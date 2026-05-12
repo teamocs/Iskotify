@@ -4,12 +4,14 @@ import { database } from '../db'
 
 const DatabaseContext = createContext<Database>(database)
 
-export function DatabaseProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <DatabaseContext.Provider value={database}>
-      {children}
-    </DatabaseContext.Provider>
-  )
+export function DatabaseProvider({
+  children,
+  db = database,
+}: {
+  children: React.ReactNode
+  db?: Database
+}) {
+  return <DatabaseContext.Provider value={db}>{children}</DatabaseContext.Provider>
 }
 
 export function useDatabase(): Database {

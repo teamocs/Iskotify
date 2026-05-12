@@ -14,7 +14,7 @@ describe('useDatabase', () => {
     expect((result.current as any).__isMock).toBe(true)
   })
 
-  it('throws when used outside DatabaseProvider', () => {
+  it('returns the singleton when used without a DatabaseProvider', () => {
     // Context has a default value (the singleton), so it never throws.
     // Test confirms the hook returns a truthy value in all cases.
     const { result } = renderHook(() => useDatabase())

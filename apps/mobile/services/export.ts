@@ -15,7 +15,9 @@ export async function exportUserData(db: Database): Promise<void> {
     exported_at: new Date().toISOString(),
   }
 
-  const fileUri = FileSystem.documentDirectory + 'iskotify-export.json'
+  const dir = FileSystem.documentDirectory
+  if (!dir) throw new Error('File system not available on this platform')
+  const fileUri = `${dir}iskotify-export.json`
   await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(payload, null, 2), {
     encoding: FileSystem.EncodingType.UTF8,
   })
