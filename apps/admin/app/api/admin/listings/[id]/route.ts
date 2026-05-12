@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       console.error('[admin/listings PATCH] supabase error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true }, { status: 200 })
   } catch (err) {
     console.error('[admin/listings PATCH] unexpected:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -30,7 +30,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       console.error('[admin/listings DELETE] supabase error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true }, { status: 200 })
   } catch (err) {
     console.error('[admin/listings DELETE] unexpected:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
