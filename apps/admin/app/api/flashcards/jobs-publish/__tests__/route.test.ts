@@ -7,6 +7,11 @@ vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
 const mockSingle = vi.fn()
 const mockEq = vi.fn(() => ({ single: mockSingle }))
 const mockSelect = vi.fn(() => ({ eq: mockEq }))
+
+// separate mock for flashcards array query (no .single())
+const mockCardsEq = vi.fn()
+const mockCardsSelect = vi.fn(() => ({ eq: mockCardsEq }))
+
 const mockEqFlat = vi.fn().mockResolvedValue({ error: null })
 const mockUpdateEqFlat = vi.fn(() => ({ eq: mockEqFlat }))
 
@@ -16,7 +21,7 @@ vi.mock('@iskotify/utils', () => ({
       if (table === 'pdf_jobs')            return { select: mockSelect, update: mockUpdateEqFlat }
       if (table === 'flashcard_subjects')  return { update: mockUpdateEqFlat }
       if (table === 'flashcard_topics')    return { update: mockUpdateEqFlat }
-      if (table === 'flashcards')          return { select: mockSelect, update: mockUpdateEqFlat }
+      if (table === 'flashcards')          return { select: mockCardsSelect, update: mockUpdateEqFlat }
       return { select: mockSelect, update: mockUpdateEqFlat }
     }),
   })),
@@ -63,6 +68,8 @@ describe('POST /api/flashcards/publish/[jobId]', () => {
     mockSingle.mockClear()
     mockEq.mockClear()
     mockSelect.mockClear()
+    mockCardsEq.mockClear()
+    mockCardsSelect.mockClear()
     mockEqFlat.mockClear()
     mockUpdateEqFlat.mockClear()
   })
@@ -99,8 +106,7 @@ describe('POST /api/flashcards/publish/[jobId]', () => {
     // job lookup
     mockSingle
       .mockResolvedValueOnce({ data: { topic_id: 'topic-1', subject_id: 'subj-1' }, error: null })
-      // flashcards select → empty array
-      .mockResolvedValueOnce({ data: [], error: null })
+    mockCardsEq.mockResolvedValueOnce({ data: [], error: null })
     const { POST } = await import('../../publish/[jobId]/route')
     const res = await POST(
       makePublishReq('job-1', { listing_slugs: ['dost-2026'], subject_name: 'Science', topic_name: 'Cell Bio' }),
@@ -113,7 +119,7 @@ describe('POST /api/flashcards/publish/[jobId]', () => {
   it('publishes topic and cards and returns { ok, published }', async () => {
     mockSingle
       .mockResolvedValueOnce({ data: { topic_id: 'topic-1', subject_id: 'subj-1' }, error: null })
-      .mockResolvedValueOnce({ data: [{ id: 'card-1' }, { id: 'card-2' }], error: null })
+    mockCardsEq.mockResolvedValueOnce({ data: [{ id: 'card-1' }, { id: 'card-2' }], error: null })
     const { POST } = await import('../../publish/[jobId]/route')
     const res = await POST(
       makePublishReq('job-1', { listing_slugs: ['dost-2026'], subject_name: 'Science', topic_name: 'Cell Biology' }),
@@ -128,7 +134,7 @@ describe('POST /api/flashcards/publish/[jobId]', () => {
   it('updates flashcards with correct listing_slugs', async () => {
     mockSingle
       .mockResolvedValueOnce({ data: { topic_id: 'topic-1', subject_id: 'subj-1' }, error: null })
-      .mockResolvedValueOnce({ data: [{ id: 'card-1' }], error: null })
+    mockCardsEq.mockResolvedValueOnce({ data: [{ id: 'card-1' }], error: null })
     const { POST } = await import('../../publish/[jobId]/route')
     await POST(
       makePublishReq('job-1', { listing_slugs: ['dost-2026', 'upcat-2026'], subject_name: 'S', topic_name: 'T' }),
@@ -137,5 +143,15 @@ describe('POST /api/flashcards/publish/[jobId]', () => {
     expect(mockUpdateEqFlat).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'published', listing_slugs: ['dost-2026', 'upcat-2026'] })
     )
+  })
+
+  it('returns 400 when subject_name or topic_name is missing', async () => {
+    const { POST } = await import('../../publish/[jobId]/route')
+    const res = await POST(
+      makePublishReq('job-1', { listing_slugs: ['dost-2026'], subject_name: '', topic_name: 'T' }),
+      { params: Promise.resolve({ jobId: 'job-1' }) }
+    )
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/subject_name|topic_name/i)
   })
 })

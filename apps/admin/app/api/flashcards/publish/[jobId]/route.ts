@@ -21,6 +21,10 @@ export async function POST(
     )
   }
 
+  if (!subject_name || !topic_name) {
+    return NextResponse.json({ error: 'Missing subject_name or topic_name' }, { status: 400 })
+  }
+
   const supabase = createServerClient()
 
   const { data: job, error: jobError } = await supabase
@@ -37,14 +41,13 @@ export async function POST(
     .from('flashcards')
     .select('id')
     .eq('topic_id', job.topic_id)
-    .single()
 
-  if (cardsError && cardsError.code !== 'PGRST116') {
+  if (cardsError) {
     console.error('[publish] cards fetch error:', cardsError)
     return NextResponse.json({ error: 'Database error' }, { status: 500 })
   }
 
-  const cardList = Array.isArray(cards) ? cards : cards ? [cards] : []
+  const cardList = cards ?? []
   if (cardList.length === 0) {
     return NextResponse.json({ error: 'No cards to publish' }, { status: 400 })
   }
