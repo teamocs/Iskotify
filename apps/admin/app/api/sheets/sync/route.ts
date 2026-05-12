@@ -16,10 +16,12 @@ function getAuth() {
 }
 
 async function fetchSheetRows(): Promise<Record<string, string>[]> {
+  const sheetId = process.env.GOOGLE_SHEETS_ID
+  if (!sheetId) throw new Error('GOOGLE_SHEETS_ID is not configured')
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEETS_ID!,
+    spreadsheetId: sheetId,
     range: 'Sheet1',
   })
   const [headers, ...rows] = response.data.values ?? []

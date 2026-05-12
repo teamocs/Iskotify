@@ -154,4 +154,41 @@ describe('POST /api/sheets/sync', () => {
     const body = await res.json()
     expect(body.error).toBe('Database error')
   })
+
+  it('returns 500 when soft-close update fails', async () => {
+    mockSelectAfterUpdate.mockResolvedValueOnce({ data: null, error: { message: 'close failed' } })
+    const POST = await importRoute()
+    const res = await POST(makeRequest(`Bearer ${VALID_SECRET}`))
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error).toBe('Database error')
+  })
+
+  it('returns 500 when Google Sheets API throws', async () => {
+    mockSheetsGet.mockRejectedValueOnce(new Error('Network error'))
+    const POST = await importRoute()
+    const res = await POST(makeRequest(`Bearer ${VALID_SECRET}`))
+    expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error).toBe('Internal server error')
+  })
+
+  it('logs console.error for each invalid row', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockSheetsGet.mockResolvedValueOnce({
+      data: {
+        values: [
+          ['type', 'title', 'slug', 'provider', 'description', 'requirements',
+           'coverage', 'deadline', 'exam_date', 'results_date', 'events',
+           'target_courses', 'target_year_levels', 'tags', 'status', 'region',
+           'grant_amount', 'external_url', 'image_url'],
+          ['invalid_type', 'Bad Row', 'bad-row', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+        ],
+      },
+    })
+    const POST = await importRoute()
+    await POST(makeRequest(`Bearer ${VALID_SECRET}`))
+    expect(spy).toHaveBeenCalledWith('[sync] skipped invalid row:', expect.any(Object))
+    spy.mockRestore()
+  })
 })
