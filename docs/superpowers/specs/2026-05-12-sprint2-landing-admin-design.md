@@ -11,7 +11,7 @@
 Sprint 2 (part A) delivers two surfaces inside a single `apps/admin` Next.js 15 App Router application:
 
 1. **Public Landing Page** (`/`) — Card-grid listing of scholarships and exams pulled from Supabase, visible to all visitors.
-2. **Admin CMS** (`/admin/*`) — Sidebar + list management interface for listings, sync controls, and sync logs. Protected by middleware cookie check.
+2. **Admin CMS** (`/admin/*`) — Sidebar + list management interface for listings, sync controls, and sync logs. Protected by Supabase Auth (email + password) with a `role = 'admin'` check on the `profiles` table.
 
 Sprint 2B (PDF → flashcard pipeline via Claude API) is a separate spec and will follow after this is shipped.
 
@@ -188,30 +188,67 @@ If no listings are returned from Supabase, render a centered empty state with Ku
 
 ## 5. Admin CMS (`/admin/*`)
 
-### 5.1 Route Protection — Middleware
+### 5.1 Route Protection — Middleware + Supabase Auth
+
+**Package required:** `@supabase/ssr` (install in `apps/admin`).
+
+Middleware uses `@supabase/ssr` to verify the Supabase session from cookies on every `/admin/*` request. If no valid session exists, the user is redirected to `/admin/login`. If a valid session exists and the user is already on `/admin/login`, they are redirected to `/admin/listings`.
 
 ```typescript
 // middleware.ts
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (request.nextUrl.pathname === '/admin/login') return NextResponse.next()
-    const cookie = request.cookies.get('ADMIN_SECRET')
-    if (cookie?.value !== process.env.ADMIN_SECRET) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return request.cookies.getAll() },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
     }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const isLoginPage = request.nextUrl.pathname === '/admin/login'
+
+  if (!user && !isLoginPage) {
+    return NextResponse.redirect(new URL('/admin/login', request.url))
   }
-  return NextResponse.next()
+  if (user && isLoginPage) {
+    return NextResponse.redirect(new URL('/admin/listings', request.url))
+  }
+
+  return supabaseResponse
 }
 
 export const config = { matcher: ['/admin/:path*'] }
 ```
 
-`/admin/login` accepts a password form that POSTs to an API route (`POST /api/admin/login`). On correct password it sets the `ADMIN_SECRET` cookie (httpOnly, sameSite strict) and redirects to `/admin/listings`.
+**Role enforcement** happens in `app/admin/layout.tsx` (server component), not in middleware. Middleware only checks session existence (fast, no DB query). The layout additionally queries `profiles.role` and renders a 403 page if the authenticated user is not an admin. This guards against authenticated non-admin users who somehow reach `/admin/*`.
 
-`ADMIN_SECRET` is a plain string in `.env.local` — no Supabase auth for MVP.
+**Login page** (`/admin/login`) — a simple email + password form (Client Component) that calls:
+```typescript
+await supabase.auth.signInWithPassword({ email, password })
+```
+On success: `router.push('/admin/listings')`. On error: shows inline error message. No custom API route needed — Supabase handles the session cookie automatically via `@supabase/ssr`.
+
+**Logout** — a "Sign out" button in the sidebar footer calls:
+```typescript
+await supabase.auth.signOut()
+router.push('/admin/login')
+```
 
 ### 5.2 Admin Shell Layout
 
@@ -307,31 +344,32 @@ Delete: shows a `<ConfirmDialog />` with "This cannot be undone." On confirm: ca
 
 ## 6. Supabase Client Usage
 
-Server components and API routes use the service-role client from `packages/utils`:
+Three client types are used:
 
-```typescript
-import { createServerClient } from '@iskotify/utils'
-```
+| Context | Client | How |
+|---|---|---|
+| Public landing page (`/`) | Anon server client | `createClient(url, anonKey)` — RLS allows public SELECT on listings |
+| Admin server components | Service-role client | `createServerClient()` from `@iskotify/utils` — bypasses RLS |
+| Admin login / logout (browser) | Auth browser client | `createBrowserClient(url, anonKey)` from `@supabase/ssr` — handles session cookies |
+| Middleware | SSR client | `createServerClient` from `@supabase/ssr` with cookie passthrough |
 
-No Supabase auth session management in Sprint 2. RLS policies on listings are permissive for `service_role` (already configured in Sprint 1 migration). Public read queries (`/`) use the anon key client — RLS SELECT policy on listings allows anon reads.
+The `@iskotify/utils` `createServerClient` helper (already built in Sprint 1) uses the service-role key and is only called from server-side code (server components, API routes). It is never imported in client components.
 
 ---
 
 ## 7. Environment Variables
 
-No new public env vars. New server-only vars:
+No new env vars needed for Sprint 2A. Supabase Auth uses the existing keys. `ADMIN_SECRET` is removed — not needed.
 
 ```
-ADMIN_SECRET=<any-strong-string>   # cookie value for admin gate
-```
-
-Already present:
-```
-NEXT_PUBLIC_SUPABASE_URL=...
+# Already present — no changes
+NEXT_PUBLIC_SUPABASE_URL=https://dtugrsbarruizgzowgso.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SYNC_SECRET=...
 ```
+
+New package dependency: `@supabase/ssr` (installed in `apps/admin`).
 
 ---
 
@@ -342,20 +380,94 @@ SYNC_SECRET=...
 | Supabase unreachable on landing page | Return empty listings array; render empty state — no crash |
 | Supabase unreachable in admin | Show error banner in stat cards area; table shows 0 rows |
 | Sync Now fails (non-200) | Error toast with message from response body |
-| Middleware env var missing | `ADMIN_SECRET` unset → middleware blocks all `/admin/*` with 500 + console.error |
+| Wrong email or password on login | Inline error: "Invalid email or password" — no redirect |
+| Authenticated user with `role != 'admin'` | Admin layout renders a 403 message; no data exposed |
 | Add/edit API error | Form shows inline error; no drawer close |
 
 ---
 
-## 9. New Migration
+## 9. New Migrations
 
-Sprint 2 adds one migration file:
+Sprint 2 adds two migration files applied in order:
 
+### 002 — Admin role + RLS (`002_admin_role.sql`)
+
+```sql
+-- Add role column to profiles
+ALTER TABLE profiles
+  ADD COLUMN role text NOT NULL DEFAULT 'student'
+  CHECK (role IN ('student', 'admin'));
+
+-- Admins can read all profiles (needed for admin CMS user management)
+CREATE POLICY "profiles_admin_select"
+  ON profiles FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid() AND p.role = 'admin'
+    )
+  );
+
+-- Admins can write listings (INSERT, UPDATE, DELETE)
+CREATE POLICY "listings_admin_insert"
+  ON listings FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "listings_admin_update"
+  ON listings FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "listings_admin_delete"
+  ON listings FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
 ```
-supabase/migrations/002_sync_logs.sql
+
+### 003 — Sync logs (`003_sync_logs.sql`)
+
+```sql
+CREATE TABLE sync_logs (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  synced      int NOT NULL DEFAULT 0,
+  skipped     int NOT NULL DEFAULT 0,
+  closed      int NOT NULL DEFAULT 0,
+  status      text NOT NULL DEFAULT 'ok' CHECK (status IN ('ok', 'warn', 'error')),
+  message     text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
 ```
 
-Adds the `sync_logs` table (defined in §5.5). Applied to `dtugrsbarruizgzowgso` via Supabase MCP before deploying.
+### Admin user seed (run once after migration 002)
+
+After applying migration 002, create the admin user and grant the role:
+
+```sql
+-- Step 1: Create the user in Supabase Auth (done via MCP or Supabase Dashboard)
+-- Email: teamocsph@gmail.com  Password: <set a strong password>
+-- Supabase Auth will fire the handle_new_user trigger → creates profiles row automatically
+
+-- Step 2: Grant admin role (run after the user is created)
+UPDATE profiles
+SET role = 'admin'
+WHERE id = (
+  SELECT id FROM auth.users WHERE email = 'teamocsph@gmail.com'
+);
+```
+
+To hand over admin access to another user in the future: create them via Supabase Dashboard → Authentication → Users, then run the same UPDATE with their email.
+
+Both migrations are applied to project `dtugrsbarruizgzowgso` via Supabase MCP before deploying.
 
 ---
 
@@ -376,5 +488,8 @@ Adds the `sync_logs` table (defined in §5.5). Applied to `dtugrsbarruizgzowgso`
 - `/admin/listings` shows stat cards, sync log, and listing table — all from live DB
 - "Sync Now" triggers the existing route and shows toast feedback
 - Add / Edit / Delete all persist to Supabase and reflect immediately on refresh
-- `/admin/*` redirects to `/admin/login` when cookie is absent
+- `/admin/*` redirects to `/admin/login` when no Supabase session exists
+- Login with `teamocsph@gmail.com` + password succeeds and lands on `/admin/listings`
+- Authenticated non-admin user hitting `/admin/*` sees a 403, not listing data
+- Sign out clears the session and redirects to `/admin/login`
 - Design matches approved Apple/iOS mockups: Outfit + Lexend, maroon brand, frosted nav, pill CTAs, 22px card radius
