@@ -1,33 +1,35 @@
-"use client";
+import { createServerClient } from '@iskotify/utils'
+import { Nav } from '@/components/landing/Nav'
+import { Hero } from '@/components/landing/Hero'
+import { KuyaBawCTA } from '@/components/landing/KuyaBawCTA'
+import { ListingGrid } from '@/components/landing/ListingGrid'
+import type { Listing } from '@iskotify/utils'
 
-import { Button } from "@iskotify/ui";
-import { APP_NAME } from "@iskotify/utils";
+export const revalidate = 3600
 
-export default function HomePage() {
+async function getListings(): Promise<Listing[]> {
+  try {
+    const supabase = createServerClient()
+    const { data } = await supabase
+      .from('listings')
+      .select('id, title, slug, type, status, provider, region, grant_amount, coverage, deadline, exam_date, external_url')
+      .order('deadline', { ascending: true, nullsFirst: false })
+    return (data as Listing[]) ?? []
+  } catch {
+    return []
+  }
+}
+
+export default async function HomePage() {
+  const listings = await getListings()
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-start justify-center gap-6 px-6">
-      <h1 className="text-4xl font-bold tracking-tight">
-        {APP_NAME} Admin Dashboard
-      </h1>
-      <p className="text-ink-muted">
-        Shared component rendered below comes from{" "}
-        <code className="rounded bg-slate-200 px-1.5 py-0.5 text-sm">
-          @iskotify/ui
-        </code>{" "}
-        and is the same source used by the mobile app.
-      </p>
-
-      <div className="flex flex-row gap-3">
-        <Button
-          label="Primary action"
-          onPress={() => console.log("admin: primary pressed")}
-        />
-        <Button
-          variant="secondary"
-          label="Secondary"
-          onPress={() => console.log("admin: secondary pressed")}
-        />
-      </div>
-    </main>
-  );
+    <div className="min-h-screen bg-[#f5f5f7]">
+      <Nav />
+      <Hero />
+      <main id="listings">
+        <ListingGrid listings={listings} />
+      </main>
+      <KuyaBawCTA />
+    </div>
+  )
 }
