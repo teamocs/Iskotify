@@ -22,8 +22,8 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
   {
     section: 'FLASHCARDS',
     items: [
-      { href: '/admin/flashcards', icon: '🃏', label: 'Subjects', disabled: true },
-      { href: '/admin/flashcards/upload', icon: '📚', label: 'Upload PDF', disabled: true }
+      { href: '/admin/flashcards', icon: '🃏', label: 'Subjects' },
+      { href: '/admin/flashcards/upload', icon: '📚', label: 'Upload PDF' }
     ]
   }
 ]
