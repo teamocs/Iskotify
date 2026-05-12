@@ -154,6 +154,9 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
     expect(res.status).toBe(200)
     expect(mockEqFlat).toHaveBeenCalledWith('id', 'card-1')
+    expect(mockUpdateEq).not.toHaveBeenCalledWith(
+      expect.objectContaining({ topic_id: expect.anything() })
+    )
   })
 
   it('returns 500 when update fails', async () => {
@@ -166,6 +169,29 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
     })
     const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
     expect(res.status).toBe(500)
+  })
+
+  it('returns 400 when no updatable fields provided', async () => {
+    const { PATCH } = await import('../../cards/[id]/route')
+    const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ topic_id: 'other-topic', status: 'published' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/no updatable fields/i)
+  })
+
+  it('returns 400 when difficulty is out of range', async () => {
+    const { PATCH } = await import('../../cards/[id]/route')
+    const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ difficulty: 5 }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
+    expect(res.status).toBe(400)
   })
 })
 
