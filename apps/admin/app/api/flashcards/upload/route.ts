@@ -5,7 +5,12 @@ import { randomUUID } from 'crypto'
 const MAX_BYTES = 20 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
-  const formData = await req.formData()
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
   const file = formData.get('file') as File | null
 
   if (!file) {

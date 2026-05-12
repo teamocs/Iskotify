@@ -71,6 +71,9 @@ describe('POST /api/flashcards/upload', () => {
     const file = new File(['%PDF-1.4'], 'test.pdf', { type: 'application/pdf' })
     const res = await POST(makePdfRequest(file))
     expect(res.status).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'pending', pdf_url: expect.stringMatching(/^[a-f0-9-]{36}\.pdf$/) })
+    )
     expect((await res.json()).jobId).toBe('job-abc')
   })
 
