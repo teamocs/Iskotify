@@ -49,14 +49,16 @@ export async function syncOnLaunch(db: Database): Promise<void> {
         ops.push(ex.prepareUpdate(r => {
           r.slug = row.slug; r.title = row.title; r.type = row.type
           r.status = row.status
-          r.examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
+          const t = row.exam_date ? new Date(row.exam_date).getTime() : null
+          r.examDate = t !== null && Number.isFinite(t) ? t : null
         }))
       } else {
         ops.push(coll.prepareCreate(r => {
           r._raw.id = row.id
           r.slug = row.slug; r.title = row.title; r.type = row.type
           r.status = row.status
-          r.examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
+          const t = row.exam_date ? new Date(row.exam_date).getTime() : null
+          r.examDate = t !== null && Number.isFinite(t) ? t : null
         }))
       }
     }
@@ -111,7 +113,9 @@ export async function syncOnLaunch(db: Database): Promise<void> {
 
     ops.push(settings.prepareUpdate(s => { s.lastSyncedAt = Date.now() }))
 
-    await db.batch(...ops)
+    await db.write(async () => {
+      await db.batch(...ops)
+    })
   } catch (err) {
     console.error('[sync] error:', err)
   }

@@ -89,5 +89,7 @@ describe('syncOnLaunch', () => {
     const db = makeDb(makeSettings('upcat', 1000))
     await syncOnLaunch(db as any)
     expect(db.batch).toHaveBeenCalled()
+    // batch should have been called with at least one argument (the settings prepareUpdate result)
+    expect(db.batch.mock.calls[0].length).toBeGreaterThan(0)
   })
 })
