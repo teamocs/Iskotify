@@ -179,4 +179,20 @@ describe('POST /api/flashcards/process/[id]', () => {
       expect.objectContaining({ status: 'failed', error_msg: 'Gemini returned unexpected format' })
     )
   })
+
+  it('marks job failed when Gemini throws a network error', async () => {
+    mockSingle.mockResolvedValueOnce({ data: { id: 'job-1', pdf_url: 'abc.pdf' }, error: null })
+    mockDownload.mockResolvedValue({
+      data: new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+      error: null,
+    })
+    mockGenerateContent.mockRejectedValue(new Error('fetch failed'))
+
+    const POST = await importRoute()
+    const res = await POST(makeReq(), makeParams('job-1'))
+    expect(res.status).toBe(500)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', error_msg: 'fetch failed' })
+    )
+  })
 })

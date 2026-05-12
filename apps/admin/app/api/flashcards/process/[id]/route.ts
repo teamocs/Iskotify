@@ -48,6 +48,14 @@ export async function POST(
   const { id } = await params
   const supabase = createServerClient()
 
+  if (!process.env.GEMINI_API_KEY) {
+    await supabase
+      .from('pdf_jobs')
+      .update({ status: 'failed', error_msg: 'GEMINI_API_KEY not configured' })
+      .eq('id', id)
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 })
+  }
+
   const { data: job, error: fetchError } = await supabase
     .from('pdf_jobs')
     .update({ status: 'processing' })
@@ -60,10 +68,11 @@ export async function POST(
   }
 
   async function failJob(msg: string) {
-    await supabase
+    const { error } = await supabase
       .from('pdf_jobs')
       .update({ status: 'failed', error_msg: msg })
       .eq('id', id)
+    if (error) console.error('[process] failed to mark job as failed:', error)
   }
 
   try {
