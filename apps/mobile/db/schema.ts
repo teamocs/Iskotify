@@ -1,6 +1,6 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
-const _schema = appSchema({
+export const dbSchema = appSchema({
   version: 1,
   tables: [
     tableSchema({
@@ -48,18 +48,3 @@ const _schema = appSchema({
     }),
   ],
 })
-
-/**
- * Re-export dbSchema with tables and columns as arrays for compatibility
- * with tests and tooling that expect array-shaped schema objects.
- *
- * WatermelonDB internally stores tables/columns as dictionaries;
- * columnArray preserves the original input order.
- */
-export const dbSchema = {
-  ..._schema,
-  tables: Object.values(_schema.tables).map((t) => ({
-    ...t,
-    columns: t.columnArray,
-  })),
-}
