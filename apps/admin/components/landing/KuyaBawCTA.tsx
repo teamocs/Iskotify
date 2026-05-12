@@ -11,7 +11,7 @@ export function KuyaBawCTA() {
             width={80}
             height={80}
             className="drop-shadow-lg"
-            onError={() => {}}
+
           />
         </div>
         <div>

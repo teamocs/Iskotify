@@ -39,7 +39,8 @@ const mockSelectAfterUpdate = vi.fn().mockResolvedValue({ data: [], error: null 
 const mockNotFilter = vi.fn(() => ({ select: mockSelectAfterUpdate }))
 const mockUpdate = vi.fn(() => ({ not: mockNotFilter }))
 const mockUpsert = vi.fn().mockResolvedValue({ error: null })
-const mockFrom = vi.fn(() => ({ upsert: mockUpsert, update: mockUpdate }))
+const mockInsert = vi.fn().mockResolvedValue({ error: null })
+const mockFrom = vi.fn(() => ({ upsert: mockUpsert, update: mockUpdate, insert: mockInsert }))
 
 vi.mock('@iskotify/utils', async () => {
   const actual = await vi.importActual<typeof import('@iskotify/utils')>('@iskotify/utils')
@@ -66,6 +67,7 @@ describe('POST /api/sheets/sync', () => {
     vi.resetModules()
     mockSheetsGet.mockClear()
     mockUpsert.mockClear()
+    mockInsert.mockClear()
     mockFrom.mockClear()
     mockUpdate.mockClear()
     mockNotFilter.mockClear()

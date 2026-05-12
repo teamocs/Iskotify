@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/admin/Sidebar'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const auth = await createAuthClient()
-  const { data: { user } } = await auth.getUser()
+  const { data: { user } } = await auth.auth.getUser()
 
   if (!user) redirect('/admin/login')
 

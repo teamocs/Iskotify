@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
-const NAV = [
+const NAV: { section: string; items: { href: string; icon: string; label: string; disabled?: boolean }[] }[] = [
   {
     section: 'LISTINGS',
     items: [
@@ -62,7 +62,7 @@ export function Sidebar({ userEmail }: Props) {
         {NAV.map(({ section, items }) => (
           <div key={section} className="px-2 py-2 border-b border-white/[0.05]">
             <p className="text-[9px] font-semibold tracking-[0.1em] uppercase text-white/25 px-2 mb-1">{section}</p>
-            {items.map(({ href, icon, label, disabled }) => {
+            {items.map(({ href, icon, label, disabled = false }) => {
               const active = pathname === href || pathname.startsWith(href + '?')
               return (
                 <Link

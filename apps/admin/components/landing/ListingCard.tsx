@@ -34,7 +34,9 @@ function formatAmount(listing: Listing) {
 
 export function ListingCard({ listing }: { listing: Listing }) {
   const cover = COVER_COLORS[listing.type] ?? COVER_COLORS.scholarship
-  const { badge: statusBadge, cta } = STATUS_STYLES[listing.status] ?? STATUS_STYLES.active
+  const statusStyle = STATUS_STYLES[listing.status] ?? STATUS_STYLES.active!
+  const statusBadge = statusStyle.badge
+  const cta = statusStyle.cta
   const typeBadge = TYPE_STYLES[listing.type] ?? TYPE_STYLES.scholarship
 
   return (

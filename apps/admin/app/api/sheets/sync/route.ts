@@ -10,7 +10,7 @@ function getAuth() {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing or malformed')
   }
   return new google.auth.GoogleAuth({
-    credentials,
+    credentials: credentials as Record<string, unknown>,
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   })
 }
@@ -92,11 +92,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ synced: valid.length, skipped, closed })
   } catch (err) {
     console.error('[sync] unexpected error:', err)
-    await createServerClient().from('sync_logs').insert({
-      synced: 0, skipped: 0, closed: 0,
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Unknown error'
-    }).catch(() => {})
+    try {
+      await createServerClient().from('sync_logs').insert({
+        synced: 0, skipped: 0, closed: 0,
+        status: 'error',
+        message: err instanceof Error ? err.message : 'Unknown error'
+      })
+    } catch { /* best-effort — don't mask original error */ }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
