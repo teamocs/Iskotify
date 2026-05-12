@@ -3,6 +3,25 @@ import { createServerClient } from '@iskotify/utils'
 
 const REQUIRED = ['type', 'title', 'slug', 'provider', 'status', 'region'] as const
 
+export async function GET() {
+  try {
+    const db = createServerClient()
+    const { data, error } = await db
+      .from('listings')
+      .select('slug, title, status')
+      .in('status', ['active', 'upcoming'])
+      .order('title')
+    if (error) {
+      console.error('[admin/listings GET] supabase error:', error)
+      return NextResponse.json({ error: 'Database error' }, { status: 500 })
+    }
+    return NextResponse.json(data ?? [])
+  } catch (err) {
+    console.error('[admin/listings GET] unexpected:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
