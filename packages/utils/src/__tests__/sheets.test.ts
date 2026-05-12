@@ -122,4 +122,24 @@ describe('transformSheetRow', () => {
     const result = transformSheetRow({ ...validRow, status: '' })
     expect(result!.status).toBe('active')
   })
+
+  it('returns null when status is an unrecognized value', () => {
+    expect(transformSheetRow({ ...validRow, status: 'draft' })).toBeNull()
+  })
+
+  it('returns null for grant_amount with trailing non-numeric chars like "7000abc"', () => {
+    const result = transformSheetRow({ ...validRow, grant_amount: '7000abc' })
+    expect(result!.grant_amount).toBeNull()
+  })
+
+  it('silently drops an odd trailing token in events (documented behavior)', () => {
+    const result = transformSheetRow({ ...validRow, events: 'Orientation|2026-03-10|Interview' })
+    expect(result!.events).toEqual([{ name: 'Orientation', date: '2026-03-10' }])
+  })
+
+  it('transforms a valid exam type row', () => {
+    const result = transformSheetRow({ ...validRow, type: 'exam' })
+    expect(result).not.toBeNull()
+    expect(result!.type).toBe('exam')
+  })
 })

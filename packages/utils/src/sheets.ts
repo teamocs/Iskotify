@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ListingUpsert } from './types'
 
-const SheetRowSchema = z.object({
+export const SheetRowSchema = z.object({
   type: z.enum(['scholarship', 'exam']),
   title: z.string().min(1),
   slug: z.string().min(1).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens'),
@@ -16,7 +16,10 @@ const SheetRowSchema = z.object({
   target_courses: z.string().default(''),
   target_year_levels: z.string().default(''),
   tags: z.string().default(''),
-  status: z.enum(['active', 'closed', 'upcoming']).default('active').catch('active'),
+  status: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v),
+    z.enum(['active', 'closed', 'upcoming']).default('active')
+  ),
   region: z.string().default(''),
   grant_amount: z.string().default(''),
   external_url: z.string().default(''),
@@ -45,7 +48,7 @@ function parseDate(value: string): string | null {
 
 function parseNumber(value: string): number | null {
   if (!value.trim()) return null
-  const n = parseFloat(value)
+  const n = Number(value.trim())
   return isNaN(n) ? null : n
 }
 
