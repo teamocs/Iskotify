@@ -13,6 +13,7 @@
     "clean": "rimraf .next .turbo"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@iskotify/ui": "workspace:*",
     "@iskotify/utils": "workspace:*",
     "@supabase/ssr": "^0.10.3",
