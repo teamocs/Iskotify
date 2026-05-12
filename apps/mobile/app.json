@@ -7,6 +7,10 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#1a1a2e",
+      "resizeMode": "contain"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.iskotify.mobile"
@@ -20,7 +24,8 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "@nozbe/watermelondb/expo-plugin"
     ],
     "experiments": {
       "typedRoutes": true,
