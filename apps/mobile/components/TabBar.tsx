@@ -76,10 +76,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     <View style={styles.wrapper} pointerEvents="box-none">
       <BlurView intensity={90} tint="dark" style={styles.blur}>
         <View style={styles.inner}>
-          {state.routes.map((route) => {
+          {state.routes.map((route, idx) => {
             const meta = TAB_META[route.name]
             if (!meta) return null
-            const isFocused = state.index === index
+            const isFocused = state.index === idx
 
             function onPress() {
               const event = navigation.emit({
