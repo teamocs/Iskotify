@@ -96,6 +96,10 @@ export async function POST(
       throw new Error('Gemini returned unexpected format')
     }
 
+    if (!parsed.subject || !parsed.topic) {
+      throw new Error('Gemini returned unexpected format')
+    }
+
     const { data: subject, error: subjectError } = await supabase
       .from('flashcard_subjects')
       .upsert({ name: parsed.subject }, { onConflict: 'name' })

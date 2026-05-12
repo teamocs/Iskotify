@@ -104,6 +104,16 @@ describe('POST /api/flashcards/process/[id]', () => {
         expect.objectContaining({ question: 'Q1', status: 'draft', topic_id: 'topic-1' }),
       ])
     )
+    // Verify source_pdf_url is set on inserted cards
+    expect(mockInsertFlat).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ source_pdf_url: 'abc.pdf' }),
+      ])
+    )
+    // Verify job is updated to done with correct ids
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'done', subject_id: 'subj-1', topic_id: 'topic-1', card_count: 1 })
+    )
   })
 
   it('marks job failed when Gemini returns malformed JSON', async () => {
@@ -150,5 +160,23 @@ describe('POST /api/flashcards/process/[id]', () => {
     const res = await POST(makeReq(), makeParams('job-1'))
     expect(res.status).toBe(500)
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }))
+  })
+
+  it('marks job failed when Gemini returns JSON without subject or topic', async () => {
+    mockSingle.mockResolvedValueOnce({ data: { id: 'job-1', pdf_url: 'abc.pdf' }, error: null })
+    mockDownload.mockResolvedValue({
+      data: new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+      error: null,
+    })
+    mockGenerateContent.mockResolvedValue({
+      response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }] }) },
+    })
+
+    const POST = await importRoute()
+    const res = await POST(makeReq(), makeParams('job-1'))
+    expect(res.status).toBe(500)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed', error_msg: 'Gemini returned unexpected format' })
+    )
   })
 })
