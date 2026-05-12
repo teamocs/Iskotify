@@ -24,8 +24,7 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router",
-      "@nozbe/watermelondb/expo-plugin"
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true,
