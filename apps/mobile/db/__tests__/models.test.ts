@@ -35,6 +35,12 @@ describe('Flashcard', () => {
       col === 'listing_slugs' ? 'not-json' : null
     expect(card.listingSlugs).toEqual([])
   })
+  it('returns empty array for non-array JSON', () => {
+    const card = Object.create(Flashcard.prototype) as Flashcard
+    ;(card as any)._getRaw = (col: string) =>
+      col === 'listing_slugs' ? '{"foo":"bar"}' : null
+    expect(card.listingSlugs).toEqual([])
+  })
 })
 
 describe('Listing', () => {

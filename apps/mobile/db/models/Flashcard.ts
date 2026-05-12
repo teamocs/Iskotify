@@ -17,7 +17,8 @@ export class Flashcard extends Model {
   get listingSlugs(): string[] {
     const raw = this._getRaw('listing_slugs') as string | null
     try {
-      return JSON.parse(raw ?? '[]')
+      const parsed = JSON.parse(raw ?? '[]')
+      return Array.isArray(parsed) ? parsed : []
     } catch {
       return []
     }
