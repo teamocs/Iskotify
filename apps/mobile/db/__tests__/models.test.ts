@@ -25,12 +25,14 @@ describe('Flashcard', () => {
   })
   it('parses listingSlugs from valid JSON', () => {
     const card = Object.create(Flashcard.prototype) as Flashcard
-    card.listingSlugsJson = '["upcat","dost-sei"]'
+    ;(card as any)._getRaw = (col: string) =>
+      col === 'listing_slugs' ? '["upcat","dost-sei"]' : null
     expect(card.listingSlugs).toEqual(['upcat', 'dost-sei'])
   })
   it('returns empty array for invalid JSON', () => {
     const card = Object.create(Flashcard.prototype) as Flashcard
-    card.listingSlugsJson = 'not-json'
+    ;(card as any)._getRaw = (col: string) =>
+      col === 'listing_slugs' ? 'not-json' : null
     expect(card.listingSlugs).toEqual([])
   })
 })

@@ -14,13 +14,10 @@ export class Flashcard extends Model {
   @field('difficulty') difficulty!: number
   @field('remote_updated_at') remoteUpdatedAt!: number | null
 
-  // Plain settable property — used directly in unit tests and by listingSlugs getter.
-  // In a live database context, assign this from the raw column value as needed.
-  listingSlugsJson: string = ''
-
   get listingSlugs(): string[] {
+    const raw = this._getRaw('listing_slugs') as string | null
     try {
-      return JSON.parse(this.listingSlugsJson)
+      return JSON.parse(raw ?? '[]')
     } catch {
       return []
     }
