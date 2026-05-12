@@ -25,4 +25,8 @@ describe('dbSchema', () => {
     const col = dbSchema.tables['topics'].columnArray.find(c => c.name === 'subject_id')!
     expect(col.isIndexed).toBe(true)
   })
+
+  it('is at schema version 1', () => {
+    expect(dbSchema.version).toBe(1)
+  })
 })

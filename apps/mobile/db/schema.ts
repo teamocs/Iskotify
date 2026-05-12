@@ -25,8 +25,8 @@ export const dbSchema = appSchema({
         { name: 'answer', type: 'string' },
         { name: 'explanation', type: 'string' },
         { name: 'difficulty', type: 'number' },
-        { name: 'listing_slugs', type: 'string' },
-        { name: 'remote_updated_at', type: 'number' },
+        { name: 'listing_slugs', type: 'string' }, // JSON-encoded string[]
+        { name: 'remote_updated_at', type: 'number', isOptional: true },
       ],
     }),
     tableSchema({
