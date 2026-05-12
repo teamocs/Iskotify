@@ -16,6 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Lexend:wght@300;400;500;600&display=swap"
           rel="stylesheet"
         />
+        <link
+          rel="stylesheet"
+          href="https://cdn.lineicons.com/5.1/line/lineicons.css"
+        />
       </head>
       <body className="min-h-screen font-body antialiased">
         {children}
