@@ -82,9 +82,21 @@ export async function POST(req: NextRequest) {
       closed = closedRows?.length ?? 0
     }
 
+    const logStatus = skipped > 0 ? 'warn' : 'ok'
+    await supabase.from('sync_logs').insert({
+      synced: valid.length,
+      skipped,
+      closed,
+      status: logStatus
+    })
     return NextResponse.json({ synced: valid.length, skipped, closed })
   } catch (err) {
     console.error('[sync] unexpected error:', err)
+    await createServerClient().from('sync_logs').insert({
+      synced: 0, skipped: 0, closed: 0,
+      status: 'error',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    }).catch(() => {})
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
