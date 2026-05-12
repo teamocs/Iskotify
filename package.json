@@ -12,6 +12,7 @@
     "dev:admin": "turbo run dev --filter=@iskotify/admin",
     "dev:mobile": "turbo run dev --filter=@iskotify/mobile",
     "build": "turbo run build",
+    "test": "turbo run test",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rimraf node_modules"
