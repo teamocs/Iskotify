@@ -9,7 +9,39 @@ const config: Config = {
     "../../packages/ui/src/**/*.{ts,tsx,js,jsx}"
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        maroon: {
+          DEFAULT: "#800000",
+          light: "#a00000",
+          dim: "rgba(128,0,0,0.08)",
+          mid: "rgba(128,0,0,0.15)"
+        },
+        surface: {
+          DEFAULT: "#ffffff",
+          2: "#f5f5f7",
+          3: "#fafafa"
+        },
+        sidebar: "#1d1d1f",
+        "text-primary": "#1d1d1f",
+        "text-secondary": "#6e6e73",
+        "text-tertiary": "#aeaeb2"
+      },
+      fontFamily: {
+        heading: ["Outfit", "sans-serif"],
+        body: ["Lexend", "-apple-system", "sans-serif"]
+      },
+      borderRadius: {
+        sm: "10px",
+        md: "16px",
+        lg: "22px",
+        pill: "980px"
+      },
+      boxShadow: {
+        sm: "0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04)",
+        card: "0 8px 32px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+      }
+    }
   },
   plugins: []
 };
