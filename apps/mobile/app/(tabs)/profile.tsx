@@ -18,19 +18,23 @@ export default function ProfileScreen() {
           text: 'Continue',
           style: 'destructive',
           onPress: async () => {
-            const settings = await db
-              .get<UserSettings>('user_settings')
-              .find('local')
-              .catch(() => null)
-            if (settings) {
-              await db.write(() =>
-                settings.update(s => {
-                  s.selectedListingSlug = ''
-                  s.lastSyncedAt = 0
-                })
-              )
+            try {
+              const settings = await db
+                .get<UserSettings>('user_settings')
+                .find('local')
+                .catch(() => null)
+              if (settings) {
+                await db.write(() =>
+                  settings.update(s => {
+                    s.selectedListingSlug = ''
+                    s.lastSyncedAt = 0
+                  })
+                )
+              }
+              router.replace('/onboarding')
+            } catch {
+              Alert.alert('Error', 'Could not reset your selection. Please try again.')
             }
-            router.replace('/onboarding')
           },
         },
       ]
