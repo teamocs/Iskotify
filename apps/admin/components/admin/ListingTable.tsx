@@ -58,6 +58,12 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
               {f}
             </button>
           ))}
+          <button
+            onClick={() => setDrawerListing('new')}
+            className="rounded-[980px] px-4 py-1.5 text-[11px] font-medium bg-[#1d1d1f] text-white hover:bg-[#3a3a3c] transition-colors"
+          >
+            + Add Listing
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
