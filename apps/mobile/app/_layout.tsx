@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { View } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -8,9 +9,11 @@ import { syncOnLaunch } from '../services/sync'
 import type { UserSettings } from '../db/models/UserSettings'
 import '../global.css'
 
-SplashScreen.preventAutoHideAsync()
+SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
+  const [ready, setReady] = useState(false)
+
   useEffect(() => {
     async function init() {
       try {
@@ -27,15 +30,20 @@ export default function RootLayout() {
         router.replace('/onboarding')
       } finally {
         await SplashScreen.hideAsync()
+        setReady(true)
       }
     }
-    init()
+    void init()
   }, [])
 
   return (
     <DatabaseProvider>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }} />
+      {ready ? (
+        <Stack screenOptions={{ headerShown: false }} />
+      ) : (
+        <View style={{ flex: 1, backgroundColor: '#1a1a2e' }} />
+      )}
     </DatabaseProvider>
   )
 }

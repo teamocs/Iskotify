@@ -22,15 +22,19 @@ export default function OnboardingScreen() {
   const [selecting, setSelecting] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     supabase
       .from('listings')
       .select('id,slug,title,type,exam_date')
       .in('status', ['active', 'upcoming'])
       .order('title')
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error('[onboarding] fetch listings error:', error)
         setListings(data ?? [])
         setLoading(false)
       })
+    return () => { cancelled = true }
   }, [])
 
   async function handleSelect(listing: ListingRow) {
@@ -55,7 +59,9 @@ export default function OnboardingScreen() {
         )
       }
       await syncOnLaunch(db)
-      router.replace('/(tabs)/')
+      router.replace('/(tabs)')
+    } catch (e) {
+      console.error('[onboarding] select error:', e)
     } finally {
       setSelecting(false)
     }
