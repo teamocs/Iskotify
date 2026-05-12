@@ -3,15 +3,9 @@ ALTER TABLE profiles
   ADD COLUMN role text NOT NULL DEFAULT 'student'
   CHECK (role IN ('student', 'admin'));
 
--- Admins can read all profiles
-CREATE POLICY "profiles_admin_select"
-  ON profiles FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      WHERE p.id = auth.uid() AND p.role = 'admin'
-    )
-  );
+-- NOTE: profiles_admin_select intentionally omitted — querying profiles inside
+-- a profiles SELECT policy causes RLS recursion. Admin CMS uses service-role
+-- client (bypasses RLS) so this policy is not needed for Sprint 2A.
 
 -- Admins can insert listings
 CREATE POLICY "listings_admin_insert"
