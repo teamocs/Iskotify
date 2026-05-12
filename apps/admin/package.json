@@ -15,6 +15,7 @@
   "dependencies": {
     "@iskotify/ui": "workspace:*",
     "@iskotify/utils": "workspace:*",
+    "@supabase/ssr": "^0.10.3",
     "googleapis": "^144.0.0",
     "nativewind": "^4.1.23",
     "next": "15.1.6",
