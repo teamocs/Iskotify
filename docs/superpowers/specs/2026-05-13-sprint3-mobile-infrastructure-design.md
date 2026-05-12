@@ -2,13 +2,14 @@
 
 **Date:** 2026-05-13
 **Sprint:** 3 of 5
-**Scope:** React Native mobile app shell — WatermelonDB schema, Supabase delta sync, minimal onboarding, 4-tab navigation
+**Scope:** React Native mobile app shell — splash screen, WatermelonDB schema, Supabase delta sync, minimal onboarding, 4-tab navigation
 
 ---
 
 ## Goals
 
 Deliver a working mobile app shell that:
+- Shows a branded splash screen while the app initialises (DB mount + sync)
 - Presents a 4-tab glassmorphism floating navbar (Home, Practice, Listings, Profile)
 - Stores flashcard and listing data locally in WatermelonDB for offline access
 - Syncs from Supabase automatically on every app launch (delta sync)
@@ -28,6 +29,7 @@ Tab screens are stubs in this sprint. Content fills in Sprint 4 (Practice engine
 - **Supabase JS v2** — anon key, browser/React Native client (no SSR)
 - **Lineicons v5** — `@lineiconshq/react-native-lineicons` + `@lineiconshq/free-icons` + `react-native-svg`
 - **Reanimated 2** — spring press animation on nav items (bundled with Expo 52)
+- **expo-splash-screen** — keeps native splash visible during async initialisation
 
 ---
 
@@ -71,6 +73,7 @@ apps/mobile/
     useDatabase.ts           # DatabaseContext + useDatabase hook
   components/
     TabBar.tsx               # Custom floating glassmorphism tab bar
+    SplashScreen.tsx         # App-level animated splash (shown during init)
 ```
 
 ---
@@ -123,6 +126,47 @@ Five tables. Four mirror Supabase; one (`user_settings`) is local-only and never
 | `id` | string (PK) | Fixed value `'local'` — single row |
 | `selected_listing_slug` | string | Set during onboarding |
 | `last_synced_at` | number | Unix ms — 0 on first launch |
+
+---
+
+## Splash Screen
+
+There are two layers:
+
+**1. Native splash (`app.json`):**
+Configured in `app.json` under `expo.splash`. Shown by the OS while the JavaScript bundle loads — before any React code runs. Settings:
+- `image`: app logo (square, centred)
+- `backgroundColor`: `#1a1a2e` (matches the app's dark navy gradient)
+- `resizeMode`: `contain`
+
+**2. App-level splash (`components/SplashScreen.tsx` + `expo-splash-screen`):**
+After the JS bundle loads, `_layout.tsx` calls `SplashScreen.preventAutoHideAsync()` immediately (before any `await`) to keep the native splash visible. While the native splash is still showing, the layout mounts the DB and runs the initial sync. Once both are done, it calls `SplashScreen.hideAsync()` — the native splash fades out and the app becomes visible.
+
+This means users see the branded splash for exactly as long as it takes to initialise — typically under 2 seconds on repeat launches, up to a few seconds on first launch with a network sync.
+
+**Sequence in `_layout.tsx`:**
+```
+SplashScreen.preventAutoHideAsync()   // called synchronously at module level
+↓
+mount DB (WatermelonDB)
+↓
+run delta sync (silently skips if offline)
+↓
+check selected_listing_slug → redirect to /onboarding or /(tabs)/
+↓
+SplashScreen.hideAsync()              // native splash fades out
+```
+
+**`app.json` splash config:**
+```json
+"splash": {
+  "image": "./assets/splash.png",
+  "resizeMode": "contain",
+  "backgroundColor": "#1a1a2e"
+}
+```
+
+The `assets/splash.png` asset must be provided (1284×2778px recommended for iOS, works on Android too). A simple white app logo on the `#1a1a2e` background is sufficient for Sprint 3.
 
 ---
 
@@ -218,6 +262,7 @@ Two actions beyond the stub:
 react-native-svg
 expo-blur
 expo-sharing
+expo-splash-screen
 @supabase/supabase-js
 ```
 
