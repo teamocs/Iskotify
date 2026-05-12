@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Iskotify",
+    "slug": "iskotify",
+    "scheme": "iskotify",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.iskotify.mobile"
+    },
+    "android": {
+      "package": "app.iskotify.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@iskotify/utils",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "devDependencies": {
+    "@iskotify/tsconfig": "workspace:*",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.6.3"
+  }
+}

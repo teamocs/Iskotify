@@ -1,0 +1,10 @@
+{
+  "extends": "@iskotify/tsconfig/react-library.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": true,
+    "types": ["nativewind/types"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "nativewind-env.d.ts"]
+}

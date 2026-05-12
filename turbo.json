@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["**/.env.*local", "tsconfig.json"],
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        ".expo/**",
+        "android/app/build/**",
+        "ios/build/**"
+      ],
+      "env": ["NEXT_PUBLIC_*", "EXPO_PUBLIC_*"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "outputs": []
+    },
+    "type-check": {
+      "dependsOn": ["^type-check"],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
