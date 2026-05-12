@@ -93,4 +93,12 @@ describe('POST /api/flashcards/upload', () => {
     const res = await POST(makePdfRequest(file))
     expect(res.status).toBe(500)
   })
+
+  it('returns 400 when file has PDF content-type but non-PDF bytes', async () => {
+    const POST = await importRoute()
+    const file = new File([new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04])], 'fake.pdf', { type: 'application/pdf' })
+    const res = await POST(makePdfRequest(file))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Only PDF files are supported')
+  })
 })
