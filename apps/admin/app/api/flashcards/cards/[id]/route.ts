@@ -10,9 +10,32 @@ export async function PATCH(
     const body = await req.json()
     const supabase = createServerClient()
 
+    // Whitelist: only card content fields may be updated via this endpoint
+    const { question, answer, explanation, difficulty } = body as {
+      question?: string
+      answer?: string
+      explanation?: string
+      difficulty?: number
+    }
+
+    const patch: Record<string, unknown> = {}
+    if (question    !== undefined) patch.question    = question
+    if (answer      !== undefined) patch.answer      = answer
+    if (explanation !== undefined) patch.explanation = explanation
+    if (difficulty  !== undefined) {
+      if (![1, 2, 3].includes(difficulty)) {
+        return NextResponse.json({ error: 'difficulty must be 1, 2, or 3' }, { status: 400 })
+      }
+      patch.difficulty = difficulty
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 })
+    }
+
     const { error } = await supabase
       .from('flashcards')
-      .update(body)
+      .update(patch)
       .eq('id', id)
 
     if (error) {
