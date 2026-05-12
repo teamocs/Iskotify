@@ -45,7 +45,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const rawRows = await fetchSheetRows()
-    const listings = rawRows.map(transformSheetRow)
+    const listings = rawRows.map(row => {
+      const result = transformSheetRow(row)
+      if (result === null) console.error('[sync] skipped invalid row:', row)
+      return result
+    })
     const valid = listings.filter((l): l is NonNullable<typeof l> => l !== null)
     const skipped = listings.length - valid.length
     const incomingSlugs = valid.map(l => l.slug)
@@ -61,12 +65,12 @@ export async function POST(req: NextRequest) {
     }
 
     let closed = 0
+    // Guard required: NOT IN () with an empty list is invalid SQL
     if (incomingSlugs.length > 0) {
       // Slugs are validated by Zod to match [a-z0-9-] — safe to interpolate directly
       const { data: closedRows, error: closeError } = await supabase
         .from('listings')
         .update({ status: 'closed', updated_at: new Date().toISOString() })
-        .eq('status', 'active')
         .not('slug', 'in', `(${incomingSlugs.join(',')})`)
         .select('id')
       if (closeError) {

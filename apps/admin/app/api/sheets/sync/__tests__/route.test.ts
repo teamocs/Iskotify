@@ -37,8 +37,7 @@ vi.mock('googleapis', () => ({
 
 const mockSelectAfterUpdate = vi.fn().mockResolvedValue({ data: [], error: null })
 const mockNotFilter = vi.fn(() => ({ select: mockSelectAfterUpdate }))
-const mockEqFilter = vi.fn(() => ({ not: mockNotFilter }))
-const mockUpdate = vi.fn(() => ({ eq: mockEqFilter }))
+const mockUpdate = vi.fn(() => ({ not: mockNotFilter }))
 const mockUpsert = vi.fn().mockResolvedValue({ error: null })
 const mockFrom = vi.fn(() => ({ upsert: mockUpsert, update: mockUpdate }))
 
@@ -69,7 +68,6 @@ describe('POST /api/sheets/sync', () => {
     mockUpsert.mockClear()
     mockFrom.mockClear()
     mockUpdate.mockClear()
-    mockEqFilter.mockClear()
     mockNotFilter.mockClear()
     mockSelectAfterUpdate.mockClear()
   })
