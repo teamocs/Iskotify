@@ -15,12 +15,12 @@ import {
 } from '@lineiconshq/free-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 
-const TAB_META = [
-  { name: 'index', label: 'Home', icon: Home2Outlined },
-  { name: 'practice', label: 'Practice', icon: Bolt2Outlined },
-  { name: 'listings', label: 'Listings', icon: GraduationCap1Outlined },
-  { name: 'profile', label: 'Profile', icon: User4Outlined },
-]
+const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
+  index:    { label: 'Home',     icon: Home2Outlined },
+  practice: { label: 'Practice', icon: Bolt2Outlined },
+  listings: { label: 'Listings', icon: GraduationCap1Outlined },
+  profile:  { label: 'Profile',  icon: User4Outlined },
+}
 
 function NavItem({
   label,
@@ -38,6 +38,10 @@ function NavItem({
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }))
+
+  React.useEffect(() => {
+    scale.value = withSpring(isFocused ? 1.06 : 1, { damping: 12, stiffness: 200 })
+  }, [isFocused])
 
   function handlePressIn() {
     scale.value = withSpring(0.9, { damping: 12, stiffness: 200 })
@@ -72,8 +76,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     <View style={styles.wrapper} pointerEvents="box-none">
       <BlurView intensity={90} tint="dark" style={styles.blur}>
         <View style={styles.inner}>
-          {state.routes.map((route, index) => {
-            const meta = TAB_META[index]
+          {state.routes.map((route) => {
+            const meta = TAB_META[route.name]
             if (!meta) return null
             const isFocused = state.index === index
 
