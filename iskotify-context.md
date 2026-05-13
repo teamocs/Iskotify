@@ -5,7 +5,7 @@
 
 **The Ecosystem:**
 *   **Marketing Landing Page:** Public web portal for discovering scholarships/exams and driving app installs.
-*   **Mobile App:** The core "Practice & Review" engine with **Kalaw** (Offline AI Coach) and a dynamic calendar.
+*   **Mobile App:** The core "Practice & Review" engine with **Kuya Baw** (Offline AI Coach) and a dynamic calendar.
 *   **Admin CMS:** Automated management via Google Sheets and AI-powered PDF parsing.
 
 ## 2. Tech Stack Recommendations
@@ -35,13 +35,13 @@
 *   **Listing Detail Page:** Publicly accessible routes (e.g., `iskotify.ph/listings/dost-2026`). 
     *   Shows full details (requirements, coverage, dates).
     *   **The Conversion Hook:** A prominent "Save to My Calendar" or "Start Practice" button that redirects the user to the mobile app store or opens the app via Deep Linking.
-*   **Feature Showcases:** Sections explaining Kalaw (AI Coach), Offline Mode, and the Dynamic Calendar.
+*   **Feature Showcases:** Sections explaining Kuya Baw (AI Coach), Offline Mode, and the Dynamic Calendar.
 
 ### B. Mobile App (Student Interface)
 1.  **Onboarding & Auto-Save:** Users select target exams. The app automatically saves those listings, populating the calendar and "Recommended" practice feed immediately.
 2.  **Home Dashboard:** 
     *   **Dynamic Activity Calendar:** Weekly strip showing milestones from saved listings.
-    *   **Kalaw Hero:** Daily AI-generated greeting and motivation.
+    *   **Kuya Baw Hero:** Daily AI-generated greeting and motivation.
 3.  **Practice Hub:**
     *   **Recommended Feed:** Content filtered by the user's profile and target exams.
     *   **Saved Decks:** Organized folders for custom-titled sessions (e.g., "Algebra Mastery").
@@ -59,7 +59,7 @@
 
 ---
 
-## 5. Kalaw: The Offline Edge AI Coach
+## 5. Kuya Baw: The Offline Edge AI Coach
 *   **Hardware-Aware:** App checks for >4GB RAM before allowing the 1.5GB Gemma model download.
 *   **Contextual Intelligence:** Uses Local RAG to read the user's WatermelonDB data (Readiness scores, missed questions, calendar deadlines) to provide 100% offline, personalized advice.
 
@@ -77,5 +77,5 @@
     *   Onboarding, Pre-assessment, and the Swipeable Flashcard engine with "Recommended" logic.
 *   **Sprint 5: Mobile App - Calendar & Folders**
     *   Dynamic Activity Calendar integration and Saved Decks/Folders management.
-*   **Sprint 6: Kalaw AI & Final Launch**
+*   **Sprint 6: Kuya Baw AI & Final Launch**
     *   Local LLM integration, deep-linking from Landing Page to App, and RevenueCat setup.
