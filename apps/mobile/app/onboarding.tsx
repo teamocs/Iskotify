@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
+import { eq } from 'drizzle-orm'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch } from '../services/sync'
-import { useDatabase } from '../hooks/useDatabase'
-import type { UserSettings } from '../db/models/UserSettings'
+import { useDb } from '../hooks/useDb'
+import { userSettings } from '../db/schema'
 
 interface ListingRow {
   id: string
@@ -16,7 +17,7 @@ interface ListingRow {
 }
 
 export default function OnboardingScreen() {
-  const db = useDatabase()
+  const db = useDb()
   const [listings, setListings] = useState<ListingRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selecting, setSelecting] = useState(false)
@@ -40,24 +41,12 @@ export default function OnboardingScreen() {
   async function handleSelect(listing: ListingRow) {
     setSelecting(true)
     try {
-      const coll = db.get<UserSettings>('user_settings')
-      const existing = await coll.find('local').catch(() => null)
-      if (existing) {
-        await db.write(() =>
-          existing.update(s => {
-            s.selectedListingSlug = listing.slug
-            s.lastSyncedAt = 0
-          })
-        )
-      } else {
-        await db.write(() =>
-          coll.create(s => {
-            s._raw.id = 'local'
-            s.selectedListingSlug = listing.slug
-            s.lastSyncedAt = 0
-          })
-        )
-      }
+      await db.insert(userSettings)
+        .values({ id: 1, selectedListingSlug: listing.slug, lastSyncedAt: 0 })
+        .onConflictDoUpdate({
+          target: userSettings.id,
+          set: { selectedListingSlug: listing.slug, lastSyncedAt: 0 },
+        })
       await syncOnLaunch(db)
       router.replace('/(tabs)')
     } catch (e) {

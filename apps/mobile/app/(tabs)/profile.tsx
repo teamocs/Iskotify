@@ -1,12 +1,13 @@
 import { View, Text, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
-import { useDatabase } from '../../hooks/useDatabase'
+import { eq } from 'drizzle-orm'
+import { useDb } from '../../hooks/useDb'
 import { exportUserData } from '../../services/export'
-import type { UserSettings } from '../../db/models/UserSettings'
+import { userSettings } from '../../db/schema'
 
 export default function ProfileScreen() {
-  const db = useDatabase()
+  const db = useDb()
 
   function handleChangeExam() {
     Alert.alert(
@@ -19,18 +20,9 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const settings = await db
-                .get<UserSettings>('user_settings')
-                .find('local')
-                .catch(() => null)
-              if (settings) {
-                await db.write(() =>
-                  settings.update(s => {
-                    s.selectedListingSlug = ''
-                    s.lastSyncedAt = 0
-                  })
-                )
-              }
+              await db.update(userSettings)
+                .set({ selectedListingSlug: '', lastSyncedAt: 0 })
+                .where(eq(userSettings.id, 1))
               router.replace('/onboarding')
             } catch {
               Alert.alert('Error', 'Could not reset your selection. Please try again.')
