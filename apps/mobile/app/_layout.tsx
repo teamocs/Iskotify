@@ -39,12 +39,12 @@ function AppInit() {
         console.error('[layout] init error:', e)
         router.replace('/onboarding')
       } finally {
-        await SplashScreen.hideAsync()
+        await SplashScreen.hideAsync().catch(() => {})
         setReady(true)
       }
     }
     void init()
-  }, [])
+  }, [db])
 
   return (
     <>
