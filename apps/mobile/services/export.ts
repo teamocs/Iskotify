@@ -14,15 +14,15 @@ export async function exportUserData(db: DrizzleClient): Promise<void> {
     exported_at: new Date().toISOString(),
   }
 
+  const canShare = await Sharing.isAvailableAsync()
+  if (!canShare) throw new Error('Sharing not available on this device')
+
   const dir = FileSystem.documentDirectory
   if (!dir) throw new Error('File system not available on this platform')
   const fileUri = `${dir}iskotify-export.json`
   await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(payload, null, 2), {
     encoding: FileSystem.EncodingType.UTF8,
   })
-
-  const canShare = await Sharing.isAvailableAsync()
-  if (!canShare) throw new Error('Sharing not available on this device')
 
   await Sharing.shareAsync(fileUri, {
     mimeType: 'application/json',
