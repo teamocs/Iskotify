@@ -1,13 +1,12 @@
 import * as Sharing from 'expo-sharing'
 import * as FileSystem from 'expo-file-system'
-import type { Database } from '@nozbe/watermelondb'
-import type { UserSettings } from '../db/models/UserSettings'
+import { eq } from 'drizzle-orm'
+import type { DrizzleClient } from '../db/client'
+import { userSettings } from '../db/schema'
 
-export async function exportUserData(db: Database): Promise<void> {
-  const settings = await db
-    .get<UserSettings>('user_settings')
-    .find('local')
-    .catch(() => null)
+export async function exportUserData(db: DrizzleClient): Promise<void> {
+  const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+  const settings = rows[0]
 
   const payload = {
     selected_listing_slug: settings?.selectedListingSlug ?? '',
