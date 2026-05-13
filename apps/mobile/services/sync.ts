@@ -25,35 +25,38 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .gt('updated_at', since),
     ])
 
-    await db.transaction(async (tx) => {
+    db.transaction((tx) => {
       for (const row of (listingsRes.data ?? [])) {
         const examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
-        await tx.insert(listings)
+        tx.insert(listings)
           .values({ id: row.id, slug: row.slug, title: row.title, type: row.type, status: row.status, examDate })
           .onConflictDoUpdate({
             target: listings.id,
             set: { slug: row.slug, title: row.title, type: row.type, status: row.status, examDate },
           })
+          .run()
       }
 
       for (const row of (subjectsRes.data ?? [])) {
-        await tx.insert(subjects)
+        tx.insert(subjects)
           .values({ id: row.id, name: row.name })
           .onConflictDoUpdate({ target: subjects.id, set: { name: row.name } })
+          .run()
       }
 
       for (const row of (topicsRes.data ?? [])) {
-        await tx.insert(topics)
+        tx.insert(topics)
           .values({ id: row.id, name: row.name, subjectId: row.subject_id, status: row.status })
           .onConflictDoUpdate({
             target: topics.id,
             set: { name: row.name, subjectId: row.subject_id, status: row.status },
           })
+          .run()
       }
 
       for (const row of (cardsRes.data ?? [])) {
         const remoteUpdatedAt = new Date(row.updated_at).getTime()
-        await tx.insert(flashcards)
+        tx.insert(flashcards)
           .values({
             id: row.id,
             topicId: row.topic_id,
@@ -76,11 +79,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
               remoteUpdatedAt,
             },
           })
+          .run()
       }
 
-      await tx.insert(userSettings)
-        .values({ id: 1, selectedListingSlug: slug, lastSyncedAt: Date.now() })
-        .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: Date.now() } })
+      const syncedAt = Date.now()
+      tx.insert(userSettings)
+        .values({ id: 1, selectedListingSlug: slug, lastSyncedAt: syncedAt })
+        .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt } })
+        .run()
     })
   } catch (err) {
     console.error('[sync] error:', err)

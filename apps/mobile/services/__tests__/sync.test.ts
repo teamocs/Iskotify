@@ -28,20 +28,21 @@ function makeSelectChain(rows: any[]) {
 }
 
 function makeTx() {
-  const onConflictDoUpdate = jest.fn().mockResolvedValue(undefined)
+  const run = jest.fn().mockReturnValue(undefined)
+  const onConflictDoUpdate = jest.fn(() => ({ run }))
   const values = jest.fn(() => ({ onConflictDoUpdate }))
   const insert = jest.fn(() => ({ values }))
-  const set = jest.fn(() => ({ where: jest.fn().mockResolvedValue(undefined) }))
+  const set = jest.fn(() => ({ where: jest.fn().mockReturnValue(undefined) }))
   const update = jest.fn(() => ({ set }))
-  return { insert, update, onConflictDoUpdate }
+  return { insert, update, onConflictDoUpdate, run }
 }
 
 function makeDb(settingsRow: object | null) {
   const tx = makeTx()
   return {
     select: jest.fn(() => makeSelectChain(settingsRow ? [settingsRow] : [])),
-    transaction: jest.fn(async (cb: (tx: any) => Promise<void>) => {
-      await cb(tx)
+    transaction: jest.fn((cb: (tx: any) => void) => {
+      cb(tx)
     }),
     _tx: tx,
   }
