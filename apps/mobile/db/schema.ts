@@ -29,7 +29,7 @@ export const flashcards = sqliteTable('flashcards', {
 
 export const listings = sqliteTable('listings', {
   id: text('id').primaryKey(),
-  slug: text('slug').notNull(),
+  slug: text('slug').notNull().unique(),
   title: text('title').notNull(),
   type: text('type').notNull(),
   status: text('status').notNull(),
