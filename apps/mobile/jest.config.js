@@ -24,7 +24,7 @@ module.exports = {
       displayName: 'mobile',
       preset: 'jest-expo',
       testMatch: ['<rootDir>/**/__tests__/**/*.test.{ts,tsx}'],
-      testPathIgnorePatterns: ['<rootDir>/db/', '<rootDir>/services/'],
+      testPathIgnorePatterns: ['<rootDir>/services/'],
       transformIgnorePatterns: [
         'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*|react-native-svg|@lineiconshq)',
       ],
