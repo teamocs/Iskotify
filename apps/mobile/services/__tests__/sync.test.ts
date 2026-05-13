@@ -1,95 +1,91 @@
 import { syncOnLaunch } from '../sync'
+import { userSettings } from '../../db/schema'
 
-function makeChain(data: any[] = []) {
+jest.mock('../supabase', () => ({
+  supabase: { from: jest.fn() },
+}))
+
+jest.mock('drizzle-orm', () => ({
+  eq: jest.fn((col, val) => ({ col, val, __isEq: true })),
+}))
+
+function makeSupabaseChain(data: any[] = []) {
   const chain: any = {
     select: jest.fn().mockReturnThis(),
     contains: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     gt: jest.fn().mockResolvedValue({ data }),
   }
-  chain.select.mockReturnValue(chain)
-  chain.contains.mockReturnValue(chain)
-  chain.eq.mockReturnValue(chain)
   return chain
 }
 
-jest.mock('../supabase', () => ({
-  supabase: { from: jest.fn() },
-}))
-
-function makeSettings(slug: string, lastSyncedAt = 0) {
+function makeSelectChain(rows: any[]) {
   return {
-    selectedListingSlug: slug,
-    lastSyncedAt,
-    _raw: { id: 'local' },
-    prepareUpdate: jest.fn(cb => {
-      const copy: any = { selectedListingSlug: slug, lastSyncedAt }
-      cb(copy)
-      return copy
-    }),
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue(rows),
   }
 }
 
-function makeDb(settings: ReturnType<typeof makeSettings> | null) {
+function makeTx() {
+  const onConflictDoUpdate = jest.fn().mockResolvedValue(undefined)
+  const values = jest.fn(() => ({ onConflictDoUpdate }))
+  const insert = jest.fn(() => ({ values }))
+  const set = jest.fn(() => ({ where: jest.fn().mockResolvedValue(undefined) }))
+  const update = jest.fn(() => ({ set }))
+  return { insert, update, onConflictDoUpdate }
+}
+
+function makeDb(settingsRow: object | null) {
+  const tx = makeTx()
   return {
-    get: jest.fn(() => ({
-      find: jest.fn().mockResolvedValue(settings),
-      create: jest.fn(cb => {
-        const obj: any = { _raw: { id: 'local' }, selectedListingSlug: '', lastSyncedAt: 0 }
-        cb(obj)
-        return obj
-      }),
-      prepareCreate: jest.fn(cb => {
-        const obj: any = { _raw: {} }
-        cb(obj)
-        return obj
-      }),
-    })),
-    write: jest.fn(cb => cb()),
-    batch: jest.fn(),
+    select: jest.fn(() => makeSelectChain(settingsRow ? [settingsRow] : [])),
+    transaction: jest.fn(async (cb: (tx: any) => Promise<void>) => {
+      await cb(tx)
+    }),
+    _tx: tx,
   }
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
   const { supabase } = require('../supabase')
-  supabase.from.mockImplementation(() => makeChain())
+  supabase.from.mockImplementation(() => makeSupabaseChain())
 })
 
 describe('syncOnLaunch', () => {
-  it('skips sync when selectedListingSlug is empty', async () => {
-    const db = makeDb(makeSettings(''))
+  it('returns early when selectedListingSlug is empty', async () => {
+    const db = makeDb({ id: 1, selectedListingSlug: '', lastSyncedAt: 0 })
     await syncOnLaunch(db as any)
-    expect(db.batch).not.toHaveBeenCalled()
+    expect(db.transaction).not.toHaveBeenCalled()
   })
 
-  it('creates settings row when none exist, then skips (empty slug)', async () => {
+  it('returns early when no settings row exists', async () => {
     const db = makeDb(null)
-    db.get = jest.fn(() => ({
-      find: jest.fn().mockRejectedValue(new Error('not found')),
-      create: jest.fn(cb => {
-        const obj: any = { _raw: { id: 'local' }, selectedListingSlug: '', lastSyncedAt: 0 }
-        cb(obj)
-        return obj
-      }),
-      prepareCreate: jest.fn(),
-    }))
     await syncOnLaunch(db as any)
-    expect(db.batch).not.toHaveBeenCalled()
+    expect(db.transaction).not.toHaveBeenCalled()
   })
 
-  it('does not throw when Supabase call fails', async () => {
+  it('calls supabase.from for all four tables when slug is set', async () => {
     const { supabase } = require('../supabase')
-    supabase.from.mockImplementation(() => { throw new Error('network error') })
-    const db = makeDb(makeSettings('upcat'))
-    await expect(syncOnLaunch(db as any)).resolves.toBeUndefined()
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 })
+    await syncOnLaunch(db as any)
+    expect(supabase.from).toHaveBeenCalledWith('listings')
+    expect(supabase.from).toHaveBeenCalledWith('flashcard_subjects')
+    expect(supabase.from).toHaveBeenCalledWith('flashcard_topics')
+    expect(supabase.from).toHaveBeenCalledWith('flashcards')
   })
 
-  it('calls db.batch to update last_synced_at when slug is set', async () => {
-    const db = makeDb(makeSettings('upcat', 1000))
+  it('calls db.transaction when slug is set', async () => {
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 1000 })
     await syncOnLaunch(db as any)
-    expect(db.batch).toHaveBeenCalled()
-    // batch should have been called with at least one argument (the settings prepareUpdate result)
-    expect(db.batch.mock.calls[0].length).toBeGreaterThan(0)
+    expect(db.transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not throw when supabase fails', async () => {
+    const { supabase } = require('../supabase')
+    supabase.from.mockImplementation(() => { throw new Error('network') })
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 })
+    await expect(syncOnLaunch(db as any)).resolves.toBeUndefined()
   })
 })
