@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Alert } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -42,30 +42,27 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#1a1a2e]">
-      <View className="flex-1 px-6 pt-8">
-        <Text className="text-white text-3xl font-bold mb-8">Profile</Text>
-
-        <TouchableOpacity
-          onPress={handleChangeExam}
-          className="bg-white/10 rounded-2xl p-4 mb-4 border border-white/20"
-        >
-          <Text className="text-white font-semibold text-base">Change Exam</Text>
-          <Text className="text-white/50 text-sm mt-1">
-            Select a different exam to study for
-          </Text>
+    <SafeAreaView style={s.root}>
+      <View style={s.inner}>
+        <Text style={s.title}>Profile</Text>
+        <TouchableOpacity onPress={handleChangeExam} style={s.card}>
+          <Text style={s.cardTitle}>Change Exam</Text>
+          <Text style={s.cardSub}>Select a different exam to study for</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={handleExport}
-          className="bg-white/10 rounded-2xl p-4 border border-white/20"
-        >
-          <Text className="text-white font-semibold text-base">Export Data</Text>
-          <Text className="text-white/50 text-sm mt-1">
-            Save your preferences as a JSON file
-          </Text>
+        <TouchableOpacity onPress={handleExport} style={s.card}>
+          <Text style={s.cardTitle}>Export Data</Text>
+          <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   )
 }
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#1a1a2e' },
+  inner: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+  title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 20 },
+  card: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 10 },
+  cardTitle: { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
+  cardSub: { fontSize: 11, color: 'rgba(255,255,255,0.50)', marginTop: 3, fontFamily: 'Lexend_400Regular' },
+})
