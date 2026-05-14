@@ -9,7 +9,15 @@ module.exports = {
     "../../packages/ui/src/**/*.{ts,tsx,js,jsx}"
   ],
   theme: {
-    extend: {}
+    extend: {
+      fontFamily: {
+        heading:       ['Outfit_700Bold'],
+        'heading-semi':['Outfit_600SemiBold'],
+        body:          ['Lexend_400Regular'],
+        'body-medium': ['Lexend_500Medium'],
+        'body-semi':   ['Lexend_600SemiBold'],
+      }
+    }
   },
   plugins: []
 };

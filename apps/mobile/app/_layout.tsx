@@ -4,6 +4,18 @@ import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import { SQLiteProvider } from 'expo-sqlite'
+import { useFonts } from 'expo-font'
+import {
+  Outfit_400Regular,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from '@expo-google-fonts/outfit'
+import {
+  Lexend_300Light,
+  Lexend_400Regular,
+  Lexend_500Medium,
+  Lexend_600SemiBold,
+} from '@expo-google-fonts/lexend'
 import { DrizzleProvider } from '../db'
 import { useDb } from '../hooks/useDb'
 import { syncOnLaunch } from '../services/sync'
@@ -14,18 +26,28 @@ import '../global.css'
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Outfit_400Regular,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    Lexend_300Light,
+    Lexend_400Regular,
+    Lexend_500Medium,
+    Lexend_600SemiBold,
+  })
+
   return (
     <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
       <DrizzleProvider>
-        <AppInit />
+        <AppInit fontsLoaded={fontsLoaded} />
       </DrizzleProvider>
     </SQLiteProvider>
   )
 }
 
-function AppInit() {
+function AppInit({ fontsLoaded }: { fontsLoaded: boolean }) {
   const db = useDb()
-  const [ready, setReady] = useState(false)
+  const [dbReady, setDbReady] = useState(false)
 
   useEffect(() => {
     async function init() {
@@ -39,20 +61,24 @@ function AppInit() {
         console.error('[layout] init error:', e)
         router.replace('/onboarding')
       } finally {
-        await SplashScreen.hideAsync().catch(() => {})
-        setReady(true)
+        setDbReady(true)
       }
     }
     void init()
   }, [db])
 
+  useEffect(() => {
+    if (dbReady && fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => {})
+    }
+  }, [dbReady, fontsLoaded])
+
   return (
     <>
       <StatusBar style="light" />
-      {ready ? (
-        <Stack screenOptions={{ headerShown: false }} />
-      ) : (
-        <View style={{ flex: 1, backgroundColor: '#1a1a2e' }} />
+      <Stack screenOptions={{ headerShown: false }} />
+      {(!dbReady || !fontsLoaded) && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1a1a2e' }} />
       )}
     </>
   )
