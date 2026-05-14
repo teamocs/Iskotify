@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { eq } from 'drizzle-orm'
+import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { userSettings, listings, userProgress, flashcards, topics } from '../db/schema'
 
@@ -80,7 +81,7 @@ export function useHomeStats(): HomeStats {
   const db = useDb()
   const [stats, setStats] = useState<HomeStats>(DEFAULT)
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let cancelled = false
     async function load() {
       try {
@@ -125,7 +126,7 @@ export function useHomeStats(): HomeStats {
     }
     void load()
     return () => { cancelled = true }
-  }, [db])
+  }, [db]))
 
   return stats
 }

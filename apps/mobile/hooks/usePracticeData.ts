@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { subjects, topics, flashcards, userProgress } from '../db/schema'
 
@@ -46,7 +47,7 @@ export function usePracticeData(): PracticeData {
   const [topicRows, setTopicRows] = useState<TopicRow[]>([])
   const [totalCards, setTotalCards] = useState(0)
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let cancelled = false
     async function load() {
       try {
@@ -92,7 +93,7 @@ export function usePracticeData(): PracticeData {
     }
     void load()
     return () => { cancelled = true }
-  }, [db, selectedSubjectId])
+  }, [db, selectedSubjectId]))
 
   return { subjects: allSubjects, topicRows, selectedSubjectId, setSelectedSubjectId, totalCards }
 }
