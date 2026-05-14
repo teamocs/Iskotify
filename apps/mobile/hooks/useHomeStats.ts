@@ -61,7 +61,7 @@ export function computeWeakTopics(
       accuracy: Math.round((correct / total) * 100),
     }))
     .filter(t => t.accuracy < 60)
-    .sort((a, b) => a.accuracy - b.accuracy)
+    .sort((a, b) => a.accuracy - b.accuracy || a.topicId.localeCompare(b.topicId))
     .slice(0, 4)
 }
 
@@ -83,40 +83,44 @@ export function useHomeStats(): HomeStats {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-      const slug = settingsRows[0]?.selectedListingSlug
-      if (!slug) { if (!cancelled) setStats(DEFAULT); return }
+      try {
+        const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+        const slug = settingsRows[0]?.selectedListingSlug
+        if (!slug) { if (!cancelled) setStats(DEFAULT); return }
 
-      const [listingRows, allProgress, allFc, allTopics, firstTopicRows] = await Promise.all([
-        db.select().from(listings).where(eq(listings.slug, slug)).limit(1),
-        db.select({
-          flashcardId: userProgress.flashcardId,
-          correct: userProgress.correct,
-          answeredAt: userProgress.answeredAt,
-        }).from(userProgress),
-        db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
-        db.select({ id: topics.id, name: topics.name }).from(topics),
-        db.select({ id: topics.id }).from(topics).limit(1),
-      ])
+        const [listingRows, allProgress, allFc, allTopics, firstTopicRows] = await Promise.all([
+          db.select().from(listings).where(eq(listings.slug, slug)).limit(1),
+          db.select({
+            flashcardId: userProgress.flashcardId,
+            correct: userProgress.correct,
+            answeredAt: userProgress.answeredAt,
+          }).from(userProgress),
+          db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
+          db.select({ id: topics.id, name: topics.name }).from(topics),
+          db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
+        ])
 
-      const listing = listingRows[0] ?? null
-      const daysLeft = listing?.examDate
-        ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
-        : null
+        const listing = listingRows[0] ?? null
+        const daysLeft = listing?.examDate
+          ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
+          : null
 
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
-      const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
 
-      if (!cancelled) {
-        setStats({
-          listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,
-          daysLeft,
-          todayAccuracy: computeTodayAccuracy(todayRows),
-          streakDays: computeStreak(allProgress),
-          weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
-          firstTopicId: firstTopicRows[0]?.id ?? null,
-        })
+        if (!cancelled) {
+          setStats({
+            listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,
+            daysLeft,
+            todayAccuracy: computeTodayAccuracy(todayRows),
+            streakDays: computeStreak(allProgress),
+            weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
+            firstTopicId: firstTopicRows[0]?.id ?? null,
+          })
+        }
+      } catch (e) {
+        console.error('[useHomeStats] load error:', e)
       }
     }
     void load()

@@ -92,12 +92,13 @@ describe('computeWeakTopics', () => {
 
   it('sorts by accuracy ascending', () => {
     const progress = [
-      { flashcardId: 'fc1', correct: false },
-      { flashcardId: 'fc2', correct: false }, // t1: 0%
-      { flashcardId: 'fc3', correct: false },  // t2: 0%
+      { flashcardId: 'fc1', correct: true },   // t1: 1/2 = 50%
+      { flashcardId: 'fc2', correct: false },
+      { flashcardId: 'fc3', correct: false },   // t2: 0%
     ]
     const result = computeWeakTopics(progress, fcList, topicList)
-    expect(result.length).toBe(2)
-    expect(result.every(r => r.accuracy < 60)).toBe(true)
+    expect(result).toHaveLength(2)
+    expect(result[0].topicId).toBe('t2')   // 0% first
+    expect(result[1].topicId).toBe('t1')   // 50% second
   })
 })
