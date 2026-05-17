@@ -15,7 +15,13 @@ CREATE INDEX IF NOT EXISTS schools_province_idx ON schools(province);
 CREATE INDEX IF NOT EXISTS schools_city_idx ON schools(city);
 CREATE INDEX IF NOT EXISTS schools_name_idx ON schools(name);
 
-ALTER TABLE schools ADD CONSTRAINT IF NOT EXISTS schools_name_city_unique UNIQUE (name, city);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'schools_name_city_unique'
+  ) THEN
+    ALTER TABLE schools ADD CONSTRAINT schools_name_city_unique UNIQUE (name, city);
+  END IF;
+END $$;
 
 ALTER TABLE schools ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
