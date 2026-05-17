@@ -105,6 +105,7 @@ function parseRow(obj) {
   const region = normaliseRegion(
     obj['Region'] ?? obj['region'] ?? obj['REGION'] ?? ''
   )
+  if (region.toLowerCase().startsWith('overseas')) return null
   const province = (
     obj['Division'] ?? obj['division'] ?? obj['Province'] ?? obj['province'] ??
     obj['DIVISION'] ?? obj['PROVINCE'] ?? ''
@@ -234,8 +235,11 @@ async function parseHtml(html) {
       const deped_id = schoolId.trim() || null
 
       if (!region || !name) return
-      // Skip legend/header rows — valid regions contain Roman numerals, NCR, CAR, BARMM, NIR, or Overseas
-      const validRegionPattern = /^(NCR|CAR|BARMM|NIR|Overseas|Region (I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII))/i
+      // Filter out overseas schools — irrelevant to PH SHS students and have a
+      // mismatched column layout that corrupts name/deped_id fields.
+      if (region.toLowerCase().startsWith('overseas')) return
+      // Skip legend/header rows — valid regions contain Roman numerals, NCR, CAR, BARMM, or NIR
+      const validRegionPattern = /^(NCR|CAR|BARMM|NIR|Region (I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII))/i
       if (!validRegionPattern.test(region)) return
       schools.push({ region, province, city, name, deped_id })
     })
