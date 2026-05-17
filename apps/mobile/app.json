@@ -6,7 +6,6 @@
     "version": "0.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "backgroundColor": "#1a1a2e",
@@ -25,7 +24,9 @@
       "output": "static"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

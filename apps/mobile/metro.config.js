@@ -17,8 +17,8 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules")
 ];
 
-// 3. Enable package exports support (required by some modern packages)
-config.resolver.unstable_enablePackageExports = true;
+// 3. Treat .wasm and .svg files as binary assets
+config.resolver.assetExts = [...(config.resolver.assetExts ?? []), 'wasm', 'svg'];
 
 module.exports = withNativeWind(config, {
   input: path.resolve(projectRoot, "global.css")

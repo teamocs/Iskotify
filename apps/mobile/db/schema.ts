@@ -42,6 +42,11 @@ export const userSettings = sqliteTable('user_settings', {
   id: integer('id').primaryKey(),
   selectedListingSlug: text('selected_listing_slug').notNull().default(''),
   lastSyncedAt: integer('last_synced_at').notNull().default(0),
+  fullName: text('full_name').notNull().default(''),
+  school: text('school').notNull().default(''),
+  gradeLevel: integer('grade_level'),
+  googleId: text('google_id'),
+  email: text('email'),
 })
 
 export const userProgress = sqliteTable('user_progress', {

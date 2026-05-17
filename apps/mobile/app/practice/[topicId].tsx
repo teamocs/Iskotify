@@ -210,7 +210,7 @@ const s = StyleSheet.create({
   resultCount: { alignItems: 'center' },
   resultNum: { fontSize: 28, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
   resultLbl: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-  primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 13, paddingHorizontal: 32, marginBottom: 10, width: '100%', alignItems: 'center', shadowColor: '#800000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
+  primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 13, paddingHorizontal: 32, marginBottom: 10, width: '100%', alignItems: 'center' },
   primaryBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
   ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
   ghostBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular' },

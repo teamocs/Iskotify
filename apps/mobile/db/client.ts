@@ -38,7 +38,12 @@ CREATE INDEX IF NOT EXISTS listings_slug_idx ON listings (slug);
 CREATE TABLE IF NOT EXISTS user_settings (
   id INTEGER PRIMARY KEY NOT NULL,
   selected_listing_slug TEXT NOT NULL DEFAULT '',
-  last_synced_at INTEGER NOT NULL DEFAULT 0
+  last_synced_at INTEGER NOT NULL DEFAULT 0,
+  full_name TEXT NOT NULL DEFAULT '',
+  school TEXT NOT NULL DEFAULT '',
+  grade_level INTEGER,
+  google_id TEXT,
+  email TEXT
 );
 CREATE TABLE IF NOT EXISTS user_progress (
   id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -49,8 +54,19 @@ CREATE TABLE IF NOT EXISTS user_progress (
 CREATE INDEX IF NOT EXISTS user_progress_flashcard_id_idx ON user_progress (flashcard_id);
 `
 
+const MIGRATIONS = [
+  `ALTER TABLE user_settings ADD COLUMN full_name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE user_settings ADD COLUMN school TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE user_settings ADD COLUMN grade_level INTEGER`,
+  `ALTER TABLE user_settings ADD COLUMN google_id TEXT`,
+  `ALTER TABLE user_settings ADD COLUMN email TEXT`,
+]
+
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
   rawDb.execSync(CREATE_SQL)
+  for (const sql of MIGRATIONS) {
+    try { rawDb.execSync(sql) } catch { /* column already exists */ }
+  }
   return drizzle(rawDb, { schema })
 }
 

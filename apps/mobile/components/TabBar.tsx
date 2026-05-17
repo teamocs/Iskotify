@@ -123,11 +123,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.28)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
   },
   inner: {
     flex: 1,
@@ -146,10 +141,6 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     backgroundColor: 'rgba(128,0,0,0.82)',
-    shadowColor: '#800000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 9,
   },
   navLabel: {
     fontSize: 9.5,
