@@ -2,6 +2,19 @@ import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import OnboardingScreen from '../onboarding'
 
+jest.mock('../../components/SchoolPicker', () => ({
+  SchoolPicker: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+    const { TextInput } = require('react-native')
+    return (
+      <TextInput
+        testID="school-picker-mock"
+        value={value}
+        onChangeText={onChange}
+      />
+    )
+  },
+}))
+
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn() },
 }))
@@ -45,7 +58,7 @@ describe('OnboardingScreen — Step 1', () => {
   it('renders Full Name and School inputs', () => {
     render(<OnboardingScreen />)
     expect(screen.getByPlaceholderText('e.g. Juan dela Cruz')).toBeTruthy()
-    expect(screen.getByPlaceholderText('e.g. UP Los Baños')).toBeTruthy()
+    expect(screen.getByTestId('school-picker-mock')).toBeTruthy()
   })
 
   it('renders grade buttons G9 through G12', () => {

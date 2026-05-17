@@ -9,6 +9,7 @@ import { supabase } from '../services/supabase'
 import { syncOnLaunch } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
+import { SchoolPicker } from '../components/SchoolPicker'
 
 interface ListingRow {
   id: string
@@ -124,15 +125,7 @@ export default function OnboardingScreen() {
 
             {/* School */}
             <Text style={[labelStyle, { marginTop: 18 }]}>School / University</Text>
-            <TextInput
-              style={inputStyle}
-              placeholder="e.g. UP Los Baños"
-              placeholderTextColor="rgba(255,255,255,0.28)"
-              value={school}
-              onChangeText={setSchool}
-              autoCapitalize="words"
-              returnKeyType="done"
-            />
+            <SchoolPicker value={school} onChange={setSchool} />
 
             {/* Grade Level */}
             <Text style={[labelStyle, { marginTop: 18 }]}>Grade Level *</Text>
@@ -187,6 +180,7 @@ export default function OnboardingScreen() {
 
           </ScrollView>
         </KeyboardAvoidingView>
+
       </SafeAreaView>
     )
   }
