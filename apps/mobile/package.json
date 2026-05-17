@@ -11,6 +11,7 @@
     "web": "expo start --web",
     "build": "expo export",
     "lint": "tsc --noEmit",
+    "test": "jest",
     "type-check": "tsc --noEmit",
     "clean": "rimraf .expo .turbo dist"
   },

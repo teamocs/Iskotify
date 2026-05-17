@@ -5,7 +5,7 @@
     "paths": {
       "@/*": ["./*"]
     },
-    "types": ["nativewind/types"],
+    "types": ["nativewind/types", "jest"],
     "experimentalDecorators": true
   },
   "include": [
