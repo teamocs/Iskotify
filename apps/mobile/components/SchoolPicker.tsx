@@ -156,7 +156,12 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
                 <ActivityIndicator testID="school-picker-loading" color="#fff" />
               </View>
             ) : picker.error ? (
-              <Text style={s.errorText}>{picker.error}</Text>
+              <View style={{ alignItems: 'center', paddingTop: 24 }}>
+                <Text style={s.errorText}>{picker.error}</Text>
+                <TouchableOpacity onPress={picker.retryLoadRegions} style={{ marginTop: 12 }}>
+                  <Text style={[s.errorText, { color: '#fca5a5' }]}>Try again</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <FlatList
                 data={filteredList}

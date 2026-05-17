@@ -26,6 +26,7 @@ export interface UseSchoolPickerReturn {
   selectCity: (c: string) => void
   jumpToLevel: (target: 'region' | 'province' | 'city') => void
   reset: () => void
+  retryLoadRegions: () => void
 }
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000
@@ -61,9 +62,11 @@ export function useSchoolPicker(): UseSchoolPickerReturn {
   const [selectedCity, setSelectedCity] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
 
   useEffect(() => {
     async function loadRegions() {
+      setError(null)
       try {
         const { data, error: err } = await supabase
           .from('school_regions')
@@ -77,7 +80,7 @@ export function useSchoolPicker(): UseSchoolPickerReturn {
       }
     }
     void loadRegions()
-  }, [])
+  }, [retryToken])
 
   const list = useMemo<string[]>(() => {
     if (level === 'region') return regions
@@ -158,5 +161,9 @@ export function useSchoolPicker(): UseSchoolPickerReturn {
     setError(null)
   }, [])
 
-  return { level, list, selectedRegion, selectedProvince, selectedCity, loading, error, selectRegion, selectProvince, selectCity, jumpToLevel, reset }
+  function retryLoadRegions() {
+    setRetryToken(t => t + 1)
+  }
+
+  return { level, list, selectedRegion, selectedProvince, selectedCity, loading, error, selectRegion, selectProvince, selectCity, jumpToLevel, reset, retryLoadRegions }
 }
