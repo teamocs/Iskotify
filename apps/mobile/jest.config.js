@@ -14,7 +14,7 @@ module.exports = {
         ],
       },
       transformIgnorePatterns: [
-        'node_modules/(?!(@supabase))',
+        'node_modules/(?!(@supabase|expo))',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
