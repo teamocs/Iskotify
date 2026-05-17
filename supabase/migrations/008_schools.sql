@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS schools (
 CREATE INDEX IF NOT EXISTS schools_region_idx ON schools(region);
 CREATE INDEX IF NOT EXISTS schools_province_idx ON schools(province);
 CREATE INDEX IF NOT EXISTS schools_city_idx ON schools(city);
+CREATE INDEX IF NOT EXISTS schools_name_idx ON schools(name);
+
+ALTER TABLE schools ADD CONSTRAINT IF NOT EXISTS schools_name_city_unique UNIQUE (name, city);
 
 ALTER TABLE schools ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
@@ -533,7 +536,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('NCR','Metro Manila','Marikina City','Infant Jesus Academy- Marikina City','406787'),
   ('NCR','Metro Manila','Marikina City','Ingenium School','406788'),
   ('NCR','Metro Manila','Marikina City','Jehoshua Christian School, Inc.','406789')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('NCR','Metro Manila','Marikina City','The Academy of God''s Children','406790'),
@@ -1036,7 +1039,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('NCR','Metro Manila','Valenzuela City','La Consolacion College - Valenzuela','407161'),
   ('NCR','Metro Manila','Valenzuela City','St. Louis College-Valenzuela','407162'),
   ('NCR','Metro Manila','Valenzuela City','Saint Mary''s Angels College of Valenzuela','407163')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('NCR','Metro Manila','Valenzuela City','Emmaus Christian Schools, Inc.','407166'),
@@ -1539,7 +1542,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region II - Cagayan Valley','Isabela','City of Cauayan','Our Lady of the Pillar College-Cauayan City','400426'),
   ('Region II - Cagayan Valley','Isabela','City of Cauayan','College of Business Education Science and Technology, Inc','404150'),
   ('Region II - Cagayan Valley','Isabela','City of Cauayan','East Asia International Systems College','404153')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region II - Cagayan Valley','Isabela','City of Cauayan','Saint Clare College of Region 02, Inc.','415501'),
@@ -2042,7 +2045,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region III - Central Luzon','Pampanga','Angeles City','Royal International School','407608'),
   ('Region III - Central Luzon','Pampanga','Angeles City','Systems Plus College Foundation - Angeles City Campus','407625'),
   ('Region III - Central Luzon','Pampanga','Angeles City','Faith Builders Integrated School','421007')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region III - Central Luzon','Pampanga','Angeles City','Amen Mission Christian School','421013'),
@@ -2545,7 +2548,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region IV-A - CALABARZON','Cavite','City of Dasmariñas','NCST Institute of Industrial Research and Training, Dasmariñas City','405124'),
   ('Region IV-A - CALABARZON','Cavite','City of Dasmariñas','The First Uniting Christian College','406953'),
   ('Region IV-A - CALABARZON','Cavite','City of Dasmariñas','AMA Computer Learning Center of Dasmariñas, Cavite','407231')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region IV-A - CALABARZON','Cavite','City of Dasmariñas','Marasigan Institute of Science and Technology','407271'),
@@ -3048,7 +3051,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region IV-A - CALABARZON','Quezon','Tiaong','Southside Integrated School Inc.','425050'),
   ('Region IV-A - CALABARZON','Quezon','Unisan','Dominican Academy','402838'),
   ('Region IV-A - CALABARZON','Rizal','Angono','Angono Private High School','402842')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region IV-A - CALABARZON','Rizal','Angono','Colegio de San Clemente, Inc','402847'),
@@ -3551,7 +3554,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region VI - Western Visayas','Aklan','Kalibo (Capital)','Christ the King School Kalibo, Inc.','403933'),
   ('Region VI - Western Visayas','Aklan','Kalibo (Capital)','Dela Cruz Institute of Business & Industry','403934'),
   ('Region VI - Western Visayas','Aklan','Kalibo (Capital)','Infant Jesus School','403935')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region VI - Western Visayas','Aklan','Kalibo (Capital)','Kalibo Institute, Inc.','403936'),
@@ -4054,7 +4057,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region VII - Central Visayas','Siquijor','Canal','Quezon Memorial Institute of Siquijor, Inc.','404633'),
   ('Region VII - Central Visayas','Siquijor','Larena','St. Vincent Academy of Larena Siquijor, Inc.','404626'),
   ('Region VII - Central Visayas','Siquijor','Larena','Siquijor State College','600036')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region VII - Central Visayas','Siquijor','Lazi','St. Isidore the Farmer Catholic School, Lazi, Siquijor, Inc.','404635'),
@@ -4557,7 +4560,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region X - Northern Mindanao','Misamis Oriental','Cagayan de Oro City (Capital)','Sacred Heart of Jesus Montessori School','462024'),
   ('Region X - Northern Mindanao','Misamis Oriental','Cagayan de Oro City (Capital)','Nanuri International School','462028'),
   ('Region X - Northern Mindanao','Misamis Oriental','Cagayan de Oro City (Capital)','King of Zion School CDO Inc.','462045')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 
 INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region X - Northern Mindanao','Misamis Oriental','Cagayan de Oro City (Capital)','Westshire Academy','462047'),
@@ -4947,7 +4950,7 @@ INSERT INTO schools (region, province, city, name, deped_id) VALUES
   ('Region XII - SOCCSKSARGEN','Sultan Kudarat','Sen. Ninoy Aquino','Kulaman Academy','405795'),
   ('Region XII - SOCCSKSARGEN','Sultan Kudarat','Sen. Ninoy Aquino','Senator Ninoy Aquino College Foundation','406101'),
   ('Region XII - SOCCSKSARGEN','Sultan Kudarat','Sen. Ninoy Aquino','King''s of Lagubang','469031')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name, city) DO NOTHING;
 -- Region lookup table
 INSERT INTO school_regions (region) VALUES
   ('BARMM'),

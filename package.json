@@ -15,7 +15,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
-    "clean": "turbo run clean && rimraf node_modules"
+    "clean": "turbo run clean && rimraf node_modules",
+    "scrape-schools": "node scripts/scrape-schools.js"
   },
   "pnpm": {
     "overrides": {
