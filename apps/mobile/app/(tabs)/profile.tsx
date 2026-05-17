@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined, SparkOutlined } from '@lineiconshq/free-icons'
@@ -31,37 +31,38 @@ export default function ProfileScreen() {
   const db = useDb()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-        const s = rows[0]
-        if (!s) return
+  const load = useCallback(async () => {
+    try {
+      const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+      const s = rows[0]
+      if (!s) return
 
-        let listingTitle = 'No exam selected'
-        if (s.selectedListingSlug) {
-          const lr = await db
-            .select({ title: listings.title })
-            .from(listings)
-            .where(eq(listings.slug, s.selectedListingSlug))
-            .limit(1)
-          listingTitle = lr[0]?.title ?? 'No exam selected'
-        }
-
-        setProfile({
-          fullName: s.fullName || 'Student',
-          school: s.school || '—',
-          gradeLevel: s.gradeLevel ?? null,
-          googleId: s.googleId ?? '',
-          email: s.email ?? '',
-          listingTitle,
-        })
-      } catch (e) {
-        console.warn('[profile] load error:', e)
+      let listingTitle = 'No exam selected'
+      if (s.selectedListingSlug) {
+        const lr = await db
+          .select({ title: listings.title })
+          .from(listings)
+          .where(eq(listings.slug, s.selectedListingSlug))
+          .limit(1)
+        listingTitle = lr[0]?.title ?? 'No exam selected'
       }
+
+      setProfile({
+        fullName: s.fullName || 'Student',
+        school: s.school || '—',
+        gradeLevel: s.gradeLevel ?? null,
+        googleId: s.googleId ?? '',
+        email: s.email ?? '',
+        listingTitle,
+      })
+    } catch (e) {
+      console.warn('[profile] load error:', e)
     }
-    void load()
   }, [db])
+
+  useFocusEffect(useCallback(() => {
+    void load()
+  }, [load]))
 
   function handleChangeExam() {
     Alert.alert(
@@ -138,11 +139,11 @@ export default function ProfileScreen() {
         </View>
 
         {/* Action cards */}
-        <TouchableOpacity onPress={handleChangeExam} style={s.card}>
+        <TouchableOpacity onPress={handleChangeExam} style={s.card} activeOpacity={0.8}>
           <Text style={s.cardTitle}>Change Exam</Text>
           <Text style={s.cardSub}>Select a different exam to study for</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleExport} style={s.card}>
+        <TouchableOpacity onPress={handleExport} style={s.card} activeOpacity={0.8}>
           <Text style={s.cardTitle}>Export Data</Text>
           <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
         </TouchableOpacity>
