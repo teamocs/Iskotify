@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Modal, TextInput, Alert, ScrollView } from 'react-native'
+import {
+  StyleSheet, View, Text, TouchableOpacity, FlatList,
+  Modal, TextInput, Alert, ScrollView,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
@@ -21,7 +24,26 @@ function lastPracticedLabel(ts: number | null): string {
   const days = Math.floor(diff / 86_400_000)
   if (days === 0) return 'Today'
   if (days === 1) return 'Yesterday'
-  return `${days} days ago`
+  return `${days}d ago`
+}
+
+// ── Recommended card (horizontal scroll) ─────────────────────────────────────
+
+function RecommendedCard({ row }: { row: TopicRow }) {
+  const c = STRENGTH_COLOR[row.strength]
+  return (
+    <TouchableOpacity
+      style={rc.card}
+      onPress={() => router.push(`/practice/${row.topic.id}`)}
+      activeOpacity={0.8}
+    >
+      <View style={[rc.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
+        <Text style={[rc.badgeTxt, { color: c.text }]}>{row.strength}</Text>
+      </View>
+      <Text style={rc.name} numberOfLines={2}>{row.topic.name}</Text>
+      <Text style={rc.sub}>{row.cardCount} cards</Text>
+    </TouchableOpacity>
+  )
 }
 
 // ── Topic card ────────────────────────────────────────────────────────────────
@@ -100,22 +122,14 @@ function CreateDeckModal({
   const [saving, setSaving] = useState(false)
 
   function reset() {
-    setName('')
-    setSelected(new Set())
-    setStep(1)
-    setSaving(false)
+    setName(''); setSelected(new Set()); setStep(1); setSaving(false)
   }
-
-  function handleClose() {
-    reset()
-    onClose()
-  }
+  function handleClose() { reset(); onClose() }
 
   function toggleTopic(id: string) {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }
@@ -123,21 +137,14 @@ function CreateDeckModal({
   async function handleCreate() {
     if (!name.trim() || selected.size === 0) return
     setSaving(true)
-    try {
-      await onCreate(name.trim(), Array.from(selected))
-      reset()
-      onClose()
-    } finally {
-      setSaving(false)
-    }
+    try { await onCreate(name.trim(), Array.from(selected)); reset(); onClose() }
+    finally { setSaving(false) }
   }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={m.overlay}>
         <View style={m.sheet}>
-
-          {/* Header */}
           <View style={m.headerRow}>
             <Text style={m.title}>New Deck</Text>
             <TouchableOpacity onPress={handleClose}>
@@ -213,7 +220,7 @@ function CreateDeckModal({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic } = usePracticeData()
+  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic } = usePracticeData()
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
@@ -231,7 +238,7 @@ export default function PracticeScreen() {
       </View>
 
       {/* Subject filter chips */}
-      <View style={s.chips}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
         <TouchableOpacity onPress={() => setSelectedSubjectId(null)}>
           <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
             <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]}>All</Text>
@@ -244,7 +251,7 @@ export default function PracticeScreen() {
             </View>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <FlatList
         data={topicRows}
@@ -255,6 +262,26 @@ export default function PracticeScreen() {
         ListEmptyComponent={<Text style={s.empty}>No topics found. Try syncing again.</Text>}
         ListHeaderComponent={
           <>
+            {/* Recommended section */}
+            {recommendedTopics.length > 0 && (
+              <>
+                <View style={s.secRow}>
+                  <Text style={s.secTitle}>Recommended</Text>
+                  <Text style={s.secSub}>{listing?.title ?? ''}</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={rc.row}
+                  style={{ marginBottom: 14 }}
+                >
+                  {recommendedTopics.map(row => (
+                    <RecommendedCard key={row.topic.id} row={row} />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
             {/* Saved Decks section */}
             <View style={s.secRow}>
               <Text style={s.secTitle}>Saved Decks</Text>
@@ -279,8 +306,7 @@ export default function PracticeScreen() {
 
             {/* Topics section header */}
             <View style={s.secRow}>
-              <Text style={s.secTitle}>Topics</Text>
-              <Text style={s.sortLink}>Sort</Text>
+              <Text style={s.secTitle}>All Topics</Text>
             </View>
           </>
         }
@@ -303,14 +329,14 @@ const s = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
   subtitle: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  chips: { paddingHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  chips: { paddingHorizontal: 16, flexDirection: 'row', gap: 6, paddingBottom: 12 },
   chip: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
   chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
   chipTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_600SemiBold' },
   chipTxtOn: { color: '#fff' },
   secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   secTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  sortLink: { fontSize: 10, color: '#fca5a5', fontWeight: '600', fontFamily: 'Lexend_600SemiBold' },
+  secSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: 8 },
   addBtn: { width: 24, height: 24, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   addBtnTxt: { color: '#fff', fontSize: 14, lineHeight: 18, fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingBottom: 100 },
@@ -326,6 +352,15 @@ const s = StyleSheet.create({
   deckSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
   deckChevron: { color: 'rgba(255,255,255,0.38)', fontSize: 18 },
   empty: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 8 },
+})
+
+const rc = StyleSheet.create({
+  row: { gap: 10, paddingRight: 4 },
+  card: { width: 130, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, padding: 12 },
+  badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 8 },
+  badgeTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+  name: { fontSize: 11, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 4, lineHeight: 16 },
+  sub: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
 })
 
 const m = StyleSheet.create({

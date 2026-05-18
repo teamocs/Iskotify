@@ -15,7 +15,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const slug = settings.selectedListingSlug
 
     const [listingsRes, subjectsRes, topicsRes, cardsRes] = await Promise.all([
-      supabase.from('listings').select('id,slug,title,type,status,exam_date').gt('updated_at', since),
+      supabase.from('listings').select('id,slug,title,type,status,exam_date,region,description,requirements,coverage,provider,external_url,deadline,grant_amount').gt('updated_at', since),
       supabase.from('flashcard_subjects').select('id,name').gt('updated_at', since),
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
       supabase.from('flashcards')
@@ -28,12 +28,20 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     db.transaction((tx) => {
       for (const row of (listingsRes.data ?? [])) {
         const examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
-        tx.insert(listings)
-          .values({ id: row.id, slug: row.slug, title: row.title, type: row.type, status: row.status, examDate })
-          .onConflictDoUpdate({
-            target: listings.id,
-            set: { slug: row.slug, title: row.title, type: row.type, status: row.status, examDate },
-          })
+        const deadline = row.deadline ? new Date(row.deadline).getTime() : null
+        const vals = {
+          id: row.id, slug: row.slug, title: row.title, type: row.type, status: row.status, examDate,
+          region: row.region ?? '',
+          description: row.description ?? '',
+          requirements: JSON.stringify(row.requirements ?? []),
+          coverage: row.coverage ?? '',
+          provider: row.provider ?? '',
+          externalUrl: row.external_url ?? '',
+          deadline,
+          grantAmount: row.grant_amount != null ? String(row.grant_amount) : '',
+        }
+        tx.insert(listings).values(vals)
+          .onConflictDoUpdate({ target: listings.id, set: vals })
           .run()
       }
 

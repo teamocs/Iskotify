@@ -63,6 +63,10 @@ CREATE TABLE IF NOT EXISTS saved_decks (
   topic_ids TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS saved_listings (
+  id TEXT PRIMARY KEY NOT NULL,
+  saved_at INTEGER NOT NULL
+);
 `
 
 const MIGRATIONS = [
@@ -71,6 +75,14 @@ const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN grade_level INTEGER`,
   `ALTER TABLE user_settings ADD COLUMN google_id TEXT`,
   `ALTER TABLE user_settings ADD COLUMN email TEXT`,
+  `ALTER TABLE listings ADD COLUMN region TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listings ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listings ADD COLUMN requirements TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE listings ADD COLUMN coverage TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listings ADD COLUMN provider TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listings ADD COLUMN external_url TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listings ADD COLUMN deadline INTEGER`,
+  `ALTER TABLE listings ADD COLUMN grant_amount TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

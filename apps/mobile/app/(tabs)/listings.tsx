@@ -1,15 +1,24 @@
-import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput } from 'react-native'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { router, useFocusEffect } from 'expo-router'
+import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined, Funnel1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
-import { listings as listingsTable } from '../../db/schema'
+import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 
 type Segment = 'all' | 'exam' | 'scholarship'
 
 interface ListingRow {
-  id: string; slug: string; title: string; type: string; status: string; examDate: number | null
+  id: string
+  slug: string
+  title: string
+  type: string
+  status: string
+  examDate: number | null
+  region: string
+  provider: string
 }
 
 function fmtDate(ts: number | null): string {
@@ -20,23 +29,60 @@ function fmtDate(ts: number | null): string {
 export default function ListingsScreen() {
   const db = useDb()
   const [all, setAll] = useState<ListingRow[]>([])
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [segment, setSegment] = useState<Segment>('all')
   const [query, setQuery] = useState('')
+  const [regionFilter, setRegionFilter] = useState<string | null>(null)
 
-  useEffect(() => {
-    db.select().from(listingsTable).then(rows => setAll(rows))
-  }, [db])
+  useFocusEffect(useCallback(() => {
+    async function load() {
+      const [rows, saved] = await Promise.all([
+        db.select({
+          id: listingsTable.id,
+          slug: listingsTable.slug,
+          title: listingsTable.title,
+          type: listingsTable.type,
+          status: listingsTable.status,
+          examDate: listingsTable.examDate,
+          region: listingsTable.region,
+          provider: listingsTable.provider,
+        }).from(listingsTable),
+        db.select({ id: savedListingsTable.id }).from(savedListingsTable),
+      ])
+      setAll(rows)
+      setSavedIds(new Set(saved.map(s => s.id)))
+    }
+    void load()
+  }, [db]))
+
+  async function toggleSave(listingId: string) {
+    if (savedIds.has(listingId)) {
+      await db.delete(savedListingsTable).where(eq(savedListingsTable.id, listingId))
+      setSavedIds(prev => { const next = new Set(prev); next.delete(listingId); return next })
+    } else {
+      await db.insert(savedListingsTable).values({ id: listingId, savedAt: Date.now() }).onConflictDoNothing()
+      setSavedIds(prev => new Set([...prev, listingId]))
+    }
+  }
+
+  // Derive distinct non-empty regions for filter chips
+  const regions = useMemo(() => {
+    const set = new Set<string>()
+    for (const l of all) { if (l.region) set.add(l.region) }
+    return Array.from(set).sort()
+  }, [all])
 
   const filtered = useMemo(() => {
     return all
       .filter(l => segment === 'all' || l.type === segment)
-      .filter(l => l.title.toLowerCase().includes(query.toLowerCase()))
+      .filter(l => !regionFilter || l.region === regionFilter)
+      .filter(l => !query || l.title.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => {
         if (!a.examDate) return 1
         if (!b.examDate) return -1
         return a.examDate - b.examDate
       })
-  }, [all, segment, query])
+  }, [all, segment, query, regionFilter])
 
   const isExam = (l: ListingRow) => l.type === 'exam'
 
@@ -59,21 +105,52 @@ export default function ListingsScreen() {
         ))}
       </View>
 
-      {/* Search + filter */}
+      {/* Search */}
       <View style={s.searchRow}>
         <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.38)' }}>🔍</Text>
         <TextInput
           style={s.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search..."
+          placeholder="Search listings..."
           placeholderTextColor="rgba(255,255,255,0.38)"
         />
-        <View style={s.searchDivider} />
-        <TouchableOpacity>
-          <Lineicons icon={Funnel1Outlined} size={13} color="rgba(255,255,255,0.62)" />
-        </TouchableOpacity>
+        {query ? (
+          <TouchableOpacity onPress={() => setQuery('')}>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', paddingHorizontal: 4 }}>✕</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <View style={s.searchDivider} />
+            <Lineicons icon={Funnel1Outlined} size={13} color="rgba(255,255,255,0.62)" />
+          </>
+        )}
       </View>
+
+      {/* Region filter chips */}
+      {regions.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.regionRow}
+        >
+          <TouchableOpacity
+            style={[s.regionChip, !regionFilter && s.regionChipOn]}
+            onPress={() => setRegionFilter(null)}
+          >
+            <Text style={[s.regionTxt, !regionFilter && s.regionTxtOn]}>All Regions</Text>
+          </TouchableOpacity>
+          {regions.map(r => (
+            <TouchableOpacity
+              key={r}
+              style={[s.regionChip, regionFilter === r && s.regionChipOn]}
+              onPress={() => setRegionFilter(prev => prev === r ? null : r)}
+            >
+              <Text style={[s.regionTxt, regionFilter === r && s.regionTxtOn]}>📍 {r}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <FlatList
         data={filtered}
@@ -83,8 +160,13 @@ export default function ListingsScreen() {
         ListEmptyComponent={<Text style={s.empty}>No listings found.</Text>}
         renderItem={({ item: l }) => {
           const exam = isExam(l)
+          const isSaved = savedIds.has(l.id)
           return (
-            <View style={s.card}>
+            <TouchableOpacity
+              style={s.card}
+              onPress={() => router.push(`/listings/${l.slug}`)}
+              activeOpacity={0.8}
+            >
               <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
                 <Lineicons
                   icon={exam ? GraduationCap1Outlined : SparkOutlined}
@@ -103,10 +185,17 @@ export default function ListingsScreen() {
                 </View>
                 <View style={s.row2}>
                   <Text style={s.dateText}>{fmtDate(l.examDate)}</Text>
-                  <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.30)' }}>🔖</Text>
+                  {l.region ? <Text style={s.regionLabel}>📍 {l.region}</Text> : null}
                 </View>
               </View>
-            </View>
+              <TouchableOpacity
+                style={s.bookmarkBtn}
+                onPress={() => toggleSave(l.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
           )
         }}
       />
@@ -124,9 +213,14 @@ const s = StyleSheet.create({
   segBtnOn: { backgroundColor: 'rgba(128,0,0,0.82)' },
   segTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_600SemiBold' },
   segTxtOn: { color: '#fff' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8, marginHorizontal: 16, marginBottom: 9 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8, marginHorizontal: 16, marginBottom: 8 },
   searchInput: { flex: 1, fontSize: 11, color: '#fff', fontFamily: 'Lexend_400Regular', padding: 0 },
   searchDivider: { width: 1, height: 13, backgroundColor: 'rgba(255,255,255,0.20)' },
+  regionRow: { paddingHorizontal: 16, paddingBottom: 9, gap: 6, flexDirection: 'row' },
+  regionChip: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
+  regionChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
+  regionTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_600SemiBold' },
+  regionTxtOn: { color: '#fff' },
   list: { paddingHorizontal: 16, paddingBottom: 100 },
   card: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
   cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -138,7 +232,11 @@ const s = StyleSheet.create({
   examBadge: { backgroundColor: 'rgba(128,0,0,0.12)', borderColor: 'rgba(128,0,0,0.25)' },
   scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
   typeTxt: { fontSize: 8.5, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  row2: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dateText: { flex: 1, fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
+  row2: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dateText: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
+  regionLabel: { fontSize: 9, color: 'rgba(255,255,255,0.30)', fontFamily: 'Lexend_400Regular' },
+  bookmarkBtn: { padding: 2, flexShrink: 0 },
+  bookmarkIcon: { fontSize: 14, opacity: 0.35 },
+  bookmarkIconSaved: { opacity: 1 },
   empty: { textAlign: 'center', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', fontSize: 11, marginTop: 32 },
 })

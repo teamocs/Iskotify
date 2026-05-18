@@ -34,9 +34,22 @@ export const listings = sqliteTable('listings', {
   type: text('type').notNull(),
   status: text('status').notNull(),
   examDate: integer('exam_date'),
+  region: text('region').notNull().default(''),
+  description: text('description').notNull().default(''),
+  requirements: text('requirements').notNull().default('[]'),
+  coverage: text('coverage').notNull().default(''),
+  provider: text('provider').notNull().default(''),
+  externalUrl: text('external_url').notNull().default(''),
+  deadline: integer('deadline'),
+  grantAmount: text('grant_amount').notNull().default(''),
 }, (t) => [
   index('listings_slug_idx').on(t.slug),
 ])
+
+export const savedListings = sqliteTable('saved_listings', {
+  id: text('id').primaryKey(),
+  savedAt: integer('saved_at').notNull(),
+})
 
 export const userSettings = sqliteTable('user_settings', {
   id: integer('id').primaryKey(),
