@@ -63,3 +63,10 @@ export const userProgress = sqliteTable('user_progress', {
 }, (t) => [
   index('user_progress_flashcard_id_idx').on(t.flashcardId),
 ])
+
+export const savedDecks = sqliteTable('saved_decks', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  topicIds: text('topic_ids').notNull().default('[]'),
+  createdAt: integer('created_at').notNull(),
+})

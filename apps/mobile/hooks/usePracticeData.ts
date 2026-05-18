@@ -19,6 +19,7 @@ export interface PracticeData {
   selectedSubjectId: string | null
   setSelectedSubjectId: (id: string | null) => void
   totalCards: number
+  cardCountByTopic: Record<string, number>
 }
 
 // ── Pure function (exported for unit tests) ──────────────────────────────────
@@ -46,6 +47,7 @@ export function usePracticeData(): PracticeData {
   const [allSubjects, setAllSubjects] = useState<Array<{ id: string; name: string }>>([])
   const [topicRows, setTopicRows] = useState<TopicRow[]>([])
   const [totalCards, setTotalCards] = useState(0)
+  const [cardCountByTopic, setCardCountByTopic] = useState<Record<string, number>>({})
 
   useFocusEffect(useCallback(() => {
     let cancelled = false
@@ -82,10 +84,16 @@ export function usePracticeData(): PracticeData {
           }
         })
 
+        const countMap: Record<string, number> = {}
+        for (const fc of fcList) {
+          countMap[fc.topicId] = (countMap[fc.topicId] ?? 0) + 1
+        }
+
         if (!cancelled) {
           setAllSubjects(subjectRows)
           setTopicRows(rows)
           setTotalCards(fcList.length)
+          setCardCountByTopic(countMap)
         }
       } catch (e) {
         console.error('[usePracticeData] load error:', e)
@@ -95,5 +103,5 @@ export function usePracticeData(): PracticeData {
     return () => { cancelled = true }
   }, [db, selectedSubjectId]))
 
-  return { subjects: allSubjects, topicRows, selectedSubjectId, setSelectedSubjectId, totalCards }
+  return { subjects: allSubjects, topicRows, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic }
 }

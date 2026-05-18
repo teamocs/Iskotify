@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS schools_cache (
   data TEXT NOT NULL,
   cached_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS saved_decks (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  topic_ids TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL
+);
 `
 
 const MIGRATIONS = [

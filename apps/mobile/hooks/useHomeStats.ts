@@ -10,6 +10,15 @@ export interface WeakTopic {
   accuracy: number
 }
 
+export interface CalendarDay {
+  date: Date
+  dayLetter: string
+  dayNum: number
+  isToday: boolean
+  hasExam: boolean
+  hasPractice: boolean
+}
+
 export interface HomeStats {
   listing: { title: string; examDate: number | null } | null
   daysLeft: number | null
@@ -17,6 +26,8 @@ export interface HomeStats {
   streakDays: number
   weakTopics: WeakTopic[]
   firstTopicId: string | null
+  fullName: string
+  calendarDays: CalendarDay[]
 }
 
 // ── Pure functions (exported for unit tests) ─────────────────────────────────
@@ -37,6 +48,39 @@ export function computeTodayAccuracy(
   if (rows.length === 0) return null
   const correct = rows.filter(r => r.correct === true || r.correct === 1).length
   return Math.round((correct / rows.length) * 100)
+}
+
+const DAY_LETTERS: string[] = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+export function computeCalendarDays(
+  allListings: Array<{ examDate: number | null }>,
+  progress: Array<{ answeredAt: number }>,
+  centerMs: number = Date.now(),
+): CalendarDay[] {
+  const days: CalendarDay[] = []
+  // Use UTC day index throughout so results are timezone-independent
+  const todayDay = Math.floor(centerMs / 86_400_000)
+
+  const examDays = new Set(
+    allListings
+      .filter(l => l.examDate != null)
+      .map(l => Math.floor(l.examDate! / 86_400_000))
+  )
+  const practiceDays = new Set(progress.map(p => Math.floor(p.answeredAt / 86_400_000)))
+
+  for (let offset = -3; offset <= 3; offset++) {
+    const dayIndex = todayDay + offset
+    const date = new Date(dayIndex * 86_400_000)
+    days.push({
+      date,
+      dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
+      dayNum: date.getUTCDate(),
+      isToday: offset === 0,
+      hasExam: examDays.has(dayIndex),
+      hasPractice: practiceDays.has(dayIndex),
+    })
+  }
+  return days
 }
 
 export function computeWeakTopics(
@@ -75,6 +119,8 @@ const DEFAULT: HomeStats = {
   streakDays: 0,
   weakTopics: [],
   firstTopicId: null,
+  fullName: '',
+  calendarDays: [],
 }
 
 export function useHomeStats(): HomeStats {
@@ -89,8 +135,9 @@ export function useHomeStats(): HomeStats {
         const slug = settingsRows[0]?.selectedListingSlug
         if (!slug) { if (!cancelled) setStats(DEFAULT); return }
 
-        const [listingRows, allProgress, allFc, allTopics, firstTopicRows] = await Promise.all([
+        const [listingRows, allListings, allProgress, allFc, allTopics, firstTopicRows] = await Promise.all([
           db.select().from(listings).where(eq(listings.slug, slug)).limit(1),
+          db.select({ examDate: listings.examDate }).from(listings),
           db.select({
             flashcardId: userProgress.flashcardId,
             correct: userProgress.correct,
@@ -118,6 +165,8 @@ export function useHomeStats(): HomeStats {
             streakDays: computeStreak(allProgress),
             weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
             firstTopicId: firstTopicRows[0]?.id ?? null,
+            fullName: settingsRows[0]?.fullName ?? '',
+            calendarDays: computeCalendarDays(allListings, allProgress),
           })
         }
       } catch (e) {

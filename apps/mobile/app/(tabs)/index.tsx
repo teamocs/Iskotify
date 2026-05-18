@@ -2,18 +2,46 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Gear1Outlined, Bolt2Outlined, SparkOutlined } from '@lineiconshq/free-icons'
-import { useHomeStats } from '../../hooks/useHomeStats'
+import { Gear1Outlined, Bolt2Outlined } from '@lineiconshq/free-icons'
+import { useHomeStats, type CalendarDay } from '../../hooks/useHomeStats'
+import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
+
+function CalendarStrip({ days }: { days: CalendarDay[] }) {
+  if (days.length === 0) return null
+  return (
+    <View style={cs.row}>
+      {days.map((d, i) => (
+        <View key={i} style={cs.dayCol}>
+          <Text style={[cs.letter, d.isToday && cs.letterToday]}>{d.dayLetter}</Text>
+          <View style={[
+            cs.circle,
+            d.isToday && cs.circleToday,
+            d.hasExam && !d.isToday && cs.circleExam,
+          ]}>
+            <Text style={[cs.num, d.isToday && cs.numToday]}>{d.dayNum}</Text>
+          </View>
+          <View style={[cs.dot, d.hasPractice && cs.dotActive, d.hasExam && cs.dotExam]} />
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function phHour(): number {
+  const now = new Date()
+  const utc = now.getTime() + now.getTimezoneOffset() * 60_000
+  return new Date(utc + 8 * 3_600_000).getHours()
+}
 
 function timeGreeting(): string {
-  const h = new Date().getHours()
+  const h = phHour()
   if (h < 12) return 'Good morning ☀️'
   if (h < 18) return 'Good afternoon 🌤'
   return 'Good evening 🌙'
 }
 
 export default function HomeScreen() {
-  const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId } = useHomeStats()
+  const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, calendarDays } = useHomeStats()
 
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
@@ -31,11 +59,16 @@ export default function HomeScreen() {
         <View style={s.greetRow}>
           <View>
             <Text style={s.greetTime}>{timeGreeting()}</Text>
-            <Text style={s.greetName}>{listing?.title ?? 'Iskotify'}</Text>
+            <Text style={s.greetName}>{fullName.split(' ')[0] || 'Student'}</Text>
           </View>
           <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
             <Lineicons icon={Gear1Outlined} size={16} color="rgba(255,255,255,0.62)" />
           </TouchableOpacity>
+        </View>
+
+        {/* 7-day calendar strip */}
+        <View style={s.calendarWrap}>
+          <CalendarStrip days={calendarDays} />
         </View>
 
         <View style={s.inner}>
@@ -44,7 +77,7 @@ export default function HomeScreen() {
           <View style={s.kuyaCard}>
             <View style={s.kuyaHeader}>
               <View style={s.kuyaAvatar}>
-                <Lineicons icon={SparkOutlined} size={13} color="#fff" />
+                <KuyaBawMascot width={40} height={40} />
               </View>
               <Text style={s.kuyaName}>Kuya Baw</Text>
               <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
@@ -108,17 +141,35 @@ export default function HomeScreen() {
   )
 }
 
+// ── Calendar strip styles ─────────────────────────────────────────────────────
+const cs = StyleSheet.create({
+  row: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 },
+  dayCol: { alignItems: 'center', gap: 3, flex: 1 },
+  letter: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontFamily: 'Lexend_600SemiBold' },
+  letterToday: { color: '#fca5a5' },
+  circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  circleToday: { backgroundColor: '#fff' },
+  circleExam: { borderWidth: 1.5, borderColor: '#fca5a5' },
+  num: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.62)', fontFamily: 'Outfit_700Bold' },
+  numToday: { color: '#1a1a2e' },
+  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
+  dotActive: { backgroundColor: '#60a5fa' },
+  dotExam: { backgroundColor: '#fca5a5' },
+})
+
+// ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root:  { flex: 1, backgroundColor: '#1a1a2e' },
   scroll: { paddingBottom: 100 },
   inner: { paddingHorizontal: 16 },
+  calendarWrap: { paddingTop: 4, paddingBottom: 2 },
   greetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   greetTime: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginBottom: 1, fontFamily: 'Lexend_400Regular' },
   greetName: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
   iconBtn: { width: 30, height: 30, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center' },
   kuyaCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 22, padding: 13, marginBottom: 8 },
   kuyaHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
-  kuyaAvatar: { width: 26, height: 26, borderRadius: 8, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center' },
+  kuyaAvatar: { width: 40, height: 40, borderRadius: 10, overflow: 'hidden' },
   kuyaName: { fontSize: 11, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
   kuyaBadge: { marginLeft: 'auto', backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 },
   kuyaBadgeText: { fontSize: 8, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
