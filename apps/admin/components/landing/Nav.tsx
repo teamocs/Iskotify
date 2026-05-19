@@ -5,7 +5,7 @@ export function Nav() {
   return (
     <nav className="sticky top-0 z-50 flex items-center justify-between px-6 h-[56px] bg-white/80 backdrop-blur-[20px] saturate-[180%] border-b border-black/[0.08]">
       <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-        <Image src="/logo.svg" alt="Iskotify" width={28} height={28} />
+        <Image src="/logo.svg" alt="Iskotify" width={28} height={28} className="rounded-[20%]" />
         <span className="font-heading font-extrabold text-[#800000] text-lg tracking-tight">Iskotify</span>
       </Link>
 

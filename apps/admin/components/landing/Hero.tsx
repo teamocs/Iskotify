@@ -16,25 +16,25 @@ export function Hero() {
             Find scholarships, track deadlines, and prepare for your qualifying exams — all in one place.
           </p>
 
-          {/* Download buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start mb-8">
+          {/* Download buttons — always side-by-side */}
+          <div className="flex flex-row gap-2 justify-center md:justify-start mb-8">
             <a
               href="#download"
-              className="inline-flex items-center gap-2.5 bg-[#1d1d1f] text-white rounded-xl px-6 py-3 text-sm font-medium hover:bg-black transition-colors shadow-sm"
+              className="flex-1 inline-flex items-center justify-center gap-2 bg-[#1d1d1f] text-white rounded-xl px-4 py-3 text-sm font-medium hover:bg-black transition-colors shadow-sm"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
               </svg>
-              Download on App Store
+              App Store
             </a>
             <a
               href="#download"
-              className="inline-flex items-center gap-2.5 bg-[#1d1d1f] text-white rounded-xl px-6 py-3 text-sm font-medium hover:bg-black transition-colors shadow-sm"
+              className="flex-1 inline-flex items-center justify-center gap-2 bg-[#1d1d1f] text-white rounded-xl px-4 py-3 text-sm font-medium hover:bg-black transition-colors shadow-sm"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M3.18 23.76c.3.17.64.22.99.14l12.49-7.21-2.79-2.79-10.69 9.86zM.35 1.09A1.5 1.5 0 0 0 0 2.06v19.88a1.5 1.5 0 0 0 .35.97l.05.05 11.14-11.14v-.26L.4 1.04l-.05.05zM23.15 10.56l-2.79-1.61-3.12 3.12 3.12 3.12 2.81-1.62c.8-.46.8-1.55-.02-2.01zM4.17.1l12.49 7.21-2.79 2.79L3.18.24A1.18 1.18 0 0 1 4.17.1z"/>
               </svg>
-              Get it on Google Play
+              Google Play
             </a>
           </div>
 
@@ -60,68 +60,123 @@ export function Hero() {
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-5 bg-[#0f0f1a] rounded-b-[14px] z-10" />
 
               {/* App screen */}
-              <div className="absolute inset-0 bg-[#1a1a2e] flex flex-col pt-7 px-3 pb-2 overflow-hidden">
+              <div className="absolute inset-0 bg-[#1a1a2e] flex flex-col pt-7 px-3 pb-1 overflow-hidden">
 
                 {/* Status bar */}
-                <div className="flex justify-between items-center px-1 mb-4">
+                <div className="flex justify-between items-center px-1 mb-2">
                   <span className="text-white text-[9px] font-semibold font-body">9:41</span>
                   <div className="flex gap-1 items-center">
                     <div className="w-3 h-1.5 rounded-sm bg-white/60" />
-                    <div className="w-1 h-1.5 rounded-sm bg-white/60" />
                     <div className="w-3 h-1.5 rounded-[2px] border border-white/60 relative">
                       <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-white/60 rounded-r-sm" />
                     </div>
                   </div>
                 </div>
 
-                {/* Greeting */}
-                <div className="mb-3 px-1">
-                  <p className="text-white font-heading font-bold text-sm leading-tight">Good morning! 🌤️</p>
-                  <p className="text-white/50 text-[9px] font-body mt-0.5">1 listing in focus</p>
-                </div>
-
-                {/* Stat chips */}
-                <div className="flex gap-2 mb-3 px-1">
-                  <div className="bg-[#800000]/30 border border-[#800000]/50 rounded-[8px] px-2 py-1 flex items-center gap-1">
-                    <span className="text-[9px]">🔥</span>
-                    <span className="text-white text-[9px] font-body font-medium">5-day streak</span>
+                {/* App header: greeting + bell + gear */}
+                <div className="flex items-center justify-between px-1 mb-2">
+                  <div>
+                    <p className="text-white font-bold text-[10px] leading-tight font-heading">Good morning! 🌤️</p>
+                    <p className="text-white/50 text-[8px] font-body">Hi, Chris</p>
                   </div>
-                  <div className="bg-white/[0.07] rounded-[8px] px-2 py-1">
-                    <span className="text-white/70 text-[9px] font-body">12 sessions</span>
-                  </div>
-                </div>
-
-                {/* Focus card */}
-                <div className="bg-gradient-to-br from-[#800000] to-[#5a0000] rounded-[14px] p-3 mb-3 mx-1">
-                  <p className="text-red-200 text-[8px] font-body uppercase tracking-wide mb-1">Your Focus</p>
-                  <p className="text-white font-heading font-bold text-xs leading-tight">UPCAT 2026</p>
-                  <p className="text-white/60 text-[8px] font-body mt-1">Exam date: Aug 2026</p>
-                  <div className="mt-2 h-1 bg-white/10 rounded-full">
-                    <div className="h-1 bg-white/50 rounded-full w-[42%]" />
+                  <div className="flex gap-1">
+                    <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" opacity="0.7" aria-hidden="true">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
+                      </svg>
+                    </div>
+                    <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" opacity="0.7" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                      </svg>
+                    </div>
                   </div>
                 </div>
 
-                {/* Recommended topics */}
-                <div className="px-1 flex-1">
-                  <p className="text-white/40 text-[8px] font-body uppercase tracking-wide mb-2">Recommended Topics</p>
+                {/* Kuya Baw AI Coach card */}
+                <div className="bg-white/[0.07] rounded-[10px] p-2 mb-2 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#800000]/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[14px]">🧑‍🏫</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="text-white text-[8px] font-bold font-heading">Kuya Baw</span>
+                      <span className="bg-[#800000] text-white text-[6px] px-1 py-0.5 rounded font-body leading-none">AI Coach</span>
+                    </div>
+                    <p className="text-white/50 text-[7px] font-body leading-tight">Keep it up — you&apos;re on a great streak! 🔥</p>
+                  </div>
+                </div>
+
+                {/* Calendar strip */}
+                <div className="mb-2">
+                  <p className="text-white/40 text-[7px] font-body uppercase tracking-wide mb-1 px-0.5">May 2026</p>
+                  <div className="flex gap-0.5">
+                    {[
+                      { d: 'M', n: 19 },
+                      { d: 'T', n: 20, active: true },
+                      { d: 'W', n: 21 },
+                      { d: 'T', n: 22, dot: true },
+                      { d: 'F', n: 23 },
+                      { d: 'S', n: 24 },
+                      { d: 'S', n: 25 },
+                    ].map((item, i) => (
+                      <div key={i} className={`flex flex-col items-center rounded-[6px] flex-1 py-1 ${item.active ? 'bg-[#800000]' : ''}`}>
+                        <span className="text-white/40 text-[6px] font-body">{item.d}</span>
+                        <span className={`text-[8px] font-medium font-body ${item.active ? 'text-white' : 'text-white/70'}`}>{item.n}</span>
+                        {item.dot && <div className="w-1 h-1 rounded-full bg-[#fca5a5] mt-0.5" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className="flex gap-1 mb-2">
+                  <div className="flex-1 bg-[#fca5a5]/20 rounded-[8px] px-1.5 py-1.5">
+                    <p className="text-[#fca5a5] text-[6px] font-body uppercase tracking-wide leading-tight">Days Left</p>
+                    <p className="text-white font-bold text-[12px] font-heading">87</p>
+                  </div>
+                  <div className="flex-1 bg-white/[0.07] rounded-[8px] px-1.5 py-1.5">
+                    <p className="text-white/40 text-[6px] font-body uppercase tracking-wide leading-tight">Accuracy</p>
+                    <p className="text-white font-bold text-[12px] font-heading">72%</p>
+                  </div>
+                  <div className="flex-1 bg-[#fbbf24]/10 rounded-[8px] px-1.5 py-1.5">
+                    <p className="text-[#fbbf24] text-[6px] font-body uppercase tracking-wide leading-tight">Streak</p>
+                    <p className="text-white font-bold text-[11px] font-heading">5 🔥</p>
+                  </div>
+                </div>
+
+                {/* Quick Practice */}
+                <div className="bg-[#800000] rounded-[8px] py-1.5 mb-2 flex items-center justify-center">
+                  <span className="text-white text-[8px] font-medium font-body">⚡ Quick Practice</span>
+                </div>
+
+                {/* Weak Areas */}
+                <div className="flex-1 min-h-0">
+                  <p className="text-white/40 text-[7px] font-body uppercase tracking-wide mb-1">Weak Areas</p>
                   <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between bg-white/[0.06] rounded-[10px] px-2.5 py-2">
-                      <span className="text-white text-[9px] font-body">General Math</span>
-                      <div className="w-4 h-4 rounded-full bg-[#800000]/40 flex items-center justify-center">
-                        <div className="w-0 h-0 border-l-[4px] border-l-white/80 border-y-[3px] border-y-transparent ml-0.5" />
+                    <div>
+                      <div className="flex justify-between mb-0.5">
+                        <span className="text-white text-[8px] font-body">Math</span>
+                        <span className="text-white/50 text-[7px] font-body">48%</span>
+                      </div>
+                      <div className="h-[3px] bg-white/10 rounded-full">
+                        <div className="h-[3px] bg-[#800000] rounded-full w-[48%]" />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between bg-white/[0.06] rounded-[10px] px-2.5 py-2">
-                      <span className="text-white text-[9px] font-body">Science</span>
-                      <div className="w-4 h-4 rounded-full bg-[#800000]/40 flex items-center justify-center">
-                        <div className="w-0 h-0 border-l-[4px] border-l-white/80 border-y-[3px] border-y-transparent ml-0.5" />
+                    <div>
+                      <div className="flex justify-between mb-0.5">
+                        <span className="text-white text-[8px] font-body">Science</span>
+                        <span className="text-white/50 text-[7px] font-body">61%</span>
+                      </div>
+                      <div className="h-[3px] bg-white/10 rounded-full">
+                        <div className="h-[3px] bg-[#800000] rounded-full w-[61%]" />
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Bottom nav */}
-                <div className="flex justify-around items-center pt-2 pb-1 border-t border-white/[0.08] mt-2">
+                <div className="flex justify-around items-center pt-1 pb-1 border-t border-white/[0.08] mt-1">
                   <div className="w-5 h-5 flex flex-col items-center justify-center gap-[2px]">
                     <div className="w-3 h-[2px] bg-[#800000] rounded-full" />
                     <div className="w-3 h-[2px] bg-[#800000] rounded-full" />

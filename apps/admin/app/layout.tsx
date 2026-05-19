@@ -2,8 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Iskotify",
-  description: "Find scholarships and ace your exams — para sa mga Iskolar ng Bayan"
+  title: "Iskotify — Scholarships & Exam Prep for Filipino Students",
+  description: "Find scholarships, track deadlines, and prepare for your qualifying exams — para sa mga Iskolar ng Bayan. One-time ₱129, lifetime access.",
+  openGraph: {
+    title: "Iskotify — Scholarships & Exam Prep for Filipino Students",
+    description: "Find scholarships, track deadlines, and prepare for your qualifying exams — para sa mga Iskolar ng Bayan.",
+    siteName: "Iskotify",
+    type: "website",
+    images: [{ url: "/logo.svg", width: 512, height: 512, alt: "Iskotify" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Iskotify",
+    description: "Find scholarships and ace your exams — para sa mga Iskolar ng Bayan",
+    images: ["/logo.svg"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
