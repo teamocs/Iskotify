@@ -15,6 +15,17 @@ export function FooterCTA() {
 
         <div className="max-w-6xl mx-auto relative">
           <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+            {/* Kuya Baw mascot — left */}
+            <div className="flex-shrink-0 order-first">
+              <Image
+                src="/kuya-baw-mascot.svg"
+                alt="Kuya Baw"
+                width={120}
+                height={120}
+                className="drop-shadow-2xl"
+              />
+            </div>
+
             {/* Text + buttons */}
             <div className="flex-1 text-center md:text-left">
               <h2 className="font-heading font-extrabold text-white text-3xl md:text-4xl lg:text-5xl leading-tight mb-4">
@@ -46,16 +57,6 @@ export function FooterCTA() {
               </div>
             </div>
 
-            {/* Kuya Baw mascot */}
-            <div className="flex-shrink-0">
-              <Image
-                src="/kuya-baw-mascot.svg"
-                alt="Kuya Baw"
-                width={120}
-                height={120}
-                className="drop-shadow-2xl"
-              />
-            </div>
           </div>
         </div>
       </section>

@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 export function Hero() {
   return (
     <section className="relative bg-[#f5f5f7] overflow-hidden py-16 md:py-24 px-6">
@@ -95,8 +97,8 @@ export function Hero() {
 
                 {/* Kuya Baw AI Coach card */}
                 <div className="bg-white/[0.07] rounded-[10px] p-2 mb-2 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#800000]/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[14px]">🧑‍🏫</span>
+                  <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                    <Image src="/kuya-baw-mascot.svg" alt="Kuya Baw" width={32} height={32} className="object-contain" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 mb-0.5">
