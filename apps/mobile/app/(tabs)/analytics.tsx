@@ -46,6 +46,8 @@ export default function AnalyticsScreen() {
     return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
   }
 
+  const activeDays = analytics.weeklyData.filter(d => d.sessionCount > 0).length
+
   return (
     <SafeAreaView style={s.root}>
       <View style={s.header}>
@@ -96,10 +98,7 @@ export default function AnalyticsScreen() {
             color="#fbbf24"
           />
           <StatCard
-            value={analytics.weeklyData.filter(d => d.sessionCount > 0).length > 0
-              ? String(analytics.weeklyData.filter(d => d.sessionCount > 0).length)
-              : '—'
-            }
+            value={activeDays > 0 ? String(activeDays) : '—'}
             label="ACTIVE DAYS"
             color="#4ade80"
           />
@@ -131,8 +130,8 @@ export default function AnalyticsScreen() {
         {analytics.recentSessions.length > 0 && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Recent Sessions</Text>
-            {analytics.recentSessions.map(rs => (
-              <View key={rs.id} style={s.recentRow}>
+            {analytics.recentSessions.map((rs, i) => (
+              <View key={rs.id} style={[s.recentRow, i === 0 && { borderTopWidth: 0 }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={s.recentTitle} numberOfLines={1}>{rs.title}</Text>
                   <Text style={s.recentDate}>{fmtDate(rs.completedAt)}</Text>
