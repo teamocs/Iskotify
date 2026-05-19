@@ -9,8 +9,9 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="practice" options={{ title: 'Practice' }} />
-      <Tabs.Screen name="listings" options={{ title: 'Listings' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      <Tabs.Screen name="listings"  options={{ title: 'Listings' }} />
+      <Tabs.Screen name="analytics" options={{ title: 'Analytics' }} />
+      <Tabs.Screen name="profile"   options={{ title: 'Profile' }} />
     </Tabs>
   )
 }
