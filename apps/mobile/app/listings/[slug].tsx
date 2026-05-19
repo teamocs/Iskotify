@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   StyleSheet, View, Text, ScrollView, TouchableOpacity,
   Linking, ActivityIndicator,
@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
+import { useTheme } from '../../theme/ThemeContext'
 
 interface FullListing {
   id: string
@@ -48,6 +49,63 @@ export default function ListingDetailScreen() {
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
+    backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
+    topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    saveBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    saveBtnIcon: { fontSize: 18, opacity: 0.35 },
+    saveBtnIconSaved: { opacity: 1 },
+    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
+    scroll: { paddingBottom: 24 },
+    hero: { marginHorizontal: 14, borderRadius: 22, padding: 16, marginBottom: 10, borderWidth: 1 },
+    heroExam: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
+    heroScholar: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.22)' },
+    heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+    typeIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)' },
+    scholarIcon: { backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' },
+    heroTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 22, marginBottom: 2 },
+    heroProvider: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    typeBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    examBadge: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
+    scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
+    typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    statusTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
+    regionBadge: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    regionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    countdownCard: { marginHorizontal: 14, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1 },
+    countdownNormal: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.20)' },
+    countdownUrgent: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.22)' },
+    countdownNum: { fontSize: typo.h1, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -1 },
+    countdownLabel: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    section: { marginHorizontal: 14, marginBottom: 14 },
+    sectionTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
+    datesGrid: { gap: 8 },
+    dateCard: { backgroundColor: t.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: t.border },
+    dateLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
+    dateVal: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    bodyText: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: 14, padding: 12 },
+    grantLabel: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    grantVal: { fontSize: typo.lg, fontWeight: '700', color: '#4ade80', fontFamily: 'Outfit_700Bold' },
+    reqRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+    reqBullet: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    reqText: { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    practiceBtn: { marginHorizontal: 14, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+    practiceBtnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    linkBtn: { marginHorizontal: 14, borderWidth: 1, borderColor: t.divider, borderRadius: 18, paddingVertical: 12, alignItems: 'center' },
+    linkBtnTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    focusRemoveBtn: { backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 2, borderColor: '#831626', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
+    focusRemoveTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fca5a5' },
+    focusAddBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
+    focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
+  }), [t, typo])
 
   useEffect(() => {
     async function load() {
@@ -218,29 +276,27 @@ export default function ListingDetailScreen() {
         ) : null}
 
         {/* Focus CTA */}
-        <View style={{ marginBottom: 12 }}>
-          {inFocus ? (
-            <TouchableOpacity
-              style={{ backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 2, borderColor: '#831626', borderRadius: 18, paddingVertical: 14, alignItems: 'center' }}
-              onPress={() => removeListing(slug)}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: '#fca5a5' }}>
-                ✓ In Focus #{focusPriority} — Tap to Remove
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center' }}
-              onPress={() => addListing(slug)}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: '#fff' }}>
-                + Add to Focus
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {inFocus ? (
+          <TouchableOpacity
+            style={s.focusRemoveBtn}
+            onPress={() => removeListing(slug)}
+            activeOpacity={0.8}
+          >
+            <Text style={s.focusRemoveTxt}>
+              ✓ In Focus #{focusPriority} — Tap to Remove
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={s.focusAddBtn}
+            onPress={() => addListing(slug)}
+            activeOpacity={0.8}
+          >
+            <Text style={s.focusAddTxt}>
+              + Add to Focus
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Start practice CTA */}
         <TouchableOpacity
@@ -266,55 +322,3 @@ export default function ListingDetailScreen() {
   )
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { color: 'rgba(255,255,255,0.62)', fontSize: 26, lineHeight: 30 },
-  topBarTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  saveBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  saveBtnIcon: { fontSize: 18, opacity: 0.35 },
-  saveBtnIconSaved: { opacity: 1 },
-  empty: { textAlign: 'center', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginTop: 60 },
-  scroll: { paddingBottom: 24 },
-  hero: { marginHorizontal: 14, borderRadius: 22, padding: 16, marginBottom: 10, borderWidth: 1 },
-  heroExam: { backgroundColor: 'rgba(128,0,0,0.12)', borderColor: 'rgba(128,0,0,0.30)' },
-  heroScholar: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.22)' },
-  heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  typeIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  examIcon: { backgroundColor: 'rgba(128,0,0,0.18)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)' },
-  scholarIcon: { backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' },
-  heroTitle: { fontSize: 16, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', lineHeight: 22, marginBottom: 2 },
-  heroProvider: { fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  typeBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  examBadge: { backgroundColor: 'rgba(128,0,0,0.12)', borderColor: 'rgba(128,0,0,0.30)' },
-  scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
-  typeTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  statusTxt: { fontSize: 9, fontWeight: '700', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
-  regionBadge: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  regionTxt: { fontSize: 9, color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_400Regular' },
-  countdownCard: { marginHorizontal: 14, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1 },
-  countdownNormal: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.20)' },
-  countdownUrgent: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.22)' },
-  countdownNum: { fontSize: 32, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -1 },
-  countdownLabel: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_400Regular' },
-  section: { marginHorizontal: 14, marginBottom: 14 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
-  datesGrid: { gap: 8 },
-  dateCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-  dateLabel: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
-  dateVal: { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-  bodyText: { fontSize: 12, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-  grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: 14, padding: 12 },
-  grantLabel: { fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-  grantVal: { fontSize: 16, fontWeight: '700', color: '#4ade80', fontFamily: 'Outfit_700Bold' },
-  reqRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  reqBullet: { color: 'rgba(255,255,255,0.38)', fontSize: 12, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-  reqText: { flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-  practiceBtn: { marginHorizontal: 14, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
-  practiceBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  linkBtn: { marginHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, paddingVertical: 12, alignItems: 'center' },
-  linkBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular' },
-})
