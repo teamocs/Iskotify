@@ -19,15 +19,6 @@ export interface FocusedListing {
   deadline: number | null
 }
 
-export interface CalendarDay {
-  date: Date
-  dayLetter: string
-  dayNum: number
-  isToday: boolean
-  hasExam: boolean
-  hasPractice: boolean
-}
-
 export interface HomeStats {
   listing: { title: string; examDate: number | null } | null
   daysLeft: number | null
@@ -36,7 +27,8 @@ export interface HomeStats {
   weakTopics: WeakTopic[]
   firstTopicId: string | null
   fullName: string
-  calendarDays: CalendarDay[]
+  importantDayIndices: number[]
+  practiceDayIndices: number[]
   focusedListings: FocusedListing[]
 }
 
@@ -58,39 +50,6 @@ export function computeTodayAccuracy(
   if (rows.length === 0) return null
   const correct = rows.filter(r => r.correct === true || r.correct === 1).length
   return Math.round((correct / rows.length) * 100)
-}
-
-const DAY_LETTERS: string[] = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-
-export function computeCalendarDays(
-  focusedItems: Array<{ examDate?: number | null; deadline?: number | null }>,
-  progress: Array<{ answeredAt: number }>,
-  centerMs: number = Date.now(),
-): CalendarDay[] {
-  const days: CalendarDay[] = []
-  // Use UTC day index throughout so results are timezone-independent
-  const todayDay = Math.floor(centerMs / 86_400_000)
-
-  const importantDays = new Set<number>()
-  for (const l of focusedItems) {
-    if (l.examDate != null) importantDays.add(Math.floor(l.examDate / 86_400_000))
-    if (l.deadline != null) importantDays.add(Math.floor(l.deadline / 86_400_000))
-  }
-  const practiceDays = new Set(progress.map(p => Math.floor(p.answeredAt / 86_400_000)))
-
-  for (let offset = -3; offset <= 3; offset++) {
-    const dayIndex = todayDay + offset
-    const date = new Date(dayIndex * 86_400_000)
-    days.push({
-      date,
-      dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
-      dayNum: date.getUTCDate(),
-      isToday: offset === 0,
-      hasExam: importantDays.has(dayIndex),
-      hasPractice: practiceDays.has(dayIndex),
-    })
-  }
-  return days
 }
 
 export function computeWeakTopics(
@@ -130,7 +89,8 @@ const DEFAULT: HomeStats = {
   weakTopics: [],
   firstTopicId: null,
   fullName: '',
-  calendarDays: [],
+  importantDayIndices: [],
+  practiceDayIndices: [],
   focusedListings: [],
 }
 
@@ -186,7 +146,11 @@ export function useHomeStats(): HomeStats {
             weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
             firstTopicId: firstTopicRows[0]?.id ?? null,
             fullName: settingsRows[0]?.fullName ?? '',
-            calendarDays: computeCalendarDays(focusedRows, allProgress),
+            importantDayIndices: focusedRows.flatMap(r => [
+              r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
+              r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
+            ]).filter((d): d is number => d != null),
+            practiceDayIndices: allProgress.map(p => Math.floor(p.answeredAt / 86_400_000)),
             focusedListings: focusedRows.map(r => ({
               slug: r.slug,
               priority: r.priority,

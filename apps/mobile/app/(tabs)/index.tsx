@@ -3,12 +3,28 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined, Bolt2Outlined } from '@lineiconshq/free-icons'
-import { useHomeStats, type CalendarDay, type FocusedListing } from '../../hooks/useHomeStats'
+import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
 
-function CalendarStrip({ days }: { days: CalendarDay[] }) {
-  if (days.length === 0) return null
+const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+function CalendarStrip({ importantDayIndices, practiceDayIndices }: { importantDayIndices: number[]; practiceDayIndices: number[] }) {
+  const todayIdx = Math.floor(Date.now() / 86_400_000)
+  const importantSet = new Set(importantDayIndices)
+  const practiceSet = new Set(practiceDayIndices)
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const offset = i - 3
+    const dayIndex = todayIdx + offset
+    const date = new Date(dayIndex * 86_400_000)
+    return {
+      dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
+      dayNum: date.getUTCDate(),
+      isToday: offset === 0,
+      hasExam: importantSet.has(dayIndex),
+      hasPractice: practiceSet.has(dayIndex),
+    }
+  })
   return (
     <View style={cs.row}>
       {days.map((d, i) => (
@@ -50,7 +66,7 @@ function daysUntil(ms: number): number {
 }
 
 export default function HomeScreen() {
-  const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, calendarDays, focusedListings } = useHomeStats()
+  const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
 
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
@@ -109,7 +125,7 @@ export default function HomeScreen() {
 
           {/* 7-day calendar strip — MOVED BELOW AI COACH */}
           <View style={s.calendarWrap}>
-            <CalendarStrip days={calendarDays} />
+            <CalendarStrip importantDayIndices={importantDayIndices} practiceDayIndices={practiceDayIndices} />
           </View>
 
           {/* Stats row */}

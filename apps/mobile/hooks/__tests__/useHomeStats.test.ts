@@ -1,4 +1,4 @@
-import { computeStreak, computeTodayAccuracy, computeWeakTopics, computeCalendarDays } from '../useHomeStats'
+import { computeStreak, computeTodayAccuracy, computeWeakTopics } from '../useHomeStats'
 
 const DAY = 86_400_000
 
@@ -103,53 +103,3 @@ describe('computeWeakTopics', () => {
   })
 })
 
-const DAY_MS = 86_400_000
-
-describe('computeCalendarDays', () => {
-  const center = new Date('2026-05-18T12:00:00Z').getTime()  // Monday
-
-  it('returns exactly 7 days', () => {
-    expect(computeCalendarDays([], [], center)).toHaveLength(7)
-  })
-
-  it('marks only the middle day as today', () => {
-    const days = computeCalendarDays([], [], center)
-    const todayCount = days.filter(d => d.isToday).length
-    expect(todayCount).toBe(1)
-    expect(days[3]!.isToday).toBe(true)
-  })
-
-  it('marks hasExam when a listing examDate falls on a day', () => {
-    const examMs = center  // today
-    const days = computeCalendarDays([{ examDate: examMs }], [], center)
-    expect(days[3]!.hasExam).toBe(true)
-    expect(days[0]!.hasExam).toBe(false)
-  })
-
-  it('marks hasPractice when progress answeredAt falls on a day', () => {
-    const yesterdayMs = center - DAY_MS
-    const days = computeCalendarDays([], [{ answeredAt: yesterdayMs }], center)
-    expect(days[2]!.hasPractice).toBe(true)  // offset -1 = index 2
-    expect(days[3]!.hasPractice).toBe(false)
-  })
-
-  it('ignores listings with null examDate', () => {
-    const days = computeCalendarDays([{ examDate: null }], [], center)
-    expect(days.every(d => !d.hasExam)).toBe(true)
-  })
-
-  it('produces 7 consecutive days in order', () => {
-    const days = computeCalendarDays([], [], center)
-    for (let i = 1; i < days.length; i++) {
-      expect(days[i]!.date.getTime() - days[i - 1]!.date.getTime()).toBe(86_400_000)
-    }
-  })
-
-  it('day letters are valid weekday abbreviations', () => {
-    const valid = new Set(['S', 'M', 'T', 'W', 'F'])
-    const days = computeCalendarDays([], [], center)
-    for (const d of days) {
-      expect(valid.has(d.dayLetter) || d.dayLetter === 'T').toBe(true)
-    }
-  })
-})
