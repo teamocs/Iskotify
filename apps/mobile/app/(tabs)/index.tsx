@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Gear1Outlined, Bolt2Outlined } from '@lineiconshq/free-icons'
+import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
 import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
+import { useNotifications } from '../../hooks/useNotifications'
 import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -157,6 +158,14 @@ export default function HomeScreen() {
   const importantDays = new Set(importantDayIndices)
   const practiceDays  = new Set(practiceDayIndices)
 
+  const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
+
+  useEffect(() => {
+    if (focusedListings.length > 0) {
+      void scheduleNotifs(focusedListings)
+    }
+  }, [focusedListings, scheduleNotifs])
+
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
   const kuyaMsg = listing
@@ -188,9 +197,21 @@ export default function HomeScreen() {
             <Text style={s.greetTime}>{timeGreeting()}</Text>
             <Text style={s.greetName}>{fullName.split(' ')[0] || 'Student'}</Text>
           </View>
-          <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
-            <Lineicons icon={Gear1Outlined} size={20} color="rgba(255,255,255,0.62)" />
-          </TouchableOpacity>
+          <View style={s.headerBtns}>
+            <TouchableOpacity
+              style={s.iconBtn}
+              onPress={() => void toggleNotifs(focusedListings)}
+            >
+              <Lineicons
+                icon={notifEnabled ? Bell1Solid : Bell1Outlined}
+                size={20}
+                color={notifEnabled ? '#fca5a5' : 'rgba(255,255,255,0.40)'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
+              <Lineicons icon={Gear1Outlined} size={20} color="rgba(255,255,255,0.62)" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={s.inner}>
@@ -374,6 +395,7 @@ const s = StyleSheet.create({
   greetTime: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 2, fontFamily: 'Lexend_400Regular' },
   greetName: { fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
   iconBtn: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center' },
+  headerBtns: { flexDirection: 'row', gap: 8, alignItems: 'center' },
 
   // Kuya Baw — LARGER MASCOT
   calendarWrap: { paddingVertical: 10 },
