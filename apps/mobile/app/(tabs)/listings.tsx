@@ -8,6 +8,7 @@ import { GraduationCap1Outlined, SparkOutlined, Funnel1Outlined } from '@lineico
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
+import { useTheme } from '../../theme/ThemeContext'
 
 type Segment = 'all' | 'exam' | 'scholarship'
 
@@ -86,6 +87,49 @@ export default function ListingsScreen() {
       })
   }, [all, segment, query, regionFilter])
 
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+    title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+    subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+    seg: { flexDirection: 'row', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 10, padding: 3, gap: 2, marginHorizontal: 16, marginBottom: 8 },
+    segBtn: { flex: 1, paddingVertical: 5, borderRadius: 8, alignItems: 'center' },
+    segBtnOn: { backgroundColor: 'rgba(128,0,0,0.82)' },
+    segTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    segTxtOn: { color: '#fff' },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8, marginHorizontal: 16, marginBottom: 8 },
+    searchInput: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', padding: 0 },
+    searchDivider: { width: 1, height: 13, backgroundColor: t.divider },
+    regionWrap: { height: 44, marginBottom: 2 },
+    regionScroll: { flex: 1 },
+    regionContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
+    regionChip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
+    regionChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
+    regionTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    regionTxtOn: { color: '#fff' },
+    list: { paddingHorizontal: 16, paddingBottom: 100 },
+    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+    cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)' },
+    scholarIcon: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
+    row1: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+    cardTitle: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    typeBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, flexShrink: 0 },
+    examBadge: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.25)' },
+    scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
+    typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    row2: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    dateText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    regionLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    bookmarkBtn: { padding: 2, flexShrink: 0 },
+    bookmarkIcon: { fontSize: 14, opacity: 0.35 },
+    bookmarkIconSaved: { opacity: 1 },
+    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
+    focusBadgeTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 32 },
+  }), [t, typo])
+
   const isExam = (l: ListingRow) => l.type === 'exam'
 
   return (
@@ -115,7 +159,7 @@ export default function ListingsScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder="Search listings..."
-          placeholderTextColor="rgba(255,255,255,0.38)"
+          placeholderTextColor={t.textTertiary}
         />
         {query ? (
           <TouchableOpacity onPress={() => setQuery('')}>
@@ -215,45 +259,3 @@ export default function ListingsScreen() {
     </SafeAreaView>
   )
 }
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-  subtitle: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  seg: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 10, padding: 3, gap: 2, marginHorizontal: 16, marginBottom: 8 },
-  segBtn: { flex: 1, paddingVertical: 5, borderRadius: 8, alignItems: 'center' },
-  segBtnOn: { backgroundColor: 'rgba(128,0,0,0.82)' },
-  segTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_600SemiBold' },
-  segTxtOn: { color: '#fff' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8, marginHorizontal: 16, marginBottom: 8 },
-  searchInput: { flex: 1, fontSize: 11, color: '#fff', fontFamily: 'Lexend_400Regular', padding: 0 },
-  searchDivider: { width: 1, height: 13, backgroundColor: 'rgba(255,255,255,0.20)' },
-  regionWrap: { height: 44, marginBottom: 2 },
-  regionScroll: { flex: 1 },
-  regionContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
-  regionChip: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
-  regionChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
-  regionTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.50)', fontFamily: 'Lexend_600SemiBold' },
-  regionTxtOn: { color: '#fff' },
-  list: { paddingHorizontal: 16, paddingBottom: 100 },
-  card: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  examIcon: { backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)' },
-  scholarIcon: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
-  row1: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
-  cardTitle: { flex: 1, fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  typeBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, flexShrink: 0 },
-  examBadge: { backgroundColor: 'rgba(128,0,0,0.12)', borderColor: 'rgba(128,0,0,0.25)' },
-  scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
-  typeTxt: { fontSize: 8.5, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  row2: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dateText: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  regionLabel: { fontSize: 9, color: 'rgba(255,255,255,0.30)', fontFamily: 'Lexend_400Regular' },
-  bookmarkBtn: { padding: 2, flexShrink: 0 },
-  bookmarkIcon: { fontSize: 14, opacity: 0.35 },
-  bookmarkIconSaved: { opacity: 1 },
-  focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
-  focusBadgeTxt: { fontSize: 8, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-  empty: { textAlign: 'center', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', fontSize: 11, marginTop: 32 },
-})
