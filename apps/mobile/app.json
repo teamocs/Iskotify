@@ -5,6 +5,7 @@
     "scheme": "iskotify",
     "version": "0.0.1",
     "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -17,7 +18,11 @@
     },
     "android": {
       "package": "app.iskotify.mobile",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#831626"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +36,12 @@
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2aff33cd-6887-46ff-9242-4e0803ca31d5"
+      }
     }
   }
 }

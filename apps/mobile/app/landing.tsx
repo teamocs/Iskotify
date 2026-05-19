@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
+import LogoSvg from '../assets/images/logo.svg'
 
 WebBrowser.maybeCompleteAuthSession()
 
@@ -84,16 +85,8 @@ export default function LandingScreen() {
 
         {/* Hero */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          {/* Logo badge */}
-          <View style={{
-            width: 88, height: 88,
-            backgroundColor: '#831626',
-            borderRadius: 24,
-            alignItems: 'center', justifyContent: 'center',
-            marginBottom: 4,
-          }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 48, color: '#fff', lineHeight: 56 }}>I</Text>
-          </View>
+          {/* Logo */}
+          <LogoSvg width={88} height={88} style={{ marginBottom: 4, borderRadius: 24 }} />
 
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 34, color: '#fff', textAlign: 'center', letterSpacing: -0.5 }}>
             Iskotify
