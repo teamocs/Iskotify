@@ -100,3 +100,29 @@ describe('FAQ', () => {
     expect(html).not.toContain('for free')
   })
 })
+
+// ─── FooterCTA ──────────────────────────────────────────────────────────────
+describe('FooterCTA', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(FooterCTA)) })
+
+  it('does not use the elongated pill class', () => {
+    expect(html).not.toContain('rounded-[980px]')
+  })
+
+  it('uses rounded-xl on download buttons', () => {
+    expect(html).toContain('rounded-xl')
+  })
+
+  it('shows ₱129 in tagline', () => {
+    expect(html).toContain('₱129')
+  })
+
+  it('shows lifetime access in tagline', () => {
+    expect(html).toContain('Lifetime access')
+  })
+
+  it('does not say "Free forever"', () => {
+    expect(html).not.toContain('Free forever')
+  })
+})
