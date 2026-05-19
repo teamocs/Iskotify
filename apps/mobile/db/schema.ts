@@ -61,6 +61,7 @@ export const userSettings = sqliteTable('user_settings', {
   googleId: text('google_id'),
   email: text('email'),
   notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
+  theme: text('theme').notNull().default('system'),
 })
 
 export const schoolsCache = sqliteTable('schools_cache', {

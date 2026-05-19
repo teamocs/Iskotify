@@ -102,6 +102,7 @@ const MIGRATIONS = [
    SELECT selected_listing_slug, 1, (strftime('%s','now') * 1000)
    FROM user_settings WHERE id = 1 AND selected_listing_slug != ''`,
   `ALTER TABLE user_settings ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE user_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
