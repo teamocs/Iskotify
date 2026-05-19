@@ -1,5 +1,3 @@
-import React from 'react'
-
 export function Hero() {
   return (
     <section className="relative bg-[#f5f5f7] overflow-hidden py-16 md:py-24 px-6">
