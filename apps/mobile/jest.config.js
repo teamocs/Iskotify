@@ -31,6 +31,8 @@ module.exports = {
       setupFiles: ['./jest.setup.ts'],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
+        '\\.svg$': '<rootDir>/__mocks__/svgMock.js',
+        '^lottie-react-native$': '<rootDir>/__mocks__/lottieMock.js',
       },
     },
   ],

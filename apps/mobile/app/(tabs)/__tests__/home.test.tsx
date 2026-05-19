@@ -10,6 +10,10 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
 
+jest.mock('expo-constants', () => ({
+  default: { executionEnvironment: 'bare' },
+}))
+
 jest.mock('@lineiconshq/react-native-lineicons', () => ({
   Lineicons: () => null,
 }))
@@ -18,6 +22,8 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Gear1Outlined: {},
   Bolt2Outlined: {},
   SparkOutlined: {},
+  Bell1Outlined: {},
+  Bell1Solid: {},
 }))
 
 const mockUseHomeStats = jest.fn()
@@ -30,7 +36,14 @@ jest.mock('../../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
 }))
 
-jest.mock('../../../assets/images/kuya-baw-mascot.svg', () => 'KuyaBawMascot')
+jest.mock('../../../hooks/useNotifications', () => ({
+  useNotifications: () => ({
+    enabled: true,
+    ready: true,
+    schedule: jest.fn(),
+    toggle: jest.fn(),
+  }),
+}))
 
 const emptyStats = {
   listing: null,
@@ -40,7 +53,9 @@ const emptyStats = {
   weakTopics: [],
   firstTopicId: null,
   fullName: 'Student',
-  calendarDays: [],
+  importantDayIndices: [],
+  practiceDayIndices: [],
+  focusedListings: [],
 }
 
 describe('HomeScreen', () => {
@@ -95,10 +110,10 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Quick Practice')).toBeTruthy()
   })
 
-  it('renders weak topic chips when present', () => {
+  it('renders weak topic cards when present', () => {
     mockUseHomeStats.mockReturnValue({
       ...emptyStats,
-      weakTopics: [{ topicId: 't1', topicName: 'Algebra' }],
+      weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 45 }],
       firstTopicId: 't1',
     })
     render(<HomeScreen />)
@@ -109,11 +124,7 @@ describe('HomeScreen', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
     render(<HomeScreen />)
-    const settingsBtn = screen.getByTestId
-      ? screen.queryByTestId('settings-btn')
-      : null
-    // Settings button is identified by pressing the gear icon area
-    // fireEvent on TouchableOpacity with router.push('/settings')
+    const settingsBtn = screen.queryByTestId('settings-btn')
     expect(router.push).not.toHaveBeenCalled()
   })
 })
