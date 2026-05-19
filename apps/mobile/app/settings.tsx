@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -16,6 +16,7 @@ import {
 import { useDb } from '../hooks/useDb'
 import { userSettings, listings } from '../db/schema'
 import { exportUserData } from '../services/export'
+import { useTheme } from '../theme/ThemeContext'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
@@ -29,6 +30,14 @@ function SettingsRow({
   onPress?: () => void
   disabled?: boolean
 }) {
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    row: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 9, marginBottom: 4 },
+    rowIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+    rowLabel: { flex: 1, fontSize: typo.sm, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    rowChevron: { color: t.textTertiary, fontSize: 18 },
+  }), [t, typo])
+
   return (
     <TouchableOpacity
       style={[s.row, disabled && { opacity: 0.5 }]}
@@ -39,7 +48,7 @@ function SettingsRow({
       <View style={[s.rowIcon, { backgroundColor: iconBg }]}>
         <Lineicons icon={icon} size={13} color={iconColor} />
       </View>
-      <Text style={[s.rowLabel, disabled && { color: 'rgba(255,255,255,0.38)' }]}>{label}</Text>
+      <Text style={[s.rowLabel, disabled && { color: t.textTertiary }]}>{label}</Text>
       <Text style={s.rowChevron}>›</Text>
     </TouchableOpacity>
   )
@@ -47,6 +56,7 @@ function SettingsRow({
 
 export default function SettingsScreen() {
   const db = useDb()
+  const { theme: t, typo, themePref, setTheme } = useTheme()
   const [listingTitle, setListingTitle] = useState('')
 
   useEffect(() => {
@@ -68,9 +78,41 @@ export default function SettingsScreen() {
     }
   }
 
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    backRow: { flexDirection: 'row' as const, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 4 },
+    backBtn: { width: 36, height: 36, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
+    scroll: { paddingHorizontal: 16, paddingBottom: 40 },
+    pageTitle: { fontSize: typo.xl, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
+    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 16 },
+    versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
+    versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
+    versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    profileCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
+    profileAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: t.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
+    profileName: { fontSize: typo.sm, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    profileSub: { fontSize: typo.xs, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
+    rowChevron: { color: t.textTertiary, fontSize: 18 },
+    secLabel: { fontSize: typo.xs, fontWeight: '600' as const, letterSpacing: 1.2, textTransform: 'uppercase' as const, color: t.textTertiary, marginBottom: 5, marginTop: 12, fontFamily: 'Lexend_600SemiBold' },
+    appearRow: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 9, marginBottom: 4 },
+    appearIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surface },
+    appearLabel: { fontSize: typo.sm, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    segWrap: { flexDirection: 'row' as const, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 3, gap: 2, marginLeft: 'auto' as const },
+    segBtn: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 7, alignItems: 'center' as const },
+    segBtnOn: { backgroundColor: t.accent },
+    segTxt: { fontSize: typo.xs, fontWeight: '600' as const, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    segTxtOn: { color: '#fff' },
+  }), [t, typo])
+
+  const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark' }[] = [
+    { label: 'Auto', value: 'system' },
+    { label: 'Light', value: 'light' },
+    { label: 'Dark', value: 'dark' },
+  ]
+
   return (
     <SafeAreaView style={s.root}>
-      {/* Back button */}
       <View style={s.backRow}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Text style={s.backArrow}>‹</Text>
@@ -78,8 +120,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Title + version badge */}
         <Text style={s.pageTitle}>Settings</Text>
         <View style={s.versionBadge}>
           <Text style={s.versionApp}>Iskotify</Text>
@@ -87,7 +127,6 @@ export default function SettingsScreen() {
           <Text style={s.versionNum}>v{version}</Text>
         </View>
 
-        {/* Profile card */}
         <TouchableOpacity style={s.profileCard} activeOpacity={0.8}>
           <View style={s.profileAvatar}>
             <Lineicons icon={User4Outlined} size={18} color="#fff" />
@@ -99,75 +138,37 @@ export default function SettingsScreen() {
           <Text style={s.rowChevron}>›</Text>
         </TouchableOpacity>
 
-        {/* App section */}
         <Text style={s.secLabel}>App</Text>
-        <SettingsRow
-          icon={SparkOutlined}
-          iconBg="rgba(128,0,0,0.12)"
-          iconColor="#fca5a5"
-          label="About Iskotify"
-          onPress={() => Alert.alert('Iskotify', `Version ${version}\n\nYour ultimate UPCAT & scholarship companion.`)}
-        />
-        <SettingsRow
-          icon={QuestionMarkCircleOutlined}
-          iconBg="rgba(96,165,250,0.12)"
-          iconColor="#60a5fa"
-          label="Help & Support"
-          onPress={() => Alert.alert('Help', 'Support docs coming soon.')}
-        />
-        <SettingsRow
-          icon={Shield2Outlined}
-          iconBg="rgba(245,158,11,0.10)"
-          iconColor="#fbbf24"
-          label="Privacy & Terms"
-          onPress={() => Alert.alert('Privacy', 'Privacy policy coming soon.')}
-        />
+        <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor="#fca5a5" label="About Iskotify"
+          onPress={() => Alert.alert('Iskotify', `Version ${version}\n\nYour ultimate UPCAT & scholarship companion.`)} />
+        <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
+          onPress={() => Alert.alert('Help', 'Support docs coming soon.')} />
+        <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
+          onPress={() => Alert.alert('Privacy', 'Privacy policy coming soon.')} />
 
-        {/* Data section */}
         <Text style={s.secLabel}>Data</Text>
-        <SettingsRow
-          icon={Download1Outlined}
-          iconBg="rgba(34,197,94,0.10)"
-          iconColor="#4ade80"
-          label="Export Data"
-          onPress={handleExport}
-        />
+        <SettingsRow icon={Download1Outlined} iconBg="rgba(34,197,94,0.10)" iconColor="#4ade80" label="Export Data" onPress={handleExport} />
 
-        {/* Appearance section */}
         <Text style={s.secLabel}>Appearance</Text>
-        <View style={[s.row, { opacity: 0.5 }]}>
-          <View style={[s.rowIcon, { backgroundColor: 'rgba(255,255,255,0.07)' }]}>
-            <Lineicons icon={Brush2Outlined} size={13} color="rgba(255,255,255,0.4)" />
+        <View style={s.appearRow}>
+          <View style={s.appearIcon}>
+            <Lineicons icon={Brush2Outlined} size={13} color={t.textSecondary} />
           </View>
-          <Text style={[s.rowLabel, { color: 'rgba(255,255,255,0.38)' }]}>Theme</Text>
-          <View style={s.soonChip}><Text style={s.soonTxt}>Coming soon</Text></View>
+          <Text style={s.appearLabel}>Theme</Text>
+          <View style={s.segWrap}>
+            {THEME_OPTIONS.map(opt => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[s.segBtn, themePref === opt.value && s.segBtnOn]}
+                onPress={() => void setTheme(opt.value)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.segTxt, themePref === opt.value && s.segTxtOn]}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   )
 }
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  backRow: { flexDirection: 'row', paddingHorizontal: 8, paddingTop: 4, paddingBottom: 4 },
-  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { color: 'rgba(255,255,255,0.62)', fontSize: 28, lineHeight: 32 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 40 },
-  pageTitle: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
-  versionBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 16 },
-  versionApp: { fontSize: 9, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
-  versionDot: { width: 3, height: 3, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 99 },
-  versionNum: { fontSize: 9, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  profileCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  profileAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center' },
-  profileName: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  profileSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 1, fontFamily: 'Lexend_400Regular' },
-  secLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase', color: 'rgba(255,255,255,0.38)', marginBottom: 5, marginTop: 12, fontFamily: 'Lexend_600SemiBold' },
-  row: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 4 },
-  rowIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { flex: 1, fontSize: 11, fontWeight: '500', color: '#fff', fontFamily: 'Lexend_500Medium' },
-  rowChevron: { color: 'rgba(255,255,255,0.38)', fontSize: 18 },
-  soonChip: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  soonTxt: { fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_600SemiBold' },
-})
