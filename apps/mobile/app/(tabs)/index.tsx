@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -9,37 +10,116 @@ import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function CalendarStrip({ importantDayIndices, practiceDayIndices }: { importantDayIndices: number[]; practiceDayIndices: number[] }) {
-  const todayIdx = Math.floor(Date.now() / 86_400_000)
-  const importantSet = new Set(importantDayIndices)
-  const practiceSet = new Set(practiceDayIndices)
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const offset = i - 3
-    const dayIndex = todayIdx + offset
+function CalendarStrip({
+  importantDays,
+  practiceDays,
+}: {
+  importantDays: Set<number>
+  practiceDays: Set<number>
+}) {
+  const [weekOffset, setWeekOffset] = useState(0)
+
+  const todayDay = Math.floor(Date.now() / 86_400_000)
+  const centerDay = todayDay + weekOffset * 7
+
+  const days: Array<{
+    dayIndex: number
+    dayLetter: string
+    dayNum: number
+    isToday: boolean
+    hasExam: boolean
+    hasPractice: boolean
+  }> = []
+  for (let offset = -3; offset <= 3; offset++) {
+    const dayIndex = centerDay + offset
     const date = new Date(dayIndex * 86_400_000)
-    return {
+    days.push({
+      dayIndex,
       dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
       dayNum: date.getUTCDate(),
-      isToday: offset === 0,
-      hasExam: importantSet.has(dayIndex),
-      hasPractice: practiceSet.has(dayIndex),
-    }
-  })
+      isToday: dayIndex === todayDay,
+      hasExam: importantDays.has(dayIndex),
+      hasPractice: practiceDays.has(dayIndex),
+    })
+  }
+
+  // Month label — "May 2026" or "May – Jun 2026" when window spans two months
+  const firstDate = new Date((centerDay - 3) * 86_400_000)
+  const lastDate  = new Date((centerDay + 3) * 86_400_000)
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+  const monthLabel =
+    fmt(firstDate) === fmt(lastDate)
+      ? `${fmt(firstDate)} ${lastDate.getUTCFullYear()}`
+      : `${fmt(firstDate)} – ${fmt(lastDate)} ${lastDate.getUTCFullYear()}`
+
+  // Nearest future exam/deadline
+  const futureDays = [...importantDays].filter(d => d > todayDay).sort((a, b) => a - b)
+  const nearestExamDay = futureDays[0] ?? null
+  const examWeekOffset =
+    nearestExamDay != null ? Math.round((nearestExamDay - todayDay) / 7) : null
+
+  const showToday    = weekOffset !== 0
+  const showNextExam = weekOffset === 0 && nearestExamDay != null
+
   return (
-    <View style={cs.row}>
-      {days.map((d, i) => (
-        <View key={i} style={cs.dayCol}>
-          <Text style={[cs.letter, d.isToday && cs.letterToday]}>{d.dayLetter}</Text>
-          <View style={[
-            cs.circle,
-            d.isToday && cs.circleToday,
-            d.hasExam && !d.isToday && cs.circleExam,
-          ]}>
-            <Text style={[cs.num, d.isToday && cs.numToday]}>{d.dayNum}</Text>
-          </View>
-          <View style={[cs.dot, d.hasPractice && cs.dotActive, d.hasExam && cs.dotExam]} />
+    <View style={cs.container}>
+      {/* Navigation row */}
+      <View style={cs.navRow}>
+        <View style={cs.navLeft}>
+          <TouchableOpacity
+            onPress={() => setWeekOffset(w => w - 1)}
+            hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          >
+            <Text style={cs.arrowTxt}>‹</Text>
+          </TouchableOpacity>
+          <Text style={cs.monthLbl}>{monthLabel}</Text>
+          <TouchableOpacity
+            onPress={() => setWeekOffset(w => w + 1)}
+            hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          >
+            <Text style={cs.arrowTxt}>›</Text>
+          </TouchableOpacity>
         </View>
-      ))}
+
+        {showToday && (
+          <TouchableOpacity onPress={() => setWeekOffset(0)} style={cs.pill}>
+            <Text style={cs.pillTxt}>Today</Text>
+          </TouchableOpacity>
+        )}
+        {showNextExam && examWeekOffset != null && (
+          <TouchableOpacity
+            onPress={() => setWeekOffset(examWeekOffset)}
+            style={[cs.pill, cs.pillExam]}
+          >
+            <Text style={[cs.pillTxt, cs.pillExamTxt]}>📌 Exam</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Days row */}
+      <View style={cs.row}>
+        {days.map((d, i) => (
+          <View key={i} style={cs.dayCol}>
+            <Text style={[cs.letter, d.isToday && cs.letterToday]}>
+              {d.dayLetter}
+            </Text>
+            <View style={[
+              cs.circle,
+              d.isToday && cs.circleToday,
+              d.hasExam && !d.isToday && cs.circleExam,
+            ]}>
+              <Text style={[cs.num, d.isToday && cs.numToday]}>
+                {d.dayNum}
+              </Text>
+            </View>
+            <View style={[
+              cs.dot,
+              d.hasPractice && cs.dotActive,
+              d.hasExam && cs.dotExam,
+            ]} />
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
@@ -68,6 +148,8 @@ function daysUntil(ms: number): number {
 export default function HomeScreen() {
   const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
+  const importantDays = new Set(importantDayIndices)
+  const practiceDays  = new Set(practiceDayIndices)
 
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
@@ -125,7 +207,7 @@ export default function HomeScreen() {
 
           {/* 7-day calendar strip — MOVED BELOW AI COACH */}
           <View style={s.calendarWrap}>
-            <CalendarStrip importantDayIndices={importantDayIndices} practiceDayIndices={practiceDayIndices} />
+            <CalendarStrip importantDays={importantDays} practiceDays={practiceDays} />
           </View>
 
           {/* Stats row */}
@@ -236,7 +318,16 @@ export default function HomeScreen() {
 
 // ── Calendar strip styles ─────────────────────────────────────────────────────
 const cs = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  container: { paddingVertical: 6 },
+  navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+  navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  arrowTxt: { fontSize: 22, color: 'rgba(255,255,255,0.55)', fontFamily: 'Outfit_700Bold', lineHeight: 26 },
+  monthLbl: { fontSize: 12, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_700Bold', minWidth: 90, textAlign: 'center' },
+  pill: { marginLeft: 'auto', backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
+  pillTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.70)', fontFamily: 'Lexend_600SemiBold' },
+  pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
+  pillExamTxt: { color: '#fca5a5' },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
   dayCol: { alignItems: 'center', gap: 3, flex: 1 },
   letter: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontFamily: 'Lexend_600SemiBold' },
   letterToday: { color: '#fca5a5' },
