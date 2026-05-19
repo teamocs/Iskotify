@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { useTheme } from '../../theme/ThemeContext'
 
 function StatCard({ value, label, color }: { value: string; label: string; color?: string }) {
   return (
@@ -41,6 +42,46 @@ export default function AnalyticsScreen() {
   const { focusListings } = useFocusListings()
   const [activeSlug, setActiveSlug] = useState<string | 'overall'>('overall')
   const analytics = useAnalytics(activeSlug)
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+    title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+    subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+    tabsScroll: { maxHeight: 46, marginBottom: 4 },
+    tabsContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center', paddingVertical: 6 },
+    tab: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 14, paddingVertical: 5, maxWidth: 140 },
+    tabActive: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
+    tabTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    tabTxtActive: { color: '#fff' },
+    scroll: { paddingHorizontal: 16 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+    statCard: { flex: 1, minWidth: '45%', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 14, alignItems: 'center' },
+    statVal: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', letterSpacing: -0.5 },
+    statLbl: { fontSize: typo.xs, color: t.textTertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
+    section: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 18, padding: 14, marginBottom: 12 },
+    sectionTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12, fontFamily: 'Lexend_600SemiBold' },
+    chartWrap: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4 },
+    barCol: { flex: 1, alignItems: 'center', gap: 4 },
+    barBg: { width: '100%', height: 60, backgroundColor: t.surfaceSubtle, borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
+    barFill: { width: '100%', borderRadius: 6 },
+    barLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    barLabelToday: { color: '#fca5a5', fontWeight: '700' },
+    barPct: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    masteryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    masteryLabel: { width: 90, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    masteryBarBg: { flex: 1, height: 6, backgroundColor: t.surface2, borderRadius: 3, overflow: 'hidden' },
+    masteryBarFill: { height: 6, borderRadius: 3 },
+    masteryPct: { width: 32, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', textAlign: 'right' },
+    recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.surfaceSubtle },
+    recentTitle: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    recentDate: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    recentBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
+    recentBadgeTxt: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    emptyState: { alignItems: 'center', paddingVertical: 48 },
+    emptyTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
+    emptySub: { fontSize: typo.base, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
+  }), [t, typo])
 
   function fmtDate(ts: number): string {
     return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
@@ -156,43 +197,3 @@ export default function AnalyticsScreen() {
     </SafeAreaView>
   )
 }
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-  subtitle: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  tabsScroll: { maxHeight: 46, marginBottom: 4 },
-  tabsContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center', paddingVertical: 6 },
-  tab: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 980, paddingHorizontal: 14, paddingVertical: 5, maxWidth: 140 },
-  tabActive: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
-  tabTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.50)', fontFamily: 'Lexend_600SemiBold' },
-  tabTxtActive: { color: '#fff' },
-  scroll: { paddingHorizontal: 16 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  statCard: { flex: 1, minWidth: '45%', backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, padding: 14, alignItems: 'center' },
-  statVal: { fontSize: 22, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', letterSpacing: -0.5 },
-  statLbl: { fontSize: 8.5, color: 'rgba(255,255,255,0.38)', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
-  section: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 18, padding: 14, marginBottom: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12, fontFamily: 'Lexend_600SemiBold' },
-  chartWrap: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4 },
-  barCol: { flex: 1, alignItems: 'center', gap: 4 },
-  barBg: { width: '100%', height: 60, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
-  barFill: { width: '100%', borderRadius: 6 },
-  barLabel: { fontSize: 8.5, color: 'rgba(255,255,255,0.35)', fontFamily: 'Lexend_400Regular' },
-  barLabelToday: { color: '#fca5a5', fontWeight: '700' },
-  barPct: { fontSize: 7.5, color: 'rgba(255,255,255,0.40)', fontFamily: 'Lexend_400Regular' },
-  masteryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  masteryLabel: { width: 90, fontSize: 10, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular' },
-  masteryBarBg: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 3, overflow: 'hidden' },
-  masteryBarFill: { height: 6, borderRadius: 3 },
-  masteryPct: { width: 32, fontSize: 10, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold', textAlign: 'right' },
-  recentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
-  recentTitle: { fontSize: 12, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-  recentDate: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginTop: 1 },
-  recentBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
-  recentBadgeTxt: { fontSize: 10, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  emptyState: { alignItems: 'center', paddingVertical: 48 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 6 },
-  emptySub: { fontSize: 12, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center' },
-})
