@@ -8,7 +8,7 @@ import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch } from '../services/sync'
 import { useDb } from '../hooks/useDb'
-import { userSettings, flashcards, userProgress } from '../db/schema'
+import { userSettings, flashcards, userProgress, focusListings as focusListingsTable } from '../db/schema'
 import { SchoolPicker } from '../components/SchoolPicker'
 
 interface ListingRow { id: string; slug: string; title: string; type: string; exam_date: string | null }
@@ -51,11 +51,12 @@ export default function OnboardingScreen() {
   const [school, setSchool] = useState('')
   const [gradeLevel, setGradeLevel] = useState<number | null>(null)
 
-  // Step 2
+  // Step 2 state
   const [listings, setListings] = useState<ListingRow[]>([])
   const [loadingListings, setLoadingListings] = useState(false)
-  const [selecting, setSelecting] = useState(false)
-  const [selectedSlug, setSelectedSlug] = useState('')
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [selectedSlug, setSelectedSlug] = useState('')  // kept for assessment
 
   // Step 3 — pre-assessment
   const [assessCards, setAssessCards] = useState<AssessCard[]>([])
@@ -117,35 +118,44 @@ export default function OnboardingScreen() {
     setStep(2)
   }
 
-  async function handleSelectListing(listing: ListingRow) {
-    setSelecting(true)
+  async function handleConfirmListings() {
+    if (selectedSlugs.length === 0) return
+    setSaving(true)
     try {
-      await db.insert(userSettings)
-        .values({
+      const now = Date.now()
+      await db.transaction(tx => {
+        tx.insert(userSettings).values({
           id: 1,
-          selectedListingSlug: listing.slug,
+          selectedListingSlug: selectedSlugs[0]!,
           lastSyncedAt: 0,
           fullName: fullName.trim(),
           school: school.trim(),
           gradeLevel: gradeLevel ?? undefined,
-        })
-        .onConflictDoUpdate({
+        }).onConflictDoUpdate({
           target: userSettings.id,
           set: {
-            selectedListingSlug: listing.slug,
+            selectedListingSlug: selectedSlugs[0]!,
             lastSyncedAt: 0,
             fullName: fullName.trim(),
             school: school.trim(),
             gradeLevel: gradeLevel ?? undefined,
           },
-        })
+        }).run()
+
+        for (let i = 0; i < selectedSlugs.length; i++) {
+          tx.insert(focusListingsTable)
+            .values({ listingSlug: selectedSlugs[i]!, priority: i + 1, addedAt: now })
+            .onConflictDoNothing()
+            .run()
+        }
+      })
+      setSelectedSlug(selectedSlugs[0]!)
       await syncOnLaunch(db)
-      setSelectedSlug(listing.slug)
       setStep(3)
     } catch (e) {
-      console.error('[onboarding] select error:', e)
+      console.error('[onboarding] confirm error:', e)
     } finally {
-      setSelecting(false)
+      setSaving(false)
     }
   }
 
@@ -257,7 +267,7 @@ export default function OnboardingScreen() {
   if (step === 2) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
-        <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 24, marginBottom: 0 }}>
+        <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 24 }}>
           <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.20)' }} />
           <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
           <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.20)' }} />
@@ -268,10 +278,10 @@ export default function OnboardingScreen() {
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.40)' }}>← Back</Text>
           </TouchableOpacity>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 26, color: '#fff', marginBottom: 4 }}>
-            Which exam are you{'\n'}preparing for?
+            What are you{'\n'}preparing for?
           </Text>
           <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.50)' }}>
-            You can change this later from your profile.
+            Tap to select. First tap = #1 priority.
           </Text>
         </View>
 
@@ -283,17 +293,28 @@ export default function OnboardingScreen() {
           <FlatList
             data={listings}
             keyExtractor={item => item.id}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => handleSelectListing(item)}
-                disabled={selecting}
-                style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: item.type === 'exam' ? 'rgba(128,0,0,0.18)' : 'rgba(34,197,94,0.14)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📋' : '🎓'}</Text>
-                  </View>
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 160 }}
+            renderItem={({ item }) => {
+              const priorityIdx = selectedSlugs.indexOf(item.slug)
+              const isSelected = priorityIdx !== -1
+              return (
+                <TouchableOpacity
+                  onPress={() => setSelectedSlugs(prev =>
+                    isSelected ? prev.filter(s => s !== item.slug) : [...prev, item.slug]
+                  )}
+                  style={{
+                    backgroundColor: isSelected ? 'rgba(128,0,0,0.20)' : 'rgba(255,255,255,0.08)',
+                    borderRadius: 18, padding: 16, marginBottom: 10,
+                    borderWidth: isSelected ? 2 : 1,
+                    borderColor: isSelected ? '#831626' : 'rgba(255,255,255,0.14)',
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  {isSelected && (
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#831626', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 12, color: '#fff' }}>#{priorityIdx + 1}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: '#fff' }}>{item.title}</Text>
                     {item.exam_date ? (
@@ -302,19 +323,51 @@ export default function OnboardingScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={{ color: 'rgba(255,255,255,0.30)', fontSize: 18 }}>›</Text>
-                </View>
-              </TouchableOpacity>
-            )}
+                  <Text style={{ color: isSelected ? '#fca5a5' : 'rgba(255,255,255,0.30)', fontSize: 18 }}>
+                    {isSelected ? '✓' : '›'}
+                  </Text>
+                </TouchableOpacity>
+              )
+            }}
           />
         )}
 
-        {selecting ? (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.50)', alignItems: 'center', justifyContent: 'center' }}>
+        {/* Sticky bottom CTA */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: '#1a1a2e', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
+          {selectedSlugs.length > 0 && (
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+              {selectedSlugs.map((slug, i) => {
+                const listing = listings.find(l => l.slug === slug)
+                return (
+                  <View key={slug} style={{ backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: 10, color: '#fca5a5' }}>
+                      #{i + 1} {listing?.title ?? slug}
+                    </Text>
+                  </View>
+                )
+              })}
+            </View>
+          )}
+          <TouchableOpacity
+            disabled={selectedSlugs.length === 0 || saving}
+            onPress={handleConfirmListings}
+            style={{
+              backgroundColor: selectedSlugs.length > 0 ? 'rgba(128,0,0,0.82)' : 'rgba(255,255,255,0.08)',
+              borderRadius: 16, paddingVertical: 15, alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: selectedSlugs.length > 0 ? '#fff' : 'rgba(255,255,255,0.28)' }}>
+              {saving ? 'Setting up…' : `Continue${selectedSlugs.length > 0 ? ` (${selectedSlugs.length})` : ''} →`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {saving && (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color="#fff" size="large" />
             <Text style={{ color: 'rgba(255,255,255,0.70)', fontFamily: 'Lexend_400Regular', marginTop: 12, fontSize: 12 }}>Syncing your content…</Text>
           </View>
-        ) : null}
+        )}
       </SafeAreaView>
     )
   }
