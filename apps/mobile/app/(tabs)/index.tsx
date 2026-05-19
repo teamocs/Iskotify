@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined, Bolt2Outlined } from '@lineiconshq/free-icons'
 import { useHomeStats, type CalendarDay } from '../../hooks/useHomeStats'
+import { useAnalytics } from '../../hooks/useAnalytics'
 import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
 
 function CalendarStrip({ days }: { days: CalendarDay[] }) {
@@ -42,6 +43,7 @@ function timeGreeting(): string {
 
 export default function HomeScreen() {
   const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, calendarDays } = useHomeStats()
+  const { sessionCount, streak } = useAnalytics('overall')
 
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
@@ -100,6 +102,23 @@ export default function HomeScreen() {
               <Text style={s.statLbl}>STREAK</Text>
             </View>
           </View>
+
+          {/* Mini progress card */}
+          {sessionCount > 0 && (
+            <TouchableOpacity
+              style={s.progressCard}
+              onPress={() => router.push('/(tabs)/analytics')}
+              activeOpacity={0.8}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={s.progressTitle}>My Progress</Text>
+                <Text style={s.progressSub}>
+                  {sessionCount} session{sessionCount !== 1 ? 's' : ''}{streak > 0 ? ` · ${streak}🔥 streak` : ''}
+                </Text>
+              </View>
+              <Text style={s.progressChevron}>›</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Quick Practice CTA */}
           {quickTopicId ? (
@@ -189,4 +208,8 @@ const s = StyleSheet.create({
   chip: { backgroundColor: 'rgba(239,68,68,0.10)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.22)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontSize: 10, fontWeight: '600', color: '#f87171', fontFamily: 'Lexend_600SemiBold' },
   empty: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
+  progressCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  progressTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  progressSub: { fontSize: 10, color: 'rgba(255,255,255,0.50)', marginTop: 1, fontFamily: 'Lexend_400Regular' },
+  progressChevron: { color: 'rgba(255,255,255,0.38)', fontSize: 20 },
 })
