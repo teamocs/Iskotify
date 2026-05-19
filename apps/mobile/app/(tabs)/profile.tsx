@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined, SparkOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
+import { useFocusListings } from '../../hooks/useFocusListings'
 import { exportUserData } from '../../services/export'
 import { userSettings, listings } from '../../db/schema'
 
@@ -30,6 +31,7 @@ const DEFAULT: ProfileData = {
 export default function ProfileScreen() {
   const db = useDb()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
+  const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
 
   const load = useCallback(async () => {
     try {
@@ -138,11 +140,48 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
+        {/* My Focus List */}
+        <View style={s.focusSection}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={s.secTitle}>My Focus List</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/listings')}>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(128,0,0,0.80)' }}>+ Add More</Text>
+            </TouchableOpacity>
+          </View>
+          {focusListingsData.length === 0 ? (
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.38)', marginBottom: 4 }}>
+              No exams in focus. Tap "+ Add More" to get started.
+            </Text>
+          ) : (
+            focusListingsData.map(item => (
+              <View key={item.slug} style={s.focusItem}>
+                <View style={s.focusPriorityBadge}>
+                  <Text style={s.focusPriorityTxt}>#{item.priority}</Text>
+                </View>
+                <Text style={s.focusItemTitle} numberOfLines={1}>{item.title}</Text>
+                <TouchableOpacity
+                  onPress={() => moveListing(item.slug, 'up')}
+                  disabled={item.priority === 1}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={{ fontSize: 16, color: item.priority === 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.45)' }}>↑</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => moveListing(item.slug, 'down')}
+                  disabled={item.priority === focusListingsData.length}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={{ fontSize: 16, color: item.priority === focusListingsData.length ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.45)' }}>↓</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => removeListing(item.slug)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                  <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.30)' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+
         {/* Action cards */}
-        <TouchableOpacity onPress={handleChangeExam} style={s.card} activeOpacity={0.8}>
-          <Text style={s.cardTitle}>Change Exam</Text>
-          <Text style={s.cardSub}>Select a different exam to study for</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={handleExport} style={s.card} activeOpacity={0.8}>
           <Text style={s.cardTitle}>Export Data</Text>
           <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
@@ -175,4 +214,10 @@ const s = StyleSheet.create({
   card:          { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 10 },
   cardTitle:     { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
   cardSub:       { fontSize: 11, color: 'rgba(255,255,255,0.50)', marginTop: 3, fontFamily: 'Lexend_400Regular' },
+  focusSection:  { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 10 },
+  secTitle:      { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
+  focusItem:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  focusPriorityBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  focusPriorityTxt: { fontSize: 11, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  focusItemTitle: { flex: 1, fontSize: 12, color: '#fff', fontFamily: 'Outfit_600SemiBold' },
 })
