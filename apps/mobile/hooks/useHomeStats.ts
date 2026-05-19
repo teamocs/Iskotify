@@ -1,13 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
-import { eq } from 'drizzle-orm'
+import { eq, asc } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
-import { userSettings, listings, userProgress, flashcards, topics } from '../db/schema'
+import { userSettings, listings as listingsTable, userProgress, flashcards, topics, focusListings } from '../db/schema'
 
 export interface WeakTopic {
   topicId: string
   topicName: string
   accuracy: number
+}
+
+export interface FocusedListing {
+  slug: string
+  priority: number
+  title: string
+  type: string
+  examDate: number | null
+  deadline: number | null
 }
 
 export interface CalendarDay {
@@ -28,6 +37,7 @@ export interface HomeStats {
   firstTopicId: string | null
   fullName: string
   calendarDays: CalendarDay[]
+  focusedListings: FocusedListing[]
 }
 
 // ── Pure functions (exported for unit tests) ─────────────────────────────────
@@ -53,7 +63,7 @@ export function computeTodayAccuracy(
 const DAY_LETTERS: string[] = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 export function computeCalendarDays(
-  allListings: Array<{ examDate: number | null }>,
+  focusedItems: Array<{ examDate?: number | null; deadline?: number | null }>,
   progress: Array<{ answeredAt: number }>,
   centerMs: number = Date.now(),
 ): CalendarDay[] {
@@ -61,11 +71,11 @@ export function computeCalendarDays(
   // Use UTC day index throughout so results are timezone-independent
   const todayDay = Math.floor(centerMs / 86_400_000)
 
-  const examDays = new Set(
-    allListings
-      .filter(l => l.examDate != null)
-      .map(l => Math.floor(l.examDate! / 86_400_000))
-  )
+  const importantDays = new Set<number>()
+  for (const l of focusedItems) {
+    if (l.examDate != null) importantDays.add(Math.floor(l.examDate / 86_400_000))
+    if (l.deadline != null) importantDays.add(Math.floor(l.deadline / 86_400_000))
+  }
   const practiceDays = new Set(progress.map(p => Math.floor(p.answeredAt / 86_400_000)))
 
   for (let offset = -3; offset <= 3; offset++) {
@@ -76,7 +86,7 @@ export function computeCalendarDays(
       dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
       dayNum: date.getUTCDate(),
       isToday: offset === 0,
-      hasExam: examDays.has(dayIndex),
+      hasExam: importantDays.has(dayIndex),
       hasPractice: practiceDays.has(dayIndex),
     })
   }
@@ -121,6 +131,7 @@ const DEFAULT: HomeStats = {
   firstTopicId: null,
   fullName: '',
   calendarDays: [],
+  focusedListings: [],
 }
 
 export function useHomeStats(): HomeStats {
@@ -135,9 +146,8 @@ export function useHomeStats(): HomeStats {
         const slug = settingsRows[0]?.selectedListingSlug
         if (!slug) { if (!cancelled) setStats(DEFAULT); return }
 
-        const [listingRows, allListings, allProgress, allFc, allTopics, firstTopicRows] = await Promise.all([
-          db.select().from(listings).where(eq(listings.slug, slug)).limit(1),
-          db.select({ examDate: listings.examDate }).from(listings),
+        const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows] = await Promise.all([
+          db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
           db.select({
             flashcardId: userProgress.flashcardId,
             correct: userProgress.correct,
@@ -146,6 +156,16 @@ export function useHomeStats(): HomeStats {
           db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
           db.select({ id: topics.id, name: topics.name }).from(topics),
           db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
+          db.select({
+            slug: focusListings.listingSlug,
+            priority: focusListings.priority,
+            title: listingsTable.title,
+            type: listingsTable.type,
+            examDate: listingsTable.examDate,
+            deadline: listingsTable.deadline,
+          }).from(focusListings)
+            .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
+            .orderBy(asc(focusListings.priority)),
         ])
 
         const listing = listingRows[0] ?? null
@@ -166,7 +186,15 @@ export function useHomeStats(): HomeStats {
             weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
             firstTopicId: firstTopicRows[0]?.id ?? null,
             fullName: settingsRows[0]?.fullName ?? '',
-            calendarDays: computeCalendarDays(allListings, allProgress),
+            calendarDays: computeCalendarDays(focusedRows, allProgress),
+            focusedListings: focusedRows.map(r => ({
+              slug: r.slug,
+              priority: r.priority,
+              title: r.title ?? r.slug,
+              type: r.type ?? 'exam',
+              examDate: r.examDate ?? null,
+              deadline: r.deadline ?? null,
+            })),
           })
         }
       } catch (e) {
