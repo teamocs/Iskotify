@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined, Funnel1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
+import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 
 type Segment = 'all' | 'exam' | 'scholarship'
@@ -28,6 +29,7 @@ function fmtDate(ts: number | null): string {
 
 export default function ListingsScreen() {
   const db = useDb()
+  const { isInFocus, getPriority } = useFocusListings()
   const [all, setAll] = useState<ListingRow[]>([])
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [segment, setSegment] = useState<Segment>('all')
@@ -129,27 +131,30 @@ export default function ListingsScreen() {
 
       {/* Region filter chips */}
       {regions.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.regionRow}
-        >
-          <TouchableOpacity
-            style={[s.regionChip, !regionFilter && s.regionChipOn]}
-            onPress={() => setRegionFilter(null)}
+        <View style={s.regionWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.regionContent}
+            style={s.regionScroll}
           >
-            <Text style={[s.regionTxt, !regionFilter && s.regionTxtOn]}>All Regions</Text>
-          </TouchableOpacity>
-          {regions.map(r => (
             <TouchableOpacity
-              key={r}
-              style={[s.regionChip, regionFilter === r && s.regionChipOn]}
-              onPress={() => setRegionFilter(prev => prev === r ? null : r)}
+              style={[s.regionChip, !regionFilter && s.regionChipOn]}
+              onPress={() => setRegionFilter(null)}
             >
-              <Text style={[s.regionTxt, regionFilter === r && s.regionTxtOn]}>📍 {r}</Text>
+              <Text style={[s.regionTxt, !regionFilter && s.regionTxtOn]}>All Regions</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            {regions.map(r => (
+              <TouchableOpacity
+                key={r}
+                style={[s.regionChip, regionFilter === r && s.regionChipOn]}
+                onPress={() => setRegionFilter(prev => prev === r ? null : r)}
+              >
+                <Text style={[s.regionTxt, regionFilter === r && s.regionTxtOn]}>📍 {r}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       <FlatList
@@ -182,6 +187,14 @@ export default function ListingsScreen() {
                       {exam ? 'Exam' : 'Scholar'}
                     </Text>
                   </View>
+                  {(() => {
+                    const p = getPriority(l.slug)
+                    return p !== null ? (
+                      <View style={s.focusBadge}>
+                        <Text style={s.focusBadgeTxt}>#{p} Focus</Text>
+                      </View>
+                    ) : null
+                  })()}
                 </View>
                 <View style={s.row2}>
                   <Text style={s.dateText}>{fmtDate(l.examDate)}</Text>
@@ -216,10 +229,12 @@ const s = StyleSheet.create({
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8, marginHorizontal: 16, marginBottom: 8 },
   searchInput: { flex: 1, fontSize: 11, color: '#fff', fontFamily: 'Lexend_400Regular', padding: 0 },
   searchDivider: { width: 1, height: 13, backgroundColor: 'rgba(255,255,255,0.20)' },
-  regionRow: { paddingHorizontal: 16, paddingBottom: 9, gap: 6, flexDirection: 'row' },
-  regionChip: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
+  regionWrap: { height: 44, marginBottom: 2 },
+  regionScroll: { flex: 1 },
+  regionContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
+  regionChip: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
   regionChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
-  regionTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_600SemiBold' },
+  regionTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.50)', fontFamily: 'Lexend_600SemiBold' },
   regionTxtOn: { color: '#fff' },
   list: { paddingHorizontal: 16, paddingBottom: 100 },
   card: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
@@ -238,5 +253,7 @@ const s = StyleSheet.create({
   bookmarkBtn: { padding: 2, flexShrink: 0 },
   bookmarkIcon: { fontSize: 14, opacity: 0.35 },
   bookmarkIconSaved: { opacity: 1 },
+  focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
+  focusBadgeTxt: { fontSize: 8, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
   empty: { textAlign: 'center', color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', fontSize: 11, marginTop: 32 },
 })
