@@ -1,8 +1,12 @@
 import { createServerClient } from '@iskotify/utils'
 import { Nav } from '@/components/landing/Nav'
 import { Hero } from '@/components/landing/Hero'
-import { KuyaBawCTA } from '@/components/landing/KuyaBawCTA'
+import { Features } from '@/components/landing/Features'
+import { HowItWorks } from '@/components/landing/HowItWorks'
 import { ListingGrid } from '@/components/landing/ListingGrid'
+import { Testimonials } from '@/components/landing/Testimonials'
+import { FAQ } from '@/components/landing/FAQ'
+import { FooterCTA } from '@/components/landing/FooterCTA'
 import type { Listing } from '@iskotify/utils'
 
 export const revalidate = 3600
@@ -26,10 +30,18 @@ export default async function HomePage() {
     <div className="min-h-screen bg-[#f5f5f7]">
       <Nav />
       <Hero />
+      <Features />
+      <HowItWorks />
       <main id="listings">
+        <div className="max-w-6xl mx-auto px-6 pt-10 pb-4">
+          <h2 className="font-heading font-bold text-2xl text-[#1d1d1f]">Browse Scholarships &amp; Exams</h2>
+          <p className="text-sm text-[#6e6e73] mt-1 mb-2">Updated weekly from official sources</p>
+        </div>
         <ListingGrid listings={listings} />
       </main>
-      <KuyaBawCTA />
+      <Testimonials />
+      <FAQ />
+      <FooterCTA />
     </div>
   )
 }
