@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -7,7 +7,7 @@ import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineic
 import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
-import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
+import LottieView from 'lottie-react-native'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -152,6 +152,86 @@ function weakTopicColor(accuracy: number): string {
   return '#eab308'
 }
 
+const NOTIF_TYPES = [
+  { icon: '📚', title: 'Daily Practice Reminder', sub: 'Every day at 9:00 AM' },
+  { icon: '🎯', title: 'Weekly Weak Areas Nudge', sub: 'Every Sunday at 10:00 AM' },
+  { icon: '📌', title: 'Exam Countdown Alerts', sub: '7 days, 3 days, and 1 day before' },
+]
+
+function NotificationModal({
+  visible,
+  enabled,
+  onToggle,
+  onClose,
+}: {
+  visible: boolean
+  enabled: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <TouchableOpacity style={nm.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={nm.sheet}>
+        {/* Handle */}
+        <View style={nm.handle} />
+
+        {/* Header */}
+        <View style={nm.header}>
+          <Text style={nm.title}>Notifications</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={nm.closeX}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Main toggle row */}
+        <View style={nm.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={nm.toggleLabel}>Push Notifications</Text>
+            <Text style={nm.toggleSub}>
+              {enabled ? 'Notifications are on' : 'Notifications are off'}
+            </Text>
+          </View>
+          <Switch
+            value={enabled}
+            onValueChange={onToggle}
+            trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(252,165,165,0.60)' }}
+            thumbColor={enabled ? '#fca5a5' : 'rgba(255,255,255,0.55)'}
+            ios_backgroundColor="rgba(255,255,255,0.15)"
+          />
+        </View>
+
+        {/* Notification types */}
+        <Text style={nm.sectionLabel}>What you'll receive</Text>
+        {NOTIF_TYPES.map((n, i) => (
+          <View
+            key={i}
+            style={[nm.typeRow, !enabled && nm.typeRowDisabled]}
+          >
+            <Text style={nm.typeIcon}>{n.icon}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={nm.typeTitle}>{n.title}</Text>
+              <Text style={nm.typeSub}>{n.sub}</Text>
+            </View>
+          </View>
+        ))}
+
+        {Platform.OS === 'android' && (
+          <Text style={nm.hint}>
+            Notifications require a development build to work on Android.
+          </Text>
+        )}
+      </View>
+    </Modal>
+  )
+}
+
 export default function HomeScreen() {
   const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
@@ -159,6 +239,7 @@ export default function HomeScreen() {
   const practiceDays  = new Set(practiceDayIndices)
 
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
+  const [showNotifModal, setShowNotifModal] = useState(false)
 
   useEffect(() => {
     if (focusedListings.length > 0) {
@@ -200,7 +281,7 @@ export default function HomeScreen() {
           <View style={s.headerBtns}>
             <TouchableOpacity
               style={s.iconBtn}
-              onPress={() => void toggleNotifs(focusedListings)}
+              onPress={() => setShowNotifModal(true)}
             >
               <Lineicons
                 icon={notifEnabled ? Bell1Solid : Bell1Outlined}
@@ -220,7 +301,12 @@ export default function HomeScreen() {
           <View style={s.kuyaCard}>
             <View style={s.kuyaRow}>
               <View style={s.kuyaAvatarLg}>
-                <KuyaBawMascot width={80} height={80} viewBox="0 0 600 600" />
+                <LottieView
+                  source={require('../../assets/kuya-baw-transparent.json')}
+                  autoPlay
+                  loop
+                  style={{ width: 80, height: 80 }}
+                />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={s.kuyaNameRow}>
@@ -355,6 +441,13 @@ export default function HomeScreen() {
 
         </View>
       </ScrollView>
+
+      <NotificationModal
+        visible={showNotifModal}
+        enabled={notifEnabled}
+        onToggle={() => void toggleNotifs(focusedListings)}
+        onClose={() => setShowNotifModal(false)}
+      />
     </SafeAreaView>
   )
 }
@@ -448,4 +541,24 @@ const s = StyleSheet.create({
   upcomingMeta: { fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
   upcomingBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
   upcomingDays: { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+})
+
+// ── Notification modal styles ─────────────────────────────────────────────────
+const nm = StyleSheet.create({
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#1e1e35', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12 },
+  handle: { width: 36, height: 4, backgroundColor: 'rgba(255,255,255,0.20)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  title: { fontSize: 17, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  closeX: { fontSize: 15, color: 'rgba(255,255,255,0.45)', padding: 4 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 14, marginBottom: 20, gap: 12 },
+  toggleLabel: { fontSize: 14, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+  toggleSub: { fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
+  sectionLabel: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.40)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  typeRowDisabled: { opacity: 0.38 },
+  typeIcon: { fontSize: 20, width: 28, textAlign: 'center' },
+  typeTitle: { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 2 },
+  typeSub: { fontSize: 10.5, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
+  hint: { marginTop: 16, fontSize: 10.5, color: 'rgba(255,255,255,0.30)', fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 16 },
 })
