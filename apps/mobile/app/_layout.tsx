@@ -15,6 +15,7 @@ import {
   Lexend_600SemiBold,
 } from '@expo-google-fonts/lexend'
 import { DrizzleProvider } from '../db'
+import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
 import { syncOnLaunch } from '../services/sync'
 import { userSettings } from '../db/schema'
@@ -47,7 +48,9 @@ export default function RootLayout() {
       {/* DB + navigation tree — children only render once SQLite is open */}
       <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
         <DrizzleProvider>
-          <AppInit onReady={handleReady} />
+          <ThemeProvider>
+            <AppInit onReady={handleReady} />
+          </ThemeProvider>
         </DrizzleProvider>
       </SQLiteProvider>
 
@@ -84,6 +87,7 @@ function WebUnsupported() {
 
 function AppInit({ onReady }: { onReady: () => void }) {
   const db = useDb()
+  const { isDark } = useTheme()
 
   const initialize = useCallback(async () => {
     // Navigate based on local DB — instant, no network required
@@ -116,7 +120,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }} />
     </>
   )
