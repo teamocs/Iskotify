@@ -32,13 +32,20 @@ export default async function HomePage() {
       <Hero />
       <Features />
       <HowItWorks />
-      <main id="listings">
-        <div className="max-w-6xl mx-auto px-6 pt-10 pb-4">
-          <h2 className="font-heading font-bold text-2xl text-[#1d1d1f]">Browse Scholarships &amp; Exams</h2>
-          <p className="text-sm text-[#6e6e73] mt-1 mb-2">Updated weekly from official sources</p>
+      <section id="listings" className="bg-white py-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Live Opportunities</p>
+            <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+              Browse Scholarships &amp; Exams
+            </h2>
+            <p className="text-[#6e6e73] font-body text-base mt-3">
+              Updated weekly from official sources — filtered for Filipino students.
+            </p>
+          </div>
         </div>
-        <ListingGrid listings={listings} />
-      </main>
+        <ListingGrid listings={listings} limit={6} />
+      </section>
       <Testimonials />
       <FAQ />
       <FooterCTA />
