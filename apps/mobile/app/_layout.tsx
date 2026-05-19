@@ -20,6 +20,7 @@ import { syncOnLaunch } from '../services/sync'
 import { userSettings } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import LogoSvg from '../assets/images/logo.svg'
+import { requestNotificationPermissions } from '../services/notifications'
 import '../global.css'
 
 export default function RootLayout() {
@@ -103,6 +104,9 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
     // Background sync — fire and forget, never blocks navigation
     syncOnLaunch(db).catch(e => console.warn('[layout] bg sync:', e))
+
+    // Request notification permission on startup (non-blocking)
+    requestNotificationPermissions().catch(e => console.warn('[layout] notif permission:', e))
   }, [db, onReady])
 
   useEffect(() => {
