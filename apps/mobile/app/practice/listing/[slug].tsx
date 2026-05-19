@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
@@ -7,6 +7,7 @@ import { flashcards as flashcardsTable, userProgress, listings as listingsTable 
 import { eq } from 'drizzle-orm'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
+import { useTheme } from '../../../theme/ThemeContext'
 
 const TIMER_SECS = 20
 const MAX_QUESTIONS = 20
@@ -33,6 +34,51 @@ export default function ListingQuizScreen() {
   const { slug, mode } = useLocalSearchParams<{ slug: string; mode?: string }>()
   const db = useDb()
   const { recordSession } = useRecordSession()
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
+    readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+    readyIcon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+    readyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 4 },
+    readySub: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: 2, textAlign: 'center' },
+    readySub2: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 28, textAlign: 'center' },
+    startBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', marginBottom: 10 },
+    startBtnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+    ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
+    backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
+    topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    qCounter: { fontSize: typo.sm, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    retryLink: { fontSize: typo.sm, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
+    dot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: t.border },
+    dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
+    dotCurrent: { backgroundColor: '#fca5a5' },
+    timerBg: { marginHorizontal: 14, height: 5, backgroundColor: t.surface2, borderRadius: 99, overflow: 'hidden' },
+    timerFill: { height: 5, borderRadius: 99 },
+    questionCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 18, marginBottom: 14 },
+    questionMeta: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+    questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
+    diffBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+    diffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
+    optionBtnSelected: { backgroundColor: t.accentSurface, borderColor: t.accent },
+    optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    optionLetterBoxOn: { backgroundColor: t.accent },
+    optionLetter: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
+    optionText: { flex: 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    scoreCard: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, alignItems: 'center' },
+    scorePass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
+    scoreFail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
+    scorePct: { fontSize: typo.display, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -2, marginBottom: 4 },
+    scoreVerdict: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    scoreSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    scoreNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    scoreLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
+  }), [t, typo])
 
   const [listingTitle, setListingTitle] = useState('')
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
@@ -269,47 +315,3 @@ export default function ListingQuizScreen() {
   )
 }
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  loadingTxt: { color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: 13 },
-  readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  readyIcon: { width: 72, height: 72, backgroundColor: 'rgba(128,0,0,0.18)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  readyTitle: { fontSize: 22, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 4 },
-  readySub: { fontSize: 12, color: 'rgba(255,255,255,0.60)', fontFamily: 'Lexend_400Regular', marginBottom: 2, textAlign: 'center' },
-  readySub2: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 28, textAlign: 'center' },
-  startBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', marginBottom: 10 },
-  startBtnTxt: { fontSize: 14, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
-  ghostBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { color: 'rgba(255,255,255,0.62)', fontSize: 26, lineHeight: 30 },
-  topBarTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  qCounter: { fontSize: 11, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-  retryLink: { fontSize: 11, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-  dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
-  dot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
-  dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
-  dotCurrent: { backgroundColor: '#fca5a5' },
-  timerBg: { marginHorizontal: 14, height: 5, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99, overflow: 'hidden' },
-  timerFill: { height: 5, borderRadius: 99 },
-  questionCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 22, padding: 18, marginBottom: 14 },
-  questionMeta: { fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
-  questionText: { fontSize: 16, fontWeight: '600', color: '#fff', lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
-  diffBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  diffTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.14)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
-  optionBtnSelected: { backgroundColor: 'rgba(128,0,0,0.22)', borderColor: '#800000' },
-  optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  optionLetterBoxOn: { backgroundColor: '#800000' },
-  optionLetter: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.55)', fontFamily: 'Outfit_700Bold' },
-  optionText: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.75)', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-  scoreCard: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, alignItems: 'center' },
-  scorePass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
-  scoreFail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
-  scorePct: { fontSize: 60, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -2, marginBottom: 4 },
-  scoreVerdict: { fontSize: 15, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-  scoreSub: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  scoreNum: { fontSize: 28, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-  scoreLbl: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-})
