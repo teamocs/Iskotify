@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Text } from 'react-native'
+import { Platform, View, Text, Image } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SQLiteProvider } from 'expo-sqlite'
@@ -20,7 +20,6 @@ import { useDb } from '../hooks/useDb'
 import { syncOnLaunch } from '../services/sync'
 import { userSettings } from '../db/schema'
 import { eq } from 'drizzle-orm'
-import LogoSvg from '../assets/images/logo.svg'
 import { requestNotificationPermissions } from '../services/notifications'
 import '../global.css'
 
@@ -64,9 +63,10 @@ export default function RootLayout() {
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
         }}>
-          <View style={{ width: 80, height: 80, borderRadius: 20, overflow: 'hidden' }}>
-            <LogoSvg width={80} height={80} viewBox="0 0 2048 2048" />
-          </View>
+          <Image
+            source={require('../assets/images/icon.png')}
+            style={{ width: 80, height: 80, borderRadius: 20 }}
+          />
         </View>
       )}
     </>

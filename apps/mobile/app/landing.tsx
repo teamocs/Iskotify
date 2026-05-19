@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTheme } from '../theme/ThemeContext'
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import * as WebBrowser from 'expo-web-browser'
@@ -8,8 +8,6 @@ import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
-import LogoSvg from '../assets/images/logo.svg'
-
 WebBrowser.maybeCompleteAuthSession()
 
 export default function LandingScreen() {
@@ -88,7 +86,10 @@ export default function LandingScreen() {
         {/* Hero */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
           {/* Logo */}
-          <LogoSvg width={88} height={88} viewBox="0 0 2048 2048" style={{ marginBottom: 4, borderRadius: 24 }} />
+          <Image
+            source={require('../assets/images/icon.png')}
+            style={{ width: 88, height: 88, borderRadius: 24, marginBottom: 4 }}
+          />
 
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h1, color: t.textPrimary, textAlign: 'center', letterSpacing: -0.5 }}>
             Iskotify
