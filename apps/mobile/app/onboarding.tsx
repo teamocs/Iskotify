@@ -8,30 +8,14 @@ import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch } from '../services/sync'
 import { useDb } from '../hooks/useDb'
-import { userSettings, flashcards, userProgress, focusListings as focusListingsTable } from '../db/schema'
+import { userSettings, userProgress, focusListings as focusListingsTable } from '../db/schema'
 import { SchoolPicker } from '../components/SchoolPicker'
+import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
+import type { PreAssessQuestion } from '../data/preAssessment'
 
 interface ListingRow { id: string; slug: string; title: string; type: string; exam_date: string | null }
-interface AssessCard { id: string; question: string; answer: string; topicId: string }
 
 const GRADES = [9, 10, 11, 12] as const
-const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
-
-// Extract option letter from answer like "C) Mitochondria" → "C"
-function answerLetter(answer: string): string {
-  return answer.match(/^([A-D])\)/)?.[1] ?? answer.charAt(0)
-}
-
-// Parse MCQ options from embedded question text
-function parseOptions(question: string): string[] | null {
-  const m = question.match(/\bA\)\s*(.*?)\s+B\)\s*(.*?)\s+C\)\s*(.*?)\s+D\)\s*([\s\S]+?)$/)
-  if (!m) return null
-  return [`A) ${m[1]!.trim()}`, `B) ${m[2]!.trim()}`, `C) ${m[3]!.trim()}`, `D) ${m[4]!.trim()}`]
-}
-
-function parseQuestionStem(question: string): string {
-  return question.replace(/\s+A\)\s[\s\S]*$/, '').trim()
-}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -58,12 +42,10 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false)
   const [selectedSlug, setSelectedSlug] = useState('')  // kept for assessment
 
-  // Step 3 — pre-assessment
-  const [assessCards, setAssessCards] = useState<AssessCard[]>([])
+  // Step 3 — pre-assessment (static 20 questions)
   const [assessIdx, setAssessIdx] = useState(0)
-  const [assessResults, setAssessResults] = useState<Array<{ flashcardId: string; correct: boolean; topicId: string }>>([])
+  const [assessAnswers, setAssessAnswers] = useState<Array<{ q: PreAssessQuestion; correct: boolean }>>([])
   const [assessDone, setAssessDone] = useState(false)
-  const [loadingAssess, setLoadingAssess] = useState(true)
 
   useEffect(() => {
     if (step !== 2) return
@@ -79,39 +61,6 @@ export default function OnboardingScreen() {
         setLoadingListings(false)
       })
   }, [step])
-
-  // Load assessment cards from local DB once we're on step 3
-  useEffect(() => {
-    if (step !== 3) return
-    setLoadingAssess(true)
-    async function loadAssessCards() {
-      try {
-        const allCards = await db.select({
-          id: flashcards.id,
-          topicId: flashcards.topicId,
-          question: flashcards.question,
-          answer: flashcards.answer,
-          listingSlugs: flashcards.listingSlugs,
-        }).from(flashcards)
-
-        const matching = allCards.filter(fc => {
-          try {
-            const slugs = JSON.parse(fc.listingSlugs ?? '[]') as string[]
-            return slugs.includes(selectedSlug)
-          } catch { return false }
-        })
-
-        // Only cards with parseable MCQ options
-        const mcqCards = matching.filter(fc => parseOptions(fc.question) !== null)
-        setAssessCards(shuffle(mcqCards).slice(0, 5))
-      } catch (e) {
-        console.error('[onboarding] load assess cards:', e)
-      } finally {
-        setLoadingAssess(false)
-      }
-    }
-    void loadAssessCards()
-  }, [step, selectedSlug, db])
 
   function handleNextStep() {
     if (!fullName.trim() || !gradeLevel) return
@@ -159,25 +108,23 @@ export default function OnboardingScreen() {
     }
   }
 
-  function handleAssessAnswer(optionLetter: string) {
-    const card = assessCards[assessIdx]!
-    const correct = optionLetter === answerLetter(card.answer)
-    const newResults = [...assessResults, { flashcardId: card.id, correct, topicId: card.topicId }]
+  function handleAssessAnswer(optionIdx: number) {
+    const q = PRE_ASSESS_QUESTIONS[assessIdx]
+    if (!q) return
+    const correct = optionIdx === q.answerIndex
+    const newAnswers = [...assessAnswers, { q, correct }]
 
-    if (assessIdx === assessCards.length - 1) {
-      // Save progress to local DB
+    if (assessIdx === PRE_ASSESS_QUESTIONS.length - 1) {
       const now = Date.now()
-      db.transaction(tx => {
-        for (const r of newResults) {
-          tx.insert(userProgress)
-            .values({ flashcardId: r.flashcardId, correct: r.correct, answeredAt: now })
-            .run()
+      void db.transaction(async tx => {
+        for (const r of newAnswers) {
+          await tx.insert(userProgress).values({ flashcardId: r.q.id, correct: r.correct, answeredAt: now })
         }
-      })
-      setAssessResults(newResults)
+      }).catch(e => console.warn('[onboarding] save assess error:', e))
+      setAssessAnswers(newAnswers)
       setAssessDone(true)
     } else {
-      setAssessResults(newResults)
+      setAssessAnswers(newAnswers)
       setAssessIdx(i => i + 1)
     }
   }
@@ -374,45 +321,44 @@ export default function OnboardingScreen() {
 
   // ── Step 3: Pre-assessment ────────────────────────────────────────────────
 
-  if (loadingAssess) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#fff" size="large" />
-        <Text style={{ color: 'rgba(255,255,255,0.50)', marginTop: 12, fontFamily: 'Lexend_400Regular', fontSize: 12 }}>
-          Preparing your assessment…
-        </Text>
-      </SafeAreaView>
-    )
-  }
-
-  // No MCQ cards available → skip straight to app
-  if (assessCards.length === 0) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 22, color: '#fff', textAlign: 'center', marginBottom: 10 }}>
-          You're all set!
-        </Text>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.50)', textAlign: 'center', marginBottom: 32 }}>
-          No pre-assessment available yet. Start practicing to build your profile.
-        </Text>
-        <TouchableOpacity style={assessStyle.primaryBtn} onPress={finishOnboarding}>
-          <Text style={assessStyle.primaryBtnTxt}>Start Learning →</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    )
-  }
-
   if (assessDone) {
-    const correct = assessResults.filter(r => r.correct).length
-    const pct = Math.round((correct / assessResults.length) * 100)
+    const correct = assessAnswers.filter(r => r.correct).length
+    const pct = Math.round((correct / assessAnswers.length) * 100)
+
+    const subjects = ['Mathematics', 'Science', 'English', 'Abstract Reasoning', 'Filipino'] as const
+    const bySubject = subjects.map(sub => {
+      const qs = assessAnswers.filter(r => r.q.subject === sub)
+      const c = qs.filter(r => r.correct).length
+      return { sub, correct: c, total: qs.length }
+    })
+
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
-        <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: 40 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 40, paddingBottom: 48 }}>
           <Text style={assessStyle.resultPct}>{pct}%</Text>
-          <Text style={assessStyle.resultTitle}>You're all set!</Text>
+          <Text style={assessStyle.resultTitle}>Assessment Complete!</Text>
           <Text style={assessStyle.resultSub}>
-            Pre-assessment complete. {correct} of {assessResults.length} correct.{'\n'}We've calibrated your starting level.
+            {correct} of {assessAnswers.length} correct.{'\n'}We've calibrated your starting level.
           </Text>
+
+          <View style={{ marginBottom: 28, gap: 8 }}>
+            {bySubject.filter(s => s.total > 0).map(({ sub, correct: c, total }) => {
+              const pctSub = Math.round((c / total) * 100)
+              return (
+                <View key={sub} style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, padding: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 12, color: '#fff' }}>{sub}</Text>
+                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: 11, color: pctSub >= 60 ? '#4ade80' : '#f87171' }}>
+                      {c}/{total} ({pctSub}%)
+                    </Text>
+                  </View>
+                  <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99 }}>
+                    <View style={{ height: 4, borderRadius: 99, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? '#4ade80' : '#f87171' }} />
+                  </View>
+                </View>
+              )
+            })}
+          </View>
 
           {selectedSlugs.length > 0 && (
             <View style={{ marginBottom: 24 }}>
@@ -423,7 +369,7 @@ export default function OnboardingScreen() {
                 const listing = listings.find(l => l.slug === slug)
                 return (
                   <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 12, color: '#fff' }}>#{i + 1}</Text>
                     </View>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#fff', flex: 1 }}>
@@ -441,7 +387,7 @@ export default function OnboardingScreen() {
               <Text style={assessStyle.resultLbl}>Correct</Text>
             </View>
             <View style={assessStyle.resultCount}>
-              <Text style={[assessStyle.resultNum, { color: '#f87171' }]}>{assessResults.length - correct}</Text>
+              <Text style={[assessStyle.resultNum, { color: '#f87171' }]}>{assessAnswers.length - correct}</Text>
               <Text style={assessStyle.resultLbl}>Incorrect</Text>
             </View>
           </View>
@@ -449,68 +395,62 @@ export default function OnboardingScreen() {
           <TouchableOpacity style={[assessStyle.primaryBtn, { marginTop: 8 }]} onPress={finishOnboarding}>
             <Text style={assessStyle.primaryBtnTxt}>Start Learning →</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     )
   }
 
-  const card = assessCards[assessIdx]!
-  const stem = parseQuestionStem(card.question)
-  const options = parseOptions(card.question) ?? OPTION_LETTERS.map(l => `${l}) —`)
+  const q = PRE_ASSESS_QUESTIONS[assessIdx]
+  if (!q) return null
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
-      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 20, marginBottom: 0 }}>
+      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 20 }}>
         <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.20)' }} />
         <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.20)' }} />
         <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
       </View>
 
       <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#fff' }}>
-            Quick Pre-assessment
+            Pre-Assessment
           </Text>
           <TouchableOpacity onPress={finishOnboarding} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.38)' }}>
-              Skip
-            </Text>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.38)' }}>Skip</Text>
           </TouchableOpacity>
         </View>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.38)' }}>
-          Question {assessIdx + 1} of {assessCards.length}
+        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 10, color: 'rgba(255,255,255,0.38)', marginBottom: 6 }}>
+          {q.subject} · Question {assessIdx + 1} of {PRE_ASSESS_QUESTIONS.length}
         </Text>
-        {/* Progress bar */}
-        <View style={{ height: 3, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99, marginTop: 10 }}>
-          <View style={{ height: 3, backgroundColor: '#831626', borderRadius: 99, width: `${((assessIdx + 1) / assessCards.length) * 100}%` as any }} />
+        <View style={{ height: 3, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99 }}>
+          <View style={{
+            height: 3, backgroundColor: '#831626', borderRadius: 99,
+            width: `${((assessIdx + 1) / PRE_ASSESS_QUESTIONS.length) * 100}%` as any,
+          }} />
         </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {/* Question card */}
         <View style={assessStyle.questionCard}>
-          <Text style={assessStyle.questionLabel}>QUESTION</Text>
-          <Text style={assessStyle.questionText}>{stem}</Text>
+          <Text style={assessStyle.questionLabel}>{q.subject.toUpperCase()}</Text>
+          <Text style={assessStyle.questionText}>{q.stem}</Text>
         </View>
 
-        {/* Options */}
         <View style={{ gap: 10, marginTop: 8 }}>
-          {options.map((opt, i) => {
-            const letter = OPTION_LETTERS[i] ?? String(i)
-            return (
-              <TouchableOpacity
-                key={letter}
-                style={assessStyle.optionBtn}
-                onPress={() => handleAssessAnswer(letter)}
-                activeOpacity={0.75}
-              >
-                <View style={assessStyle.optionLetter}>
-                  <Text style={assessStyle.optionLetterTxt}>{letter}</Text>
-                </View>
-                <Text style={assessStyle.optionText}>{opt.replace(/^[A-D]\)\s*/, '')}</Text>
-              </TouchableOpacity>
-            )
-          })}
+          {q.options.map((opt, i) => (
+            <TouchableOpacity
+              key={i}
+              style={assessStyle.optionBtn}
+              onPress={() => handleAssessAnswer(i)}
+              activeOpacity={0.75}
+            >
+              <View style={assessStyle.optionLetter}>
+                <Text style={assessStyle.optionLetterTxt}>{(['A', 'B', 'C', 'D'] as const)[i]}</Text>
+              </View>
+              <Text style={assessStyle.optionText}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
