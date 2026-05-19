@@ -140,11 +140,11 @@ export default function SettingsScreen() {
 
         <Text style={s.secLabel}>App</Text>
         <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor="#fca5a5" label="About Iskotify"
-          onPress={() => Alert.alert('Iskotify', `Version ${version}\n\nYour ultimate UPCAT & scholarship companion.`)} />
+          onPress={() => router.push('/about')} />
         <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
-          onPress={() => Alert.alert('Help', 'Support docs coming soon.')} />
+          onPress={() => router.push('/help')} />
         <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
-          onPress={() => Alert.alert('Privacy', 'Privacy policy coming soon.')} />
+          onPress={() => router.push('/privacy')} />
 
         <Text style={s.secLabel}>Data</Text>
         <SettingsRow icon={Download1Outlined} iconBg="rgba(34,197,94,0.10)" iconColor="#4ade80" label="Export Data" onPress={handleExport} />

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -7,12 +7,7 @@ import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineic
 import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
-import LottieView from 'lottie-react-native'
-import Constants from 'expo-constants'
-import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
 import { useTheme } from '../../theme/ThemeContext'
-
-const isExpoGo = Constants.executionEnvironment === 'storeClient'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -402,17 +397,11 @@ export default function HomeScreen() {
           <View style={s.kuyaCard}>
             <View style={s.kuyaRow}>
               <View style={s.kuyaAvatarLg}>
-                {isExpoGo ? (
-                  <KuyaBawMascot width={80} height={80} viewBox="0 0 600 600" />
-                ) : (
-                  <LottieView
-                    source={require('../../assets/kuya-baw-transparent.json')}
-                    autoPlay
-                    loop
-                    resizeMode="contain"
-                    style={s.kuyaLottie}
-                  />
-                )}
+                <Image
+                  source={require('../../assets/images/kuya-baw-mascot.png')}
+                  style={{ width: 80, height: 80 }}
+                  resizeMode="contain"
+                />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={s.kuyaNameRow}>

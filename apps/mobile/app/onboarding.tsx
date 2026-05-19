@@ -359,7 +359,6 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 40, paddingBottom: 48 }}>
-          <Text style={assessStyle.resultPct}>{pct}%</Text>
           <Text style={assessStyle.resultTitle}>Assessment Complete!</Text>
           <Text style={assessStyle.resultSub}>
             {correct} of {assessAnswers.length} correct.{'\n'}We've calibrated your starting level.
@@ -404,17 +403,6 @@ export default function OnboardingScreen() {
               })}
             </View>
           )}
-
-          <View style={assessStyle.resultCounts}>
-            <View style={assessStyle.resultCount}>
-              <Text style={[assessStyle.resultNum, { color: '#4ade80' }]}>{correct}</Text>
-              <Text style={assessStyle.resultLbl}>Correct</Text>
-            </View>
-            <View style={assessStyle.resultCount}>
-              <Text style={[assessStyle.resultNum, { color: '#f87171' }]}>{assessAnswers.length - correct}</Text>
-              <Text style={assessStyle.resultLbl}>Incorrect</Text>
-            </View>
-          </View>
 
           <TouchableOpacity style={[assessStyle.primaryBtn, { marginTop: 8 }]} onPress={finishOnboarding}>
             <Text style={assessStyle.primaryBtnTxt}>Start Learning →</Text>

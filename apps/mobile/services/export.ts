@@ -1,17 +1,34 @@
 import * as Sharing from 'expo-sharing'
-import * as FileSystem from 'expo-file-system'
+import * as FileSystem from 'expo-file-system/legacy'
 import { eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
-import { userSettings } from '../db/schema'
+import {
+  userSettings,
+  focusListings,
+  savedListings,
+  savedDecks,
+  userProgress,
+  practiceSessions,
+} from '../db/schema'
 
 export async function exportUserData(db: DrizzleClient): Promise<void> {
-  const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-  const settings = rows[0]
+  const [settings, focus, saved, decks, progress, sessions] = await Promise.all([
+    db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+    db.select().from(focusListings),
+    db.select().from(savedListings),
+    db.select().from(savedDecks),
+    db.select().from(userProgress),
+    db.select().from(practiceSessions),
+  ])
 
   const payload = {
-    selected_listing_slug: settings?.selectedListingSlug ?? '',
-    last_synced_at: settings?.lastSyncedAt ?? 0,
     exported_at: new Date().toISOString(),
+    settings: settings[0] ?? null,
+    focus_listings: focus,
+    saved_listings: saved,
+    saved_decks: decks,
+    user_progress: progress,
+    practice_sessions: sessions,
   }
 
   const canShare = await Sharing.isAvailableAsync()

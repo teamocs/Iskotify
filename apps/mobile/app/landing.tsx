@@ -6,6 +6,7 @@ import { router } from 'expo-router'
 import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
+import { pullUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 WebBrowser.maybeCompleteAuthSession()
@@ -63,6 +64,8 @@ export default function LandingScreen() {
                   fullName: user.user_metadata?.full_name ?? '',
                 },
               })
+            // Restore backed-up user data from Supabase
+            await pullUserData(db)
           }
         }
         router.replace('/onboarding')
