@@ -22,6 +22,7 @@ export interface PracticeData {
   setSelectedSubjectId: (id: string | null) => void
   totalCards: number
   cardCountByTopic: Record<string, number>
+  topicIdsByListingSlug: Record<string, string[]>
 }
 
 // ── Pure function (exported for unit tests) ──────────────────────────────────
@@ -53,6 +54,7 @@ export function usePracticeData(): PracticeData {
   const [recommendedTopics, setRecommendedTopics] = useState<TopicRow[]>([])
   const [totalCards, setTotalCards] = useState(0)
   const [cardCountByTopic, setCardCountByTopic] = useState<Record<string, number>>({})
+  const [topicIdsByListingSlug, setTopicIdsByListingSlug] = useState<Record<string, string[]>>({})
 
   useFocusEffect(useCallback(() => {
     let cancelled = false
@@ -86,6 +88,18 @@ export function usePracticeData(): PracticeData {
               if (slugs.includes(slug)) recommendedTopicIds.add(fc.topicId)
             } catch {}
           }
+        }
+
+        // Build mapping: listingSlug → topicIds derived from flashcard tags
+        const topicIdsBySlug: Record<string, string[]> = {}
+        for (const fc of fcList) {
+          try {
+            const slugs = JSON.parse(fc.listingSlugs ?? '[]') as string[]
+            for (const s of slugs) {
+              if (!topicIdsBySlug[s]) topicIdsBySlug[s] = []
+              if (!topicIdsBySlug[s]!.includes(fc.topicId)) topicIdsBySlug[s]!.push(fc.topicId)
+            }
+          } catch {}
         }
 
         const filteredTopics = selectedSubjectId
@@ -128,6 +142,7 @@ export function usePracticeData(): PracticeData {
           setRecommendedTopics(recommended)
           setTotalCards(fcList.length)
           setCardCountByTopic(countMap)
+          setTopicIdsByListingSlug(topicIdsBySlug)
         }
       } catch (e) {
         console.error('[usePracticeData] load error:', e)
@@ -137,5 +152,5 @@ export function usePracticeData(): PracticeData {
     return () => { cancelled = true }
   }, [db, selectedSubjectId]))
 
-  return { subjects: allSubjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic }
+  return { subjects: allSubjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug }
 }
