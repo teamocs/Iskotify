@@ -4,6 +4,7 @@ import {
   ActivityIndicator, StyleSheet,
 } from 'react-native'
 import { useSchoolPicker } from '../hooks/useSchoolPicker'
+import { useTheme } from '../theme/ThemeContext'
 import type { PickerLevel } from '../hooks/useSchoolPicker'
 
 interface SchoolPickerProps {
@@ -23,6 +24,61 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
   const [isOthers, setIsOthers] = useState(false)
   const [search, setSearch] = useState('')
   const picker = useSchoolPicker()
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    input: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.md,
+      color: t.textPrimary,
+    },
+    trigger: { justifyContent: 'center' },
+    triggerText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary },
+    triggerTextPlaceholder: { color: t.textTertiary },
+    othersInput: { marginTop: 10 },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+    modalDismissOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    sheet: {
+      backgroundColor: t.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '82%',
+      paddingTop: 16,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+    },
+    sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, marginBottom: 10 },
+    breadcrumb: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 12, alignItems: 'center' },
+    crumbActive: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#fca5a5' },
+    crumbSep: { fontSize: typo.sm, color: t.textTertiary },
+    crumbPending: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary },
+    searchInput: { marginBottom: 10 },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    listRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.surfaceSubtle,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    listText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary, flex: 1 },
+    chevron: { color: t.textTertiary, fontSize: 18, marginLeft: 8 },
+    othersText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: 'rgba(252,165,165,0.8)' },
+    errorText: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.sm,
+      color: 'rgba(252,165,165,0.8)',
+      textAlign: 'center',
+      marginTop: 24,
+      paddingHorizontal: 16,
+    },
+  }), [t, typo])
 
   const filteredList = useMemo(() => {
     const q = search.toLowerCase()
@@ -85,7 +141,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
         <TextInput
           style={[s.input, s.othersInput]}
           placeholder="Type your school name"
-          placeholderTextColor="rgba(255,255,255,0.28)"
+          placeholderTextColor={t.textTertiary}
           value={value}
           onChangeText={onChange}
           autoCapitalize="words"
@@ -143,7 +199,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
             <TextInput
               style={[s.input, s.searchInput]}
               placeholder="Type to search..."
-              placeholderTextColor="rgba(255,255,255,0.28)"
+              placeholderTextColor={t.textTertiary}
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
@@ -184,119 +240,3 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     </>
   )
 }
-
-const s = StyleSheet.create({
-  input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 14,
-    color: '#fff',
-  },
-  trigger: {
-    justifyContent: 'center',
-  },
-  triggerText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 14,
-    color: '#fff',
-  },
-  triggerTextPlaceholder: {
-    color: 'rgba(255,255,255,0.28)',
-  },
-  othersInput: {
-    marginTop: 10,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalDismissOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  sheet: {
-    backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '82%',
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  sheetTitle: {
-    fontFamily: 'Outfit_700Bold',
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 10,
-  },
-  breadcrumb: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  crumbActive: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 11,
-    color: '#fca5a5',
-  },
-  crumbSep: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.30)',
-  },
-  crumbPending: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.40)',
-  },
-  searchInput: {
-    marginBottom: 10,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  listText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 13,
-    color: '#fff',
-    flex: 1,
-  },
-  chevron: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 18,
-    marginLeft: 8,
-  },
-  othersText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 13,
-    color: 'rgba(252,165,165,0.8)',
-  },
-  errorText: {
-    fontFamily: 'Lexend_400Regular',
-    fontSize: 12,
-    color: 'rgba(252,165,165,0.8)',
-    textAlign: 'center',
-    marginTop: 24,
-    paddingHorizontal: 16,
-  },
-})
