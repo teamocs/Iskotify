@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined, SparkOutlined } from '@lineiconshq/free-icons'
+import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { exportUserData } from '../../services/export'
@@ -32,6 +33,37 @@ export default function ProfileScreen() {
   const db = useDb()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root:          { flex: 1, backgroundColor: t.bg },
+    inner:         { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+    title:         { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 16 },
+    identityCard:  { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 12 },
+    avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    avatar:        { width: 52, height: 52, borderRadius: 26, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    name:          { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 3 },
+    schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+    school:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    gradeChip:     { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 980, paddingHorizontal: 6, paddingVertical: 2 },
+    gradeText:     { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    listingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    listingTitle:  { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
+    googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.divider },
+    googleBadge:   { backgroundColor: t.textPrimary, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+    googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
+    googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    signedInText:  { fontSize: typo.xs, fontWeight: '600', color: '#4ade80', fontFamily: 'Lexend_600SemiBold' },
+    card:          { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
+    cardTitle:     { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    cardSub:       { fontSize: typo.sm, color: t.textSecondary, marginTop: 3, fontFamily: 'Lexend_400Regular' },
+    focusSection:  { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
+    secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    focusItem:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.surfaceSubtle },
+    focusPriorityBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    focusPriorityTxt: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    focusItemTitle: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+  }), [t, typo])
 
   const load = useCallback(async () => {
     try {
@@ -190,34 +222,3 @@ export default function ProfileScreen() {
     </SafeAreaView>
   )
 }
-
-const s = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: '#1a1a2e' },
-  inner:         { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  title:         { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 16 },
-  identityCard:  { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 12 },
-  avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar:        { width: 52, height: 52, borderRadius: 26, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  name:          { fontSize: 18, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 3 },
-  schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  school:        { fontSize: 11, color: 'rgba(255,255,255,0.50)', fontFamily: 'Lexend_400Regular' },
-  gradeChip:     { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 980, paddingHorizontal: 6, paddingVertical: 2 },
-  gradeText:     { fontSize: 9, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  listingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  listingTitle:  { fontSize: 11, color: 'rgba(255,255,255,0.60)', fontFamily: 'Lexend_400Regular', flex: 1 },
-  googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' },
-  googleBadge:   { backgroundColor: '#fff', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
-  googleBadgeText: { fontSize: 10, fontWeight: '700', color: '#1a1a2e', fontFamily: 'Outfit_700Bold' },
-  googleEmail:   { flex: 1, fontSize: 11, color: 'rgba(255,255,255,0.60)', fontFamily: 'Lexend_400Regular' },
-  signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  signedInText:  { fontSize: 9, fontWeight: '600', color: '#4ade80', fontFamily: 'Lexend_600SemiBold' },
-  card:          { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 10 },
-  cardTitle:     { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-  cardSub:       { fontSize: 11, color: 'rgba(255,255,255,0.50)', marginTop: 3, fontFamily: 'Lexend_400Regular' },
-  focusSection:  { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 16, marginBottom: 10 },
-  secTitle:      { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-  focusItem:     { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
-  focusPriorityBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  focusPriorityTxt: { fontSize: 11, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  focusItemTitle: { flex: 1, fontSize: 12, color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-})
