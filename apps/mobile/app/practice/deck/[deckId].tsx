@@ -125,7 +125,7 @@ export default function DeckQuizScreen() {
     reviewOptTxt: { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     correctMark: { fontSize: typo.md, color: '#4ade80', fontWeight: '700' },
     wrongMark: { fontSize: typo.md, color: '#f87171', fontWeight: '700' },
-    explainBox: { backgroundColor: t.surface, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: t.surface },
+    explainBox: { backgroundColor: t.surfaceSubtle, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: t.border },
     explainLabel: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
     explainTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
   }), [t, typo])
