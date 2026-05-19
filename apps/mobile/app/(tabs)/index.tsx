@@ -145,6 +145,12 @@ function daysUntil(ms: number): number {
   return Math.ceil((ms - Date.now()) / 86_400_000)
 }
 
+function weakTopicColor(accuracy: number): string {
+  if (accuracy <= 30) return '#ef4444'
+  if (accuracy <= 50) return '#f97316'
+  return '#eab308'
+}
+
 export default function HomeScreen() {
   const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
@@ -264,14 +270,30 @@ export default function HomeScreen() {
             <Text style={s.secTitle}>Weak Areas</Text>
           </View>
           {weakTopics.length > 0 ? (
-            <View style={s.chips}>
-              {weakTopics.map(t => (
-                <TouchableOpacity key={t.topicId} onPress={() => router.push(`/practice/${t.topicId}`)}>
-                  <View style={s.chip}>
-                    <Text style={s.chipText}>{t.topicName}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+            <View style={{ gap: 6, marginBottom: 4 }}>
+              {weakTopics.map(t => {
+                const color = weakTopicColor(t.accuracy)
+                return (
+                  <TouchableOpacity
+                    key={t.topicId}
+                    style={s.weakCard}
+                    onPress={() => router.push(`/practice/${t.topicId}`)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[s.weakDot, { backgroundColor: color }]} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={s.weakTopRow}>
+                        <Text style={s.weakName} numberOfLines={1}>{t.topicName}</Text>
+                        <Text style={[s.weakPct, { color }]}>{t.accuracy}%</Text>
+                      </View>
+                      <View style={s.weakTrack}>
+                        <View style={[s.weakBar, { width: `${t.accuracy}%` as any, backgroundColor: color }]} />
+                      </View>
+                    </View>
+                    <Text style={s.chevron}>›</Text>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
           ) : (
             <Text style={s.empty}>Start practicing to see weak areas</Text>
@@ -382,9 +404,13 @@ const s = StyleSheet.create({
   secTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
 
   // Weak Areas
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { backgroundColor: 'rgba(239,68,68,0.10)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.22)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
-  chipText: { fontSize: 10, fontWeight: '600', color: '#f87171', fontFamily: 'Lexend_600SemiBold' },
+  weakCard:   { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  weakDot:    { width: 8, height: 8, borderRadius: 4, flexShrink: 0, marginTop: 1 },
+  weakTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  weakName:   { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', flex: 1 },
+  weakPct:    { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold', flexShrink: 0, marginLeft: 8 },
+  weakTrack:  { height: 3, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' },
+  weakBar:    { height: 3, borderRadius: 99 },
   empty: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 8 },
 
   // Progress card
