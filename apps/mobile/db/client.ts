@@ -101,6 +101,7 @@ const MIGRATIONS = [
   `INSERT OR IGNORE INTO focus_listings (listing_slug, priority, added_at)
    SELECT selected_listing_slug, 1, (strftime('%s','now') * 1000)
    FROM user_settings WHERE id = 1 AND selected_listing_slug != ''`,
+  `ALTER TABLE user_settings ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

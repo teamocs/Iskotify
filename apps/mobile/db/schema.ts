@@ -60,6 +60,7 @@ export const userSettings = sqliteTable('user_settings', {
   gradeLevel: integer('grade_level'),
   googleId: text('google_id'),
   email: text('email'),
+  notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
 })
 
 export const schoolsCache = sqliteTable('schools_cache', {
