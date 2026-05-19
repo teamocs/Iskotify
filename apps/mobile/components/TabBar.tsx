@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { BlurView } from 'expo-blur'
 import Animated, {
@@ -15,6 +15,7 @@ import {
   User4Outlined,
 } from '@lineiconshq/free-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { useTheme } from '../theme/ThemeContext'
 
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
   index:     { label: 'Home',      icon: Home2Outlined },
@@ -35,6 +36,14 @@ function NavItem({
   isFocused: boolean
   onPress: () => void
 }) {
+  const { theme: t, typo } = useTheme()
+  const ns = useMemo(() => StyleSheet.create({
+    navItem: { alignItems: 'center', gap: 3, paddingVertical: 7, paddingHorizontal: 11, borderRadius: 22 },
+    navItemActive: { backgroundColor: 'rgba(128,0,0,0.82)' },
+    navLabel: { fontSize: typo.xs, fontWeight: '500', color: t.textSecondary, letterSpacing: 0.15 },
+    navLabelActive: { color: '#fff', fontWeight: '700' },
+  }), [t, typo])
+
   const scale = useSharedValue(isFocused ? 1.06 : 1)
 
   const animStyle = useAnimatedStyle(() => ({
@@ -59,13 +68,13 @@ function NavItem({
       onPressOut={handlePressOut}
       activeOpacity={1}
     >
-      <Animated.View style={[styles.navItem, isFocused && styles.navItemActive, animStyle]}>
+      <Animated.View style={[ns.navItem, isFocused && ns.navItemActive, animStyle]}>
         <Lineicons
           icon={icon}
           size={20}
-          color={isFocused ? '#fff' : 'rgba(255,255,255,0.62)'}
+          color={isFocused ? '#fff' : t.textSecondary}
         />
-        <Text style={[styles.navLabel, isFocused && styles.navLabelActive]}>
+        <Text style={[ns.navLabel, isFocused && ns.navLabelActive]}>
           {label}
         </Text>
       </Animated.View>
@@ -74,10 +83,12 @@ function NavItem({
 }
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
+  const { theme: t, isDark } = useTheme()
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      <BlurView intensity={90} tint="dark" style={styles.blur}>
-        <View style={styles.inner}>
+      <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.blur, { borderColor: t.border }]}>
+        <View style={[styles.inner, { backgroundColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(128,0,0,0.04)' }]}>
           {state.routes.map((route, idx) => {
             const meta = TAB_META[route.name]
             if (!meta) return null
@@ -124,7 +135,6 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
   },
   inner: {
     flex: 1,
@@ -132,26 +142,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 10,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  navItem: {
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-    borderRadius: 22,
-  },
-  navItemActive: {
-    backgroundColor: 'rgba(128,0,0,0.82)',
-  },
-  navLabel: {
-    fontSize: 9.5,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.62)',
-    letterSpacing: 0.15,
-  },
-  navLabelActive: {
-    color: '#fff',
-    fontWeight: '700',
   },
 })
