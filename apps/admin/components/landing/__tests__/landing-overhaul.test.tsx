@@ -54,3 +54,27 @@ describe('Hero', () => {
     expect(html).not.toContain('Free to Use')
   })
 })
+
+// ─── Testimonials ───────────────────────────────────────────────────────────
+describe('Testimonials', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Testimonials)) })
+
+  it('shows empty-state heading', () => {
+    expect(html).toContain('Be the first to review Iskotify')
+  })
+
+  it('does not show fake student names', () => {
+    expect(html).not.toContain('Maria Santos')
+    expect(html).not.toContain('Juan dela Cruz')
+    expect(html).not.toContain('Ana Reyes')
+  })
+
+  it('has App Store review CTA', () => {
+    expect(html).toContain('Leave a review on App Store')
+  })
+
+  it('has Google Play review CTA', () => {
+    expect(html).toContain('Rate on Google Play')
+  })
+})
