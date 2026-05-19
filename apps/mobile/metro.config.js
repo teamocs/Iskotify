@@ -17,8 +17,13 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules")
 ];
 
-// 3. Treat .wasm and .svg files as binary assets
-config.resolver.assetExts = [...(config.resolver.assetExts ?? []), 'wasm', 'svg'];
+// 3. SVG transformer — import SVG files as React Native SVG components
+config.transformer.babelTransformerPath = require.resolve('react-native-svg-transformer');
+config.resolver.assetExts = (config.resolver.assetExts ?? []).filter(ext => ext !== 'svg');
+config.resolver.sourceExts = [...(config.resolver.sourceExts ?? []), 'svg'];
+
+// 4. Keep wasm as a binary asset
+config.resolver.assetExts = [...config.resolver.assetExts, 'wasm'];
 
 module.exports = withNativeWind(config, {
   input: path.resolve(projectRoot, "global.css")
