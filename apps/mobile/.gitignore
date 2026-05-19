@@ -7,3 +7,6 @@ expo-env.d.ts
 
 .env
 .env.local
+
+# Large Lottie animation assets (embedded base64, too big for git)
+assets/kuya-baw-transparent.json
