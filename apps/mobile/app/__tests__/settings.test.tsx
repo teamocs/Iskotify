@@ -67,10 +67,12 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Export Data')).toBeTruthy()
   })
 
-  it('renders Appearance section with Theme coming soon', () => {
+  it('renders Appearance section with theme picker', () => {
     render(<SettingsScreen />)
-    expect(screen.getByText('Theme')).toBeTruthy()
-    expect(screen.getByText('Coming soon')).toBeTruthy()
+    expect(screen.getByText('Appearance')).toBeTruthy()
+    expect(screen.getByText('Auto')).toBeTruthy()
+    expect(screen.getByText('Light')).toBeTruthy()
+    expect(screen.getByText('Dark')).toBeTruthy()
   })
 
   it('shows Student as default name when no listing is loaded', async () => {

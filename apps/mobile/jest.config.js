@@ -33,6 +33,7 @@ module.exports = {
         '^@/(.*)$': '<rootDir>/$1',
         '\\.svg$': '<rootDir>/__mocks__/svgMock.js',
         '^lottie-react-native$': '<rootDir>/__mocks__/lottieMock.js',
+        'theme/ThemeContext': '<rootDir>/__mocks__/themeContextMock.js',
       },
     },
   ],
