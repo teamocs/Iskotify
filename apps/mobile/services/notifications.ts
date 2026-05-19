@@ -18,8 +18,7 @@ function getN(): N | null {
     _N = require('expo-notifications') as N
     _N.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
+        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: false,
       }),
