@@ -407,13 +407,34 @@ export default function OnboardingScreen() {
     const pct = Math.round((correct / assessResults.length) * 100)
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
+        <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: 40 }}>
           <Text style={assessStyle.resultPct}>{pct}%</Text>
-          <Text style={assessStyle.resultTitle}>Pre-assessment Complete!</Text>
+          <Text style={assessStyle.resultTitle}>You're all set!</Text>
           <Text style={assessStyle.resultSub}>
-            You got {correct} out of {assessResults.length} correct.
-            {'\n'}We've calibrated your starting level.
+            Pre-assessment complete. {correct} of {assessResults.length} correct.{'\n'}We've calibrated your starting level.
           </Text>
+
+          {selectedSlugs.length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: 10, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                Your Focus List
+              </Text>
+              {selectedSlugs.map((slug, i) => {
+                const listing = listings.find(l => l.slug === slug)
+                return (
+                  <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 12, color: '#fff' }}>#{i + 1}</Text>
+                    </View>
+                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#fff', flex: 1 }}>
+                      {listing?.title ?? slug}
+                    </Text>
+                  </View>
+                )
+              })}
+            </View>
+          )}
+
           <View style={assessStyle.resultCounts}>
             <View style={assessStyle.resultCount}>
               <Text style={[assessStyle.resultNum, { color: '#4ade80' }]}>{correct}</Text>
@@ -424,7 +445,8 @@ export default function OnboardingScreen() {
               <Text style={assessStyle.resultLbl}>Incorrect</Text>
             </View>
           </View>
-          <TouchableOpacity style={assessStyle.primaryBtn} onPress={finishOnboarding}>
+
+          <TouchableOpacity style={[assessStyle.primaryBtn, { marginTop: 8 }]} onPress={finishOnboarding}>
             <Text style={assessStyle.primaryBtnTxt}>Start Learning →</Text>
           </TouchableOpacity>
         </View>
