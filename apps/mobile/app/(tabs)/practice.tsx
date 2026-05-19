@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TouchableOpacity, FlatList,
   Modal, TextInput, Alert, ScrollView,
@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
+import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 
@@ -217,13 +218,71 @@ function CreateDeckModal({
   )
 }
 
+// ── Focus card ────────────────────────────────────────────────────────────────
+
+function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[fc.card, isActive && fc.cardActive]}
+      activeOpacity={0.8}
+    >
+      <Text style={fc.badge}>#{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}</Text>
+      <Text style={fc.name} numberOfLines={2}>{row.title}</Text>
+    </TouchableOpacity>
+  )
+}
+
+const fc = StyleSheet.create({
+  card: { minWidth: 110, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: 11, marginRight: 8 },
+  cardActive: { backgroundColor: 'rgba(128,0,0,0.18)', borderColor: '#831626', borderWidth: 2 },
+  badge: { fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.40)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Lexend_600SemiBold' },
+  name: { fontSize: 11, fontWeight: '700', color: '#fff', lineHeight: 15, fontFamily: 'Outfit_700Bold' },
+})
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic } = usePracticeData()
+  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug } = usePracticeData()
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+
+  const { focusListings: focusListingsList } = useFocusListings()
+  const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
+
+  // Sync activeFocusSlug to first focus listing when list loads
+  useEffect(() => {
+    if (focusListingsList.length > 0 && !activeFocusSlug) {
+      setActiveFocusSlug(focusListingsList[0]!.slug)
+    }
+  }, [focusListingsList])
+
+  const activeTopicIds = useMemo(
+    () => new Set(topicIdsByListingSlug[activeFocusSlug] ?? []),
+    [topicIdsByListingSlug, activeFocusSlug]
+  )
+
+  const activeRecommended = useMemo(
+    () => topicRows
+      .filter(r => activeTopicIds.has(r.topic.id))
+      .sort((a, b) =>
+        ({ New: 0, Weak: 1, Review: 2, Strong: 3 }[a.strength] ?? 0) -
+        ({ New: 0, Weak: 1, Review: 2, Strong: 3 }[b.strength] ?? 0)
+      )
+      .slice(0, 5),
+    [topicRows, activeTopicIds]
+  )
+
+  const weakTopicsForActive = useMemo(
+    () => topicRows.filter(r => activeTopicIds.has(r.topic.id) && r.strength === 'Weak'),
+    [topicRows, activeTopicIds]
+  )
+
+  const activeListing = useMemo(
+    () => focusListingsList.find(r => r.slug === activeFocusSlug),
+    [focusListingsList, activeFocusSlug]
+  )
 
   const deckCardCount = useCallback(
     (deck: SavedDeck) => deck.topicIds.reduce((sum, tid) => sum + (cardCountByTopic[tid] ?? 0), 0),
@@ -238,20 +297,27 @@ export default function PracticeScreen() {
       </View>
 
       {/* Subject filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-        <TouchableOpacity onPress={() => setSelectedSubjectId(null)}>
-          <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
-            <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]}>All</Text>
-          </View>
-        </TouchableOpacity>
-        {subjects.map(sub => (
-          <TouchableOpacity key={sub.id} onPress={() => setSelectedSubjectId(sub.id)}>
-            <View style={[s.chip, selectedSubjectId === sub.id && s.chipOn]}>
-              <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]}>{sub.name}</Text>
+      <View style={s.chipsWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.chipsContent}
+          style={s.chipsScroll}
+        >
+          <TouchableOpacity onPress={() => setSelectedSubjectId(null)}>
+            <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
+              <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]}>All</Text>
             </View>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          {subjects.map(sub => (
+            <TouchableOpacity key={sub.id} onPress={() => setSelectedSubjectId(sub.id)}>
+              <View style={[s.chip, selectedSubjectId === sub.id && s.chipOn]}>
+                <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]}>{sub.name}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <FlatList
         data={topicRows}
@@ -262,12 +328,72 @@ export default function PracticeScreen() {
         ListEmptyComponent={<Text style={s.empty}>No topics found. Try syncing again.</Text>}
         ListHeaderComponent={
           <>
+            {/* Focus cards row */}
+            {focusListingsList.length > 0 && (
+              <>
+                <View style={s.secRow}>
+                  <Text style={s.secTitle}>My Focus</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingRight: 4, marginBottom: 12 }}
+                >
+                  {focusListingsList.map(row => (
+                    <FocusCard
+                      key={row.slug}
+                      row={row}
+                      isActive={row.slug === activeFocusSlug}
+                      onPress={() => setActiveFocusSlug(row.slug)}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            {/* Quick Start — auto-generated decks for active focus */}
+            {activeFocusSlug ? (
+              <>
+                <View style={s.secRow}>
+                  <Text style={s.secTitle}>Quick Start</Text>
+                  <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
+                </View>
+                <TouchableOpacity
+                  style={qs.card}
+                  onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=all`)}
+                  activeOpacity={0.8}
+                >
+                  <View style={qs.icon}><Text style={{ fontSize: 15 }}>⚡</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={qs.title}>Full Review Deck</Text>
+                    <Text style={qs.sub}>Auto · all topics tagged to this listing</Text>
+                  </View>
+                  <Text style={qs.go}>›</Text>
+                </TouchableOpacity>
+                {weakTopicsForActive.length > 0 && (
+                  <TouchableOpacity
+                    style={qs.card2}
+                    onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=weak`)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={qs.icon2}><Text style={{ fontSize: 15 }}>⚠️</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={qs.title}>Weak Topics Only</Text>
+                      <Text style={qs.sub}>Smart · {weakTopicsForActive.length} weak topics</Text>
+                    </View>
+                    <Text style={[qs.go, { color: 'rgba(245,158,11,0.80)' }]}>›</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={{ height: 4 }} />
+              </>
+            ) : null}
+
             {/* Recommended section */}
-            {recommendedTopics.length > 0 && (
+            {activeRecommended.length > 0 && (
               <>
                 <View style={s.secRow}>
                   <Text style={s.secTitle}>Recommended</Text>
-                  <Text style={s.secSub}>{listing?.title ?? ''}</Text>
+                  <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
                 </View>
                 <ScrollView
                   horizontal
@@ -275,7 +401,7 @@ export default function PracticeScreen() {
                   contentContainerStyle={rc.row}
                   style={{ marginBottom: 14 }}
                 >
-                  {recommendedTopics.map(row => (
+                  {activeRecommended.map(row => (
                     <RecommendedCard key={row.topic.id} row={row} />
                   ))}
                 </ScrollView>
@@ -329,10 +455,12 @@ const s = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
   title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
   subtitle: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  chips: { paddingHorizontal: 16, flexDirection: 'row', gap: 6, paddingBottom: 12 },
-  chip: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
+  chipsWrap: { height: 44, marginBottom: 4 },
+  chipsScroll: { flex: 1 },
+  chipsContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
+  chip: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
   chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
-  chipTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_600SemiBold' },
+  chipTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_600SemiBold' },
   chipTxtOn: { color: '#fff' },
   secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   secTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
@@ -361,6 +489,16 @@ const rc = StyleSheet.create({
   badgeTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
   name: { fontSize: 11, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 4, lineHeight: 16 },
   sub: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
+})
+
+const qs = StyleSheet.create({
+  card:  { backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+  card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+  icon:  { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  icon2: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  title: { fontSize: 11, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  sub:   { fontSize: 9, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginTop: 1 },
+  go:    { fontSize: 18, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
 })
 
 const m = StyleSheet.create({
