@@ -16,6 +16,7 @@ import { Hero } from '../Hero'
 import { Testimonials } from '../Testimonials'
 import { FAQ } from '../FAQ'
 import { FooterCTA } from '../FooterCTA'
+import { KuyaBawCTA } from '../KuyaBawCTA'
 
 // ─── Hero ───────────────────────────────────────────────────────────────────
 describe('Hero', () => {
@@ -124,5 +125,19 @@ describe('FooterCTA', () => {
 
   it('does not say "Free forever"', () => {
     expect(html).not.toContain('Free forever')
+  })
+})
+
+// ─── KuyaBawCTA ─────────────────────────────────────────────────────────────
+describe('KuyaBawCTA', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(KuyaBawCTA)) })
+
+  it('does not say "Download Free"', () => {
+    expect(html).not.toContain('Download Free')
+  })
+
+  it('does not use the elongated pill class', () => {
+    expect(html).not.toContain('rounded-[980px]')
   })
 })

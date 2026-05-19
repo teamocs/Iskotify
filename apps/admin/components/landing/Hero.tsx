@@ -13,7 +13,7 @@ export function Hero() {
             <span className="text-[#800000]">Made Effortlessly Simple</span>
           </h1>
           <p className="text-[#6e6e73] text-base md:text-lg mb-8 max-w-lg font-body leading-relaxed">
-            Join thousands of Filipino students who never miss a scholarship deadline or exam date again.
+            Find scholarships, track deadlines, and prepare for your qualifying exams — all in one place.
           </p>
 
           {/* Download buttons */}

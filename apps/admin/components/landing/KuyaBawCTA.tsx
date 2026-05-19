@@ -23,9 +23,9 @@ export function KuyaBawCTA() {
           </p>
           <a
             href="#"
-            className="inline-block bg-[#800000] text-white rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-[#a00000] transition-colors"
+            className="inline-block bg-[#800000] text-white rounded-xl px-5 py-2 text-sm font-medium hover:bg-[#a00000] transition-colors"
           >
-            Download Free →
+            Download Now →
           </a>
         </div>
       </div>

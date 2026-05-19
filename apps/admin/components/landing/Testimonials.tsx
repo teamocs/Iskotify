@@ -1,5 +1,3 @@
-import React from 'react'
-
 // Replace with live App Store / Google Play review URLs when the app is published
 const APP_STORE_REVIEW_URL = '#'
 const PLAY_STORE_REVIEW_URL = '#'
