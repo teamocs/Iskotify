@@ -83,3 +83,20 @@ export const savedDecks = sqliteTable('saved_decks', {
   topicIds: text('topic_ids').notNull().default('[]'),
   createdAt: integer('created_at').notNull(),
 })
+
+export const focusListings = sqliteTable('focus_listings', {
+  listingSlug: text('listing_slug').primaryKey(),
+  priority:    integer('priority').notNull(),
+  addedAt:     integer('added_at').notNull(),
+})
+
+export const practiceSessions = sqliteTable('practice_sessions', {
+  id:           integer('id').primaryKey({ autoIncrement: true }),
+  listingSlug:  text('listing_slug').notNull().default(''),
+  topicId:      text('topic_id').notNull().default(''),
+  deckId:       text('deck_id').notNull().default(''),
+  score:        integer('score').notNull().default(0),
+  total:        integer('total').notNull().default(0),
+  durationSecs: integer('duration_secs').notNull().default(0),
+  completedAt:  integer('completed_at').notNull(),
+})

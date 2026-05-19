@@ -83,6 +83,24 @@ const MIGRATIONS = [
   `ALTER TABLE listings ADD COLUMN external_url TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE listings ADD COLUMN deadline INTEGER`,
   `ALTER TABLE listings ADD COLUMN grant_amount TEXT NOT NULL DEFAULT ''`,
+  `CREATE TABLE IF NOT EXISTS focus_listings (
+    listing_slug TEXT PRIMARY KEY NOT NULL,
+    priority INTEGER NOT NULL,
+    added_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS practice_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    listing_slug TEXT NOT NULL DEFAULT '',
+    topic_id TEXT NOT NULL DEFAULT '',
+    deck_id TEXT NOT NULL DEFAULT '',
+    score INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    duration_secs INTEGER NOT NULL DEFAULT 0,
+    completed_at INTEGER NOT NULL
+  )`,
+  `INSERT OR IGNORE INTO focus_listings (listing_slug, priority, added_at)
+   SELECT selected_listing_slug, 1, (strftime('%s','now') * 1000)
+   FROM user_settings WHERE id = 1 AND selected_listing_slug != ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
