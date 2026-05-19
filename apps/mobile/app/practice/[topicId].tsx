@@ -154,13 +154,12 @@ export default function QuizScreen() {
     if (currentIdx === questions.length - 1) {
       // Last question: save progress and go to results
       const now = Date.now()
-      db.transaction(tx => {
+      void db.transaction(async (tx) => {
         for (const a of newAnswers) {
-          tx.insert(userProgress)
+          await tx.insert(userProgress)
             .values({ flashcardId: a.flashcardId, correct: a.correct, answeredAt: now })
-            .run()
         }
-      })
+      }).catch(e => console.warn('[quiz] save progress error:', e))
       void recordSession({
         listingSlug: listingSlug ?? '',
         topicId,
@@ -385,7 +384,14 @@ export default function QuizScreen() {
 
   // ── Phase: quiz ─────────────────────────────────────────────────────────────
 
-  const q = questions[currentIdx]!
+  const q = questions[currentIdx]
+  if (!q) {
+    return (
+      <SafeAreaView style={s.root}>
+        <Text style={s.loadingTxt}>Loading question…</Text>
+      </SafeAreaView>
+    )
+  }
 
   const timerBarColor = timerProgress.interpolate({
     inputRange: [0, 0.3, 1],

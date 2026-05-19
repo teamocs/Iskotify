@@ -134,11 +134,11 @@ export default function ListingQuizScreen() {
       stopTimer()
       const score = newAnswers.filter(a => a.correct).length
       const now = Date.now()
-      db.transaction(tx => {
+      void db.transaction(async (tx) => {
         for (const a of newAnswers) {
-          tx.insert(userProgress).values({ flashcardId: a.flashcardId, correct: a.correct, answeredAt: now }).run()
+          await tx.insert(userProgress).values({ flashcardId: a.flashcardId, correct: a.correct, answeredAt: now })
         }
-      })
+      }).catch(e => console.warn('[listing-quiz] save progress error:', e))
       void recordSession({
         listingSlug: slug,
         topicId: '',
@@ -234,7 +234,14 @@ export default function ListingQuizScreen() {
     )
   }
 
-  const q = questions[currentIdx]!
+  const q = questions[currentIdx]
+  if (!q) {
+    return (
+      <SafeAreaView style={s.root}>
+        <Text style={s.loadingTxt}>Loading question…</Text>
+      </SafeAreaView>
+    )
+  }
   const timerBarColor = timerProgress.interpolate({ inputRange: [0, 0.3, 1], outputRange: ['#f87171', '#fbbf24', '#4ade80'], extrapolate: 'clamp' })
   const timerBarWidth = timerProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
 

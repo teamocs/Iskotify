@@ -4,19 +4,31 @@ import { createServerClient } from '@iskotify/utils'
 import { Sidebar } from '@/components/admin/Sidebar'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const auth = await createAuthClient()
-  const { data: { user } } = await auth.auth.getUser()
+  let user = null
+  try {
+    const auth = await createAuthClient()
+    const { data } = await auth.auth.getUser()
+    user = data.user
+  } catch {
+    redirect('/login')
+  }
 
   if (!user) redirect('/login')
 
-  const db = createServerClient()
-  const { data: profile } = await db
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  let isAdmin = false
+  try {
+    const db = createServerClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    isAdmin = profile?.role === 'admin'
+  } catch {
+    // DB unavailable — deny access
+  }
 
-  if (profile?.role !== 'admin') {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7]">
         <div className="text-center">
