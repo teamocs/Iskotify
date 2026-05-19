@@ -23,10 +23,10 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const isLoginPage = request.nextUrl.pathname === '/admin/login'
+  const isLoginPage = request.nextUrl.pathname === '/login'
 
   if (!user && !isLoginPage) {
-    return NextResponse.redirect(new URL('/admin/login', request.url))
+    return NextResponse.redirect(new URL('/login', request.url))
   }
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL('/admin/listings', request.url))
@@ -35,4 +35,4 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse
 }
 
-export const config = { matcher: ['/admin/:path*'] }
+export const config = { matcher: ['/admin/:path*', '/login'] }

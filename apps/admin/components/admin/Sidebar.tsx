@@ -43,7 +43,7 @@ export function Sidebar({ userEmail }: Props) {
 
   async function handleSignOut() {
     await supabase.auth.signOut()
-    router.push('/admin/login')
+    router.push('/login')
   }
 
   const initials = userEmail.slice(0, 2).toUpperCase()

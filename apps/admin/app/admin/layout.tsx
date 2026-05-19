@@ -7,7 +7,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const auth = await createAuthClient()
   const { data: { user } } = await auth.auth.getUser()
 
-  if (!user) redirect('/admin/login')
+  if (!user) redirect('/login')
 
   const db = createServerClient()
   const { data: profile } = await db
