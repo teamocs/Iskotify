@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTheme } from '../theme/ThemeContext'
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -13,6 +14,7 @@ WebBrowser.maybeCompleteAuthSession()
 
 export default function LandingScreen() {
   const db = useDb()
+  const { theme: t, typo } = useTheme()
   const [signingIn, setSigningIn] = useState(false)
 
   async function handleGoogleSignIn() {
@@ -80,7 +82,7 @@ export default function LandingScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#1a1a2e' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: 'space-between', paddingTop: 56, paddingBottom: 40 }}>
 
         {/* Hero */}
@@ -88,18 +90,18 @@ export default function LandingScreen() {
           {/* Logo */}
           <LogoSvg width={88} height={88} viewBox="0 0 2048 2048" style={{ marginBottom: 4, borderRadius: 24 }} />
 
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 34, color: '#fff', textAlign: 'center', letterSpacing: -0.5 }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h1, color: t.textPrimary, textAlign: 'center', letterSpacing: -0.5 }}>
             Iskotify
           </Text>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 14, color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.base, color: t.textSecondary, textAlign: 'center', lineHeight: 22, maxWidth: 280 }}>
             Your AI-powered study companion for Philippine scholarships and entrance exams.
           </Text>
 
           {/* Feature pills */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 }}>
             {['Flashcards', 'Progress Tracking', 'Weak Area Focus', 'Sync Across Devices'].map(f => (
-              <View key={f} style={{ backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: 11, color: '#fca5a5' }}>{f}</Text>
+              <View key={f} style={{ backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: '#fca5a5' }}>{f}</Text>
               </View>
             ))}
           </View>
@@ -108,9 +110,9 @@ export default function LandingScreen() {
         {/* Actions */}
         <View style={{ gap: 12 }}>
           {/* Google sync info */}
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 14, gap: 4 }}>
-            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 12, color: '#fff' }}>☁️  Back up with Google</Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.50)', lineHeight: 16 }}>
+          <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 14, gap: 4 }}>
+            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary }}>☁️  Back up with Google</Text>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: 16 }}>
               Sign in so your progress and settings are saved. Switch devices anytime and your data comes with you.
             </Text>
           </View>
@@ -120,7 +122,7 @@ export default function LandingScreen() {
             onPress={handleGoogleSignIn}
             disabled={signingIn}
             style={{
-              backgroundColor: '#fff',
+              backgroundColor: t.textPrimary,
               borderRadius: 16,
               paddingVertical: 15,
               flexDirection: 'row',
@@ -131,18 +133,18 @@ export default function LandingScreen() {
             }}
           >
             {signingIn ? (
-              <ActivityIndicator color="#1a1a2e" size="small" />
+              <ActivityIndicator color={t.bg} size="small" />
             ) : (
-              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 14, color: '#1a1a2e', letterSpacing: 0.1 }}>G</Text>
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.bg, letterSpacing: 0.1 }}>G</Text>
             )}
-            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: '#1a1a2e' }}>
+            <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.bg }}>
               {signingIn ? 'Signing in…' : 'Continue with Google'}
             </Text>
           </TouchableOpacity>
 
           {/* Skip */}
           <TouchableOpacity onPress={handleSkip} style={{ alignItems: 'center', paddingVertical: 10 }}>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.40)' }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>
               Skip for now — set up later in Profile
             </Text>
           </TouchableOpacity>
