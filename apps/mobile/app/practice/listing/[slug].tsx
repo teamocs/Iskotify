@@ -1,0 +1,322 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Animated } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useLocalSearchParams, router } from 'expo-router'
+import { useDb } from '../../../hooks/useDb'
+import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
+import { eq } from 'drizzle-orm'
+import { useRecordSession } from '../../../hooks/useRecordSession'
+
+const TIMER_SECS = 20
+const MAX_QUESTIONS = 20
+const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
+const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
+const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
+
+interface QuizQuestion {
+  id: string; stem: string; options: string[]; answerIndex: number; explanation: string; difficulty: number
+}
+interface UserAnswer {
+  flashcardId: string; selectedIndex: number | null; correct: boolean
+}
+
+function parseQuizQuestion(card: { id: string; question: string; answer: string; explanation: string; difficulty: number }): QuizQuestion | null {
+  const m = card.question.match(/\bA\)\s*(.*?)\s+B\)\s*(.*?)\s+C\)\s*(.*?)\s+D\)\s*([\s\S]+?)$/)
+  if (!m) return null
+  const stem = card.question.replace(/\s+A\)\s[\s\S]*$/, '').trim()
+  const options = [m[1]!.trim(), m[2]!.trim(), m[3]!.trim(), m[4]!.trim()]
+  const letter = card.answer.match(/^([A-D])\)/)?.[1]
+  if (!letter) return null
+  const answerIndex = 'ABCD'.indexOf(letter)
+  if (answerIndex === -1) return null
+  return { id: card.id, stem, options, answerIndex, explanation: card.explanation, difficulty: card.difficulty }
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = a[i] as T; a[i] = a[j] as T; a[j] = tmp
+  }
+  return a
+}
+
+type Phase = 'loading' | 'ready' | 'quiz' | 'results'
+
+export default function ListingQuizScreen() {
+  const { slug, mode } = useLocalSearchParams<{ slug: string; mode?: string }>()
+  const db = useDb()
+  const { recordSession } = useRecordSession()
+
+  const [listingTitle, setListingTitle] = useState('')
+  const [questions, setQuestions] = useState<QuizQuestion[]>([])
+  const [phase, setPhase] = useState<Phase>('loading')
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [answers, setAnswers] = useState<UserAnswer[]>([])
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+  const [timeLeft, setTimeLeft] = useState(TIMER_SECS)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timeLeftRef = useRef(TIMER_SECS)
+  const advanceRef = useRef<(sel: number | null) => void>(() => {})
+  const startTimeRef = useRef(0)
+  const timerProgress = useRef(new Animated.Value(1)).current
+  const timerAnimRef = useRef<Animated.CompositeAnimation | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const [listingRows, allCards, progress] = await Promise.all([
+        db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
+        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, difficulty: flashcardsTable.difficulty, listingSlugs: flashcardsTable.listingSlugs }).from(flashcardsTable),
+        db.select({ flashcardId: userProgress.flashcardId, correct: userProgress.correct }).from(userProgress),
+      ])
+
+      setListingTitle(listingRows[0]?.title ?? slug)
+
+      // Filter cards belonging to this listing
+      const matching = allCards.filter(card => {
+        try { return (JSON.parse(card.listingSlugs ?? '[]') as string[]).includes(slug) }
+        catch { return false }
+      })
+
+      let filtered = matching
+      if (mode === 'weak') {
+        // Find topics with <60% accuracy
+        const fcByTopic: Record<string, string[]> = {}
+        for (const c of matching) {
+          if (!fcByTopic[c.topicId]) fcByTopic[c.topicId] = []
+          fcByTopic[c.topicId]!.push(c.id)
+        }
+        const weakTopicIds = new Set<string>()
+        for (const [topicId, fcIds] of Object.entries(fcByTopic)) {
+          const tp = progress.filter(p => fcIds.includes(p.flashcardId))
+          if (tp.length === 0) continue
+          const correct = tp.filter(p => p.correct === true || (p.correct as unknown as number) === 1).length
+          if (correct / tp.length < 0.6) weakTopicIds.add(topicId)
+        }
+        filtered = matching.filter(c => weakTopicIds.has(c.topicId))
+      }
+
+      const parsed = shuffle(filtered).map(parseQuizQuestion).filter((q): q is QuizQuestion => q !== null).slice(0, MAX_QUESTIONS)
+      setQuestions(parsed)
+      setPhase(parsed.length === 0 ? 'results' : 'ready')
+    }
+    void load()
+  }, [db, slug, mode])
+
+  useEffect(() => () => { stopTimer() }, [])
+
+  function stopTimer() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    timerAnimRef.current?.stop()
+  }
+
+  function startTimer() {
+    stopTimer()
+    timeLeftRef.current = TIMER_SECS
+    setTimeLeft(TIMER_SECS)
+    timerProgress.setValue(1)
+    timerAnimRef.current = Animated.timing(timerProgress, { toValue: 0, duration: TIMER_SECS * 1000, useNativeDriver: false })
+    timerAnimRef.current.start()
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1
+      setTimeLeft(timeLeftRef.current)
+      if (timeLeftRef.current <= 0) { stopTimer(); advanceRef.current(null) }
+    }, 1000)
+  }
+
+  const advance = useCallback((sel: number | null) => {
+    const q = questions[currentIdx]
+    if (!q) return
+    const correct = sel !== null && sel === q.answerIndex
+    const newAnswers: UserAnswer[] = [...answers, { flashcardId: q.id, selectedIndex: sel, correct }]
+
+    if (currentIdx === questions.length - 1) {
+      stopTimer()
+      const score = newAnswers.filter(a => a.correct).length
+      const now = Date.now()
+      db.transaction(tx => {
+        for (const a of newAnswers) {
+          tx.insert(userProgress).values({ flashcardId: a.flashcardId, correct: a.correct, answeredAt: now }).run()
+        }
+      })
+      void recordSession({
+        listingSlug: slug,
+        topicId: '',
+        deckId: mode === 'weak' ? '__weak__' : '__full__',
+        score,
+        total: newAnswers.length,
+        startTime: startTimeRef.current,
+      })
+      setAnswers(newAnswers)
+      setPhase('results')
+    } else {
+      setAnswers(newAnswers)
+      setCurrentIdx(i => i + 1)
+      setSelectedIdx(null)
+      startTimer()
+    }
+  }, [questions, currentIdx, answers, db, slug, mode, recordSession])
+
+  useEffect(() => { advanceRef.current = advance })
+
+  function handleSelect(idx: number) {
+    if (selectedIdx !== null) return
+    stopTimer()
+    setSelectedIdx(idx)
+    setTimeout(() => advance(idx), 650)
+  }
+
+  function startQuiz() {
+    startTimeRef.current = Date.now()
+    setCurrentIdx(0); setAnswers([]); setSelectedIdx(null); setPhase('quiz')
+    setTimeout(() => startTimer(), 50)
+  }
+
+  const modeLabel = mode === 'weak' ? 'Weak Topics' : 'Full Review'
+
+  if (phase === 'loading') return (
+    <SafeAreaView style={s.root}><Text style={s.loadingTxt}>Loading…</Text></SafeAreaView>
+  )
+
+  if (phase === 'ready') return (
+    <SafeAreaView style={s.root}>
+      <View style={s.readyWrap}>
+        <View style={s.readyIcon}><Text style={{ fontSize: 36 }}>{mode === 'weak' ? '⚠️' : '⚡'}</Text></View>
+        <Text style={s.readyTitle}>{modeLabel}</Text>
+        <Text style={s.readySub}>{listingTitle}</Text>
+        <Text style={s.readySub2}>{questions.length} questions · {TIMER_SECS}s each</Text>
+        <TouchableOpacity style={s.startBtn} onPress={startQuiz}>
+          <Text style={s.startBtnTxt}>Start Quiz →</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}>
+          <Text style={s.ghostBtnTxt}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  )
+
+  if (phase === 'results') {
+    const correct = answers.filter(a => a.correct).length
+    const total = answers.length
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0
+    const passed = pct >= 60
+    if (total === 0) return (
+      <SafeAreaView style={s.root}>
+        <View style={s.readyWrap}>
+          <Text style={s.readyTitle}>{mode === 'weak' ? 'No weak topics yet!' : 'No cards found'}</Text>
+          <Text style={s.readySub2}>{mode === 'weak' ? 'Keep practicing to identify weak topics.' : 'No flashcards are tagged to this listing yet.'}</Text>
+          <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}><Text style={s.ghostBtnTxt}>← Back</Text></TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={s.topBar}>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}><Text style={s.backArrow}>‹</Text></TouchableOpacity>
+          <Text style={s.topBarTitle}>Results</Text>
+          <TouchableOpacity onPress={startQuiz}><Text style={s.retryLink}>Retry</Text></TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 48 }}>
+          <View style={[s.scoreCard, passed ? s.scorePass : s.scoreFail]}>
+            <Text style={[s.scorePct, { color: passed ? '#4ade80' : '#fca5a5' }]}>{pct}%</Text>
+            <Text style={s.scoreVerdict}>{passed ? '🎉 Great job!' : '📚 Keep practicing'}</Text>
+            <Text style={s.scoreSub}>{modeLabel} · {listingTitle}</Text>
+            <View style={{ flexDirection: 'row', gap: 28, marginTop: 16 }}>
+              <View style={{ alignItems: 'center' }}><Text style={[s.scoreNum, { color: '#4ade80' }]}>{correct}</Text><Text style={s.scoreLbl}>Correct</Text></View>
+              <View style={{ alignItems: 'center' }}><Text style={[s.scoreNum, { color: '#f87171' }]}>{total - correct}</Text><Text style={s.scoreLbl}>Wrong</Text></View>
+              <View style={{ alignItems: 'center' }}><Text style={[s.scoreNum, { color: 'rgba(255,255,255,0.62)' }]}>{total}</Text><Text style={s.scoreLbl}>Total</Text></View>
+            </View>
+          </View>
+          <TouchableOpacity style={s.startBtn} onPress={startQuiz}><Text style={s.startBtnTxt}>Play Again</Text></TouchableOpacity>
+          <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}><Text style={s.ghostBtnTxt}>← Back</Text></TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    )
+  }
+
+  const q = questions[currentIdx]!
+  const timerBarColor = timerProgress.interpolate({ inputRange: [0, 0.3, 1], outputRange: ['#f87171', '#fbbf24', '#4ade80'], extrapolate: 'clamp' })
+  const timerBarWidth = timerProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+
+  return (
+    <SafeAreaView style={s.root}>
+      <View style={s.topBar}>
+        <TouchableOpacity style={s.backBtn} onPress={() => { stopTimer(); router.back() }}><Text style={s.backArrow}>‹</Text></TouchableOpacity>
+        <Text style={s.topBarTitle} numberOfLines={1}>{modeLabel}</Text>
+        <Text style={s.qCounter}>{currentIdx + 1} / {questions.length}</Text>
+      </View>
+      <View style={s.dotsRow}>{questions.map((_, i) => <View key={i} style={[s.dot, i < currentIdx && s.dotDone, i === currentIdx && s.dotCurrent]} />)}</View>
+      <View style={s.timerBg}><Animated.View style={[s.timerFill, { width: timerBarWidth, backgroundColor: timerBarColor }]} /></View>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 14, marginTop: 4, marginBottom: 4 }}>
+        <Text style={[{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_600SemiBold' }, timeLeft <= 5 && { color: '#f87171' }]}>{timeLeft}s</Text>
+      </View>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 40 }}>
+        <View style={s.questionCard}>
+          <Text style={s.questionMeta}>QUESTION {currentIdx + 1} OF {questions.length}</Text>
+          <Text style={s.questionText}>{q.stem}</Text>
+          <View style={[s.diffBadge, { borderColor: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
+            <Text style={[s.diffTxt, { color: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>{DIFF_LABEL[q.difficulty] ?? 'Medium'}</Text>
+          </View>
+        </View>
+        <View style={{ gap: 9 }}>
+          {q.options.map((opt, oi) => {
+            const isSelected = selectedIdx === oi
+            return (
+              <TouchableOpacity key={oi} style={[s.optionBtn, isSelected && s.optionBtnSelected]} onPress={() => handleSelect(oi)} activeOpacity={0.72} disabled={selectedIdx !== null}>
+                <View style={[s.optionLetterBox, isSelected && s.optionLetterBoxOn]}>
+                  <Text style={[s.optionLetter, isSelected && { color: '#fff' }]}>{OPTION_LETTERS[oi]}</Text>
+                </View>
+                <Text style={[s.optionText, isSelected && { color: '#fff', fontFamily: 'Lexend_600SemiBold' }]} numberOfLines={4}>{opt}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  )
+}
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#1a1a2e' },
+  loadingTxt: { color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: 13 },
+  readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  readyIcon: { width: 72, height: 72, backgroundColor: 'rgba(128,0,0,0.18)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  readyTitle: { fontSize: 22, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 4 },
+  readySub: { fontSize: 12, color: 'rgba(255,255,255,0.60)', fontFamily: 'Lexend_400Regular', marginBottom: 2, textAlign: 'center' },
+  readySub2: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 28, textAlign: 'center' },
+  startBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', marginBottom: 10 },
+  startBtnTxt: { fontSize: 14, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+  ghostBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
+  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  backArrow: { color: 'rgba(255,255,255,0.62)', fontSize: 26, lineHeight: 30 },
+  topBarTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  qCounter: { fontSize: 11, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+  retryLink: { fontSize: 11, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+  dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
+  dot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
+  dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
+  dotCurrent: { backgroundColor: '#fca5a5' },
+  timerBg: { marginHorizontal: 14, height: 5, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99, overflow: 'hidden' },
+  timerFill: { height: 5, borderRadius: 99 },
+  questionCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 22, padding: 18, marginBottom: 14 },
+  questionMeta: { fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+  questionText: { fontSize: 16, fontWeight: '600', color: '#fff', lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
+  diffBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  diffTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.14)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
+  optionBtnSelected: { backgroundColor: 'rgba(128,0,0,0.22)', borderColor: '#800000' },
+  optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  optionLetterBoxOn: { backgroundColor: '#800000' },
+  optionLetter: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.55)', fontFamily: 'Outfit_700Bold' },
+  optionText: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.75)', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+  scoreCard: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, alignItems: 'center' },
+  scorePass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
+  scoreFail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
+  scorePct: { fontSize: 60, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -2, marginBottom: 4 },
+  scoreVerdict: { fontSize: 15, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+  scoreSub: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
+  scoreNum: { fontSize: 28, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+  scoreLbl: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
+})
