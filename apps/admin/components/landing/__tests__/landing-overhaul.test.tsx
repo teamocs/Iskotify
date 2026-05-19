@@ -78,3 +78,25 @@ describe('Testimonials', () => {
     expect(html).toContain('Rate on Google Play')
   })
 })
+
+// ─── FAQ ────────────────────────────────────────────────────────────────────
+describe('FAQ', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(FAQ)) })
+
+  it('shows one-time payment amount', () => {
+    expect(html).toContain('₱129')
+  })
+
+  it('mentions one-time payment in pricing answer', () => {
+    expect(html).toContain('one-time payment')
+  })
+
+  it('does not say the app is completely free', () => {
+    expect(html).not.toContain('completely free')
+  })
+
+  it('does not say "for free" in download answer', () => {
+    expect(html).not.toContain('for free')
+  })
+})

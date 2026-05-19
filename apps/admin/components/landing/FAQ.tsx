@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 
 type FAQItem = {
   question: string
@@ -11,7 +11,7 @@ const faqs: FAQItem[] = [
   {
     question: 'Is Iskotify free to use?',
     answer:
-      'Yes! Iskotify is completely free for students. Browse scholarships, track deadlines, and study with flashcards at no cost.',
+      'Iskotify is available for a one-time payment of ₱129 — no subscription, no hidden fees. Pay once and get lifetime access to all scholarships, exam content, and AI coach features.',
   },
   {
     question: 'Which scholarships are listed?',
@@ -31,7 +31,7 @@ const faqs: FAQItem[] = [
   {
     question: 'Is it available on iOS and Android?',
     answer:
-      'Yes! Iskotify is fully optimized for iOS 15+ and Android 10+. Download it for free from the App Store or Google Play.',
+      'Yes! Iskotify is fully optimized for iOS 15+ and Android 10+. Available on the App Store and Google Play.',
   },
 ]
 
