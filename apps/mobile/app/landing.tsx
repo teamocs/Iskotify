@@ -86,7 +86,7 @@ export default function LandingScreen() {
         {/* Hero */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
           {/* Logo */}
-          <LogoSvg width={88} height={88} style={{ marginBottom: 4, borderRadius: 24 }} />
+          <LogoSvg width={88} height={88} viewBox="0 0 2048 2048" style={{ marginBottom: 4, borderRadius: 24 }} />
 
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 34, color: '#fff', textAlign: 'center', letterSpacing: -0.5 }}>
             Iskotify

@@ -199,7 +199,7 @@ export default function HomeScreen() {
           <View style={s.kuyaCard}>
             <View style={s.kuyaRow}>
               <View style={s.kuyaAvatarLg}>
-                <KuyaBawMascot width={80} height={80} />
+                <KuyaBawMascot width={80} height={80} viewBox="0 0 600 600" />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={s.kuyaNameRow}>

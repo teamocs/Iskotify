@@ -60,7 +60,7 @@ export default function RootLayout() {
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', gap: 20,
         }}>
-          <LogoSvg width={80} height={80} />
+          <LogoSvg width={80} height={80} viewBox="0 0 2048 2048" />
           <ActivityIndicator color="rgba(252,165,165,0.8)" size="small" />
         </View>
       )}
