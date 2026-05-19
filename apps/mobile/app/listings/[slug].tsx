@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
+import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 
 interface FullListing {
@@ -44,6 +45,9 @@ export default function ListingDetailScreen() {
   const [listing, setListing] = useState<FullListing | null>(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
+  const inFocus = isInFocus(slug)
+  const focusPriority = getPriority(slug)
 
   useEffect(() => {
     async function load() {
@@ -212,6 +216,31 @@ export default function ListingDetailScreen() {
             ))}
           </View>
         ) : null}
+
+        {/* Focus CTA */}
+        <View style={{ marginBottom: 12 }}>
+          {inFocus ? (
+            <TouchableOpacity
+              style={{ backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 2, borderColor: '#831626', borderRadius: 18, paddingVertical: 14, alignItems: 'center' }}
+              onPress={() => removeListing(slug)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: '#fca5a5' }}>
+                ✓ In Focus #{focusPriority} — Tap to Remove
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center' }}
+              onPress={() => addListing(slug)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 13, color: '#fff' }}>
+                + Add to Focus
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Start practice CTA */}
         <TouchableOpacity
