@@ -10,3 +10,6 @@ expo-env.d.ts
 
 # Large Lottie animation assets (embedded base64, too big for git)
 assets/kuya-baw-transparent.json
+# SETUP NOTE: kuya-baw-transparent.json must be copied manually on fresh clones.
+# Source: <repo-root>/assets/kuya-baw-transparent.json → apps/mobile/assets/kuya-baw-transparent.json
+# Run: cp assets/kuya-baw-transparent.json apps/mobile/assets/kuya-baw-transparent.json

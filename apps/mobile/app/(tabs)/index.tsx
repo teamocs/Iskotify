@@ -8,6 +8,10 @@ import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
 import LottieView from 'lottie-react-native'
+import Constants from 'expo-constants'
+import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
+
+const isExpoGo = Constants.executionEnvironment === 'storeClient'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -301,12 +305,17 @@ export default function HomeScreen() {
           <View style={s.kuyaCard}>
             <View style={s.kuyaRow}>
               <View style={s.kuyaAvatarLg}>
-                <LottieView
-                  source={require('../../assets/kuya-baw-transparent.json')}
-                  autoPlay
-                  loop
-                  style={{ width: 80, height: 80 }}
-                />
+                {isExpoGo ? (
+                  <KuyaBawMascot width={80} height={80} viewBox="0 0 600 600" />
+                ) : (
+                  <LottieView
+                    source={require('../../assets/kuya-baw-transparent.json')}
+                    autoPlay
+                    loop
+                    resizeMode="contain"
+                    style={s.kuyaLottie}
+                  />
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <View style={s.kuyaNameRow}>
@@ -500,6 +509,7 @@ const s = StyleSheet.create({
   kuyaBadge: { marginLeft: 'auto', backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   kuyaBadgeText: { fontSize: 8, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
   kuyaText: { fontSize: 11.5, color: 'rgba(255,255,255,0.80)', lineHeight: 18, fontFamily: 'Lexend_400Regular' },
+  kuyaLottie: { width: 80, height: 80 },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
