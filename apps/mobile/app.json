@@ -22,7 +22,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#831626"
-      }
+      },
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",

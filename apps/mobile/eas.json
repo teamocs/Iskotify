@@ -34,9 +34,7 @@
         "track": "internal"
       },
       "ios": {
-        "appleId": "teamocsph@gmail.com",
-        "ascAppId": "",
-        "appleTeamId": ""
+        "appleId": "teamocsph@gmail.com"
       }
     }
   }
