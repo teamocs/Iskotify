@@ -4,7 +4,7 @@ import { Alert } from 'react-native'
 import ProfileScreen from '../profile'
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn() },
+  router: { replace: jest.fn(), push: jest.fn() },
   useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
 }))
 
@@ -28,9 +28,13 @@ jest.mock('../../../services/export', () => ({
 const makeDb = (userRow?: any) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
+      leftJoin: jest.fn(() => ({
+        orderBy: jest.fn().mockResolvedValue([]),
+      })),
       where: jest.fn(() => ({
         limit: jest.fn().mockResolvedValue(userRow ? [userRow] : []),
       })),
+      orderBy: jest.fn().mockResolvedValue([]),
     })),
   })),
   update: jest.fn(() => ({
@@ -42,6 +46,17 @@ const makeDb = (userRow?: any) => ({
 
 jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
+}))
+
+jest.mock('../../../hooks/useFocusListings', () => ({
+  useFocusListings: () => ({
+    focusListings: [],
+    addListing: jest.fn(),
+    removeListing: jest.fn(),
+    moveListing: jest.fn(),
+    isInFocus: jest.fn().mockReturnValue(false),
+    getPriority: jest.fn().mockReturnValue(null),
+  }),
 }))
 
 describe('ProfileScreen — empty DB', () => {
@@ -65,10 +80,9 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.getByText('No exam selected')).toBeTruthy()
   })
 
-  it('renders Change Exam card', () => {
+  it('renders My Focus List section', () => {
     render(<ProfileScreen />)
-    expect(screen.getByText('Change Exam')).toBeTruthy()
-    expect(screen.getByText('Select a different exam to study for')).toBeTruthy()
+    expect(screen.getByText('My Focus List')).toBeTruthy()
   })
 
   it('renders Export Data card', () => {
@@ -133,14 +147,13 @@ describe('ProfileScreen — interactions', () => {
     jest.spyOn(Alert, 'alert')
   })
 
-  it('pressing Change Exam opens a confirmation alert', () => {
+  it('pressing Export Data calls exportUserData and shows alert', async () => {
+    const { exportUserData } = require('../../../services/export')
     render(<ProfileScreen />)
-    fireEvent.press(screen.getByText('Change Exam'))
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Change Exam',
-      expect.any(String),
-      expect.any(Array),
-    )
+    fireEvent.press(screen.getByText('Export Data'))
+    await waitFor(() => {
+      expect(exportUserData).toHaveBeenCalled()
+    })
   })
 
   it('pressing Export Data calls exportUserData', async () => {

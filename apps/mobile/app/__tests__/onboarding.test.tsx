@@ -87,6 +87,6 @@ describe('OnboardingScreen — Step 1', () => {
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Juan dela Cruz'), 'Juan dela Cruz')
     fireEvent.press(screen.getByText('G11'))
     fireEvent.press(screen.getByText('Next →'))
-    expect(screen.getByText(/Which exam are you/)).toBeTruthy()
+    expect(screen.getByText(/What are you/)).toBeTruthy()
   })
 })

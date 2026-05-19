@@ -21,12 +21,34 @@ jest.mock('../../../hooks/useHomeStats', () => ({
   useHomeStats: () => mockUseHomeStats(),
 }))
 
+jest.mock('../../../hooks/useFocusListings', () => ({
+  useFocusListings: () => ({
+    focusListings: [],
+    addListing: jest.fn(),
+    removeListing: jest.fn(),
+    moveListing: jest.fn(),
+    isInFocus: jest.fn().mockReturnValue(false),
+    getPriority: jest.fn().mockReturnValue(null),
+  }),
+}))
+
+jest.mock('../../../hooks/useSavedDecks', () => ({
+  useSavedDecks: () => ({
+    decks: [],
+    createDeck: jest.fn(),
+    deleteDeck: jest.fn(),
+  }),
+}))
+
 const emptyPracticeData = {
   subjects: [],
   topicRows: [],
+  recommendedTopics: [],
   selectedSubjectId: null,
   setSelectedSubjectId: jest.fn(),
   totalCards: 0,
+  cardCountByTopic: {},
+  topicIdsByListingSlug: {},
 }
 
 describe('PracticeScreen', () => {

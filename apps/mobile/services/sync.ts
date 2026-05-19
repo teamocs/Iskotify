@@ -56,7 +56,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       seen.add(r.id); return true
     })
 
-    db.transaction((tx) => {
+    await db.transaction((tx) => {
       for (const row of (listingsRes.data ?? [])) {
         const examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
         const deadline = row.deadline ? new Date(row.deadline).getTime() : null

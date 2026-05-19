@@ -184,7 +184,7 @@ export default function DeckQuizScreen() {
       setSelectedIdx(null)
       startTimer()
     }
-  }, [questions, currentIdx, answers, db])
+  }, [questions, currentIdx, answers, db, recordSession, listingSlug, deckId])
 
   useEffect(() => { advanceRef.current = advance })
 

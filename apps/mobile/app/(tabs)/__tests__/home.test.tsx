@@ -26,6 +26,12 @@ jest.mock('../../../hooks/useHomeStats', () => ({
   useHomeStats: () => mockUseHomeStats(),
 }))
 
+jest.mock('../../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
+}))
+
+jest.mock('../../../assets/images/kuya-baw-mascot.svg', () => 'KuyaBawMascot')
+
 const emptyStats = {
   listing: null,
   daysLeft: null,
@@ -33,6 +39,8 @@ const emptyStats = {
   streakDays: 0,
   weakTopics: [],
   firstTopicId: null,
+  fullName: 'Student',
+  calendarDays: [],
 }
 
 describe('HomeScreen', () => {
@@ -75,7 +83,7 @@ describe('HomeScreen', () => {
       listing: { title: 'UPCAT 2025' },
     })
     render(<HomeScreen />)
-    expect(screen.getByText('UPCAT 2025')).toBeTruthy()
+    expect(screen.getByText(/UPCAT 2025/)).toBeTruthy()
   })
 
   it('shows Quick Practice button when a topic is available', () => {

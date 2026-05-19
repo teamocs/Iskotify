@@ -16,14 +16,42 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Funnel1Outlined: {},
 }))
 
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
+}))
+
 jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
+}))
+
+jest.mock('../../../hooks/useFocusListings', () => ({
+  useFocusListings: () => ({
+    focusListings: [],
+    addListing: jest.fn(),
+    removeListing: jest.fn(),
+    moveListing: jest.fn(),
+    isInFocus: jest.fn().mockReturnValue(false),
+    getPriority: jest.fn().mockReturnValue(null),
+  }),
 }))
 
 const makeDb = (rows: any[] = []) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
+      leftJoin: jest.fn(() => ({
+        orderBy: jest.fn().mockResolvedValue([]),
+      })),
+      orderBy: jest.fn().mockResolvedValue([]),
       then: jest.fn((cb: any) => Promise.resolve().then(() => cb(rows))),
+    })),
+  })),
+  delete: jest.fn(() => ({
+    where: jest.fn().mockResolvedValue(undefined),
+  })),
+  insert: jest.fn(() => ({
+    values: jest.fn(() => ({
+      onConflictDoNothing: jest.fn().mockResolvedValue(undefined),
     })),
   })),
 })
@@ -53,7 +81,7 @@ describe('ListingsScreen', () => {
 
   it('renders search input', () => {
     render(<ListingsScreen />)
-    expect(screen.getByPlaceholderText('Search...')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Search listings...')).toBeTruthy()
   })
 
   it('shows empty state when no listings', async () => {
@@ -73,7 +101,7 @@ describe('ListingsScreen', () => {
 
   it('filters by search query', async () => {
     render(<ListingsScreen />)
-    fireEvent.changeText(screen.getByPlaceholderText('Search...'), 'UPCAT')
+    fireEvent.changeText(screen.getByPlaceholderText('Search listings...'), 'UPCAT')
     await waitFor(() => {
       expect(screen.getByText('No listings found.')).toBeTruthy()
     })

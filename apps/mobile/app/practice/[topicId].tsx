@@ -177,7 +177,7 @@ export default function QuizScreen() {
       setSelectedIdx(null)
       startTimer()
     }
-  }, [questions, currentIdx, answers, db])
+  }, [questions, currentIdx, answers, db, recordSession, listingSlug, topicId])
 
   // Keep ref current so timer closure always calls the latest advance
   useEffect(() => { advanceRef.current = advance })
