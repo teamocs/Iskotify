@@ -9,6 +9,7 @@ import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePr
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
+import { useTheme } from '../../theme/ThemeContext'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -30,7 +31,8 @@ function lastPracticedLabel(ts: number | null): string {
 
 // ── Recommended card (horizontal scroll) ─────────────────────────────────────
 
-function RecommendedCard({ row }: { row: TopicRow }) {
+type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; row: object }
+function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
   const c = STRENGTH_COLOR[row.strength]
   return (
     <TouchableOpacity
@@ -49,7 +51,8 @@ function RecommendedCard({ row }: { row: TopicRow }) {
 
 // ── Topic card ────────────────────────────────────────────────────────────────
 
-function TopicCard({ row }: { row: TopicRow }) {
+type SStyles = { topicCard: object; topicIcon: object; topicName: object; topicSub: object; badge: object; badgeText: object; deckCard: object; deckIcon: object; deckName: object; deckSub: object; deckChevron: object; root: object; header: object; title: object; subtitle: object; chipsWrap: object; chipsScroll: object; chipsContent: object; chip: object; chipOn: object; chipTxt: object; chipTxtOn: object; secRow: object; secTitle: object; secSub: object; addBtn: object; addBtnTxt: object; list: object; empty: object }
+function TopicCard({ row, s }: { row: TopicRow; s: SStyles }) {
   const c = STRENGTH_COLOR[row.strength]
   return (
     <TouchableOpacity style={s.topicCard} onPress={() => router.push(`/practice/${row.topic.id}`)}>
@@ -73,10 +76,12 @@ function DeckCard({
   deck,
   totalCards,
   onDelete,
+  s,
 }: {
   deck: SavedDeck
   totalCards: number
   onDelete: () => void
+  s: SStyles
 }) {
   function handleLongPress() {
     Alert.alert('Delete Deck', `Delete "${deck.name}"?`, [
@@ -106,16 +111,20 @@ function DeckCard({
 
 // ── Create Deck Modal ─────────────────────────────────────────────────────────
 
+type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object }
+
 function CreateDeckModal({
   visible,
   topicRows,
   onClose,
   onCreate,
+  m,
 }: {
   visible: boolean
   topicRows: TopicRow[]
   onClose: () => void
   onCreate: (name: string, topicIds: string[]) => Promise<void>
+  m: MStyles
 }) {
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -221,6 +230,13 @@ function CreateDeckModal({
 // ── Focus card ────────────────────────────────────────────────────────────────
 
 function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: boolean; onPress: () => void }) {
+  const { theme: t, typo } = useTheme()
+  const fc = useMemo(() => StyleSheet.create({
+    card: { minWidth: 110, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 11, marginRight: 8 },
+    cardActive: { backgroundColor: t.accentSurface, borderColor: '#831626', borderWidth: 2 },
+    badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Lexend_600SemiBold' },
+    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 15, fontFamily: 'Outfit_700Bold' },
+  }), [t, typo])
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -233,13 +249,6 @@ function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: bo
   )
 }
 
-const fc = StyleSheet.create({
-  card: { minWidth: 110, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: 11, marginRight: 8 },
-  cardActive: { backgroundColor: 'rgba(128,0,0,0.18)', borderColor: '#831626', borderWidth: 2 },
-  badge: { fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.40)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Lexend_600SemiBold' },
-  name: { fontSize: 11, fontWeight: '700', color: '#fff', lineHeight: 15, fontFamily: 'Outfit_700Bold' },
-})
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function PracticeScreen() {
@@ -247,6 +256,83 @@ export default function PracticeScreen() {
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+
+  const { theme: t, typo } = useTheme()
+  const styles = useMemo(() => ({
+    s: StyleSheet.create({
+      root: { flex: 1, backgroundColor: t.bg },
+      header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+      title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+      subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+      chipsWrap: { height: 44, marginBottom: 4 },
+      chipsScroll: { flex: 1 },
+      chipsContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
+      chip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
+      chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
+      chipTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+      chipTxtOn: { color: '#fff' },
+      secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+      secTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: 8 },
+      addBtn: { width: 24, height: 24, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+      addBtnTxt: { color: '#fff', fontSize: 14, lineHeight: 18, fontWeight: '700' },
+      list: { paddingHorizontal: 16, paddingBottom: 100 },
+      topicCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+      topicIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 1 },
+      topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, flexShrink: 0 },
+      badgeText: { fontSize: typo.xs, fontWeight: '600', fontFamily: 'Lexend_600SemiBold' },
+      deckCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+      deckIcon: { width: 36, height: 36, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      deckName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 1 },
+      deckSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      deckChevron: { color: t.textTertiary, fontSize: 18 },
+      empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 8 },
+    }),
+    rc: StyleSheet.create({
+      row: { gap: 10, paddingRight: 4 },
+      card: { width: 130, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 12 },
+      badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 8 },
+      badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+      name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 4, lineHeight: 16 },
+      sub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    }),
+    qs: StyleSheet.create({
+      card:  { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+      card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+      icon:  { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      icon2: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      title: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      sub:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+      go:    { fontSize: 18, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
+    }),
+    m: StyleSheet.create({
+      overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+      sheet: { backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 36, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
+      headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+      title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      closeBtn: { color: t.textTertiary, fontSize: 16, padding: 4 },
+      label: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6, fontFamily: 'Lexend_600SemiBold' },
+      input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', marginBottom: 14 },
+      btn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+      btnFlex: { flex: 1 },
+      btnDisabled: { opacity: 0.4 },
+      btnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+      topicList: { maxHeight: 280, marginBottom: 14 },
+      topicRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
+      topicRowOn: { backgroundColor: t.accentSurface, borderRadius: 10, paddingHorizontal: 6 },
+      checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      checkboxOn: { backgroundColor: t.accent, borderColor: t.accent },
+      checkmark: { color: '#fff', fontSize: 11, fontWeight: '700' },
+      topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+      topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      footerRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+      backBtn: { paddingVertical: 12, paddingHorizontal: 4 },
+      backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    }),
+  }), [t, typo])
+  const { s, rc, qs, m } = styles
 
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
@@ -324,7 +410,7 @@ export default function PracticeScreen() {
         keyExtractor={r => r.topic.id}
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <TopicCard row={item} />}
+        renderItem={({ item }) => <TopicCard row={item} s={s} />}
         ListEmptyComponent={<Text style={s.empty}>No topics found. Try syncing again.</Text>}
         ListHeaderComponent={
           <>
@@ -402,7 +488,7 @@ export default function PracticeScreen() {
                   style={{ marginBottom: 14 }}
                 >
                   {activeRecommended.map(row => (
-                    <RecommendedCard key={row.topic.id} row={row} />
+                    <RecommendedCard key={row.topic.id} row={row} rc={rc} />
                   ))}
                 </ScrollView>
               </>
@@ -425,6 +511,7 @@ export default function PracticeScreen() {
                     deck={deck}
                     totalCards={deckCardCount(deck)}
                     onDelete={() => deleteDeck(deck.id)}
+                    s={s}
                   />
                 ))}
               </View>
@@ -443,85 +530,9 @@ export default function PracticeScreen() {
         topicRows={topicRows}
         onClose={() => setModalVisible(false)}
         onCreate={createDeck}
+        m={m}
       />
     </SafeAreaView>
   )
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-  subtitle: { fontSize: 10, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  chipsWrap: { height: 44, marginBottom: 4 },
-  chipsScroll: { flex: 1 },
-  chipsContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
-  chip: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
-  chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
-  chipTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_600SemiBold' },
-  chipTxtOn: { color: '#fff' },
-  secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  secTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  secSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: 8 },
-  addBtn: { width: 24, height: 24, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  addBtnTxt: { color: '#fff', fontSize: 14, lineHeight: 18, fontWeight: '700' },
-  list: { paddingHorizontal: 16, paddingBottom: 100 },
-  topicCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  topicIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  topicName: { fontSize: 12, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 1 },
-  topicSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, flexShrink: 0 },
-  badgeText: { fontSize: 9, fontWeight: '600', fontFamily: 'Lexend_600SemiBold' },
-  deckCard: { backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  deckIcon: { width: 36, height: 36, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  deckName: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 1 },
-  deckSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  deckChevron: { color: 'rgba(255,255,255,0.38)', fontSize: 18 },
-  empty: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 8 },
-})
-
-const rc = StyleSheet.create({
-  row: { gap: 10, paddingRight: 4 },
-  card: { width: 130, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 18, padding: 12 },
-  badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 8 },
-  badgeTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  name: { fontSize: 11, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 4, lineHeight: 16 },
-  sub: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-})
-
-const qs = StyleSheet.create({
-  card:  { backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-  icon:  { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  icon2: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title: { fontSize: 11, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  sub:   { fontSize: 9, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginTop: 1 },
-  go:    { fontSize: 18, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
-})
-
-const m = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#1a1a2e', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 36, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.12)', maxHeight: '85%' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 16, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  closeBtn: { color: 'rgba(255,255,255,0.45)', fontSize: 16, padding: 4 },
-  label: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6, fontFamily: 'Lexend_600SemiBold' },
-  input: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: '#fff', fontFamily: 'Lexend_400Regular', marginBottom: 14 },
-  btn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  btnFlex: { flex: 1 },
-  btnDisabled: { opacity: 0.4 },
-  btnTxt: { fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  topicList: { maxHeight: 280, marginBottom: 14 },
-  topicRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 2, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
-  topicRowOn: { backgroundColor: 'rgba(128,0,0,0.08)', borderRadius: 10, paddingHorizontal: 6 },
-  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  checkboxOn: { backgroundColor: '#800000', borderColor: '#800000' },
-  checkmark: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  topicName: { fontSize: 12, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold' },
-  topicSub: { fontSize: 10, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular' },
-  footerRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  backBtn: { paddingVertical: 12, paddingHorizontal: 4 },
-  backTxt: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_400Regular' },
-})
