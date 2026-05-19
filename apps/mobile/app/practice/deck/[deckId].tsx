@@ -7,6 +7,7 @@ import { useDb } from '../../../hooks/useDb'
 import { savedDecks as savedDecksTable, flashcards as flashcardsTable, userProgress } from '../../../db/schema'
 import { parseTopicIds } from '../../../hooks/useSavedDecks'
 import { useRecordSession } from '../../../hooks/useRecordSession'
+import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -19,15 +20,6 @@ const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface QuizQuestion {
-  id: string
-  stem: string
-  options: string[]
-  answerIndex: number
-  explanation: string
-  difficulty: number
-}
-
 interface UserAnswer {
   flashcardId: string
   selectedIndex: number | null
@@ -35,20 +27,6 @@ interface UserAnswer {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function parseQuizQuestion(card: {
-  id: string; question: string; answer: string; explanation: string; difficulty: number
-}): QuizQuestion | null {
-  const m = card.question.match(/\bA\)\s*(.*?)\s+B\)\s*(.*?)\s+C\)\s*(.*?)\s+D\)\s*([\s\S]+?)$/)
-  if (!m) return null
-  const stem = card.question.replace(/\s+A\)\s[\s\S]*$/, '').trim()
-  const options = [m[1]!.trim(), m[2]!.trim(), m[3]!.trim(), m[4]!.trim()]
-  const letter = card.answer.match(/^([A-D])\)/)?.[1]
-  if (!letter) return null
-  const answerIndex = 'ABCD'.indexOf(letter)
-  if (answerIndex === -1) return null
-  return { id: card.id, stem, options, answerIndex, explanation: card.explanation, difficulty: card.difficulty }
-}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -108,10 +86,7 @@ export default function DeckQuizScreen() {
         .from(flashcardsTable)
         .where(inArray(flashcardsTable.topicId, topicIds))
 
-      const parsed = shuffle(cardRows)
-        .map(parseQuizQuestion)
-        .filter((q): q is QuizQuestion => q !== null)
-        .slice(0, MAX_QUESTIONS)
+      const parsed = buildQuizQuestions(shuffle(cardRows as RawCard[])).slice(0, MAX_QUESTIONS)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }

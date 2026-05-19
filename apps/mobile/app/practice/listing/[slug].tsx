@@ -6,6 +6,7 @@ import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
 import { eq } from 'drizzle-orm'
 import { useRecordSession } from '../../../hooks/useRecordSession'
+import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 
 const TIMER_SECS = 20
 const MAX_QUESTIONS = 20
@@ -13,23 +14,8 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
 const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
 const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
 
-interface QuizQuestion {
-  id: string; stem: string; options: string[]; answerIndex: number; explanation: string; difficulty: number
-}
 interface UserAnswer {
   flashcardId: string; selectedIndex: number | null; correct: boolean
-}
-
-function parseQuizQuestion(card: { id: string; question: string; answer: string; explanation: string; difficulty: number }): QuizQuestion | null {
-  const m = card.question.match(/\bA\)\s*(.*?)\s+B\)\s*(.*?)\s+C\)\s*(.*?)\s+D\)\s*([\s\S]+?)$/)
-  if (!m) return null
-  const stem = card.question.replace(/\s+A\)\s[\s\S]*$/, '').trim()
-  const options = [m[1]!.trim(), m[2]!.trim(), m[3]!.trim(), m[4]!.trim()]
-  const letter = card.answer.match(/^([A-D])\)/)?.[1]
-  if (!letter) return null
-  const answerIndex = 'ABCD'.indexOf(letter)
-  if (answerIndex === -1) return null
-  return { id: card.id, stem, options, answerIndex, explanation: card.explanation, difficulty: card.difficulty }
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -96,7 +82,7 @@ export default function ListingQuizScreen() {
         filtered = matching.filter(c => weakTopicIds.has(c.topicId))
       }
 
-      const parsed = shuffle(filtered).map(parseQuizQuestion).filter((q): q is QuizQuestion => q !== null).slice(0, MAX_QUESTIONS)
+      const parsed = buildQuizQuestions(shuffle(filtered) as RawCard[]).slice(0, MAX_QUESTIONS)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }
