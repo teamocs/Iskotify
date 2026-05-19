@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -10,6 +10,7 @@ import { useNotifications } from '../../hooks/useNotifications'
 import LottieView from 'lottie-react-native'
 import Constants from 'expo-constants'
 import KuyaBawMascot from '../../assets/images/kuya-baw-mascot.svg'
+import { useTheme } from '../../theme/ThemeContext'
 
 const isExpoGo = Constants.executionEnvironment === 'storeClient'
 
@@ -22,6 +23,31 @@ function CalendarStrip({
   importantDays: Set<number>
   practiceDays: Set<number>
 }) {
+  const { theme: t, typo } = useTheme()
+  const cs = useMemo(() => StyleSheet.create({
+    container: { paddingVertical: 6 },
+    navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+    navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    arrowTxt: { fontSize: typo.xl, color: t.textSecondary, fontFamily: 'Outfit_700Bold', lineHeight: 26 },
+    monthLbl: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold', minWidth: 90, textAlign: 'center' },
+    pill: { marginLeft: 'auto', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
+    pillTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
+    pillExamTxt: { color: '#fca5a5' },
+    row: { flexDirection: 'row', justifyContent: 'space-between' },
+    dayCol: { alignItems: 'center', gap: 3, flex: 1 },
+    letter: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    letterToday: { color: '#fca5a5' },
+    circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    circleToday: { backgroundColor: t.textPrimary },
+    circleExam: { borderWidth: 1.5, borderColor: '#fca5a5' },
+    num: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
+    numToday: { color: t.bg },
+    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
+    dotActive: { backgroundColor: '#60a5fa' },
+    dotExam: { backgroundColor: '#fca5a5' },
+  }), [t, typo])
+
   const [weekOffset, setWeekOffset] = useState(0)
 
   const todayDay = Math.floor(Date.now() / 86_400_000)
@@ -173,6 +199,26 @@ function NotificationModal({
   onToggle: () => void
   onClose: () => void
 }) {
+  const { theme: t, typo } = useTheme()
+  const nm = useMemo(() => StyleSheet.create({
+    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12 },
+    handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+    title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    closeX: { fontSize: typo.md, color: t.textTertiary, padding: 4 },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 14, marginBottom: 20, gap: 12 },
+    toggleLabel: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    toggleSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    sectionLabel: { fontSize: typo.sm, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+    typeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle },
+    typeRowDisabled: { opacity: 0.38 },
+    typeIcon: { fontSize: 20, width: 28, textAlign: 'center' },
+    typeTitle: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 2 },
+    typeSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    hint: { marginTop: 16, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 16 },
+  }), [t, typo])
+
   return (
     <Modal
       visible={visible}
@@ -245,6 +291,57 @@ export default function HomeScreen() {
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
 
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root:  { flex: 1, backgroundColor: t.bg },
+    scroll: { paddingBottom: 100 },
+    inner: { paddingHorizontal: 16 },
+    greetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 18, paddingBottom: 16 },
+    greetTime: { fontSize: typo.sm, color: t.textTertiary, marginBottom: 2, fontFamily: 'Lexend_400Regular' },
+    greetName: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
+    iconBtn: { width: 40, height: 40, backgroundColor: t.surface2, borderRadius: 14, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
+    headerBtns: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    calendarWrap: { paddingVertical: 10 },
+    kuyaCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 22, padding: 14, marginBottom: 10 },
+    kuyaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    kuyaAvatarLg: { width: 80, height: 80, borderRadius: 16, overflow: 'hidden', flexShrink: 0 },
+    kuyaNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
+    kuyaName: { fontSize: typo.md, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
+    kuyaBadge: { marginLeft: 'auto', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+    kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 18, fontFamily: 'Lexend_400Regular' },
+    kuyaLottie: { width: 80, height: 80 },
+    statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+    statCard: { flex: 1, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, alignItems: 'center' },
+    statVal: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+    statLbl: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: 'Lexend_600SemiBold' },
+    quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 22, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+    quickIcon: { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    quickSub: { fontSize: typo.xs, color: 'rgba(255,255,255,0.65)', marginTop: 1, fontFamily: 'Lexend_400Regular' },
+    chevron: { color: t.textTertiary, fontSize: 22 },
+    secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7, marginTop: 8 },
+    secTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    weakCard:   { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    weakDot:    { width: 8, height: 8, borderRadius: 4, flexShrink: 0, marginTop: 1 },
+    weakTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+    weakName:   { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', flex: 1 },
+    weakPct:    { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold', flexShrink: 0, marginLeft: 8 },
+    weakTrack:  { height: 3, backgroundColor: t.surface, borderRadius: 99, overflow: 'hidden' },
+    weakBar:    { height: 3, borderRadius: 99 },
+    empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 8 },
+    progressCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    progressTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    progressSub: { fontSize: typo.xs, color: t.textSecondary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
+    progressChevron: { color: t.textTertiary, fontSize: 20 },
+    upcomingCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    upcomingIcon: { width: 36, height: 36, backgroundColor: t.surface2, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    upcomingTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    upcomingMeta: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+    upcomingBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
+    upcomingDays: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+  }), [t, typo])
+
   useEffect(() => {
     if (focusedListings.length > 0) {
       void scheduleNotifs(focusedListings)
@@ -290,11 +387,11 @@ export default function HomeScreen() {
               <Lineicons
                 icon={notifEnabled ? Bell1Solid : Bell1Outlined}
                 size={20}
-                color={notifEnabled ? '#fca5a5' : 'rgba(255,255,255,0.40)'}
+                color={notifEnabled ? '#fca5a5' : t.textTertiary}
               />
             </TouchableOpacity>
             <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
-              <Lineicons icon={Gear1Outlined} size={20} color="rgba(255,255,255,0.62)" />
+              <Lineicons icon={Gear1Outlined} size={20} color={t.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -387,23 +484,23 @@ export default function HomeScreen() {
           </View>
           {weakTopics.length > 0 ? (
             <View style={{ gap: 6, marginBottom: 4 }}>
-              {weakTopics.map(t => {
-                const color = weakTopicColor(t.accuracy)
+              {weakTopics.map(topic => {
+                const color = weakTopicColor(topic.accuracy)
                 return (
                   <TouchableOpacity
-                    key={t.topicId}
+                    key={topic.topicId}
                     style={s.weakCard}
-                    onPress={() => router.push(`/practice/${t.topicId}`)}
+                    onPress={() => router.push(`/practice/${topic.topicId}`)}
                     activeOpacity={0.75}
                   >
                     <View style={[s.weakDot, { backgroundColor: color }]} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <View style={s.weakTopRow}>
-                        <Text style={s.weakName} numberOfLines={1}>{t.topicName}</Text>
-                        <Text style={[s.weakPct, { color }]}>{t.accuracy}%</Text>
+                        <Text style={s.weakName} numberOfLines={1}>{topic.topicName}</Text>
+                        <Text style={[s.weakPct, { color }]}>{topic.accuracy}%</Text>
                       </View>
                       <View style={s.weakTrack}>
-                        <View style={[s.weakBar, { width: `${t.accuracy}%` as any, backgroundColor: color }]} />
+                        <View style={[s.weakBar, { width: `${topic.accuracy}%` as any, backgroundColor: color }]} />
                       </View>
                     </View>
                     <Text style={s.chevron}>›</Text>
@@ -461,114 +558,5 @@ export default function HomeScreen() {
   )
 }
 
-// ── Calendar strip styles ─────────────────────────────────────────────────────
-const cs = StyleSheet.create({
-  container: { paddingVertical: 6 },
-  navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
-  navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  arrowTxt: { fontSize: 22, color: 'rgba(255,255,255,0.55)', fontFamily: 'Outfit_700Bold', lineHeight: 26 },
-  monthLbl: { fontSize: 12, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_700Bold', minWidth: 90, textAlign: 'center' },
-  pill: { marginLeft: 'auto', backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
-  pillTxt: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.70)', fontFamily: 'Lexend_600SemiBold' },
-  pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
-  pillExamTxt: { color: '#fca5a5' },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
-  dayCol: { alignItems: 'center', gap: 3, flex: 1 },
-  letter: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.35)', fontFamily: 'Lexend_600SemiBold' },
-  letterToday: { color: '#fca5a5' },
-  circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  circleToday: { backgroundColor: '#fff' },
-  circleExam: { borderWidth: 1.5, borderColor: '#fca5a5' },
-  num: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.62)', fontFamily: 'Outfit_700Bold' },
-  numToday: { color: '#1a1a2e' },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
-  dotActive: { backgroundColor: '#60a5fa' },
-  dotExam: { backgroundColor: '#fca5a5' },
-})
 
-// ── Screen styles ─────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: '#1a1a2e' },
-  scroll: { paddingBottom: 100 },
-  inner: { paddingHorizontal: 16 },
 
-  // Greeting — ENLARGED
-  greetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 16, paddingTop: 18, paddingBottom: 16 },
-  greetTime: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 2, fontFamily: 'Lexend_400Regular' },
-  greetName: { fontSize: 28, fontWeight: '700', color: '#fff', letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
-  iconBtn: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center' },
-  headerBtns: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-
-  // Kuya Baw — LARGER MASCOT
-  calendarWrap: { paddingVertical: 10 },
-  kuyaCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 22, padding: 14, marginBottom: 10 },
-  kuyaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  kuyaAvatarLg: { width: 80, height: 80, borderRadius: 16, overflow: 'hidden', flexShrink: 0 },
-  kuyaNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
-  kuyaName: { fontSize: 13, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
-  kuyaBadge: { marginLeft: 'auto', backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  kuyaBadgeText: { fontSize: 8, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-  kuyaText: { fontSize: 11.5, color: 'rgba(255,255,255,0.80)', lineHeight: 18, fontFamily: 'Lexend_400Regular' },
-  kuyaLottie: { width: 80, height: 80 },
-
-  // Stats
-  statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
-  statCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 16, padding: 10, alignItems: 'center' },
-  statVal: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-  statLbl: { fontSize: 8.5, color: 'rgba(255,255,255,0.38)', marginTop: 2, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: 'Lexend_600SemiBold' },
-
-  // Quick Practice
-  quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 22, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  quickIcon: { width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  quickTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  quickSub: { fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 1, fontFamily: 'Lexend_400Regular' },
-  chevron: { color: 'rgba(255,255,255,0.45)', fontSize: 22 },
-
-  // Section headers
-  secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7, marginTop: 8 },
-  secTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-
-  // Weak Areas
-  weakCard:   { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  weakDot:    { width: 8, height: 8, borderRadius: 4, flexShrink: 0, marginTop: 1 },
-  weakTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  weakName:   { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', flex: 1 },
-  weakPct:    { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold', flexShrink: 0, marginLeft: 8 },
-  weakTrack:  { height: 3, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' },
-  weakBar:    { height: 3, borderRadius: 99 },
-  empty: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 8 },
-
-  // Progress card
-  progressCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  progressTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  progressSub: { fontSize: 10, color: 'rgba(255,255,255,0.50)', marginTop: 1, fontFamily: 'Lexend_400Regular' },
-  progressChevron: { color: 'rgba(255,255,255,0.38)', fontSize: 20 },
-
-  // Upcoming Dates
-  upcomingCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  upcomingIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  upcomingTitle: { fontSize: 12, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  upcomingMeta: { fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2, fontFamily: 'Lexend_400Regular' },
-  upcomingBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
-  upcomingDays: { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-})
-
-// ── Notification modal styles ─────────────────────────────────────────────────
-const nm = StyleSheet.create({
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#1e1e35', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12 },
-  handle: { width: 36, height: 4, backgroundColor: 'rgba(255,255,255,0.20)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  title: { fontSize: 17, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  closeX: { fontSize: 15, color: 'rgba(255,255,255,0.45)', padding: 4 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 14, marginBottom: 20, gap: 12 },
-  toggleLabel: { fontSize: 14, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-  toggleSub: { fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-  sectionLabel: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.40)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
-  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  typeRowDisabled: { opacity: 0.38 },
-  typeIcon: { fontSize: 20, width: 28, textAlign: 'center' },
-  typeTitle: { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', marginBottom: 2 },
-  typeSub: { fontSize: 10.5, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-  hint: { marginTop: 16, fontSize: 10.5, color: 'rgba(255,255,255,0.30)', fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 16 },
-})
