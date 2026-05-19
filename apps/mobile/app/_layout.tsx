@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Text, ActivityIndicator } from 'react-native'
+import { Platform, View, Text } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SQLiteProvider } from 'expo-sqlite'
@@ -59,10 +59,11 @@ export default function RootLayout() {
       {(!appReady || !fontsReady) && (
         <View style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', gap: 20,
+          backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
         }}>
-          <LogoSvg width={80} height={80} viewBox="0 0 2048 2048" />
-          <ActivityIndicator color="rgba(252,165,165,0.8)" size="small" />
+          <View style={{ width: 80, height: 80, borderRadius: 20, overflow: 'hidden' }}>
+            <LogoSvg width={80} height={80} viewBox="0 0 2048 2048" />
+          </View>
         </View>
       )}
     </>
