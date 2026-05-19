@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
@@ -7,6 +7,7 @@ import { useDb } from '../../hooks/useDb'
 import { flashcards as flashcardsTable, topics, userProgress } from '../../db/schema'
 import { useRecordSession } from '../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../utils/mcDistractors'
+import { useTheme } from '../../theme/ThemeContext'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,91 @@ export default function QuizScreen() {
 
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
+
+  const { theme: t, typo } = useTheme()
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
+    readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+    readyIcon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+    readyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
+    readySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 24, textAlign: 'center' },
+    rulesCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 18, padding: 16, width: '100%', gap: 10, marginBottom: 28 },
+    ruleItem: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 18 },
+    startBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', marginBottom: 10 },
+    startBtnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+    ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
+    backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
+    topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    qCounter: { fontSize: typo.sm, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    retryLink: { fontSize: typo.sm, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
+    progressDot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: t.border },
+    dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
+    dotCurrent: { backgroundColor: '#fca5a5' },
+    timerBg: { marginHorizontal: 14, height: 5, backgroundColor: t.surface2, borderRadius: 99, overflow: 'hidden' },
+    timerFill: { height: 5, borderRadius: 99 },
+    timerLabelRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 14, marginTop: 4, marginBottom: 4 },
+    timerLabel: { fontSize: typo.sm, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    timerLabelUrgent: { color: '#f87171' },
+    quizScroll: { paddingHorizontal: 14, paddingBottom: 40 },
+    questionCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 18, marginBottom: 14 },
+    questionMeta: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+    questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
+    questionDiff: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+    questionDiffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    optionsWrap: { gap: 9 },
+    optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
+    optionBtnSelected: { backgroundColor: t.accentSurface, borderColor: t.accent },
+    optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    optionLetterBoxOn: { backgroundColor: t.accent },
+    optionLetter: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
+    optionLetterOn: { color: '#fff' },
+    optionText: { flex: 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    optionTextOn: { color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    noPeekRow: { alignItems: 'center', marginTop: 20 },
+    noPeekTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    resultsScroll: { paddingHorizontal: 14, paddingBottom: 24 },
+    scoreCard: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, alignItems: 'center' },
+    scoreCardPass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
+    scoreCardFail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
+    scorePct: { fontSize: typo.display, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -2, marginBottom: 4 },
+    scoreVerdict: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    scoreTopic: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 20 },
+    scoreCounts: { flexDirection: 'row', gap: 20, alignItems: 'center' },
+    scoreCount: { alignItems: 'center' },
+    scoreNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    scoreLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
+    scoreDivider: { width: 1, height: 32, backgroundColor: t.border },
+    reviewHeader: { fontSize: typo.sm, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
+    reviewCard: { borderRadius: 20, borderWidth: 1, padding: 14, marginBottom: 12 },
+    reviewCardOk: { backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.18)' },
+    reviewCardBad: { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.18)' },
+    reviewQHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    reviewQBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+    reviewQBadgeOk: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.30)' },
+    reviewQBadgeBad: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.30)' },
+    reviewQBadgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    timeoutBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+    timeoutTxt: { fontSize: typo.xs, fontWeight: '600', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold' },
+    diffBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 'auto' },
+    diffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    reviewStem: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', lineHeight: 20, marginBottom: 12 },
+    reviewOptions: { gap: 6, marginBottom: 10 },
+    reviewOpt: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.surfaceSubtle, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10, borderWidth: 1, borderColor: 'transparent' },
+    reviewOptCorrect: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.35)' },
+    reviewOptWrong: { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.30)' },
+    reviewOptLetter: { width: 22, height: 22, borderRadius: 6, backgroundColor: t.surface2, textAlign: 'center', lineHeight: 22, fontSize: typo.xs, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: t.textTertiary },
+    reviewOptTxt: { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
+    correctMark: { fontSize: typo.md, color: '#4ade80', fontWeight: '700' },
+    wrongMark: { fontSize: typo.md, color: '#f87171', fontWeight: '700' },
+    explainBox: { backgroundColor: t.surfaceSubtle, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: t.border },
+    explainLabel: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+    explainTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
+  }), [t, typo])
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeLeftRef = useRef(TIMER_SECS)
@@ -459,112 +545,3 @@ export default function QuizScreen() {
   )
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1a1a2e' },
-
-  loadingTxt: { color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: 13 },
-
-  // Ready
-  readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  readyIcon: { width: 72, height: 72, backgroundColor: 'rgba(128,0,0,0.18)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  readyTitle: { fontSize: 22, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
-  readySub: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular', marginBottom: 24, textAlign: 'center' },
-  rulesCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 18, padding: 16, width: '100%', gap: 10, marginBottom: 28 },
-  ruleItem: { fontSize: 12, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular', lineHeight: 18 },
-  startBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', marginBottom: 10 },
-  startBtnTxt: { fontSize: 14, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
-  ghostBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_400Regular' },
-
-  // Top bar (quiz + results shared)
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  backArrow: { color: 'rgba(255,255,255,0.62)', fontSize: 26, lineHeight: 30 },
-  topBarTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-  qCounter: { fontSize: 11, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-  retryLink: { fontSize: 11, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-
-  // Quiz progress dots
-  dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
-  progressDot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' },
-  dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
-  dotCurrent: { backgroundColor: '#fca5a5' },
-
-  // Timer
-  timerBg: { marginHorizontal: 14, height: 5, backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 99, overflow: 'hidden' },
-  timerFill: { height: 5, borderRadius: 99 },
-  timerLabelRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 14, marginTop: 4, marginBottom: 4 },
-  timerLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_600SemiBold' },
-  timerLabelUrgent: { color: '#f87171' },
-
-  // Quiz question
-  quizScroll: { paddingHorizontal: 14, paddingBottom: 40 },
-  questionCard: { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', borderRadius: 22, padding: 18, marginBottom: 14 },
-  questionMeta: { fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
-  questionText: { fontSize: 16, fontWeight: '600', color: '#fff', lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
-  questionDiff: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  questionDiffTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-
-  // MCQ options
-  optionsWrap: { gap: 9 },
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.14)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
-  optionBtnSelected: { backgroundColor: 'rgba(128,0,0,0.22)', borderColor: '#800000' },
-  optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  optionLetterBoxOn: { backgroundColor: '#800000' },
-  optionLetter: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.55)', fontFamily: 'Outfit_700Bold' },
-  optionLetterOn: { color: '#fff' },
-  optionText: { flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.75)', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-  optionTextOn: { color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-
-  // No peek reminder
-  noPeekRow: { alignItems: 'center', marginTop: 20 },
-  noPeekTxt: { fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'Lexend_400Regular' },
-
-  // Results
-  resultsScroll: { paddingHorizontal: 14, paddingBottom: 24 },
-  scoreCard: { borderRadius: 24, padding: 22, marginBottom: 20, borderWidth: 1, alignItems: 'center' },
-  scoreCardPass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
-  scoreCardFail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
-  scorePct: { fontSize: 60, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -2, marginBottom: 4 },
-  scoreVerdict: { fontSize: 15, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-  scoreTopic: { fontSize: 11, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', marginBottom: 20 },
-  scoreCounts: { flexDirection: 'row', gap: 20, alignItems: 'center' },
-  scoreCount: { alignItems: 'center' },
-  scoreNum: { fontSize: 28, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-  scoreLbl: { fontSize: 9.5, color: 'rgba(255,255,255,0.38)', fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-  scoreDivider: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.12)' },
-
-  reviewHeader: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
-
-  reviewCard: { borderRadius: 20, borderWidth: 1, padding: 14, marginBottom: 12 },
-  reviewCardOk: { backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.18)' },
-  reviewCardBad: { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.18)' },
-
-  reviewQHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  reviewQBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
-  reviewQBadgeOk: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.30)' },
-  reviewQBadgeBad: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.30)' },
-  reviewQBadgeTxt: { fontSize: 10, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-
-  timeoutBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
-  timeoutTxt: { fontSize: 9, fontWeight: '600', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold' },
-  diffBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 'auto' },
-  diffTxt: { fontSize: 9, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-
-  reviewStem: { fontSize: 13, fontWeight: '600', color: '#fff', fontFamily: 'Outfit_600SemiBold', lineHeight: 20, marginBottom: 12 },
-
-  reviewOptions: { gap: 6, marginBottom: 10 },
-  reviewOpt: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10, borderWidth: 1, borderColor: 'transparent' },
-  reviewOptCorrect: { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.35)' },
-  reviewOptWrong: { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.30)' },
-  reviewOptLetter: { width: 22, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.08)', textAlign: 'center', lineHeight: 22, fontSize: 10, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: 'rgba(255,255,255,0.38)' },
-  reviewOptTxt: { flex: 1, fontSize: 11.5, color: 'rgba(255,255,255,0.55)', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-  correctMark: { fontSize: 13, color: '#4ade80', fontWeight: '700' },
-  wrongMark: { fontSize: 13, color: '#f87171', fontWeight: '700' },
-
-  explainBox: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  explainLabel: { fontSize: 9.5, fontWeight: '700', color: 'rgba(255,255,255,0.45)', fontFamily: 'Lexend_600SemiBold', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  explainTxt: { fontSize: 11.5, color: 'rgba(255,255,255,0.62)', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-})
