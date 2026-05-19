@@ -41,11 +41,6 @@ export function HowItWorks() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
           {steps.map((step, index) => (
             <div key={step.number} className="relative">
-              {/* Connector line (desktop only, between steps) */}
-              {index < steps.length - 1 && (
-                <div className="hidden md:block absolute top-8 left-[calc(100%+20px)] right-[-20px] h-[1px] bg-gradient-to-r from-[#800000]/30 to-transparent w-[calc(100%-40px)] z-0" />
-              )}
-
               <div className="relative z-10">
                 <span className="font-heading font-extrabold text-[#800000]/20 text-7xl leading-none block mb-4 select-none">
                   {step.number}
