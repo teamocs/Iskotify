@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS flashcards (
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
   explanation TEXT NOT NULL,
-  difficulty INTEGER NOT NULL,
   listing_slugs TEXT NOT NULL DEFAULT '[]',
   remote_updated_at INTEGER
 );
@@ -100,6 +99,10 @@ const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'`,
   `ALTER TABLE flashcards ADD COLUMN options TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE flashcards ADD COLUMN correct_answer_index INTEGER`,
+  `ALTER TABLE flashcards ADD COLUMN ai_options TEXT`,
+  `ALTER TABLE flashcards ADD COLUMN ai_correct_index INTEGER`,
+  `ALTER TABLE flashcards ADD COLUMN ai_explanation TEXT`,
+  `ALTER TABLE flashcards ADD COLUMN ai_enhanced_at INTEGER`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

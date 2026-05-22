@@ -143,7 +143,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const cardResults = await Promise.all(
       slugs.map(slug =>
         supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,difficulty,listing_slugs,options,correct_answer_index,updated_at')
+          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,updated_at')
           .contains('listing_slugs', [slug])
           .eq('status', 'published')
           .gt('updated_at', since)
@@ -186,13 +186,13 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         const remoteUpdatedAt = new Date(row.updated_at).getTime()
         const vals = {
           id: row.id, topicId: row.topic_id, question: row.question, answer: row.answer,
-          explanation: row.explanation, difficulty: row.difficulty,
+          explanation: row.explanation,
           listingSlugs: JSON.stringify(row.listing_slugs ?? []),
           options: JSON.stringify(row.options ?? []),
           correctAnswerIndex: row.correct_answer_index ?? null,
           remoteUpdatedAt,
         }
-        tx.insert(flashcards).values(vals).onConflictDoUpdate({ target: flashcards.id, set: vals }).run()
+        tx.insert(flashcards).values(vals).onConflictDoUpdate({ target: flashcards.id, set: { ...vals, aiEnhancedAt: null } }).run()
       }
 
       const syncedAt = Date.now()

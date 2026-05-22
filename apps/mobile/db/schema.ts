@@ -20,11 +20,14 @@ export const flashcards = sqliteTable('flashcards', {
   question: text('question').notNull(),
   answer: text('answer').notNull(),
   explanation: text('explanation').notNull(),
-  difficulty: integer('difficulty').notNull(),
   listingSlugs: text('listing_slugs').notNull().default('[]'),
   options: text('options').notNull().default('[]'),
   correctAnswerIndex: integer('correct_answer_index'),
   remoteUpdatedAt: integer('remote_updated_at'),
+  aiOptions: text('ai_options'),
+  aiCorrectIndex: integer('ai_correct_index'),
+  aiExplanation: text('ai_explanation'),
+  aiEnhancedAt: integer('ai_enhanced_at'),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
 ])
