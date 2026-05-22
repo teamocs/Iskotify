@@ -57,6 +57,34 @@ describe('buildQuizQuestions', () => {
       expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
       expect(q!.answerIndex).toBe(2)
     })
+
+    it('falls through to admin options when aiCorrectIndex is out of bounds', () => {
+      const c: RawCard = {
+        id: 'a5', question: 'Q?', answer: 'Correct',
+        explanation: '',
+        aiOptions: ['W1', 'W2', 'W3', 'Correct'],
+        aiCorrectIndex: 5,   // out of range
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 1,
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
+      expect(q!.answerIndex).toBe(1)
+    })
+
+    it('falls through when aiOptions length is not 4', () => {
+      const c: RawCard = {
+        id: 'a6', question: 'Q?', answer: 'Correct',
+        explanation: '',
+        aiOptions: ['W1', 'W2', 'Correct'],  // length 3
+        aiCorrectIndex: 2,
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 0,
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
+      expect(q!.answerIndex).toBe(0)
+    })
   })
 
   describe('A. newline format (DB format)', () => {

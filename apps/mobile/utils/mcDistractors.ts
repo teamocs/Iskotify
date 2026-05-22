@@ -47,7 +47,7 @@ function parseEmbedded(card: RawCard): QuizQuestion | null {
     stem,
     options,
     answerIndex,
-    explanation: card.aiExplanation ?? card.explanation,
+    explanation: '',  // caller applies the aiExplanation ?? explanation precedence
   }
 }
 
@@ -56,7 +56,11 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
     const explanation = card.aiExplanation ?? card.explanation
 
     // Priority 1: AI-generated options
-    if (card.aiOptions && card.aiOptions.length === 4 && card.aiCorrectIndex != null) {
+    if (
+      card.aiOptions && card.aiOptions.length === 4 &&
+      card.aiCorrectIndex != null &&
+      card.aiCorrectIndex >= 0 && card.aiCorrectIndex <= 3
+    ) {
       return {
         id: card.id,
         stem: card.question.trim(),
@@ -67,7 +71,11 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
     }
 
     // Priority 2: admin-stored options
-    if (card.options && card.options.length === 4 && card.correctAnswerIndex != null) {
+    if (
+      card.options && card.options.length === 4 &&
+      card.correctAnswerIndex != null &&
+      card.correctAnswerIndex >= 0 && card.correctAnswerIndex <= 3
+    ) {
       return {
         id: card.id,
         stem: card.question.trim(),
