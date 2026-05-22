@@ -192,7 +192,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           correctAnswerIndex: row.correct_answer_index ?? null,
           remoteUpdatedAt,
         }
-        tx.insert(flashcards).values(vals).onConflictDoUpdate({ target: flashcards.id, set: { ...vals, aiEnhancedAt: null } }).run()
+        tx.insert(flashcards).values(vals).onConflictDoUpdate({
+          target: flashcards.id,
+          set: { ...vals, aiOptions: null, aiCorrectIndex: null, aiExplanation: null, aiEnhancedAt: null },
+        }).run()
       }
 
       const syncedAt = Date.now()
