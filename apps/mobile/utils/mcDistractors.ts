@@ -2,6 +2,8 @@ export interface RawCard {
   id: string
   question: string
   answer: string
+  options?: string[]           // stored: 4 option texts, no letter prefix
+  correctAnswerIndex?: number  // stored: 0–3
   explanation: string
   difficulty: number
 }
@@ -27,15 +29,16 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function stripPrefix(answer: string): string {
-  return answer.replace(/^[A-D]\)\s*/, '').trim()
+  return answer.replace(/^[A-D][.)]\s*/, '').trim()
 }
 
+// Handles both "A)" and "A." label formats, with options on same line or new lines
 function parseEmbedded(card: RawCard): QuizQuestion | null {
-  const m = card.question.match(/\bA\)\s*(.*?)\s+B\)\s*(.*?)\s+C\)\s*(.*?)\s+D\)\s*([\s\S]+?)$/)
+  const m = card.question.match(/\bA[.)]\s*(.*?)\s+B[.)]\s*(.*?)\s+C[.)]\s*(.*?)\s+D[.)]\s*([\s\S]+?)$/)
   if (!m) return null
-  const stem = card.question.replace(/\s+A\)\s[\s\S]*$/, '').trim()
+  const stem = card.question.replace(/\s+A[.)]\s[\s\S]*$/, '').trim()
   const options = [m[1]!.trim(), m[2]!.trim(), m[3]!.trim(), m[4]!.trim()]
-  const letter = card.answer.match(/^([A-D])\)/)?.[1]
+  const letter = card.answer.match(/^([A-D])[.)]/)?.[1]
   if (!letter) return null
   const answerIndex = 'ABCD'.indexOf(letter)
   if (answerIndex === -1) return null
@@ -44,12 +47,24 @@ function parseEmbedded(card: RawCard): QuizQuestion | null {
 
 /**
  * Converts every RawCard to a QuizQuestion.
- * Cards with embedded A)/B)/C)/D) options are parsed directly.
- * Plain Q+A cards get 3 distractors synthesised from other cards' answers.
- * Never filters — always returns one QuizQuestion per input card.
+ * Priority 1: stored options (new seeded flashcards with options[] + correctAnswerIndex).
+ * Priority 2: embedded A)/A. parsing.
+ * Priority 3: synthetic distractors from pool.
  */
 export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
   return cards.map(card => {
+    // Priority 1: pre-stored options — no parsing needed
+    if (card.options && card.options.length === 4 && card.correctAnswerIndex !== undefined) {
+      return {
+        id: card.id,
+        stem: card.question.trim(),
+        options: card.options,
+        answerIndex: card.correctAnswerIndex,
+        explanation: card.explanation,
+        difficulty: card.difficulty,
+      }
+    }
+
     const embedded = parseEmbedded(card)
     if (embedded) return embedded
 
