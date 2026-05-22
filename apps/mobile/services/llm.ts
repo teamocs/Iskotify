@@ -1,0 +1,117 @@
+import { initLlama } from 'llama.rn'
+import * as FileSystem from 'expo-file-system'
+import * as Device from 'expo-device'
+
+const MODEL_FILENAME = 'qwen2.5-1.5b-instruct-q4_k_m.gguf'
+const MODEL_DIR = `${FileSystem.documentDirectory}models/`
+export const MODEL_PATH = `${MODEL_DIR}${MODEL_FILENAME}`
+
+export const MODEL_DOWNLOAD_URL =
+  'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf'
+
+const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
+
+export function hasEnoughRam(): boolean {
+  const total = Device.totalMemory
+  if (total === null) return true
+  return total >= MIN_RAM_BYTES
+}
+
+export async function modelExists(): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(MODEL_PATH)
+  return info.exists
+}
+
+type PromptStrategy = 'science' | 'math' | 'language'
+
+function detectStrategy(subjectName: string): PromptStrategy {
+  const s = subjectName.toLowerCase()
+  if (
+    s.includes('math') || s.includes('algebra') ||
+    s.includes('geometry') || s.includes('trigonometry')
+  ) return 'math'
+  if (s.includes('english') || s.includes('filipino') || s.includes('language')) return 'language'
+  return 'science'
+}
+
+export function buildPrompt(params: {
+  subjectName: string
+  topicName: string
+  question: string
+  answer: string
+}): string {
+  const { subjectName, topicName, question, answer } = params
+  const strategy = detectStrategy(subjectName)
+
+  let systemPrompt: string
+  if (strategy === 'math') {
+    systemPrompt =
+      `You are an expert UPCAT Math reviewer. Do NOT solve the problem. Instead, generate exactly ` +
+      `3 incorrect answer choices that reflect common student mistakes such as sign errors, wrong ` +
+      `formula application, or arithmetic slips. Write a 2-sentence explanation of why the Right ` +
+      `Answer is correct. Output ONLY valid JSON, no other text.`
+  } else if (strategy === 'language') {
+    systemPrompt =
+      `You are an expert UPCAT Language reviewer. Generate exactly 3 grammatically or idiomatically ` +
+      `incorrect variations of the correct answer that a student might plausibly choose. Write a ` +
+      `2-sentence explanation of why the Right Answer is correct. Output ONLY valid JSON, no other text.`
+  } else {
+    systemPrompt =
+      `You are an expert UPCAT reviewer engine. Analyze the provided Question, Subject, and Right Answer. ` +
+      `Generate exactly 3 plausible, highly challenging college-level incorrect choices (distractors) that ` +
+      `fit the context but are factually wrong. Then write a crisp 2-sentence explanation of why the Right ` +
+      `Answer is correct. Output ONLY valid JSON, no other text.`
+  }
+
+  const userMessage =
+    `Subject: ${subjectName} (${topicName})\n` +
+    `Question: ${question}\n` +
+    `Right Answer: ${answer}`
+
+  return (
+    `<|im_start|>system\n${systemPrompt}<|im_end|>\n` +
+    `<|im_start|>user\n${userMessage}<|im_end|>\n` +
+    `<|im_start|>assistant\n`
+  )
+}
+
+export interface LlmOutput {
+  wrong_option_1: string
+  wrong_option_2: string
+  wrong_option_3: string
+  explanation: string
+}
+
+export function parseResponse(text: string): LlmOutput | null {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<LlmOutput>
+    if (
+      !parsed.wrong_option_1 || !parsed.wrong_option_2 ||
+      !parsed.wrong_option_3 || !parsed.explanation
+    ) return null
+    return parsed as LlmOutput
+  } catch {
+    return null
+  }
+}
+
+export async function runInference(prompt: string): Promise<LlmOutput | null> {
+  const context = await initLlama({
+    model: MODEL_PATH,
+    n_ctx: 2048,
+    n_threads: 4,
+  })
+  try {
+    const result = await context.completion({
+      prompt,
+      n_predict: 400,
+      temperature: 0.1,
+      stop: ['<|im_end|>', '</s>'],
+    })
+    return parseResponse(result.text)
+  } finally {
+    await context.release()
+  }
+}
