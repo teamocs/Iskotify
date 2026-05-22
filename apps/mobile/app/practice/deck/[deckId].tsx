@@ -8,6 +8,7 @@ import { savedDecks as savedDecksTable, flashcards as flashcardsTable, userProgr
 import { parseTopicIds } from '../../../hooks/useSavedDecks'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
+import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { useTheme } from '../../../theme/ThemeContext'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -220,7 +221,7 @@ export default function DeckQuizScreen() {
         ...row,
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
-        aiOptions: row.aiOptions ? (JSON.parse(row.aiOptions) as string[]) : null,
+        aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
         aiExplanation: row.aiExplanation ?? null,
       }))

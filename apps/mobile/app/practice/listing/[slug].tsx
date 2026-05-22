@@ -7,6 +7,7 @@ import { flashcards as flashcardsTable, userProgress, listings as listingsTable 
 import { eq } from 'drizzle-orm'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
+import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { useTheme } from '../../../theme/ThemeContext'
 
 const TIMER_OPTIONS = [20, 30, 45, 60] as const
@@ -176,7 +177,7 @@ export default function ListingQuizScreen() {
         ...row,
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
-        aiOptions: row.aiOptions ? (JSON.parse(row.aiOptions) as string[]) : null,
+        aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
         aiExplanation: row.aiExplanation ?? null,
       }))
