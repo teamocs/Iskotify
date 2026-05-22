@@ -2,19 +2,20 @@ export interface RawCard {
   id: string
   question: string
   answer: string
-  options?: string[]           // stored: 4 option texts, no letter prefix
-  correctAnswerIndex?: number  // stored: 0–3
+  options?: string[] | null
+  correctAnswerIndex?: number | null
   explanation: string
-  difficulty: number
+  aiOptions?: string[] | null
+  aiCorrectIndex?: number | null
+  aiExplanation?: string | null
 }
 
 export interface QuizQuestion {
   id: string
   stem: string
-  options: string[]    // 4 answer texts, no letter prefix
-  answerIndex: number  // 0–3
+  options: string[]
+  answerIndex: number
   explanation: string
-  difficulty: number
 }
 
 const FALLBACKS = ['Cannot be determined', 'None of the above', 'All of the above']
@@ -32,7 +33,6 @@ function stripPrefix(answer: string): string {
   return answer.replace(/^[A-D][.)]\s*/, '').trim()
 }
 
-// Handles both "A)" and "A." label formats, with options on same line or new lines
 function parseEmbedded(card: RawCard): QuizQuestion | null {
   const m = card.question.match(/\bA[.)]\s*(.*?)\s+B[.)]\s*(.*?)\s+C[.)]\s*(.*?)\s+D[.)]\s*([\s\S]+?)$/)
   if (!m) return null
@@ -42,32 +42,46 @@ function parseEmbedded(card: RawCard): QuizQuestion | null {
   if (!letter) return null
   const answerIndex = 'ABCD'.indexOf(letter)
   if (answerIndex === -1) return null
-  return { id: card.id, stem, options, answerIndex, explanation: card.explanation, difficulty: card.difficulty }
+  return {
+    id: card.id,
+    stem,
+    options,
+    answerIndex,
+    explanation: card.aiExplanation ?? card.explanation,
+  }
 }
 
-/**
- * Converts every RawCard to a QuizQuestion.
- * Priority 1: stored options (new seeded flashcards with options[] + correctAnswerIndex).
- * Priority 2: embedded A)/A. parsing.
- * Priority 3: synthetic distractors from pool.
- */
 export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
   return cards.map(card => {
-    // Priority 1: pre-stored options — no parsing needed
-    if (card.options && card.options.length === 4 && card.correctAnswerIndex !== undefined) {
+    const explanation = card.aiExplanation ?? card.explanation
+
+    // Priority 1: AI-generated options
+    if (card.aiOptions && card.aiOptions.length === 4 && card.aiCorrectIndex != null) {
+      return {
+        id: card.id,
+        stem: card.question.trim(),
+        options: card.aiOptions,
+        answerIndex: card.aiCorrectIndex,
+        explanation,
+      }
+    }
+
+    // Priority 2: admin-stored options
+    if (card.options && card.options.length === 4 && card.correctAnswerIndex != null) {
       return {
         id: card.id,
         stem: card.question.trim(),
         options: card.options,
         answerIndex: card.correctAnswerIndex,
-        explanation: card.explanation,
-        difficulty: card.difficulty,
+        explanation,
       }
     }
 
+    // Priority 3: embedded A)/A. parsing
     const embedded = parseEmbedded(card)
-    if (embedded) return embedded
+    if (embedded) return { ...embedded, explanation }
 
+    // Priority 4: synthetic distractors from pool
     const correct = stripPrefix(card.answer)
     const pool = cards
       .filter(c => c.id !== card.id)
@@ -89,8 +103,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       stem: card.question.trim(),
       options: all,
       answerIndex: Math.max(0, all.indexOf(correct)),
-      explanation: card.explanation,
-      difficulty: card.difficulty,
+      explanation,
     }
   })
 }

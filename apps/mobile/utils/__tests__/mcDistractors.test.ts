@@ -1,10 +1,64 @@
 import { buildQuizQuestions, RawCard } from '../mcDistractors'
 
 const card = (overrides: Partial<RawCard> = {}): RawCard => ({
-  id: '1', question: 'Q?', answer: 'A', explanation: '', difficulty: 1, ...overrides,
+  id: '1', question: 'Q?', answer: 'A', explanation: '', ...overrides,
 })
 
 describe('buildQuizQuestions', () => {
+  describe('AI options — highest priority', () => {
+    it('uses aiOptions and aiCorrectIndex when present', () => {
+      const c: RawCard = {
+        id: 'a1', question: 'Q?', answer: 'Correct',
+        explanation: 'admin exp',
+        aiOptions: ['Wrong1', 'Correct', 'Wrong2', 'Wrong3'],
+        aiCorrectIndex: 1,
+        aiExplanation: 'AI exp',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toEqual(['Wrong1', 'Correct', 'Wrong2', 'Wrong3'])
+      expect(q!.answerIndex).toBe(1)
+      expect(q!.explanation).toBe('AI exp')
+    })
+
+    it('uses aiExplanation over admin explanation even when admin options used', () => {
+      const c: RawCard = {
+        id: 'a2', question: 'Q?', answer: 'Correct',
+        explanation: 'admin exp',
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 0,
+        aiExplanation: 'AI exp',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
+      expect(q!.explanation).toBe('AI exp')
+    })
+
+    it('falls back to admin explanation when aiExplanation absent', () => {
+      const c: RawCard = {
+        id: 'a3', question: 'Q?', answer: 'Correct',
+        explanation: 'admin exp',
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 0,
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.explanation).toBe('admin exp')
+    })
+
+    it('ignores aiOptions when aiCorrectIndex is null', () => {
+      const c: RawCard = {
+        id: 'a4', question: 'Q?', answer: 'Correct',
+        explanation: '',
+        aiOptions: ['W1', 'Correct', 'W2', 'W3'],
+        aiCorrectIndex: null,
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 2,
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
+      expect(q!.answerIndex).toBe(2)
+    })
+  })
+
   describe('A. newline format (DB format)', () => {
     it('parses stem and options from A. newline format', () => {
       const c = card({
@@ -66,7 +120,7 @@ describe('buildQuizQuestions', () => {
       const c: RawCard = {
         id: 's1', question: 'What is 2+2?', answer: '4',
         options: ['2', '3', '4', '5'], correctAnswerIndex: 2,
-        explanation: '', difficulty: 1,
+        explanation: '',
       }
       const [q] = buildQuizQuestions([c])
       expect(q!.stem).toBe('What is 2+2?')
@@ -81,7 +135,7 @@ describe('buildQuizQuestions', () => {
         answer: 'B. Right',
         options: ['Option1', 'Option2', 'Option3', 'Option4'],
         correctAnswerIndex: 1,
-        explanation: '', difficulty: 1,
+        explanation: '',
       }
       const [q] = buildQuizQuestions([c])
       expect(q!.options).toEqual(['Option1', 'Option2', 'Option3', 'Option4'])
