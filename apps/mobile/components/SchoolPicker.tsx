@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import {
   View, Text, TextInput, FlatList, Modal, TouchableOpacity,
-  ActivityIndicator, StyleSheet,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useSchoolSearch } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
@@ -173,6 +173,10 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
             accessibilityRole="button"
             onPress={closeModal}
           />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}
+          >
           <View style={s.sheet}>
             <View style={s.sheetHeader}>
               <Text style={s.sheetTitle}>School / University</Text>
@@ -203,6 +207,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
               </TouchableOpacity>
             )}
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </>

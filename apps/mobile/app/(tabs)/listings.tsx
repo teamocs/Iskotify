@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView } from 'react-native'
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -134,6 +134,10 @@ export default function ListingsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
 
       <View style={s.header}>
         <Text style={s.title}>Listings</Text>
@@ -206,6 +210,8 @@ export default function ListingsScreen() {
         keyExtractor={item => item.id}
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={<Text style={s.empty}>No listings found.</Text>}
         renderItem={({ item: l }) => {
           const exam = isExam(l)
@@ -256,6 +262,7 @@ export default function ListingsScreen() {
           )
         }}
       />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }

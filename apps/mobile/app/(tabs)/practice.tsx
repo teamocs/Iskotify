@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TouchableOpacity, FlatList,
-  Modal, TextInput, Alert, ScrollView,
+  Modal, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -154,6 +154,10 @@ function CreateDeckModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={m.overlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ width: '100%' }}
+        >
         <View style={m.sheet}>
           <View style={m.headerRow}>
             <Text style={m.title}>New Deck</Text>
@@ -222,6 +226,7 @@ function CreateDeckModal({
             </>
           )}
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   )
