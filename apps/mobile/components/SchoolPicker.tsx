@@ -113,7 +113,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       <Text style={s.listName}>{item.name}</Text>
       <Text style={s.listSubtitle}>{item.subtitle}</Text>
     </TouchableOpacity>
-  ), [selectResult, s])
+  ), [selectResult])
 
   function renderBody() {
     if (query.length < 3) {
@@ -151,7 +151,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     <>
       <TouchableOpacity
         testID="school-picker-trigger"
-        onPress={() => setModalVisible(true)}
+        onPress={() => { setQuery(''); setModalVisible(true) }}
         style={[s.input, s.trigger]}
       >
         <Text style={[s.triggerText, !value && s.triggerTextPlaceholder]} numberOfLines={1}>
