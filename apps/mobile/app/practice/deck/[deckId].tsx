@@ -17,9 +17,6 @@ const MIN_QUESTIONS = 20
 const QUESTION_STEP = 10
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
 
-const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
-const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserAnswer {
@@ -121,8 +118,6 @@ export default function DeckQuizScreen() {
     questionCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 18, marginBottom: 14 },
     questionMeta: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
     questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
-    questionDiff: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-    questionDiffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     optionsWrap: { gap: 9 },
     optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
     optionBtnSelected: { backgroundColor: t.accentSurface, borderColor: t.accent },
@@ -157,8 +152,6 @@ export default function DeckQuizScreen() {
     reviewQBadgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     timeoutBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
     timeoutTxt: { fontSize: typo.xs, fontWeight: '600', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold' },
-    diffBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 'auto' },
-    diffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     reviewStem: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', lineHeight: 20, marginBottom: 12 },
     reviewOptions: { gap: 6, marginBottom: 10 },
     reviewOpt: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.surface, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10, borderWidth: 1, borderColor: 'transparent' },
@@ -214,9 +207,11 @@ export default function DeckQuizScreen() {
           question: flashcardsTable.question,
           answer: flashcardsTable.answer,
           explanation: flashcardsTable.explanation,
-          difficulty: flashcardsTable.difficulty,
           options: flashcardsTable.options,
           correctAnswerIndex: flashcardsTable.correctAnswerIndex,
+          aiOptions: flashcardsTable.aiOptions,
+          aiCorrectIndex: flashcardsTable.aiCorrectIndex,
+          aiExplanation: flashcardsTable.aiExplanation,
         })
         .from(flashcardsTable)
         .where(inArray(flashcardsTable.topicId, topicIds))
@@ -225,6 +220,9 @@ export default function DeckQuizScreen() {
         ...row,
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
+        aiOptions: row.aiOptions ? (JSON.parse(row.aiOptions) as string[]) : null,
+        aiCorrectIndex: row.aiCorrectIndex ?? null,
+        aiExplanation: row.aiExplanation ?? null,
       }))
       const parsed = buildQuizQuestions(shuffle(rawCards))
       allQuestionsRef.current = parsed
@@ -492,11 +490,6 @@ export default function DeckQuizScreen() {
                       <Text style={s.timeoutTxt}>⏱ Timeout</Text>
                     </View>
                   )}
-                  <View style={[s.diffBadge, { borderColor: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
-                    <Text style={[s.diffTxt, { color: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
-                      {DIFF_LABEL[q.difficulty] ?? 'Medium'}
-                    </Text>
-                  </View>
                 </View>
 
                 <Text style={s.reviewStem}>{q.stem}</Text>
@@ -621,11 +614,6 @@ export default function DeckQuizScreen() {
         <View style={s.questionCard}>
           <Text style={s.questionMeta}>QUESTION {currentIdx + 1} OF {questions.length}</Text>
           <Text style={s.questionText}>{q.stem}</Text>
-          <View style={[s.questionDiff, { borderColor: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
-            <Text style={[s.questionDiffTxt, { color: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
-              {DIFF_LABEL[q.difficulty] ?? 'Medium'}
-            </Text>
-          </View>
         </View>
 
         {/* MCQ options */}

@@ -13,8 +13,6 @@ const TIMER_OPTIONS = [20, 30, 45, 60] as const
 const MIN_QUESTIONS = 100
 const QUESTION_STEP = 50
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
-const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
-const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
 
 interface UserAnswer {
   flashcardId: string; selectedIndex: number | null; correct: boolean
@@ -63,8 +61,6 @@ export default function ListingQuizScreen() {
     questionCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 18, marginBottom: 14 },
     questionMeta: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
     questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold', marginBottom: 12 },
-    diffBadge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-    diffTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14 },
     optionBtnSelected: { backgroundColor: t.accentSurface, borderColor: t.accent },
     optionLetterBox: { width: 32, height: 32, borderRadius: 10, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -146,7 +142,7 @@ export default function ListingQuizScreen() {
     async function load() {
       const [listingRows, allCards, progress] = await Promise.all([
         db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, difficulty: flashcardsTable.difficulty, listingSlugs: flashcardsTable.listingSlugs, options: flashcardsTable.options, correctAnswerIndex: flashcardsTable.correctAnswerIndex }).from(flashcardsTable),
+        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, listingSlugs: flashcardsTable.listingSlugs, options: flashcardsTable.options, correctAnswerIndex: flashcardsTable.correctAnswerIndex, aiOptions: flashcardsTable.aiOptions, aiCorrectIndex: flashcardsTable.aiCorrectIndex, aiExplanation: flashcardsTable.aiExplanation }).from(flashcardsTable),
         db.select({ flashcardId: userProgress.flashcardId, correct: userProgress.correct }).from(userProgress),
       ])
 
@@ -180,6 +176,9 @@ export default function ListingQuizScreen() {
         ...row,
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
+        aiOptions: row.aiOptions ? (JSON.parse(row.aiOptions) as string[]) : null,
+        aiCorrectIndex: row.aiCorrectIndex ?? null,
+        aiExplanation: row.aiExplanation ?? null,
       }))
       const parsed = buildQuizQuestions(rawCards)
       allQuestionsRef.current = parsed
@@ -400,9 +399,6 @@ export default function ListingQuizScreen() {
         <View style={s.questionCard}>
           <Text style={s.questionMeta}>QUESTION {currentIdx + 1} OF {questions.length}</Text>
           <Text style={s.questionText}>{q.stem}</Text>
-          <View style={[s.diffBadge, { borderColor: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>
-            <Text style={[s.diffTxt, { color: DIFF_COLOR[q.difficulty] ?? '#fbbf24' }]}>{DIFF_LABEL[q.difficulty] ?? 'Medium'}</Text>
-          </View>
         </View>
         <View style={{ gap: 9 }}>
           {q.options.map((opt, oi) => {
