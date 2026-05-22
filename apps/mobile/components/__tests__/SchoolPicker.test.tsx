@@ -2,36 +2,26 @@ import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { SchoolPicker } from '../SchoolPicker'
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: any) => children,
+jest.mock('../../hooks/useSchoolSearch', () => ({
+  useSchoolSearch: jest.fn(),
 }))
 
-jest.mock('../../hooks/useSchoolPicker', () => ({
-  useSchoolPicker: jest.fn(),
-}))
-
-const mockUseSchoolPicker = require('../../hooks/useSchoolPicker').useSchoolPicker
+const mockUseSchoolSearch = require('../../hooks/useSchoolSearch').useSchoolSearch
 
 function makeState(overrides = {}) {
   return {
-    level: 'region',
-    list: ['NCR', 'Region I - Ilocos Region'],
-    selectedRegion: null,
-    selectedProvince: null,
-    selectedCity: null,
+    query: '',
+    setQuery: jest.fn(),
+    results: [],
     loading: false,
-    error: null,
-    selectRegion: jest.fn().mockResolvedValue(undefined),
-    selectProvince: jest.fn(),
-    selectCity: jest.fn(),
-    jumpToLevel: jest.fn(),
-    reset: jest.fn(),
+    error: false,
+    retry: jest.fn(),
     ...overrides,
   }
 }
 
 beforeEach(() => {
-  mockUseSchoolPicker.mockReturnValue(makeState())
+  mockUseSchoolSearch.mockReturnValue(makeState())
 })
 
 describe('SchoolPicker — trigger', () => {
@@ -40,99 +30,101 @@ describe('SchoolPicker — trigger', () => {
     expect(screen.getByText('Search your school...')).toBeTruthy()
   })
 
-  it('shows selected school name', () => {
-    render(<SchoolPicker value="Makati High School" onChange={jest.fn()} />)
-    expect(screen.getByText('Makati High School')).toBeTruthy()
+  it('shows selected school name when value is set', () => {
+    render(<SchoolPicker value="San Beda University" onChange={jest.fn()} />)
+    expect(screen.getByText('San Beda University')).toBeTruthy()
   })
 })
 
-describe('SchoolPicker — modal navigation', () => {
-  it('opens modal on trigger press and shows region list', () => {
+describe('SchoolPicker — modal', () => {
+  it('opens on trigger press and shows title and search input', () => {
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    expect(screen.getByText('Select your school')).toBeTruthy()
-    expect(screen.getByText('NCR')).toBeTruthy()
-    expect(screen.getByText('Region I - Ilocos Region')).toBeTruthy()
+    expect(screen.getByText('School / University')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Search schools...')).toBeTruthy()
   })
 
-  it('calls selectRegion when a region is tapped', () => {
-    const state = makeState()
-    mockUseSchoolPicker.mockReturnValue(state)
+  it('shows hint when query is empty', () => {
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    fireEvent.press(screen.getByText('NCR'))
-    expect(state.selectRegion).toHaveBeenCalledWith('NCR')
+    expect(screen.getByText('Type at least 3 characters to search')).toBeTruthy()
   })
 
-  it('calls selectProvince when a province is tapped', () => {
-    const state = makeState({
-      level: 'province',
-      list: ['Metro Manila'],
-      selectedRegion: 'NCR',
-    })
-    mockUseSchoolPicker.mockReturnValue(state)
+  it('shows spinner when loading=true', () => {
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'san', loading: true }))
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    fireEvent.press(screen.getByText('Metro Manila'))
-    expect(state.selectProvince).toHaveBeenCalledWith('Metro Manila')
+    expect(screen.getByTestId('school-search-loading')).toBeTruthy()
   })
 
-  it('calls onChange and closes modal when school is selected', () => {
+  it('shows error message and Retry button when error=true', () => {
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'san', error: true }))
+    render(<SchoolPicker value="" onChange={jest.fn()} />)
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+    expect(screen.getByText(/Could not search schools/)).toBeTruthy()
+    expect(screen.getByText('Retry')).toBeTruthy()
+  })
+
+  it('calls retry when Retry button is pressed', () => {
+    const retry = jest.fn()
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'san', error: true, retry }))
+    render(<SchoolPicker value="" onChange={jest.fn()} />)
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+    fireEvent.press(screen.getByText('Retry'))
+    expect(retry).toHaveBeenCalled()
+  })
+
+  it('shows result rows with name and subtitle', () => {
+    mockUseSchoolSearch.mockReturnValue(makeState({
+      query: 'san',
+      results: [
+        { name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines' },
+      ],
+    }))
+    render(<SchoolPicker value="" onChange={jest.fn()} />)
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+    expect(screen.getByText('San Beda University')).toBeTruthy()
+    expect(screen.getByText('Mendiola, Manila, Philippines')).toBeTruthy()
+  })
+
+  it('calls onChange with result.name on row press', () => {
     const onChange = jest.fn()
-    mockUseSchoolPicker.mockReturnValue(makeState({
-      level: 'school',
-      list: ['Makati High School'],
-      selectedRegion: 'NCR',
-      selectedProvince: 'Metro Manila',
-      selectedCity: 'Makati City',
+    mockUseSchoolSearch.mockReturnValue(makeState({
+      query: 'san',
+      results: [{ name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines' }],
     }))
     render(<SchoolPicker value="" onChange={onChange} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    fireEvent.press(screen.getByText('Makati High School'))
-    expect(onChange).toHaveBeenCalledWith('Makati High School')
+    fireEvent.press(screen.getByText('San Beda University'))
+    expect(onChange).toHaveBeenCalledWith('San Beda University')
   })
 
-  it('shows Others option only at school level', () => {
-    mockUseSchoolPicker.mockReturnValue(makeState({
-      level: 'school',
-      list: ['Some School'],
-      selectedRegion: 'NCR',
-      selectedProvince: 'Metro Manila',
-      selectedCity: 'Makati City',
-    }))
+  it('shows "No schools found." when results are empty and query >= 3 chars', () => {
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'xyz', results: [] }))
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    expect(screen.getByText('Others — type my school name')).toBeTruthy()
+    expect(screen.getByText('No schools found.')).toBeTruthy()
   })
 
-  it('does NOT show Others at region level', () => {
+  it('shows "Use what I typed" fallback when query >= 1 char', () => {
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'xyz school' }))
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    expect(screen.queryByText('Others — type my school name')).toBeNull()
+    expect(screen.getByText(/Use "xyz school"/)).toBeTruthy()
   })
-})
 
-describe('SchoolPicker — Others fallback', () => {
-  it('shows freetext input when Others is selected', () => {
-    mockUseSchoolPicker.mockReturnValue(makeState({
-      level: 'school',
-      list: [],
-      selectedRegion: 'NCR',
-      selectedProvince: 'MM',
-      selectedCity: 'Makati City',
-    }))
+  it('does NOT show "Use what I typed" fallback when query is empty', () => {
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    fireEvent.press(screen.getByText('Others — type my school name'))
-    expect(screen.getByPlaceholderText('Type your school name')).toBeTruthy()
+    expect(screen.queryByText(/Can't find your school/)).toBeNull()
   })
-})
 
-describe('SchoolPicker — loading state', () => {
-  it('shows activity indicator when loading', () => {
-    mockUseSchoolPicker.mockReturnValue(makeState({ loading: true, list: [] }))
-    render(<SchoolPicker value="" onChange={jest.fn()} />)
+  it('calls onChange with raw query when "Use what I typed" is pressed', () => {
+    const onChange = jest.fn()
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'My Custom School' }))
+    render(<SchoolPicker value="" onChange={onChange} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    expect(screen.getByTestId('school-picker-loading')).toBeTruthy()
+    fireEvent.press(screen.getByText(/Use "My Custom School"/))
+    expect(onChange).toHaveBeenCalledWith('My Custom School')
   })
 })

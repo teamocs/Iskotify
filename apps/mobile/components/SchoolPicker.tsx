@@ -3,28 +3,20 @@ import {
   View, Text, TextInput, FlatList, Modal, TouchableOpacity,
   ActivityIndicator, StyleSheet,
 } from 'react-native'
-import { useSchoolPicker } from '../hooks/useSchoolPicker'
+import { useSchoolSearch } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
-import type { PickerLevel } from '../hooks/useSchoolPicker'
+import type { SchoolResult } from '../hooks/useSchoolSearch'
 
 interface SchoolPickerProps {
   value: string
   onChange: (school: string) => void
 }
 
-const LEVEL_LABEL: Record<PickerLevel, string> = {
-  region: 'Select a region...',
-  province: 'Select a province...',
-  city: 'Select a city...',
-  school: 'Select a school...',
-}
-
 export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
   const [modalVisible, setModalVisible] = useState(false)
-  const [isOthers, setIsOthers] = useState(false)
-  const [search, setSearch] = useState('')
-  const picker = useSchoolPicker()
+  const { query, setQuery, results, loading, error, retry } = useSchoolSearch()
   const { theme: t, typo } = useTheme()
+
   const s = useMemo(() => StyleSheet.create({
     input: {
       backgroundColor: t.surface,
@@ -40,7 +32,6 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     trigger: { justifyContent: 'center' },
     triggerText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary },
     triggerTextPlaceholder: { color: t.textTertiary },
-    othersInput: { marginTop: 10 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     modalDismissOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     sheet: {
@@ -52,108 +43,127 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       paddingHorizontal: 16,
       paddingBottom: 32,
     },
-    sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, marginBottom: 10 },
-    breadcrumb: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 12, alignItems: 'center' },
-    crumbActive: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#fca5a5' },
-    crumbSep: { fontSize: typo.sm, color: t.textTertiary },
-    crumbPending: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary },
+    sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, flex: 1 },
+    closeText: { fontFamily: 'Lexend_400Regular', fontSize: 18, color: t.textSecondary, padding: 4 },
     searchInput: { marginBottom: 10 },
+    contentArea: { flex: 1 },
     loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    listRow: {
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: t.surfaceSubtle,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+    hintText: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.sm,
+      color: t.textTertiary,
+      textAlign: 'center',
+      paddingTop: 40,
     },
-    listText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary, flex: 1 },
-    chevron: { color: t.textTertiary, fontSize: 18, marginLeft: 8 },
-    othersText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: 'rgba(252,165,165,0.8)' },
     errorText: {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.sm,
       color: 'rgba(252,165,165,0.8)',
       textAlign: 'center',
-      marginTop: 24,
       paddingHorizontal: 16,
+    },
+    retryBtn: { marginTop: 12, alignItems: 'center' },
+    listRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.surfaceSubtle,
+    },
+    listName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary },
+    listSubtitle: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.sm,
+      color: t.textSecondary,
+      marginTop: 2,
+    },
+    fallbackRow: {
+      paddingVertical: 14,
+      borderTopWidth: 1,
+      borderTopColor: t.surfaceSubtle,
+      marginTop: 8,
+    },
+    fallbackLabel: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary },
+    fallbackLink: {
+      fontFamily: 'Lexend_500Medium',
+      fontSize: typo.md,
+      color: 'rgba(252,165,165,0.8)',
+      marginTop: 2,
     },
   }), [t, typo])
 
-  const filteredList = useMemo(() => {
-    const q = search.toLowerCase()
-    return picker.list.filter(item => item.toLowerCase().includes(q))
-  }, [picker.list, search])
-
-  function openModal() {
-    picker.reset()
-    setSearch('')
-    setIsOthers(false)
-    setModalVisible(true)
-  }
-
-  const handleSelectItem = useCallback((item: string) => {
-    if (picker.level === 'region') {
-      setSearch('')
-      void picker.selectRegion(item)
-    } else if (picker.level === 'province') {
-      setSearch('')
-      picker.selectProvince(item)
-    } else if (picker.level === 'city') {
-      setSearch('')
-      picker.selectCity(item)
-    } else {
-      onChange(item)
-      setIsOthers(false)
-      setModalVisible(false)
-    }
-  }, [picker.level, picker.selectRegion, picker.selectProvince, picker.selectCity, onChange])
-
-  const renderItem = useCallback(({ item }: { item: string }) => (
-    <TouchableOpacity onPress={() => handleSelectItem(item)} style={s.listRow}>
-      <Text style={s.listText}>{item}</Text>
-      {picker.level !== 'school' && <Text style={s.chevron}>›</Text>}
-    </TouchableOpacity>
-  ), [handleSelectItem, picker.level])
-
-  function handleOthers() {
-    setIsOthers(true)
-    onChange('')
+  const closeModal = useCallback(() => {
+    setQuery('')
     setModalVisible(false)
+  }, [setQuery])
+
+  const selectResult = useCallback((r: SchoolResult) => {
+    onChange(r.name)
+    setQuery('')
+    setModalVisible(false)
+  }, [onChange, setQuery])
+
+  const selectTyped = useCallback(() => {
+    onChange(query)
+    setQuery('')
+    setModalVisible(false)
+  }, [onChange, query, setQuery])
+
+  const renderItem = useCallback(({ item }: { item: SchoolResult }) => (
+    <TouchableOpacity onPress={() => selectResult(item)} style={s.listRow}>
+      <Text style={s.listName}>{item.name}</Text>
+      <Text style={s.listSubtitle}>{item.subtitle}</Text>
+    </TouchableOpacity>
+  ), [selectResult, s])
+
+  function renderBody() {
+    if (query.length < 3) {
+      return <Text style={s.hintText}>Type at least 3 characters to search</Text>
+    }
+    if (loading) {
+      return (
+        <View style={s.loadingContainer}>
+          <ActivityIndicator testID="school-search-loading" color="#fca5a5" />
+        </View>
+      )
+    }
+    if (error) {
+      return (
+        <View style={{ alignItems: 'center', paddingTop: 24 }}>
+          <Text style={s.errorText}>Could not search schools. Check your connection.</Text>
+          <TouchableOpacity onPress={retry} style={s.retryBtn}>
+            <Text style={[s.errorText, { color: '#fca5a5' }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+    return (
+      <FlatList
+        data={results}
+        keyExtractor={r => `${r.name}-${r.subtitle}`}
+        keyboardShouldPersistTaps="handled"
+        renderItem={renderItem}
+        ListEmptyComponent={<Text style={s.hintText}>No schools found.</Text>}
+      />
+    )
   }
 
   return (
     <>
       <TouchableOpacity
         testID="school-picker-trigger"
-        onPress={openModal}
+        onPress={() => setModalVisible(true)}
         style={[s.input, s.trigger]}
       >
-        <Text
-          style={[s.triggerText, !value && s.triggerTextPlaceholder]}
-          numberOfLines={1}
-        >
+        <Text style={[s.triggerText, !value && s.triggerTextPlaceholder]} numberOfLines={1}>
           {value || 'Search your school...'}
         </Text>
       </TouchableOpacity>
-
-      {isOthers && (
-        <TextInput
-          style={[s.input, s.othersInput]}
-          placeholder="Type your school name"
-          placeholderTextColor={t.textTertiary}
-          value={value}
-          onChangeText={onChange}
-          autoCapitalize="words"
-          returnKeyType="done"
-        />
-      )}
 
       <Modal
         visible={modalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={closeModal}
       >
         <View style={s.modalBackdrop}>
           <TouchableOpacity
@@ -161,78 +171,36 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
             activeOpacity={1}
             accessibilityLabel="Close school picker"
             accessibilityRole="button"
-            onPress={() => setModalVisible(false)}
+            onPress={closeModal}
           />
           <View style={s.sheet}>
-            <Text style={s.sheetTitle}>Select your school</Text>
-
-            {/* Breadcrumb */}
-            <View style={s.breadcrumb}>
-              {picker.selectedRegion ? (
-                <>
-                  <TouchableOpacity onPress={() => { setSearch(''); picker.jumpToLevel('region') }}>
-                    <Text style={s.crumbActive}>{picker.selectedRegion}</Text>
-                  </TouchableOpacity>
-                  <Text style={s.crumbSep}>›</Text>
-                </>
-              ) : null}
-              {picker.selectedProvince ? (
-                <>
-                  <TouchableOpacity onPress={() => { setSearch(''); picker.jumpToLevel('province') }}>
-                    <Text style={s.crumbActive}>{picker.selectedProvince}</Text>
-                  </TouchableOpacity>
-                  <Text style={s.crumbSep}>›</Text>
-                </>
-              ) : null}
-              {picker.selectedCity ? (
-                <>
-                  <TouchableOpacity onPress={() => { setSearch(''); picker.jumpToLevel('city') }}>
-                    <Text style={s.crumbActive}>{picker.selectedCity}</Text>
-                  </TouchableOpacity>
-                  <Text style={s.crumbSep}>›</Text>
-                </>
-              ) : null}
-              <Text style={s.crumbPending}>{LEVEL_LABEL[picker.level]}</Text>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>School / University</Text>
+              <TouchableOpacity onPress={closeModal} accessibilityLabel="Close">
+                <Text style={s.closeText}>✕</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Search */}
             <TextInput
               style={[s.input, s.searchInput]}
-              placeholder="Type to search..."
+              placeholder="Search schools..."
               placeholderTextColor={t.textTertiary}
-              value={search}
-              onChangeText={setSearch}
+              value={query}
+              onChangeText={setQuery}
               autoCapitalize="none"
               returnKeyType="search"
               autoFocus
             />
 
-            {picker.loading ? (
-              <View style={s.loadingContainer}>
-                <ActivityIndicator testID="school-picker-loading" color="#fff" />
-              </View>
-            ) : picker.error ? (
-              <View style={{ alignItems: 'center', paddingTop: 24 }}>
-                <Text style={s.errorText}>{picker.error}</Text>
-                <TouchableOpacity onPress={picker.retryLoadRegions} style={{ marginTop: 12 }}>
-                  <Text style={[s.errorText, { color: '#fca5a5' }]}>Try again</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredList}
-                keyExtractor={item => item}
-                keyboardShouldPersistTaps="handled"
-                initialNumToRender={100}
-                renderItem={renderItem}
-                ListFooterComponent={
-                  picker.level === 'school' ? (
-                    <TouchableOpacity onPress={handleOthers} style={s.listRow}>
-                      <Text style={s.othersText}>Others — type my school name</Text>
-                    </TouchableOpacity>
-                  ) : null
-                }
-              />
+            <View style={s.contentArea}>
+              {renderBody()}
+            </View>
+
+            {query.length >= 1 && (
+              <TouchableOpacity onPress={selectTyped} style={s.fallbackRow}>
+                <Text style={s.fallbackLabel}>Can't find your school?</Text>
+                <Text style={s.fallbackLink}>Use "{query}" ›</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
