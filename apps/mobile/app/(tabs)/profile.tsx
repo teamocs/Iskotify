@@ -1,14 +1,14 @@
 import { useState, useCallback, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { User4Outlined, SparkOutlined } from '@lineiconshq/free-icons'
+import { User4Outlined, SparkOutlined, Gear1Outlined, Upload1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { exportUserData } from '../../services/export'
+import { exportUserData, importUserData } from '../../services/export'
 import { userSettings, listings } from '../../db/schema'
 
 interface ProfileData {
@@ -130,10 +130,31 @@ export default function ProfileScreen() {
     }
   }
 
+  async function handleImport() {
+    try {
+      await importUserData(db)
+      Alert.alert('Import Successful', 'Your data has been restored.', [
+        { text: 'OK', onPress: () => void load() },
+      ])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not import data.'
+      Alert.alert('Import Failed', msg)
+    }
+  }
+
   return (
     <SafeAreaView style={s.root}>
-      <View style={s.inner}>
-        <Text style={s.title}>Profile</Text>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12 }} showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text style={[s.title, { marginBottom: 0 }]}>Profile</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Lineicons icon={Gear1Outlined} size={16} color={t.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
         {/* Identity card */}
         <View style={s.identityCard}>
@@ -215,10 +236,31 @@ export default function ProfileScreen() {
 
         {/* Action cards */}
         <TouchableOpacity onPress={handleExport} style={s.card} activeOpacity={0.8}>
-          <Text style={s.cardTitle}>Export Data</Text>
-          <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(34,197,94,0.10)', alignItems: 'center', justifyContent: 'center' }}>
+              <Lineicons icon={Upload1Outlined} size={14} color="#4ade80" style={{ transform: [{ rotate: '180deg' }] }} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Export Data</Text>
+              <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
+            </View>
+            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
+          </View>
         </TouchableOpacity>
-      </View>
+
+        <TouchableOpacity onPress={handleImport} style={[s.card, { marginBottom: 32 }]} activeOpacity={0.8}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(96,165,250,0.10)', alignItems: 'center', justifyContent: 'center' }}>
+              <Lineicons icon={Upload1Outlined} size={14} color="#60a5fa" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Import Data</Text>
+              <Text style={s.cardSub}>Restore from a previously exported JSON file</Text>
+            </View>
+            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   )
 }

@@ -19,7 +19,7 @@ jest.mock('@lineiconshq/free-icons', () => ({
   SparkOutlined: {},
   QuestionMarkCircleOutlined: {},
   Shield2Outlined: {},
-  Download1Outlined: {},
+  ExitOutlined: {},
   Brush2Outlined: {},
 }))
 
@@ -40,9 +40,6 @@ jest.mock('../../hooks/useDb', () => ({
   }),
 }))
 
-jest.mock('../../services/export', () => ({
-  exportUserData: jest.fn().mockResolvedValue(undefined),
-}))
 
 describe('SettingsScreen', () => {
   it('renders Settings title', () => {
@@ -62,9 +59,9 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Privacy & Terms')).toBeTruthy()
   })
 
-  it('renders Data section with Export Data', () => {
+  it('renders Session section with Exit App', () => {
     render(<SettingsScreen />)
-    expect(screen.getByText('Export Data')).toBeTruthy()
+    expect(screen.getByText('Exit App')).toBeTruthy()
   })
 
   it('renders Appearance section with theme picker', () => {

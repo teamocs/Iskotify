@@ -28,6 +28,7 @@
     "expo": "~54.0.34",
     "expo-blur": "^15.0.8",
     "expo-constants": "~18.0.13",
+    "expo-document-picker": "^56.0.4",
     "expo-linking": "~8.0.12",
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.23",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, BackHandler } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -10,12 +10,11 @@ import {
   SparkOutlined,
   QuestionMarkCircleOutlined,
   Shield2Outlined,
-  Download1Outlined,
+  ExitOutlined,
   Brush2Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
-import { userSettings, listings } from '../db/schema'
-import { exportUserData } from '../services/export'
+import { userSettings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
@@ -57,25 +56,29 @@ function SettingsRow({
 export default function SettingsScreen() {
   const db = useDb()
   const { theme: t, typo, themePref, setTheme } = useTheme()
-  const [listingTitle, setListingTitle] = useState('')
+  const [profileName, setProfileName] = useState('Student')
+  const [profileEmail, setProfileEmail] = useState('')
 
   useEffect(() => {
     async function load() {
       const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-      const slug = rows[0]?.selectedListingSlug ?? ''
-      if (!slug) return
-      const lr = await db.select({ title: listings.title }).from(listings).where(eq(listings.slug, slug)).limit(1)
-      setListingTitle(lr[0]?.title ?? slug)
+      const row = rows[0]
+      if (!row) return
+      setProfileName(row.fullName || 'Student')
+      setProfileEmail(row.email ?? '')
     }
     void load()
   }, [db])
 
-  async function handleExport() {
-    try {
-      await exportUserData(db)
-    } catch {
-      Alert.alert('Export Failed', 'Could not export data. Please try again.')
-    }
+  function handleExitApp() {
+    Alert.alert(
+      'Exit Iskotify',
+      'Are you sure you want to exit?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+      ]
+    )
   }
 
   const s = useMemo(() => StyleSheet.create({
@@ -127,13 +130,17 @@ export default function SettingsScreen() {
           <Text style={s.versionNum}>v{version}</Text>
         </View>
 
-        <TouchableOpacity style={s.profileCard} activeOpacity={0.8}>
+        <TouchableOpacity style={s.profileCard} onPress={() => router.push('/(tabs)/profile')} activeOpacity={0.8}>
           <View style={s.profileAvatar}>
             <Lineicons icon={User4Outlined} size={18} color="#fff" />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.profileName} numberOfLines={1}>{listingTitle || 'Student'}</Text>
-            <Text style={s.profileSub}>Class of 2027</Text>
+            <Text style={s.profileName} numberOfLines={1}>{profileName}</Text>
+            {profileEmail ? (
+              <Text style={s.profileSub} numberOfLines={1}>{profileEmail}</Text>
+            ) : (
+              <Text style={s.profileSub}>View Profile</Text>
+            )}
           </View>
           <Text style={s.rowChevron}>›</Text>
         </TouchableOpacity>
@@ -146,8 +153,8 @@ export default function SettingsScreen() {
         <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
           onPress={() => router.push('/privacy')} />
 
-        <Text style={s.secLabel}>Data</Text>
-        <SettingsRow icon={Download1Outlined} iconBg="rgba(34,197,94,0.10)" iconColor="#4ade80" label="Export Data" onPress={handleExport} />
+        <Text style={s.secLabel}>Session</Text>
+        <SettingsRow icon={ExitOutlined} iconBg="rgba(239,68,68,0.10)" iconColor="#f87171" label="Exit App" onPress={handleExitApp} />
 
         <Text style={s.secLabel}>Appearance</Text>
         <View style={s.appearRow}>
