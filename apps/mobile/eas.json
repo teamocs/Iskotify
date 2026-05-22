@@ -18,6 +18,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_PLACES_KEY": "FILL_IN_YOUR_GOOGLE_PLACES_API_KEY"
       }
     },
     "production": {
