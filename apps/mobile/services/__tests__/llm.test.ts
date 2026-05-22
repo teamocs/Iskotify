@@ -32,6 +32,30 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('grammatically')
   })
 
+  it('uses math prompt for Calculus', () => {
+    expect(buildPrompt({ subjectName: 'Calculus', topicName: 'Limits', question: 'Q?', answer: 'A' })).toContain('Do NOT solve')
+  })
+
+  it('uses math prompt for Statistics', () => {
+    expect(buildPrompt({ subjectName: 'Statistics', topicName: 'Mean', question: 'Q?', answer: 'A' })).toContain('Do NOT solve')
+  })
+
+  it('uses language prompt for Reading Comprehension', () => {
+    expect(buildPrompt({ subjectName: 'Reading Comprehension', topicName: 'Inference', question: 'Q?', answer: 'A' })).toContain('grammatically')
+  })
+
+  it('uses language prompt for Panitikan', () => {
+    expect(buildPrompt({ subjectName: 'Panitikan', topicName: 'Noli Me Tangere', question: 'Q?', answer: 'A' })).toContain('grammatically')
+  })
+
+  it('uses language prompt for Literature', () => {
+    expect(buildPrompt({ subjectName: 'Literature', topicName: 'Sonnets', question: 'Q?', answer: 'A' })).toContain('grammatically')
+  })
+
+  it('uses science prompt for Science (default fallback)', () => {
+    expect(buildPrompt({ subjectName: 'Chemistry', topicName: 'Bonds', question: 'Q?', answer: 'A' })).toContain('factually wrong')
+  })
+
   it('includes ChatML format tokens for Qwen', () => {
     const prompt = buildPrompt({ subjectName: 'Science', topicName: 'Physics', question: 'Q?', answer: 'A' })
     expect(prompt).toContain('<|im_start|>system')
@@ -76,5 +100,17 @@ describe('parseResponse', () => {
 
   it('returns null for empty string', () => {
     expect(parseResponse('')).toBeNull()
+  })
+
+  it('returns null when wrong_option_1 is a number', () => {
+    expect(parseResponse('{"wrong_option_1":1,"wrong_option_2":"B","wrong_option_3":"C","explanation":"x"}')).toBeNull()
+  })
+
+  it('returns null when explanation is not a string', () => {
+    expect(parseResponse('{"wrong_option_1":"A","wrong_option_2":"B","wrong_option_3":"C","explanation":null}')).toBeNull()
+  })
+
+  it('returns null when fields are objects', () => {
+    expect(parseResponse('{"wrong_option_1":{"a":1},"wrong_option_2":"B","wrong_option_3":"C","explanation":"x"}')).toBeNull()
   })
 })

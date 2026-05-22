@@ -13,7 +13,7 @@ const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
 
 export function hasEnoughRam(): boolean {
   const total = Device.totalMemory
-  if (total === null) return true
+  if (total === null) return false  // unknown device — err on the side of skipping the feature
   return total >= MIN_RAM_BYTES
 }
 
@@ -28,9 +28,17 @@ function detectStrategy(subjectName: string): PromptStrategy {
   const s = subjectName.toLowerCase()
   if (
     s.includes('math') || s.includes('algebra') ||
-    s.includes('geometry') || s.includes('trigonometry')
+    s.includes('geometry') || s.includes('trigonometry') ||
+    s.includes('calculus') || s.includes('statistics') ||
+    s.includes('arithmetic')
   ) return 'math'
-  if (s.includes('english') || s.includes('filipino') || s.includes('language')) return 'language'
+  if (
+    s.includes('english') || s.includes('filipino') ||
+    s.includes('language') || s.includes('panitikan') ||
+    s.includes('wika') || s.includes('grammar') ||
+    s.includes('reading') || s.includes('vocabulary') ||
+    s.includes('literature') || s.includes('comprehension')
+  ) return 'language'
   return 'science'
 }
 
@@ -87,10 +95,10 @@ export function parseResponse(text: string): LlmOutput | null {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
     const parsed = JSON.parse(jsonMatch[0]) as Partial<LlmOutput>
-    if (
-      !parsed.wrong_option_1 || !parsed.wrong_option_2 ||
-      !parsed.wrong_option_3 || !parsed.explanation
-    ) return null
+    const requiredFields: Array<keyof LlmOutput> = ['wrong_option_1', 'wrong_option_2', 'wrong_option_3', 'explanation']
+    for (const f of requiredFields) {
+      if (typeof parsed[f] !== 'string' || !parsed[f]) return null
+    }
     return parsed as LlmOutput
   } catch {
     return null
