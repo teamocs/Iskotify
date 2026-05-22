@@ -316,6 +316,7 @@ export default function QuizScreen() {
   }
 
   function startQuiz() {
+    if (allQuestionsRef.current.length === 0) return
     const sliced = shuffle([...allQuestionsRef.current]).slice(0, cardCountRef.current)
     startTimeRef.current = Date.now()
     setCurrentIdx(0)
