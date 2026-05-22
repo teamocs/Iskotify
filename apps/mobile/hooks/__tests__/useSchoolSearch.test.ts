@@ -79,6 +79,7 @@ describe('useSchoolSearch', () => {
     expect(result.current.loading).toBe(false) // debounce not yet fired
 
     act(() => { jest.advanceTimersByTime(500) })
+    expect(result.current.loading).toBe(true) // fetch fired, not yet resolved
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
@@ -145,6 +146,7 @@ describe('useSchoolSearch', () => {
     await waitFor(() => expect(result.current.error).toBe(true))
 
     act(() => { result.current.retry() })
+    expect(result.current.loading).toBe(true) // retry fired fetch immediately
 
     await waitFor(() => {
       expect(result.current.error).toBe(false)

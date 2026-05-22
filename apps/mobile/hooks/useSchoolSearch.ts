@@ -89,7 +89,7 @@ export function useSchoolSearch(): UseSchoolSearch {
   }, [fetchResults])
 
   const retry = useCallback(() => {
-    setError(false)
+    if (lastQueryRef.current.length < 3) return
     void fetchResults(lastQueryRef.current)
   }, [fetchResults])
 
