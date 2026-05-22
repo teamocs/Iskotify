@@ -64,12 +64,6 @@ export const userSettings = sqliteTable('user_settings', {
   theme: text('theme').notNull().default('system'),
 })
 
-export const schoolsCache = sqliteTable('schools_cache', {
-  region: text('region').primaryKey(),
-  data: text('data').notNull(),
-  cachedAt: integer('cached_at').notNull(),
-})
-
 export const userProgress = sqliteTable('user_progress', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   flashcardId: text('flashcard_id').notNull(),
