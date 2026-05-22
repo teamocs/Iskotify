@@ -98,7 +98,7 @@ export default function ListingQuizScreen() {
     async function load() {
       const [listingRows, allCards, progress] = await Promise.all([
         db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, difficulty: flashcardsTable.difficulty, listingSlugs: flashcardsTable.listingSlugs }).from(flashcardsTable),
+        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, difficulty: flashcardsTable.difficulty, listingSlugs: flashcardsTable.listingSlugs, options: flashcardsTable.options, correctAnswerIndex: flashcardsTable.correctAnswerIndex }).from(flashcardsTable),
         db.select({ flashcardId: userProgress.flashcardId, correct: userProgress.correct }).from(userProgress),
       ])
 
@@ -128,7 +128,12 @@ export default function ListingQuizScreen() {
         filtered = matching.filter(c => weakTopicIds.has(c.topicId))
       }
 
-      const parsed = buildQuizQuestions(shuffle(filtered) as RawCard[]).slice(0, MAX_QUESTIONS)
+      const rawCards: RawCard[] = (shuffle(filtered) as typeof filtered).map(row => ({
+        ...row,
+        options: JSON.parse(row.options) as string[],
+        correctAnswerIndex: row.correctAnswerIndex ?? undefined,
+      }))
+      const parsed = buildQuizQuestions(rawCards).slice(0, MAX_QUESTIONS)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }

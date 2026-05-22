@@ -98,6 +98,8 @@ const MIGRATIONS = [
    FROM user_settings WHERE id = 1 AND selected_listing_slug != ''`,
   `ALTER TABLE user_settings ADD COLUMN notifications_enabled INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE user_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'`,
+  `ALTER TABLE flashcards ADD COLUMN options TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE flashcards ADD COLUMN correct_answer_index INTEGER`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

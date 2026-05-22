@@ -167,11 +167,18 @@ export default function DeckQuizScreen() {
           answer: flashcardsTable.answer,
           explanation: flashcardsTable.explanation,
           difficulty: flashcardsTable.difficulty,
+          options: flashcardsTable.options,
+          correctAnswerIndex: flashcardsTable.correctAnswerIndex,
         })
         .from(flashcardsTable)
         .where(inArray(flashcardsTable.topicId, topicIds))
 
-      const parsed = buildQuizQuestions(shuffle(cardRows as RawCard[])).slice(0, MAX_QUESTIONS)
+      const rawCards: RawCard[] = cardRows.map(row => ({
+        ...row,
+        options: JSON.parse(row.options) as string[],
+        correctAnswerIndex: row.correctAnswerIndex ?? undefined,
+      }))
+      const parsed = buildQuizQuestions(shuffle(rawCards)).slice(0, MAX_QUESTIONS)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }

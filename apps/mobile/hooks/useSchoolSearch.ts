@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { supabase } from '../services/supabase'
 
 const PLACES_URL = 'https://places.googleapis.com/v1/places:autocomplete'
 const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ?? ''
@@ -15,6 +16,50 @@ export interface UseSchoolSearch {
   loading: boolean
   error: boolean
   retry: () => void
+}
+
+async function searchSupabase(q: string): Promise<SchoolResult[]> {
+  const { data, error } = await supabase
+    .from('schools')
+    .select('name,city,province')
+    .ilike('name', `%${q}%`)
+    .limit(10)
+  if (error || !data || data.length === 0) return []
+  return data.map(s => ({
+    name: s.name,
+    subtitle: `${s.city}, ${s.province}`,
+  }))
+}
+
+async function searchPlaces(q: string): Promise<SchoolResult[]> {
+  const res = await fetch(PLACES_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': PLACES_KEY,
+      'X-Goog-FieldMask': 'suggestions.placePrediction.structuredFormat',
+    },
+    body: JSON.stringify({
+      input: q,
+      includedPrimaryTypes: ['school', 'secondary_school', 'university'],
+      includedRegionCodes: ['ph'],
+    }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = await res.json() as {
+    suggestions?: Array<{
+      placePrediction: {
+        structuredFormat: {
+          mainText: { text: string }
+          secondaryText: { text: string }
+        }
+      }
+    }>
+  }
+  return (json.suggestions ?? []).map(s => ({
+    name: s.placePrediction.structuredFormat.mainText.text,
+    subtitle: s.placePrediction.structuredFormat.secondaryText.text,
+  }))
 }
 
 export function useSchoolSearch(): UseSchoolSearch {
@@ -37,35 +82,15 @@ export function useSchoolSearch(): UseSchoolSearch {
     setLoading(true)
     setError(false)
     try {
-      const res = await fetch(PLACES_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': PLACES_KEY,
-          'X-Goog-FieldMask': 'suggestions.placePrediction.structuredFormat',
-        },
-        body: JSON.stringify({
-          input: q,
-          includedPrimaryTypes: ['school', 'secondary_school', 'university'],
-          includedRegionCodes: ['ph'],
-        }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json() as {
-        suggestions?: Array<{
-          placePrediction: {
-            structuredFormat: {
-              mainText: { text: string }
-              secondaryText: { text: string }
-            }
-          }
-        }>
-      }
+      const dbResults = await searchSupabase(q)
       if (activeQueryRef.current !== q) return
-      setResults((json.suggestions ?? []).map(s => ({
-        name: s.placePrediction.structuredFormat.mainText.text,
-        subtitle: s.placePrediction.structuredFormat.secondaryText.text,
-      })))
+      if (dbResults.length > 0) {
+        setResults(dbResults)
+        return
+      }
+      const placesResults = await searchPlaces(q)
+      if (activeQueryRef.current !== q) return
+      setResults(placesResults)
     } catch {
       if (activeQueryRef.current !== q) return
       setError(true)

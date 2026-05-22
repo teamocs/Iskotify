@@ -22,6 +22,8 @@ export const flashcards = sqliteTable('flashcards', {
   explanation: text('explanation').notNull(),
   difficulty: integer('difficulty').notNull(),
   listingSlugs: text('listing_slugs').notNull().default('[]'),
+  options: text('options').notNull().default('[]'),
+  correctAnswerIndex: integer('correct_answer_index'),
   remoteUpdatedAt: integer('remote_updated_at'),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
