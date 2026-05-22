@@ -84,7 +84,6 @@ export default function ReviewPage({ params }: PageProps) {
       question: '',
       answer: '',
       explanation: '',
-      difficulty: 1,
     }
     setCards((prev) => [...prev, blank])
   }

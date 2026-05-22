@@ -15,16 +15,10 @@ Return ONLY valid JSON with this exact structure — no markdown, no explanation
     {
       "question": "<clear, specific question>",
       "answer": "<concise, accurate answer>",
-      "explanation": "<brief context or elaboration — empty string if not needed>",
-      "difficulty": 1
+      "explanation": "<brief context or elaboration — empty string if not needed>"
     }
   ]
 }
-
-Difficulty levels:
-  1 = Basic recall (definition, fact)
-  2 = Application (explain, compare, compute)
-  3 = Analysis/synthesis (evaluate, connect concepts)
 
 Generate between 15 and 40 cards. Prioritize high-yield concepts for competitive exams.`
 
@@ -32,7 +26,6 @@ interface GeminiCard {
   question: string
   answer: string
   explanation: string
-  difficulty: number
 }
 
 interface GeminiResponse {
@@ -130,7 +123,6 @@ export async function POST(
       question: c.question,
       answer: c.answer,
       explanation: c.explanation,
-      difficulty: c.difficulty,
       status: 'draft',
       source_pdf_url: job.pdf_url,
       listing_slugs: [],
