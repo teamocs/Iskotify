@@ -15,10 +15,9 @@ interface CardRow {
   question: string
   answer: string
   explanation: string
-  difficulty: 1 | 2 | 3
 }
 
-const BLANK_CARD: CardRow = { question: '', answer: '', explanation: '', difficulty: 1 }
+const BLANK_CARD: CardRow = { question: '', answer: '', explanation: '' }
 
 export default function NewFlashcardsPage() {
   const router = useRouter()
@@ -47,7 +46,7 @@ export default function NewFlashcardsPage() {
       .catch((err) => console.error('[new] listings fetch error:', err))
   }, [])
 
-  function updateCard(index: number, field: keyof CardRow, value: string | number) {
+  function updateCard(index: number, field: keyof CardRow, value: string) {
     setCards((prev) =>
       prev.map((c, i) =>
         i === index ? { ...c, [field]: value } : c
@@ -86,7 +85,6 @@ export default function NewFlashcardsPage() {
             question: c.question,
             answer: c.answer,
             explanation: c.explanation,
-            difficulty: c.difficulty,
           })),
         }),
       })
@@ -215,23 +213,6 @@ export default function NewFlashcardsPage() {
                   placeholder="Optional explanation or context"
                   className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-none"
                 />
-              </div>
-
-              <div>
-                <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
-                  DIFFICULTY
-                </label>
-                <select
-                  value={card.difficulty}
-                  onChange={(e) =>
-                    updateCard(index, 'difficulty', Number(e.target.value) as 1 | 2 | 3)
-                  }
-                  className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm text-[#1d1d1f] focus:outline-none focus:border-[#800000] transition-colors bg-white"
-                >
-                  <option value={1}>1 — Easy</option>
-                  <option value={2}>2 — Medium</option>
-                  <option value={3}>3 — Hard</option>
-                </select>
               </div>
             </div>
           ))}

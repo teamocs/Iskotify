@@ -41,7 +41,7 @@ const VALID_GEMINI_JSON = JSON.stringify({
   subject: 'Science',
   topic: 'Cell Biology',
   cards: [
-    { question: 'Q1', answer: 'A1', explanation: '', difficulty: 1 },
+    { question: 'Q1', answer: 'A1', explanation: '' },
   ],
 })
 
@@ -169,7 +169,7 @@ describe('POST /api/flashcards/process/[id]', () => {
       error: null,
     })
     mockGenerateContent.mockResolvedValue({
-      response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }] }) },
+      response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
     })
 
     const POST = await importRoute()

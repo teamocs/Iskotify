@@ -56,7 +56,7 @@ describe('POST /api/flashcards/manual', () => {
         subject_name: 'Science',
         topic_name: 'Physics',
         listing_slugs: [],
-        cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }],
+        cards: [{ question: 'Q', answer: 'A', explanation: '' }],
       })
     )
     expect(res.status).toBe(400)
@@ -86,7 +86,7 @@ describe('POST /api/flashcards/manual', () => {
         subject_name: 'Science',
         topic_name: 'Physics',
         listing_slugs: ['dost-2026'],
-        cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }],
+        cards: [{ question: 'Q', answer: 'A', explanation: '' }],
       })
     )
     expect(res.status).toBe(200)
@@ -111,7 +111,7 @@ describe('POST /api/flashcards/manual', () => {
         subject_name: 'Science',
         topic_name: 'Physics',
         listing_slugs: ['dost-2026'],
-        cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }],
+        cards: [{ question: 'Q', answer: 'A', explanation: '' }],
       })
     )
     expect(mockInsertSelect).toHaveBeenCalledWith(
@@ -127,7 +127,7 @@ describe('POST /api/flashcards/manual', () => {
         subject_name: 'Science',
         topic_name: 'Physics',
         listing_slugs: ['x'],
-        cards: [{ question: 'Q', answer: 'A', explanation: '', difficulty: 1 }],
+        cards: [{ question: 'Q', answer: 'A', explanation: '' }],
       })
     )
     expect(res.status).toBe(500)
@@ -181,17 +181,6 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/no updatable fields/i)
-  })
-
-  it('returns 400 when difficulty is out of range', async () => {
-    const { PATCH } = await import('../../cards/[id]/route')
-    const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ difficulty: 5 }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'card-1' }) })
-    expect(res.status).toBe(400)
   })
 })
 

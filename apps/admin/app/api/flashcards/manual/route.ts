@@ -5,7 +5,6 @@ interface CardInput {
   question: string
   answer: string
   explanation?: string
-  difficulty: number
 }
 
 export async function POST(req: NextRequest) {
@@ -51,7 +50,6 @@ export async function POST(req: NextRequest) {
       question: c.question,
       answer: c.answer,
       explanation: c.explanation ?? '',
-      difficulty: c.difficulty,
       status: 'published',
       listing_slugs,
     }))
