@@ -52,11 +52,6 @@ CREATE TABLE IF NOT EXISTS user_progress (
   answered_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS user_progress_flashcard_id_idx ON user_progress (flashcard_id);
-CREATE TABLE IF NOT EXISTS schools_cache (
-  region TEXT PRIMARY KEY NOT NULL,
-  data TEXT NOT NULL,
-  cached_at INTEGER NOT NULL
-);
 CREATE TABLE IF NOT EXISTS saved_decks (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,

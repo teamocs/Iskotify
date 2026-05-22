@@ -153,4 +153,61 @@ describe('useSchoolSearch', () => {
       expect(result.current.results).toHaveLength(2)
     })
   })
+
+  it('ignores stale response when a newer query overwrites the active query', async () => {
+    // First fetch resolves slowly (after second fetch completes)
+    let resolveFirst!: (value: Response) => void
+    const firstFetch = new Promise<Response>(resolve => { resolveFirst = resolve })
+
+    jest.spyOn(global, 'fetch' as never)
+      .mockReturnValueOnce(firstFetch as any) // 'san' — slow
+      .mockResolvedValueOnce({               // 'santa' — fast
+        ok: true,
+        json: () => Promise.resolve({
+          suggestions: [{
+            placePrediction: {
+              structuredFormat: {
+                mainText: { text: 'Santa School' },
+                secondaryText: { text: 'Metro Manila, Philippines' },
+              },
+            },
+          }],
+        }),
+      } as Response)
+
+    const { result } = renderHook(() => useSchoolSearch())
+
+    // Fire 'san' — goes directly (no debounce since we call fetchResults manually via setQuery + timers)
+    act(() => { result.current.setQuery('san') })
+    act(() => { jest.advanceTimersByTime(500) }) // fire debounce for 'san'
+
+    // Before 'san' resolves, type 'santa' (new debounce)
+    act(() => { result.current.setQuery('santa') })
+    act(() => { jest.advanceTimersByTime(500) }) // fire debounce for 'santa'
+
+    // 'santa' resolves first
+    await waitFor(() => expect(result.current.results).toHaveLength(1))
+    expect(result.current.results[0]?.name).toBe('Santa School')
+
+    // Now resolve the slow 'san' fetch — its result must be discarded
+    await act(async () => {
+      resolveFirst({
+        ok: true,
+        json: () => Promise.resolve({
+          suggestions: [{
+            placePrediction: {
+              structuredFormat: {
+                mainText: { text: 'San Beda University' },
+                secondaryText: { text: 'Mendiola, Manila, Philippines' },
+              },
+            },
+          }],
+        }),
+      } as Response)
+    })
+
+    // Results must still reflect 'santa', not 'san'
+    expect(result.current.results[0]?.name).toBe('Santa School')
+    expect(result.current.results).toHaveLength(1)
+  })
 })
