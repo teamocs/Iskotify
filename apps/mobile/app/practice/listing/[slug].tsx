@@ -9,8 +9,9 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 import { useTheme } from '../../../theme/ThemeContext'
 
-const TIMER_SECS = 20
-const MAX_QUESTIONS = 20
+const TIMER_OPTIONS = [20, 30, 45, 60] as const
+const MIN_QUESTIONS = 100
+const QUESTION_STEP = 50
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
 const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
 const DIFF_LABEL: Record<number, string> = { 1: 'Easy', 2: 'Medium', 3: 'Hard' }
@@ -78,6 +79,48 @@ export default function ListingQuizScreen() {
     scoreSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     scoreNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     scoreLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
+    configCard: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 18,
+      padding: 14,
+      width: '100%',
+      gap: 14,
+      marginBottom: 20,
+    },
+    configRow: { gap: 6 },
+    configLabel: {
+      fontSize: typo.xs,
+      fontWeight: '700',
+      color: t.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      fontFamily: 'Lexend_600SemiBold',
+    },
+    configChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    configChip: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.surface2,
+    },
+    configChipOn: { borderColor: t.accent, backgroundColor: t.accentSurface },
+    configChipTxt: {
+      fontSize: typo.sm,
+      fontWeight: '600',
+      color: t.textTertiary,
+      fontFamily: 'Lexend_600SemiBold',
+    },
+    configChipTxtOn: { color: '#fca5a5' },
+    readyContent: {
+      alignItems: 'center' as const,
+      paddingHorizontal: 28,
+      paddingTop: 48,
+      paddingBottom: 40,
+    },
   }), [t, typo])
 
   const [listingTitle, setListingTitle] = useState('')
@@ -86,9 +129,14 @@ export default function ListingQuizScreen() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<UserAnswer[]>([])
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
-  const [timeLeft, setTimeLeft] = useState(TIMER_SECS)
+  const allQuestionsRef = useRef<QuizQuestion[]>([])
+  const timerSecsRef = useRef(20)
+  const cardCountRef = useRef(MIN_QUESTIONS)
+  const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
+  const [timerSecs, setTimerSecs] = useState(20)
+  const [timeLeft, setTimeLeft] = useState(20)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeLeftRef = useRef(TIMER_SECS)
+  const timeLeftRef = useRef(20)
   const advanceRef = useRef<(sel: number | null) => void>(() => {})
   const startTimeRef = useRef(0)
   const timerProgress = useRef(new Animated.Value(1)).current
@@ -133,12 +181,18 @@ export default function ListingQuizScreen() {
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
       }))
-      const parsed = buildQuizQuestions(rawCards).slice(0, MAX_QUESTIONS)
+      const parsed = buildQuizQuestions(rawCards)
+      allQuestionsRef.current = parsed
+      const initialCount = Math.min(MIN_QUESTIONS, parsed.length)
+      setCardCount(initialCount > 0 ? initialCount : parsed.length)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }
     void load()
   }, [db, slug, mode])
+
+  useEffect(() => { timerSecsRef.current = timerSecs }, [timerSecs])
+  useEffect(() => { cardCountRef.current = cardCount }, [cardCount])
 
   useEffect(() => () => { stopTimer() }, [])
 
@@ -148,11 +202,12 @@ export default function ListingQuizScreen() {
   }
 
   function startTimer() {
+    const secs = timerSecsRef.current
     stopTimer()
-    timeLeftRef.current = TIMER_SECS
-    setTimeLeft(TIMER_SECS)
+    timeLeftRef.current = secs
+    setTimeLeft(secs)
     timerProgress.setValue(1)
-    timerAnimRef.current = Animated.timing(timerProgress, { toValue: 0, duration: TIMER_SECS * 1000, useNativeDriver: false })
+    timerAnimRef.current = Animated.timing(timerProgress, { toValue: 0, duration: secs * 1000, useNativeDriver: false })
     timerAnimRef.current.start()
     timerRef.current = setInterval(() => {
       timeLeftRef.current -= 1
@@ -204,8 +259,11 @@ export default function ListingQuizScreen() {
   }
 
   function startQuiz() {
+    const sliced = shuffle([...allQuestionsRef.current]).slice(0, cardCountRef.current)
     startTimeRef.current = Date.now()
-    setCurrentIdx(0); setAnswers([]); setSelectedIdx(null); setPhase('quiz')
+    setCurrentIdx(0); setAnswers([]); setSelectedIdx(null)
+    setQuestions(sliced)
+    setPhase('quiz')
     setTimeout(() => startTimer(), 50)
   }
 
@@ -215,22 +273,65 @@ export default function ListingQuizScreen() {
     <SafeAreaView style={s.root}><Text style={s.loadingTxt}>Loading…</Text></SafeAreaView>
   )
 
-  if (phase === 'ready') return (
-    <SafeAreaView style={s.root}>
-      <View style={s.readyWrap}>
-        <View style={s.readyIcon}><Text style={{ fontSize: 36 }}>{mode === 'weak' ? '⚠️' : '⚡'}</Text></View>
-        <Text style={s.readyTitle}>{modeLabel}</Text>
-        <Text style={s.readySub}>{listingTitle}</Text>
-        <Text style={s.readySub2}>{questions.length} questions · {TIMER_SECS}s each</Text>
-        <TouchableOpacity style={s.startBtn} onPress={startQuiz}>
-          <Text style={s.startBtnTxt}>Start Quiz →</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}>
-          <Text style={s.ghostBtnTxt}>← Back</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  )
+  if (phase === 'ready') {
+    const cardOpts: number[] = []
+    for (let n = MIN_QUESTIONS; n <= questions.length; n += QUESTION_STEP) cardOpts.push(n)
+    if (cardOpts.length === 0 && questions.length > 0) cardOpts.push(questions.length)
+
+    return (
+      <SafeAreaView style={s.root}>
+        <ScrollView
+          contentContainerStyle={s.readyContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={s.readyIcon}><Text style={{ fontSize: 36 }}>{mode === 'weak' ? '⚠️' : '⚡'}</Text></View>
+          <Text style={s.readyTitle}>{modeLabel}</Text>
+          <Text style={s.readySub}>{listingTitle}</Text>
+          <Text style={s.readySub2}>{questions.length} cards available</Text>
+
+          <View style={s.configCard}>
+            <View style={s.configRow}>
+              <Text style={s.configLabel}>Cards</Text>
+              <View style={s.configChipsRow}>
+                {cardOpts.map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[s.configChip, cardCount === n && s.configChipOn]}
+                    onPress={() => setCardCount(n)}
+                  >
+                    <Text style={[s.configChipTxt, cardCount === n && s.configChipTxtOn]}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={s.configRow}>
+              <Text style={s.configLabel}>Time per card</Text>
+              <View style={s.configChipsRow}>
+                {TIMER_OPTIONS.map(sec => (
+                  <TouchableOpacity
+                    key={sec}
+                    style={[s.configChip, timerSecs === sec && s.configChipOn]}
+                    onPress={() => setTimerSecs(sec)}
+                  >
+                    <Text style={[s.configChipTxt, timerSecs === sec && s.configChipTxtOn]}>{sec}s</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity style={s.startBtn} onPress={startQuiz}>
+            <Text style={s.startBtnTxt}>Start Quiz →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}>
+            <Text style={s.ghostBtnTxt}>← Back</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    )
+  }
 
   if (phase === 'results') {
     const correct = answers.filter(a => a.correct).length
