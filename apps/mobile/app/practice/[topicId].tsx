@@ -11,8 +11,9 @@ import { useTheme } from '../../theme/ThemeContext'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TIMER_SECS = 20
-const MAX_QUESTIONS = 10
+const TIMER_OPTIONS = [20, 30, 45, 60] as const
+const MIN_QUESTIONS = 20
+const QUESTION_STEP = 10
 const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const
 
 const DIFF_COLOR: Record<number, string> = { 1: '#4ade80', 2: '#fbbf24', 3: '#f87171' }
@@ -51,7 +52,11 @@ export default function QuizScreen() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<UserAnswer[]>([])
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
-  const [timeLeft, setTimeLeft] = useState(TIMER_SECS)
+  const [timeLeft, setTimeLeft] = useState(20)
+  const allQuestionsRef = useRef<QuizQuestion[]>([])
+  const timerSecsRef = useRef(20)
+  const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
+  const [timerSecs, setTimerSecs] = useState(20)
 
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
@@ -139,13 +144,49 @@ export default function QuizScreen() {
     explainBox: { backgroundColor: t.surfaceSubtle, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: t.border },
     explainLabel: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
     explainTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
+    configCard: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 18,
+      padding: 14,
+      width: '100%',
+      gap: 14,
+      marginBottom: 20,
+    },
+    configRow: { gap: 6 },
+    configLabel: {
+      fontSize: typo.xs,
+      fontWeight: '700',
+      color: t.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      fontFamily: 'Lexend_600SemiBold',
+    },
+    configChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    configChip: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.surface2,
+    },
+    configChipOn: { borderColor: t.accent, backgroundColor: t.accentSurface },
+    configChipTxt: {
+      fontSize: typo.sm,
+      fontWeight: '600',
+      color: t.textTertiary,
+      fontFamily: 'Lexend_600SemiBold',
+    },
+    configChipTxtOn: { color: '#fca5a5' },
   }), [t, typo])
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeLeftRef = useRef(TIMER_SECS)
+  const timeLeftRef = useRef(20)
   const advanceRef = useRef<(sel: number | null) => void>(() => {})
 
-  // Animated timer bar (1 → 0 over TIMER_SECS seconds)
+  // Animated timer bar (1 → 0 over timerSecs seconds)
   const timerProgress = useRef(new Animated.Value(1)).current
   const timerAnimRef = useRef<Animated.CompositeAnimation | null>(null)
 
@@ -171,7 +212,10 @@ export default function QuizScreen() {
         options: JSON.parse(row.options) as string[],
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
       }))
-      const parsed = buildQuizQuestions(shuffle(rawCards)).slice(0, MAX_QUESTIONS)
+      const parsed = buildQuizQuestions(shuffle(rawCards))
+      allQuestionsRef.current = parsed
+      const initialCount = Math.min(MIN_QUESTIONS, parsed.length)
+      setCardCount(initialCount > 0 ? initialCount : parsed.length)
       setQuestions(parsed)
       setPhase(parsed.length === 0 ? 'results' : 'ready')
     }
@@ -181,6 +225,9 @@ export default function QuizScreen() {
   // Cleanup on unmount
   useEffect(() => () => { stopTimer() }, [])
 
+  // Sync timerSecs state → ref so startTimer can read it without stale closure
+  useEffect(() => { timerSecsRef.current = timerSecs }, [timerSecs])
+
   // ── Timer ───────────────────────────────────────────────────────────────────
 
   function stopTimer() {
@@ -189,14 +236,15 @@ export default function QuizScreen() {
   }
 
   function startTimer() {
+    const secs = timerSecsRef.current
     stopTimer()
-    timeLeftRef.current = TIMER_SECS
-    setTimeLeft(TIMER_SECS)
+    timeLeftRef.current = secs
+    setTimeLeft(secs)
 
     timerProgress.setValue(1)
     timerAnimRef.current = Animated.timing(timerProgress, {
       toValue: 0,
-      duration: TIMER_SECS * 1000,
+      duration: secs * 1000,
       useNativeDriver: false,
     })
     timerAnimRef.current.start()
@@ -206,7 +254,7 @@ export default function QuizScreen() {
       setTimeLeft(timeLeftRef.current)
       if (timeLeftRef.current <= 0) {
         stopTimer()
-        advanceRef.current(null) // timeout → wrong
+        advanceRef.current(null)
       }
     }, 1000)
   }
@@ -259,20 +307,19 @@ export default function QuizScreen() {
     setTimeout(() => advance(idx), 650)
   }
 
-  function startQuiz(qs?: QuizQuestion[]) {
+  function startQuiz() {
+    const sliced = shuffle([...allQuestionsRef.current]).slice(0, cardCount)
     startTimeRef.current = Date.now()
-    const qList = qs ?? questions
     setCurrentIdx(0)
     setAnswers([])
     setSelectedIdx(null)
+    setQuestions(sliced)
     setPhase('quiz')
-    // Start timer after next frame
     setTimeout(() => startTimer(), 50)
-    if (qs) setQuestions(qs)
   }
 
   function handlePlayAgain() {
-    startQuiz(shuffle(questions))
+    startQuiz()
   }
 
   // ── Phase: loading ──────────────────────────────────────────────────────────
@@ -288,12 +335,58 @@ export default function QuizScreen() {
   // ── Phase: ready ────────────────────────────────────────────────────────────
 
   if (phase === 'ready') {
+    const cardOpts: number[] = []
+    for (let n = MIN_QUESTIONS; n <= questions.length; n += QUESTION_STEP) cardOpts.push(n)
+    if (cardOpts.length === 0 && questions.length > 0) cardOpts.push(questions.length)
+
     return (
       <SafeAreaView style={s.root}>
-        <View style={s.readyWrap}>
+        <ScrollView
+          contentContainerStyle={{
+            alignItems: 'center',
+            paddingHorizontal: 28,
+            paddingTop: 48,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={s.readyIcon}><Text style={{ fontSize: 40 }}>🎯</Text></View>
           <Text style={s.readyTitle}>{topicName}</Text>
-          <Text style={s.readySub}>{questions.length} questions · {TIMER_SECS}s per question</Text>
+          <Text style={s.readySub}>{questions.length} cards available</Text>
+
+          <View style={s.configCard}>
+            <View style={s.configRow}>
+              <Text style={s.configLabel}>Cards</Text>
+              <View style={s.configChipsRow}>
+                {cardOpts.map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[s.configChip, cardCount === n && s.configChipOn]}
+                    onPress={() => setCardCount(n)}
+                  >
+                    <Text style={[s.configChipTxt, cardCount === n && s.configChipTxtOn]}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={s.configRow}>
+              <Text style={s.configLabel}>Time per card</Text>
+              <View style={s.configChipsRow}>
+                {TIMER_OPTIONS.map(sec => (
+                  <TouchableOpacity
+                    key={sec}
+                    style={[s.configChip, timerSecs === sec && s.configChipOn]}
+                    onPress={() => setTimerSecs(sec)}
+                  >
+                    <Text style={[s.configChipTxt, timerSecs === sec && s.configChipTxtOn]}>{sec}s</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
           <View style={s.rulesCard}>
             <Text style={s.ruleItem}>⏱  Timer counts down each question</Text>
             <Text style={s.ruleItem}>🔤  Tap A / B / C / D to answer</Text>
@@ -305,7 +398,7 @@ export default function QuizScreen() {
           <TouchableOpacity style={s.ghostBtn} onPress={() => router.back()}>
             <Text style={s.ghostBtnTxt}>← Back</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     )
   }
