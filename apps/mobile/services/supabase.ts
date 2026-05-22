@@ -44,6 +44,7 @@ const storage = {
 
 export const supabase = createClient(url, anonKey, {
   auth: {
+    flowType: 'pkce',
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,

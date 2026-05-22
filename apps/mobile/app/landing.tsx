@@ -9,7 +9,6 @@ import { supabase } from '../services/supabase'
 import { pullUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
-WebBrowser.maybeCompleteAuthSession()
 
 export default function LandingScreen() {
   const db = useDb()
@@ -36,39 +35,46 @@ export default function LandingScreen() {
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
 
+      // app/auth/callback.tsx is the PRIMARY handler (handles when Android routes
+      // the deep link through Expo Router). This block is a FALLBACK for when
+      // openAuthSessionAsync intercepts the redirect before Expo Router does.
       if (result.type === 'success') {
-        const parsed = new URL(result.url)
-        const fragment = new URLSearchParams(parsed.hash.slice(1))
-        const accessToken = fragment.get('access_token')
-        const refreshToken = fragment.get('refresh_token')
-
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-          const { data: { user } } = await supabase.auth.getUser()
-
-          if (user) {
-            await db.insert(userSettings)
-              .values({
-                id: 1,
-                googleId: user.id,
-                email: user.email ?? '',
-                fullName: user.user_metadata?.full_name ?? '',
-                selectedListingSlug: '',
-                lastSyncedAt: 0,
-              })
-              .onConflictDoUpdate({
-                target: userSettings.id,
-                set: {
-                  googleId: user.id,
-                  email: user.email ?? '',
-                  fullName: user.user_metadata?.full_name ?? '',
-                },
-              })
-            // Restore backed-up user data from Supabase
-            await pullUserData(db)
+        try {
+          const parsed = new URL(result.url)
+          const code = parsed.searchParams.get('code')
+          if (code) {
+            const { error } = await supabase.auth.exchangeCodeForSession(code)
+            // If error, callback.tsx may have already exchanged this code — check session
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!error || session) {
+              const { data: { user } } = await supabase.auth.getUser()
+              if (user) {
+                await db.insert(userSettings)
+                  .values({
+                    id: 1,
+                    googleId: user.id,
+                    email: user.email ?? '',
+                    fullName: user.user_metadata?.full_name ?? '',
+                    selectedListingSlug: '',
+                    lastSyncedAt: 0,
+                  })
+                  .onConflictDoUpdate({
+                    target: userSettings.id,
+                    set: {
+                      googleId: user.id,
+                      email: user.email ?? '',
+                      fullName: user.user_metadata?.full_name ?? '',
+                    },
+                  })
+                await pullUserData(db)
+              }
+              router.replace('/onboarding')
+            }
           }
+          // No code in URL → app/auth/callback.tsx already handled the deep link
+        } catch {
+          // callback.tsx is handling navigation; swallow errors here
         }
-        router.replace('/onboarding')
       }
     } catch (e) {
       console.error('[landing] google sign-in error:', e)
