@@ -2,7 +2,7 @@
 
 ## Overview
 
-Enhance the flashcard system in two ways: (1) remove the `difficulty` field entirely from all layers, and (2) integrate Gemma 3n (via `react-native-llama`) to regenerate MCQ distractors and explanations on-device using same-topic cards as context. Enhancement runs silently in the background after sync. Admin content is never overwritten — AI results live in separate local-only SQLite columns.
+Enhance the flashcard system in two ways: (1) remove the `difficulty` field entirely from all layers, and (2) integrate Qwen 2.5 1.5B Instruct (via `react-native-llama`) to regenerate MCQ distractors and explanations on-device using same-topic cards as context. Enhancement runs silently in the background after sync. Admin content is never overwritten — AI results live in separate local-only SQLite columns.
 
 ---
 
@@ -36,19 +36,19 @@ Cards arriving from Supabase always have `aiEnhancedAt = null` on first insert. 
 ## 3. Model Download Flow
 
 ### Trigger
-When the user navigates to the Practice tab and Gemma is not yet on-device (`modelExists() === false`).
+When the user navigates to the Practice tab and the Qwen model is not yet on-device (`modelExists() === false`).
 
 ### RAM Check
-Before showing any prompt, check available RAM. If device has < 4 GB, the download banner never appears and the enhancement pipeline is silently skipped — the app falls back to admin-authored content.
+Before showing any prompt, check available RAM. If device has < 2 GB, the download banner never appears and the enhancement pipeline is silently skipped — the app falls back to admin-authored content.
 
 ### UI
 A non-blocking banner at the top of the Practice screen (not a modal, does not block navigation):
 
-> *"Enable AI-enhanced practice — Download Gemma 3n (1.5 GB)"*
+> *"Enable AI-enhanced practice — Download Qwen 2.5 1.5B Instruct (~1 GB)"*
 
 Tapping the banner opens a bottom sheet with:
-- Model name and size (1.5 GB)
-- RAM requirement note (≥ 4 GB)
+- Model name and size (~1 GB, GGUF Q4_K_M quantization)
+- RAM requirement note (≥ 2 GB)
 - **Download** and **Not now** buttons
 
 ### Download Behavior
@@ -74,7 +74,7 @@ The enhancement job runs when:
 For each card where `aiEnhancedAt` is null:
 
 1. Load up to 10 Q&A pairs from the same topic (excluding the card being enhanced) as context
-2. Run Gemma 3n inference with the prompt below
+2. Run Qwen 2.5 1.5B Instruct inference with the prompt below
 3. Parse JSON response
 4. Shuffle the 4 options (correct + 3 distractors), tracking the new correct index
 5. Write `aiOptions`, `aiCorrectIndex`, `aiExplanation`, `aiEnhancedAt = Date.now()` to local SQLite
@@ -105,7 +105,7 @@ Respond only with valid JSON:
 
 ### Robustness
 - Job runs one card at a time at low CPU priority
-- If Gemma returns malformed JSON or an error, the card is skipped (retried on next sync)
+- If the model returns malformed JSON or an error, the card is skipped (retried on next sync)
 - Job pauses if the app enters a low-memory state
 - Already-enhanced cards (`aiEnhancedAt` not null) are skipped unless `remoteUpdatedAt` changed on last sync
 
@@ -135,7 +135,7 @@ Updated priority chain — no changes to the three quiz screens themselves:
 | `apps/mobile/db/migrations/` | New Drizzle migration for schema change |
 | `apps/mobile/services/sync.ts` | Remove `difficulty` from SELECT query and upsert mapping; reset `aiEnhancedAt = null` when `remoteUpdatedAt` changed |
 | `apps/mobile/utils/mcDistractors.ts` | Update priority chain to prefer AI fields |
-| `apps/mobile/services/llm.ts` (new) | `react-native-llama` wrapper: model existence check, RAM check, inference, JSON parsing |
+| `apps/mobile/services/llm.ts` (new) | `react-native-llama` wrapper: Qwen 2.5 1.5B Instruct GGUF, model existence check, RAM check, inference, JSON parsing |
 | `apps/mobile/hooks/useAiEnhancement.ts` (new) | Background enhancement job: trigger logic, card iteration, SQLite writes |
 | `apps/mobile/hooks/useModelDownload.ts` (new) | Download state, progress, completion notification via `expo-notifications` |
 | `apps/mobile/app/(tabs)/practice.tsx` | Add model download banner + progress bar |
