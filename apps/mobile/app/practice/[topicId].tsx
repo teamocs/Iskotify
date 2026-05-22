@@ -55,6 +55,7 @@ export default function QuizScreen() {
   const [timeLeft, setTimeLeft] = useState(20)
   const allQuestionsRef = useRef<QuizQuestion[]>([])
   const timerSecsRef = useRef(20)
+  const cardCountRef = useRef(MIN_QUESTIONS)
   const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
   const [timerSecs, setTimerSecs] = useState(20)
 
@@ -65,7 +66,6 @@ export default function QuizScreen() {
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
-    readyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
     readyIcon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
     readyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
     readySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 24, textAlign: 'center' },
@@ -180,6 +180,12 @@ export default function QuizScreen() {
       fontFamily: 'Lexend_600SemiBold',
     },
     configChipTxtOn: { color: '#fca5a5' },
+    readyContent: {
+      alignItems: 'center' as const,
+      paddingHorizontal: 28,
+      paddingTop: 48,
+      paddingBottom: 40,
+    },
   }), [t, typo])
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -227,6 +233,8 @@ export default function QuizScreen() {
 
   // Sync timerSecs state → ref so startTimer can read it without stale closure
   useEffect(() => { timerSecsRef.current = timerSecs }, [timerSecs])
+  // Sync cardCount state → ref so startQuiz can read it without stale closure
+  useEffect(() => { cardCountRef.current = cardCount }, [cardCount])
 
   // ── Timer ───────────────────────────────────────────────────────────────────
 
@@ -308,7 +316,7 @@ export default function QuizScreen() {
   }
 
   function startQuiz() {
-    const sliced = shuffle([...allQuestionsRef.current]).slice(0, cardCount)
+    const sliced = shuffle([...allQuestionsRef.current]).slice(0, cardCountRef.current)
     startTimeRef.current = Date.now()
     setCurrentIdx(0)
     setAnswers([])
@@ -342,12 +350,7 @@ export default function QuizScreen() {
     return (
       <SafeAreaView style={s.root}>
         <ScrollView
-          contentContainerStyle={{
-            alignItems: 'center',
-            paddingHorizontal: 28,
-            paddingTop: 48,
-            paddingBottom: 40,
-          }}
+          contentContainerStyle={s.readyContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
