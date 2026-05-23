@@ -97,64 +97,6 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
   const generatingPromiseRef = useRef<Promise<void> | null>(null)
   const pendingRefillRef = useRef<Set<CoachCategory>>(new Set())
 
-  // ── Initial load + staggered generation ─────────────────────────────────────
-  useEffect(() => {
-    isMountedRef.current = true
-    let cancelled = false
-
-    void (async () => {
-      try {
-        const ctx = await buildCoachContextFromStats(db, stats)
-        const hash = computeContextHash(ctx)
-        ctxRef.current = ctx
-        hashRef.current = hash
-
-        await pruneStalePhrases(db, hash)
-        await gcOldConsumed(db, CONSUMED_GC_THRESHOLD_MS)
-        const rows = await loadFreshPhrases(db, hash)
-
-        if (!cancelled && isMountedRef.current) {
-          setState(s => ({ ...s, queue: rows, isReady: true }))
-        }
-
-        if (!(await modelExists())) return
-        scheduleBatchGeneration(ctx, hash)
-      } catch (e) {
-        console.warn('[AiCoachProvider] init failed:', e)
-        if (!cancelled && isMountedRef.current) {
-          setState(s => ({ ...s, isReady: true }))
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      isMountedRef.current = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db])
-
-  // ── AppState: release context after background idle ────────────────────────
-  useEffect(() => {
-    let idleTimer: ReturnType<typeof setTimeout> | null = null
-
-    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'background' || next === 'inactive') {
-        if (idleTimer) clearTimeout(idleTimer)
-        idleTimer = setTimeout(() => {
-          void releaseContextIfIdle()
-        }, IDLE_RELEASE_CHECK_MS)
-      } else if (next === 'active') {
-        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
-      }
-    })
-
-    return () => {
-      sub.remove()
-      if (idleTimer) clearTimeout(idleTimer)
-    }
-  }, [])
-
   // ── Background generation scheduler ────────────────────────────────────────
   const generateOne = useCallback(async (
     categoryIdx: number,
@@ -202,10 +144,67 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
     return next
   }, [db])
 
-  const scheduleBatchGeneration = useCallback((ctx: CoachContext, hash: string) => {
-    for (const cat of COACH_CATEGORIES) pendingRefillRef.current.add(cat)
-    void generateOne(0, ctx, hash)
-  }, [generateOne])
+  // ── Initial load + staggered generation, re-runs when context hash changes ─
+  useEffect(() => {
+    isMountedRef.current = true
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const ctx = await buildCoachContextFromStats(db, stats)
+        const hash = computeContextHash(ctx)
+
+        // If hash hasn't changed since last run, nothing to do
+        if (hash === hashRef.current) return
+
+        ctxRef.current = ctx
+        hashRef.current = hash
+
+        await pruneStalePhrases(db, hash)
+        await gcOldConsumed(db, CONSUMED_GC_THRESHOLD_MS)
+        const rows = await loadFreshPhrases(db, hash)
+
+        if (!cancelled && isMountedRef.current) {
+          setState(s => ({ ...s, queue: rows, isReady: true }))
+        }
+
+        if (!(await modelExists())) return
+        for (const cat of COACH_CATEGORIES) pendingRefillRef.current.add(cat)
+        void generateOne(0, ctx, hash)
+      } catch (e) {
+        console.warn('[AiCoachProvider] init failed:', e)
+        if (!cancelled && isMountedRef.current) {
+          setState(s => ({ ...s, isReady: true }))
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      isMountedRef.current = false
+    }
+  }, [db, stats, generateOne])
+
+  // ── AppState: release context after background idle ────────────────────────
+  useEffect(() => {
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'background' || next === 'inactive') {
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          void releaseContextIfIdle()
+        }, IDLE_RELEASE_CHECK_MS)
+      } else if (next === 'active') {
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
+      }
+    })
+
+    return () => {
+      sub.remove()
+      if (idleTimer) clearTimeout(idleTimer)
+    }
+  }, [])
 
   // ── Refill a single category after consumption ─────────────────────────────
   const refillCategory = useCallback((category: CoachCategory) => {
@@ -235,7 +234,8 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
     }
 
     setState(s => ({ ...s, ringIndex: currentIdx + 1 }))
-    return { id: null, text: pickTemplate(stats, currentIdx) }
+    // Use the NEW (post-increment) index so first tap doesn't show the same Layer-1 phrase
+    return { id: null, text: pickTemplate(stats, currentIdx + 1) }
   }, [state.queue, db, stats, refillCategory])
 
   const value = useMemo<CoachContextValue>(() => ({

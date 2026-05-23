@@ -279,7 +279,7 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { listing, daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
+  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
   const importantDays = new Set(importantDayIndices)
   const practiceDays  = new Set(practiceDayIndices)
@@ -307,7 +307,6 @@ export default function HomeScreen() {
     kuyaBadge: { marginLeft: 'auto', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
     kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 18, fontFamily: 'Lexend_400Regular' },
-    kuyaLottie: { width: 80, height: 80 },
     statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
     statCard: { flex: 1, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, alignItems: 'center' },
     statVal: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
