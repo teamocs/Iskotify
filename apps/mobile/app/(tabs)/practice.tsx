@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TouchableOpacity, FlatList,
   Modal, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -258,10 +259,16 @@ function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: bo
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug } = usePracticeData()
+  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await refresh() } finally { setRefreshing(false) }
+  }, [refresh])
 
   const { theme: t, typo } = useTheme()
   const styles = useMemo(() => ({
@@ -420,6 +427,15 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <TopicCard row={item} s={s} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+            progressBackgroundColor={t.surface}
+          />
+        }
         ListEmptyComponent={<Text style={s.empty}>No topics found. Try syncing again.</Text>}
         ListHeaderComponent={
           <>
