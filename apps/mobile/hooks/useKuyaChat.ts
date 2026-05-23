@@ -122,13 +122,16 @@ export function useKuyaChat(): UseKuyaChat {
             scheduleFlush()
           }, controller.signal)
 
-          // Final flush
+          // Skip finalization if the user aborted or moved on to another send
+          if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
+          if (!isMountedRef.current) return
+
+          // Final flush — safe to touch shared refs only after the staleness guard
           if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
           flushTimerRef.current = null
           const finalChunk = bufferRef.current
           bufferRef.current = ''
 
-          if (!isMountedRef.current) return
           setMessages(prev => prev.map(m => {
             if (m.id !== assistantId) return m
             const finalText = (m.text + finalChunk).trim()
@@ -143,6 +146,8 @@ export function useKuyaChat(): UseKuyaChat {
           }))
           setIsStreaming(false)
         } catch (err) {
+          // Skip error UI if the user aborted (intentional cancel — not a real error) or moved on
+          if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
           console.warn('[useKuyaChat] streamChatInference failed:', err)
           setMessages(prev => prev.map(m =>

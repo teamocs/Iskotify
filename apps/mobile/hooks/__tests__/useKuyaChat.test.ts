@@ -95,4 +95,102 @@ describe('useKuyaChat', () => {
     expect(() => result.current.abort()).not.toThrow()
     expect(result.current.isStreaming).toBe(false)
   })
+
+  it('finalizes the assistant message text after stream completes', async () => {
+    mockStream.mockImplementation(async (_prompt, onToken) => {
+      onToken('Hello ')
+      onToken('world!')
+      return 'Hello world!'
+    })
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('hi')
+      // wait for InteractionManager + setTimeout flushes
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Hello world!')
+    expect(assistantMsg?.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('shows the empty-output fallback when stream resolves with no tokens', async () => {
+    mockStream.mockImplementation(async () => '')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('hi')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Hmm, hindi ko ma-process yan. Try mong i-rephrase!')
+    expect(assistantMsg?.isStreaming).toBe(false)
+  })
+
+  it('shows the inline error message when streamChatInference throws', async () => {
+    mockStream.mockRejectedValue(new Error('native crash'))
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('hi')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.error).toBe("Kuya Baw can't answer right now. Try again sa moment.")
+    expect(assistantMsg?.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('does NOT clobber a fresh send when a previously-aborted stream resolves late', async () => {
+    // First call: hang until manually resolved
+    let resolveFirst: (() => void) | undefined
+    mockStream.mockImplementationOnce(async () => {
+      await new Promise<void>(r => { resolveFirst = r })
+      return 'late response'
+    })
+    // Second call: resolves quickly with real tokens
+    mockStream.mockImplementationOnce(async (_p, onToken) => {
+      onToken('Quick reply')
+      return 'Quick reply'
+    })
+
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+
+    // Send #1 → starts streaming
+    await act(async () => {
+      result.current.send('first')
+      await new Promise(r => setTimeout(r, 10))
+    })
+    expect(result.current.isStreaming).toBe(true)
+
+    // User aborts #1
+    act(() => { result.current.abort() })
+    expect(result.current.isStreaming).toBe(false)
+
+    // User immediately sends #2
+    await act(async () => {
+      result.current.send('second')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    // #2 should have populated cleanly
+    const userMsgs = result.current.messages.filter(m => m.role === 'user')
+    expect(userMsgs.length).toBe(2)
+    expect(userMsgs[1]!.text).toBe('second')
+
+    const assistant2 = result.current.messages.filter(m => m.role === 'assistant')[1]
+    expect(assistant2?.text).toBe('Quick reply')
+    expect(assistant2?.isStreaming).toBe(false)
+
+    // Now #1 finally resolves — must NOT corrupt #2's bubble or isStreaming state
+    if (resolveFirst) await act(async () => { resolveFirst!(); await new Promise(r => setTimeout(r, 50)) })
+
+    // After late #1 resolution, #2 is unchanged
+    const finalAssistant2 = result.current.messages.filter(m => m.role === 'assistant')[1]
+    expect(finalAssistant2?.text).toBe('Quick reply')
+    expect(finalAssistant2?.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+  })
 })

@@ -222,6 +222,7 @@ export async function streamChatInference(
           n_predict: 250,
           temperature: 0.5,
           top_p: 0.9,
+          repeat_penalty: 1.1,
           stop: ['<|im_end|>', '</s>', '<|im_start|>'],
         },
         (tokenData: { token?: string }) => {
