@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  FlatList, Image, KeyboardAvoidingView, Modal,
-  Platform, Pressable, StyleSheet, Text, TextInput,
+  FlatList, Image, Modal,
+  Pressable, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 import { useKuyaChat, type ChatMessage } from '../hooks/useKuyaChat'
@@ -205,8 +206,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
     <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={s.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        behavior="padding"
       >
       {/* Header */}
       <View style={s.header}>
