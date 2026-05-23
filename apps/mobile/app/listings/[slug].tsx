@@ -10,6 +10,7 @@ import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 
 interface FullListing {
   id: string
@@ -265,13 +266,10 @@ export default function ListingDetailScreen() {
         {/* Requirements */}
         {requirements.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Requirements</Text>
-            {requirements.map((req, i) => (
-              <View key={i} style={s.reqRow}>
-                <Text style={s.reqBullet}>•</Text>
-                <Text style={s.reqText}>{req}</Text>
-              </View>
-            ))}
+            <RequirementsChecklist
+              listingSlug={slug}
+              requirements={requirements}
+            />
           </View>
         ) : null}
 
