@@ -71,3 +71,40 @@ describe('runEnhancement', () => {
     await expect(runEnhancement(makeMockDb([], [], []))).resolves.not.toThrow()
   })
 })
+
+describe('shuffleWithCorrect bug regression', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('skips card when all 3 distractors equal the correct answer', async () => {
+    mockModelExists.mockResolvedValue(true)
+    mockRunInference.mockResolvedValue({
+      wrong_option_1: 'Paris',
+      wrong_option_2: 'Paris',
+      wrong_option_3: 'Paris',
+      explanation: 'x',
+    })
+    const cards = [{ id: 'c1', topicId: 't1', question: 'Capital of France?', answer: 'Paris' }]
+    const updateSet = jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) })
+    const db: any = {
+      select: jest.fn().mockImplementation(() => ({
+        from: jest.fn().mockImplementation((table: any) => {
+          const name = table?._?.name
+          return {
+            where: jest.fn().mockImplementation(() => {
+              const limitData =
+                name === 'topics' ? [{ subjectId: 's1', topicName: 'Geography' }] :
+                name === 'subjects' ? [{ name: 'Geography' }] : cards
+              const thenable: any = Promise.resolve(cards)
+              thenable.limit = jest.fn().mockResolvedValue(limitData)
+              return thenable
+            }),
+          }
+        }),
+      })),
+      update: jest.fn().mockReturnValue({ set: updateSet }),
+    }
+    await runEnhancement(db)
+    // The card should have been skipped (model echoed the answer 3 times)
+    expect(updateSet).not.toHaveBeenCalled()
+  })
+})
