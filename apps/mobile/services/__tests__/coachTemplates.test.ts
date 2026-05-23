@@ -1,0 +1,86 @@
+import { pickTemplate } from '../coachTemplates'
+import type { HomeStats } from '../../hooks/useHomeStats'
+
+const EMPTY: HomeStats = {
+  listing: null,
+  daysLeft: null,
+  todayAccuracy: null,
+  streakDays: 0,
+  weakTopics: [],
+  firstTopicId: null,
+  fullName: '',
+  importantDayIndices: [],
+  practiceDayIndices: [],
+  focusedListings: [],
+}
+
+const FULL: HomeStats = {
+  listing: { title: 'UPCAT 2026', examDate: Date.now() + 30 * 86400000 },
+  daysLeft: 30,
+  todayAccuracy: 75,
+  streakDays: 5,
+  weakTopics: [
+    { topicId: 't1', topicName: 'Algebra', accuracy: 32 },
+    { topicId: 't2', topicName: 'Biology', accuracy: 45 },
+  ],
+  firstTopicId: 't1',
+  fullName: 'Juan',
+  importantDayIndices: [],
+  practiceDayIndices: [],
+  focusedListings: [],
+}
+
+describe('pickTemplate', () => {
+  it('returns a non-empty string for empty stats', () => {
+    const phrase = pickTemplate(EMPTY, 0)
+    expect(typeof phrase).toBe('string')
+    expect(phrase.length).toBeGreaterThan(0)
+  })
+
+  it('returns a non-empty string for full stats', () => {
+    const phrase = pickTemplate(FULL, 0)
+    expect(typeof phrase).toBe('string')
+    expect(phrase.length).toBeGreaterThan(0)
+  })
+
+  it('rotates deterministically — same index returns same phrase', () => {
+    const a = pickTemplate(FULL, 3)
+    const b = pickTemplate(FULL, 3)
+    expect(a).toBe(b)
+  })
+
+  it('produces different phrases at different indices (over the ring size)', () => {
+    const phrases = new Set<string>()
+    for (let i = 0; i < 15; i++) phrases.add(pickTemplate(FULL, i))
+    expect(phrases.size).toBeGreaterThanOrEqual(10)
+  })
+
+  it('wraps around — index beyond ring length returns same as index % ringSize', () => {
+    const a = pickTemplate(FULL, 2)
+    const b = pickTemplate(FULL, 17)  // 17 % 15 = 2
+    expect(a).toBe(b)
+  })
+
+  it('never throws for any combination of missing data', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(() => pickTemplate(EMPTY, i)).not.toThrow()
+      expect(() => pickTemplate(FULL, i)).not.toThrow()
+    }
+  })
+
+  it('interpolates listing.title when stats include a listing', () => {
+    let found = false
+    for (let i = 0; i < 15; i++) {
+      if (pickTemplate(FULL, i).includes('UPCAT 2026')) { found = true; break }
+    }
+    expect(found).toBe(true)
+  })
+
+  it('interpolates weakest topic name when stats include weak topics', () => {
+    let found = false
+    for (let i = 0; i < 15; i++) {
+      if (pickTemplate(FULL, i).includes('Algebra')) { found = true; break }
+    }
+    expect(found).toBe(true)
+  })
+})
