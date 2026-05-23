@@ -40,24 +40,10 @@ jest.mock('../../../hooks/useSavedDecks', () => ({
   }),
 }))
 
-// Stub AI-model-download hooks so we don't pull in expo-notifications /
+// Stub AiModelBanner so we don't pull in expo-notifications /
 // react-native-background-downloader native modules during tests.
-jest.mock('../../../hooks/useDb', () => ({
-  useDb: () => ({}),
-}))
-
-jest.mock('../../../hooks/useModelDownload', () => ({
-  useModelDownload: () => ({
-    modelStatus: 'ready',
-    progress: 0,
-    startDownload: jest.fn(),
-    lastError: null,
-  }),
-}))
-
-jest.mock('../../../hooks/useAiEnhancement', () => ({
-  useAiEnhancement: () => ({ enhance: jest.fn() }),
-  runEnhancement: jest.fn(),
+jest.mock('../../../components/AiModelBanner', () => ({
+  AiModelBanner: () => null,
 }))
 
 const emptyPracticeData = {

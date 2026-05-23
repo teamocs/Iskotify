@@ -9,10 +9,8 @@ import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePr
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
-import { useDb } from '../../hooks/useDb'
-import { useModelDownload } from '../../hooks/useModelDownload'
-import { useAiEnhancement } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
+import { AiModelBanner } from '../../components/AiModelBanner'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -265,14 +263,6 @@ export default function PracticeScreen() {
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
 
-  // AI model download UI state
-  const db = useDb()
-  const { enhance } = useAiEnhancement()
-  const { modelStatus, progress, startDownload } = useModelDownload(
-    () => { void enhance(db) },  // called after download completes
-  )
-  const [showDownloadSheet, setShowDownloadSheet] = useState(false)
-
   const { theme: t, typo } = useTheme()
   const styles = useMemo(() => ({
     s: StyleSheet.create({
@@ -398,35 +388,8 @@ export default function PracticeScreen() {
         <Text style={s.subtitle}>{listing?.title ?? '—'} · {totalCards} cards synced</Text>
       </View>
 
-      {/* AI model download banner — shown only when model is absent */}
-      {modelStatus === 'absent' && (
-        <TouchableOpacity
-          style={{
-            backgroundColor: 'rgba(128,0,0,0.10)',
-            borderBottomWidth: 1,
-            borderBottomColor: 'rgba(128,0,0,0.20)',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
-          }}
-          onPress={() => setShowDownloadSheet(true)}
-          activeOpacity={0.8}
-        >
-          <Text style={{ flex: 1, fontSize: typo.xs, color: '#fca5a5', fontFamily: 'Lexend_500Medium' }}>
-            ✨ Enable AI-enhanced practice — Download Reviewer Engine (~950 MB)
-          </Text>
-          <Text style={{ color: '#fca5a5', fontSize: 16 }}>›</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Download progress bar — shown while downloading */}
-      {modelStatus === 'downloading' && (
-        <View style={{ height: 3, backgroundColor: 'rgba(128,0,0,0.15)', marginBottom: 2 }}>
-          <View style={{ height: 3, width: `${Math.round(progress * 100)}%`, backgroundColor: '#fca5a5' }} />
-        </View>
-      )}
+      {/* AI Reviewer Engine — banner + progress + download bottom-sheet */}
+      <AiModelBanner />
 
       {/* Subject filter chips */}
       <View style={s.chipsWrap}>
@@ -578,65 +541,6 @@ export default function PracticeScreen() {
         onCreate={createDeck}
         m={m}
       />
-
-      {/* AI Reviewer Engine download bottom-sheet */}
-      <Modal
-        visible={showDownloadSheet}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowDownloadSheet(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <TouchableOpacity
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            activeOpacity={1}
-            onPress={() => setShowDownloadSheet(false)}
-          />
-          <View style={{
-            backgroundColor: t.bg,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            padding: 24,
-            paddingBottom: 40,
-          }}>
-            <Text style={{ fontSize: typo.lg, fontFamily: 'Outfit_700Bold', color: t.textPrimary, marginBottom: 8 }}>
-              AI Reviewer Engine
-            </Text>
-            <Text style={{ fontSize: typo.sm, fontFamily: 'Lexend_400Regular', color: t.textSecondary, marginBottom: 4 }}>
-              Model: Qwen 2.5 1.5B Instruct (Q4_K_M)
-            </Text>
-            <Text style={{ fontSize: typo.sm, fontFamily: 'Lexend_400Regular', color: t.textSecondary, marginBottom: 4 }}>
-              Download size: ~950 MB
-            </Text>
-            <Text style={{ fontSize: typo.sm, fontFamily: 'Lexend_400Regular', color: t.textTertiary, marginBottom: 24 }}>
-              Requires ≥ 2 GB RAM · Downloads in background
-            </Text>
-            <TouchableOpacity
-              style={{
-                backgroundColor: 'rgba(128,0,0,0.82)',
-                borderRadius: 14,
-                paddingVertical: 14,
-                alignItems: 'center',
-                marginBottom: 10,
-              }}
-              onPress={() => { setShowDownloadSheet(false); startDownload() }}
-              activeOpacity={0.8}
-            >
-              <Text style={{ color: '#fff', fontFamily: 'Outfit_700Bold', fontSize: typo.md }}>
-                Download
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ alignItems: 'center', paddingVertical: 10 }}
-              onPress={() => setShowDownloadSheet(false)}
-            >
-              <Text style={{ color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm }}>
-                Not now
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   )
 }
