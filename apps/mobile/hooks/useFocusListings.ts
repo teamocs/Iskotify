@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { eq, asc } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { focusListings, listings } from '../db/schema'
+import { syncOnLaunch } from '../services/sync'
 
 export interface FocusListing {
   slug: string
@@ -55,6 +56,13 @@ export function useFocusListings() {
     })))
   }, [db])
 
+  const refresh = useCallback(async () => {
+    // Pull fresh listings from Supabase; syncOnLaunch handles offline via try/catch internally
+    await syncOnLaunch(db)
+    // Then re-read local DB to surface the new rows
+    await load()
+  }, [db, load])
+
   useFocusEffect(useCallback(() => { void load() }, [load]))
 
   async function addListing(slug: string) {
@@ -95,5 +103,5 @@ export function useFocusListings() {
     return focusListingsList.find(r => r.slug === slug)?.priority ?? null
   }
 
-  return { focusListings: focusListingsList, addListing, removeListing, moveListing, isInFocus, getPriority }
+  return { focusListings: focusListingsList, addListing, removeListing, moveListing, isInFocus, getPriority, refresh }
 }

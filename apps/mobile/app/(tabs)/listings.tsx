@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -9,6 +9,7 @@ import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { syncOnLaunch } from '../../services/sync'
 
 type Segment = 'all' | 'exam' | 'scholarship'
 
@@ -37,26 +38,37 @@ export default function ListingsScreen() {
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<string | null>(null)
 
-  useFocusEffect(useCallback(() => {
-    async function load() {
-      const [rows, saved] = await Promise.all([
-        db.select({
-          id: listingsTable.id,
-          slug: listingsTable.slug,
-          title: listingsTable.title,
-          type: listingsTable.type,
-          status: listingsTable.status,
-          examDate: listingsTable.examDate,
-          region: listingsTable.region,
-          provider: listingsTable.provider,
-        }).from(listingsTable),
-        db.select({ id: savedListingsTable.id }).from(savedListingsTable),
-      ])
-      setAll(rows)
-      setSavedIds(new Set(saved.map(s => s.id)))
-    }
-    void load()
-  }, [db]))
+  const loadListings = useCallback(async () => {
+    const [rows, saved] = await Promise.all([
+      db.select({
+        id: listingsTable.id,
+        slug: listingsTable.slug,
+        title: listingsTable.title,
+        type: listingsTable.type,
+        status: listingsTable.status,
+        examDate: listingsTable.examDate,
+        region: listingsTable.region,
+        provider: listingsTable.provider,
+      }).from(listingsTable),
+      db.select({ id: savedListingsTable.id }).from(savedListingsTable),
+    ])
+    setAll(rows)
+    setSavedIds(new Set(saved.map(s => s.id)))
+  }, [db])
+
+  useFocusEffect(useCallback(() => { void loadListings() }, [loadListings]))
+
+  const refresh = useCallback(async () => {
+    // Pull fresh listings from Supabase; syncOnLaunch handles offline via try/catch internally
+    await syncOnLaunch(db)
+    await loadListings()
+  }, [db, loadListings])
+
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await refresh() } finally { setRefreshing(false) }
+  }, [refresh])
 
   async function toggleSave(listingId: string) {
     if (savedIds.has(listingId)) {
@@ -212,6 +224,15 @@ export default function ListingsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+            progressBackgroundColor={t.surface}
+          />
+        }
         ListEmptyComponent={<Text style={s.empty}>No listings found.</Text>}
         renderItem={({ item: l }) => {
           const exam = isExam(l)
