@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useFocusEffect } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { createDownloadTask, setConfig, completeHandler } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
@@ -63,27 +64,36 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     completeCbRef.current = onDownloadComplete
   }, [onDownloadComplete])
 
+  // Cleanup on unmount only — runs once
   useEffect(() => {
     isMountedRef.current = true
-    let cancelled = false
-
-    async function check() {
-      if (!hasEnoughRam()) {
-        if (!cancelled) setModelStatus('unsupported')
-        return
-      }
-      const exists = await modelExists()
-      if (!cancelled) setModelStatus(exists ? 'ready' : 'absent')
-    }
-    void check()
-
     return () => {
-      cancelled = true
       isMountedRef.current = false
       taskRef.current?.stop()
       taskRef.current = null
     }
   }, [])
+
+  // Re-check model status on every screen focus (so Home reflects model
+  // downloads that happened on Practice tab without remounting)
+  useFocusEffect(
+    useCallback(() => {
+      // Don't clobber in-flight download state
+      if (modelStatus === 'downloading') return
+
+      let cancelled = false
+      async function check() {
+        if (!hasEnoughRam()) {
+          if (!cancelled && isMountedRef.current) setModelStatus('unsupported')
+          return
+        }
+        const exists = await modelExists()
+        if (!cancelled && isMountedRef.current) setModelStatus(exists ? 'ready' : 'absent')
+      }
+      void check()
+      return () => { cancelled = true }
+    }, [modelStatus])
+  )
 
   const startDownload = useCallback(() => {
     if (modelStatus === 'downloading' || modelStatus === 'ready') return

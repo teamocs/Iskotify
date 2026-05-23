@@ -1,5 +1,12 @@
 import { renderHook, act } from '@testing-library/react-native'
 
+jest.mock('expo-router', () => ({
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react')
+    React.useEffect(() => cb(), [])
+  },
+}))
+
 jest.mock('../../services/llm', () => ({
   modelExists: jest.fn(),
   hasEnoughRam: jest.fn(),
