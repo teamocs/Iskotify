@@ -18,6 +18,7 @@ import { DrizzleProvider } from '../db'
 import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
 import { syncOnLaunch } from '../services/sync'
+import { runEnhancement } from '../hooks/useAiEnhancement'
 import { userSettings } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { requestNotificationPermissions } from '../services/notifications'
@@ -107,8 +108,11 @@ function AppInit({ onReady }: { onReady: () => void }) {
       onReady()  // hide the loading overlay
     }
 
-    // Background sync — fire and forget, never blocks navigation
-    syncOnLaunch(db).catch(e => console.warn('[layout] bg sync:', e))
+    // Background sync — fire and forget, never blocks navigation.
+    // After sync completes, kick off AI enhancement in the background (fire-and-forget).
+    syncOnLaunch(db)
+      .then(() => { void runEnhancement(db) })
+      .catch(e => console.warn('[layout] bg sync:', e))
 
     // Request notification permission on startup (non-blocking)
     requestNotificationPermissions().catch(e => console.warn('[layout] notif permission:', e))

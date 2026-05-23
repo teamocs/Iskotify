@@ -8,6 +8,7 @@ import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch } from '../services/sync'
 import { useDb } from '../hooks/useDb'
+import { runEnhancement } from '../hooks/useAiEnhancement'
 import { userSettings, userProgress, focusListings as focusListingsTable } from '../db/schema'
 import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
@@ -124,6 +125,7 @@ export default function OnboardingScreen() {
       })
       setSelectedSlug(selectedSlugs[0]!)
       await syncOnLaunch(db)
+      void runEnhancement(db)  // Fire-and-forget — runs in background, won't block UI
       setStep(3)
     } catch (e) {
       console.error('[onboarding] confirm error:', e)
