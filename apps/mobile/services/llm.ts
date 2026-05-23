@@ -1,6 +1,9 @@
-import { initLlama } from 'llama.rn'
+import { initLlama, type LlamaContext } from 'llama.rn'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Device from 'expo-device'
+import { parseCoachPhrase } from './coachPrompts'
+
+export { parseCoachPhrase }
 
 const MODEL_FILENAME = 'qwen2.5-1.5b-instruct-q4_k_m.gguf'
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`
@@ -10,10 +13,11 @@ export const MODEL_DOWNLOAD_URL =
   'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf'
 
 const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
+export const IDLE_RELEASE_MS = 60_000
 
 export function hasEnoughRam(): boolean {
   const total = Device.totalMemory
-  if (total === null) return false  // unknown device — err on the side of skipping the feature
+  if (total === null) return false
   return total >= MIN_RAM_BYTES
 }
 
@@ -21,6 +25,49 @@ export async function modelExists(): Promise<boolean> {
   const info = await FileSystem.getInfoAsync(MODEL_PATH)
   return info.exists
 }
+
+// ── Persistent context + mutex ────────────────────────────────────────────────
+
+let ctxRef: LlamaContext | null = null
+let lastUsedAt = 0
+let inflightChain: Promise<unknown> = Promise.resolve()
+
+async function getContext(): Promise<LlamaContext> {
+  if (ctxRef) return ctxRef
+  ctxRef = await initLlama({
+    model: MODEL_PATH.replace(/^file:\/\//, ''),
+    n_ctx: 2048,
+    n_threads: 4,
+  })
+  return ctxRef
+}
+
+async function releaseContext(): Promise<void> {
+  if (ctxRef) {
+    try { await ctxRef.release() } catch { /* ignore */ }
+    ctxRef = null
+  }
+}
+
+/** Release the context if it has been idle for longer than IDLE_RELEASE_MS. */
+export async function releaseContextIfIdle(): Promise<void> {
+  if (ctxRef && Date.now() - lastUsedAt > IDLE_RELEASE_MS) {
+    await releaseContext()
+  }
+}
+
+/** Force-release the context — useful for app teardown. */
+export async function releaseContextNow(): Promise<void> {
+  await releaseContext()
+}
+
+function withMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const next = inflightChain.then(fn, fn)
+  inflightChain = next.catch(() => undefined)
+  return next
+}
+
+// ── MCQ inference (used by useAiEnhancement) ─────────────────────────────────
 
 type PromptStrategy = 'science' | 'math' | 'language'
 
@@ -95,7 +142,9 @@ export function parseResponse(text: string): LlmOutput | null {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return null
     const parsed = JSON.parse(jsonMatch[0]) as Partial<LlmOutput>
-    const requiredFields: Array<keyof LlmOutput> = ['wrong_option_1', 'wrong_option_2', 'wrong_option_3', 'explanation']
+    const requiredFields: Array<keyof LlmOutput> = [
+      'wrong_option_1', 'wrong_option_2', 'wrong_option_3', 'explanation',
+    ]
     for (const f of requiredFields) {
       if (typeof parsed[f] !== 'string' || !parsed[f]) return null
     }
@@ -106,20 +155,33 @@ export function parseResponse(text: string): LlmOutput | null {
 }
 
 export async function runInference(prompt: string): Promise<LlmOutput | null> {
-  const context = await initLlama({
-    model: MODEL_PATH,
-    n_ctx: 2048,
-    n_threads: 4,
-  })
-  try {
-    const result = await context.completion({
+  return withMutex(async () => {
+    const ctx = await getContext()
+    lastUsedAt = Date.now()
+    const result = await ctx.completion({
       prompt,
       n_predict: 400,
       temperature: 0.1,
       stop: ['<|im_end|>', '</s>'],
     })
+    lastUsedAt = Date.now()
     return parseResponse(result.text)
-  } finally {
-    await context.release()
-  }
+  })
+}
+
+// ── Coach inference (used by AiCoachProvider) ────────────────────────────────
+
+export async function runCoachInference(prompt: string): Promise<string | null> {
+  return withMutex(async () => {
+    const ctx = await getContext()
+    lastUsedAt = Date.now()
+    const result = await ctx.completion({
+      prompt,
+      n_predict: 80,
+      temperature: 0.7,
+      stop: ['<|im_end|>', '</s>', '\n\n'],
+    })
+    lastUsedAt = Date.now()
+    return parseCoachPhrase(result.text)
+  })
 }

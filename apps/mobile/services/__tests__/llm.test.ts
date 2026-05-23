@@ -114,3 +114,22 @@ describe('parseResponse', () => {
     expect(parseResponse('{"wrong_option_1":{"a":1},"wrong_option_2":"B","wrong_option_3":"C","explanation":"x"}')).toBeNull()
   })
 })
+
+describe('coach exports', () => {
+  it('re-exports parseCoachPhrase from coachPrompts', () => {
+    const { parseCoachPhrase } = require('../llm')
+    expect(typeof parseCoachPhrase).toBe('function')
+    expect(parseCoachPhrase('Tara mag-review tayo!')).toBe('Tara mag-review tayo!')
+    expect(parseCoachPhrase('')).toBeNull()
+  })
+
+  it('exports runCoachInference as an async function', () => {
+    const { runCoachInference } = require('../llm')
+    expect(typeof runCoachInference).toBe('function')
+  })
+
+  it('exports releaseContextIfIdle as an async function', () => {
+    const { releaseContextIfIdle } = require('../llm')
+    expect(typeof releaseContextIfIdle).toBe('function')
+  })
+})
