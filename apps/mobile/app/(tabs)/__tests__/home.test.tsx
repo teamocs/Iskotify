@@ -45,6 +45,36 @@ jest.mock('../../../hooks/useNotifications', () => ({
   }),
 }))
 
+// Mock AiCoachProvider so HomeScreen can render without the real provider tree.
+// useAiCoach is mocked to derive its phrase from the current useHomeStats() so
+// tests asserting on listing-derived text (e.g. "UPCAT 2025") still pass.
+jest.mock('../../../providers/AiCoachProvider', () => {
+  const React = require('react')
+  return {
+    AiCoachProvider: ({ children }: { children: React.ReactNode }) => children,
+    useCoachContext: () => ({
+      stats: {
+        listing: null, daysLeft: null, todayAccuracy: null, streakDays: 0,
+        weakTopics: [], firstTopicId: null, fullName: '',
+        importantDayIndices: [], practiceDayIndices: [], focusedListings: [],
+      },
+      ringIndex: 0,
+      nextPhrase: () => ({ id: null, text: 'Tara mag-review tayo!' }),
+    }),
+  }
+})
+
+jest.mock('../../../hooks/useAiCoach', () => {
+  const { useHomeStats } = require('../../../hooks/useHomeStats')
+  const { pickTemplate } = require('../../../services/coachTemplates')
+  return {
+    useAiCoach: () => {
+      const stats = useHomeStats()
+      return { phrase: pickTemplate(stats, 0), onTap: jest.fn() }
+    },
+  }
+})
+
 const emptyStats = {
   listing: null,
   daysLeft: null,

@@ -17,6 +17,7 @@ import {
 import { DrizzleProvider } from '../db'
 import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
+import { AiCoachProvider } from '../providers/AiCoachProvider'
 import { syncOnLaunch } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { userSettings } from '../db/schema'
@@ -125,7 +126,9 @@ function AppInit({ onReady }: { onReady: () => void }) {
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }} />
+      <AiCoachProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </AiCoachProvider>
     </>
   )
 }

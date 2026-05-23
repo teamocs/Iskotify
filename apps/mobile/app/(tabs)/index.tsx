@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image } from 'react-native'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -7,6 +7,7 @@ import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineic
 import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useAiCoach } from '../../hooks/useAiCoach'
 import { useTheme } from '../../theme/ThemeContext'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -285,6 +286,7 @@ export default function HomeScreen() {
 
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
+  const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -345,12 +347,6 @@ export default function HomeScreen() {
 
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
-  const kuyaMsg = listing
-    ? weakTopics.length > 0
-      ? `Kamusta! ${daysLeft ?? '?'} days na lang bago ang ${listing.title}. Mag-focus tayo sa ${weakTopics[0]?.topicName ?? ''} ngayon — ito ang pinaka-mahina mo. Kaya mo 'yan! 💪`
-      : `Kamusta! ${daysLeft ?? '?'} days na lang bago ang ${listing.title}. Magsimula na tayo! Kaya mo 'yan! 💪`
-    : "Kamusta! Handa ka na ba? Simulan na natin ang pag-aaral! 💪"
-
   const now = Date.now()
   const upcomingDates = focusedListings
     .map(l => {
@@ -396,13 +392,20 @@ export default function HomeScreen() {
           {/* Kuya Baw AI Coach card — LARGER MASCOT */}
           <View style={s.kuyaCard}>
             <View style={s.kuyaRow}>
-              <View style={s.kuyaAvatarLg}>
+              <Pressable
+                style={s.kuyaAvatarLg}
+                onPress={onKuyaTap}
+                hitSlop={12}
+                android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
+                accessibilityRole="button"
+                accessibilityLabel="Tap Kuya Baw for a new tip"
+              >
                 <Image
                   source={require('../../assets/images/kuya-baw-mascot.png')}
                   style={{ width: 80, height: 80 }}
                   resizeMode="contain"
                 />
-              </View>
+              </Pressable>
               <View style={{ flex: 1 }}>
                 <View style={s.kuyaNameRow}>
                   <Text style={s.kuyaName}>Kuya Baw</Text>
