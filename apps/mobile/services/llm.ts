@@ -1,5 +1,5 @@
 import { initLlama } from 'llama.rn'
-import * as FileSystem from 'expo-file-system'
+import * as FileSystem from 'expo-file-system/legacy'
 import * as Device from 'expo-device'
 
 const MODEL_FILENAME = 'qwen2.5-1.5b-instruct-q4_k_m.gguf'

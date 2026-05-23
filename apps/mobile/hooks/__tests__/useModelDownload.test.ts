@@ -7,11 +7,9 @@ jest.mock('../../services/llm', () => ({
   MODEL_DOWNLOAD_URL: 'https://example.com/model.gguf',
 }))
 
-jest.mock('react-native-background-downloader', () => ({
+jest.mock('@kesha-antonov/react-native-background-downloader', () => ({
   __esModule: true,
-  default: {
-    download: jest.fn(),
-  },
+  createDownloadTask: jest.fn(),
 }))
 
 jest.mock('expo-notifications', () => ({
@@ -70,19 +68,18 @@ describe('useModelDownload', () => {
     expect(result.current.lastError).toBeNull()
   })
 
-  it('startDownload sets status to downloading and invokes RNBackgroundDownloader.download', async () => {
+  it('startDownload sets status to downloading and invokes createDownloadTask', async () => {
     mockModelExists.mockResolvedValue(false)
     mockHasEnoughRam.mockReturnValue(true)
 
-    // Provide a fake DownloadTask
     const fakeTask = {
       progress: jest.fn().mockReturnThis(),
       done: jest.fn().mockReturnThis(),
       error: jest.fn().mockReturnThis(),
       stop: jest.fn(),
     }
-    const RNBackgroundDownloader = require('react-native-background-downloader').default
-    RNBackgroundDownloader.download.mockReturnValue(fakeTask)
+    const { createDownloadTask } = require('@kesha-antonov/react-native-background-downloader')
+    ;(createDownloadTask as jest.Mock).mockReturnValue(fakeTask)
 
     const { result } = renderHook(() => useModelDownload())
     await act(async () => {})
@@ -92,7 +89,7 @@ describe('useModelDownload', () => {
     })
 
     expect(result.current.modelStatus).toBe('downloading')
-    expect(RNBackgroundDownloader.download).toHaveBeenCalledWith(
+    expect(createDownloadTask).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'qwen-model', url: 'https://example.com/model.gguf' })
     )
   })

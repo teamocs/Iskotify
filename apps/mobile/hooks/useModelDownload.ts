@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as Notifications from 'expo-notifications'
-import RNBackgroundDownloader, { type DownloadTask } from 'react-native-background-downloader'
+import { createDownloadTask } from '@kesha-antonov/react-native-background-downloader'
+import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
 import { modelExists, hasEnoughRam, MODEL_PATH, MODEL_DOWNLOAD_URL } from '../services/llm'
 
 export type ModelStatus = 'unknown' | 'absent' | 'downloading' | 'ready' | 'unsupported'
@@ -64,16 +65,16 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
 
     const destination = MODEL_PATH.replace(/^file:\/\//, '')
 
-    const task = RNBackgroundDownloader.download({
+    const task = createDownloadTask({
       id: DOWNLOAD_ID,
       url: MODEL_DOWNLOAD_URL,
       destination,
     })
     taskRef.current = task
 
-    task.progress(({ written, total }: { written: number; total: number }) => {
+    task.progress(({ bytesDownloaded, bytesTotal }) => {
       if (!isMountedRef.current) return
-      if (total > 0) setProgress(written / total)
+      if (bytesTotal > 0) setProgress(bytesDownloaded / bytesTotal)
     })
 
     task.done(async () => {
@@ -96,12 +97,13 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
       completeCbRef.current?.()
     })
 
-    task.error((err: Error) => {
-      console.warn('[useModelDownload] download failed:', err)
+    task.error(({ error, errorCode }) => {
+      const wrapped = new Error(`Download failed (code ${errorCode}): ${error}`)
+      console.warn('[useModelDownload] download failed:', wrapped)
       if (!isMountedRef.current) return
       setModelStatus('absent')
       setProgress(0)
-      setLastError(err)
+      setLastError(wrapped)
       taskRef.current = null
     })
   }, [modelStatus])

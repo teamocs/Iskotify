@@ -1,5 +1,5 @@
 jest.mock('llama.rn', () => ({ initLlama: jest.fn() }))
-jest.mock('expo-file-system', () => ({ documentDirectory: '/mock/', getInfoAsync: jest.fn() }))
+jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '/mock/', getInfoAsync: jest.fn() }))
 jest.mock('expo-device', () => ({ totalMemory: 4 * 1024 * 1024 * 1024 }))
 
 import { buildPrompt, parseResponse } from '../llm'
