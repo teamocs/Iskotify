@@ -42,6 +42,7 @@ const STATS_BASE: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  refresh: async () => {},
 }
 
 describe('buildProgressContext', () => {

@@ -12,6 +12,7 @@ const EMPTY: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  refresh: async () => {},
 }
 
 const FULL: HomeStats = {
@@ -28,6 +29,7 @@ const FULL: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  refresh: async () => {},
 }
 
 describe('pickTemplate', () => {

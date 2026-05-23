@@ -14,6 +14,7 @@ const BASE: CoachContext = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  refresh: async () => {},
   acquiredCount: 3,
   totalRequirements: 5,
   remainingRequirements: ['NSO birth cert', 'Form 138'],
