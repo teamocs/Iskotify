@@ -186,3 +186,59 @@ describe('inference mutex', () => {
     expect(release).toHaveBeenCalled()
   })
 })
+
+describe('streamChatInference', () => {
+  beforeEach(() => {
+    jest.resetModules()
+    jest.clearAllMocks()
+  })
+
+  it('fires onToken for each token emitted by the completion callback', async () => {
+    const tokens = ['Hello', ' ', 'world', '!']
+    const completion = jest.fn().mockImplementation(async (_params, cb) => {
+      for (const t of tokens) cb({ token: t })
+      return { text: tokens.join('') }
+    })
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue({
+      completion,
+      release: jest.fn().mockResolvedValue(undefined),
+    })
+
+    const { streamChatInference } = require('../llm')
+    const collected: string[] = []
+    const controller = new AbortController()
+    const final = await streamChatInference('test prompt', (t: string) => collected.push(t), controller.signal)
+
+    expect(collected).toEqual(['Hello', ' ', 'world', '!'])
+    expect(final).toBe('Hello world!')
+  })
+
+  it('stops emitting tokens after abort signal fires', async () => {
+    const completion = jest.fn().mockImplementation(async (_params, cb) => {
+      cb({ token: 'first' })
+      cb({ token: 'second' })
+      // Caller aborts here in the test body via controller.abort()
+      cb({ token: 'third' })
+      cb({ token: 'fourth' })
+      return { text: 'firstsecondthirdfourth' }
+    })
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue({
+      completion,
+      release: jest.fn().mockResolvedValue(undefined),
+    })
+
+    const { streamChatInference } = require('../llm')
+    const controller = new AbortController()
+    const collected: string[] = []
+    const promise = streamChatInference('p', (t: string) => {
+      collected.push(t)
+      if (collected.length === 2) controller.abort()
+    }, controller.signal)
+    await promise
+
+    // Only the first two tokens should have been collected (signal blocks 3rd and 4th)
+    expect(collected).toEqual(['first', 'second'])
+  })
+})

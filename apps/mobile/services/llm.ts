@@ -202,3 +202,41 @@ export async function runCoachInference(prompt: string): Promise<string | null> 
     }
   })
 }
+
+// ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
+
+export async function streamChatInference(
+  prompt: string,
+  onToken: (text: string) => void,
+  signal: AbortSignal,
+): Promise<string> {
+  return withMutex(async () => {
+    if (signal.aborted) return ''
+    const ctx = await getContext()
+    lastUsedAt = Date.now()
+    let collected = ''
+    try {
+      const result = await ctx.completion(
+        {
+          prompt,
+          n_predict: 250,
+          temperature: 0.5,
+          top_p: 0.9,
+          stop: ['<|im_end|>', '</s>', '<|im_start|>'],
+        },
+        (tokenData: { token?: string }) => {
+          if (signal.aborted) return
+          const text = tokenData.token ?? ''
+          collected += text
+          onToken(text)
+        },
+      )
+      lastUsedAt = Date.now()
+      return collected || result.text || ''
+    } catch (err) {
+      // Native errors may corrupt context — release so next call re-inits
+      await releaseContext()
+      throw err
+    }
+  })
+}
