@@ -91,9 +91,11 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
     queue: [], ringIndex: 0, isReady: false,
   })
   const isMountedRef = useRef(true)
+  const ringIndexRef = useRef(0)
   const ctxRef = useRef<CoachContext | null>(null)
   const hashRef = useRef<string>('')
-  const generatingRef = useRef(false)
+  const generatingPromiseRef = useRef<Promise<void> | null>(null)
+  const pendingRefillRef = useRef<Set<CoachCategory>>(new Set())
 
   // ── Initial load + staggered generation ─────────────────────────────────────
   useEffect(() => {
@@ -160,42 +162,48 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
     hash: string,
   ): Promise<void> => {
     if (categoryIdx >= COACH_CATEGORIES.length) return
-    if (generatingRef.current) {
-      setTimeout(() => void generateOne(categoryIdx, ctx, hash), GENERATION_DELAY_MS)
-      return
-    }
-    generatingRef.current = true
 
-    InteractionManager.runAfterInteractions(() => {
-      void (async () => {
-        try {
-          const category = COACH_CATEGORIES[categoryIdx]!
-          const prompt = buildCoachPrompt(category, ctx)
-          if (prompt === null) {
-            generatingRef.current = false
-            setTimeout(() => void generateOne(categoryIdx + 1, ctx, hash), 50)
-            return
-          }
-
-          const phrase = await runCoachInference(prompt)
-          if (phrase && isMountedRef.current && hashRef.current === hash) {
-            await insertPhrase(db, category, phrase, hash)
-            const rows = await loadFreshPhrases(db, hash)
-            if (isMountedRef.current && hashRef.current === hash) {
-              setState(s => ({ ...s, queue: rows }))
+    // Chain off the previous in-flight generation (no busy-wait)
+    const prev = generatingPromiseRef.current ?? Promise.resolve()
+    const next = prev.then(() => new Promise<void>((resolve) => {
+      InteractionManager.runAfterInteractions(() => {
+        void (async () => {
+          try {
+            const category = COACH_CATEGORIES[categoryIdx]!
+            pendingRefillRef.current.delete(category)
+            const prompt = buildCoachPrompt(category, ctx)
+            if (prompt === null) {
+              resolve()
+              // Move to next category eagerly (no LLM work needed)
+              void generateOne(categoryIdx + 1, ctx, hash)
+              return
             }
+
+            const phrase = await runCoachInference(prompt)
+            if (phrase && isMountedRef.current && hashRef.current === hash) {
+              await insertPhrase(db, category, phrase, hash)
+              const rows = await loadFreshPhrases(db, hash)
+              if (isMountedRef.current && hashRef.current === hash) {
+                setState(s => ({ ...s, queue: rows }))
+              }
+            }
+          } catch (e) {
+            console.warn('[AiCoachProvider] generation error:', e)
+          } finally {
+            resolve()
+            // Schedule next category with a small delay so we don't hammer the LLM
+            setTimeout(() => void generateOne(categoryIdx + 1, ctx, hash), GENERATION_DELAY_MS)
           }
-        } catch (e) {
-          console.warn('[AiCoachProvider] generation error:', e)
-        } finally {
-          generatingRef.current = false
-          setTimeout(() => void generateOne(categoryIdx + 1, ctx, hash), GENERATION_DELAY_MS)
-        }
-      })()
-    })
+        })()
+      })
+    }))
+
+    generatingPromiseRef.current = next
+    return next
   }, [db])
 
   const scheduleBatchGeneration = useCallback((ctx: CoachContext, hash: string) => {
+    for (const cat of COACH_CATEGORIES) pendingRefillRef.current.add(cat)
     void generateOne(0, ctx, hash)
   }, [generateOne])
 
@@ -204,26 +212,31 @@ export function AiCoachProvider({ children }: { children: ReactNode }) {
     const ctx = ctxRef.current
     const hash = hashRef.current
     if (!ctx || !hash) return
+    if (pendingRefillRef.current.has(category)) return  // already queued
     const idx = COACH_CATEGORIES.indexOf(category)
     if (idx < 0) return
+    pendingRefillRef.current.add(category)
     setTimeout(() => void generateOne(idx, ctx, hash), GENERATION_DELAY_MS)
   }, [generateOne])
 
   // ── Tap handler: consume next phrase ───────────────────────────────────────
   const nextPhrase = useCallback((): { id: number | null; text: string } => {
+    // Atomic read-and-increment via ref — prevents rapid-tap stale closure bug
+    const currentIdx = ringIndexRef.current
+    ringIndexRef.current = currentIdx + 1
+
     const head = state.queue[0]
     if (head) {
-      const remaining = state.queue.slice(1)
-      setState(s => ({ ...s, queue: remaining, ringIndex: s.ringIndex + 1 }))
+      setState(s => ({ ...s, queue: s.queue.slice(1), ringIndex: currentIdx + 1 }))
       void markConsumed(db, head.id).catch(e =>
         console.warn('[AiCoachProvider] markConsumed failed:', e))
       refillCategory(head.category)
       return { id: head.id, text: head.text }
     }
-    setState(s => ({ ...s, ringIndex: s.ringIndex + 1 }))
-    const text = pickTemplate(stats, state.ringIndex)
-    return { id: null, text }
-  }, [state.queue, state.ringIndex, db, stats, refillCategory])
+
+    setState(s => ({ ...s, ringIndex: currentIdx + 1 }))
+    return { id: null, text: pickTemplate(stats, currentIdx) }
+  }, [state.queue, db, stats, refillCategory])
 
   const value = useMemo<CoachContextValue>(() => ({
     stats,
