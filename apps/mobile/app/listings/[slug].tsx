@@ -47,6 +47,7 @@ export default function ListingDetailScreen() {
   const [listing, setListing] = useState<FullListing | null>(null)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [acquiredCount, setAcquiredCount] = useState(0)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
@@ -263,9 +264,13 @@ export default function ListingDetailScreen() {
         {/* Requirements */}
         {requirements.length > 0 ? (
           <View style={s.section}>
+            <Text style={s.sectionTitle}>
+              Requirements ({acquiredCount}/{requirements.length})
+            </Text>
             <RequirementsChecklist
               listingSlug={slug}
               requirements={requirements}
+              onAcquiredCountChange={(a) => setAcquiredCount(a)}
             />
           </View>
         ) : null}

@@ -10,9 +10,10 @@ import {
 interface Props {
   listingSlug: string
   requirements: string[]
+  onAcquiredCountChange?: (acquired: number, total: number) => void
 }
 
-export function RequirementsChecklist({ listingSlug, requirements }: Props) {
+export function RequirementsChecklist({ listingSlug, requirements, onAcquiredCountChange }: Props) {
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const [acquired, setAcquired] = useState<Set<number>>(new Set())
@@ -30,39 +31,35 @@ export function RequirementsChecklist({ listingSlug, requirements }: Props) {
     return () => { cancelled = true }
   }, [db, listingSlug])
 
+  useEffect(() => {
+    onAcquiredCountChange?.(acquired.size, requirements.length)
+  }, [acquired, requirements.length, onAcquiredCountChange])
+
   const onToggle = useCallback(async (index: number) => {
-    const isCurrentlyAcquired = acquired.has(index)
-    const next = new Set(acquired)
-    if (isCurrentlyAcquired) next.delete(index)
-    else next.add(index)
-    setAcquired(next)
+    let wasAcquired = false
+    setAcquired(prev => {
+      wasAcquired = prev.has(index)
+      const next = new Set(prev)
+      if (wasAcquired) next.delete(index)
+      else next.add(index)
+      return next
+    })
     try {
-      await toggleRequirement(db, listingSlug, index, !isCurrentlyAcquired)
+      await toggleRequirement(db, listingSlug, index, !wasAcquired)
     } catch (e) {
       console.warn('[RequirementsChecklist] toggle failed:', e)
-      // Revert on error
-      setAcquired(acquired)
+      // Revert only this index so concurrent toggles on other rows aren't clobbered
+      setAcquired(prev => {
+        const reverted = new Set(prev)
+        if (wasAcquired) reverted.add(index)
+        else reverted.delete(index)
+        return reverted
+      })
     }
-  }, [acquired, db, listingSlug])
+  }, [db, listingSlug])
 
   const s = useMemo(() => StyleSheet.create({
-    container: { marginTop: 20 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-    title: {
-      fontFamily: 'Outfit_700Bold',
-      fontSize: typo.md,
-      color: t.textPrimary,
-    },
-    count: {
-      fontFamily: 'Lexend_500Medium',
-      fontSize: typo.xs,
-      color: t.textTertiary,
-    },
+    container: {},
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -82,8 +79,8 @@ export function RequirementsChecklist({ listingSlug, requirements }: Props) {
       justifyContent: 'center',
     },
     checkboxAcquired: {
-      backgroundColor: 'rgba(128,0,0,0.82)',
-      borderColor: 'rgba(128,0,0,0.82)',
+      backgroundColor: t.accent,
+      borderColor: t.accent,
     },
     checkmark: {
       color: '#fff',
@@ -106,10 +103,6 @@ export function RequirementsChecklist({ listingSlug, requirements }: Props) {
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
-        <Text style={s.title}>Requirements</Text>
-        <Text style={s.count}>{acquired.size} of {requirements.length} acquired</Text>
-      </View>
       {requirements.map((req, i) => {
         const isAcquired = acquired.has(i)
         const isLast = i === requirements.length - 1
