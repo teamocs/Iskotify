@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { eq, asc } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
@@ -30,6 +30,7 @@ export interface HomeStats {
   importantDayIndices: number[]
   practiceDayIndices: number[]
   focusedListings: FocusedListing[]
+  refresh: () => Promise<void>
 }
 
 // ── Pure functions (exported for unit tests) ─────────────────────────────────
@@ -92,82 +93,95 @@ const DEFAULT: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  refresh: async () => {},
 }
 
 export function useHomeStats(): HomeStats {
   const db = useDb()
   const [stats, setStats] = useState<HomeStats>(DEFAULT)
+  const isMountedRef = useRef(true)
+  const loadingRef = useRef(false)
 
-  useFocusEffect(useCallback(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-        const slug = settingsRows[0]?.selectedListingSlug
-        if (!slug) { if (!cancelled) setStats(DEFAULT); return }
-
-        const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows] = await Promise.all([
-          db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-          db.select({
-            flashcardId: userProgress.flashcardId,
-            correct: userProgress.correct,
-            answeredAt: userProgress.answeredAt,
-          }).from(userProgress),
-          db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
-          db.select({ id: topics.id, name: topics.name }).from(topics),
-          db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
-          db.select({
-            slug: focusListings.listingSlug,
-            priority: focusListings.priority,
-            title: listingsTable.title,
-            type: listingsTable.type,
-            examDate: listingsTable.examDate,
-            deadline: listingsTable.deadline,
-          }).from(focusListings)
-            .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
-            .orderBy(asc(focusListings.priority)),
-        ])
-
-        const listing = listingRows[0] ?? null
-        const daysLeft = listing?.examDate
-          ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
-          : null
-
-        const todayStart = new Date()
-        todayStart.setHours(0, 0, 0, 0)
-        const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
-
-        if (!cancelled) {
-          setStats({
-            listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,
-            daysLeft,
-            todayAccuracy: computeTodayAccuracy(todayRows),
-            streakDays: computeStreak(allProgress),
-            weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
-            firstTopicId: firstTopicRows[0]?.id ?? null,
-            fullName: settingsRows[0]?.fullName ?? '',
-            importantDayIndices: focusedRows.flatMap(r => [
-              r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
-              r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
-            ]).filter((d): d is number => d != null),
-            practiceDayIndices: allProgress.map(p => Math.floor(p.answeredAt / 86_400_000)),
-            focusedListings: focusedRows.map(r => ({
-              slug: r.slug,
-              priority: r.priority,
-              title: r.title ?? r.slug,
-              type: r.type ?? 'exam',
-              examDate: r.examDate ?? null,
-              deadline: r.deadline ?? null,
-            })),
-          })
-        }
-      } catch (e) {
-        console.error('[useHomeStats] load error:', e)
+  const load = useCallback(async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    try {
+      const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+      const slug = settingsRows[0]?.selectedListingSlug
+      if (!slug) {
+        if (isMountedRef.current) setStats(DEFAULT)
+        return
       }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [db]))
 
-  return stats
+      const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows] = await Promise.all([
+        db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
+        db.select({
+          flashcardId: userProgress.flashcardId,
+          correct: userProgress.correct,
+          answeredAt: userProgress.answeredAt,
+        }).from(userProgress),
+        db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
+        db.select({ id: topics.id, name: topics.name }).from(topics),
+        db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
+        db.select({
+          slug: focusListings.listingSlug,
+          priority: focusListings.priority,
+          title: listingsTable.title,
+          type: listingsTable.type,
+          examDate: listingsTable.examDate,
+          deadline: listingsTable.deadline,
+        }).from(focusListings)
+          .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
+          .orderBy(asc(focusListings.priority)),
+      ])
+
+      const listing = listingRows[0] ?? null
+      const daysLeft = listing?.examDate
+        ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
+        : null
+
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
+
+      if (isMountedRef.current) {
+        setStats({
+          listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,
+          daysLeft,
+          todayAccuracy: computeTodayAccuracy(todayRows),
+          streakDays: computeStreak(allProgress),
+          weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
+          firstTopicId: firstTopicRows[0]?.id ?? null,
+          fullName: settingsRows[0]?.fullName ?? '',
+          importantDayIndices: focusedRows.flatMap(r => [
+            r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
+            r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
+          ]).filter((d): d is number => d != null),
+          practiceDayIndices: allProgress.map(p => Math.floor(p.answeredAt / 86_400_000)),
+          focusedListings: focusedRows.map(r => ({
+            slug: r.slug,
+            priority: r.priority,
+            title: r.title ?? r.slug,
+            type: r.type ?? 'exam',
+            examDate: r.examDate ?? null,
+            deadline: r.deadline ?? null,
+          })),
+          refresh: load,
+        })
+      }
+    } catch (e) {
+      console.error('[useHomeStats] load error:', e)
+    } finally {
+      loadingRef.current = false
+    }
+  }, [db])
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  useFocusEffect(useCallback(() => { void load() }, [load]))
+
+  return { ...stats, refresh: load }
 }

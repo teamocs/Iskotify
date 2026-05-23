@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Alert, StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image, Pressable } from 'react-native'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Alert, StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image, Pressable, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -281,8 +281,15 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings } = useHomeStats()
+  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings, refresh } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
+
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await refresh() } finally { setRefreshing(false) }
+  }, [refresh])
+
   const importantDays = new Set(importantDayIndices)
   const practiceDays  = new Set(practiceDayIndices)
 
@@ -395,7 +402,19 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+            progressBackgroundColor={t.surface}
+          />
+        }
+      >
 
         {/* Greeting row — ENLARGED */}
         <View style={s.greetRow}>
