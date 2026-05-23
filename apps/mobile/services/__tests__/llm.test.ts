@@ -1,4 +1,9 @@
-jest.mock('llama.rn', () => ({ initLlama: jest.fn() }))
+jest.mock('llama.rn', () => ({
+  initLlama: jest.fn().mockResolvedValue({
+    completion: jest.fn().mockResolvedValue({ text: 'Tara mag-review tayo!' }),
+    release: jest.fn().mockResolvedValue(undefined),
+  }),
+}))
 jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '/mock/', getInfoAsync: jest.fn() }))
 jest.mock('expo-device', () => ({ totalMemory: 4 * 1024 * 1024 * 1024 }))
 
@@ -131,5 +136,53 @@ describe('coach exports', () => {
   it('exports releaseContextIfIdle as an async function', () => {
     const { releaseContextIfIdle } = require('../llm')
     expect(typeof releaseContextIfIdle).toBe('function')
+  })
+})
+
+describe('inference mutex', () => {
+  beforeEach(() => {
+    jest.resetModules()
+    jest.clearAllMocks()
+  })
+
+  it('serializes concurrent coach inferences in FIFO order', async () => {
+    const order: number[] = []
+    let n = 0
+    const completion = jest.fn().mockImplementation(async () => {
+      const i = ++n
+      order.push(i)
+      await new Promise(r => setTimeout(r, 5))
+      order.push(-i)
+      return { text: 'Tara mag-review tayo na!' }
+    })
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue({
+      completion,
+      release: jest.fn().mockResolvedValue(undefined),
+    })
+
+    const { runCoachInference } = require('../llm')
+
+    await Promise.all([
+      runCoachInference('a'),
+      runCoachInference('b'),
+      runCoachInference('c'),
+    ])
+
+    // FIFO: each inference completes (negative number) before the next starts (positive number)
+    expect(order).toEqual([1, -1, 2, -2, 3, -3])
+    expect(completion).toHaveBeenCalledTimes(3)
+  })
+
+  it('releases context if inference throws', async () => {
+    const release = jest.fn().mockResolvedValue(undefined)
+    const completion = jest.fn().mockRejectedValueOnce(new Error('native crash'))
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue({ completion, release })
+
+    const { runCoachInference } = require('../llm')
+
+    await expect(runCoachInference('boom')).rejects.toThrow('native crash')
+    expect(release).toHaveBeenCalled()
   })
 })

@@ -49,16 +49,22 @@ async function releaseContext(): Promise<void> {
   }
 }
 
-/** Release the context if it has been idle for longer than IDLE_RELEASE_MS. */
+/** Release the context if it has been idle for longer than IDLE_RELEASE_MS.
+ *  Serialized through the mutex so it cannot fire during an in-flight inference. */
 export async function releaseContextIfIdle(): Promise<void> {
-  if (ctxRef && Date.now() - lastUsedAt > IDLE_RELEASE_MS) {
-    await releaseContext()
-  }
+  return withMutex(async () => {
+    if (ctxRef && Date.now() - lastUsedAt > IDLE_RELEASE_MS) {
+      await releaseContext()
+    }
+  })
 }
 
-/** Force-release the context — useful for app teardown. */
+/** Force-release the context — useful for app teardown.
+ *  Serialized through the mutex so concurrent calls are safe. */
 export async function releaseContextNow(): Promise<void> {
-  await releaseContext()
+  return withMutex(async () => {
+    await releaseContext()
+  })
 }
 
 function withMutex<T>(fn: () => Promise<T>): Promise<T> {
@@ -158,14 +164,20 @@ export async function runInference(prompt: string): Promise<LlmOutput | null> {
   return withMutex(async () => {
     const ctx = await getContext()
     lastUsedAt = Date.now()
-    const result = await ctx.completion({
-      prompt,
-      n_predict: 400,
-      temperature: 0.1,
-      stop: ['<|im_end|>', '</s>'],
-    })
-    lastUsedAt = Date.now()
-    return parseResponse(result.text)
+    try {
+      const result = await ctx.completion({
+        prompt,
+        n_predict: 400,
+        temperature: 0.1,
+        stop: ['<|im_end|>', '</s>'],
+      })
+      lastUsedAt = Date.now()
+      return parseResponse(result.text)
+    } catch (err) {
+      // Native errors may corrupt context state — release so next call re-inits
+      await releaseContext()
+      throw err
+    }
   })
 }
 
@@ -175,13 +187,18 @@ export async function runCoachInference(prompt: string): Promise<string | null> 
   return withMutex(async () => {
     const ctx = await getContext()
     lastUsedAt = Date.now()
-    const result = await ctx.completion({
-      prompt,
-      n_predict: 80,
-      temperature: 0.7,
-      stop: ['<|im_end|>', '</s>', '\n\n'],
-    })
-    lastUsedAt = Date.now()
-    return parseCoachPhrase(result.text)
+    try {
+      const result = await ctx.completion({
+        prompt,
+        n_predict: 80,
+        temperature: 0.7,
+        stop: ['<|im_end|>', '</s>', '\n\n'],
+      })
+      lastUsedAt = Date.now()
+      return parseCoachPhrase(result.text)
+    } catch (err) {
+      await releaseContext()
+      throw err
+    }
   })
 }
