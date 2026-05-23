@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
 import {
   View, Text, TextInput, FlatList, Modal, TouchableOpacity,
-  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, StyleSheet,
 } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSchoolSearch } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
 import type { SchoolResult } from '../hooks/useSchoolSearch'
@@ -174,7 +175,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
             onPress={closeModal}
           />
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior="padding"
             style={{ width: '100%' }}
           >
           <View style={s.sheet}>
