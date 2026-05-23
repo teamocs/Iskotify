@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   StyleSheet, View, Text, TouchableOpacity, FlatList,
-  Modal, TextInput, Alert, ScrollView, KeyboardAvoidingView, Platform,
+  Modal, TextInput, Alert, ScrollView,
   RefreshControl,
 } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
@@ -157,7 +158,7 @@ function CreateDeckModal({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={m.overlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="padding"
           style={{ width: '100%' }}
         >
         <View style={m.sheet}>
