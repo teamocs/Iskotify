@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image, Pressable } from 'react-native'
+import { Alert, StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Switch, Platform, Image, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -8,7 +8,9 @@ import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
+import { useModelDownload } from '../../hooks/useModelDownload'
 import { useTheme } from '../../theme/ThemeContext'
+import { AskKuyaModal } from '../../components/AskKuyaModal'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -287,6 +289,23 @@ export default function HomeScreen() {
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
   const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
+  const { modelStatus } = useModelDownload(() => {})
+  const [chatVisible, setChatVisible] = useState(false)
+
+  const onAskPress = () => {
+    if (modelStatus === 'ready') {
+      setChatVisible(true)
+    } else {
+      Alert.alert(
+        'Install AI Reviewer first',
+        'Tap "Get it" to download the AI Reviewer engine.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get it', onPress: () => router.push('/(tabs)/practice') },
+        ],
+      )
+    }
+  }
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -306,6 +325,21 @@ export default function HomeScreen() {
     kuyaName: { fontSize: typo.md, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
     kuyaBadge: { marginLeft: 'auto', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
     kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    askPill: {
+      marginLeft: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    askPillDisabled: { opacity: 0.5 },
+    askPillText: {
+      fontFamily: 'Lexend_500Medium',
+      fontSize: 11,
+      color: t.textSecondary,
+    },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 18, fontFamily: 'Lexend_400Regular' },
     statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
     statCard: { flex: 1, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, alignItems: 'center' },
@@ -409,6 +443,14 @@ export default function HomeScreen() {
                 <View style={s.kuyaNameRow}>
                   <Text style={s.kuyaName}>Kuya Baw</Text>
                   <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
+                  <Pressable
+                    style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
+                    onPress={onAskPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
+                  >
+                    <Text style={s.askPillText}>💬 Ask</Text>
+                  </Pressable>
                 </View>
                 <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
               </View>
@@ -545,6 +587,8 @@ export default function HomeScreen() {
         onToggle={() => void toggleNotifs(focusedListings)}
         onClose={() => setShowNotifModal(false)}
       />
+
+      <AskKuyaModal visible={chatVisible} onClose={() => setChatVisible(false)} />
     </SafeAreaView>
   )
 }

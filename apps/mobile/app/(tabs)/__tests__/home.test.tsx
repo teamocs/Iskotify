@@ -26,6 +26,21 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Bell1Solid: {},
 }))
 
+jest.mock('../../../hooks/useModelDownload', () => ({
+  useModelDownload: () => ({
+    modelStatus: 'absent',
+    progress: 0,
+    bytesDownloaded: 0,
+    bytesTotal: 0,
+    startDownload: jest.fn(),
+    lastError: null,
+  }),
+}))
+
+jest.mock('../../../components/AskKuyaModal', () => ({
+  AskKuyaModal: () => null,
+}))
+
 const mockUseHomeStats = jest.fn()
 
 jest.mock('../../../hooks/useHomeStats', () => ({
