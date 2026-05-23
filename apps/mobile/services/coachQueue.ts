@@ -1,7 +1,7 @@
 import { eq, and, asc, lt, ne } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { coachPhrases, userRequirements } from '../db/schema'
-import type { CoachCategory } from './coachPrompts'
+import { COACH_CATEGORIES, type CoachCategory } from './coachPrompts'
 
 export interface QueuedPhrase {
   id: number
@@ -24,14 +24,17 @@ export async function loadFreshPhrases(
       eq(coachPhrases.contextHash, contextHash),
     ))
     .orderBy(asc(coachPhrases.generatedAt))
-  return rows.map(r => ({
-    id: r.id,
-    category: r.category as CoachCategory,
-    text: r.text,
-    generatedAt: r.generatedAt,
-    contextHash: r.contextHash,
-    consumed: r.consumed,
-  }))
+  const known = new Set<string>(COACH_CATEGORIES)
+  return rows
+    .filter(r => known.has(r.category))
+    .map(r => ({
+      id: r.id,
+      category: r.category as CoachCategory,
+      text: r.text,
+      generatedAt: r.generatedAt,
+      contextHash: r.contextHash,
+      consumed: r.consumed,
+    }))
 }
 
 export async function pruneStalePhrases(
@@ -71,6 +74,10 @@ export async function markConsumed(
     .where(eq(coachPhrases.id, id))
 }
 
+/**
+ * Deletes consumed rows where `generated_at < (now - olderThanMs)`.
+ * Rows exactly at the boundary are kept (strict less-than).
+ */
 export async function gcOldConsumed(
   db: DrizzleClient,
   olderThanMs: number,

@@ -108,6 +108,14 @@ describe('coachQueue — requirements', () => {
     expect(ids).toEqual([])
   })
 
+  it('toggleRequirement(false) is a no-op on non-existent key', async () => {
+    const db = makeDb()
+    // Should not throw
+    await toggleRequirement(db, 'upcat-2026', 99, false)
+    const ids = await getAcquiredRequirementIndices(db, 'upcat-2026')
+    expect(ids).toEqual([])
+  })
+
   it('toggleRequirement(true) twice for same key is idempotent', async () => {
     const db = makeDb()
     await toggleRequirement(db, 'upcat-2026', 0, true)
