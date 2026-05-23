@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Platform, View, Text, Image } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SQLiteProvider } from 'expo-sqlite'
@@ -45,33 +47,35 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-      {/* DB + navigation tree — children only render once SQLite is open */}
-      <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
-        <DrizzleProvider>
-          <ThemeProvider>
-            <AppInit onReady={handleReady} />
-          </ThemeProvider>
-        </DrizzleProvider>
-      </SQLiteProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        {/* DB + navigation tree — children only render once SQLite is open */}
+        <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
+          <DrizzleProvider>
+            <ThemeProvider>
+              <AppInit onReady={handleReady} />
+            </ThemeProvider>
+          </DrizzleProvider>
+        </SQLiteProvider>
 
-      {/*
-        Loading overlay lives OUTSIDE SQLiteProvider so it shows on the very
-        first frame — before the DB has opened and before AppInit mounts.
-        Hides once AppInit signals ready AND fonts are loaded.
-      */}
-      {(!appReady || !fontsReady) && (
-        <View style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Image
-            source={require('../assets/images/icon.png')}
-            style={{ width: 80, height: 80, borderRadius: 20 }}
-          />
-        </View>
-      )}
-    </>
+        {/*
+          Loading overlay lives OUTSIDE SQLiteProvider so it shows on the very
+          first frame — before the DB has opened and before AppInit mounts.
+          Hides once AppInit signals ready AND fonts are loaded.
+        */}
+        {(!appReady || !fontsReady) && (
+          <View style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={{ width: 80, height: 80, borderRadius: 20 }}
+            />
+          </View>
+        )}
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   )
 }
 
