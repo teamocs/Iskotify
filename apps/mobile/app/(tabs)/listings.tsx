@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native'
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ScrollView, RefreshControl } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -148,7 +149,7 @@ export default function ListingsScreen() {
     <SafeAreaView style={s.root}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
       >
 
       <View style={s.header}>
