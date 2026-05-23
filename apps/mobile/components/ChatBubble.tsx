@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../theme/ThemeContext'
 import type { ChatMessage } from '../hooks/useKuyaChat'
+import { TypingDots } from './TypingDots'
 
 interface Props {
   message: ChatMessage
@@ -49,7 +50,24 @@ export function ChatBubble({ message }: Props) {
       fontSize: typo.xs,
       fontFamily: 'Lexend_400Regular',
     },
+    slowHint: {
+      fontStyle: 'italic',
+      color: t.textSecondary,
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.sm,
+    },
   }), [t, typo])
+
+  const [showSlowHint, setShowSlowHint] = useState(false)
+
+  useEffect(() => {
+    if (!message.isStreaming || message.text.length > 0) {
+      setShowSlowHint(false)
+      return
+    }
+    const t = setTimeout(() => setShowSlowHint(true), 8000)
+    return () => clearTimeout(t)
+  }, [message.isStreaming, message.text])
 
   const timeStr = new Date(message.timestamp).toLocaleTimeString('en-PH', {
     hour: '2-digit',
@@ -67,10 +85,18 @@ export function ChatBubble({ message }: Props) {
           accessibilityRole="text"
           accessibilityLiveRegion={message.isStreaming ? 'polite' : 'none'}
         >
-          <Text style={[s.text, isUser ? s.textUser : s.textAssistant]}>
-            {message.text}
-            {message.isStreaming && <Text style={s.cursor}>▍</Text>}
-          </Text>
+          {message.isStreaming && message.text.length === 0 ? (
+            showSlowHint ? (
+              <Text style={s.slowHint}>Kuya Baw is thinking...</Text>
+            ) : (
+              <TypingDots />
+            )
+          ) : (
+            <Text style={[s.text, isUser ? s.textUser : s.textAssistant]}>
+              {message.text}
+              {message.isStreaming && <Text style={s.cursor}>▍</Text>}
+            </Text>
+          )}
           {message.error && <Text style={s.error}>{message.error}</Text>}
         </View>
       </View>
