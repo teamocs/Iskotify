@@ -28,7 +28,7 @@ const RING: Template[] = [
     : `Slow and steady wins. Wag ka mag-stress, kaya mo 'yan. 💪`,
 
   s => s.weakTopics.length >= 2
-    ? `May ${s.weakTopics.length} weak areas ka pa. Isa-isa lang, today si ${s.weakTopics[0]?.topicName} muna. 🎯`
+    ? `May ${s.weakTopics.length} weak areas ka pa. Isa-isa lang, today si ${s.weakTopics[0]?.topicName ?? 'topic'} muna. 🎯`
     : `Maganda ang progress mo. Tuloy lang ang review! 📚`,
 
   s => s.listing && s.daysLeft != null && s.daysLeft > 30

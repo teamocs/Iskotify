@@ -49,10 +49,15 @@ describe('pickTemplate', () => {
     expect(a).toBe(b)
   })
 
-  it('produces different phrases at different indices (over the ring size)', () => {
+  it('produces at least 13 distinct phrases over 15 indices for full stats', () => {
     const phrases = new Set<string>()
     for (let i = 0; i < 15; i++) phrases.add(pickTemplate(FULL, i))
-    expect(phrases.size).toBeGreaterThanOrEqual(10)
+    expect(phrases.size).toBeGreaterThanOrEqual(13)
+  })
+
+  it('handles negative indices via true-modulo wrap', () => {
+    expect(pickTemplate(FULL, -1)).toBe(pickTemplate(FULL, 14))
+    expect(pickTemplate(FULL, -15)).toBe(pickTemplate(FULL, 0))
   })
 
   it('wraps around — index beyond ring length returns same as index % ringSize', () => {
