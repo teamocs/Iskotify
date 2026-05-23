@@ -103,6 +103,21 @@ const MIGRATIONS = [
   `ALTER TABLE flashcards ADD COLUMN ai_correct_index INTEGER`,
   `ALTER TABLE flashcards ADD COLUMN ai_explanation TEXT`,
   `ALTER TABLE flashcards ADD COLUMN ai_enhanced_at INTEGER`,
+  `CREATE TABLE IF NOT EXISTS coach_phrases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    category TEXT NOT NULL,
+    text TEXT NOT NULL,
+    generated_at INTEGER NOT NULL,
+    context_hash TEXT NOT NULL,
+    consumed INTEGER NOT NULL DEFAULT 0
+  )`,
+  `CREATE INDEX IF NOT EXISTS coach_phrases_consumed_idx ON coach_phrases (consumed, generated_at)`,
+  `CREATE TABLE IF NOT EXISTS user_requirements (
+    listing_slug TEXT NOT NULL,
+    requirement_index INTEGER NOT NULL,
+    acquired_at INTEGER NOT NULL,
+    PRIMARY KEY (listing_slug, requirement_index)
+  )`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

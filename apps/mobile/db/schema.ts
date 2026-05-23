@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
 
 export const subjects = sqliteTable('subjects', {
   id: text('id').primaryKey(),
@@ -101,3 +101,22 @@ export const practiceSessions = sqliteTable('practice_sessions', {
   durationSecs: integer('duration_secs').notNull().default(0),
   completedAt:  integer('completed_at').notNull(),
 })
+
+export const coachPhrases = sqliteTable('coach_phrases', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  category: text('category').notNull(),
+  text: text('text').notNull(),
+  generatedAt: integer('generated_at').notNull(),
+  contextHash: text('context_hash').notNull(),
+  consumed: integer('consumed', { mode: 'boolean' }).notNull().default(false),
+}, t => [
+  index('coach_phrases_consumed_idx').on(t.consumed, t.generatedAt),
+])
+
+export const userRequirements = sqliteTable('user_requirements', {
+  listingSlug: text('listing_slug').notNull(),
+  requirementIndex: integer('requirement_index').notNull(),
+  acquiredAt: integer('acquired_at').notNull(),
+}, t => [
+  primaryKey({ columns: [t.listingSlug, t.requirementIndex] }),
+])
