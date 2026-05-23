@@ -3,7 +3,7 @@
     "name": "Iskotify",
     "slug": "iskotify",
     "scheme": "iskotify",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -30,7 +30,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#831626"
       },
-      "versionCode": 9
+      "versionCode": 10
     },
     "web": {
       "bundler": "metro",
