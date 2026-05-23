@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
   View, Text, TextInput, FlatList, StyleSheet,
-  TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
@@ -165,8 +166,12 @@ export default function OnboardingScreen() {
     const isValid = fullName.trim().length > 0 && gradeLevel !== null
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          bottomOffset={20}
+        >
 
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 28 }}>
               <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
@@ -229,8 +234,7 @@ export default function OnboardingScreen() {
                 Next →
               </Text>
             </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     )
   }
