@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as Notifications from 'expo-notifications'
-import { createDownloadTask, setConfig } from '@kesha-antonov/react-native-background-downloader'
+import { createDownloadTask, setConfig, completeHandler } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
 import { modelExists, hasEnoughRam, MODEL_PATH, MODEL_DOWNLOAD_URL } from '../services/llm'
 
@@ -121,6 +121,7 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     })
 
     task.done(async ({ bytesTotal }) => {
+      try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
       if (!isMountedRef.current) return
       setModelStatus('ready')
       setProgress(1)
@@ -144,6 +145,7 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     })
 
     task.error(({ error, errorCode }) => {
+      try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
       const wrapped = new Error(`Download failed (code ${errorCode}): ${error}`)
       console.warn('[useModelDownload] download failed:', wrapped)
       if (!isMountedRef.current) return
@@ -154,6 +156,8 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
       setLastError(wrapped)
       taskRef.current = null
     })
+
+    task.start()
   }, [modelStatus])
 
   return { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload, lastError }

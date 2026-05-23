@@ -11,6 +11,7 @@ jest.mock('@kesha-antonov/react-native-background-downloader', () => ({
   __esModule: true,
   createDownloadTask: jest.fn(),
   setConfig: jest.fn(),
+  completeHandler: jest.fn(),
 }))
 
 jest.mock('expo-notifications', () => ({
@@ -78,6 +79,7 @@ describe('useModelDownload', () => {
       progress: jest.fn().mockReturnThis(),
       done: jest.fn().mockReturnThis(),
       error: jest.fn().mockReturnThis(),
+      start: jest.fn(),
       stop: jest.fn(),
     }
     const { createDownloadTask, setConfig } = require('@kesha-antonov/react-native-background-downloader')
@@ -97,6 +99,7 @@ describe('useModelDownload', () => {
     expect(setConfig).toHaveBeenCalledWith(
       expect.objectContaining({ showNotificationsEnabled: true })
     )
+    expect(fakeTask.start).toHaveBeenCalledTimes(1)
   })
 
   it('exposes bytesDownloaded and bytesTotal as 0 initially', async () => {
