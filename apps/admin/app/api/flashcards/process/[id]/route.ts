@@ -34,6 +34,16 @@ interface GeminiResponse {
   cards: GeminiCard[]
 }
 
+function extractJson(raw: string): string {
+  const trimmed = raw.trim()
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fenced && fenced[1]) return fenced[1].trim()
+  const first = trimmed.indexOf('{')
+  const last = trimmed.lastIndexOf('}')
+  if (first !== -1 && last !== -1 && last > first) return trimmed.slice(first, last + 1)
+  return trimmed
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,7 +89,14 @@ export async function POST(
     const base64 = Buffer.from(buffer).toString('base64')
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        maxOutputTokens: 16384,
+        temperature: 0.2,
+      },
+    })
 
     const result = await model.generateContent([
       { text: PROMPT },
@@ -89,8 +106,9 @@ export async function POST(
     const raw = result.response.text()
     let parsed: GeminiResponse
     try {
-      parsed = JSON.parse(raw)
+      parsed = JSON.parse(extractJson(raw))
     } catch {
+      console.error('[process] failed to parse Gemini response. Raw output (first 500 chars):', raw.slice(0, 500))
       throw new Error('Gemini returned unexpected format')
     }
 
