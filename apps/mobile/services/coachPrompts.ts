@@ -1,21 +1,15 @@
 import type { HomeStats } from '../hooks/useHomeStats'
 
-export type CoachCategory =
-  | 'motivation'
-  | 'weak_area'
-  | 'exam_countdown'
-  | 'streak'
-  | 'requirements'
-  | 'daily_reminder'
-
-export const COACH_CATEGORIES: CoachCategory[] = [
+export const COACH_CATEGORIES = [
   'motivation',
   'weak_area',
   'exam_countdown',
   'streak',
   'requirements',
   'daily_reminder',
-]
+] as const
+
+export type CoachCategory = typeof COACH_CATEGORIES[number]
 
 export interface CoachContext extends HomeStats {
   acquiredCount: number
@@ -96,6 +90,7 @@ export function parseCoachPhrase(text: string): string | null {
 
 export function computeContextHash(ctx: CoachContext): string {
   const key =
+    `${ctx.listing?.title ?? '-'}|` +
     `${ctx.daysLeft ?? '-'}|` +
     `${ctx.weakTopics[0]?.topicId ?? '-'}|` +
     `${ctx.streakDays}|` +

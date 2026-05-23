@@ -137,6 +137,15 @@ describe('computeContextHash', () => {
     expect(a).not.toBe(b)
   })
 
+  it('changes when listing.title changes', () => {
+    const a = computeContextHash(BASE)
+    const b = computeContextHash({
+      ...BASE,
+      listing: { title: 'DOST 2026', examDate: BASE.listing!.examDate },
+    })
+    expect(a).not.toBe(b)
+  })
+
   it('changes when weakTopics[0] topicId changes', () => {
     const a = computeContextHash(BASE)
     const b = computeContextHash({ ...BASE, weakTopics: [{ topicId: 't2', topicName: 'Biology', accuracy: 50 }] })
