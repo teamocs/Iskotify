@@ -219,9 +219,9 @@ export async function streamChatInference(
       const result = await ctx.completion(
         {
           prompt,
-          n_predict: 250,
+          n_predict: 100,
           temperature: 0.5,
-          top_p: 0.9,
+          top_k: 40,
           repeat_penalty: 1.1,
           stop: ['<|im_end|>', '</s>', '<|im_start|>'],
         },

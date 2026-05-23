@@ -117,6 +117,23 @@ describe('buildChatPrompt', () => {
     expect(() => buildChatPrompt('topic', '')).not.toThrow()
     expect(() => buildChatPrompt('progress', '', 'ctx')).not.toThrow()
   })
+
+  it('both system prompts include the conciseness directive', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    expect(progress).toContain('No preamble')
+    expect(topic).toContain('No preamble')
+  })
+
+  it('progress prompt enforces max 2 sentences', () => {
+    const prompt = buildChatPrompt('progress', 'q', 'ctx')
+    expect(prompt).toContain('1 sentence, max 2')
+  })
+
+  it('topic prompt enforces max 2 sentences total', () => {
+    const prompt = buildChatPrompt('topic', 'q')
+    expect(prompt).toContain('Maximum 2 sentences total')
+  })
 })
 
 describe('parseChatChunk', () => {
