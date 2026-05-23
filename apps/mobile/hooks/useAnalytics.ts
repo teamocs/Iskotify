@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { practiceSessions, topics, savedDecks } from '../db/schema'
@@ -30,6 +30,7 @@ export interface AnalyticsData {
   topicMastery: TopicMastery[]
   recentSessions: RecentSession[]
   isLoading: boolean
+  refresh: () => Promise<void>
 }
 
 export function computeStreak(sessions: { completedAt: number }[]): number {
@@ -64,14 +65,17 @@ export function computeWeeklyData(
 
 export function useAnalytics(slug: string | 'overall'): AnalyticsData {
   const db = useDb()
-  const [data, setData] = useState<AnalyticsData>({
+  const [data, setData] = useState<Omit<AnalyticsData, 'refresh'>>({
     sessionCount: 0, avgAccuracy: null, streak: 0,
     weeklyData: [], topicMastery: [], recentSessions: [], isLoading: true,
   })
+  const isMountedRef = useRef(true)
+  const loadingRef = useRef(false)
 
-  useFocusEffect(useCallback(() => {
-    let cancelled = false
-    async function load() {
+  const load = useCallback(async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
+    try {
       const [allSessions, topicRows, deckRows] = await Promise.all([
         db.select().from(practiceSessions),
         db.select({ id: topics.id, name: topics.name }).from(topics),
@@ -125,11 +129,22 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
         })
 
-      if (!cancelled) setData({ sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions, isLoading: false })
+      if (isMountedRef.current) {
+        setData({ sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions, isLoading: false })
+      }
+    } catch (e) {
+      console.error('[useAnalytics] load error:', e)
+    } finally {
+      loadingRef.current = false
     }
-    void load()
-    return () => { cancelled = true }
-  }, [db, slug]))
+  }, [db, slug])
 
-  return data
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  useFocusEffect(useCallback(() => { void load() }, [load]))
+
+  return { ...data, refresh: load }
 }

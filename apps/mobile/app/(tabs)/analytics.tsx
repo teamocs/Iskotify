@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native'
+import { useState, useMemo, useCallback } from 'react'
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -58,6 +58,12 @@ export default function AnalyticsScreen() {
   const { focusListings } = useFocusListings()
   const [activeSlug, setActiveSlug] = useState<string | 'overall'>('overall')
   const analytics = useAnalytics(activeSlug)
+  const { refresh } = analytics
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await refresh() } finally { setRefreshing(false) }
+  }, [refresh])
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
@@ -136,7 +142,19 @@ export default function AnalyticsScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+            progressBackgroundColor={t.surface}
+          />
+        }
+      >
 
         {/* Stats grid */}
         <View style={s.statsGrid}>
