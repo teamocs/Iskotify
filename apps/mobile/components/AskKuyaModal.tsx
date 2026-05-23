@@ -4,6 +4,7 @@ import {
   Platform, Pressable, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 import { useKuyaChat, type ChatMessage } from '../hooks/useKuyaChat'
 import { ChatBubble } from './ChatBubble'
@@ -45,6 +46,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
   const { mode, setMode, messages, send, abort, isStreaming } = useKuyaChat()
   const [input, setInput] = useState('')
   const listRef = useRef<FlatList<ChatMessage>>(null)
+  const insets = useSafeAreaInsets()
 
   const onSend = useCallback(() => {
     const text = input.trim()
@@ -73,6 +75,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
   }, [])
 
   const s = useMemo(() => StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: t.bg },
     container: { flex: 1, backgroundColor: t.bg },
     header: {
       flexDirection: 'row',
@@ -199,10 +202,12 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
   const sendDisabled = input.trim().length === 0 && !isStreaming
 
   return (
-    <KeyboardAvoidingView
-      style={s.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={s.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      >
       {/* Header */}
       <View style={s.header}>
         <Image
@@ -292,7 +297,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
       )}
 
       {/* Input */}
-      <View style={s.inputRow}>
+      <View style={[s.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <TextInput
           style={s.input}
           value={input}
@@ -315,6 +320,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
           <Text style={s.sendBtnText}>{isStreaming ? '■' : '→'}</Text>
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
