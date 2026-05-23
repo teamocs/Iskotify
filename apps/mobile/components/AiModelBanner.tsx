@@ -7,10 +7,17 @@ import { useTheme } from '../theme/ThemeContext'
 
 const MODEL_SIZE_LABEL = '~950 MB'
 
+function formatMB(bytes: number): string {
+  if (bytes <= 0) return '0 MB'
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`
+  return `${mb.toFixed(0)} MB`
+}
+
 export function AiModelBanner() {
   const { theme: t, typo } = useTheme()
   const db = useDb()
-  const { modelStatus, progress, startDownload } = useModelDownload(
+  const { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload } = useModelDownload(
     () => { void runEnhancement(db).catch(e => console.warn('[AiModelBanner] enhance:', e)) }
   )
   const [showSheet, setShowSheet] = useState(false)
@@ -36,14 +43,47 @@ export function AiModelBanner() {
       color: '#fca5a5',
       fontSize: 16,
     },
+    downloadingBanner: {
+      backgroundColor: 'rgba(128,0,0,0.10)',
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(128,0,0,0.20)',
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 0,
+    },
+    downloadingHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    downloadingTitle: {
+      fontSize: typo.xs,
+      color: '#fca5a5',
+      fontFamily: 'Lexend_500Medium',
+    },
+    downloadingPct: {
+      fontSize: typo.xs,
+      color: '#fca5a5',
+      fontFamily: 'Outfit_600SemiBold',
+    },
+    downloadingBytes: {
+      fontSize: 11,
+      color: 'rgba(252,165,165,0.75)',
+      fontFamily: 'Lexend_400Regular',
+      marginBottom: 8,
+    },
     progressTrack: {
-      height: 3,
-      backgroundColor: 'rgba(128,0,0,0.15)',
-      marginBottom: 2,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: 'rgba(128,0,0,0.20)',
+      overflow: 'hidden',
+      marginBottom: 10,
     },
     progressFill: {
-      height: 3,
+      height: 6,
       backgroundColor: '#fca5a5',
+      borderRadius: 3,
     },
     modalBackdrop: {
       flex: 1,
@@ -105,6 +145,8 @@ export function AiModelBanner() {
     },
   }), [t, typo])
 
+  const pct = Math.round(progress * 100)
+
   return (
     <>
       {modelStatus === 'absent' && (
@@ -125,12 +167,21 @@ export function AiModelBanner() {
 
       {modelStatus === 'downloading' && (
         <View
-          style={s.progressTrack}
+          style={s.downloadingBanner}
           accessibilityRole="progressbar"
           accessibilityLabel="AI reviewer download progress"
-          accessibilityValue={{ now: Math.round(progress * 100), min: 0, max: 100 }}
+          accessibilityValue={{ now: pct, min: 0, max: 100 }}
         >
-          <View style={[s.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+          <View style={s.downloadingHeader}>
+            <Text style={s.downloadingTitle}>Downloading AI Reviewer Engine…</Text>
+            <Text style={s.downloadingPct}>{pct}%</Text>
+          </View>
+          <Text style={s.downloadingBytes}>
+            {formatMB(bytesDownloaded)} of {bytesTotal > 0 ? formatMB(bytesTotal) : MODEL_SIZE_LABEL} · keeps going in background
+          </Text>
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${pct}%` }]} />
+          </View>
         </View>
       )}
 
@@ -150,7 +201,6 @@ export function AiModelBanner() {
           />
           <View style={s.sheet}>
             <Text style={s.sheetTitle}>AI Reviewer Engine</Text>
-            <Text style={s.sheetLine}>Model: Qwen 2.5 1.5B Instruct (Q4_K_M)</Text>
             <Text style={s.sheetLine}>Download size: {MODEL_SIZE_LABEL}</Text>
             <Text style={s.sheetMeta}>Requires ≥ 2 GB RAM · Downloads in background</Text>
             <TouchableOpacity

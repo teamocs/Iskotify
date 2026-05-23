@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as Notifications from 'expo-notifications'
-import { createDownloadTask } from '@kesha-antonov/react-native-background-downloader'
+import { createDownloadTask, setConfig } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
 import { modelExists, hasEnoughRam, MODEL_PATH, MODEL_DOWNLOAD_URL } from '../services/llm'
 
@@ -9,11 +9,38 @@ export type ModelStatus = 'unknown' | 'absent' | 'downloading' | 'ready' | 'unsu
 interface UseModelDownload {
   modelStatus: ModelStatus
   progress: number
+  bytesDownloaded: number
+  bytesTotal: number
   startDownload: () => void
   lastError: Error | null
 }
 
 const DOWNLOAD_ID = 'qwen-model'
+
+let nativeConfigured = false
+function ensureNativeConfigured(): void {
+  if (nativeConfigured) return
+  nativeConfigured = true
+  try {
+    setConfig({
+      showNotificationsEnabled: true,
+      progressInterval: 500,
+      progressMinBytes: 256 * 1024,
+      notificationsGrouping: {
+        enabled: false,
+        texts: {
+          downloadTitle: 'Iskotify · AI Reviewer Engine',
+          downloadStarting: 'Preparing download…',
+          downloadProgress: 'Downloading… {progress}%',
+          downloadFinished: 'AI Reviewer ready',
+          downloadPaused: 'Paused',
+        },
+      },
+    })
+  } catch (err) {
+    console.warn('[useModelDownload] setConfig failed:', err)
+  }
+}
 
 async function ensureNotificationPermission(): Promise<void> {
   const { status } = await Notifications.getPermissionsAsync()
@@ -25,6 +52,8 @@ async function ensureNotificationPermission(): Promise<void> {
 export function useModelDownload(onDownloadComplete?: () => void): UseModelDownload {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('unknown')
   const [progress, setProgress] = useState(0)
+  const [bytesDownloaded, setBytesDownloaded] = useState(0)
+  const [bytesTotal, setBytesTotal] = useState(0)
   const [lastError, setLastError] = useState<Error | null>(null)
   const taskRef = useRef<DownloadTask | null>(null)
   const isMountedRef = useRef(true)
@@ -59,8 +88,13 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
   const startDownload = useCallback(() => {
     if (modelStatus === 'downloading' || modelStatus === 'ready') return
 
+    ensureNativeConfigured()
+    void ensureNotificationPermission()
+
     setModelStatus('downloading')
     setProgress(0)
+    setBytesDownloaded(0)
+    setBytesTotal(0)
     setLastError(null)
 
     const destination = MODEL_PATH.replace(/^file:\/\//, '')
@@ -72,18 +106,30 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     })
     taskRef.current = task
 
-    task.progress(({ bytesDownloaded, bytesTotal }) => {
+    task.begin(({ expectedBytes }) => {
       if (!isMountedRef.current) return
-      if (bytesTotal > 0) setProgress(bytesDownloaded / bytesTotal)
+      if (expectedBytes > 0) setBytesTotal(expectedBytes)
     })
 
-    task.done(async () => {
+    task.progress(({ bytesDownloaded, bytesTotal }) => {
+      if (!isMountedRef.current) return
+      setBytesDownloaded(bytesDownloaded)
+      if (bytesTotal > 0) {
+        setBytesTotal(bytesTotal)
+        setProgress(bytesDownloaded / bytesTotal)
+      }
+    })
+
+    task.done(async ({ bytesTotal }) => {
       if (!isMountedRef.current) return
       setModelStatus('ready')
       setProgress(1)
+      if (bytesTotal > 0) {
+        setBytesDownloaded(bytesTotal)
+        setBytesTotal(bytesTotal)
+      }
       taskRef.current = null
       try {
-        await ensureNotificationPermission()
         await Notifications.scheduleNotificationAsync({
           content: {
             title: 'AI Reviewer is ready!',
@@ -103,10 +149,12 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
       if (!isMountedRef.current) return
       setModelStatus('absent')
       setProgress(0)
+      setBytesDownloaded(0)
+      setBytesTotal(0)
       setLastError(wrapped)
       taskRef.current = null
     })
   }, [modelStatus])
 
-  return { modelStatus, progress, startDownload, lastError }
+  return { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload, lastError }
 }

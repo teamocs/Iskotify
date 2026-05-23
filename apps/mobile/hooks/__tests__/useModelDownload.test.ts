@@ -10,6 +10,7 @@ jest.mock('../../services/llm', () => ({
 jest.mock('@kesha-antonov/react-native-background-downloader', () => ({
   __esModule: true,
   createDownloadTask: jest.fn(),
+  setConfig: jest.fn(),
 }))
 
 jest.mock('expo-notifications', () => ({
@@ -73,12 +74,13 @@ describe('useModelDownload', () => {
     mockHasEnoughRam.mockReturnValue(true)
 
     const fakeTask = {
+      begin: jest.fn().mockReturnThis(),
       progress: jest.fn().mockReturnThis(),
       done: jest.fn().mockReturnThis(),
       error: jest.fn().mockReturnThis(),
       stop: jest.fn(),
     }
-    const { createDownloadTask } = require('@kesha-antonov/react-native-background-downloader')
+    const { createDownloadTask, setConfig } = require('@kesha-antonov/react-native-background-downloader')
     ;(createDownloadTask as jest.Mock).mockReturnValue(fakeTask)
 
     const { result } = renderHook(() => useModelDownload())
@@ -92,5 +94,17 @@ describe('useModelDownload', () => {
     expect(createDownloadTask).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'qwen-model', url: 'https://example.com/model.gguf' })
     )
+    expect(setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ showNotificationsEnabled: true })
+    )
+  })
+
+  it('exposes bytesDownloaded and bytesTotal as 0 initially', async () => {
+    mockModelExists.mockResolvedValue(false)
+    mockHasEnoughRam.mockReturnValue(true)
+    const { result } = renderHook(() => useModelDownload())
+    await act(async () => {})
+    expect(result.current.bytesDownloaded).toBe(0)
+    expect(result.current.bytesTotal).toBe(0)
   })
 })
