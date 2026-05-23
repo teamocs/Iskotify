@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -65,7 +65,12 @@ export default function ProfileScreen() {
     focusItemTitle: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
   }), [t, typo])
 
-  const load = useCallback(async () => {
+  const isMountedRef = useRef(true)
+  const loadingRef = useRef(false)
+
+  const loadProfile = useCallback(async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
     try {
       const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
       const s = rows[0]
@@ -81,22 +86,37 @@ export default function ProfileScreen() {
         listingTitle = lr[0]?.title ?? 'No exam selected'
       }
 
-      setProfile({
-        fullName: s.fullName || 'Student',
-        school: s.school || '—',
-        gradeLevel: s.gradeLevel ?? null,
-        googleId: s.googleId ?? '',
-        email: s.email ?? '',
-        listingTitle,
-      })
+      if (isMountedRef.current) {
+        setProfile({
+          fullName: s.fullName || 'Student',
+          school: s.school || '—',
+          gradeLevel: s.gradeLevel ?? null,
+          googleId: s.googleId ?? '',
+          email: s.email ?? '',
+          listingTitle,
+        })
+      }
     } catch (e) {
       console.warn('[profile] load error:', e)
+    } finally {
+      loadingRef.current = false
     }
   }, [db])
 
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
   useFocusEffect(useCallback(() => {
-    void load()
-  }, [load]))
+    void loadProfile()
+  }, [loadProfile]))
+
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await loadProfile() } finally { setRefreshing(false) }
+  }, [loadProfile])
 
   function handleChangeExam() {
     Alert.alert(
@@ -134,7 +154,7 @@ export default function ProfileScreen() {
     try {
       await importUserData(db)
       Alert.alert('Import Successful', 'Your data has been restored.', [
-        { text: 'OK', onPress: () => void load() },
+        { text: 'OK', onPress: () => void loadProfile() },
       ])
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not import data.'
@@ -144,7 +164,19 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+            progressBackgroundColor={t.surface}
+          />
+        }
+      >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Text style={[s.title, { marginBottom: 0 }]}>Profile</Text>
           <TouchableOpacity
