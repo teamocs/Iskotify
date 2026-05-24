@@ -16,11 +16,20 @@ import { AiModelBanner } from '../../components/AiModelBanner'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
-const STRENGTH_COLOR: Record<Strength, { bg: string; border: string; text: string; iconBg: string; iconColor: string }> = {
-  New:    { bg: 'rgba(128,0,0,0.10)',    border: 'rgba(128,0,0,0.25)',    text: '#fca5a5', iconBg: 'rgba(128,0,0,0.10)',    iconColor: '#fca5a5' },
+const STRENGTH_COLOR_STATIC: Record<Strength, { bg: string; border: string; text: string; iconBg: string; iconColor: string }> = {
+  New:    { bg: 'rgba(128,0,0,0.10)',    border: 'rgba(128,0,0,0.25)',    text: '',        iconBg: 'rgba(128,0,0,0.10)',    iconColor: '' },
   Weak:   { bg: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.22)',  text: '#f87171', iconBg: 'rgba(239,68,68,0.10)',  iconColor: '#f87171' },
   Review: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.22)', text: '#fbbf24', iconBg: 'rgba(245,158,11,0.08)', iconColor: '#fbbf24' },
   Strong: { bg: 'rgba(34,197,94,0.10)',  border: 'rgba(34,197,94,0.22)',  text: '#4ade80', iconBg: 'rgba(34,197,94,0.08)',  iconColor: '#4ade80' },
+}
+
+function useStrengthColor(strength: Strength) {
+  const { theme: t } = useTheme()
+  const base = STRENGTH_COLOR_STATIC[strength]
+  if (strength === 'New') {
+    return { ...base, text: t.accentText, iconColor: t.accentText }
+  }
+  return base
 }
 
 function lastPracticedLabel(ts: number | null): string {
@@ -36,7 +45,7 @@ function lastPracticedLabel(ts: number | null): string {
 
 type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; row: object }
 function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
-  const c = STRENGTH_COLOR[row.strength]
+  const c = useStrengthColor(row.strength)
   return (
     <TouchableOpacity
       style={rc.card}
@@ -56,7 +65,7 @@ function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
 
 type SStyles = { topicCard: object; topicIcon: object; topicName: object; topicSub: object; badge: object; badgeText: object; deckCard: object; deckIcon: object; deckName: object; deckSub: object; deckChevron: object; root: object; header: object; title: object; subtitle: object; chipsWrap: object; chipsScroll: object; chipsContent: object; chip: object; chipOn: object; chipTxt: object; chipTxtOn: object; secRow: object; secTitle: object; secSub: object; addBtn: object; addBtnTxt: object; list: object; empty: object }
 function TopicCard({ row, s }: { row: TopicRow; s: SStyles }) {
-  const c = STRENGTH_COLOR[row.strength]
+  const c = useStrengthColor(row.strength)
   return (
     <TouchableOpacity style={s.topicCard} onPress={() => router.push(`/practice/${row.topic.id}`)}>
       <View style={[s.topicIcon, { backgroundColor: c.iconBg }]}>

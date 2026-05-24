@@ -28,7 +28,7 @@ function WeeklyChart({ data }: { data: { dayLabel: string; accuracy: number | nu
     barBg: { width: '100%', height: 60, backgroundColor: t.surfaceSubtle, borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
     barFill: { width: '100%', borderRadius: 6 },
     barLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    barLabelToday: { color: '#fca5a5', fontWeight: '700' },
+    barLabelToday: { color: t.accentText, fontWeight: '700' },
     barPct: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
   return (
@@ -40,7 +40,7 @@ function WeeklyChart({ data }: { data: { dayLabel: string; accuracy: number | nu
           <View key={i} style={s.barCol}>
             <View style={s.barBg}>
               {bar.accuracy !== null && (
-                <View style={[s.barFill, { height, backgroundColor: isToday ? '#fca5a5' : 'rgba(128,0,0,0.55)' }]} />
+                <View style={[s.barFill, { height, backgroundColor: isToday ? t.accentText : 'rgba(128,0,0,0.55)' }]} />
               )}
             </View>
             <Text style={[s.barLabel, isToday && s.barLabelToday]}>{bar.dayLabel}</Text>
@@ -88,7 +88,7 @@ export default function AnalyticsScreen() {
     barBg: { width: '100%', height: 60, backgroundColor: t.surfaceSubtle, borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
     barFill: { width: '100%', borderRadius: 6 },
     barLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    barLabelToday: { color: '#fca5a5', fontWeight: '700' },
+    barLabelToday: { color: t.accentText, fontWeight: '700' },
     barPct: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     masteryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
     masteryLabel: { width: 90, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
@@ -161,7 +161,7 @@ export default function AnalyticsScreen() {
           <StatCard
             value={analytics.sessionCount > 0 ? String(analytics.sessionCount) : '—'}
             label="SESSIONS"
-            color="#fca5a5"
+            color={t.accentText}
           />
           <StatCard
             value={analytics.avgAccuracy !== null ? `${analytics.avgAccuracy}%` : '—'}

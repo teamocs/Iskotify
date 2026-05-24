@@ -210,7 +210,7 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
               <View style={s.listingRow}>
-                <Lineicons icon={SparkOutlined} size={12} color="#fca5a5" />
+                <Lineicons icon={SparkOutlined} size={12} color={t.accentText} />
                 <Text style={s.listingTitle} numberOfLines={1}>{profile.listingTitle}</Text>
               </View>
             </View>

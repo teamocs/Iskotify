@@ -21,7 +21,7 @@ export default function AboutScreen() {
     heroIcon: { width: 80, height: 80, borderRadius: 20, marginBottom: 14 },
     heroName: { fontFamily: 'Outfit_700Bold', fontSize: typo.xl + 2, color: t.textPrimary, letterSpacing: -0.4 },
     heroBadge: { marginTop: 6, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3 },
-    heroBadgeTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.xs, color: '#fca5a5' },
+    heroBadgeTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.xs, color: t.accentText },
     card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 16, marginBottom: 12 },
     cardTitle: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 8 },
     cardBody: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: typo.sm * 1.6 },

@@ -36,11 +36,11 @@ export function AiModelBanner() {
     bannerText: {
       flex: 1,
       fontSize: typo.xs,
-      color: '#fca5a5',
+      color: t.accentText,
       fontFamily: 'Lexend_500Medium',
     },
     bannerChevron: {
-      color: '#fca5a5',
+      color: t.accentText,
       fontSize: 16,
     },
     downloadingBanner: {
@@ -59,12 +59,12 @@ export function AiModelBanner() {
     },
     downloadingTitle: {
       fontSize: typo.xs,
-      color: '#fca5a5',
+      color: t.accentText,
       fontFamily: 'Lexend_500Medium',
     },
     downloadingPct: {
       fontSize: typo.xs,
-      color: '#fca5a5',
+      color: t.accentText,
       fontFamily: 'Outfit_600SemiBold',
     },
     downloadingBytes: {
@@ -82,7 +82,7 @@ export function AiModelBanner() {
     },
     progressFill: {
       height: 6,
-      backgroundColor: '#fca5a5',
+      backgroundColor: t.accentText,
       borderRadius: 3,
     },
     modalBackdrop: {

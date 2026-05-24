@@ -31,19 +31,19 @@ function CalendarStrip({
     pill: { marginLeft: 'auto', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
     pillTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
     pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
-    pillExamTxt: { color: '#fca5a5' },
+    pillExamTxt: { color: t.accentText },
     row: { flexDirection: 'row', justifyContent: 'space-between' },
     dayCol: { alignItems: 'center', gap: 3, flex: 1 },
     letter: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    letterToday: { color: '#fca5a5' },
+    letterToday: { color: t.accentText },
     circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     circleToday: { backgroundColor: t.textPrimary },
-    circleExam: { borderWidth: 1.5, borderColor: '#fca5a5' },
+    circleExam: { borderWidth: 1.5, borderColor: t.accentText },
     num: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
     numToday: { color: t.bg },
     dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
     dotActive: { backgroundColor: '#60a5fa' },
-    dotExam: { backgroundColor: '#fca5a5' },
+    dotExam: { backgroundColor: t.accentText },
   }), [t, typo])
 
   const [weekOffset, setWeekOffset] = useState(0)
@@ -250,7 +250,7 @@ function NotificationModal({
             value={enabled}
             onValueChange={onToggle}
             trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(252,165,165,0.60)' }}
-            thumbColor={enabled ? '#fca5a5' : 'rgba(255,255,255,0.55)'}
+            thumbColor={enabled ? t.accentText : 'rgba(255,255,255,0.55)'}
             ios_backgroundColor="rgba(255,255,255,0.15)"
           />
         </View>
@@ -329,9 +329,9 @@ export default function HomeScreen() {
     kuyaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
     kuyaAvatarLg: { width: 80, height: 80, borderRadius: 16, overflow: 'hidden', flexShrink: 0 },
     kuyaNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
-    kuyaName: { fontSize: typo.md, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
+    kuyaName: { fontSize: typo.md, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
     kuyaBadge: { marginLeft: 'auto', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-    kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     askPill: {
       marginLeft: 8,
       paddingHorizontal: 10,
@@ -430,7 +430,7 @@ export default function HomeScreen() {
               <Lineicons
                 icon={notifEnabled ? Bell1Solid : Bell1Outlined}
                 size={20}
-                color={notifEnabled ? '#fca5a5' : t.textTertiary}
+                color={notifEnabled ? t.accentText : t.textTertiary}
               />
             </TouchableOpacity>
             <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
@@ -484,7 +484,7 @@ export default function HomeScreen() {
           {/* Stats row */}
           <View style={s.statsRow}>
             <View style={s.statCard}>
-              <Text style={[s.statVal, { color: '#fca5a5' }]}>{daysLeft ?? '—'}</Text>
+              <Text style={[s.statVal, { color: t.accentText }]}>{daysLeft ?? '—'}</Text>
               <Text style={s.statLbl}>DAYS LEFT</Text>
             </View>
             <View style={s.statCard}>

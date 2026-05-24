@@ -248,14 +248,14 @@ export default function ListingsScreen() {
                 <Lineicons
                   icon={exam ? GraduationCap1Outlined : SparkOutlined}
                   size={16}
-                  color={exam ? '#fca5a5' : '#4ade80'}
+                  color={exam ? t.accentText : '#4ade80'}
                 />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={s.row1}>
                   <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
                   <View style={[s.typeBadge, exam ? s.examBadge : s.scholarBadge]}>
-                    <Text style={[s.typeTxt, { color: exam ? '#fca5a5' : '#4ade80' }]}>
+                    <Text style={[s.typeTxt, { color: exam ? t.accentText : '#4ade80' }]}>
                       {exam ? 'Exam' : 'Scholar'}
                     </Text>
                   </View>

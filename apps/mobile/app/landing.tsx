@@ -111,7 +111,7 @@ export default function LandingScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 }}>
             {['Flashcards', 'Progress Tracking', 'Weak Area Focus', 'Sync Across Devices'].map(f => (
               <View key={f} style={{ backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: '#fca5a5' }}>{f}</Text>
+                <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: t.accentText }}>{f}</Text>
               </View>
             ))}
           </View>
