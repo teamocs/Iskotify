@@ -9,6 +9,11 @@ import { useRecordSession } from '../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../utils/mcDistractors'
 import { parseAiOptions } from '../../utils/parseAiOptions'
 import { useTheme } from '../../theme/ThemeContext'
+import { StatusBar } from 'expo-status-bar'
+import { useFocusModePref } from '../../hooks/useFocusModePref'
+import { useFocusMode } from '../../hooks/useFocusMode'
+import { FocusModeToggle } from '../../components/FocusModeToggle'
+import { SessionPausedOverlay } from '../../components/SessionPausedOverlay'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -59,6 +64,16 @@ export default function QuizScreen() {
 
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
+
+  const { enabled: focusEnabled, setEnabled: setFocusEnabled } = useFocusModePref()
+
+  const focusMode = useFocusMode({
+    enabled: focusEnabled,
+    active: phase === 'quiz',
+    onTimerPause: pauseTimer,
+    onTimerResume: resumeTimer,
+    onExitConfirmed: () => router.back(),
+  })
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -242,6 +257,34 @@ export default function QuizScreen() {
     timerAnimRef.current?.stop()
   }
 
+  function pauseTimer() {
+    // Halts the interval + animation but keeps timeLeftRef.current as-is
+    // so resumeTimer can pick up from where we left off.
+    stopTimer()
+  }
+
+  function resumeTimer() {
+    const secs = timeLeftRef.current
+    if (secs <= 0) return
+    stopTimer()
+    // Reset progress bar to the proportion currently remaining
+    timerProgress.setValue(secs / timerSecsRef.current)
+    timerAnimRef.current = Animated.timing(timerProgress, {
+      toValue: 0,
+      duration: secs * 1000,
+      useNativeDriver: false,
+    })
+    timerAnimRef.current.start()
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1
+      setTimeLeft(timeLeftRef.current)
+      if (timeLeftRef.current <= 0) {
+        stopTimer()
+        advanceRef.current(null)
+      }
+    }, 1000)
+  }
+
   function startTimer() {
     const secs = timerSecsRef.current
     stopTimer()
@@ -395,6 +438,7 @@ export default function QuizScreen() {
             <Text style={s.ruleItem}>🔤  Tap A / B / C / D to answer</Text>
             <Text style={s.ruleItem}>🔒  No hints — results revealed at the end</Text>
           </View>
+          <FocusModeToggle enabled={focusEnabled} onToggle={setFocusEnabled} />
           <TouchableOpacity style={s.startBtn} onPress={() => startQuiz()}>
             <Text style={s.startBtnTxt}>Start Quiz →</Text>
           </TouchableOpacity>
@@ -634,6 +678,17 @@ export default function QuizScreen() {
         </View>
 
       </ScrollView>
+
+      <SessionPausedOverlay
+        visible={focusMode.isPaused}
+        timeRemainingSecs={timeLeft}
+        onResume={focusMode.resumeSession}
+        onEnd={() => {
+          focusMode.endSession()
+          setPhase('results')
+        }}
+      />
+      {focusEnabled && phase === 'quiz' && <StatusBar hidden />}
     </SafeAreaView>
   )
 }
