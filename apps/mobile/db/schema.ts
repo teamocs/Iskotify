@@ -67,6 +67,7 @@ export const userSettings = sqliteTable('user_settings', {
   email: text('email'),
   notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
   theme: text('theme').notNull().default('system'),
+  focusModeEnabled: integer('focus_mode_enabled', { mode: 'boolean' }).notNull().default(true),
 })
 
 export const userProgress = sqliteTable('user_progress', {

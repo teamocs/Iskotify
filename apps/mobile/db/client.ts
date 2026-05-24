@@ -118,6 +118,7 @@ const MIGRATIONS = [
     acquired_at INTEGER NOT NULL,
     PRIMARY KEY (listing_slug, requirement_index)
   )`,
+  `ALTER TABLE user_settings ADD COLUMN focus_mode_enabled INTEGER NOT NULL DEFAULT 1`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
