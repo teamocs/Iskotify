@@ -10,6 +10,11 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { useTheme } from '../../../theme/ThemeContext'
+import { StatusBar } from 'expo-status-bar'
+import { useFocusModePref } from '../../../hooks/useFocusModePref'
+import { useFocusMode } from '../../../hooks/useFocusMode'
+import { FocusModeToggle } from '../../../components/FocusModeToggle'
+import { SessionPausedOverlay } from '../../../components/SessionPausedOverlay'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -180,6 +185,8 @@ export default function DeckQuizScreen() {
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
 
+  const { enabled: focusEnabled, setEnabled: setFocusEnabled } = useFocusModePref()
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeLeftRef = useRef(20)
   const advanceRef = useRef<(sel: number | null) => void>(() => {})
@@ -247,6 +254,39 @@ export default function DeckQuizScreen() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     timerAnimRef.current?.stop()
   }
+
+  function pauseTimer() {
+    stopTimer()
+  }
+
+  function resumeTimer() {
+    const secs = timeLeftRef.current
+    if (secs <= 0) return
+    stopTimer()
+    timerProgress.setValue(secs / timerSecsRef.current)
+    timerAnimRef.current = Animated.timing(timerProgress, {
+      toValue: 0,
+      duration: secs * 1000,
+      useNativeDriver: false,
+    })
+    timerAnimRef.current.start()
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1
+      setTimeLeft(timeLeftRef.current)
+      if (timeLeftRef.current <= 0) {
+        stopTimer()
+        advanceRef.current(null)
+      }
+    }, 1000)
+  }
+
+  const focusMode = useFocusMode({
+    enabled: focusEnabled,
+    active: phase === 'quiz',
+    onTimerPause: pauseTimer,
+    onTimerResume: resumeTimer,
+    onExitConfirmed: () => router.back(),
+  })
 
   function startTimer() {
     const secs = timerSecsRef.current
@@ -398,6 +438,7 @@ export default function DeckQuizScreen() {
             <Text style={s.ruleItem}>🔤  Tap A / B / C / D to answer</Text>
             <Text style={s.ruleItem}>🔒  No hints — results revealed at the end</Text>
           </View>
+          <FocusModeToggle enabled={focusEnabled} onToggle={setFocusEnabled} />
           <TouchableOpacity style={s.startBtn} onPress={() => startQuiz()}>
             <Text style={s.startBtnTxt}>Start Quiz →</Text>
           </TouchableOpacity>
@@ -647,6 +688,17 @@ export default function DeckQuizScreen() {
         </View>
 
       </ScrollView>
+
+      <SessionPausedOverlay
+        visible={focusMode.isPaused}
+        timeRemainingSecs={timeLeft}
+        onResume={focusMode.resumeSession}
+        onEnd={() => {
+          focusMode.endSession()
+          setPhase('results')
+        }}
+      />
+      {focusEnabled && phase === 'quiz' && <StatusBar hidden />}
     </SafeAreaView>
   )
 }
