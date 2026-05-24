@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import type { DrizzleClient } from '../../db/client'
 import type { HomeStats } from '../../hooks/useHomeStats'
-import { buildProgressContext, loadStudentIdentity, buildTopicContext } from '../chatContext'
+import { buildProgressContext, loadStudentIdentity } from '../chatContext'
 
 function makeDb(): DrizzleClient {
   const raw = new Database(':memory:')
@@ -64,7 +64,7 @@ describe('loadStudentIdentity', () => {
       id: 1, fullName: 'Juan dela Cruz', school: 'UP Los Baños', gradeLevel: 11,
     })
     const out = await loadStudentIdentity(db)
-    expect(out).toBe('Student: Juan dela Cruz (Grade 11 student at UP Los Baños).')
+    expect(out).toBe('Student: Juan dela Cruz (Grade 11, UP Los Baños).')
   })
 
   it('returns name + grade when school is empty', async () => {
@@ -73,7 +73,7 @@ describe('loadStudentIdentity', () => {
       id: 1, fullName: 'Maria', school: '', gradeLevel: 12,
     })
     const out = await loadStudentIdentity(db)
-    expect(out).toBe('Student: Maria (Grade 12 student).')
+    expect(out).toBe('Student: Maria (Grade 12).')
   })
 
   it('returns name + school when grade is null', async () => {
@@ -82,7 +82,7 @@ describe('loadStudentIdentity', () => {
       id: 1, fullName: 'Pedro', school: 'PSHS', gradeLevel: null,
     })
     const out = await loadStudentIdentity(db)
-    expect(out).toBe('Student: Pedro (student at PSHS).')
+    expect(out).toBe('Student: Pedro (PSHS).')
   })
 
   it('returns name only when school is empty and grade is null', async () => {
@@ -110,19 +110,6 @@ describe('loadStudentIdentity', () => {
   })
 })
 
-describe('buildTopicContext', () => {
-  it('returns only the identity line (no stats, no sessions)', async () => {
-    const db = makeDb()
-    await db.insert(schema.userSettings).values({
-      id: 1, fullName: 'Juan', school: 'UP', gradeLevel: 11,
-    })
-    const out = await buildTopicContext(db)
-    expect(out).toBe('Student: Juan (Grade 11 student at UP).')
-    expect(out).not.toContain('Focused exam')
-    expect(out).not.toContain('Streak')
-  })
-})
-
 describe('buildProgressContext', () => {
   it('returns "no focused exam" message when listing is null', async () => {
     const db = makeDb()
@@ -131,58 +118,31 @@ describe('buildProgressContext', () => {
     expect(out).toContain('No focused exam')
   })
 
-  it('includes listing title, days left, streak, and accuracy', async () => {
+  it('emits compact 3-line context (Student / Exam line / Weak topics)', async () => {
     const db = makeDb()
     const out = await buildProgressContext(db, STATS_BASE)
     expect(out).toContain('UPCAT 2026')
     expect(out).toContain('30 days')
-    expect(out).toContain('Streak: 5 days')
-    expect(out).toContain("Today's accuracy: 75%")
-    expect(out.startsWith('Student:')).toBe(true)  // identity is the first line
+    expect(out).toContain('5-day streak')
+    expect(out).toContain('75% accuracy')
+    expect(out.startsWith('Student:')).toBe(true)
+    expect(out).not.toContain('Recent sessions')
+    expect(out).not.toContain('Streak:')
+    expect(out).not.toContain("Today's accuracy:")
   })
 
   it('lists top 3 weak topics with accuracy percentages', async () => {
     const db = makeDb()
     const out = await buildProgressContext(db, STATS_BASE)
+    expect(out).toContain('Weak topics:')
     expect(out).toContain('Algebra (32%)')
     expect(out).toContain('Biology (45%)')
   })
 
-  it('emits "none yet" when weakTopics is empty', async () => {
+  it('omits the weak topics line when weakTopics is empty', async () => {
     const db = makeDb()
     const stats: HomeStats = { ...STATS_BASE, weakTopics: [] }
     const out = await buildProgressContext(db, stats)
-    expect(out).toContain('Top weak topics: none yet')
-  })
-
-  it('includes recent practice sessions joined with topic names, ordered most-recent-first', async () => {
-    const db = makeDb()
-    const now = Date.now()
-    await db.insert(schema.topics).values([
-      { id: 't1', name: 'Algebra', subjectId: 'math', status: 'active' },
-      { id: 't2', name: 'Biology', subjectId: 'sci', status: 'active' },
-    ])
-    await db.insert(schema.practiceSessions).values([
-      { topicId: 't1', score: 7, total: 10, completedAt: now - 1000 },
-      { topicId: 't2', score: 8, total: 10, completedAt: now - 2000 },
-    ])
-    const out = await buildProgressContext(db, STATS_BASE)
-    expect(out).toContain('Algebra — 7/10')
-    expect(out).toContain('Biology — 8/10')
-  })
-
-  it('emits "(no recent sessions)" when practice_sessions is empty', async () => {
-    const db = makeDb()
-    const out = await buildProgressContext(db, STATS_BASE)
-    expect(out).toContain('(no recent sessions)')
-  })
-
-  it('handles sessions whose topic was deleted (falls back to "mixed practice")', async () => {
-    const db = makeDb()
-    await db.insert(schema.practiceSessions).values([
-      { topicId: 'ghost-topic-id', score: 5, total: 10, completedAt: Date.now() },
-    ])
-    const out = await buildProgressContext(db, STATS_BASE)
-    expect(out).toContain('mixed practice')
+    expect(out).not.toContain('Weak topics:')
   })
 })
