@@ -15,7 +15,7 @@ interface SchoolPickerProps {
 
 export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
   const [modalVisible, setModalVisible] = useState(false)
-  const { query, setQuery, results, loading, error, retry } = useSchoolSearch()
+  const { query, setQuery, results, loading, error, errorMessage, retry } = useSchoolSearch()
   const { theme: t, typo } = useTheme()
 
   const s = useMemo(() => StyleSheet.create({
@@ -63,6 +63,14 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       color: 'rgba(252,165,165,0.8)',
       textAlign: 'center',
       paddingHorizontal: 16,
+    },
+    errorDetail: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: 11,
+      color: t.textTertiary,
+      textAlign: 'center',
+      paddingHorizontal: 16,
+      marginTop: 6,
     },
     retryBtn: { marginTop: 12, alignItems: 'center' },
     listRow: {
@@ -123,16 +131,19 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     if (loading) {
       return (
         <View style={s.loadingContainer}>
-          <ActivityIndicator testID="school-search-loading" color="#fca5a5" />
+          <ActivityIndicator testID="school-search-loading" color={t.accentText} />
         </View>
       )
     }
     if (error) {
       return (
         <View style={{ alignItems: 'center', paddingTop: 24 }}>
-          <Text style={s.errorText}>Could not search schools. Check your connection.</Text>
+          <Text style={s.errorText}>Could not search schools.</Text>
+          {errorMessage && (
+            <Text style={s.errorDetail}>{errorMessage}</Text>
+          )}
           <TouchableOpacity onPress={retry} style={s.retryBtn}>
-            <Text style={[s.errorText, { color: '#fca5a5' }]}>Retry</Text>
+            <Text style={[s.errorText, { color: t.accentText }]}>Retry</Text>
           </TouchableOpacity>
         </View>
       )
