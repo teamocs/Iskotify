@@ -51,12 +51,12 @@ export default function ListingQuizScreen() {
     backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    qCounter: { fontSize: typo.sm, fontWeight: '700', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
-    retryLink: { fontSize: typo.sm, fontWeight: '600', color: '#fca5a5', fontFamily: 'Lexend_600SemiBold' },
+    qCounter: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    retryLink: { fontSize: typo.sm, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     dotsRow: { flexDirection: 'row', gap: 4, paddingHorizontal: 14, marginBottom: 8, flexWrap: 'wrap' },
     dot: { height: 4, flex: 1, borderRadius: 2, backgroundColor: t.border },
     dotDone: { backgroundColor: 'rgba(128,0,0,0.60)' },
-    dotCurrent: { backgroundColor: '#fca5a5' },
+    dotCurrent: { backgroundColor: t.accentText },
     timerBg: { marginHorizontal: 14, height: 5, backgroundColor: t.surface2, borderRadius: 99, overflow: 'hidden' },
     timerFill: { height: 5, borderRadius: 99 },
     questionCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 18, marginBottom: 14 },
@@ -111,7 +111,7 @@ export default function ListingQuizScreen() {
       color: t.textTertiary,
       fontFamily: 'Lexend_600SemiBold',
     },
-    configChipTxtOn: { color: '#fca5a5' },
+    configChipTxtOn: { color: t.accentText },
     readyContent: {
       alignItems: 'center' as const,
       paddingHorizontal: 28,
@@ -357,7 +357,7 @@ export default function ListingQuizScreen() {
         </View>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 48 }}>
           <View style={[s.scoreCard, passed ? s.scorePass : s.scoreFail]}>
-            <Text style={[s.scorePct, { color: passed ? '#4ade80' : '#fca5a5' }]}>{pct}%</Text>
+            <Text style={[s.scorePct, { color: passed ? '#4ade80' : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{passed ? '🎉 Great job!' : '📚 Keep practicing'}</Text>
             <Text style={s.scoreSub}>{modeLabel} · {listingTitle}</Text>
             <View style={{ flexDirection: 'row', gap: 28, marginTop: 16 }}>

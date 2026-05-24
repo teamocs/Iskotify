@@ -56,7 +56,7 @@ export default function PrivacyScreen() {
     contactCard: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.2)', borderRadius: 16, padding: 16, marginTop: 8 },
     contactTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textPrimary, marginBottom: 4 },
     contactBody: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: typo.sm * 1.6 },
-    contactEmail: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: '#fca5a5', marginTop: 6 },
+    contactEmail: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.accentText, marginTop: 6 },
     effectiveDate: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 20 },
   }), [t, typo])
 

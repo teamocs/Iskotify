@@ -57,9 +57,9 @@ export default function OnboardingScreen() {
     questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 23, fontFamily: 'Outfit_600SemiBold' },
     optionBtn: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
     optionLetter: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    optionLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
+    optionLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
     optionText: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 19 },
-    resultPct: { fontSize: typo.display, fontWeight: '700', color: '#fca5a5', letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: 8 },
+    resultPct: { fontSize: typo.display, fontWeight: '700', color: t.accentText, letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: 8 },
     resultTitle: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 8, textAlign: 'center' },
     resultSub: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20, marginBottom: 28 },
     resultCounts: { flexDirection: 'row', gap: 40, marginBottom: 32 },
@@ -300,7 +300,7 @@ export default function OnboardingScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={{ color: isSelected ? '#fca5a5' : t.textTertiary, fontSize: 18 }}>
+                  <Text style={{ color: isSelected ? t.accentText : t.textTertiary, fontSize: 18 }}>
                     {isSelected ? '✓' : '›'}
                   </Text>
                 </TouchableOpacity>
@@ -317,7 +317,7 @@ export default function OnboardingScreen() {
                 const listing = listings.find(l => l.slug === slug)
                 return (
                   <View key={slug} style={{ backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: '#fca5a5' }}>
+                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
                       #{i + 1} {listing?.title ?? slug}
                     </Text>
                   </View>

@@ -89,7 +89,7 @@ export default function SettingsScreen() {
     scroll: { paddingHorizontal: 16, paddingBottom: 40 },
     pageTitle: { fontSize: typo.xl, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
     versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 16 },
-    versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: '#fca5a5', fontFamily: 'Outfit_700Bold' },
+    versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: t.accentText, fontFamily: 'Outfit_700Bold' },
     versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
     versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     profileCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
@@ -146,7 +146,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <Text style={s.secLabel}>App</Text>
-        <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor="#fca5a5" label="About Iskotify"
+        <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor={t.accentText} label="About Iskotify"
           onPress={() => router.push('/about')} />
         <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
           onPress={() => router.push('/help')} />
