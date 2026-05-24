@@ -26,32 +26,28 @@ describe('buildChatPrompt', () => {
     expect(prompt).not.toContain('null')
   })
 
-  it('topic mode includes context block if dataContext is passed', () => {
-    const prompt = buildChatPrompt('topic', 'What is photosynthesis?', 'Student: Juan.')
-    expect(prompt).toContain('STUDENT CONTEXT')
-    expect(prompt).toContain('Student: Juan.')
-    expect(prompt).not.toContain('Focused exam')  // topic context omits stats
-  })
-
-  it('topic mode without dataContext omits the context block', () => {
-    const prompt = buildChatPrompt('topic', 'What is photosynthesis?')
-    expect(prompt).not.toContain('STUDENT CONTEXT')
-  })
-
-  it('system prompts mention Kuya Baw and Taglish', () => {
+  it('system prompts mention Kuya Baw and force English output', () => {
     const progress = buildChatPrompt('progress', 'q', 'ctx')
     const topic = buildChatPrompt('topic', 'q')
     expect(progress).toContain('Kuya Baw')
-    expect(progress).toContain('Taglish')
+    expect(progress).toContain('clear English')
     expect(topic).toContain('Kuya Baw')
-    expect(topic).toContain('Taglish')
+    expect(topic).toContain('clear English')
   })
 
-  it('topic system prompt contains the math confidence rule', () => {
+  it('topic system prompt contains the math confidence rule (English)', () => {
     const prompt = buildChatPrompt('topic', 'q')
-    // The new rule lets the LLM self-assess: solve simple math, suggest "try first" for complex.
-    expect(prompt).toContain('straightforward problem')
-    expect(prompt).toContain('Subukan mo muna')
+    expect(prompt).toContain('complex math')
+    expect(prompt).toContain('Try it yourself first')
+    expect(prompt).toContain('simple math')
+  })
+
+  it('topic mode never includes a STUDENT CONTEXT block (even if dataContext passed)', () => {
+    const promptWithCtx = buildChatPrompt('topic', 'What is photosynthesis?', 'Student: Maria.')
+    const promptWithoutCtx = buildChatPrompt('topic', 'What is photosynthesis?')
+    // Topic mode ignores any context arg — both shapes must be identical.
+    expect(promptWithCtx).not.toContain('STUDENT CONTEXT')
+    expect(promptWithoutCtx).not.toContain('STUDENT CONTEXT')
   })
 
   it('strips ChatML injection attempts from the question', () => {
@@ -78,7 +74,7 @@ describe('buildChatPrompt', () => {
 
   it('progress prompt enforces max 2 sentences', () => {
     const prompt = buildChatPrompt('progress', 'q', 'ctx')
-    expect(prompt).toContain('1 sentence, max 2')
+    expect(prompt).toContain('Maximum 2 sentences')
   })
 
   it('topic prompt enforces max 2 sentences total', () => {
@@ -86,19 +82,6 @@ describe('buildChatPrompt', () => {
     expect(prompt).toContain('Maximum 2 sentences total')
   })
 
-  it('progress system prompt enforces second-person Tagalog pronouns', () => {
-    const prompt = buildChatPrompt('progress', 'q', 'ctx')
-    expect(prompt).toContain('second person')
-    expect(prompt).toContain('mo, ka, mong')
-    expect(prompt).toContain('NEVER refer to the student with ako, ko')
-  })
-
-  it('topic system prompt enforces second-person Tagalog pronouns', () => {
-    const prompt = buildChatPrompt('topic', 'q')
-    expect(prompt).toContain('second person')
-    expect(prompt).toContain('mo, ka, mong')
-    expect(prompt).toContain('NEVER refer to the student with ako, ko')
-  })
 })
 
 describe('parseChatChunk', () => {
