@@ -2,7 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
 import { useDb } from '../../../hooks/useDb'
+import { useFocusModePref } from '../../../hooks/useFocusModePref'
+import { useFocusMode } from '../../../hooks/useFocusMode'
+import { FocusModeToggle } from '../../../components/FocusModeToggle'
+import { SessionPausedOverlay } from '../../../components/SessionPausedOverlay'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
 import { eq } from 'drizzle-orm'
 import { useRecordSession } from '../../../hooks/useRecordSession'
@@ -35,6 +40,7 @@ export default function ListingQuizScreen() {
   const db = useDb()
   const { recordSession } = useRecordSession()
   const { theme: t, typo } = useTheme()
+  const { enabled: focusEnabled, setEnabled: setFocusEnabled } = useFocusModePref()
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
@@ -201,6 +207,39 @@ export default function ListingQuizScreen() {
     timerAnimRef.current?.stop()
   }
 
+  function pauseTimer() {
+    stopTimer()
+  }
+
+  function resumeTimer() {
+    const secs = timeLeftRef.current
+    if (secs <= 0) return
+    stopTimer()
+    timerProgress.setValue(secs / timerSecsRef.current)
+    timerAnimRef.current = Animated.timing(timerProgress, {
+      toValue: 0,
+      duration: secs * 1000,
+      useNativeDriver: false,
+    })
+    timerAnimRef.current.start()
+    timerRef.current = setInterval(() => {
+      timeLeftRef.current -= 1
+      setTimeLeft(timeLeftRef.current)
+      if (timeLeftRef.current <= 0) {
+        stopTimer()
+        advanceRef.current(null)
+      }
+    }, 1000)
+  }
+
+  const focusMode = useFocusMode({
+    enabled: focusEnabled,
+    active: phase === 'quiz',
+    onTimerPause: pauseTimer,
+    onTimerResume: resumeTimer,
+    onExitConfirmed: () => router.back(),
+  })
+
   function startTimer() {
     const secs = timerSecsRef.current
     stopTimer()
@@ -323,6 +362,7 @@ export default function ListingQuizScreen() {
             </View>
           </View>
 
+          <FocusModeToggle enabled={focusEnabled} onToggle={setFocusEnabled} />
           <TouchableOpacity style={s.startBtn} onPress={startQuiz}>
             <Text style={s.startBtnTxt}>Start Quiz →</Text>
           </TouchableOpacity>
@@ -415,6 +455,16 @@ export default function ListingQuizScreen() {
           })}
         </View>
       </ScrollView>
+      <SessionPausedOverlay
+        visible={focusMode.isPaused}
+        timeRemainingSecs={timeLeft}
+        onResume={focusMode.resumeSession}
+        onEnd={() => {
+          focusMode.endSession()
+          setPhase('results')
+        }}
+      />
+      {focusEnabled && phase === 'quiz' && <StatusBar hidden />}
     </SafeAreaView>
   )
 }
