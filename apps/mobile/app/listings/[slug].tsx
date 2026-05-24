@@ -100,9 +100,25 @@ export default function ListingDetailScreen() {
     practiceBtnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
     linkBtn: { marginHorizontal: 14, borderWidth: 1, borderColor: t.divider, borderRadius: 18, paddingVertical: 12, alignItems: 'center' },
     linkBtnTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    focusRemoveBtn: { backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 2, borderColor: '#831626', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
-    focusRemoveTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fca5a5' },
-    focusAddBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
+    focusRemoveBtn: {
+      marginHorizontal: 14,
+      backgroundColor: 'rgba(128,0,0,0.12)',
+      borderWidth: 2,
+      borderColor: '#831626',
+      borderRadius: 18,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    focusRemoveTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.accentText },
+    focusAddBtn: {
+      marginHorizontal: 14,
+      backgroundColor: 'rgba(128,0,0,0.82)',
+      borderRadius: 18,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginBottom: 12,
+    },
     focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
   }), [t, typo])
 
@@ -192,7 +208,7 @@ export default function ListingDetailScreen() {
           </View>
           <View style={s.badgeRow}>
             <View style={[s.typeBadge, isExam ? s.examBadge : s.scholarBadge]}>
-              <Text style={[s.typeTxt, { color: isExam ? '#fca5a5' : '#4ade80' }]}>
+              <Text style={[s.typeTxt, { color: isExam ? t.accentText : '#4ade80' }]}>
                 {isExam ? 'Exam' : 'Scholarship'}
               </Text>
             </View>
@@ -212,7 +228,7 @@ export default function ListingDetailScreen() {
         {/* Days countdown */}
         {daysLeft !== null && daysLeft > 0 ? (
           <View style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}>
-            <Text style={[s.countdownNum, { color: daysLeft < 30 ? '#fca5a5' : '#4ade80' }]}>{daysLeft}</Text>
+            <Text style={[s.countdownNum, { color: daysLeft < 30 ? t.accentText : '#4ade80' }]}>{daysLeft}</Text>
             <Text style={s.countdownLabel}>days until {isExam ? 'exam' : 'deadline'}</Text>
           </View>
         ) : null}
