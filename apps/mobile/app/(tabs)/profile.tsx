@@ -144,9 +144,14 @@ export default function ProfileScreen() {
 
   async function handleExport() {
     try {
-      await exportUserData(db)
-    } catch {
-      Alert.alert('Export Failed', 'Could not export data. Please try again.')
+      const result = await exportUserData(db)
+      if (result.status === 'saved') {
+        Alert.alert('Export Complete', `Saved as ${result.filename}`)
+      }
+      // status === 'cancelled' — user backed out of the picker, no alert
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not export data. Please try again.'
+      Alert.alert('Export Failed', msg)
     }
   }
 

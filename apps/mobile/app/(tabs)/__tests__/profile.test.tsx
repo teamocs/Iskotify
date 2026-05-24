@@ -22,7 +22,7 @@ jest.mock('@lineiconshq/free-icons', () => ({
 }))
 
 jest.mock('../../../services/export', () => ({
-  exportUserData: jest.fn().mockResolvedValue(undefined),
+  exportUserData: jest.fn().mockResolvedValue({ status: 'saved', filename: 'test.json' }),
 }))
 
 const makeDb = (userRow?: any) => ({
