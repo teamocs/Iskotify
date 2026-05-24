@@ -1,7 +1,45 @@
-import { desc } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
-import { practiceSessions, topics } from '../db/schema'
+import { practiceSessions, topics, userSettings } from '../db/schema'
+
+/**
+ * One-line student identity for chat prompts. Used as the first line of
+ * progress mode context and as the sole content of topic mode context.
+ */
+export async function loadStudentIdentity(db: DrizzleClient): Promise<string> {
+  const rows = await db
+    .select({
+      fullName: userSettings.fullName,
+      school: userSettings.school,
+      gradeLevel: userSettings.gradeLevel,
+    })
+    .from(userSettings)
+    .where(eq(userSettings.id, 1))
+    .limit(1)
+
+  const row = rows[0]
+  const name = row?.fullName?.trim() ?? ''
+  const school = row?.school?.trim() ?? ''
+  const grade = row?.gradeLevel ?? null
+
+  if (!name) return 'Student: (anonymous).'
+
+  const hasSchool = school.length > 0
+  const hasGrade = grade !== null
+
+  if (hasGrade && hasSchool) return `Student: ${name} (Grade ${grade} student at ${school}).`
+  if (hasGrade) return `Student: ${name} (Grade ${grade} student).`
+  if (hasSchool) return `Student: ${name} (student at ${school}).`
+  return `Student: ${name}.`
+}
+
+/**
+ * Topic-mode context: just the identity line. Topic mode doesn't need stats.
+ */
+export async function buildTopicContext(db: DrizzleClient): Promise<string> {
+  return loadStudentIdentity(db)
+}
 
 /**
  * Builds a prompt-ready progress context string from the user's HomeStats
@@ -12,7 +50,10 @@ export async function buildProgressContext(
   db: DrizzleClient,
   stats: HomeStats,
 ): Promise<string> {
-  if (!stats.listing) return 'No focused exam yet. Pick one from Listings to get personalized advice.'
+  if (!stats.listing) {
+    const identity = await loadStudentIdentity(db)
+    return `${identity}\nNo focused exam yet. Pick one from Listings to get personalized advice.`
+  }
 
   const sessions = await db
     .select({
@@ -53,7 +94,10 @@ export async function buildProgressContext(
       }).join('\n')
     : '  (no recent sessions)'
 
+  const identity = await loadStudentIdentity(db)
+
   return [
+    identity,
     `Focused exam: ${stats.listing.title} in ${stats.daysLeft ?? '?'} days`,
     `Streak: ${stats.streakDays} days`,
     `Today's accuracy: ${stats.todayAccuracy ?? 'n/a'}%`,

@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import type { DrizzleClient } from '../../db/client'
 import type { HomeStats } from '../../hooks/useHomeStats'
-import { buildProgressContext } from '../chatContext'
+import { buildProgressContext, loadStudentIdentity, buildTopicContext } from '../chatContext'
 
 function makeDb(): DrizzleClient {
   const raw = new Database(':memory:')
@@ -23,6 +23,18 @@ function makeDb(): DrizzleClient {
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
       completed_at INTEGER NOT NULL
+    );
+    CREATE TABLE user_settings (
+      id INTEGER PRIMARY KEY NOT NULL,
+      selected_listing_slug TEXT NOT NULL DEFAULT '',
+      last_synced_at INTEGER NOT NULL DEFAULT 0,
+      full_name TEXT NOT NULL DEFAULT '',
+      school TEXT NOT NULL DEFAULT '',
+      grade_level INTEGER,
+      google_id TEXT,
+      email TEXT,
+      notifications_enabled INTEGER DEFAULT 1,
+      theme TEXT NOT NULL DEFAULT 'system'
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -45,6 +57,72 @@ const STATS_BASE: HomeStats = {
   refresh: async () => {},
 }
 
+describe('loadStudentIdentity', () => {
+  it('returns name + grade + school when all three are present', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: 'Juan dela Cruz', school: 'UP Los Baños', gradeLevel: 11,
+    })
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: Juan dela Cruz (Grade 11 student at UP Los Baños).')
+  })
+
+  it('returns name + grade when school is empty', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: 'Maria', school: '', gradeLevel: 12,
+    })
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: Maria (Grade 12 student).')
+  })
+
+  it('returns name + school when grade is null', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: 'Pedro', school: 'PSHS', gradeLevel: null,
+    })
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: Pedro (student at PSHS).')
+  })
+
+  it('returns name only when school is empty and grade is null', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: 'Ana', school: '', gradeLevel: null,
+    })
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: Ana.')
+  })
+
+  it('returns "(anonymous)" when name is empty', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: '', school: '', gradeLevel: null,
+    })
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: (anonymous).')
+  })
+
+  it('returns "(anonymous)" when no user_settings row exists', async () => {
+    const db = makeDb()
+    const out = await loadStudentIdentity(db)
+    expect(out).toBe('Student: (anonymous).')
+  })
+})
+
+describe('buildTopicContext', () => {
+  it('returns only the identity line (no stats, no sessions)', async () => {
+    const db = makeDb()
+    await db.insert(schema.userSettings).values({
+      id: 1, fullName: 'Juan', school: 'UP', gradeLevel: 11,
+    })
+    const out = await buildTopicContext(db)
+    expect(out).toBe('Student: Juan (Grade 11 student at UP).')
+    expect(out).not.toContain('Focused exam')
+    expect(out).not.toContain('Streak')
+  })
+})
+
 describe('buildProgressContext', () => {
   it('returns "no focused exam" message when listing is null', async () => {
     const db = makeDb()
@@ -60,6 +138,7 @@ describe('buildProgressContext', () => {
     expect(out).toContain('30 days')
     expect(out).toContain('Streak: 5 days')
     expect(out).toContain("Today's accuracy: 75%")
+    expect(out.startsWith('Student:')).toBe(true)  // identity is the first line
   })
 
   it('lists top 3 weak topics with accuracy percentages', async () => {
