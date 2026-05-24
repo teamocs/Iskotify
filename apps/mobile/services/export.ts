@@ -1,3 +1,4 @@
+import { Platform } from 'react-native'
 import * as Sharing from 'expo-sharing'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as DocumentPicker from 'expo-document-picker'
@@ -12,7 +13,13 @@ import {
   practiceSessions,
 } from '../db/schema'
 
-export async function exportUserData(db: DrizzleClient): Promise<void> {
+const { StorageAccessFramework } = FileSystem
+
+export type ExportResult =
+  | { status: 'saved'; filename: string }
+  | { status: 'cancelled' }
+
+export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
   const [settings, focus, saved, decks, progress, sessions] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
@@ -32,20 +39,33 @@ export async function exportUserData(db: DrizzleClient): Promise<void> {
     practice_sessions: sessions,
   }
 
-  const canShare = await Sharing.isAvailableAsync()
-  if (!canShare) throw new Error('Sharing not available on this device')
+  const json = JSON.stringify(payload, null, 2)
+  const filename = `iskotify-export-${new Date().toISOString().slice(0, 10)}.json`
 
-  const dir = FileSystem.documentDirectory
-  if (!dir) throw new Error('File system not available on this platform')
-  const fileUri = `${dir}iskotify-export.json`
-  await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(payload, null, 2), {
+  if (Platform.OS === 'android') {
+    const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync()
+    if (!perms.granted) return { status: 'cancelled' }
+    const fileUri = await StorageAccessFramework.createFileAsync(
+      perms.directoryUri,
+      filename,
+      'application/json',
+    )
+    await StorageAccessFramework.writeAsStringAsync(fileUri, json)
+    return { status: 'saved', filename }
+  }
+
+  // iOS — share sheet is the iOS-native export paradigm
+  const fileUri = `${FileSystem.documentDirectory}${filename}`
+  await FileSystem.writeAsStringAsync(fileUri, json, {
     encoding: FileSystem.EncodingType.UTF8,
   })
-
+  const canShare = await Sharing.isAvailableAsync()
+  if (!canShare) throw new Error('Sharing not available on this device')
   await Sharing.shareAsync(fileUri, {
     mimeType: 'application/json',
-    dialogTitle: 'Export Iskotify Data',
+    dialogTitle: 'Save Iskotify Data',
   })
+  return { status: 'saved', filename }
 }
 
 type ExportRow = Record<string, unknown>

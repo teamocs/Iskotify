@@ -1,14 +1,31 @@
 import { exportUserData } from '../export'
 
+jest.mock('react-native', () => ({
+  Platform: { OS: 'android' },
+}))
+
 jest.mock('expo-sharing', () => ({
   isAvailableAsync: jest.fn().mockResolvedValue(true),
   shareAsync: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('expo-file-system', () => ({
+const mockCreateFileAsync = jest.fn().mockResolvedValue('content://picked/iskotify-export-2026-05-24.json')
+const mockWriteAsStringAsync = jest.fn().mockResolvedValue(undefined)
+const mockRequestDirPerms = jest.fn().mockResolvedValue({ granted: true, directoryUri: 'content://picked/' })
+
+jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: '/tmp/',
   writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
   EncodingType: { UTF8: 'utf8' },
+  StorageAccessFramework: {
+    requestDirectoryPermissionsAsync: (...args: unknown[]) => mockRequestDirPerms(...args),
+    createFileAsync: (...args: unknown[]) => mockCreateFileAsync(...args),
+    writeAsStringAsync: (...args: unknown[]) => mockWriteAsStringAsync(...args),
+  },
+}))
+
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(),
 }))
 
 jest.mock('drizzle-orm', () => ({
@@ -29,49 +46,76 @@ function makeDb(settingsRow: { selectedListingSlug: string; lastSyncedAt: number
 
 beforeEach(() => {
   jest.clearAllMocks()
-  const Sharing = require('expo-sharing')
-  Sharing.isAvailableAsync.mockResolvedValue(true)
-  Sharing.shareAsync.mockResolvedValue(undefined)
-  const FileSystem = require('expo-file-system')
-  FileSystem.writeAsStringAsync.mockResolvedValue(undefined)
+  mockRequestDirPerms.mockResolvedValue({ granted: true, directoryUri: 'content://picked/' })
+  mockCreateFileAsync.mockResolvedValue('content://picked/iskotify-export-2026-05-24.json')
+  mockWriteAsStringAsync.mockResolvedValue(undefined)
+  // Reset platform to android by default
+  const RN = require('react-native')
+  RN.Platform.OS = 'android'
 })
 
-describe('exportUserData', () => {
-  it('writes a JSON file containing selected_listing_slug', async () => {
-    const FileSystem = require('expo-file-system')
-    await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 1700000000000 }) as any)
-    const written = FileSystem.writeAsStringAsync.mock.calls[0][1] as string
-    expect(JSON.parse(written).selected_listing_slug).toBe('upcat')
+describe('exportUserData (Android, SAF)', () => {
+  it('opens the SAF directory picker', async () => {
+    await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
+    expect(mockRequestDirPerms).toHaveBeenCalledTimes(1)
   })
 
-  it('includes exported_at timestamp in output', async () => {
-    const FileSystem = require('expo-file-system')
+  it('creates the JSON file in the picked directory', async () => {
     await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
-    const written = FileSystem.writeAsStringAsync.mock.calls[0][1] as string
-    expect(JSON.parse(written).exported_at).toBeDefined()
-  })
-
-  it('calls shareAsync after writing the file', async () => {
-    const Sharing = require('expo-sharing')
-    await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
-    expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      '/tmp/iskotify-export.json',
-      expect.objectContaining({ mimeType: 'application/json' }),
+    expect(mockCreateFileAsync).toHaveBeenCalledWith(
+      'content://picked/',
+      expect.stringMatching(/^iskotify-export-\d{4}-\d{2}-\d{2}\.json$/),
+      'application/json',
     )
   })
 
-  it('throws when sharing is not available', async () => {
+  it('writes the JSON payload to the created file', async () => {
+    await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      'content://picked/iskotify-export-2026-05-24.json',
+      expect.stringContaining('"exported_at"'),
+    )
+  })
+
+  it('returns { status: "saved", filename } on success', async () => {
+    const result = await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
+    expect(result.status).toBe('saved')
+    if (result.status === 'saved') expect(result.filename).toMatch(/^iskotify-export-\d{4}-\d{2}-\d{2}\.json$/)
+  })
+
+  it('returns { status: "cancelled" } when user denies the picker', async () => {
+    mockRequestDirPerms.mockResolvedValue({ granted: false, directoryUri: '' })
+    const result = await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
+    expect(result.status).toBe('cancelled')
+    expect(mockCreateFileAsync).not.toHaveBeenCalled()
+    expect(mockWriteAsStringAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('exportUserData (iOS, share sheet)', () => {
+  beforeEach(() => {
+    const RN = require('react-native')
+    RN.Platform.OS = 'ios'
+  })
+
+  it('writes to documentDirectory and calls shareAsync', async () => {
+    const FileSystem = require('expo-file-system/legacy')
+    const Sharing = require('expo-sharing')
+    const result = await exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
+    expect(FileSystem.writeAsStringAsync).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/iskotify-export-\d{4}-\d{2}-\d{2}\.json$/),
+      expect.stringContaining('"exported_at"'),
+      { encoding: 'utf8' },
+    )
+    expect(Sharing.shareAsync).toHaveBeenCalledTimes(1)
+    expect(result.status).toBe('saved')
+  })
+
+  it('throws when sharing is not available on iOS', async () => {
     const Sharing = require('expo-sharing')
     Sharing.isAvailableAsync.mockResolvedValue(false)
     await expect(
       exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
     ).rejects.toThrow('Sharing not available')
-  })
-
-  it('uses empty slug when no settings row exists', async () => {
-    const FileSystem = require('expo-file-system')
-    await exportUserData(makeDb(null) as any)
-    const written = FileSystem.writeAsStringAsync.mock.calls[0][1] as string
-    expect(JSON.parse(written).selected_listing_slug).toBe('')
   })
 })
