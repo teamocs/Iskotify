@@ -54,9 +54,13 @@ export async function buildProgressContext(
     return `${identity}\nNo focused exam yet. Pick one from Listings to get personalized advice.`
   }
 
-  const examLine =
-    `Exam: ${stats.listing.title} in ${stats.daysLeft ?? '?'} days. ` +
-    `Today: ${stats.todayAccuracy ?? 'n/a'}% accuracy, ${stats.streakDays}-day streak.`
+  // Build the exam/stats line, omitting accuracy entirely when null
+  // (otherwise the model echoes literal "n/a%" into its responses).
+  const examIntro = `Exam: ${stats.listing.title} in ${stats.daysLeft ?? '?'} days.`
+  const statsLine = stats.todayAccuracy != null
+    ? `Today: ${stats.todayAccuracy}% accuracy, ${stats.streakDays}-day streak.`
+    : `${stats.streakDays}-day streak.`
+  const examLine = `${examIntro} ${statsLine}`
 
   const lines: string[] = [identity, examLine]
   if (stats.weakTopics.length > 0) {

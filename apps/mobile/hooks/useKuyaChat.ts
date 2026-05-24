@@ -29,6 +29,20 @@ interface UseKuyaChat {
 }
 
 const FLUSH_INTERVAL_MS = 60
+const MIN_QUESTION_LENGTH = 5
+
+// High-confidence Tagalog tokens. A response with ≥3 hits is treated as
+// language-mirroring failure (1.5B model echoed user's Tagalog input
+// despite the English-only prompt) and gets overridden with a canned
+// English message. Tokens chosen to minimize false positives in English
+// text (e.g. "ng", "mga", "kong" don't appear as word-boundary matches
+// inside common English words).
+const TAGALOG_INDICATORS = /\b(kong|mong|akin|sayo|ikaw|siya|niya|mga|nang|kasi|dahil|naman|meron|pag-aaral|kumpanya|gobyerno|naging|magiging|gawin|mahalaga|nais|paano|hindi|wala|kaya|tara|opo|anong|saan|kelan|tayo|kayo|sila|natin|talaga)\b/gi
+
+function isTagalogHeavy(text: string): boolean {
+  const matches = text.match(TAGALOG_INDICATORS)
+  return (matches?.length ?? 0) >= 3
+}
 
 export function useKuyaChat(): UseKuyaChat {
   const db = useDb()
@@ -93,6 +107,22 @@ export function useKuyaChat(): UseKuyaChat {
       text: trimmed,
       timestamp: now,
     }
+
+    // Short-question guard: inputs under 5 chars don't give the 1.5B model
+    // enough signal to answer correctly — it tends to hallucinate. Show a
+    // direct English nudge instead of calling the model.
+    if (trimmed.length < MIN_QUESTION_LENGTH) {
+      const assistantMsg: ChatMessage = {
+        id: `a-${now}`,
+        role: 'assistant',
+        text: 'Please ask a more specific question — try one of the suggestions below.',
+        timestamp: now,
+        isStreaming: false,
+      }
+      setMessages(prev => [...prev, userMsg, assistantMsg])
+      return
+    }
+
     const assistantId = `a-${now}`
     const assistantMsg: ChatMessage = {
       id: assistantId,
@@ -139,7 +169,17 @@ export function useKuyaChat(): UseKuyaChat {
               return {
                 ...m,
                 isStreaming: false,
-                text: 'Hmm, hindi ko ma-process yan. Try mong i-rephrase!',
+                text: "I couldn't process that. Try rephrasing your question.",
+              }
+            }
+            // Tagalog-output safety net: if the model ignored the English-only
+            // rule and produced Tagalog-heavy text, override with a canned
+            // English fallback so the user doesn't see hallucinated garbage.
+            if (isTagalogHeavy(finalText)) {
+              return {
+                ...m,
+                isStreaming: false,
+                text: "Let me try that again — could you re-ask your question?",
               }
             }
             return { ...m, text: m.text + finalChunk, isStreaming: false }
@@ -152,7 +192,7 @@ export function useKuyaChat(): UseKuyaChat {
           console.warn('[useKuyaChat] streamChatInference failed:', err)
           setMessages(prev => prev.map(m =>
             m.id === assistantId
-              ? { ...m, isStreaming: false, error: "Kuya Baw can't answer right now. Try again sa moment." }
+              ? { ...m, isStreaming: false, error: "Kuya Baw can't answer right now. Try again in a moment." }
               : m
           ))
           setIsStreaming(false)

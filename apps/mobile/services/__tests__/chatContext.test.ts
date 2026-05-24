@@ -145,4 +145,13 @@ describe('buildProgressContext', () => {
     const out = await buildProgressContext(db, stats)
     expect(out).not.toContain('Weak topics:')
   })
+
+  it('omits accuracy phrase (no literal "n/a%") when todayAccuracy is null', async () => {
+    const db = makeDb()
+    const stats: HomeStats = { ...STATS_BASE, todayAccuracy: null }
+    const out = await buildProgressContext(db, stats)
+    expect(out).not.toContain('n/a')
+    expect(out).not.toContain('Today:')
+    expect(out).toContain('5-day streak')  // streak still emitted
+  })
 })

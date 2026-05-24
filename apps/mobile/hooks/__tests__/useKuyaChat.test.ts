@@ -105,7 +105,9 @@ describe('useKuyaChat', () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('hi')
+      // Use a question over the 5-char threshold so the short-question guard
+      // doesn't short-circuit the model call.
+      result.current.send('hello?')
       // wait for InteractionManager + setTimeout flushes
       await new Promise(r => setTimeout(r, 200))
     })
@@ -115,31 +117,81 @@ describe('useKuyaChat', () => {
     expect(result.current.isStreaming).toBe(false)
   })
 
-  it('shows the empty-output fallback when stream resolves with no tokens', async () => {
+  it('shows the empty-output fallback (English) when stream resolves with no tokens', async () => {
     mockStream.mockImplementation(async () => '')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('hi')
+      result.current.send('hello?')
       await new Promise(r => setTimeout(r, 200))
     })
     const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
-    expect(assistantMsg?.text).toBe('Hmm, hindi ko ma-process yan. Try mong i-rephrase!')
+    expect(assistantMsg?.text).toBe("I couldn't process that. Try rephrasing your question.")
     expect(assistantMsg?.isStreaming).toBe(false)
   })
 
-  it('shows the inline error message when streamChatInference throws', async () => {
+  it('shows the inline error message (English) when streamChatInference throws', async () => {
     mockStream.mockRejectedValue(new Error('native crash'))
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('hi')
+      result.current.send('hello?')
       await new Promise(r => setTimeout(r, 200))
     })
     const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
-    expect(assistantMsg?.error).toBe("Kuya Baw can't answer right now. Try again sa moment.")
+    expect(assistantMsg?.error).toBe("Kuya Baw can't answer right now. Try again in a moment.")
     expect(assistantMsg?.isStreaming).toBe(false)
     expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('short-question guard: input under 5 chars shows canned message and does NOT call the model', async () => {
+    mockStream.mockImplementation(async () => 'should not be called')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('Ano?')  // 4 chars — under threshold
+      await new Promise(r => setTimeout(r, 50))
+    })
+    const userMsg = result.current.messages.find(m => m.role === 'user')
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(userMsg?.text).toBe('Ano?')
+    expect(assistantMsg?.text).toBe('Please ask a more specific question — try one of the suggestions below.')
+    expect(assistantMsg?.isStreaming).toBe(false)
+    expect(mockStream).not.toHaveBeenCalled()
+  })
+
+  it('Tagalog safety net: response with ≥3 Tagalog tokens gets replaced with English fallback', async () => {
+    // Simulate the 1.5B model ignoring the English-only rule and producing Tagalog
+    mockStream.mockImplementation(async (_prompt, onToken) => {
+      const tagalogResponse = 'Christian Raro, nais ka naman sa naging pag-aaral. Sa naging pag-aaral, nangangahulugang masama ka sa pag-aaral. Mga gawin mo'
+      onToken(tagalogResponse)
+      return tagalogResponse
+    })
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('How am I doing this week?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Let me try that again — could you re-ask your question?')
+    expect(assistantMsg?.isStreaming).toBe(false)
+  })
+
+  it('Tagalog safety net does NOT trigger for clean English responses', async () => {
+    mockStream.mockImplementation(async (_prompt, onToken) => {
+      const englishResponse = 'Focus on Algebra today — it is your weakest topic at 32%.'
+      onToken(englishResponse)
+      return englishResponse
+    })
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('What should I focus on?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Focus on Algebra today — it is your weakest topic at 32%.')
   })
 
   it('does NOT clobber a fresh send when a previously-aborted stream resolves late', async () => {
