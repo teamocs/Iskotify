@@ -242,7 +242,7 @@ describe('streamChatInference', () => {
     expect(collected).toEqual(['first', 'second'])
   })
 
-  it('passes top_k: 40 and n_predict: 100 to completion (no top_p)', async () => {
+  it('passes top_k: 40 and n_predict: 60 to completion (no top_p)', async () => {
     const completion = jest.fn().mockResolvedValue({ text: 'ok' })
     const llama = require('llama.rn')
     llama.initLlama.mockResolvedValue({
@@ -255,7 +255,7 @@ describe('streamChatInference', () => {
     await streamChatInference('p', () => {}, controller.signal)
 
     const config = completion.mock.calls[0]![0]
-    expect(config.n_predict).toBe(100)
+    expect(config.n_predict).toBe(60)
     expect(config.top_k).toBe(40)
     expect(config.temperature).toBe(0.5)
     expect(config.repeat_penalty).toBe(1.1)
