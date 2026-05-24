@@ -219,7 +219,7 @@ export async function streamChatInference(
       const result = await ctx.completion(
         {
           prompt,
-          n_predict: 100,
+          n_predict: 60,
           temperature: 0.5,
           top_k: 40,
           repeat_penalty: 1.1,
