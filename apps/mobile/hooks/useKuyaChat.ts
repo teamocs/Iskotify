@@ -7,7 +7,7 @@ import {
   buildChatPrompt, parseChatChunk,
   type ChatMode,
 } from '../services/chatPrompts'
-import { buildProgressContext, loadStudentIdentity } from '../services/chatContext'
+import { buildProgressContext } from '../services/chatContext'
 
 export interface ChatMessage {
   id: string
@@ -113,7 +113,7 @@ export function useKuyaChat(): UseKuyaChat {
         try {
           const dataCtx = mode === 'progress'
             ? await buildProgressContext(db, stats)
-            : await loadStudentIdentity(db)
+            : undefined
           const prompt = buildChatPrompt(mode, trimmed, dataCtx)
 
           await streamChatInference(prompt, (tokenText) => {
