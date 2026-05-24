@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   FlatList, Image, Modal,
-  Pressable, StyleSheet, Text, TextInput,
+  Pressable, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
@@ -95,32 +95,36 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
     },
     closeBtn: { padding: 6 },
     closeBtnText: { fontSize: 20, color: t.textSecondary },
-    toggleRow: {
+    tabRow: {
       flexDirection: 'row',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      gap: 8,
       borderBottomWidth: 1,
-      borderBottomColor: t.surfaceSubtle,
+      borderBottomColor: t.border,
     },
-    togglePill: {
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: t.border,
+    tabItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 12,
+      position: 'relative',
     },
-    togglePillActive: {
-      backgroundColor: t.accent,
-      borderColor: t.accent,
-    },
-    togglePillDisabled: { opacity: 0.5 },
-    togglePillText: {
+    tabItemDisabled: { opacity: 0.5 },
+    tabItemText: {
       fontFamily: 'Lexend_500Medium',
-      fontSize: typo.xs,
+      fontSize: typo.sm,
       color: t.textSecondary,
     },
-    togglePillTextActive: { color: '#fff' },
+    tabItemTextActive: {
+      color: t.textPrimary,
+      fontFamily: 'Lexend_600SemiBold',
+    },
+    tabUnderline: {
+      position: 'absolute',
+      bottom: -1,
+      left: 12,
+      right: 12,
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: t.accent,
+    },
     list: { flex: 1, paddingHorizontal: 12 },
     listContent: { paddingVertical: 12 },
     emptyState: {
@@ -136,16 +140,18 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
       textAlign: 'center',
       marginBottom: 20,
     },
-    suggestRow: {
-      paddingHorizontal: 16,
-      paddingBottom: 8,
-      gap: 8,
-    },
+    suggestSection: { paddingTop: 6, paddingBottom: 8 },
     suggestLabel: {
       fontFamily: 'Lexend_500Medium',
       fontSize: 11,
       color: t.textTertiary,
-      marginBottom: 4,
+      marginBottom: 6,
+      paddingHorizontal: 16,
+    },
+    suggestScrollContent: {
+      paddingHorizontal: 16,
+      gap: 8,
+      flexDirection: 'row',
     },
     suggestChip: {
       backgroundColor: t.surfaceSubtle,
@@ -153,17 +159,11 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
       paddingVertical: 8,
       borderRadius: 999,
       alignSelf: 'flex-start',
-      marginRight: 6,
-      marginBottom: 6,
     },
     suggestChipText: {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.xs,
       color: t.textSecondary,
-    },
-    suggestChipsWrap: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
     },
     inputRow: {
       flexDirection: 'row',
@@ -226,28 +226,25 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
         </TouchableOpacity>
       </View>
 
-      {/* Mode toggle */}
-      <View style={s.toggleRow}>
+      {/* Mode tabs */}
+      <View style={s.tabRow}>
         {(['progress', 'topic'] as const).map(m => {
           const active = mode === m
           const disabled = isStreaming && !active
           return (
             <Pressable
               key={m}
-              style={[
-                s.togglePill,
-                active && s.togglePillActive,
-                disabled && s.togglePillDisabled,
-              ]}
+              style={[s.tabItem, disabled && s.tabItemDisabled]}
               onPress={() => setMode(m)}
               disabled={disabled}
-              accessibilityRole="button"
+              accessibilityRole="tab"
               accessibilityState={{ selected: active, disabled }}
-              accessibilityLabel={m === 'progress' ? 'My progress mode' : 'A topic mode'}
+              accessibilityLabel={m === 'progress' ? 'About Me tab' : 'A Topic tab'}
             >
-              <Text style={[s.togglePillText, active && s.togglePillTextActive]}>
-                {m === 'progress' ? 'My progress' : 'A topic'}
+              <Text style={[s.tabItemText, active && s.tabItemTextActive]}>
+                {m === 'progress' ? 'About Me' : 'A Topic'}
               </Text>
+              {active && <View style={s.tabUnderline} />}
             </Pressable>
           )
         })}
@@ -278,9 +275,13 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
 
       {/* Suggestions */}
       {showSuggestions && (
-        <View style={s.suggestRow}>
+        <View style={s.suggestSection}>
           <Text style={s.suggestLabel}>💡 Try asking:</Text>
-          <View style={s.suggestChipsWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.suggestScrollContent}
+          >
             {SUGGESTIONS[mode].map(text => (
               <Pressable
                 key={text}
@@ -292,7 +293,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
                 <Text style={s.suggestChipText}>{text}</Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         </View>
       )}
 
