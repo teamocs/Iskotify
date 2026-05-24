@@ -24,7 +24,7 @@ export interface UseSchoolSearch {
 // (commas, parens, and the backtick-quote-like chars). The remaining string
 // is safe inside `name.ilike.%X%` and `aliases.cs.{X}` filter clauses.
 function sanitizeForOr(q: string): string {
-  return q.replace(/[,()'"]/g, '').trim()
+  return q.replace(/[,(){}'"]/g, '').trim()
 }
 
 async function searchSupabase(q: string): Promise<SchoolResult[]> {

@@ -60,7 +60,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     errorText: {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.sm,
-      color: 'rgba(252,165,165,0.8)',
+      color: t.accentText,
       textAlign: 'center',
       paddingHorizontal: 16,
     },
@@ -95,7 +95,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     fallbackLink: {
       fontFamily: 'Lexend_500Medium',
       fontSize: typo.md,
-      color: 'rgba(252,165,165,0.8)',
+      color: t.accentText,
       marginTop: 2,
     },
   }), [t, typo])

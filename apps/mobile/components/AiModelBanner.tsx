@@ -69,7 +69,7 @@ export function AiModelBanner() {
     },
     downloadingBytes: {
       fontSize: 11,
-      color: 'rgba(252,165,165,0.75)',
+      color: t.accentText,
       fontFamily: 'Lexend_400Regular',
       marginBottom: 8,
     },

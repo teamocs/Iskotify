@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
@@ -27,16 +27,18 @@ export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) 
     router.navigate(TAB_HREFS[next] as never)
   }, [pathname])
 
-  const pan = Gesture.Pan()
-    .activeOffsetX([-15, 15])
-    .failOffsetY([-15, 15])
-    .onEnd((e) => {
-      'worklet'
-      const swipeLeft = e.translationX < -SWIPE_DISTANCE && Math.abs(e.velocityX) > SWIPE_VELOCITY
-      const swipeRight = e.translationX > SWIPE_DISTANCE && Math.abs(e.velocityX) > SWIPE_VELOCITY
-      if (swipeLeft) runOnJS(navigateTo)('left')
-      else if (swipeRight) runOnJS(navigateTo)('right')
-    })
+  const pan = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-15, 15])
+      .failOffsetY([-15, 15])
+      .onEnd((e) => {
+        'worklet'
+        const swipeLeft = e.translationX < -SWIPE_DISTANCE && Math.abs(e.velocityX) > SWIPE_VELOCITY
+        const swipeRight = e.translationX > SWIPE_DISTANCE && Math.abs(e.velocityX) > SWIPE_VELOCITY
+        if (swipeLeft) runOnJS(navigateTo)('left')
+        else if (swipeRight) runOnJS(navigateTo)('right')
+      }),
+  [navigateTo])
 
   return (
     <GestureDetector gesture={pan}>

@@ -228,4 +228,18 @@ describe('useSchoolSearch', () => {
       expect(result.current.errorMessage).toBe('Places API key not configured')
     })
   })
+
+  it('sanitizes curly braces from the .or() filter', async () => {
+    const mocks = mockSupabase([
+      { name: 'Test School', city: 'Manila', province: 'NCR' },
+    ])
+    const { result } = renderHook(() => useSchoolSearch())
+    act(() => { result.current.setQuery('Mapua{test}university') })
+    act(() => { jest.advanceTimersByTime(500) })
+
+    await waitFor(() => expect(result.current.results.length).toBeGreaterThan(0))
+    // The query passed to .or() should have `{` and `}` stripped
+    expect(mocks.or).toHaveBeenCalledWith(expect.stringContaining('name.ilike.%Mapuatestuniversity%'))
+    expect(mocks.or).not.toHaveBeenCalledWith(expect.stringContaining('{test}'))
+  })
 })

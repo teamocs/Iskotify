@@ -59,6 +59,15 @@ describe('EdgeSwipeNavigator', () => {
     expect(mockPanBuilder.onEnd).toHaveBeenCalledTimes(1)
   })
 
+  it('does not recreate the Pan gesture on re-render when pathname is unchanged', () => {
+    mockUsePathname.mockReturnValue('/practice')
+    const { rerender } = render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    expect(Gesture.Pan).toHaveBeenCalledTimes(1)
+    rerender(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    rerender(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    expect(Gesture.Pan).toHaveBeenCalledTimes(1)  // useMemo kept the same object
+  })
+
   it('navigates to next tab on qualifying left swipe', () => {
     mockUsePathname.mockReturnValue('/practice')
     render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
