@@ -15,3 +15,16 @@ jest.mock('react-native-keyboard-controller', () => {
     KeyboardAwareScrollView: RN.ScrollView,
   }
 })
+
+// expo-screen-capture: stub the async prevent/allow APIs
+jest.mock('expo-screen-capture', () => ({
+  preventScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
+  allowScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
+}))
+
+// expo-navigation-bar: stub setVisibilityAsync + setBehaviorAsync
+jest.mock('expo-navigation-bar', () => ({
+  setVisibilityAsync: jest.fn().mockResolvedValue(undefined),
+  setBehaviorAsync: jest.fn().mockResolvedValue(undefined),
+  getVisibilityAsync: jest.fn().mockResolvedValue('visible'),
+}))
