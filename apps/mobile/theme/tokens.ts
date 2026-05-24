@@ -7,6 +7,7 @@ export const darkTheme = {
   textSecondary: 'rgba(255,255,255,0.62)',
   textTertiary:  'rgba(255,255,255,0.38)',
   accent:        '#800000',
+  accentText:    '#fca5a5',
   accentSurface: 'rgba(128,0,0,0.18)',
   tabBar:        'rgba(26,26,46,0.92)',
   divider:       'rgba(255,255,255,0.20)',
@@ -22,6 +23,7 @@ export const lightTheme = {
   textSecondary: '#7a4444',
   textTertiary:  'rgba(45,10,10,0.40)',
   accent:        '#800000',
+  accentText:    '#9b1c1c',
   accentSurface: 'rgba(128,0,0,0.10)',
   tabBar:        'rgba(253,244,244,0.92)',
   divider:       'rgba(128,0,0,0.15)',
@@ -32,7 +34,6 @@ export const statusColors = {
   strong: '#4ade80',
   weak:   '#f87171',
   review: '#fbbf24',
-  pink:   '#fca5a5',
 } as const
 
 export const typography = {
