@@ -34,7 +34,8 @@ function makeDb(): DrizzleClient {
       google_id TEXT,
       email TEXT,
       notifications_enabled INTEGER DEFAULT 1,
-      theme TEXT NOT NULL DEFAULT 'system'
+      theme TEXT NOT NULL DEFAULT 'system',
+      focus_mode_enabled INTEGER NOT NULL DEFAULT 1
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
