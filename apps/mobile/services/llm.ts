@@ -220,7 +220,7 @@ export async function streamChatInference(
         {
           prompt,
           n_predict: 60,
-          temperature: 0.5,
+          temperature: 0.2,
           top_k: 40,
           repeat_penalty: 1.1,
           stop: ['<|im_end|>', '</s>', '<|im_start|>'],

@@ -257,7 +257,7 @@ describe('streamChatInference', () => {
     const config = completion.mock.calls[0]![0]
     expect(config.n_predict).toBe(60)
     expect(config.top_k).toBe(40)
-    expect(config.temperature).toBe(0.5)
+    expect(config.temperature).toBe(0.2)
     expect(config.repeat_penalty).toBe(1.1)
     expect(config.top_p).toBeUndefined()
   })

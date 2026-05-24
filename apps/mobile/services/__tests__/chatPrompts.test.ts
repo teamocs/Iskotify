@@ -82,6 +82,34 @@ describe('buildChatPrompt', () => {
     expect(prompt).toContain('Maximum 2 sentences total')
   })
 
+  it('user turn includes the English-only [INSTRUCTION] block (both modes)', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    expect(progress).toContain('[INSTRUCTION] Respond in clear English only.')
+    expect(topic).toContain('[INSTRUCTION] Respond in clear English only.')
+  })
+
+  it('user turn places [INSTRUCTION] BEFORE the question in both modes', () => {
+    const progress = buildChatPrompt('progress', 'How am I doing?', 'ctx')
+    const topic = buildChatPrompt('topic', 'What is photosynthesis?')
+    const progressUser = progress.split('<|im_start|>user\n')[1]?.split('<|im_end|>')[0] ?? ''
+    const topicUser = topic.split('<|im_start|>user\n')[1]?.split('<|im_end|>')[0] ?? ''
+    expect(progressUser.indexOf('[INSTRUCTION]')).toBeLessThan(progressUser.indexOf('How am I doing?'))
+    expect(topicUser.indexOf('[INSTRUCTION]')).toBeLessThan(topicUser.indexOf('What is photosynthesis?'))
+  })
+
+  it('system prompts include a Tagalog → English few-shot example (both modes)', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    // Both demonstrate the Tagalog-question → English-answer pattern.
+    expect(progress).toContain('Example')
+    expect(progress).toContain('Anong')
+    expect(progress).toContain('you answer in English')
+    expect(topic).toContain('Example')
+    expect(topic).toContain('Anong')
+    expect(topic).toContain('you answer in English')
+  })
+
 })
 
 describe('parseChatChunk', () => {
