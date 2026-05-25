@@ -33,7 +33,9 @@ export default function NoteEditorScreen() {
   // Load note on mount
   useEffect(() => {
     if (!id) return
+    let cancelled = false
     void db.select().from(notesTable).where(eq(notesTable.id, id)).limit(1).then(rows => {
+      if (cancelled) return
       const row = rows[0]
       if (!row) return
       setTitle(row.title)
@@ -45,7 +47,8 @@ export default function NoteEditorScreen() {
       }
       setLoaded(true)
     })
-    void assignedLabelIds(id).then(setAssignedIds)
+    void assignedLabelIds(id).then(ids => { if (!cancelled) setAssignedIds(ids) })
+    return () => { cancelled = true }
   }, [id, db, assignedLabelIds])
 
   // Auto-save debounced 500ms
