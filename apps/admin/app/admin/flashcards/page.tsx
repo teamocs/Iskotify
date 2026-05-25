@@ -5,6 +5,13 @@ import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
+type Topic = {
+  id: string
+  name: string
+  status: string
+  flashcards: { id: string; status: string }[]
+}
+
 async function getData() {
   const db = createServerClient()
   const { data: subjects } = await db
@@ -32,12 +39,19 @@ function statusBadge(status: string) {
 export default async function FlashcardsPage() {
   const subjects = await getData()
 
+  const enriched = subjects.map(subject => {
+    const topics = (subject.flashcard_topics ?? []) as Topic[]
+    const totalCards = topics.reduce((sum, t) => sum + (t.flashcards?.length ?? 0), 0)
+    const overallStatus = topics.some(t => t.status === 'published') ? 'published' : 'draft'
+    return { ...subject, topics, totalCards, overallStatus }
+  })
+
   return (
     <>
       <Topbar title="Knowledge Base" />
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-5">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-[#6e6e73]">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-[#6e6e73]">{enriched.length} subject{enriched.length !== 1 ? 's' : ''}</p>
           <div className="flex gap-2">
             <Link
               href="/admin/flashcards/new"
@@ -54,7 +68,7 @@ export default async function FlashcardsPage() {
           </div>
         </div>
 
-        {subjects.length === 0 ? (
+        {enriched.length === 0 ? (
           <div className="text-center py-16 text-[#6e6e73] text-sm">
             No subjects yet. Upload a PDF or add cards manually.
           </div>
@@ -72,51 +86,41 @@ export default async function FlashcardsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.map(subject => {
-                    const topics = (subject.flashcard_topics ?? []) as Array<{ id: string; name: string; status: string; flashcards: Array<{ id: string; status: string }> }>
-                    const totalCards = topics.reduce((sum, t) => sum + (t.flashcards?.length ?? 0), 0)
-                    const overallStatus = topics.some(t => t.status === 'published') ? 'published' : 'draft'
-                    return (
-                      <tr key={subject.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
-                        <td className="px-5 py-3">
-                          <Link
-                            href={`/admin/flashcards/subjects/${subject.id}`}
-                            className="font-medium text-[#1d1d1f] hover:text-[#800000] transition-colors"
-                          >
-                            {subject.name}
-                          </Link>
-                        </td>
-                        <td className="px-5 py-3 text-[#374151]">{topics.length}</td>
-                        <td className="px-5 py-3 text-[#374151]">{totalCards}</td>
-                        <td className="px-5 py-3">{statusBadge(overallStatus)}</td>
-                      </tr>
-                    )
-                  })}
+                  {enriched.map(subject => (
+                    <tr key={subject.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
+                      <td className="px-5 py-3">
+                        <Link
+                          href={`/admin/flashcards/subjects/${subject.id}`}
+                          className="font-medium text-[#1d1d1f] hover:text-[#800000] transition-colors"
+                        >
+                          {subject.name}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-3 text-[#374151]">{subject.topics.length}</td>
+                      <td className="px-5 py-3 text-[#374151]">{subject.totalCards}</td>
+                      <td className="px-5 py-3">{statusBadge(subject.overallStatus)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile cards */}
             <div className="md:hidden space-y-2">
-              {subjects.map(subject => {
-                const topics = (subject.flashcard_topics ?? []) as Array<{ id: string; name: string; status: string; flashcards: Array<{ id: string; status: string }> }>
-                const totalCards = topics.reduce((sum, t) => sum + (t.flashcards?.length ?? 0), 0)
-                const overallStatus = topics.some(t => t.status === 'published') ? 'published' : 'draft'
-                return (
-                  <Link
-                    key={subject.id}
-                    href={`/admin/flashcards/subjects/${subject.id}`}
-                    className="flex items-center justify-between bg-white border border-[#e5e7eb] rounded-2xl p-4"
-                  >
-                    <div>
-                      <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
-                      <p className="text-xs text-[#6e6e73] mt-0.5">{topics.length} topics · {totalCards} cards</p>
-                      <div className="mt-1">{statusBadge(overallStatus)}</div>
-                    </div>
-                    <span className="text-[#aeaeb2] text-lg ml-2">›</span>
-                  </Link>
-                )
-              })}
+              {enriched.map(subject => (
+                <Link
+                  key={subject.id}
+                  href={`/admin/flashcards/subjects/${subject.id}`}
+                  className="flex items-center justify-between bg-white border border-[#e5e7eb] rounded-2xl p-4 active:bg-[#f5f5f7]"
+                >
+                  <div>
+                    <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
+                    <p className="text-xs text-[#6e6e73] mt-0.5">{subject.topics.length} topics · {subject.totalCards} cards</p>
+                    <div className="mt-1">{statusBadge(subject.overallStatus)}</div>
+                  </div>
+                  <span className="text-[#aeaeb2] text-lg ml-2">›</span>
+                </Link>
+              ))}
             </div>
           </>
         )}
