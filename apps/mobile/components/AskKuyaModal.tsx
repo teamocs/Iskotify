@@ -44,7 +44,7 @@ export function AskKuyaModal({ visible, onClose }: Props) {
 
 function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
   const { theme: t, typo } = useTheme()
-  const { mode, setMode, messages, send, abort, isStreaming } = useKuyaChat()
+  const { mode, setMode, messages, send, abort, clearHistory, isStreaming } = useKuyaChat()
   const [input, setInput] = useState('')
   const listRef = useRef<FlatList<ChatMessage>>(null)
   const insets = useSafeAreaInsets()
@@ -95,6 +95,16 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
     },
     closeBtn: { padding: 6 },
     closeBtnText: { fontSize: 20, color: t.textSecondary },
+    clearBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginRight: 4,
+    },
+    clearBtnText: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.xs,
+      color: t.textSecondary,
+    },
     tabRow: {
       flexDirection: 'row',
       borderBottomWidth: 1,
@@ -216,6 +226,16 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
           resizeMode="contain"
         />
         <Text style={s.headerTitle}>Kuya Baw</Text>
+        {messages.length > 0 && !isStreaming && (
+          <TouchableOpacity
+            style={s.clearBtn}
+            onPress={clearHistory}
+            accessibilityRole="button"
+            accessibilityLabel="Clear chat history"
+          >
+            <Text style={s.clearBtnText}>Clear</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={s.closeBtn}
           onPress={onClosePressed}
