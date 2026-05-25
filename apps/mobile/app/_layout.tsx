@@ -22,6 +22,7 @@ import { useDb } from '../hooks/useDb'
 import { AiCoachProvider } from '../providers/AiCoachProvider'
 import { syncOnLaunch } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
+import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
 import { userSettings } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { requestNotificationPermissions } from '../services/notifications'
@@ -113,6 +114,9 @@ function AppInit({ onReady }: { onReady: () => void }) {
       onReady()  // hide the loading overlay
     }
 
+    // Prune notes older than 7 days in trash — fire and forget
+    pruneOldTrashedNotesDb(db).catch(e => console.warn('[layout] prune trash:', e))
+
     // Background sync — fire and forget, never blocks navigation.
     // After sync completes, kick off AI enhancement in the background (fire-and-forget).
     syncOnLaunch(db)
@@ -131,7 +135,9 @@ function AppInit({ onReady }: { onReady: () => void }) {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AiCoachProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
+        </Stack>
       </AiCoachProvider>
     </>
   )

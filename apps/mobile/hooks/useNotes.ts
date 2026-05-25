@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { desc, and, eq, lt } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { notes as notesTable, noteLabelAssignments } from '../db/schema'
+import type { DrizzleClient } from '../db/client'
 
 export type NoteType = 'text' | 'checklist'
 export type NoteColor =
@@ -223,4 +224,17 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     emptyTrash,
     pruneOldTrashedNotes,
   }
+}
+
+// Standalone version for app-start pruning without mounting the full hook
+export async function pruneOldTrashedNotesDb(db: DrizzleClient): Promise<void> {
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  const old = await db.select({ id: notesTable.id })
+    .from(notesTable)
+    .where(and(eq(notesTable.isTrashed, true), lt(notesTable.trashedAt, cutoff)))
+  for (const row of old) {
+    await db.delete(noteLabelAssignments).where(eq(noteLabelAssignments.noteId, row.id))
+  }
+  await db.delete(notesTable)
+    .where(and(eq(notesTable.isTrashed, true), lt(notesTable.trashedAt, cutoff)))
 }

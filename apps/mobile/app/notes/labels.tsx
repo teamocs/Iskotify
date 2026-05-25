@@ -14,13 +14,22 @@ export default function LabelsScreen() {
 
   const handleCreate = async () => {
     if (!newLabelName.trim()) return
-    await createLabel(newLabelName)
-    setNewLabelName('')
+    try {
+      await createLabel(newLabelName)
+      setNewLabelName('')
+    } catch {
+      Alert.alert('Label already exists', `"${newLabelName.trim()}" already exists.`)
+    }
   }
 
   const handleRename = async (id: string) => {
-    await renameLabel(id, editingName)
-    setEditingId(null)
+    if (!editingName.trim()) { setEditingId(null); return }
+    try {
+      await renameLabel(id, editingName)
+      setEditingId(null)
+    } catch {
+      Alert.alert('Label already exists', `"${editingName.trim()}" already exists.`)
+    }
   }
 
   const handleDelete = (id: string, name: string) => {
