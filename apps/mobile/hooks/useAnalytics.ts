@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { practiceSessions, topics, savedDecks } from '../db/schema'
+import { resolveTopicLabel } from '../utils/topicLabel'
 
 export interface WeeklyBar {
   dayLabel: string
@@ -110,7 +111,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       const topicMastery: TopicMastery[] = Object.entries(grouped)
         .filter(([, v]) => v.total > 0)
         .map(([key, v]) => ({
-          label: topicMap.get(key) ?? deckMap.get(key) ?? key,
+          label: resolveTopicLabel(key, topicMap) || deckMap.get(key) || key,
           accuracy: Math.round((v.score / v.total) * 100),
           sessionCount: v.count,
         }))
@@ -124,7 +125,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           let title = 'Session'
           if (s.deckId === '__full__') title = 'Full Review'
           else if (s.deckId === '__weak__') title = 'Weak Topics'
-          else if (s.topicId) title = topicMap.get(s.topicId) ?? s.topicId
+          else if (s.topicId) title = resolveTopicLabel(s.topicId, topicMap)
           else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
           return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
         })

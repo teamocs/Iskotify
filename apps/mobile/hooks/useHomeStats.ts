@@ -3,6 +3,7 @@ import { eq, asc } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { userSettings, listings as listingsTable, userProgress, flashcards, topics, focusListings } from '../db/schema'
+import { resolveTopicLabel } from '../utils/topicLabel'
 
 export interface WeakTopic {
   topicId: string
@@ -72,7 +73,7 @@ export function computeWeakTopics(
   return Array.from(topicStats.entries())
     .map(([tid, { correct, total }]) => ({
       topicId: tid,
-      topicName: topicMap.get(tid) ?? tid,
+      topicName: resolveTopicLabel(tid, topicMap),
       accuracy: Math.round((correct / total) * 100),
     }))
     .filter(t => t.accuracy < 60)

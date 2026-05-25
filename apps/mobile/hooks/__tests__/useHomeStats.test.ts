@@ -101,5 +101,20 @@ describe('computeWeakTopics', () => {
     expect(result[0].topicId).toBe('t2')   // 0% first
     expect(result[1].topicId).toBe('t1')   // 50% second
   })
+
+  it('renders pre-assess synthetic topic IDs as "Pre-Assessment: <Subject>"', () => {
+    const progress = [
+      { flashcardId: 'pa-q1', correct: false },
+      { flashcardId: 'pa-q2', correct: false },
+    ]
+    const fcList = [
+      { id: 'pa-q1', topicId: 'pre-assess-Mathematics' },
+      { id: 'pa-q2', topicId: 'pre-assess-Mathematics' },
+    ]
+    const topicList: Array<{ id: string; name: string }> = []  // empty map
+    const out = computeWeakTopics(progress, fcList, topicList)
+    expect(out).toHaveLength(1)
+    expect(out[0]?.topicName).toBe('Pre-Assessment: Mathematics')
+  })
 })
 
