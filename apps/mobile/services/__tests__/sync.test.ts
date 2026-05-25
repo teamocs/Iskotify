@@ -179,6 +179,29 @@ function makeTestDb(): DrizzleClient {
       duration_secs INTEGER NOT NULL DEFAULT 0,
       completed_at INTEGER NOT NULL
     );
+    CREATE TABLE notes (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT 'text',
+      color TEXT,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      is_trashed INTEGER NOT NULL DEFAULT 0,
+      trashed_at INTEGER,
+      created_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE note_labels (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE note_label_assignments (
+      note_id TEXT NOT NULL,
+      label_id TEXT NOT NULL,
+      PRIMARY KEY (note_id, label_id)
+    );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
 }
@@ -335,5 +358,44 @@ describe('pullUserData', () => {
     expect(s.notificationsEnabled).toBe(false)
     expect(s.theme).toBe('dark')
     expect(s.focusModeEnabled).toBe(false)
+  })
+})
+
+describe('pushUserData includes notes', () => {
+  it('includes notes, note_labels, note_label_assignments in the upsert payload', async () => {
+    const { supabase } = require('../supabase')
+    const upsertMock = jest.fn().mockResolvedValue({ error: null })
+    ;(supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    ;(supabase.from as jest.Mock).mockReturnValue({ upsert: upsertMock })
+
+    const makeFrom = (rows: unknown[] = []) => {
+      const p = Promise.resolve(rows) as any
+      p.where = () => p
+      p.limit = () => Promise.resolve(rows)
+      p.orderBy = () => Promise.resolve(rows)
+      return p
+    }
+
+    const db: any = {
+      select: jest.fn()
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // focusListings
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // savedListings
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // savedDecks
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userProgress
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // practiceSessions
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userSettings
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // notes
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabels
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // noteLabelAssignments
+    }
+
+    const { pushUserData } = require('../sync')
+    await pushUserData(db)
+
+    expect(upsertMock).toHaveBeenCalledTimes(1)
+    const payload = upsertMock.mock.calls[0]![0] as Record<string, unknown>
+    expect(payload).toHaveProperty('notes')
+    expect(payload).toHaveProperty('note_labels')
+    expect(payload).toHaveProperty('note_label_assignments')
   })
 })

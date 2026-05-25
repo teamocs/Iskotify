@@ -3,6 +3,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedListings, savedDecks, userProgress, practiceSessions,
+  notes as notesTable, noteLabels, noteLabelAssignments,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -23,13 +24,16 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const [focus, saved, decks, progress, sessions, settings] = await Promise.all([
+  const [focus, saved, decks, progress, sessions, settings, noteRows, labelRows, assignRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
     db.select().from(practiceSessions),
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+    db.select().from(notesTable),
+    db.select().from(noteLabels),
+    db.select().from(noteLabelAssignments),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -40,6 +44,9 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     user_progress: progress,
     practice_sessions: sessions,
     settings: settings[0] ?? {},
+    notes: noteRows,
+    note_labels: labelRows,
+    note_label_assignments: assignRows,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -130,6 +137,27 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         .values(settingsValues)
         .onConflictDoUpdate({ target: userSettings.id, set: settingsValues })
         .run()
+    }
+
+    // Restore notes — wipe and restore
+    const remoteNotes: typeof notesTable.$inferInsert[] = data.notes ?? []
+    tx.delete(noteLabelAssignments).run()
+    tx.delete(notesTable).run()
+    for (const row of remoteNotes) {
+      tx.insert(notesTable).values(row).onConflictDoNothing().run()
+    }
+
+    // Restore note labels
+    const remoteLabels: typeof noteLabels.$inferInsert[] = data.note_labels ?? []
+    tx.delete(noteLabels).run()
+    for (const row of remoteLabels) {
+      tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+    }
+
+    // Restore note label assignments
+    const remoteAssigns: typeof noteLabelAssignments.$inferInsert[] = data.note_label_assignments ?? []
+    for (const row of remoteAssigns) {
+      tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
     }
   })
 }
