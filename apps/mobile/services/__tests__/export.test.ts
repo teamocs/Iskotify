@@ -44,6 +44,19 @@ function makeDb(settingsRow: { selectedListingSlug: string; lastSyncedAt: number
   }
 }
 
+function makeDbFull() {
+  const makeFrom = () => {
+    const p = Promise.resolve([]) as any
+    p.where = () => p
+    p.limit = () => Promise.resolve([])
+    p.orderBy = () => Promise.resolve([])
+    return p
+  }
+  return {
+    select: jest.fn(() => ({ from: jest.fn(() => makeFrom()) })),
+  }
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
   mockRequestDirPerms.mockResolvedValue({ granted: true, directoryUri: 'content://picked/' })
@@ -117,5 +130,19 @@ describe('exportUserData (iOS, share sheet)', () => {
     await expect(
       exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
     ).rejects.toThrow('Sharing not available')
+  })
+})
+
+describe('exportUserData includes notes fields', () => {
+  it('writes JSON payload containing notes, note_labels, note_label_assignments keys', async () => {
+    await exportUserData(makeDbFull() as any)
+    const written: string = mockWriteAsStringAsync.mock.calls[0]![1] as string
+    const parsed = JSON.parse(written) as Record<string, unknown>
+    expect(parsed).toHaveProperty('notes')
+    expect(parsed).toHaveProperty('note_labels')
+    expect(parsed).toHaveProperty('note_label_assignments')
+    expect(Array.isArray(parsed.notes)).toBe(true)
+    expect(Array.isArray(parsed.note_labels)).toBe(true)
+    expect(Array.isArray(parsed.note_label_assignments)).toBe(true)
   })
 })

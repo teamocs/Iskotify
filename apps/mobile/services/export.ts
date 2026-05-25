@@ -11,6 +11,9 @@ import {
   savedDecks,
   userProgress,
   practiceSessions,
+  notes as notesTable,
+  noteLabels,
+  noteLabelAssignments,
 } from '../db/schema'
 
 const { StorageAccessFramework } = FileSystem
@@ -20,13 +23,16 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, saved, decks, progress, sessions] = await Promise.all([
+  const [settings, focus, saved, decks, progress, sessions, noteRows, labelRows, assignRows] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
     db.select().from(savedListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
     db.select().from(practiceSessions),
+    db.select().from(notesTable),
+    db.select().from(noteLabels),
+    db.select().from(noteLabelAssignments),
   ])
 
   const payload = {
@@ -37,6 +43,9 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     saved_decks: decks,
     user_progress: progress,
     practice_sessions: sessions,
+    notes: noteRows,
+    note_labels: labelRows,
+    note_label_assignments: assignRows,
   }
 
   const json = JSON.stringify(payload, null, 2)
@@ -185,5 +194,49 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       durationSecs: Number(row.durationSecs ?? row.duration_secs ?? 0),
       completedAt: Number(row.completedAt ?? row.completed_at ?? Date.now()),
     })
+  }
+
+  // Notes — replace entirely
+  await db.delete(noteLabelAssignments)
+  await db.delete(notesTable)
+  const noteImportRows = Array.isArray(data.notes) ? (data.notes as ExportRow[]) : []
+  for (const row of noteImportRows) {
+    const id = String(row.id ?? '')
+    if (!id) continue
+    await db.insert(notesTable).values({
+      id,
+      title: String(row.title ?? ''),
+      content: String(row.content ?? ''),
+      type: String(row.type ?? 'text'),
+      color: row.color ? String(row.color) : null,
+      isPinned: Boolean(row.isPinned ?? row.is_pinned ?? false),
+      isArchived: Boolean(row.isArchived ?? row.is_archived ?? false),
+      isTrashed: Boolean(row.isTrashed ?? row.is_trashed ?? false),
+      trashedAt: row.trashedAt != null ? Number(row.trashedAt) : row.trashed_at != null ? Number(row.trashed_at) : null,
+      createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
+      updatedAt: Number(row.updatedAt ?? row.updated_at ?? Date.now()),
+    }).onConflictDoNothing()
+  }
+
+  // Note labels — replace entirely
+  await db.delete(noteLabels)
+  const labelImportRows = Array.isArray(data.note_labels) ? (data.note_labels as ExportRow[]) : []
+  for (const row of labelImportRows) {
+    const id = String(row.id ?? '')
+    if (!id) continue
+    await db.insert(noteLabels).values({
+      id,
+      name: String(row.name ?? ''),
+      createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
+    }).onConflictDoNothing()
+  }
+
+  // Note label assignments — replace entirely
+  const assignImportRows = Array.isArray(data.note_label_assignments) ? (data.note_label_assignments as ExportRow[]) : []
+  for (const row of assignImportRows) {
+    const noteId = String(row.noteId ?? row.note_id ?? '')
+    const labelId = String(row.labelId ?? row.label_id ?? '')
+    if (!noteId || !labelId) continue
+    await db.insert(noteLabelAssignments).values({ noteId, labelId }).onConflictDoNothing()
   }
 }
