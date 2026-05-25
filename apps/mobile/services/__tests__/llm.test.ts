@@ -61,12 +61,13 @@ describe('buildPrompt', () => {
     expect(buildPrompt({ subjectName: 'Chemistry', topicName: 'Bonds', question: 'Q?', answer: 'A' })).toContain('factually wrong')
   })
 
-  it('includes ChatML format tokens for Qwen', () => {
+  it('uses Gemma turn tokens for MCQ prompt', () => {
     const prompt = buildPrompt({ subjectName: 'Science', topicName: 'Physics', question: 'Q?', answer: 'A' })
-    expect(prompt).toContain('<|im_start|>system')
-    expect(prompt).toContain('<|im_end|>')
-    expect(prompt).toContain('<|im_start|>user')
-    expect(prompt).toContain('<|im_start|>assistant')
+    expect(prompt).toContain('<start_of_turn>user')
+    expect(prompt).toContain('<end_of_turn>')
+    expect(prompt).toContain('<start_of_turn>model')
+    expect(prompt).not.toContain('<|im_start|>')
+    expect(prompt).not.toContain('<|im_end|>')
   })
 
   it('includes subject, question, and answer in user section', () => {
@@ -260,5 +261,9 @@ describe('streamChatInference', () => {
     expect(config.temperature).toBe(0.2)
     expect(config.repeat_penalty).toBe(1.1)
     expect(config.top_p).toBeUndefined()
+    // NEW: verify Gemma stop tokens
+    expect(config.stop).toContain('<end_of_turn>')
+    expect(config.stop).toContain('<eos>')
+    expect(config.stop).not.toContain('<|im_end|>')
   })
 })

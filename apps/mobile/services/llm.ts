@@ -5,12 +5,12 @@ import { parseCoachPhrase } from './coachPrompts'
 
 export { parseCoachPhrase }
 
-const MODEL_FILENAME = 'qwen2.5-1.5b-instruct-q4_k_m.gguf'
+const MODEL_FILENAME = 'gemma-3-1b-it-Q4_K_M.gguf'
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`
 export const MODEL_PATH = `${MODEL_DIR}${MODEL_FILENAME}`
 
 export const MODEL_DOWNLOAD_URL =
-  'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf'
+  'https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf'
 
 const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
 export const IDLE_RELEASE_MS = 60_000
@@ -130,9 +130,8 @@ export function buildPrompt(params: {
     `Right Answer: ${answer}`
 
   return (
-    `<|im_start|>system\n${systemPrompt}<|im_end|>\n` +
-    `<|im_start|>user\n${userMessage}<|im_end|>\n` +
-    `<|im_start|>assistant\n`
+    `<start_of_turn>user\n${systemPrompt}\n\n${userMessage}<end_of_turn>\n` +
+    `<start_of_turn>model\n`
   )
 }
 
@@ -169,12 +168,11 @@ export async function runInference(prompt: string): Promise<LlmOutput | null> {
         prompt,
         n_predict: 400,
         temperature: 0.1,
-        stop: ['<|im_end|>', '</s>'],
+        stop: ['<end_of_turn>', '<eos>'],
       })
       lastUsedAt = Date.now()
       return parseResponse(result.text)
     } catch (err) {
-      // Native errors may corrupt context state — release so next call re-inits
       await releaseContext()
       throw err
     }
@@ -192,7 +190,7 @@ export async function runCoachInference(prompt: string): Promise<string | null> 
         prompt,
         n_predict: 80,
         temperature: 0.7,
-        stop: ['<|im_end|>', '</s>', '\n\n'],
+        stop: ['<end_of_turn>', '<eos>', '\n\n'],
       })
       lastUsedAt = Date.now()
       return parseCoachPhrase(result.text)
@@ -223,7 +221,7 @@ export async function streamChatInference(
           temperature: 0.2,
           top_k: 40,
           repeat_penalty: 1.1,
-          stop: ['<|im_end|>', '</s>', '<|im_start|>'],
+          stop: ['<end_of_turn>', '<eos>', '<start_of_turn>'],
         },
         (tokenData: { token?: string }) => {
           if (signal.aborted) return
@@ -235,7 +233,6 @@ export async function streamChatInference(
       lastUsedAt = Date.now()
       return collected || result.text || ''
     } catch (err) {
-      // Native errors may corrupt context — release so next call re-inits
       await releaseContext()
       throw err
     }
