@@ -139,19 +139,23 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         .run()
     }
 
-    // Restore notes — wipe and restore
+    // Restore notes — wipe and restore (guard matches practice_sessions/user_progress pattern)
     const remoteNotes: typeof notesTable.$inferInsert[] = data.notes ?? []
-    tx.delete(noteLabelAssignments).run()
-    tx.delete(notesTable).run()
-    for (const row of remoteNotes) {
-      tx.insert(notesTable).values(row).onConflictDoNothing().run()
+    if (remoteNotes.length > 0) {
+      tx.delete(noteLabelAssignments).run()
+      tx.delete(notesTable).run()
+      for (const row of remoteNotes) {
+        tx.insert(notesTable).values(row).onConflictDoNothing().run()
+      }
     }
 
     // Restore note labels
     const remoteLabels: typeof noteLabels.$inferInsert[] = data.note_labels ?? []
-    tx.delete(noteLabels).run()
-    for (const row of remoteLabels) {
-      tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+    if (remoteLabels.length > 0) {
+      tx.delete(noteLabels).run()
+      for (const row of remoteLabels) {
+        tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+      }
     }
 
     // Restore note label assignments

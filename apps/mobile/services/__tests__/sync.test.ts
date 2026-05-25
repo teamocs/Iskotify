@@ -361,6 +361,75 @@ describe('pullUserData', () => {
   })
 })
 
+describe('pullUserData notes restore', () => {
+  let supabase: any
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabase = require('../supabase').supabase
+    supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+  })
+
+  it('restores notes from remote when server has notes', async () => {
+    const fromBuilder = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          focus_listings: [],
+          saved_listings: [],
+          saved_decks: [],
+          user_progress: [],
+          practice_sessions: [],
+          settings: null,
+          notes: [
+            { id: 'note-1', title: 'Test Note', content: 'Hello', type: 'text', color: null, isPinned: false, isArchived: false, isTrashed: false, trashedAt: null, createdAt: 1000, updatedAt: 1000 },
+          ],
+          note_labels: [],
+          note_label_assignments: [],
+        },
+        error: null,
+      }),
+    }
+    supabase.from.mockReturnValue(fromBuilder)
+    const db = makeTestDb()
+    await pullUserData(db)
+    const noteRows = await db.select().from(schema.notes)
+    expect(noteRows).toHaveLength(1)
+    expect(noteRows[0]!.id).toBe('note-1')
+  })
+
+  it('does not wipe local notes when server payload has no notes', async () => {
+    const fromBuilder = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          focus_listings: [],
+          saved_listings: [],
+          saved_decks: [],
+          user_progress: [],
+          practice_sessions: [],
+          settings: null,
+          notes: [],
+          note_labels: [],
+          note_label_assignments: [],
+        },
+        error: null,
+      }),
+    }
+    supabase.from.mockReturnValue(fromBuilder)
+    const db = makeTestDb()
+    // Pre-populate a local note
+    await db.insert(schema.notes).values({ id: 'local-1', title: 'Local', content: '', type: 'text', color: null, isPinned: false, isArchived: false, isTrashed: false, trashedAt: null, createdAt: 1000, updatedAt: 1000 })
+    await pullUserData(db)
+    const noteRows = await db.select().from(schema.notes)
+    expect(noteRows).toHaveLength(1)
+    expect(noteRows[0]!.id).toBe('local-1')
+  })
+})
+
 describe('pushUserData includes notes', () => {
   it('includes notes, note_labels, note_label_assignments in the upsert payload', async () => {
     const { supabase } = require('../supabase')
