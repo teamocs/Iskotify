@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createAuthClient } from '@/lib/supabase'
 import { createServerClient } from '@iskotify/utils'
-import { Sidebar } from '@/components/admin/Sidebar'
+import { AdminShell } from '@/components/admin/AdminShell'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   let user = null
@@ -39,12 +39,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     )
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-[#f5f5f7]">
-      <Sidebar userEmail={user.email ?? ''} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {children}
-      </div>
-    </div>
-  )
+  return <AdminShell userEmail={user.email ?? ''}>{children}</AdminShell>
 }
