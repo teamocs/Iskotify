@@ -7,10 +7,10 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
-import { syncOnLaunch } from '../services/sync'
+import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { runEnhancement } from '../hooks/useAiEnhancement'
-import { userSettings, userProgress, focusListings as focusListingsTable } from '../db/schema'
+import { userSettings, practiceSessions, focusListings as focusListingsTable } from '../db/schema'
 import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
@@ -143,11 +143,38 @@ export default function OnboardingScreen() {
 
     if (assessIdx === PRE_ASSESS_QUESTIONS.length - 1) {
       const now = Date.now()
+      const PRE_ASSESS_SUBJECTS = ['Mathematics', 'Science', 'English', 'Abstract Reasoning', 'Filipino'] as const
+
+      // Group by subject and count correct vs total per subject
+      const grouped = new Map<string, { correct: number; total: number }>()
+      for (const r of newAnswers) {
+        const stats = grouped.get(r.q.subject) ?? { correct: 0, total: 0 }
+        stats.total++
+        if (r.correct) stats.correct++
+        grouped.set(r.q.subject, stats)
+      }
+
       void db.transaction(async tx => {
-        for (const r of newAnswers) {
-          await tx.insert(userProgress).values({ flashcardId: r.q.id, correct: r.correct, answeredAt: now })
+        for (const subject of PRE_ASSESS_SUBJECTS) {
+          const stats = grouped.get(subject)
+          if (!stats || stats.total === 0) continue
+          await tx.insert(practiceSessions).values({
+            listingSlug: '',
+            topicId: `pre-assess-${subject}`,
+            deckId: '',
+            score: stats.correct,
+            total: stats.total,
+            durationSecs: 0,
+            completedAt: now,
+          })
         }
-      }).catch(e => console.warn('[onboarding] save assess error:', e))
+      })
+        .then(() => {
+          // Backup the new pre-assessment data to Supabase if signed in (fire-and-forget)
+          void pushUserData(db).catch(err => console.warn('[onboarding] push failed:', err))
+        })
+        .catch(e => console.warn('[onboarding] save assess error:', e))
+
       setAssessAnswers(newAnswers)
       setAssessDone(true)
     } else {
