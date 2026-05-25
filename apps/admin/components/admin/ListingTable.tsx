@@ -65,7 +65,7 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
             + Add Listing
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-[#fafafa]">
@@ -116,6 +116,44 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
               )}
             </tbody>
           </table>
+        </div>
+        {/* Mobile card list */}
+        <div className="md:hidden divide-y divide-black/[0.04]">
+          {filtered.map(l => (
+            <div key={l.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-[#1d1d1f] truncate">{l.title}</p>
+                  <p className="text-[11px] text-[#aeaeb2]">{l.provider}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => setDrawerListing(l)}
+                    className="w-7 h-7 rounded-lg bg-[#f5f5f7] border border-black/[0.08] flex items-center justify-center text-sm"
+                    title="Edit"
+                  >✏️</button>
+                  <button
+                    onClick={() => setDeleteTarget(l)}
+                    className="w-7 h-7 rounded-lg bg-[#f5f5f7] border border-black/[0.08] flex items-center justify-center text-sm"
+                    title="Delete"
+                  >🗑</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 mt-2">
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[l.type]}`}>{l.type}</span>
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLE[l.status]}`}>{l.status}</span>
+                {l.region && <span className="rounded-md px-2 py-0.5 text-[10px] bg-[#f5f5f7] text-[#6e6e73]">{l.region}</span>}
+              </div>
+              {l.deadline && (
+                <p className="text-[11px] text-[#aeaeb2] mt-1">
+                  Deadline: {new Date(l.deadline).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              )}
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <p className="px-5 py-10 text-center text-sm text-[#aeaeb2]">No listings match this filter.</p>
+          )}
         </div>
       </div>
 
