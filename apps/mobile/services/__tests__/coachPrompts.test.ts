@@ -47,15 +47,16 @@ describe('buildCoachPrompt', () => {
     expect(prompt).toBeNull()
   })
 
-  it('includes ChatML envelope (system + user + assistant) for valid motivation', () => {
+  it('uses Gemma turn tokens for valid motivation prompt', () => {
     const prompt = buildCoachPrompt('motivation', BASE)
     expect(prompt).not.toBeNull()
-    expect(prompt!).toContain('<|im_start|>system')
+    expect(prompt!).toContain('<start_of_turn>user')
     expect(prompt!).toContain('Kuya Baw')
     expect(prompt!).toContain('Taglish')
-    expect(prompt!).toContain('<|im_end|>')
-    expect(prompt!).toContain('<|im_start|>user')
-    expect(prompt!).toContain('<|im_start|>assistant')
+    expect(prompt!).toContain('<end_of_turn>')
+    expect(prompt!).toContain('<start_of_turn>model')
+    expect(prompt!).not.toContain('<|im_start|>')
+    expect(prompt!).not.toContain('<|im_end|>')
   })
 
   it('weak_area prompt references the weakest topic name + accuracy', () => {
@@ -116,8 +117,9 @@ describe('parseCoachPhrase', () => {
     expect(parseCoachPhrase('{"phrase": "Tara mag-review!"}')).toBeNull()
   })
 
-  it('returns null when ChatML markers leak through', () => {
-    expect(parseCoachPhrase('Tara mag-review! <|im_end|>')).toBeNull()
+  it('returns null when Gemma turn tokens leak through', () => {
+    expect(parseCoachPhrase('Tara mag-review! <end_of_turn>')).toBeNull()
+    expect(parseCoachPhrase('<start_of_turn>model\nTara mag-review!')).toBeNull()
   })
 
   it('collapses whitespace runs and strips trailing newlines', () => {

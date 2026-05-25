@@ -66,9 +66,8 @@ export function buildCoachPrompt(category: CoachCategory, ctx: CoachContext): st
   const userPrompt = buildUserPrompt(category, ctx)
   if (userPrompt === null) return null
   return (
-    `<|im_start|>system\n${SYSTEM_PROMPT}<|im_end|>\n` +
-    `<|im_start|>user\n${userPrompt}<|im_end|>\n` +
-    `<|im_start|>assistant\n`
+    `<start_of_turn>user\n${SYSTEM_PROMPT}\n\n${userPrompt}<end_of_turn>\n` +
+    `<start_of_turn>model\n`
   )
 }
 
@@ -81,7 +80,7 @@ export function parseCoachPhrase(text: string): string | null {
   if (s.length < 10) return null
   if (s.length > 280) return null
   if (s.includes('{') || s.includes('}')) return null
-  if (s.includes('<|')) return null
+  if (s.includes('<start_of_turn>') || s.includes('<end_of_turn>')) return null
   // Collapse internal whitespace runs
   s = s.replace(/\s+/g, ' ').trim()
   if (!s) return null
