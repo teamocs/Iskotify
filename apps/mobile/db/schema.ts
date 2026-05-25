@@ -131,3 +131,35 @@ export const chatMessages = sqliteTable('chat_messages', {
 }, t => [
   index('chat_messages_created_at_idx').on(t.createdAt),
 ])
+
+export const notes = sqliteTable('notes', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull().default(''),
+  content: text('content').notNull().default(''),
+  type: text('type').notNull().default('text'),
+  color: text('color'),
+  isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false),
+  isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
+  isTrashed: integer('is_trashed', { mode: 'boolean' }).notNull().default(false),
+  trashedAt: integer('trashed_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => [
+  index('notes_updated_at_idx').on(t.updatedAt),
+  index('notes_archived_idx').on(t.isArchived),
+  index('notes_trashed_idx').on(t.isTrashed),
+])
+
+export const noteLabels = sqliteTable('note_labels', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const noteLabelAssignments = sqliteTable('note_label_assignments', {
+  noteId: text('note_id').notNull(),
+  labelId: text('label_id').notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.noteId, t.labelId] }),
+  index('note_label_assignments_note_idx').on(t.noteId),
+])

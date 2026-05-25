@@ -127,6 +127,33 @@ const MIGRATIONS = [
     created_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages (created_at)`,
+  `CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT 'text',
+    color TEXT,
+    is_pinned INTEGER NOT NULL DEFAULT 0,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    is_trashed INTEGER NOT NULL DEFAULT 0,
+    trashed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS notes_updated_at_idx ON notes (updated_at)`,
+  `CREATE INDEX IF NOT EXISTS notes_archived_idx ON notes (is_archived)`,
+  `CREATE INDEX IF NOT EXISTS notes_trashed_idx ON notes (is_trashed)`,
+  `CREATE TABLE IF NOT EXISTS note_labels (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS note_label_assignments (
+    note_id TEXT NOT NULL,
+    label_id TEXT NOT NULL,
+    PRIMARY KEY (note_id, label_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS note_label_assignments_note_idx ON note_label_assignments (note_id)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
