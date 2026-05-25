@@ -59,16 +59,19 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
   if (error || !data) return
 
   await db.transaction((tx) => {
-    // Restore focus listings
+    // Restore focus listings (upsert by listingSlug)
     const remoteF: typeof focusListings.$inferInsert[] = data.focus_listings ?? []
     for (const row of remoteF) {
       tx.insert(focusListings)
         .values(row)
-        .onConflictDoUpdate({ target: focusListings.listingSlug, set: { priority: row.priority, addedAt: row.addedAt } })
+        .onConflictDoUpdate({
+          target: focusListings.listingSlug,
+          set: { priority: row.priority, addedAt: row.addedAt },
+        })
         .run()
     }
 
-    // Restore saved listings
+    // Restore saved listings (upsert by id)
     const remoteS: typeof savedListings.$inferInsert[] = data.saved_listings ?? []
     for (const row of remoteS) {
       tx.insert(savedListings)
@@ -77,39 +80,55 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         .run()
     }
 
-    // Restore saved decks
+    // Restore saved decks (upsert by id)
     const remoteD: typeof savedDecks.$inferInsert[] = data.saved_decks ?? []
     for (const row of remoteD) {
       tx.insert(savedDecks)
         .values(row)
-        .onConflictDoUpdate({ target: savedDecks.id, set: { name: row.name, topicIds: row.topicIds } })
+        .onConflictDoUpdate({
+          target: savedDecks.id,
+          set: { name: row.name, topicIds: row.topicIds },
+        })
         .run()
     }
 
-    // Restore user settings (profile fields only — don't overwrite local selectedListingSlug)
-    const remoteSettings = data.settings as Partial<typeof userSettings.$inferInsert>
-    if (remoteSettings?.fullName || remoteSettings?.school || remoteSettings?.email) {
+    // Restore practice sessions — Supabase is source of truth at sign-in time
+    const remoteSessions: typeof practiceSessions.$inferInsert[] = data.practice_sessions ?? []
+    if (remoteSessions.length > 0) {
+      tx.delete(practiceSessions).run()
+      for (const row of remoteSessions) {
+        tx.insert(practiceSessions).values(row).run()
+      }
+    }
+
+    // Restore user progress (same wipe-and-restore approach)
+    const remoteProgress: typeof userProgress.$inferInsert[] = data.user_progress ?? []
+    if (remoteProgress.length > 0) {
+      tx.delete(userProgress).run()
+      for (const row of remoteProgress) {
+        tx.insert(userProgress).values(row).run()
+      }
+    }
+
+    // Restore full settings row (all writeable fields, not just profile)
+    const remoteSettings = data.settings as Partial<typeof userSettings.$inferInsert> | null
+    if (remoteSettings) {
+      const settingsValues = {
+        id: 1,
+        googleId: remoteSettings.googleId ?? '',
+        email: remoteSettings.email ?? '',
+        fullName: remoteSettings.fullName ?? '',
+        school: remoteSettings.school ?? '',
+        gradeLevel: remoteSettings.gradeLevel ?? null,
+        selectedListingSlug: remoteSettings.selectedListingSlug ?? '',
+        lastSyncedAt: 0,  // force catalog re-sync on next launch
+        notificationsEnabled: remoteSettings.notificationsEnabled ?? true,
+        theme: remoteSettings.theme ?? 'system',
+        focusModeEnabled: remoteSettings.focusModeEnabled ?? true,
+      }
       tx.insert(userSettings)
-        .values({
-          id: 1,
-          googleId: remoteSettings.googleId ?? '',
-          email: remoteSettings.email ?? '',
-          fullName: remoteSettings.fullName ?? '',
-          school: remoteSettings.school ?? '',
-          gradeLevel: remoteSettings.gradeLevel ?? null,
-          selectedListingSlug: '',
-          lastSyncedAt: 0,
-        })
-        .onConflictDoUpdate({
-          target: userSettings.id,
-          set: {
-            googleId: remoteSettings.googleId ?? '',
-            email: remoteSettings.email ?? '',
-            fullName: remoteSettings.fullName ?? '',
-            school: remoteSettings.school ?? '',
-            gradeLevel: remoteSettings.gradeLevel ?? null,
-          },
-        })
+        .values(settingsValues)
+        .onConflictDoUpdate({ target: userSettings.id, set: settingsValues })
         .run()
     }
   })
