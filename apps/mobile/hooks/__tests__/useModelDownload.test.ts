@@ -101,7 +101,7 @@ describe('useModelDownload', () => {
 
     expect(result.current.modelStatus).toBe('downloading')
     expect(createDownloadTask).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'qwen-model', url: 'https://example.com/model.gguf' })
+      expect.objectContaining({ id: 'gemma-model', url: 'https://example.com/model.gguf' })
     )
     expect(setConfig).toHaveBeenCalledWith(
       expect.objectContaining({ showNotificationsEnabled: true })

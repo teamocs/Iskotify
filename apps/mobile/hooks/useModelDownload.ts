@@ -16,7 +16,7 @@ interface UseModelDownload {
   lastError: Error | null
 }
 
-const DOWNLOAD_ID = 'qwen-model'
+const DOWNLOAD_ID = 'gemma-model'
 
 let nativeConfigured = false
 function ensureNativeConfigured(): void {
