@@ -119,6 +119,14 @@ const MIGRATIONS = [
     PRIMARY KEY (listing_slug, requirement_index)
   )`,
   `ALTER TABLE user_settings ADD COLUMN focus_mode_enabled INTEGER NOT NULL DEFAULT 1`,
+  `CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages (created_at)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

@@ -121,3 +121,13 @@ export const userRequirements = sqliteTable('user_requirements', {
 }, t => [
   primaryKey({ columns: [t.listingSlug, t.requirementIndex] }),
 ])
+
+export const chatMessages = sqliteTable('chat_messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  role: text('role').notNull(),
+  text: text('text').notNull(),
+  mode: text('mode').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, t => [
+  index('chat_messages_created_at_idx').on(t.createdAt),
+])
