@@ -18,7 +18,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
     .eq('id', id)
     .single()
 
-  if (!subject) notFound()
+  if (!subject) return notFound()
 
   const { data: topicsRaw } = await db
     .from('flashcard_topics')

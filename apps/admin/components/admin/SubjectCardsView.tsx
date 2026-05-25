@@ -20,7 +20,7 @@ export function SubjectCardsView({ subjectId, topics, defaultOpenTopicId }: Prop
   if (topics.length === 0) {
     return (
       <div className="text-center py-16 text-[#6e6e73] text-sm">
-        No topics yet. Add topics from the subject page first.
+        No topics yet. Use the &quot;+ Add Topic&quot; button to create one.
       </div>
     )
   }

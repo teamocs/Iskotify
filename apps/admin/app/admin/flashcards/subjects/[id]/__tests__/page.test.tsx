@@ -42,7 +42,10 @@ vi.mock('@/components/admin/SubjectCardsView', () => ({
 }))
 
 describe('SubjectDetailPage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
 
   it('renders SubjectCardsView with topics', async () => {
     mockSingle.mockResolvedValue({ data: { id: 'sub1', name: 'Mathematics' } })
