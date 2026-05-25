@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 
 interface SubjectRow {
@@ -168,37 +168,68 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
               </thead>
               <tbody>
                 {subjects.map(subject => (
-                  <tr key={subject.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
-                      <ListingPills slugs={subject.listing_slugs} listings={listings} />
-                    </td>
-                    <td className="px-5 py-3 text-[#374151]">{subject.topics.length}</td>
-                    <td className="px-5 py-3 text-[#374151]">{subject.totalCards}</td>
-                    <td className="px-5 py-3"><StatusBadge status={subject.overallStatus} /></td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-3">
-                        <Link
-                          href={`/admin/flashcards/subjects/${subject.id}`}
-                          className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
-                        >
-                          View
-                        </Link>
-                        <button
-                          onClick={() => startEdit(subject)}
-                          className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => startDelete(subject)}
-                          className="text-xs text-[#6e6e73] hover:text-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={subject.id}>
+                    <tr className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
+                        <ListingPills slugs={subject.listing_slugs} listings={listings} />
+                      </td>
+                      <td className="px-5 py-3 text-[#374151]">{subject.topics.length}</td>
+                      <td className="px-5 py-3 text-[#374151]">{subject.totalCards}</td>
+                      <td className="px-5 py-3"><StatusBadge status={subject.overallStatus} /></td>
+                      <td className="px-5 py-3">
+                        <div className="flex gap-3">
+                          <Link
+                            href={`/admin/flashcards/subjects/${subject.id}`}
+                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                          >
+                            View
+                          </Link>
+                          <button
+                            onClick={() => startEdit(subject)}
+                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => startDelete(subject)}
+                            className="text-xs text-[#6e6e73] hover:text-red-600"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {deletingSubject?.id === subject.id && (
+                      <tr className="border-b border-[#f3f4f6]">
+                        <td colSpan={5} className="px-5 py-3 bg-red-50 border-t border-red-100">
+                          <div className="flex items-center justify-between gap-4">
+                            <p className="text-sm text-red-700">
+                              Delete <strong>{subject.name}</strong>? This will permanently remove{' '}
+                              <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
+                              <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
+                            </p>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              {error && <p className="text-xs text-red-600">{error}</p>}
+                              <button
+                                onClick={confirmDelete}
+                                disabled={saving}
+                                className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                              >
+                                Yes, delete
+                              </button>
+                              <button
+                                onClick={() => { setDeletingSubject(null); setError('') }}
+                                className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
