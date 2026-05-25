@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { MobileSidebar } from './MobileSidebar'
 import { AdminDrawerContext } from '../../contexts/AdminDrawerContext'
+import { PageTransition } from './PageTransition'
 
 interface Props {
   userEmail: string
@@ -22,9 +23,9 @@ export function AdminShell({ userEmail, children }: Props) {
           onClose={() => setDrawerOpen(false)}
           userEmail={userEmail}
         />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <PageTransition>
           {children}
-        </div>
+        </PageTransition>
       </div>
     </AdminDrawerContext.Provider>
   )
