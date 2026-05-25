@@ -68,7 +68,7 @@ describe('ListingTable', () => {
     expect(html).not.toContain('Scholar C')
   })
 
-  it('shows empty state when no rows match filter', () => {
+  it('renders only upcoming rows when filter is Upcoming', () => {
     const html = renderToStaticMarkup(
       React.createElement(ListingTable, { listings: mockListings, filter: 'Upcoming', onFilterChange: () => {} })
     )

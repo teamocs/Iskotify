@@ -1,9 +1,8 @@
 import { createServerClient } from '@iskotify/utils'
-import { StatCard } from '@/components/admin/StatCard'
-import { SyncPanel } from '@/components/admin/SyncPanel'
-import { ListingTable } from '@/components/admin/ListingTable'
 import { Topbar } from '@/components/admin/Topbar'
+import { ListingsView } from '@/components/admin/ListingsView'
 import type { Listing } from '@iskotify/utils'
+import type { SyncLog } from '@/components/admin/SyncPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +14,7 @@ async function getData() {
   ])
   return {
     listings: (listingsRes.data ?? []) as Listing[],
-    logs: logsRes.data ?? []
+    logs: (logsRes.data ?? []) as SyncLog[]
   }
 }
 
@@ -23,13 +22,13 @@ export default async function ListingsPage() {
   const { listings, logs } = await getData()
 
   const total = listings.length
-  const active = listings.filter(l => l.status === 'active').length
-  const upcoming = listings.filter(l => l.status === 'upcoming').length
-  const lastSync = logs[0]?.created_at
+  const activeCount = listings.filter(l => l.status === 'active').length
+  const upcomingCount = listings.filter(l => l.status === 'upcoming').length
+  const lastSyncTime = logs[0]?.created_at ?? null
 
   function syncHealth() {
-    if (!lastSync) return { label: 'Never synced', accent: 'text-gray-400' }
-    const hrs = (Date.now() - new Date(lastSync).getTime()) / 3600_000
+    if (!lastSyncTime) return { label: 'Never synced', accent: 'text-gray-400' }
+    const hrs = (Date.now() - new Date(lastSyncTime).getTime()) / 3600_000
     if (hrs < 12) return { label: 'Healthy', accent: 'text-green-600' }
     if (hrs < 24) return { label: 'Stale', accent: 'text-amber-600' }
     return { label: 'Very stale', accent: 'text-red-600' }
@@ -40,21 +39,15 @@ export default async function ListingsPage() {
   return (
     <>
       <Topbar title="All Listings" showSyncButton />
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Listings" value={total} />
-          <StatCard label="Active" value={active} accent="text-green-700" sub="Open for applications" />
-          <StatCard label="Upcoming" value={upcoming} accent="text-amber-700" sub="Opening soon" />
-          <StatCard
-            label="Last Sync"
-            value={lastSync ? new Date(lastSync).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : '—'}
-            sub={health.label}
-            accent={health.accent}
-          />
-        </div>
-        <SyncPanel logs={logs as any} />
-        <ListingTable listings={listings} />
-      </div>
+      <ListingsView
+        listings={listings}
+        logs={logs}
+        total={total}
+        active={activeCount}
+        upcoming={upcomingCount}
+        lastSync={lastSyncTime}
+        health={health}
+      />
     </>
   )
 }
