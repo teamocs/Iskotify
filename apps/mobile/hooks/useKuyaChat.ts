@@ -58,6 +58,9 @@ export function useKuyaChat(): UseKuyaChat {
   // Stable ref to db so mount effect doesn't re-run when mock returns a new object each render
   const dbRef = useRef(db)
   dbRef.current = db
+  // Stable ref to messages so send doesn't recreate on every token flush
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   // Check model availability + load chat history on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,7 +154,7 @@ export function useKuyaChat(): UseKuyaChat {
     abortRef.current = controller
 
     // Snapshot history before this exchange for the LLM prompt (max 10 messages)
-    const historyForPrompt = messages.slice(-10).map(m => ({ role: m.role, text: m.text }))
+    const historyForPrompt = messagesRef.current.slice(-10).map(m => ({ role: m.role, text: m.text }))
 
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
@@ -191,7 +194,7 @@ export function useKuyaChat(): UseKuyaChat {
           // Persist to DB — fire-and-forget, DB failure does not affect UI
           void dbRef.current.transaction(async tx => {
             await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
-            await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now })
+            await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
           }).catch(() => {})
 
         } catch (err) {
@@ -207,7 +210,7 @@ export function useKuyaChat(): UseKuyaChat {
         }
       })()
     })
-  }, [isStreaming, mode, stats, scheduleFlush, messages])
+  }, [isStreaming, mode, stats, scheduleFlush])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
