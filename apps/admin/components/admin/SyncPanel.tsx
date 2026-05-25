@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-interface SyncLog {
+export interface SyncLog {
   id: number
   synced: number
   skipped: number

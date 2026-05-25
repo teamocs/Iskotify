@@ -19,8 +19,11 @@ const STATUS_STYLE: Record<string, string> = {
   closed:   'bg-gray-100 text-gray-500'
 }
 
-export function ListingTable({ listings }: { listings: Listing[] }) {
-  const [filter, setFilter] = useState('All')
+export function ListingTable({ listings, filter, onFilterChange }: {
+  listings: Listing[]
+  filter: string
+  onFilterChange: (f: string) => void
+}) {
   const [drawerListing, setDrawerListing] = useState<Listing | null | 'new'>(null)
   const [deleteTarget, setDeleteTarget] = useState<Listing | null>(null)
   const router = useRouter()
@@ -48,7 +51,7 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
           {TYPE_FILTERS.map(f => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => onFilterChange(f)}
               className={`rounded-[980px] px-3 py-1 text-[11px] font-medium transition-colors ${
                 filter === f
                   ? 'bg-[#fef2f2] text-[#800000] border border-[rgba(128,0,0,0.2)]'
