@@ -40,7 +40,16 @@ const config: Config = {
       boxShadow: {
         sm: "0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04)",
         card: "0 8px 32px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
-      }
+      },
+      animation: {
+        slideUp: 'slideUp 0.2s ease-out',
+      },
+      keyframes: {
+        slideUp: {
+          '0%':   { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
     }
   },
   plugins: []
