@@ -3,10 +3,14 @@ import { Text } from 'react-native'
 import { render } from '@testing-library/react-native'
 
 const mockNavigate = jest.fn()
+const mockBack = jest.fn()
 const mockUsePathname = jest.fn(() => '/practice')
 
 jest.mock('expo-router', () => ({
-  router: { navigate: (...args: unknown[]) => mockNavigate(...args) },
+  router: {
+    navigate: (...args: unknown[]) => mockNavigate(...args),
+    back: () => mockBack(),
+  },
   usePathname: () => mockUsePathname(),
 }))
 
@@ -37,6 +41,7 @@ function getOnEndCallback(): OnEndCallback {
 describe('EdgeSwipeNavigator', () => {
   beforeEach(() => {
     mockNavigate.mockClear()
+    mockBack.mockClear()
     ;(Gesture.Pan as jest.Mock).mockClear()
     mockPanBuilder.activeOffsetX.mockClear()
     mockPanBuilder.failOffsetY.mockClear()
@@ -89,11 +94,12 @@ describe('EdgeSwipeNavigator', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/practice')
   })
 
-  it('no-op at Home boundary on right swipe', () => {
+  it('navigates Home → /notes on right swipe', () => {
     mockUsePathname.mockReturnValue('/')
     render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
     getOnEndCallback()({ translationX: 200, velocityX: 800 })
-    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(mockNavigate).toHaveBeenCalledWith('/notes')
+    expect(mockBack).not.toHaveBeenCalled()
   })
 
   it('no-op at Profile boundary on left swipe', () => {
@@ -122,5 +128,21 @@ describe('EdgeSwipeNavigator', () => {
     render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
     getOnEndCallback()({ translationX: -200, velocityX: -800 })
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('calls router.back on left swipe from /notes', () => {
+    mockUsePathname.mockReturnValue('/notes')
+    render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    getOnEndCallback()({ translationX: -200, velocityX: -800 })
+    expect(mockBack).toHaveBeenCalledTimes(1)
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('no-op on right swipe from /notes', () => {
+    mockUsePathname.mockReturnValue('/notes')
+    render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    getOnEndCallback()({ translationX: 200, velocityX: 800 })
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(mockBack).not.toHaveBeenCalled()
   })
 })

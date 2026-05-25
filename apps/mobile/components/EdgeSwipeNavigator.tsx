@@ -13,6 +13,7 @@ const TAB_HREFS = [
   '/(tabs)/profile',
 ] as const
 
+const NOTES_PATH = '/notes'
 const SWIPE_DISTANCE = 50
 const SWIPE_VELOCITY = 300
 
@@ -20,6 +21,16 @@ export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) 
   const pathname = usePathname()
 
   const navigateTo = useCallback((direction: 'left' | 'right') => {
+    // Home ↔ Notes swipe
+    if (direction === 'right' && pathname === '/') {
+      router.navigate(NOTES_PATH as never)
+      return
+    }
+    if (direction === 'left' && pathname === NOTES_PATH) {
+      router.back()
+      return
+    }
+    // Standard tab swipe
     const idx = (TAB_PATHS as readonly string[]).indexOf(pathname)
     if (idx === -1) return
     const next = direction === 'left' ? idx + 1 : idx - 1
