@@ -18,7 +18,8 @@ export default async function TopicRedirect({
     .eq('id', id)
     .single()
 
-  if (!topic?.subject_id) return notFound()
+  if (!topic) return notFound()
+  if (!topic.subject_id) redirect('/admin/flashcards')
 
   redirect(`/admin/flashcards/subjects/${topic.subject_id}`)
 }

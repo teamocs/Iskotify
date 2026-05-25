@@ -57,7 +57,7 @@ describe('SubjectDetailPage', () => {
     })
 
     const { default: Page } = await import('../page')
-    const element = await Page({ params: Promise.resolve({ id: 'sub1' }) })
+    const element = await Page({ params: Promise.resolve({ id: 'sub1' }), searchParams: Promise.resolve({}) })
     const html = renderToStaticMarkup(element as React.ReactElement)
 
     expect(html).toContain('subject-cards-view')
@@ -76,7 +76,7 @@ describe('SubjectDetailPage', () => {
     })
 
     const { default: Page } = await import('../page')
-    const element = await Page({ params: Promise.resolve({ id: 'sub1' }) })
+    const element = await Page({ params: Promise.resolve({ id: 'sub1' }), searchParams: Promise.resolve({}) })
     const html = renderToStaticMarkup(element as React.ReactElement)
 
     expect(html).not.toContain('View Cards')
@@ -89,7 +89,7 @@ describe('SubjectDetailPage', () => {
 
     const { default: Page } = await import('../page')
     await expect(
-      Page({ params: Promise.resolve({ id: 'nonexistent' }) })
+      Page({ params: Promise.resolve({ id: 'nonexistent' }), searchParams: Promise.resolve({}) })
     ).rejects.toThrow('NOT_FOUND')
   })
 })

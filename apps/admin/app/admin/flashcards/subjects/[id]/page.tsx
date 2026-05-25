@@ -8,8 +8,15 @@ import { SubjectCardsView } from '@/components/admin/SubjectCardsView'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SubjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SubjectDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ topic?: string }>
+}) {
   const { id } = await params
+  const { topic: defaultOpenTopicId } = await searchParams
   const db = createServerClient()
 
   const { data: subject } = await db
@@ -52,7 +59,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
           <AddTopicButton subjectId={id} />
         </div>
         <p className="text-sm text-[#6e6e73]">{topics.length} topic{topics.length !== 1 ? 's' : ''}</p>
-        <SubjectCardsView subjectId={id} topics={topicsWithCount} />
+        <SubjectCardsView subjectId={id} topics={topicsWithCount} defaultOpenTopicId={defaultOpenTopicId} />
       </div>
     </>
   )

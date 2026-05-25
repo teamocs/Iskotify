@@ -5,9 +5,13 @@ export const dynamic = 'force-dynamic'
 
 export default async function SubjectCardsRedirect({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ topic?: string }>
 }) {
   const { id } = await params
-  redirect(`/admin/flashcards/subjects/${id}`)
+  const { topic } = await searchParams
+  const qs = topic ? `?topic=${encodeURIComponent(topic)}` : ''
+  redirect(`/admin/flashcards/subjects/${id}${qs}`)
 }
