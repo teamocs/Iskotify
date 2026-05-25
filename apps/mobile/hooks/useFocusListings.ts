@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { eq, asc } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { focusListings, listings } from '../db/schema'
-import { syncOnLaunch } from '../services/sync'
+import { syncOnLaunch, pushUserData } from '../services/sync'
 
 export interface FocusListing {
   slug: string
@@ -71,6 +71,7 @@ export function useFocusListings() {
       .values({ listingSlug: slug, priority: maxPriority + 1, addedAt: Date.now() })
       .onConflictDoNothing()
     await load()
+    void pushUserData(db).catch(() => { /* best-effort backup */ })
   }
 
   async function removeListing(slug: string) {
@@ -83,6 +84,7 @@ export function useFocusListings() {
       }
     })
     await load()
+    void pushUserData(db).catch(() => { /* best-effort backup */ })
   }
 
   async function moveListing(slug: string, direction: 'up' | 'down') {
