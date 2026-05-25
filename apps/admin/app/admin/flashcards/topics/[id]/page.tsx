@@ -25,6 +25,8 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
     .eq('id', topic.subject_id ?? '')
     .single()
 
+  if (!subject) notFound()
+
   const { data: cardsRaw } = await db
     .from('flashcards')
     .select('id, question, answer, explanation')
@@ -47,7 +49,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
         <div className="flex items-center justify-between gap-3">
           <Breadcrumb items={[
             { label: 'Subjects', href: '/admin/flashcards' },
-            { label: subject?.name ?? '…', href: `/admin/flashcards/subjects/${topic.subject_id ?? ''}` },
+            { label: subject!.name, href: `/admin/flashcards/subjects/${topic.subject_id}` },
             { label: topic.name },
           ]} />
           <AddCardButton topicId={id} topicStatus={topicStatus} />
@@ -73,7 +75,7 @@ export default async function TopicDetailPage({ params }: { params: Promise<{ id
                 </thead>
                 <tbody>
                   {cards.map(card => (
-                    <tr key={card.id} className="border-b border-[#f3f4f6] last:border-0">
+                    <tr key={card.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
                       <td className="px-5 py-3 text-[#1d1d1f]">{card.question}</td>
                       <td className="px-5 py-3 text-[#374151]">{card.answer}</td>
                       <td className="px-5 py-3 text-[#6e6e73] text-[12px]">{card.explanation}</td>

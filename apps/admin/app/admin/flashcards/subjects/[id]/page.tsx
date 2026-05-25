@@ -101,7 +101,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
                     <p className="text-xs text-[#6e6e73] mt-0.5">{topic.flashcards?.length ?? 0} cards</p>
                     <div className="mt-1">{statusBadge(topic.status)}</div>
                   </div>
-                  <span className="text-[#aeaeb2] text-lg ml-2">&#x203A;</span>
+                  <span className="text-[#aeaeb2] text-lg ml-2">›</span>
                 </Link>
               ))}
             </div>
