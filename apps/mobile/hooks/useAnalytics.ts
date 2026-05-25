@@ -111,7 +111,11 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       const topicMastery: TopicMastery[] = Object.entries(grouped)
         .filter(([, v]) => v.total > 0)
         .map(([key, v]) => ({
-          label: resolveTopicLabel(key, topicMap) || deckMap.get(key) || key,
+          // Priority: real topic name → deck name → pre-assess-prefix (or raw key).
+          // resolveTopicLabel ALWAYS returns a non-empty string, so we can't use
+          // it as a non-final fallback — feed it an empty map so it only does
+          // pre-assess prefix handling + raw-key passthrough.
+          label: topicMap.get(key) ?? deckMap.get(key) ?? resolveTopicLabel(key, new Map()),
           accuracy: Math.round((v.score / v.total) * 100),
           sessionCount: v.count,
         }))
