@@ -20,7 +20,7 @@ export default async function SyncPage() {
   return (
     <>
       <Topbar title="Sync Logs" />
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <table className="w-full">
             <thead>

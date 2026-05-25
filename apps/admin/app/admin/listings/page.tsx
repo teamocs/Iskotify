@@ -40,8 +40,8 @@ export default async function ListingsPage() {
   return (
     <>
       <Topbar title="All Listings" showSyncButton />
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
-        <div className="grid grid-cols-4 gap-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Total Listings" value={total} />
           <StatCard label="Active" value={active} accent="text-green-700" sub="Open for applications" />
           <StatCard label="Upcoming" value={upcoming} accent="text-amber-700" sub="Opening soon" />
