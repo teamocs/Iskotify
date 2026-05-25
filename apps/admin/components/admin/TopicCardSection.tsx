@@ -7,7 +7,7 @@ interface Card {
   id: string
   question: string
   answer: string
-  explanation: string
+  explanation: string | null
 }
 
 interface Topic {
@@ -42,26 +42,46 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
   const [editExp, setEditExp] = useState('')
   const [error, setError] = useState('')
 
+  const abortRef = React.useRef<AbortController | null>(null)
+
   async function loadCards(pageNum: number, replace = false) {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     try {
       const res = await fetch(
-        `/api/flashcards/subjects/${subjectId}/cards?topic_id=${topic.id}&page=${pageNum}&limit=10`
+        `/api/flashcards/subjects/${subjectId}/cards?topic_id=${topic.id}&page=${pageNum}&limit=10`,
+        { signal: controller.signal }
       )
-      if (res.ok) {
-        const data = await res.json()
-        setCards(prev => (replace ? data.cards : [...prev, ...data.cards]))
-        setHasMore(data.hasMore)
-        setPage(pageNum)
+      if (!controller.signal.aborted) {
+        if (res.ok) {
+          const data = await res.json()
+          setCards(prev => (replace ? data.cards : [...prev, ...data.cards]))
+          setHasMore(data.hasMore)
+          setPage(pageNum)
+        } else {
+          setError('Failed to load cards')
+        }
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        setError('Failed to load cards')
       }
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     if (isOpen && cards.length === 0) {
       loadCards(1)
+    }
+    return () => {
+      abortRef.current?.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Intentionally runs only on isOpen change, not on every loadCards re-creation
@@ -72,7 +92,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
     setEditingId(card.id)
     setEditQ(card.question)
     setEditA(card.answer)
-    setEditExp(card.explanation)
+    setEditExp(card.explanation ?? '')
     setDeletingId(null)
   }
 
@@ -87,7 +107,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
         body: JSON.stringify({
           question: editQ.trim(),
           answer: editA.trim(),
-          explanation: editExp.trim(),
+          explanation: editExp.trim() || null,
         }),
       })
       if (!res.ok) {
@@ -98,7 +118,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
       setCards(prev =>
         prev.map(c =>
           c.id === editingId
-            ? { ...c, question: editQ.trim(), answer: editA.trim(), explanation: editExp.trim() }
+            ? { ...c, question: editQ.trim(), answer: editA.trim(), explanation: editExp.trim() || null }
             : c
         )
       )

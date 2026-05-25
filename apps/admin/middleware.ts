@@ -46,4 +46,4 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse
 }
 
-export const config = { matcher: ['/admin/:path*', '/login'] }
+export const config = { matcher: ['/admin/:path*', '/api/:path*', '/login'] }

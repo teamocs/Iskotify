@@ -5,7 +5,12 @@ vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
 
 const mockRange = vi.fn()
-const mockOrder = vi.fn(() => ({ range: mockRange }))
+const mockOrderChain: { order: ReturnType<typeof vi.fn>; range: ReturnType<typeof vi.fn> } = {
+  order: vi.fn(),
+  range: mockRange,
+}
+mockOrderChain.order.mockReturnValue(mockOrderChain)
+const mockOrder = vi.fn(() => mockOrderChain)
 const mockEq = vi.fn(() => ({ order: mockOrder }))
 const mockSelect = vi.fn(() => ({ eq: mockEq }))
 
@@ -29,6 +34,8 @@ describe('GET /api/flashcards/subjects/[id]/cards', () => {
     vi.resetModules()
     mockRange.mockClear()
     mockOrder.mockClear()
+    mockOrderChain.order.mockClear()
+    mockOrderChain.order.mockReturnValue(mockOrderChain)
     mockEq.mockClear()
     mockSelect.mockClear()
   })

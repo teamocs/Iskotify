@@ -13,8 +13,8 @@ export async function GET(
     return NextResponse.json({ error: 'topic_id is required' }, { status: 400 })
   }
 
-  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'))
-  const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') ?? '10')))
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10))
+  const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') ?? '10', 10)))
   const offset = (page - 1) * limit
 
   const supabase = createServerClient()
@@ -23,6 +23,7 @@ export async function GET(
     .select('id, question, answer, explanation', { count: 'exact' })
     .eq('topic_id', topic_id)
     .order('created_at')
+    .order('id')
     .range(offset, offset + limit - 1)
 
   if (error) {

@@ -26,6 +26,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 })
     }
 
+    if (typeof question === 'string' && question.trim() === '') {
+      return NextResponse.json({ error: 'Question cannot be empty' }, { status: 400 })
+    }
+    if (typeof answer === 'string' && answer.trim() === '') {
+      return NextResponse.json({ error: 'Answer cannot be empty' }, { status: 400 })
+    }
+
     const { error } = await supabase
       .from('flashcards')
       .update(patch)
