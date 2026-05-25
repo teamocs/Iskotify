@@ -5,8 +5,9 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
 import { pullUserData } from '../../services/sync'
 import { useDb } from '../../hooks/useDb'
-import { userSettings } from '../../db/schema'
+import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { eq } from 'drizzle-orm'
 
 // Must be at module level — signals openAuthSessionAsync in landing.tsx to close
 // the browser and return the redirect URL.
@@ -39,14 +40,15 @@ export default function AuthCallback() {
 
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
+          // Seed minimal local profile from Google's user_metadata so pullUserData
+          // has a row to merge against. pullUserData will overwrite these with the
+          // remote settings if a backup exists.
           await db.insert(userSettings)
             .values({
               id: 1,
               googleId: user.id,
               email: user.email ?? '',
               fullName: user.user_metadata?.full_name ?? '',
-              selectedListingSlug: '',
-              lastSyncedAt: 0,
             })
             .onConflictDoUpdate({
               target: userSettings.id,
@@ -56,10 +58,24 @@ export default function AuthCallback() {
                 fullName: user.user_metadata?.full_name ?? '',
               },
             })
+
           await pullUserData(db)
+
+          // Decide landing screen based on whether the user has prior data restored
+          const [settingsRows, focusRows] = await Promise.all([
+            db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+            db.select().from(focusListings).limit(1),
+          ])
+          const hasProfile = !!(settingsRows[0]?.fullName?.trim())
+          const hasFocus = focusRows.length > 0
+
+          if (hasProfile && hasFocus) {
+            router.replace('/(tabs)')  // returning user with restored data
+            return
+          }
         }
 
-        router.replace('/onboarding')
+        router.replace('/onboarding')  // new account or incomplete onboarding
       } catch (e) {
         console.error('[auth/callback] error:', e)
         router.replace('/landing')
