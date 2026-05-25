@@ -52,7 +52,8 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   const [editingSubject, setEditingSubject] = useState<SubjectRow | null>(null)
   const [deletingSubject, setDeletingSubject] = useState<SubjectRow | null>(null)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [editError, setEditError] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const [editName, setEditName] = useState('')
   const [editSlugs, setEditSlugs] = useState<string[]>([])
 
@@ -64,13 +65,13 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     setEditName(subject.name)
     setEditSlugs(subject.listing_slugs)
     setDeletingSubject(null)
-    setError('')
+    setEditError('')
   }
 
   function startDelete(subject: SubjectRow) {
     setDeletingSubject(subject)
     setEditingSubject(null)
-    setError('')
+    setDeleteError('')
   }
 
   function toggleSlug(slug: string) {
@@ -82,7 +83,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   async function saveEdit() {
     if (!editingSubject) return
     setSaving(true)
-    setError('')
+    setEditError('')
     try {
       const res = await fetch(`/api/flashcards/subjects/${editingSubject.id}`, {
         method: 'PATCH',
@@ -91,7 +92,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+        setEditError(body.error ?? 'Something went wrong')
         return
       }
       const updated = await res.json()
@@ -111,14 +112,14 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   async function confirmDelete() {
     if (!deletingSubject) return
     setSaving(true)
-    setError('')
+    setDeleteError('')
     try {
       const res = await fetch(`/api/flashcards/subjects/${deletingSubject.id}`, {
         method: 'DELETE',
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+        setDeleteError(body.error ?? 'Something went wrong')
         return
       }
       setSubjects(prev => prev.filter(s => s.id !== deletingSubject.id))
@@ -210,7 +211,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                               <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
                             </p>
                             <div className="flex items-center gap-3 flex-shrink-0">
-                              {error && <p className="text-xs text-red-600">{error}</p>}
+                              {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
                               <button
                                 onClick={confirmDelete}
                                 disabled={saving}
@@ -219,7 +220,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                                 Yes, delete
                               </button>
                               <button
-                                onClick={() => { setDeletingSubject(null); setError('') }}
+                                onClick={() => { setDeletingSubject(null); setDeleteError('') }}
                                 className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
                               >
                                 Cancel
@@ -241,7 +242,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
               <div key={subject.id} className="bg-white border border-[#e5e7eb] rounded-2xl p-4">
                 <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
                 <p className="text-xs text-[#6e6e73] mt-0.5">
-                  {subject.topics.length} topics · {subject.totalCards} cards
+                  {subject.topics.length} {subject.topics.length !== 1 ? 'topics' : 'topic'} · {subject.totalCards} {subject.totalCards !== 1 ? 'cards' : 'card'}
                 </p>
                 <ListingPills slugs={subject.listing_slugs} listings={listings} />
                 <div className="mt-1"><StatusBadge status={subject.overallStatus} /></div>
@@ -272,7 +273,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                       <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
                       <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
                     </p>
-                    {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
+                    {deleteError && <p className="text-xs text-red-600 mb-2">{deleteError}</p>}
                     <div className="flex gap-3">
                       <button
                         onClick={confirmDelete}
@@ -282,7 +283,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                         Yes, delete
                       </button>
                       <button
-                        onClick={() => { setDeletingSubject(null); setError('') }}
+                        onClick={() => { setDeletingSubject(null); setDeleteError('') }}
                         className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
                       >
                         Cancel
@@ -299,12 +300,24 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
       {/* Edit modal */}
       {editingSubject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h2 className="text-base font-semibold text-[#1d1d1f]">Edit Subject</h2>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-subject-heading"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && !saving) {
+                setEditingSubject(null)
+                setEditError('')
+              }
+            }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
+          >
+            <h2 id="edit-subject-heading" className="text-base font-semibold text-[#1d1d1f]">Edit Subject</h2>
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-[#6e6e73]">Subject name</label>
+              <label htmlFor="edit-subject-name" className="text-xs font-medium text-[#6e6e73]">Subject name</label>
               <input
+                id="edit-subject-name"
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
                 className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
@@ -351,13 +364,13 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
               </div>
             )}
 
-            {error && (
-              <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">{error}</p>
+            {editError && (
+              <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">{editError}</p>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button
-                onClick={() => { setEditingSubject(null); setError('') }}
+                onClick={() => { setEditingSubject(null); setEditError('') }}
                 className="text-sm text-[#6e6e73] hover:text-[#1d1d1f] px-3 py-1.5"
               >
                 Cancel
