@@ -299,17 +299,22 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
 
       {/* Edit modal */}
       {editingSubject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => { if (!saving) { setEditingSubject(null); setEditError('') } }}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-subject-heading"
+            tabIndex={-1}
             onKeyDown={(e) => {
               if (e.key === 'Escape' && !saving) {
                 setEditingSubject(null)
                 setEditError('')
               }
             }}
+            onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
           >
             <h2 id="edit-subject-heading" className="text-base font-semibold text-[#1d1d1f]">Edit Subject</h2>
@@ -318,6 +323,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
               <label htmlFor="edit-subject-name" className="text-xs font-medium text-[#6e6e73]">Subject name</label>
               <input
                 id="edit-subject-name"
+                autoFocus
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
                 className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"

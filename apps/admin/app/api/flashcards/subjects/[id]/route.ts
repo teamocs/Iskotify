@@ -9,7 +9,7 @@ export async function GET(
   const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcard_subjects')
-    .select('id, name')
+    .select('id, name, listing_slugs')
     .eq('id', id)
     .single()
 
