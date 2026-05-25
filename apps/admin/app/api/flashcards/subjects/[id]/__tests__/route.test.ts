@@ -69,8 +69,16 @@ describe('PATCH /api/flashcards/subjects/[id]', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 when listing_slugs contains non-string elements', async () => {
+    const { PATCH } = await import('../route')
+    const res = await PATCH(patchReq('sub-1', { name: 'Math', listing_slugs: [1, 2] }), {
+      params: Promise.resolve({ id: 'sub-1' }),
+    })
+    expect(res.status).toBe(400)
+  })
+
   it('returns 404 when subject does not exist', async () => {
-    mockPatchSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } })
+    mockPatchSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'Not found' } })
     const { PATCH } = await import('../route')
     const res = await PATCH(patchReq('nonexistent', { name: 'Math', listing_slugs: [] }), {
       params: Promise.resolve({ id: 'nonexistent' }),
@@ -102,7 +110,7 @@ describe('DELETE /api/flashcards/subjects/[id]', () => {
   })
 
   it('returns 404 when subject does not exist', async () => {
-    mockDeleteSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } })
+    mockDeleteSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'Not found' } })
     const { DELETE } = await import('../route')
     const res = await DELETE(deleteReq('nonexistent'), {
       params: Promise.resolve({ id: 'nonexistent' }),

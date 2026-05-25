@@ -28,8 +28,8 @@ export async function PATCH(
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
-  if (!Array.isArray(listing_slugs)) {
-    return NextResponse.json({ error: 'listing_slugs must be an array' }, { status: 400 })
+  if (!Array.isArray(listing_slugs) || listing_slugs.some((s: unknown) => typeof s !== 'string')) {
+    return NextResponse.json({ error: 'listing_slugs must be an array of strings' }, { status: 400 })
   }
 
   const supabase = createServerClient()
@@ -40,7 +40,13 @@ export async function PATCH(
     .select('id, name, listing_slugs')
     .single()
 
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+  if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(data)
 }
 
@@ -57,6 +63,12 @@ export async function DELETE(
     .select('id')
     .single()
 
-  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+  if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return new NextResponse(null, { status: 204 })
 }
