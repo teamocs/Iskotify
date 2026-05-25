@@ -9,7 +9,8 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { exportUserData, importUserData } from '../../services/export'
-import { userSettings, listings } from '../../db/schema'
+import { supabase } from '../../services/supabase'
+import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 
 interface ProfileData {
   fullName: string
@@ -167,6 +168,60 @@ export default function ProfileScreen() {
     }
   }
 
+  function handleSignOut() {
+    Alert.alert(
+      'Sign Out?',
+      'Your local progress stays on this device. Your cloud backup is safe.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut()
+            } catch (err) {
+              console.warn('[profile] signOut failed:', err)
+            }
+            router.replace('/landing')
+          },
+        },
+      ],
+    )
+  }
+
+  function handleResetAppData() {
+    Alert.alert(
+      'Reset App Data?',
+      'This will permanently delete ALL local data on this device (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await db.transaction((tx) => {
+                tx.delete(userProgress).run()
+                tx.delete(practiceSessions).run()
+                tx.delete(focusListings).run()
+                tx.delete(savedListings).run()
+                tx.delete(savedDecks).run()
+                tx.delete(userSettings).run()
+                tx.delete(userRequirements).run()
+                tx.delete(coachPhrases).run()
+              })
+              await supabase.auth.signOut()
+            } catch (err) {
+              console.warn('[profile] reset failed:', err)
+            }
+            router.replace('/landing')
+          },
+        },
+      ],
+    )
+  }
+
   return (
     <SafeAreaView style={s.root}>
       <ScrollView
@@ -285,7 +340,7 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleImport} style={[s.card, { marginBottom: 32 }]} activeOpacity={0.8}>
+        <TouchableOpacity onPress={handleImport} style={s.card} activeOpacity={0.8}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(96,165,250,0.10)', alignItems: 'center', justifyContent: 'center' }}>
               <Lineicons icon={Upload1Outlined} size={14} color="#60a5fa" />
@@ -293,6 +348,32 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <Text style={s.cardTitle}>Import Data</Text>
               <Text style={s.cardSub}>Restore from a previously exported JSON file</Text>
+            </View>
+            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleSignOut} style={s.card} activeOpacity={0.8}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(148,163,184,0.10)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 14, color: t.textSecondary }}>↪</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Sign Out</Text>
+              <Text style={s.cardSub}>Sign out of your Google account on this device</Text>
+            </View>
+            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleResetAppData} style={[s.card, { marginBottom: 32 }]} activeOpacity={0.8}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.10)', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 14, color: t.accentText }}>⚠</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.cardTitle, { color: t.accentText }]}>Reset App Data</Text>
+              <Text style={s.cardSub}>Permanently delete all local data on this device</Text>
             </View>
             <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
           </View>

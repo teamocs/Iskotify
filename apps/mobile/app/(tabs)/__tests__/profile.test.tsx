@@ -25,6 +25,16 @@ jest.mock('../../../services/export', () => ({
   exportUserData: jest.fn().mockResolvedValue({ status: 'saved', filename: 'test.json' }),
 }))
 
+jest.mock('../../../services/supabase', () => ({
+  supabase: {
+    auth: { signOut: jest.fn().mockResolvedValue({ error: null }) },
+  },
+}))
+
+const makeTx = () => ({
+  delete: jest.fn(() => ({ run: jest.fn() })),
+})
+
 const makeDb = (userRow?: any) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
@@ -42,6 +52,10 @@ const makeDb = (userRow?: any) => ({
       where: jest.fn().mockResolvedValue(undefined),
     })),
   })),
+  transaction: jest.fn((cb: (tx: any) => void) => {
+    cb(makeTx())
+    return Promise.resolve()
+  }),
 })
 
 jest.mock('../../../hooks/useDb', () => ({
@@ -163,5 +177,37 @@ describe('ProfileScreen — interactions', () => {
     await waitFor(() => {
       expect(exportUserData).toHaveBeenCalled()
     })
+  })
+
+  it('renders Sign Out + Reset App Data action cards', () => {
+    const { getByText } = render(<ProfileScreen />)
+    expect(getByText('Sign Out')).toBeTruthy()
+    expect(getByText('Reset App Data')).toBeTruthy()
+  })
+
+  it('Sign Out tap shows confirmation Alert and signs out on confirm', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      const destructive = buttons?.find((b: any) => b.style === 'destructive')
+      destructive?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Sign Out'))
+    expect(alertSpy).toHaveBeenCalledWith('Sign Out?', expect.any(String), expect.any(Array))
+    const { supabase } = require('../../../services/supabase')
+    await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
+    alertSpy.mockRestore()
+  })
+
+  it('Reset App Data tap shows confirmation Alert and wipes tables on confirm', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      const destructive = buttons?.find((b: any) => b.style === 'destructive')
+      destructive?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Reset App Data'))
+    expect(alertSpy).toHaveBeenCalledWith('Reset App Data?', expect.any(String), expect.any(Array))
+    const { supabase } = require('../../../services/supabase')
+    await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
+    alertSpy.mockRestore()
   })
 })
