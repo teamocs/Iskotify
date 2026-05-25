@@ -8,6 +8,7 @@ import {
   type ChatMode,
 } from '../services/chatPrompts'
 import { buildProgressContext } from '../services/chatContext'
+import { chatMessages } from '../db/schema'
 
 export interface ChatMessage {
   id: string
@@ -24,6 +25,7 @@ interface UseKuyaChat {
   messages: ChatMessage[]
   send: (text: string) => void
   abort: () => void
+  clearHistory: () => Promise<void>
   isStreaming: boolean
   isModelReady: boolean
 }
@@ -31,12 +33,6 @@ interface UseKuyaChat {
 const FLUSH_INTERVAL_MS = 60
 const MIN_QUESTION_LENGTH = 5
 
-// High-confidence Tagalog tokens. A response with ≥3 hits is treated as
-// language-mirroring failure (1.5B model echoed user's Tagalog input
-// despite the English-only prompt) and gets overridden with a canned
-// English message. Tokens chosen to minimize false positives in English
-// text (e.g. "ng", "mga", "kong" don't appear as word-boundary matches
-// inside common English words).
 const TAGALOG_INDICATORS = /\b(kong|mong|akin|sayo|ikaw|siya|niya|mga|nang|kasi|dahil|naman|meron|pag-aaral|kumpanya|gobyerno|naging|magiging|gawin|mahalaga|nais|paano|hindi|wala|kaya|tara|opo|anong|saan|kelan|tayo|kayo|sila|natin|talaga)\b/gi
 
 function isTagalogHeavy(text: string): boolean {
@@ -57,12 +53,28 @@ export function useKuyaChat(): UseKuyaChat {
   const bufferRef = useRef('')
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const assistantIdRef = useRef<string | null>(null)
+  // Tracks text flushed to state via scheduleFlush so finalization can compute the full text
+  const accumulatedRef = useRef('')
+  // Stable ref to db so mount effect doesn't re-run when mock returns a new object each render
+  const dbRef = useRef(db)
+  dbRef.current = db
 
-  // Check model availability on mount
+  // Check model availability + load chat history on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     isMountedRef.current = true
     void modelExists().then(exists => {
       if (isMountedRef.current) setIsModelReady(exists)
+    })
+    void dbRef.current.select().from(chatMessages).orderBy(chatMessages.createdAt).then(rows => {
+      if (!isMountedRef.current) return
+      setMessages(rows.map(r => ({
+        id: String(r.id),
+        role: r.role as 'user' | 'assistant',
+        text: r.text,
+        timestamp: r.createdAt,
+        isStreaming: false,
+      })))
     })
     return () => {
       isMountedRef.current = false
@@ -89,6 +101,7 @@ export function useKuyaChat(): UseKuyaChat {
       bufferRef.current = ''
       const id = assistantIdRef.current
       if (!chunk || !id || !isMountedRef.current) return
+      accumulatedRef.current += chunk
       setMessages(prev => prev.map(m =>
         m.id === id ? { ...m, text: m.text + chunk } : m
       ))
@@ -101,6 +114,8 @@ export function useKuyaChat(): UseKuyaChat {
     if (!trimmed) return
 
     const now = Date.now()
+    accumulatedRef.current = ''
+
     const userMsg: ChatMessage = {
       id: `u-${now}`,
       role: 'user',
@@ -108,18 +123,15 @@ export function useKuyaChat(): UseKuyaChat {
       timestamp: now,
     }
 
-    // Short-question guard: inputs under 5 chars don't give the 1.5B model
-    // enough signal to answer correctly — it tends to hallucinate. Show a
-    // direct English nudge instead of calling the model.
     if (trimmed.length < MIN_QUESTION_LENGTH) {
-      const assistantMsg: ChatMessage = {
+      const canned = 'Please ask a more specific question — try one of the suggestions below.'
+      setMessages(prev => [...prev, userMsg, {
         id: `a-${now}`,
-        role: 'assistant',
-        text: 'Please ask a more specific question — try one of the suggestions below.',
+        role: 'assistant' as const,
+        text: canned,
         timestamp: now,
         isStreaming: false,
-      }
-      setMessages(prev => [...prev, userMsg, assistantMsg])
+      }])
       return
     }
 
@@ -138,13 +150,16 @@ export function useKuyaChat(): UseKuyaChat {
     const controller = new AbortController()
     abortRef.current = controller
 
+    // Snapshot history before this exchange for the LLM prompt (max 10 messages)
+    const historyForPrompt = messages.slice(-10).map(m => ({ role: m.role, text: m.text }))
+
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
         try {
           const dataCtx = mode === 'progress'
-            ? await buildProgressContext(db, stats)
+            ? await buildProgressContext(dbRef.current, stats)
             : undefined
-          const prompt = buildChatPrompt(mode, trimmed, dataCtx)
+          const prompt = buildChatPrompt(mode, trimmed, dataCtx, historyForPrompt)
 
           await streamChatInference(prompt, (tokenText) => {
             if (controller.signal.aborted) return
@@ -152,41 +167,34 @@ export function useKuyaChat(): UseKuyaChat {
             scheduleFlush()
           }, controller.signal)
 
-          // Skip finalization if the user aborted or moved on to another send
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
 
-          // Final flush — safe to touch shared refs only after the staleness guard
           if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
           flushTimerRef.current = null
           const finalChunk = bufferRef.current
           bufferRef.current = ''
+          const totalText = (accumulatedRef.current + finalChunk).trim()
+          accumulatedRef.current = ''
 
-          setMessages(prev => prev.map(m => {
-            if (m.id !== assistantId) return m
-            const finalText = (m.text + finalChunk).trim()
-            if (finalText.length === 0) {
-              return {
-                ...m,
-                isStreaming: false,
-                text: "I couldn't process that. Try rephrasing your question.",
-              }
-            }
-            // Tagalog-output safety net: if the model ignored the English-only
-            // rule and produced Tagalog-heavy text, override with a canned
-            // English fallback so the user doesn't see hallucinated garbage.
-            if (isTagalogHeavy(finalText)) {
-              return {
-                ...m,
-                isStreaming: false,
-                text: "Let me try that again — could you re-ask your question?",
-              }
-            }
-            return { ...m, text: m.text + finalChunk, isStreaming: false }
-          }))
+          const displayText = totalText.length === 0
+            ? "I couldn't process that. Try rephrasing your question."
+            : isTagalogHeavy(totalText)
+              ? "Let me try that again — could you re-ask your question?"
+              : totalText
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m
+          ))
           setIsStreaming(false)
+
+          // Persist to DB — fire-and-forget, DB failure does not affect UI
+          void dbRef.current.transaction(async tx => {
+            await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
+            await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now })
+          }).catch(() => {})
+
         } catch (err) {
-          // Skip error UI if the user aborted (intentional cancel — not a real error) or moved on
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
           console.warn('[useKuyaChat] streamChatInference failed:', err)
@@ -199,7 +207,7 @@ export function useKuyaChat(): UseKuyaChat {
         }
       })()
     })
-  }, [isStreaming, mode, db, stats, scheduleFlush])
+  }, [isStreaming, mode, stats, scheduleFlush, messages])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
@@ -207,6 +215,7 @@ export function useKuyaChat(): UseKuyaChat {
     flushTimerRef.current = null
     const finalChunk = bufferRef.current
     bufferRef.current = ''
+    accumulatedRef.current = ''
     const id = assistantIdRef.current
     if (id && isMountedRef.current) {
       setMessages(prev => prev.map(m =>
@@ -216,10 +225,15 @@ export function useKuyaChat(): UseKuyaChat {
     setIsStreaming(false)
   }, [])
 
+  const clearHistory = useCallback(async () => {
+    await dbRef.current.delete(chatMessages)
+    setMessages([])
+  }, [])
+
   const setMode = useCallback((next: ChatMode) => {
-    if (isStreaming) return  // lock during streaming
+    if (isStreaming) return
     setModeState(next)
   }, [isStreaming])
 
-  return { mode, setMode, messages, send, abort, isStreaming, isModelReady }
+  return { mode, setMode, messages, send, abort, clearHistory, isStreaming, isModelReady }
 }
