@@ -67,6 +67,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
                     <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Topic</th>
                     <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Cards</th>
                     <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Status</th>
+                    <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -82,6 +83,14 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
                       </td>
                       <td className="px-5 py-3 text-[#374151]">{topic.flashcards?.length ?? 0}</td>
                       <td className="px-5 py-3">{statusBadge(topic.status)}</td>
+                      <td className="px-5 py-3">
+                        <Link
+                          href={`/admin/flashcards/subjects/${id}/cards?topic=${topic.id}`}
+                          className="text-xs text-[#800000] hover:text-[#a00000] font-medium transition-colors"
+                        >
+                          View Cards →
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -91,18 +100,31 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
             {/* Mobile cards */}
             <div className="md:hidden space-y-2">
               {topics.map(topic => (
-                <Link
+                <div
                   key={topic.id}
-                  href={`/admin/flashcards/topics/${topic.id}`}
-                  className="flex items-center justify-between bg-white border border-[#e5e7eb] rounded-2xl p-4 active:bg-[#f5f5f7]"
+                  className="bg-white border border-[#e5e7eb] rounded-2xl p-4"
                 >
-                  <div>
-                    <p className="font-medium text-[#1d1d1f]">{topic.name}</p>
-                    <p className="text-xs text-[#6e6e73] mt-0.5">{topic.flashcards?.length ?? 0} cards</p>
-                    <div className="mt-1">{statusBadge(topic.status)}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-[#1d1d1f]">{topic.name}</p>
+                      <p className="text-xs text-[#6e6e73] mt-0.5">{topic.flashcards?.length ?? 0} cards</p>
+                      <div className="mt-1">{statusBadge(topic.status)}</div>
+                      <Link
+                        href={`/admin/flashcards/subjects/${id}/cards?topic=${topic.id}`}
+                        className="inline-block mt-2 text-xs font-medium text-[#800000] hover:text-[#a00000]"
+                      >
+                        View Cards →
+                      </Link>
+                    </div>
+                    <Link
+                      href={`/admin/flashcards/topics/${topic.id}`}
+                      className="text-[#aeaeb2] text-lg flex-shrink-0 hover:text-[#1d1d1f] transition-colors"
+                      aria-label={`Open ${topic.name} topic`}
+                    >
+                      ›
+                    </Link>
                   </div>
-                  <span className="text-[#aeaeb2] text-lg ml-2">›</span>
-                </Link>
+                </div>
               ))}
             </div>
           </>
