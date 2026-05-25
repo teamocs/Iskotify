@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AddCardModal } from './AddCardModal'
 
 interface Card {
@@ -40,6 +40,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
   const [editQ, setEditQ] = useState('')
   const [editA, setEditA] = useState('')
   const [editExp, setEditExp] = useState('')
+  const [error, setError] = useState('')
 
   async function loadCards(pageNum: number, replace = false) {
     setLoading(true)
@@ -62,9 +63,12 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
     if (isOpen && cards.length === 0) {
       loadCards(1)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally runs only on isOpen change, not on every loadCards re-creation
   }, [isOpen])
 
   function startEdit(card: Card) {
+    setError('')
     setEditingId(card.id)
     setEditQ(card.question)
     setEditA(card.answer)
@@ -74,6 +78,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
 
   async function saveEdit() {
     if (!editingId) return
+    setError('')
     setSaving(true)
     try {
       const res = await fetch(`/api/flashcards/cards/${editingId}`, {
@@ -85,16 +90,19 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
           explanation: editExp.trim(),
         }),
       })
-      if (res.ok) {
-        setCards(prev =>
-          prev.map(c =>
-            c.id === editingId
-              ? { ...c, question: editQ.trim(), answer: editA.trim(), explanation: editExp.trim() }
-              : c
-          )
-        )
-        setEditingId(null)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? 'Something went wrong')
+        return
       }
+      setCards(prev =>
+        prev.map(c =>
+          c.id === editingId
+            ? { ...c, question: editQ.trim(), answer: editA.trim(), explanation: editExp.trim() }
+            : c
+        )
+      )
+      setEditingId(null)
     } finally {
       setSaving(false)
     }
@@ -102,14 +110,18 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
 
   async function confirmDelete() {
     if (!deletingId) return
+    setError('')
     setSaving(true)
     try {
       const res = await fetch(`/api/flashcards/cards/${deletingId}`, { method: 'DELETE' })
-      if (res.ok) {
-        setCards(prev => prev.filter(c => c.id !== deletingId))
-        setLocalCardCount(prev => Math.max(0, prev - 1))
-        setDeletingId(null)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body.error ?? 'Something went wrong')
+        return
       }
+      setCards(prev => prev.filter(c => c.id !== deletingId))
+      setLocalCardCount(prev => Math.max(0, prev - 1))
+      setDeletingId(null)
     } finally {
       setSaving(false)
     }
@@ -190,6 +202,11 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
+                          {error && (
+                            <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600 mb-1">
+                              {error}
+                            </p>
+                          )}
                           <button
                             onClick={saveEdit}
                             disabled={saving || !editQ.trim() || !editA.trim()}
@@ -198,7 +215,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                             Save
                           </button>
                           <button
-                            onClick={() => setEditingId(null)}
+                            onClick={() => { setEditingId(null); setError('') }}
                             className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
                           >
                             Cancel
@@ -220,7 +237,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                             Edit
                           </button>
                           <button
-                            onClick={() => { setDeletingId(card.id); setEditingId(null) }}
+                            onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
                             className="text-xs text-[#6e6e73] hover:text-red-600"
                           >
                             Delete
@@ -261,6 +278,11 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                       rows={2}
                       placeholder="Explanation (optional)"
                     />
+                    {error && (
+                      <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">
+                        {error}
+                      </p>
+                    )}
                     <div className="flex gap-3">
                       <button
                         onClick={saveEdit}
@@ -270,7 +292,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                         Save
                       </button>
                       <button
-                        onClick={() => setEditingId(null)}
+                        onClick={() => { setEditingId(null); setError('') }}
                         className="text-xs text-[#6e6e73]"
                       >
                         Cancel
@@ -292,7 +314,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
                         Edit
                       </button>
                       <button
-                        onClick={() => { setDeletingId(card.id); setEditingId(null) }}
+                        onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
                         className="text-xs text-[#6e6e73] hover:text-red-600"
                       >
                         Delete
@@ -306,23 +328,30 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
 
           {/* Delete confirm banner */}
           {deletingId && (
-            <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex items-center justify-between gap-4">
-              <p className="text-sm text-red-700">Delete this card? This cannot be undone.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={confirmDelete}
-                  disabled={saving}
-                  className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
-                >
-                  Yes, delete
-                </button>
-                <button
-                  onClick={() => setDeletingId(null)}
-                  className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
-                >
-                  Cancel
-                </button>
+            <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-red-700">Delete this card? This cannot be undone.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={confirmDelete}
+                    disabled={saving}
+                    className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                  >
+                    Yes, delete
+                  </button>
+                  <button
+                    onClick={() => { setDeletingId(null); setError('') }}
+                    className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
+              {error && (
+                <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600 border border-red-200">
+                  {error}
+                </p>
+              )}
             </div>
           )}
 
