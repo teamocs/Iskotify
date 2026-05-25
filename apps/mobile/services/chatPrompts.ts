@@ -31,10 +31,10 @@ export function buildChatPrompt(
   dataContext?: string,
   history?: Array<{ role: 'user' | 'assistant'; text: string }>,
 ): string {
-  // Strip Gemma turn token injection attempts from the question
-  const safeQuestion = question
-    .replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '')
-    .replace(/<(start|end)_of_turn>/g, '')
+  const sanitize = (s: string) =>
+    s.replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '').replace(/<(start|end)_of_turn>/g, '')
+
+  const safeQuestion = sanitize(question)
 
   const systemPrompt = mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC
   const instruction = `[INSTRUCTION] Respond in clear English only.`
@@ -49,13 +49,13 @@ export function buildChatPrompt(
     finalUserContent = `${systemPrompt}\n\n${instruction}\n\n[QUESTION]\n${safeQuestion}`
   }
 
-  // Build history turns (no system prompt injection — bare markers only)
+  // Build history turns — sanitize each message to prevent turn token injection
   let historyTurns = ''
   if (history && history.length > 0) {
     historyTurns = history.map(m =>
       m.role === 'user'
-        ? `<start_of_turn>user\n${m.text}<end_of_turn>\n`
-        : `<start_of_turn>model\n${m.text}<end_of_turn>\n`
+        ? `<start_of_turn>user\n${sanitize(m.text)}<end_of_turn>\n`
+        : `<start_of_turn>model\n${sanitize(m.text)}<end_of_turn>\n`
     ).join('')
   }
 
