@@ -19,6 +19,7 @@ jest.mock('@kesha-antonov/react-native-background-downloader', () => ({
   createDownloadTask: jest.fn(),
   setConfig: jest.fn(),
   completeHandler: jest.fn(),
+  getExistingDownloadTasks: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('expo-notifications', () => ({

@@ -18,6 +18,7 @@ module.exports = {
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
+        'expo-file-system/legacy': '<rootDir>/__mocks__/expoFileSystemLegacyMock.js',
       },
     },
     {

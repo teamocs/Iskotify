@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import * as Notifications from 'expo-notifications'
-import { createDownloadTask, setConfig, completeHandler } from '@kesha-antonov/react-native-background-downloader'
+import { createDownloadTask, setConfig, completeHandler, getExistingDownloadTasks } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
 import { modelExists, hasEnoughRam, MODEL_PATH, MODEL_DOWNLOAD_URL } from '../services/llm'
 
@@ -17,6 +17,8 @@ interface UseModelDownload {
 }
 
 const DOWNLOAD_ID = 'gemma-model'
+// Legacy ID from before the Qwen → Gemma model swap; cancel any stale task on startup
+const LEGACY_DOWNLOAD_IDS = ['qwen-model']
 
 let nativeConfigured = false
 function ensureNativeConfigured(): void {
@@ -67,6 +69,16 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
   // Cleanup on unmount only — runs once
   useEffect(() => {
     isMountedRef.current = true
+
+    // Cancel any stale download from before the Qwen → Gemma swap
+    getExistingDownloadTasks().then(tasks => {
+      for (const task of tasks) {
+        if (LEGACY_DOWNLOAD_IDS.includes(task.id)) {
+          task.stop().catch(() => {})
+        }
+      }
+    }).catch(() => {})
+
     return () => {
       isMountedRef.current = false
       taskRef.current?.stop()

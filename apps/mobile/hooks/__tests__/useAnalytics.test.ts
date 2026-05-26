@@ -31,10 +31,15 @@ describe('computeStreak', () => {
   })
 
   it('returns 0 when only yesterday has a session', () => {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    yesterday.setHours(12, 0, 0, 0)
-    expect(computeStreak([{ completedAt: yesterday.getTime() }])).toBe(0)
+    // Pin Date.now() to a fixed noon UTC to avoid midnight boundary flakiness
+    const now = new Date('2024-06-15T12:00:00.000Z').getTime()
+    jest.spyOn(Date, 'now').mockReturnValue(now)
+    const yesterdayNoon = now - 86_400_000
+    try {
+      expect(computeStreak([{ completedAt: yesterdayNoon }])).toBe(0)
+    } finally {
+      jest.restoreAllMocks()
+    }
   })
 })
 
