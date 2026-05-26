@@ -226,7 +226,7 @@ export default function AnalyticsScreen() {
           </View>
         )}
 
-        <View style={{ height: 80 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   )

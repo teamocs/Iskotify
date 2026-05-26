@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useDb } from '../hooks/useDb'
 import { useModelDownload } from '../hooks/useModelDownload'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { useTheme } from '../theme/ThemeContext'
 
-const MODEL_SIZE_LABEL = '~950 MB'
+const MODEL_SIZE_LABEL = '~750 MB'
 
 function formatMB(bytes: number): string {
   if (bytes <= 0) return '0 MB'
@@ -17,6 +18,7 @@ function formatMB(bytes: number): string {
 export function AiModelBanner() {
   const { theme: t, typo } = useTheme()
   const db = useDb()
+  const insets = useSafeAreaInsets()
   const { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload } = useModelDownload(
     () => { void runEnhancement(db).catch(e => console.warn('[AiModelBanner] enhance:', e)) }
   )
@@ -102,7 +104,7 @@ export function AiModelBanner() {
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       padding: 24,
-      paddingBottom: 40,
+      paddingBottom: Math.max(32, insets.bottom + 16),
     },
     sheetTitle: {
       fontSize: typo.lg,
@@ -143,7 +145,7 @@ export function AiModelBanner() {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.sm,
     },
-  }), [t, typo])
+  }), [t, typo, insets])
 
   const pct = Math.round(progress * 100)
 

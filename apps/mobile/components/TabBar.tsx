@@ -15,6 +15,7 @@ import {
   User4Outlined,
 } from '@lineiconshq/free-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
@@ -84,9 +85,10 @@ function NavItem({
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { theme: t, isDark } = useTheme()
+  const insets = useSafeAreaInsets()
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <View style={[styles.wrapper, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
       <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.blur, { borderColor: t.border }]}>
         <View style={[styles.inner, { backgroundColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(128,0,0,0.04)' }]}>
           {state.routes.map((route, idx) => {
@@ -124,7 +126,6 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 24,
     left: 0,
     right: 0,
     alignItems: 'center',

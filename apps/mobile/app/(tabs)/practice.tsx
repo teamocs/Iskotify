@@ -5,7 +5,7 @@ import {
   RefreshControl,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
@@ -138,6 +138,7 @@ function CreateDeckModal({
   onCreate: (name: string, topicIds: string[]) => Promise<void>
   m: MStyles
 }) {
+  const insets = useSafeAreaInsets()
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [step, setStep] = useState<1 | 2>(1)
@@ -170,7 +171,7 @@ function CreateDeckModal({
           behavior="padding"
           style={{ width: '100%' }}
         >
-        <View style={m.sheet}>
+        <View style={[m.sheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
           <View style={m.headerRow}>
             <Text style={m.title}>New Deck</Text>
             <TouchableOpacity onPress={handleClose}>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -32,6 +32,7 @@ const DEFAULT: ProfileData = {
 
 export default function ProfileScreen() {
   const db = useDb()
+  const insets = useSafeAreaInsets()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
   const { theme: t, typo } = useTheme()
@@ -225,7 +226,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={s.root}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
