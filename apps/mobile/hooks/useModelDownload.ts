@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { createDownloadTask, setConfig, completeHandler, getExistingDownloadTasks } from '@kesha-antonov/react-native-background-downloader'
@@ -52,6 +52,71 @@ async function ensureNotificationPermission(): Promise<void> {
   }
 }
 
+type StateSetter<T> = React.Dispatch<React.SetStateAction<T>>
+
+function attachHandlers(
+  task: DownloadTask,
+  isMountedRef: React.MutableRefObject<boolean>,
+  taskRef: React.MutableRefObject<DownloadTask | null>,
+  setModelStatus: StateSetter<ModelStatus>,
+  setProgress: StateSetter<number>,
+  setBytesDownloaded: StateSetter<number>,
+  setBytesTotal: StateSetter<number>,
+  setLastError: StateSetter<Error | null>,
+  completeCbRef: React.MutableRefObject<(() => void) | undefined>,
+): void {
+  task.begin(({ expectedBytes }) => {
+    if (!isMountedRef.current) return
+    if (expectedBytes > 0) setBytesTotal(expectedBytes)
+  })
+
+  task.progress(({ bytesDownloaded, bytesTotal }) => {
+    if (!isMountedRef.current) return
+    setBytesDownloaded(bytesDownloaded)
+    if (bytesTotal > 0) {
+      setBytesTotal(bytesTotal)
+      setProgress(bytesDownloaded / bytesTotal)
+    }
+  })
+
+  task.done(async ({ bytesTotal }) => {
+    try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
+    if (!isMountedRef.current) return
+    setModelStatus('ready')
+    setProgress(1)
+    if (bytesTotal > 0) {
+      setBytesDownloaded(bytesTotal)
+      setBytesTotal(bytesTotal)
+    }
+    taskRef.current = null
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'AI Reviewer is ready!',
+          body: 'Your flashcards are now being enhanced in the background.',
+        },
+        trigger: null,
+      })
+    } catch (err) {
+      console.warn('[useModelDownload] notification failed:', err)
+    }
+    completeCbRef.current?.()
+  })
+
+  task.error(({ error, errorCode }) => {
+    try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
+    const wrapped = new Error(`Download failed (code ${errorCode}): ${error}`)
+    console.warn('[useModelDownload] download failed:', wrapped)
+    if (!isMountedRef.current) return
+    setModelStatus('absent')
+    setProgress(0)
+    setBytesDownloaded(0)
+    setBytesTotal(0)
+    setLastError(wrapped)
+    taskRef.current = null
+  })
+}
+
 export function useModelDownload(onDownloadComplete?: () => void): UseModelDownload {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('unknown')
   const [progress, setProgress] = useState(0)
@@ -66,22 +131,33 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     completeCbRef.current = onDownloadComplete
   }, [onDownloadComplete])
 
-  // Cleanup on unmount only — runs once
+  // Runs once on mount — cancel legacy Qwen tasks; reconnect to any
+  // already-running Gemma download so navigation doesn't lose progress.
   useEffect(() => {
     isMountedRef.current = true
 
-    // Cancel any stale download from before the Qwen → Gemma swap
     getExistingDownloadTasks().then(tasks => {
       for (const task of tasks) {
         if (LEGACY_DOWNLOAD_IDS.includes(task.id)) {
           task.stop().catch(() => {})
         }
       }
+
+      // Reconnect JS handlers to an in-progress Gemma download.
+      // The native download keeps running when the component unmounts;
+      // we just need to reattach callbacks so the UI reflects real progress.
+      const active = tasks.find(t => t.id === DOWNLOAD_ID)
+      if (active && isMountedRef.current) {
+        taskRef.current = active
+        setModelStatus('downloading')
+        attachHandlers(active, isMountedRef, taskRef, setModelStatus, setProgress, setBytesDownloaded, setBytesTotal, setLastError, completeCbRef)
+      }
     }).catch(() => {})
 
     return () => {
       isMountedRef.current = false
-      taskRef.current?.stop()
+      // Do NOT stop the native download on unmount — background downloads
+      // must survive tab navigation. Only the JS callbacks are torn down.
       taskRef.current = null
     }
   }, [])
@@ -128,56 +204,7 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     })
     taskRef.current = task
 
-    task.begin(({ expectedBytes }) => {
-      if (!isMountedRef.current) return
-      if (expectedBytes > 0) setBytesTotal(expectedBytes)
-    })
-
-    task.progress(({ bytesDownloaded, bytesTotal }) => {
-      if (!isMountedRef.current) return
-      setBytesDownloaded(bytesDownloaded)
-      if (bytesTotal > 0) {
-        setBytesTotal(bytesTotal)
-        setProgress(bytesDownloaded / bytesTotal)
-      }
-    })
-
-    task.done(async ({ bytesTotal }) => {
-      try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
-      if (!isMountedRef.current) return
-      setModelStatus('ready')
-      setProgress(1)
-      if (bytesTotal > 0) {
-        setBytesDownloaded(bytesTotal)
-        setBytesTotal(bytesTotal)
-      }
-      taskRef.current = null
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'AI Reviewer is ready!',
-            body: 'Your flashcards are now being enhanced in the background.',
-          },
-          trigger: null,
-        })
-      } catch (err) {
-        console.warn('[useModelDownload] notification failed:', err)
-      }
-      completeCbRef.current?.()
-    })
-
-    task.error(({ error, errorCode }) => {
-      try { completeHandler(DOWNLOAD_ID) } catch { /* iOS-only handle; safe to ignore on Android */ }
-      const wrapped = new Error(`Download failed (code ${errorCode}): ${error}`)
-      console.warn('[useModelDownload] download failed:', wrapped)
-      if (!isMountedRef.current) return
-      setModelStatus('absent')
-      setProgress(0)
-      setBytesDownloaded(0)
-      setBytesTotal(0)
-      setLastError(wrapped)
-      taskRef.current = null
-    })
+    attachHandlers(task, isMountedRef, taskRef, setModelStatus, setProgress, setBytesDownloaded, setBytesTotal, setLastError, completeCbRef)
 
     task.start()
   }, [modelStatus])

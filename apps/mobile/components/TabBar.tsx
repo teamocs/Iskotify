@@ -88,7 +88,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
 
   return (
-    <View style={[styles.wrapper, { bottom: insets.bottom + 12 }]} pointerEvents="box-none">
+    <View style={[styles.wrapper, { bottom: insets.bottom + 20 }]} pointerEvents="box-none">
       <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.blur, { borderColor: t.border }]}>
         <View style={[styles.inner, { backgroundColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(128,0,0,0.04)' }]}>
           {state.routes.map((route, idx) => {

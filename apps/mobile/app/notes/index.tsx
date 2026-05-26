@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, Pressable, Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
 import { useNotes, NOTE_COLORS, type Note, type NoteType } from '../../hooks/useNotes'
@@ -84,6 +84,7 @@ function NoteCard({
 
 export default function NotesScreen() {
   const { theme: t, typo } = useTheme()
+  const insets = useSafeAreaInsets()
   const { notes, createNote, archiveNote, deleteNote, updateNote } = useNotes('active')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -163,15 +164,15 @@ export default function NotesScreen() {
     cardWrap: { width: '48%' },
     empty: { paddingVertical: 48, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
-    fab: { position: 'absolute', bottom: 28, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-    fabTxt: { color: '#fff', fontSize: 28, lineHeight: 32, marginTop: -2 },
-    fabSub: { position: 'absolute', bottom: 90, right: 20, gap: 8 },
-    fabSubBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
-    fabSubTxt: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 16 },
+    fab: { position: 'absolute', bottom: insets.bottom + 40, right: 24, width: 64, height: 64, borderRadius: 32, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+    fabTxt: { color: '#fff', fontSize: 32, lineHeight: 36, marginTop: -2 },
+    fabSub: { position: 'absolute', bottom: insets.bottom + 40 + 72, right: 24, gap: 10 },
+    fabSubBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 28, paddingHorizontal: 20, paddingVertical: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+    fabSubTxt: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: Math.max(16, insets.bottom + 10), gap: 16 },
     selCount: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    selAction: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', paddingVertical: 4, paddingHorizontal: 8 },
-  }), [t, typo])
+    selAction: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', paddingVertical: 6, paddingHorizontal: 10 },
+  }), [t, typo, insets])
 
   const renderGrid = (items: Note[]) => (
     <View style={s.grid}>
