@@ -38,6 +38,10 @@ android/local.properties
 .DS_Store
 Thumbs.db
 
+# Local SQLite databases (e.g. dev iskotify.db that gets created at runtime)
+*.db
+*.db-journal
+
 # Local MCP config (contains machine-specific paths)
 .mcp.json
 
