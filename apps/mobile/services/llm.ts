@@ -5,12 +5,43 @@ import { parseCoachPhrase } from './coachPrompts'
 
 export { parseCoachPhrase }
 
-const MODEL_FILENAME = 'gemma-3-1b-it-Q4_K_M.gguf'
+// Correct filename: the bartowski GGUF repo prefixes files with `google_`.
+// Full file list: https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF
+const MODEL_FILENAME = 'google_gemma-3-1b-it-Q4_K_M.gguf'
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`
 export const MODEL_PATH = `${MODEL_DIR}${MODEL_FILENAME}`
 
+// NOTE: The correct repo slug is `bartowski/google_gemma-3-1b-it-GGUF` (with `google_` prefix).
+// The previous slug `bartowski/gemma-3-1b-it-GGUF` (without the prefix) does not exist and
+// caused all downloads to fail with a 404.  The filename also carries the `google_` prefix.
 export const MODEL_DOWNLOAD_URL =
-  'https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf'
+  'https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf'
+
+/**
+ * Resolve the final CDN/S3 URL for the model by following HuggingFace's
+ * redirect chain.  Android's DownloadManager can silently fail when it
+ * encounters the multi-hop 302 → LFS → S3 redirect that HuggingFace uses,
+ * so we resolve the destination in JS first and hand the direct URL to the
+ * native downloader.
+ *
+ * Returns the resolved URL, or the original MODEL_DOWNLOAD_URL if the
+ * HEAD request fails (graceful degradation).
+ */
+export async function resolveDownloadUrl(): Promise<string> {
+  try {
+    const response = await fetch(MODEL_DOWNLOAD_URL, {
+      method: 'HEAD',
+      redirect: 'follow',
+    })
+    // `response.url` is the final URL after all redirects have been followed
+    if (response.ok && response.url && response.url !== MODEL_DOWNLOAD_URL) {
+      return response.url
+    }
+  } catch (err) {
+    console.warn('[llm] resolveDownloadUrl failed, falling back to original URL:', err)
+  }
+  return MODEL_DOWNLOAD_URL
+}
 
 const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
 export const IDLE_RELEASE_MS = 60_000
@@ -24,6 +55,10 @@ export function hasEnoughRam(): boolean {
 export async function modelExists(): Promise<boolean> {
   const info = await FileSystem.getInfoAsync(MODEL_PATH)
   return info.exists
+}
+
+export async function ensureModelDirectory(): Promise<void> {
+  await FileSystem.makeDirectoryAsync(MODEL_DIR, { intermediates: true })
 }
 
 // ── Persistent context + mutex ────────────────────────────────────────────────
@@ -203,11 +238,23 @@ export async function runCoachInference(prompt: string): Promise<string | null> 
 
 // ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
 
+export interface StreamChatOptions {
+  /** Max tokens to generate. Defaults to 60 (tight for short Q&A). Math queries
+   *  should pass ~250 so multi-step solutions don't truncate. */
+  nPredict?: number
+  /** Sampling temperature. Defaults to 0.2 (balanced). Math should use ~0.05
+   *  so the model doesn't hallucinate digits. */
+  temperature?: number
+}
+
 export async function streamChatInference(
   prompt: string,
   onToken: (text: string) => void,
   signal: AbortSignal,
+  options: StreamChatOptions = {},
 ): Promise<string> {
+  const nPredict = options.nPredict ?? 60
+  const temperature = options.temperature ?? 0.2
   return withMutex(async () => {
     if (signal.aborted) return ''
     const ctx = await getContext()
@@ -217,10 +264,10 @@ export async function streamChatInference(
       const result = await ctx.completion(
         {
           prompt,
-          n_predict: 60,
-          temperature: 0.2,
+          n_predict: nPredict,
+          temperature,
           top_k: 40,
-          repeat_penalty: 1.1,
+          penalty_repeat: 1.1,
           stop: ['<end_of_turn>', '<eos>', '<start_of_turn>'],
         },
         (tokenData: { token?: string }) => {

@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { createDownloadTask, setConfig, completeHandler, getExistingDownloadTasks } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
-import { modelExists, hasEnoughRam, MODEL_PATH, MODEL_DOWNLOAD_URL } from '../services/llm'
+import { modelExists, hasEnoughRam, ensureModelDirectory, MODEL_PATH, MODEL_DOWNLOAD_URL, resolveDownloadUrl } from '../services/llm'
 
 export type ModelStatus = 'unknown' | 'absent' | 'downloading' | 'ready' | 'unsupported'
 
@@ -197,16 +197,43 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
 
     const destination = MODEL_PATH.replace(/^file:\/\//, '')
 
-    const task = createDownloadTask({
-      id: DOWNLOAD_ID,
-      url: MODEL_DOWNLOAD_URL,
-      destination,
-    })
-    taskRef.current = task
+    // Step 1 — ensure the models/ directory exists.
+    // Step 2 — pre-resolve the final CDN URL before handing it to the native downloader.
+    //           Android's DownloadManager silently fails when HuggingFace's multi-hop
+    //           302 → LFS → S3 redirect chain is involved.  Following the redirects in JS
+    //           first lets us pass a direct S3 URL to createDownloadTask.
+    void ensureModelDirectory()
+      .then(async () => {
+        if (!isMountedRef.current) return
 
-    attachHandlers(task, isMountedRef, taskRef, setModelStatus, setProgress, setBytesDownloaded, setBytesTotal, setLastError, completeCbRef)
+        // Resolve the final download URL (follows HuggingFace redirects in JS)
+        let resolvedUrl = MODEL_DOWNLOAD_URL
+        try {
+          // Race the URL resolution against a 15-second timeout
+          const timeoutPromise = new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('URL resolution timed out')), 15_000)
+          )
+          resolvedUrl = await Promise.race([resolveDownloadUrl(), timeoutPromise])
+          console.log('[useModelDownload] resolved URL:', resolvedUrl)
+        } catch (err) {
+          console.warn('[useModelDownload] URL resolution failed, using original URL:', err)
+          resolvedUrl = MODEL_DOWNLOAD_URL
+        }
 
-    task.start()
+        if (!isMountedRef.current) return
+
+        const task = createDownloadTask({ id: DOWNLOAD_ID, url: resolvedUrl, destination })
+        taskRef.current = task
+        attachHandlers(task, isMountedRef, taskRef, setModelStatus, setProgress, setBytesDownloaded, setBytesTotal, setLastError, completeCbRef)
+        task.start()
+        console.log('[useModelDownload] download started →', resolvedUrl)
+      })
+      .catch(err => {
+        console.warn('[useModelDownload] failed to prepare download:', err)
+        if (!isMountedRef.current) return
+        setModelStatus('absent')
+        setLastError(new Error(`Could not prepare download: ${(err as Error).message ?? err}`))
+      })
   }, [modelStatus])
 
   return { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload, lastError }

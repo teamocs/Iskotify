@@ -77,9 +77,10 @@ describe('computeWeakTopics', () => {
     ]
     const result = computeWeakTopics(progress, fcList, topicList)
     expect(result).toHaveLength(1)
-    expect(result[0].topicId).toBe('t1')
-    expect(result[0].accuracy).toBe(0)
-    expect(result[0].topicName).toBe('Algebra')
+    const topic = result[0]!
+    expect(topic.topicId).toBe('t1')
+    expect(topic.accuracy).toBe(0)
+    expect(topic.topicName).toBe('Algebra')
   })
 
   it('excludes topics with accuracy >= 60', () => {
@@ -98,8 +99,9 @@ describe('computeWeakTopics', () => {
     ]
     const result = computeWeakTopics(progress, fcList, topicList)
     expect(result).toHaveLength(2)
-    expect(result[0].topicId).toBe('t2')   // 0% first
-    expect(result[1].topicId).toBe('t1')   // 50% second
+    const [first, second] = result
+    expect(first!.topicId).toBe('t2')   // 0% first
+    expect(second!.topicId).toBe('t1')   // 50% second
   })
 
   it('renders pre-assess synthetic topic IDs as "Pre-Assessment: <Subject>"', () => {

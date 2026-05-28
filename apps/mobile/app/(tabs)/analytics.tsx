@@ -6,41 +6,49 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { useTheme } from '../../theme/ThemeContext'
 
 function StatCard({ value, label, color }: { value: string; label: string; color?: string }) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t, typo, isDark } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     statCard: { flex: 1, minWidth: '45%', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 14, alignItems: 'center' },
     statVal: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', letterSpacing: -0.5 },
     statLbl: { fontSize: typo.xs, color: t.textTertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
+  // Ensure provided colors are accessible in both modes
+  const safeColor = color === '#4ade80' ? (isDark ? '#4ade80' : '#16a34a')
+    : color === '#fbbf24' ? (isDark ? '#fbbf24' : '#b45309')
+    : color
   return (
     <View style={s.statCard}>
-      <Text style={[s.statVal, color ? { color } : {}]}>{value}</Text>
+      <Text style={[s.statVal, safeColor ? { color: safeColor } : {}]}>{value}</Text>
       <Text style={s.statLbl}>{label}</Text>
     </View>
   )
 }
 
 function WeeklyChart({ data }: { data: { dayLabel: string; accuracy: number | null; sessionCount: number }[] }) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t, typo, isDark } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     chartWrap: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4 },
     barCol: { flex: 1, alignItems: 'center', gap: 4 },
     barBg: { width: '100%', height: 60, backgroundColor: t.surfaceSubtle, borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
     barFill: { width: '100%', borderRadius: 6 },
     barLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    barLabelToday: { color: t.accentText, fontWeight: '700' },
-    barPct: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    barLabelToday: { color: t.accentText, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    barPct: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
   return (
     <View style={s.chartWrap}>
       {data.map((bar, i) => {
         const height = bar.accuracy !== null ? Math.round((bar.accuracy / 100) * 60) : 0
         const isToday = i === data.length - 1
+        // Accessible fill colors for both modes
+        const fillColor = isToday
+          ? t.accentText
+          : isDark ? 'rgba(128,0,0,0.55)' : 'rgba(128,0,0,0.35)'
         return (
           <View key={i} style={s.barCol}>
             <View style={s.barBg}>
               {bar.accuracy !== null && (
-                <View style={[s.barFill, { height, backgroundColor: isToday ? t.accentText : 'rgba(128,0,0,0.55)' }]} />
+                <View style={[s.barFill, { height, backgroundColor: fillColor }]} />
               )}
             </View>
             <Text style={[s.barLabel, isToday && s.barLabelToday]}>{bar.dayLabel}</Text>
@@ -64,7 +72,7 @@ export default function AnalyticsScreen() {
     setRefreshing(true)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
-  const { theme: t, typo } = useTheme()
+  const { theme: t, typo, isDark } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
@@ -170,12 +178,12 @@ export default function AnalyticsScreen() {
           <StatCard
             value={analytics.streak > 0 ? `${analytics.streak}🔥` : '—'}
             label="STREAK"
-            color="#fbbf24"
+            color={isDark ? '#fbbf24' : '#b45309'}
           />
           <StatCard
             value={activeDays > 0 ? String(activeDays) : '—'}
             label="ACTIVE DAYS"
-            color="#4ade80"
+            color={isDark ? '#4ade80' : '#16a34a'}
           />
         </View>
 

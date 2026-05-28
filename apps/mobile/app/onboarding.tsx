@@ -11,6 +11,7 @@ import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { userSettings, practiceSessions, focusListings as focusListingsTable } from '../db/schema'
+import { eq } from 'drizzle-orm'
 import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
@@ -50,6 +51,24 @@ export default function OnboardingScreen() {
   const [assessIdx, setAssessIdx] = useState(0)
   const [assessAnswers, setAssessAnswers] = useState<Array<{ q: PreAssessQuestion; correct: boolean }>>([])
   const [assessDone, setAssessDone] = useState(false)
+
+  // Pre-fill profile from Google sign-in data (seeded into DB by auth/callback.tsx)
+  useEffect(() => {
+    async function prefill() {
+      try {
+        const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+        const s = rows[0]
+        if (!s) return
+        if (s.fullName) setFullName(s.fullName)
+        if (s.school) setSchool(s.school)
+        if (s.gradeLevel) setGradeLevel(s.gradeLevel)
+      } catch (e) {
+        console.warn('[onboarding] prefill error:', e)
+      }
+    }
+    void prefill()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const assessStyle = useMemo(() => StyleSheet.create({
     questionCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 20, marginBottom: 4 },

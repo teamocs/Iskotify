@@ -4,9 +4,12 @@ import { SchoolPicker } from '../SchoolPicker'
 
 jest.mock('../../hooks/useSchoolSearch', () => ({
   useSchoolSearch: jest.fn(),
+  MIN_QUERY_LENGTH: 2,
 }))
 
 const mockUseSchoolSearch = require('../../hooks/useSchoolSearch').useSchoolSearch
+
+const mockContributeSchool = jest.fn().mockResolvedValue(undefined)
 
 function makeState(overrides = {}) {
   return {
@@ -15,7 +18,9 @@ function makeState(overrides = {}) {
     results: [],
     loading: false,
     error: false,
+    errorMessage: null,
     retry: jest.fn(),
+    contributeSchool: mockContributeSchool,
     ...overrides,
   }
 }
@@ -47,7 +52,7 @@ describe('SchoolPicker — modal', () => {
   it('shows hint when query is empty', () => {
     render(<SchoolPicker value="" onChange={jest.fn()} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
-    expect(screen.getByText('Type at least 3 characters to search')).toBeTruthy()
+    expect(screen.getByText(/Type at least \d+ characters to search/)).toBeTruthy()
   })
 
   it('shows spinner when loading=true', () => {
@@ -78,7 +83,7 @@ describe('SchoolPicker — modal', () => {
     mockUseSchoolSearch.mockReturnValue(makeState({
       query: 'san',
       results: [
-        { name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines' },
+        { name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines', source: 'database' },
       ],
     }))
     render(<SchoolPicker value="" onChange={jest.fn()} />)
@@ -91,7 +96,7 @@ describe('SchoolPicker — modal', () => {
     const onChange = jest.fn()
     mockUseSchoolSearch.mockReturnValue(makeState({
       query: 'san',
-      results: [{ name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines' }],
+      results: [{ name: 'San Beda University', subtitle: 'Mendiola, Manila, Philippines', source: 'database' }],
     }))
     render(<SchoolPicker value="" onChange={onChange} />)
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
@@ -126,5 +131,42 @@ describe('SchoolPicker — modal', () => {
     fireEvent.press(screen.getByTestId('school-picker-trigger'))
     fireEvent.press(screen.getByText(/Use "My Custom School"/))
     expect(onChange).toHaveBeenCalledWith('My Custom School')
+  })
+
+  it('contributes manual entry to Supabase when "Use what I typed" is pressed', () => {
+    mockContributeSchool.mockClear()
+    mockUseSchoolSearch.mockReturnValue(makeState({ query: 'My Custom School' }))
+    render(<SchoolPicker value="" onChange={jest.fn()} />)
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+    fireEvent.press(screen.getByText(/Use "My Custom School"/))
+    expect(mockContributeSchool).toHaveBeenCalledWith({
+      name: 'My Custom School',
+      subtitle: '',
+      source: 'manual',
+    })
+  })
+
+  it('contributes Places picks to Supabase but NOT database picks', () => {
+    mockContributeSchool.mockClear()
+    mockUseSchoolSearch.mockReturnValue(makeState({
+      query: 'san',
+      results: [
+        { name: 'San Beda DB', subtitle: 'Manila', source: 'database' },
+        { name: 'San Beda Maps', subtitle: 'Mendiola, Manila, Philippines', source: 'places' },
+      ],
+    }))
+    render(<SchoolPicker value="" onChange={jest.fn()} />)
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+
+    fireEvent.press(screen.getByText('San Beda DB'))
+    expect(mockContributeSchool).not.toHaveBeenCalled()
+
+    fireEvent.press(screen.getByTestId('school-picker-trigger'))
+    fireEvent.press(screen.getByText('San Beda Maps'))
+    expect(mockContributeSchool).toHaveBeenCalledWith({
+      name: 'San Beda Maps',
+      subtitle: 'Mendiola, Manila, Philippines',
+      source: 'places',
+    })
   })
 })

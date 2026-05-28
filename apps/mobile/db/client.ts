@@ -154,6 +154,40 @@ const MIGRATIONS = [
     PRIMARY KEY (note_id, label_id)
   )`,
   `CREATE INDEX IF NOT EXISTS note_label_assignments_note_idx ON note_label_assignments (note_id)`,
+  `ALTER TABLE notes ADD COLUMN reminder_at INTEGER`,
+
+  // ── Flashcard full-text search (FTS5) for Kuya chat RAG ──────────────
+  // Indexes question+answer+explanation so the chat can retrieve relevant
+  // flashcards at inference time and inject them into the prompt.
+  // flashcard_id + topic_id stored UNINDEXED so retrieval avoids a JOIN.
+  `CREATE VIRTUAL TABLE IF NOT EXISTS flashcards_fts USING fts5(
+    flashcard_id UNINDEXED,
+    topic_id UNINDEXED,
+    question,
+    answer,
+    explanation,
+    tokenize = 'unicode61 remove_diacritics 2'
+  )`,
+  // Triggers keep flashcards_fts in sync with flashcards on insert/update/delete.
+  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_ai AFTER INSERT ON flashcards BEGIN
+    INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
+    VALUES (new.id, new.topic_id, new.question, new.answer, new.explanation);
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_ad AFTER DELETE ON flashcards BEGIN
+    DELETE FROM flashcards_fts WHERE flashcard_id = old.id;
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_au AFTER UPDATE ON flashcards BEGIN
+    DELETE FROM flashcards_fts WHERE flashcard_id = old.id;
+    INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
+    VALUES (new.id, new.topic_id, new.question, new.answer, new.explanation);
+  END`,
+  // One-time backfill for users who already have flashcards before this migration.
+  // INSERT-SELECT is idempotent enough for users without prior rows; for users
+  // who already populated, the unique nature of flashcard_id + the natural
+  // de-dup on re-running is handled by checking row existence first.
+  `INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
+   SELECT f.id, f.topic_id, f.question, f.answer, f.explanation FROM flashcards f
+   WHERE NOT EXISTS (SELECT 1 FROM flashcards_fts WHERE flashcard_id = f.id)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

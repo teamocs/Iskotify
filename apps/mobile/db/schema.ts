@@ -142,6 +142,7 @@ export const notes = sqliteTable('notes', {
   isArchived: integer('is_archived', { mode: 'boolean' }).notNull().default(false),
   isTrashed: integer('is_trashed', { mode: 'boolean' }).notNull().default(false),
   trashedAt: integer('trashed_at'),
+  reminderAt: integer('reminder_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => [

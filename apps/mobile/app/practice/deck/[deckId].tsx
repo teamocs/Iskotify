@@ -503,7 +503,7 @@ export default function DeckQuizScreen() {
               </View>
               <View style={s.scoreDivider} />
               <View style={s.scoreCount}>
-                <Text style={[s.scoreNum, { color: 'rgba(255,255,255,0.62)' }]}>{total}</Text>
+                <Text style={[s.scoreNum, { color: t.textSecondary }]}>{total}</Text>
                 <Text style={s.scoreLbl}>Total</Text>
               </View>
             </View>
@@ -560,7 +560,7 @@ export default function DeckQuizScreen() {
                         </Text>
                         <Text style={[
                           s.reviewOptTxt,
-                          isAns && { color: '#fff' },
+                          isAns && { color: t.textPrimary },
                           isWrongPick && { color: '#f87171', opacity: 0.85 },
                         ]} numberOfLines={3}>
                           {opt}

@@ -28,6 +28,10 @@ export interface PracticeData {
 
 // ── Pure function (exported for unit tests) ──────────────────────────────────
 
+function isCorrectAnswer(value: boolean | number): boolean {
+  return typeof value === 'boolean' ? value === true : value === 1
+}
+
 export function computeStrength(
   topicId: string,
   progress: Array<{ flashcardId: string; correct: boolean | number }>,
@@ -36,7 +40,7 @@ export function computeStrength(
   const fcIds = new Set(fcList.filter(f => f.topicId === topicId).map(f => f.id))
   const tp = progress.filter(p => fcIds.has(p.flashcardId))
   if (tp.length === 0) return 'New'
-  const correct = tp.filter(p => p.correct === true || p.correct === 1).length
+  const correct = tp.filter(p => isCorrectAnswer(p.correct)).length
   const acc = correct / tp.length
   if (acc >= 0.8) return 'Strong'
   if (acc >= 0.5) return 'Review'
@@ -112,7 +116,7 @@ export function usePracticeData(): PracticeData {
         const tp = progressList.filter(p => fcIds.has(p.flashcardId))
         const lastPracticedAt = tp.length > 0 ? Math.max(...tp.map(p => p.answeredAt)) : null
         const cardCount = fcList.filter(f => f.topicId === topic.id).length
-        const correct = tp.filter(p => p.correct === true || p.correct === 1).length
+        const correct = tp.filter(p => isCorrectAnswer(p.correct)).length
         const accuracy = tp.length > 0 ? Math.round((correct / tp.length) * 100) : null
         return {
           topic,

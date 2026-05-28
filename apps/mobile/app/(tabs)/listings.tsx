@@ -100,7 +100,8 @@ export default function ListingsScreen() {
       })
   }, [all, segment, query, regionFilter])
 
-  const { theme: t, typo } = useTheme()
+  const { theme: t, typo, isDark } = useTheme()
+  const scholarColor = isDark ? '#4ade80' : '#16a34a'
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
@@ -170,7 +171,7 @@ export default function ListingsScreen() {
 
       {/* Search */}
       <View style={s.searchRow}>
-        <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.38)' }}>🔍</Text>
+        <Text style={{ fontSize: 13, color: t.textTertiary }}>🔍</Text>
         <TextInput
           style={s.searchInput}
           value={query}
@@ -180,12 +181,12 @@ export default function ListingsScreen() {
         />
         {query ? (
           <TouchableOpacity onPress={() => setQuery('')}>
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', paddingHorizontal: 4 }}>✕</Text>
+            <Text style={{ fontSize: 12, color: t.textTertiary, paddingHorizontal: 4 }}>✕</Text>
           </TouchableOpacity>
         ) : (
           <>
             <View style={s.searchDivider} />
-            <Lineicons icon={Funnel1Outlined} size={13} color="rgba(255,255,255,0.62)" />
+            <Lineicons icon={Funnel1Outlined} size={13} color={t.textTertiary} />
           </>
         )}
       </View>
@@ -248,14 +249,14 @@ export default function ListingsScreen() {
                 <Lineicons
                   icon={exam ? GraduationCap1Outlined : SparkOutlined}
                   size={16}
-                  color={exam ? t.accentText : '#4ade80'}
+                  color={exam ? t.accentText : scholarColor}
                 />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={s.row1}>
                   <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
                   <View style={[s.typeBadge, exam ? s.examBadge : s.scholarBadge]}>
-                    <Text style={[s.typeTxt, { color: exam ? t.accentText : '#4ade80' }]}>
+                    <Text style={[s.typeTxt, { color: exam ? t.accentText : scholarColor }]}>
                       {exam ? 'Exam' : 'Scholar'}
                     </Text>
                   </View>

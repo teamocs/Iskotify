@@ -3,7 +3,13 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import type { DrizzleClient } from '../../db/client'
 import type { HomeStats } from '../../hooks/useHomeStats'
-import { buildProgressContext, loadStudentIdentity } from '../chatContext'
+import {
+  buildProgressContext,
+  loadStudentIdentity,
+  formatRetrievedFlashcards,
+  buildRetrievedFlashcards,
+} from '../chatContext'
+import type { RetrievedFlashcard } from '../flashcardRetriever'
 
 function makeDb(): DrizzleClient {
   const raw = new Database(':memory:')
@@ -55,6 +61,7 @@ const STATS_BASE: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  noteReminders: [],
   refresh: async () => {},
 }
 
@@ -154,5 +161,53 @@ describe('buildProgressContext', () => {
     expect(out).not.toContain('n/a')
     expect(out).not.toContain('Today:')
     expect(out).toContain('5-day streak')  // streak still emitted
+  })
+})
+
+describe('formatRetrievedFlashcards', () => {
+  it('returns null when there are no retrieved cards', () => {
+    expect(formatRetrievedFlashcards([])).toBeNull()
+  })
+
+  it('formats each card as Q/A/Why block joined by --- separator', () => {
+    const cards: RetrievedFlashcard[] = [
+      { flashcardId: 'f1', topicId: 't1', question: 'What is photosynthesis?', answer: 'Plants make food from sunlight', explanation: 'Uses chlorophyll', score: -1.5 },
+      { flashcardId: 'f2', topicId: 't1', question: 'What is respiration?', answer: 'How cells make energy', explanation: '', score: -1.2 },
+    ]
+    const out = formatRetrievedFlashcards(cards)!
+    expect(out).toContain('Q: What is photosynthesis?')
+    expect(out).toContain('A: Plants make food from sunlight')
+    expect(out).toContain('Why: Uses chlorophyll')
+    expect(out).toContain('---')
+    expect(out).toContain('Q: What is respiration?')
+    // Empty explanation should NOT produce a "Why:" line for that card
+    const respirationBlock = out.split('---').find(b => b.includes('respiration'))!
+    expect(respirationBlock).not.toContain('Why:')
+  })
+
+  it('truncates over-long fields with ellipsis to bound token cost', () => {
+    const longText = 'word '.repeat(100).trim()
+    const cards: RetrievedFlashcard[] = [
+      { flashcardId: 'f1', topicId: 't1', question: longText, answer: 'A', explanation: '', score: -1 },
+    ]
+    const out = formatRetrievedFlashcards(cards)!
+    expect(out).toMatch(/Q: .{1,140}…/)
+  })
+
+  it('collapses internal whitespace before truncating (no jagged formatting)', () => {
+    const cards: RetrievedFlashcard[] = [
+      { flashcardId: 'f1', topicId: 't1', question: 'Line 1\n\n\n\nLine 2', answer: 'A', explanation: '', score: -1 },
+    ]
+    const out = formatRetrievedFlashcards(cards)!
+    expect(out).toContain('Q: Line 1 Line 2')
+  })
+})
+
+describe('buildRetrievedFlashcards', () => {
+  it('returns null when no flashcards match (graceful empty)', async () => {
+    const db = makeDb()
+    // makeDb does not create flashcards/flashcards_fts — searchFlashcards
+    // catches the SQL error and returns []; format then returns null.
+    expect(await buildRetrievedFlashcards(db, 'anything')).toBeNull()
   })
 })

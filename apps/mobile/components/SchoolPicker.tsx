@@ -4,7 +4,7 @@ import {
   ActivityIndicator, StyleSheet,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { useSchoolSearch } from '../hooks/useSchoolSearch'
+import { useSchoolSearch, MIN_QUERY_LENGTH } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
 import type { SchoolResult } from '../hooks/useSchoolSearch'
 
@@ -15,8 +15,8 @@ interface SchoolPickerProps {
 
 export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
   const [modalVisible, setModalVisible] = useState(false)
-  const { query, setQuery, results, loading, error, errorMessage, retry } = useSchoolSearch()
-  const { theme: t, typo } = useTheme()
+  const { query, setQuery, results, loading, error, errorMessage, retry, contributeSchool } = useSchoolSearch()
+  const { theme: t, typo, isDark } = useTheme()
 
   const s = useMemo(() => StyleSheet.create({
     input: {
@@ -39,23 +39,73 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       backgroundColor: t.bg,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      maxHeight: '82%',
-      paddingTop: 16,
+      height: '82%',
+      paddingTop: 12,
       paddingHorizontal: 16,
       paddingBottom: 32,
     },
+    // Bottom sheet handle
+    handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, flex: 1 },
     closeText: { fontFamily: 'Lexend_400Regular', fontSize: 18, color: t.textSecondary, padding: 4 },
     searchInput: { marginBottom: 10 },
-    contentArea: { flex: 1 },
-    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    contentArea: { flex: 1, minHeight: 200 },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
     hintText: {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.sm,
       color: t.textTertiary,
       textAlign: 'center',
       paddingTop: 40,
+      paddingHorizontal: 8,
+    },
+    sourceHeader: {
+      fontFamily: 'Lexend_600SemiBold',
+      fontSize: 10,
+      color: t.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      marginBottom: 4,
+      marginTop: 2,
+    },
+    listRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.surfaceSubtle,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    listTextWrap: { flex: 1 },
+    listName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary },
+    listSubtitle: {
+      fontFamily: 'Lexend_400Regular',
+      fontSize: typo.sm,
+      color: t.textSecondary,
+      marginTop: 2,
+    },
+    sourceBadge: {
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      flexShrink: 0,
+    },
+    sourceBadgeDb: {
+      backgroundColor: isDark ? 'rgba(34,197,94,0.15)' : 'rgba(22,163,74,0.12)',
+    },
+    sourceBadgeDbTxt: {
+      fontFamily: 'Lexend_600SemiBold',
+      fontSize: 9,
+      color: isDark ? '#4ade80' : '#16a34a',
+    },
+    sourceBadgePlaces: {
+      backgroundColor: t.accentSurface,
+    },
+    sourceBadgePlacesTxt: {
+      fontFamily: 'Lexend_600SemiBold',
+      fontSize: 9,
+      color: t.accentText,
     },
     errorText: {
       fontFamily: 'Lexend_400Regular',
@@ -73,18 +123,6 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       marginTop: 6,
     },
     retryBtn: { marginTop: 12, alignItems: 'center' },
-    listRow: {
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: t.surfaceSubtle,
-    },
-    listName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary },
-    listSubtitle: {
-      fontFamily: 'Lexend_400Regular',
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      marginTop: 2,
-    },
     fallbackRow: {
       paddingVertical: 14,
       borderTopWidth: 1,
@@ -98,7 +136,7 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
       color: t.accentText,
       marginTop: 2,
     },
-  }), [t, typo])
+  }), [t, typo, isDark])
 
   const closeModal = useCallback(() => {
     setQuery('')
@@ -109,29 +147,48 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
     onChange(r.name)
     setQuery('')
     setModalVisible(false)
-  }, [onChange, setQuery])
+    // Backfill user-selected Places results into the schools directory so
+    // future users searching the same school find it in the DB layer.
+    if (r.source === 'places') void contributeSchool(r)
+  }, [onChange, setQuery, contributeSchool])
 
   const selectTyped = useCallback(() => {
-    onChange(query)
+    const name = query.trim()
+    if (!name) return
+    onChange(name)
     setQuery('')
     setModalVisible(false)
-  }, [onChange, query, setQuery])
+    void contributeSchool({ name, subtitle: '', source: 'manual' })
+  }, [onChange, query, setQuery, contributeSchool])
 
   const renderItem = useCallback(({ item }: { item: SchoolResult }) => (
     <TouchableOpacity onPress={() => selectResult(item)} style={s.listRow}>
-      <Text style={s.listName}>{item.name}</Text>
-      <Text style={s.listSubtitle}>{item.subtitle}</Text>
+      <View style={s.listTextWrap}>
+        <Text style={s.listName}>{item.name}</Text>
+        {item.subtitle ? <Text style={s.listSubtitle}>{item.subtitle}</Text> : null}
+      </View>
+      {item.source === 'database' && (
+        <View style={[s.sourceBadge, s.sourceBadgeDb]}>
+          <Text style={s.sourceBadgeDbTxt}>DB</Text>
+        </View>
+      )}
+      {item.source === 'places' && (
+        <View style={[s.sourceBadge, s.sourceBadgePlaces]}>
+          <Text style={s.sourceBadgePlacesTxt}>Maps</Text>
+        </View>
+      )}
     </TouchableOpacity>
-  ), [selectResult])
+  ), [selectResult, s])
 
   function renderBody() {
-    if (query.length < 3) {
-      return <Text style={s.hintText}>Type at least 3 characters to search</Text>
+    if (query.trim().length < MIN_QUERY_LENGTH) {
+      return <Text style={s.hintText}>Type at least {MIN_QUERY_LENGTH} characters to search</Text>
     }
     if (loading) {
       return (
         <View style={s.loadingContainer}>
           <ActivityIndicator testID="school-search-loading" color={t.accentText} />
+          <Text style={[s.hintText, { paddingTop: 12 }]}>Searching...</Text>
         </View>
       )
     }
@@ -148,13 +205,18 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
         </View>
       )
     }
+
+    if (results.length === 0) {
+      return <Text style={s.hintText}>No schools found.</Text>
+    }
+
     return (
       <FlatList
         data={results}
-        keyExtractor={r => `${r.name}-${r.subtitle}`}
+        keyExtractor={(r: SchoolResult, i) => `${r.source}-${r.name}-${i}`}
         keyboardShouldPersistTaps="handled"
         renderItem={renderItem}
-        ListEmptyComponent={<Text style={s.hintText}>No schools found.</Text>}
+        showsVerticalScrollIndicator={false}
       />
     )
   }
@@ -190,6 +252,9 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
             style={{ width: '100%' }}
           >
           <View style={s.sheet}>
+            {/* iOS-style drag handle */}
+            <View style={s.handle} />
+
             <View style={s.sheetHeader}>
               <Text style={s.sheetTitle}>School / University</Text>
               <TouchableOpacity onPress={closeModal} accessibilityLabel="Close">

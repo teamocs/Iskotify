@@ -26,6 +26,7 @@ export interface Note {
   isArchived: boolean
   isTrashed: boolean
   trashedAt: number | null
+  reminderAt: number | null
   createdAt: number
   updatedAt: number
 }
@@ -75,6 +76,7 @@ function mapRow(r: typeof notesTable.$inferSelect): Note {
     isArchived: Boolean(r.isArchived),
     isTrashed: Boolean(r.isTrashed),
     trashedAt: r.trashedAt ?? null,
+    reminderAt: r.reminderAt ?? null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }
@@ -91,6 +93,7 @@ export interface UseNotes {
   permanentlyDeleteNote: (id: string) => Promise<void>
   emptyTrash: () => Promise<void>
   pruneOldTrashedNotes: () => Promise<void>
+  setReminder: (id: string, reminderAt: number | null) => Promise<void>
 }
 
 export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): UseNotes {
@@ -212,6 +215,15 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
       .where(and(eq(notesTable.isTrashed, true), lt(notesTable.trashedAt, cutoff)))
   }, [db])
 
+  const setReminder = useCallback(async (id: string, reminderAt: number | null) => {
+    await db.update(notesTable)
+      .set({ reminderAt, updatedAt: Date.now() })
+      .where(eq(notesTable.id, id))
+    setNotesList(prev => prev.map(n =>
+      n.id === id ? { ...n, reminderAt } : n
+    ))
+  }, [db])
+
   return {
     notes: notesList,
     createNote,
@@ -223,6 +235,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     permanentlyDeleteNote,
     emptyTrash,
     pruneOldTrashedNotes,
+    setReminder,
   }
 }
 

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
 import { userSettings } from '../db/schema'
+import { searchFlashcards, type RetrievedFlashcard } from './flashcardRetriever'
 
 /**
  * One-line student identity for chat prompts. Used as the first line of
@@ -72,4 +73,39 @@ export async function buildProgressContext(
   }
 
   return lines.join('\n')
+}
+
+// Keep individual fields short so 3 cards fit well under our token budget
+// (target: <200 tokens for the whole block).
+const MAX_FIELD_LEN = 140
+
+function truncate(s: string, max = MAX_FIELD_LEN): string {
+  const trimmed = s.trim().replace(/\s+/g, ' ')
+  if (trimmed.length <= max) return trimmed
+  return trimmed.slice(0, max - 1).trimEnd() + '…'
+}
+
+export function formatRetrievedFlashcards(cards: RetrievedFlashcard[]): string | null {
+  if (cards.length === 0) return null
+  const blocks = cards.map(c => {
+    const lines = [`Q: ${truncate(c.question)}`, `A: ${truncate(c.answer)}`]
+    const explanation = truncate(c.explanation)
+    if (explanation) lines.push(`Why: ${explanation}`)
+    return lines.join('\n')
+  })
+  return blocks.join('\n---\n')
+}
+
+/**
+ * Retrieve top-K flashcards relevant to the user's question and format them
+ * for prompt injection. Returns null when nothing matches (so callers can
+ * conditionally skip the [RELEVANT FLASHCARDS] block in the prompt).
+ */
+export async function buildRetrievedFlashcards(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<string | null> {
+  const cards = await searchFlashcards(db, question, limit)
+  return formatRetrievedFlashcards(cards)
 }

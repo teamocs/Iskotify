@@ -23,9 +23,9 @@ import { AiCoachProvider } from '../providers/AiCoachProvider'
 import { syncOnLaunch } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
-import { userSettings } from '../db/schema'
-import { eq } from 'drizzle-orm'
-import { requestNotificationPermissions } from '../services/notifications'
+import { notes as notesTable, userSettings, focusListings as focusListingsTable } from '../db/schema'
+import { eq, and, gt } from 'drizzle-orm'
+import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 import '../global.css'
 
 export default function RootLayout() {
@@ -99,11 +99,15 @@ function AppInit({ onReady }: { onReady: () => void }) {
   const initialize = useCallback(async () => {
     // Navigate based on local DB — instant, no network required
     try {
-      const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+      const [rows, focusRows] = await Promise.all([
+        db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+        db.select().from(focusListingsTable).limit(1),
+      ])
       const settings = rows[0]
       if (!settings?.fullName) {
         router.replace('/landing')
-      } else if (!settings?.selectedListingSlug) {
+      } else if (!settings?.selectedListingSlug && focusRows.length === 0) {
+        // No listing chosen yet — send to onboarding step 2
         router.replace('/onboarding')
       }
       // else: returning user — Stack shows tabs automatically
@@ -116,6 +120,28 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
     // Prune notes older than 7 days in trash — fire and forget
     pruneOldTrashedNotesDb(db).catch(e => console.warn('[layout] prune trash:', e))
+
+    // Re-schedule any note reminders lost after a device reboot — fire and forget
+    ;(async () => {
+      try {
+        const rows = await db.select({
+          id: notesTable.id,
+          title: notesTable.title,
+          reminderAt: notesTable.reminderAt,
+        }).from(notesTable).where(and(
+          eq(notesTable.isArchived, false),
+          eq(notesTable.isTrashed, false),
+          gt(notesTable.reminderAt, Date.now()),
+        ))
+        for (const row of rows) {
+          if (row.reminderAt) {
+            await scheduleNoteReminder(row.id, row.title, new Date(row.reminderAt))
+          }
+        }
+      } catch (e) {
+        console.warn('[layout] reschedule note reminders:', e)
+      }
+    })()
 
     // Background sync — fire and forget, never blocks navigation.
     // After sync completes, kick off AI enhancement in the background (fire-and-forget).

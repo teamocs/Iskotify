@@ -1,13 +1,36 @@
 import { useState, useMemo, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Pressable, Alert,
+  StyleSheet, Pressable, Alert, Modal,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import {
+  BoxArchive1Outlined,
+  Trash3Outlined,
+  Bookmark1Outlined,
+  MapPin5Outlined,
+  Pencil1Outlined,
+  CheckSquare2Outlined,
+  XmarkOutlined,
+  Bell1Outlined,
+} from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { useNotes, NOTE_COLORS, type Note, type NoteType } from '../../hooks/useNotes'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
+
+function formatReminderShort(ms: number): string {
+  const d = new Date(ms)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1)
+  const isTomorrow = d.toDateString() === tomorrow.toDateString()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  if (isToday) return `Today ${time}`
+  if (isTomorrow) return `Tomorrow ${time}`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`
+}
 
 function NoteCard({
   note,
@@ -24,6 +47,8 @@ function NoteCard({
   const bg = note.color ? NOTE_COLORS[note.color] : t.surface
   const textColor = note.color ? '#2d0a0a' : t.textPrimary
   const subColor = note.color ? 'rgba(45,10,10,0.6)' : t.textSecondary
+  const now = Date.now()
+  const hasReminder = note.reminderAt != null && note.reminderAt > now
 
   return (
     <Pressable
@@ -41,7 +66,10 @@ function NoteCard({
       ]}
     >
       {note.isPinned && (
-        <Text style={{ fontSize: 10, color: subColor, marginBottom: 4 }}>📌 Pinned</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+          <Lineicons icon={MapPin5Outlined} size={10} color={subColor} />
+          <Text style={{ fontSize: 10, color: subColor }}>Pinned</Text>
+        </View>
       )}
       {note.title.length > 0 && (
         <Text
@@ -78,6 +106,14 @@ function NoteCard({
           )
         } catch { return null }
       })()}
+      {hasReminder && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: note.color ? 'rgba(0,0,0,0.08)' : t.surfaceSubtle }}>
+          <Lineicons icon={Bell1Outlined} size={10} color={subColor} />
+          <Text style={{ fontSize: 10, color: subColor, fontFamily: 'Lexend_400Regular' }}>
+            {formatReminderShort(note.reminderAt!)}
+          </Text>
+        </View>
+      )}
     </Pressable>
   )
 }
@@ -88,7 +124,7 @@ export default function NotesScreen() {
   const { notes, createNote, archiveNote, deleteNote, updateNote } = useNotes('active')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [fabOpen, setFabOpen] = useState(false)
+  const [fabSheetOpen, setFabSheetOpen] = useState(false)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return notes as Note[]
@@ -102,7 +138,7 @@ export default function NotesScreen() {
   const others = filtered.filter(n => !n.isPinned)
 
   const handleCreate = useCallback(async (type: NoteType) => {
-    setFabOpen(false)
+    setFabSheetOpen(false)
     const id = await createNote(type)
     router.push(`/notes/${id}` as never)
   }, [createNote])
@@ -154,9 +190,8 @@ export default function NotesScreen() {
     header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8 },
     titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
     title: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    overflowBtn: { flexDirection: 'row', gap: 8 },
-    menuBtn: { width: 36, height: 36, backgroundColor: t.surface2, borderRadius: 12, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    menuBtnTxt: { fontSize: 16 },
+    headerBtns: { flexDirection: 'row', gap: 6 },
+    iconBtn: { width: 36, height: 36, backgroundColor: t.surface2, borderRadius: 12, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
     searchBar: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
     content: { paddingHorizontal: 12, paddingBottom: 100 },
     sectionHeader: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', paddingHorizontal: 4, paddingVertical: 8 },
@@ -166,12 +201,22 @@ export default function NotesScreen() {
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
     fab: { position: 'absolute', bottom: insets.bottom + 40, right: 24, width: 64, height: 64, borderRadius: 32, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
     fabTxt: { color: '#fff', fontSize: 32, lineHeight: 36, marginTop: -2 },
-    fabSub: { position: 'absolute', bottom: insets.bottom + 40 + 72, right: 24, gap: 10 },
-    fabSubBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 28, paddingHorizontal: 20, paddingVertical: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
-    fabSubTxt: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: Math.max(16, insets.bottom + 10), gap: 16 },
+    // Selection bar
+    selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: Math.max(16, insets.bottom + 10), gap: 8 },
     selCount: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    selAction: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', paddingVertical: 6, paddingHorizontal: 10 },
+    selBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
+    selBtnDanger: { borderColor: 'rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)' },
+    // Bottom sheet
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+    sheet: { backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Math.max(32, insets.bottom + 16), paddingTop: 12 },
+    sheetHandle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+    sheetTitle: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', paddingHorizontal: 20, marginBottom: 8 },
+    sheetOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle },
+    sheetOptionLabel: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    sheetOptionSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    sheetIconWrap: { width: 42, height: 42, borderRadius: 13, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
+    cancelBtn: { marginHorizontal: 16, marginTop: 10, paddingVertical: 14, borderRadius: 16, backgroundColor: t.surface2, alignItems: 'center', borderWidth: 1, borderColor: t.border },
+    cancelTxt: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
   }), [t, typo, insets])
 
   const renderGrid = (items: Note[]) => (
@@ -197,15 +242,15 @@ export default function NotesScreen() {
         <View style={s.header}>
           <View style={s.titleRow}>
             <Text style={s.title}>Notes</Text>
-            <View style={s.overflowBtn}>
-              <TouchableOpacity style={s.menuBtn} onPress={() => router.push('/notes/archive' as never)}>
-                <Text style={s.menuBtnTxt}>📦</Text>
+            <View style={s.headerBtns}>
+              <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/notes/archive' as never)}>
+                <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={s.menuBtn} onPress={() => router.push('/notes/trash' as never)}>
-                <Text style={s.menuBtnTxt}>🗑</Text>
+              <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/notes/trash' as never)}>
+                <Lineicons icon={Trash3Outlined} size={18} color={t.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={s.menuBtn} onPress={() => router.push('/notes/labels' as never)}>
-                <Text style={s.menuBtnTxt}>🏷</Text>
+              <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/notes/labels' as never)}>
+                <Lineicons icon={Bookmark1Outlined} size={18} color={t.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -243,45 +288,72 @@ export default function NotesScreen() {
 
         {/* FAB */}
         {selected.size === 0 && (
-          <>
-            {fabOpen && (
-              <View style={s.fabSub}>
-                <TouchableOpacity style={s.fabSubBtn} onPress={() => handleCreate('text')}>
-                  <Text style={s.fabSubTxt}>📝 Text note</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.fabSubBtn} onPress={() => handleCreate('checklist')}>
-                  <Text style={s.fabSubTxt}>☑ Checklist</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <TouchableOpacity
-              style={s.fab}
-              onPress={() => setFabOpen(o => !o)}
-              onLongPress={() => handleCreate('text')}
-            >
-              <Text style={s.fabTxt}>{fabOpen ? '✕' : '+'}</Text>
-            </TouchableOpacity>
-          </>
+          <TouchableOpacity
+            style={s.fab}
+            onPress={() => setFabSheetOpen(true)}
+            onLongPress={() => void handleCreate('text')}
+          >
+            <Text style={s.fabTxt}>+</Text>
+          </TouchableOpacity>
         )}
 
         {/* Selection action bar */}
         {selected.size > 0 && (
           <View style={s.selBar}>
             <Text style={s.selCount}>{selected.size} selected</Text>
-            <TouchableOpacity onPress={bulkPin}>
-              <Text style={s.selAction}>📌 Pin</Text>
+            <TouchableOpacity style={s.selBtn} onPress={bulkPin}>
+              <Lineicons icon={MapPin5Outlined} size={18} color={t.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={bulkArchive}>
-              <Text style={s.selAction}>📦 Archive</Text>
+            <TouchableOpacity style={s.selBtn} onPress={bulkArchive}>
+              <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={bulkDelete}>
-              <Text style={s.selAction}>🗑 Trash</Text>
+            <TouchableOpacity style={[s.selBtn, s.selBtnDanger]} onPress={bulkDelete}>
+              <Lineicons icon={Trash3Outlined} size={18} color="#f87171" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={clearSelection}>
-              <Text style={s.selAction}>✕</Text>
+            <TouchableOpacity style={s.selBtn} onPress={clearSelection}>
+              <Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} />
             </TouchableOpacity>
           </View>
         )}
+
+        {/* iOS-style FAB bottom sheet */}
+        <Modal
+          visible={fabSheetOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setFabSheetOpen(false)}
+          statusBarTranslucent
+        >
+          <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setFabSheetOpen(false)} />
+          <View style={s.sheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>New Note</Text>
+
+            <TouchableOpacity style={s.sheetOption} onPress={() => void handleCreate('text')}>
+              <View style={s.sheetIconWrap}>
+                <Lineicons icon={Pencil1Outlined} size={20} color="#800000" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sheetOptionLabel}>Text Note</Text>
+                <Text style={s.sheetOptionSub}>Write freely in a rich text note</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[s.sheetOption, { borderBottomWidth: 0 }]} onPress={() => void handleCreate('checklist')}>
+              <View style={s.sheetIconWrap}>
+                <Lineicons icon={CheckSquare2Outlined} size={20} color="#800000" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sheetOptionLabel}>Checklist</Text>
+                <Text style={s.sheetOptionSub}>Create a to-do or checklist note</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.cancelBtn} onPress={() => setFabSheetOpen(false)}>
+              <Text style={s.cancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </SafeAreaView>
     </EdgeSwipeNavigator>
   )

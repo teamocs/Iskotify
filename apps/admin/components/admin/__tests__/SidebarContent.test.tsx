@@ -23,7 +23,14 @@ describe('SidebarContent', () => {
     )
     expect(html).toContain('LISTINGS')
     expect(html).toContain('SYNC')
-    expect(html).toContain('FLASHCARDS')
+    expect(html).toContain('KNOWLEDGEBASE')
+  })
+
+  it('renames the primary flashcards item to "Knowledgebase"', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SidebarContent, { userEmail: 'admin@test.com' })
+    )
+    expect(html).toContain('Knowledgebase')
   })
 
   it('renders user email', () => {

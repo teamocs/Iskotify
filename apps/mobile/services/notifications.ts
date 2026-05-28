@@ -33,8 +33,51 @@ export interface NotificationListing {
   deadline: number | null
 }
 
-const OUR_PREFIXES = ['exam-7d-', 'exam-3d-', 'exam-1d-']
+const OUR_PREFIXES = ['exam-7d-', 'exam-3d-', 'exam-1d-', 'note-reminder-']
 const OUR_IDS     = ['daily-practice', 'weekly-weak-areas']
+
+// ── Note reminder helpers ─────────────────────────────────────────────────────
+
+/**
+ * Schedule a push notification for a note reminder.
+ * Safe to call multiple times — cancels any existing reminder for the same
+ * note first, so rescheduling is idempotent.
+ */
+export async function scheduleNoteReminder(
+  noteId: string,
+  noteTitle: string,
+  at: Date,
+): Promise<void> {
+  const N = getN()
+  if (!N) return
+  // Cancel any existing reminder for this note first
+  await N.cancelScheduledNotificationAsync(`note-reminder-${noteId}`).catch(() => {})
+  // Only schedule if the date is in the future
+  if (at.getTime() <= Date.now()) return
+  await N.scheduleNotificationAsync({
+    identifier: `note-reminder-${noteId}`,
+    content: {
+      title: '🔔 Note Reminder',
+      body: noteTitle.trim() || 'You have a note reminder.',
+      sound: true,
+      data: { noteId },
+    },
+    trigger: {
+      type: N.SchedulableTriggerInputTypes.DATE,
+      date: at,
+    },
+  })
+}
+
+/**
+ * Cancel a previously scheduled note reminder.
+ */
+export async function cancelNoteReminder(noteId: string): Promise<void> {
+  const N = getN()
+  if (!N) return
+  await N.cancelScheduledNotificationAsync(`note-reminder-${noteId}`).catch(() => {})
+}
+
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'web') return false

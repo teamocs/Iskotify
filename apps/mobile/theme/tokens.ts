@@ -17,17 +17,17 @@ export const darkTheme = {
 export const lightTheme = {
   bg:            '#fdf4f4',
   surface:       '#ffffff',
-  surface2:      'rgba(128,0,0,0.05)',
-  border:        'rgba(128,0,0,0.10)',
+  surface2:      'rgba(128,0,0,0.06)',
+  border:        'rgba(128,0,0,0.12)',
   textPrimary:   '#2d0a0a',
-  textSecondary: '#7a4444',
-  textTertiary:  'rgba(45,10,10,0.40)',
+  textSecondary: '#6b3737',
+  textTertiary:  'rgba(45,10,10,0.52)',
   accent:        '#800000',
   accentText:    '#9b1c1c',
   accentSurface: 'rgba(128,0,0,0.10)',
   tabBar:        'rgba(253,244,244,0.92)',
-  divider:       'rgba(128,0,0,0.15)',
-  surfaceSubtle: 'rgba(128,0,0,0.03)',
+  divider:       'rgba(128,0,0,0.12)',
+  surfaceSubtle: 'rgba(128,0,0,0.05)',
 }
 
 export const statusColors = {

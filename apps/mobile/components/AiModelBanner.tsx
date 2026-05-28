@@ -6,7 +6,7 @@ import { useModelDownload } from '../hooks/useModelDownload'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { useTheme } from '../theme/ThemeContext'
 
-const MODEL_SIZE_LABEL = '~750 MB'
+const MODEL_SIZE_LABEL = '~800 MB'
 
 function formatMB(bytes: number): string {
   if (bytes <= 0) return '0 MB'

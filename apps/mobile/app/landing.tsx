@@ -8,7 +8,8 @@ import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
 import { pullUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
-import { userSettings } from '../db/schema'
+import { eq } from 'drizzle-orm'
+import { userSettings, focusListings } from '../db/schema'
 
 export default function LandingScreen() {
   const db = useDb()
@@ -67,6 +68,19 @@ export default function LandingScreen() {
                     },
                   })
                 await pullUserData(db)
+
+                // Mirror callback.tsx logic: skip onboarding for returning users
+                const [settingsRows, focusRows] = await Promise.all([
+                  db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+                  db.select().from(focusListings).limit(1),
+                ])
+                const hasProfile = !!(settingsRows[0]?.fullName?.trim())
+                const hasFocus = focusRows.length > 0
+
+                if (hasProfile && hasFocus) {
+                  router.replace('/(tabs)')  // returning user — data fully restored
+                  return
+                }
               }
               router.replace('/onboarding')
             }

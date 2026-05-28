@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
-import { useHomeStats, type FocusedListing } from '../../hooks/useHomeStats'
+import { useHomeStats, type FocusedListing, type NoteReminder } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
@@ -250,9 +250,9 @@ function NotificationModal({
           <Switch
             value={enabled}
             onValueChange={onToggle}
-            trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(252,165,165,0.60)' }}
-            thumbColor={enabled ? t.accentText : 'rgba(255,255,255,0.55)'}
-            ios_backgroundColor="rgba(255,255,255,0.15)"
+            trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+            thumbColor={enabled ? t.accentText : t.textTertiary}
+            ios_backgroundColor={t.border}
           />
         </View>
 
@@ -282,7 +282,7 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings, refresh } = useHomeStats()
+  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings, noteReminders, refresh } = useHomeStats()
   const { sessionCount, streak } = useAnalytics('overall')
 
   const [refreshing, setRefreshing] = useState(false)
@@ -389,17 +389,31 @@ export default function HomeScreen() {
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
   const now = Date.now()
-  const upcomingDates = focusedListings
-    .map(l => {
-      const keyDate = l.type === 'exam'
-        ? (l.examDate ?? l.deadline)
-        : (l.deadline ?? l.examDate)
-      const label = l.type === 'exam' ? 'Exam' : 'Deadline'
-      return { ...l, keyDate, label }
-    })
+  const upcomingDates = [
+    ...focusedListings
+      .map(l => {
+        const keyDate = l.type === 'exam'
+          ? (l.examDate ?? l.deadline)
+          : (l.deadline ?? l.examDate)
+        const label = l.type === 'exam' ? 'Exam' : 'Deadline'
+        return { ...l, keyDate, label, entryType: 'listing' as const }
+      })
+      .filter(l => l.keyDate != null && l.keyDate >= now),
+    ...noteReminders.map(r => ({
+      slug: r.noteId,
+      priority: 0,
+      title: r.noteTitle || 'Untitled note',
+      type: 'reminder',
+      examDate: null,
+      deadline: null,
+      keyDate: r.reminderAt,
+      label: 'Reminder',
+      entryType: 'reminder' as const,
+    })),
+  ]
     .filter(l => l.keyDate != null && l.keyDate >= now)
     .sort((a, b) => (a.keyDate ?? 0) - (b.keyDate ?? 0))
-    .slice(0, 4)
+    .slice(0, 5)
 
   return (
     <SafeAreaView style={s.root}>
@@ -574,17 +588,21 @@ export default function HomeScreen() {
               {upcomingDates.map(item => {
                 const d = daysUntil(item.keyDate!)
                 const dayColor = d < 14 ? '#f87171' : d < 30 ? '#fbbf24' : '#4ade80'
+                const isReminder = item.entryType === 'reminder'
                 return (
                   <View key={item.slug} style={s.upcomingCard}>
                     <View style={s.upcomingIcon}>
-                      <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
+                      {isReminder
+                        ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
+                        : <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
+                      }
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={s.upcomingTitle} numberOfLines={1}>{item.title}</Text>
                       <Text style={s.upcomingMeta}>{item.label} · {formatShortDate(item.keyDate!)}</Text>
                     </View>
                     <View style={[s.upcomingBadge, { backgroundColor: `${dayColor}18`, borderColor: `${dayColor}40` }]}>
-                      <Text style={[s.upcomingDays, { color: dayColor }]}>{d}d</Text>
+                      <Text style={[s.upcomingDays, { color: dayColor }]}>{d < 1 ? 'Today' : `${d}d`}</Text>
                     </View>
                   </View>
                 )

@@ -44,6 +44,7 @@ jest.mock('../../services/llm', () => ({
 
 jest.mock('../../services/chatContext', () => ({
   buildProgressContext: jest.fn().mockResolvedValue('ctx'),
+  buildRetrievedFlashcards: jest.fn().mockResolvedValue(null),
 }))
 
 import { useKuyaChat } from '../useKuyaChat'
@@ -59,11 +60,10 @@ describe('useKuyaChat', () => {
     mockOrderBy.mockResolvedValue([])
   })
 
-  it('initializes with empty messages, progress mode, and not streaming', async () => {
+  it('initializes with empty messages and not streaming', async () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     expect(result.current.messages).toEqual([])
-    expect(result.current.mode).toBe('progress')
     expect(result.current.isStreaming).toBe(false)
   })
 
@@ -115,11 +115,36 @@ describe('useKuyaChat', () => {
     expect(mockStream).not.toHaveBeenCalled()
   })
 
-  it('setMode changes the mode when not streaming', async () => {
+  it('auto-detects progress mode for "About me" questions and saves them with mode=progress', async () => {
+    mockStream.mockImplementation(async () => 'doing well')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
-    act(() => { result.current.setMode('topic') })
-    expect(result.current.mode).toBe('topic')
+    await act(async () => {
+      result.current.send('How am I doing this week?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    // The DB save records the detected mode so chat_messages reflects it forever.
+    const insertCalls = mockInsert.mock.calls
+    expect(insertCalls.length).toBeGreaterThan(0)
+    // mockValues receives the actual row payload
+    const valuesCalls = mockValues.mock.calls
+    const userInsert = valuesCalls.find(c => (c[0] as { role: string }).role === 'user')
+    expect(userInsert).toBeDefined()
+    expect((userInsert![0] as { mode: string }).mode).toBe('progress')
+  })
+
+  it('auto-detects topic mode for knowledge questions', async () => {
+    mockStream.mockImplementation(async () => 'photo is...')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('Tell me about photosynthesis')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const valuesCalls = mockValues.mock.calls
+    const userInsert = valuesCalls.find(c => (c[0] as { role: string }).role === 'user')
+    expect(userInsert).toBeDefined()
+    expect((userInsert![0] as { mode: string }).mode).toBe('topic')
   })
 
   it('abort can be called safely when nothing is streaming', async () => {
@@ -284,6 +309,38 @@ describe('useKuyaChat', () => {
     await act(async () => { await result.current.clearHistory() })
     expect(mockDelete).toHaveBeenCalled()
     expect(result.current.messages).toHaveLength(0)
+  })
+
+  it('passes higher nPredict + lower temperature to streamChatInference for math queries', async () => {
+    mockStream.mockImplementation(async () => 'Step 1: ...')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('Solve 2x + 6 = 14')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    expect(mockStream).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Object),
+      expect.objectContaining({ nPredict: 250, temperature: 0.05 }),
+    )
+  })
+
+  it('passes undefined sampler options for non-math queries (defaults preserved)', async () => {
+    mockStream.mockImplementation(async () => 'response')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('Tell me about photosynthesis')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    expect(mockStream).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+      expect.any(Object),
+      undefined,
+    )
   })
 
   it('passes existing messages as history to the LLM prompt', async () => {

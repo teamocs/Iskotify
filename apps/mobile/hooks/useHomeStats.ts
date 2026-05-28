@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { eq, asc } from 'drizzle-orm'
+import { eq, asc, gt, and } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
-import { userSettings, listings as listingsTable, userProgress, flashcards, topics, focusListings } from '../db/schema'
+import { userSettings, listings as listingsTable, userProgress, flashcards, topics, focusListings, notes as notesTable } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
 
 export interface WeakTopic {
@@ -20,6 +20,12 @@ export interface FocusedListing {
   deadline: number | null
 }
 
+export interface NoteReminder {
+  noteId: string
+  noteTitle: string
+  reminderAt: number
+}
+
 export interface HomeStats {
   listing: { title: string; examDate: number | null } | null
   daysLeft: number | null
@@ -31,6 +37,7 @@ export interface HomeStats {
   importantDayIndices: number[]
   practiceDayIndices: number[]
   focusedListings: FocusedListing[]
+  noteReminders: NoteReminder[]
   refresh: () => Promise<void>
 }
 
@@ -94,6 +101,7 @@ const DEFAULT: HomeStats = {
   importantDayIndices: [],
   practiceDayIndices: [],
   focusedListings: [],
+  noteReminders: [],
   refresh: async () => {},
 }
 
@@ -114,7 +122,7 @@ export function useHomeStats(): HomeStats {
         return
       }
 
-      const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows] = await Promise.all([
+      const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows, reminderRows] = await Promise.all([
         db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
         db.select({
           flashcardId: userProgress.flashcardId,
@@ -134,6 +142,10 @@ export function useHomeStats(): HomeStats {
         }).from(focusListings)
           .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
           .orderBy(asc(focusListings.priority)),
+        // Active notes with a future reminder
+        db.select({ id: notesTable.id, title: notesTable.title, reminderAt: notesTable.reminderAt })
+          .from(notesTable)
+          .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false), gt(notesTable.reminderAt, Date.now()))),
       ])
 
       const listing = listingRows[0] ?? null
@@ -154,10 +166,16 @@ export function useHomeStats(): HomeStats {
           weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
           firstTopicId: firstTopicRows[0]?.id ?? null,
           fullName: settingsRows[0]?.fullName ?? '',
-          importantDayIndices: focusedRows.flatMap(r => [
-            r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
-            r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
-          ]).filter((d): d is number => d != null),
+          importantDayIndices: [
+            ...focusedRows.flatMap(r => [
+              r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
+              r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
+            ]).filter((d): d is number => d != null),
+            // Merge note reminder day indices
+            ...reminderRows
+              .filter(r => r.reminderAt != null)
+              .map(r => Math.floor(r.reminderAt! / 86_400_000)),
+          ],
           practiceDayIndices: allProgress.map(p => Math.floor(p.answeredAt / 86_400_000)),
           focusedListings: focusedRows.map(r => ({
             slug: r.slug,
@@ -167,6 +185,10 @@ export function useHomeStats(): HomeStats {
             examDate: r.examDate ?? null,
             deadline: r.deadline ?? null,
           })),
+          noteReminders: reminderRows
+            .filter(r => r.reminderAt != null)
+            .map(r => ({ noteId: r.id, noteTitle: r.title, reminderAt: r.reminderAt! }))
+            .sort((a, b) => a.reminderAt - b.reminderAt),
           refresh: load,
         })
       }

@@ -17,9 +17,9 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     items: [{ href: '/admin/sync', icon: '📄', label: 'Sync Logs' }],
   },
   {
-    section: 'FLASHCARDS',
+    section: 'KNOWLEDGEBASE',
     items: [
-      { href: '/admin/flashcards', icon: '🃏', label: 'Subjects' },
+      { href: '/admin/flashcards', icon: '🃏', label: 'Knowledgebase' },
       { href: '/admin/flashcards/upload', icon: '📚', label: 'Upload PDF' },
     ],
   },

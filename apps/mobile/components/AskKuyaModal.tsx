@@ -9,25 +9,23 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 import { useKuyaChat, type ChatMessage } from '../hooks/useKuyaChat'
 import { ChatBubble } from './ChatBubble'
-import type { ChatMode } from '../services/chatPrompts'
 
 interface Props {
   visible: boolean
   onClose: () => void
 }
 
-const SUGGESTIONS: Record<ChatMode, string[]> = {
-  progress: [
-    'How am I doing this week?',
-    'Anong dapat kong i-focus today?',
-    'Am I on track for the exam?',
-  ],
-  topic: [
-    'Ano ang photosynthesis?',
-    "Explain Newton's 3rd law",
-    'What is a topic sentence?',
-  ],
-}
+// Mixed list — mode is now auto-detected from the question text, so suggestions
+// no longer split by tab. Order is intentional: a progress question first, then
+// a topic, then math, so users discover all three behaviors organically.
+const SUGGESTIONS: string[] = [
+  'How am I doing this week?',
+  'Ano ang photosynthesis?',
+  'Anong dapat kong i-focus today?',
+  "Explain Newton's 3rd law",
+  'Solve 2x + 6 = 14',
+  'What is a topic sentence?',
+]
 
 export function AskKuyaModal({ visible, onClose }: Props) {
   return (
@@ -44,7 +42,7 @@ export function AskKuyaModal({ visible, onClose }: Props) {
 
 function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
   const { theme: t, typo } = useTheme()
-  const { mode, setMode, messages, send, abort, clearHistory, isStreaming } = useKuyaChat()
+  const { messages, send, abort, clearHistory, isStreaming } = useKuyaChat()
   const [input, setInput] = useState('')
   const listRef = useRef<FlatList<ChatMessage>>(null)
   const insets = useSafeAreaInsets()
@@ -104,36 +102,6 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.xs,
       color: t.textSecondary,
-    },
-    tabRow: {
-      flexDirection: 'row',
-      borderBottomWidth: 1,
-      borderBottomColor: t.border,
-    },
-    tabItem: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 12,
-      position: 'relative',
-    },
-    tabItemDisabled: { opacity: 0.5 },
-    tabItemText: {
-      fontFamily: 'Lexend_500Medium',
-      fontSize: typo.sm,
-      color: t.textSecondary,
-    },
-    tabItemTextActive: {
-      color: t.textPrimary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    tabUnderline: {
-      position: 'absolute',
-      bottom: -1,
-      left: 12,
-      right: 12,
-      height: 3,
-      borderRadius: 2,
-      backgroundColor: t.accent,
     },
     list: { flex: 1, paddingHorizontal: 12 },
     listContent: { paddingVertical: 12 },
@@ -246,30 +214,6 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
         </TouchableOpacity>
       </View>
 
-      {/* Mode tabs */}
-      <View style={s.tabRow}>
-        {(['progress', 'topic'] as const).map(m => {
-          const active = mode === m
-          const disabled = isStreaming && !active
-          return (
-            <Pressable
-              key={m}
-              style={[s.tabItem, disabled && s.tabItemDisabled]}
-              onPress={() => setMode(m)}
-              disabled={disabled}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active, disabled }}
-              accessibilityLabel={m === 'progress' ? 'About Me tab' : 'A Topic tab'}
-            >
-              <Text style={[s.tabItemText, active && s.tabItemTextActive]}>
-                {m === 'progress' ? 'About Me' : 'A Topic'}
-              </Text>
-              {active && <View style={s.tabUnderline} />}
-            </Pressable>
-          )
-        })}
-      </View>
-
       {/* Messages */}
       <FlatList
         ref={listRef}
@@ -287,7 +231,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
               resizeMode="contain"
             />
             <Text style={s.emptyText}>
-              Hi! Ask me about your progress or any UPCAT topic.
+              Hi! Ask me anything — your study progress, an exam topic, or a math problem.
             </Text>
           </View>
         }
@@ -302,7 +246,7 @@ function AskKuyaModalInner({ onClose }: { onClose: () => void }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.suggestScrollContent}
           >
-            {SUGGESTIONS[mode].map(text => (
+            {SUGGESTIONS.map(text => (
               <Pressable
                 key={text}
                 style={s.suggestChip}

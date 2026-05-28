@@ -4,10 +4,9 @@ import { useDb } from './useDb'
 import { useHomeStats } from './useHomeStats'
 import { streamChatInference, modelExists } from '../services/llm'
 import {
-  buildChatPrompt, parseChatChunk,
-  type ChatMode,
+  buildChatPrompt, parseChatChunk, isMathQuestion, detectChatMode,
 } from '../services/chatPrompts'
-import { buildProgressContext } from '../services/chatContext'
+import { buildProgressContext, buildRetrievedFlashcards } from '../services/chatContext'
 import { chatMessages } from '../db/schema'
 
 export interface ChatMessage {
@@ -20,8 +19,6 @@ export interface ChatMessage {
 }
 
 interface UseKuyaChat {
-  mode: ChatMode
-  setMode: (mode: ChatMode) => void
   messages: ChatMessage[]
   send: (text: string) => void
   abort: () => void
@@ -43,7 +40,6 @@ function isTagalogHeavy(text: string): boolean {
 export function useKuyaChat(): UseKuyaChat {
   const db = useDb()
   const stats = useHomeStats()
-  const [mode, setModeState] = useState<ChatMode>('progress')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isModelReady, setIsModelReady] = useState(false)
@@ -156,19 +152,33 @@ export function useKuyaChat(): UseKuyaChat {
     // Snapshot history before this exchange for the LLM prompt (max 10 messages)
     const historyForPrompt = messagesRef.current.slice(-10).map(m => ({ role: m.role, text: m.text }))
 
+    // Auto-detect mode from the question itself — no UI picker required.
+    const mode = detectChatMode(trimmed)
+
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
         try {
-          const dataCtx = mode === 'progress'
-            ? await buildProgressContext(dbRef.current, stats)
+          // Run progress-context (DB read) and FTS5 retrieval in parallel so
+          // first-token latency is bounded by whichever is slower, not their sum.
+          const [dataCtx, retrieved] = await Promise.all([
+            mode === 'progress'
+              ? buildProgressContext(dbRef.current, stats)
+              : Promise.resolve(undefined),
+            buildRetrievedFlashcards(dbRef.current, trimmed, 3),
+          ])
+          const prompt = buildChatPrompt(mode, trimmed, dataCtx, historyForPrompt, retrieved ?? undefined)
+
+          // Math questions need a bigger budget (multi-step solutions exceed 60 tokens)
+          // and tighter sampling (less hallucinated arithmetic).
+          const samplerOptions = isMathQuestion(trimmed)
+            ? { nPredict: 250, temperature: 0.05 }
             : undefined
-          const prompt = buildChatPrompt(mode, trimmed, dataCtx, historyForPrompt)
 
           await streamChatInference(prompt, (tokenText) => {
             if (controller.signal.aborted) return
             bufferRef.current += parseChatChunk(tokenText)
             scheduleFlush()
-          }, controller.signal)
+          }, controller.signal, samplerOptions)
 
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
@@ -210,7 +220,7 @@ export function useKuyaChat(): UseKuyaChat {
         }
       })()
     })
-  }, [isStreaming, mode, stats, scheduleFlush])
+  }, [isStreaming, stats, scheduleFlush])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
@@ -233,10 +243,5 @@ export function useKuyaChat(): UseKuyaChat {
     setMessages([])
   }, [])
 
-  const setMode = useCallback((next: ChatMode) => {
-    if (isStreaming) return
-    setModeState(next)
-  }, [isStreaming])
-
-  return { mode, setMode, messages, send, abort, clearHistory, isStreaming, isModelReady }
+  return { messages, send, abort, clearHistory, isStreaming, isModelReady }
 }
