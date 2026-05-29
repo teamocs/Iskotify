@@ -593,12 +593,8 @@ export default function PracticeScreen() {
         ) : null}
         <SubjectAccordion
           groups={subjectGroups}
-          emptyText={
-            focusListingsList.length > 0
-              ? "Your focus list doesn't have topics yet — they'll appear here after sync"
-              : 'No topics yet'
-          }
-          initiallyExpanded="first"
+          emptyText="No topics yet — they'll appear here after sync"
+          initiallyExpanded="focused"
           keyExtractor={(t) => t.topic.id}
           renderRow={(row) => {
             if (!row) return null  // defensive — shouldn't happen, but no crash if it does

@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeContext'
 interface Props<T> {
   groups: SubjectGroup<T>[]
   emptyText?: string
-  initiallyExpanded?: 'first' | 'all' | 'none'
+  initiallyExpanded?: 'first' | 'all' | 'none' | 'focused'
   renderRow: (row: T) => React.ReactNode
   keyExtractor?: (row: T, index: number) => string
 }
@@ -46,10 +46,18 @@ export function SubjectAccordion<T>({
     if (initiallyExpanded === 'none') {
       return Object.fromEntries(groups.map(g => [g.subjectId, false]))
     }
+    if (initiallyExpanded === 'focused') {
+      // Expand all groups marked focused=true. If none are focused, fall back to 'first'.
+      const anyFocused = groups.some(g => g.focused === true)
+      if (anyFocused) {
+        return Object.fromEntries(groups.map(g => [g.subjectId, g.focused === true]))
+      }
+      return Object.fromEntries(groups.map((g, i) => [g.subjectId, i === 0]))
+    }
     // 'first'
     return Object.fromEntries(groups.map((g, i) => [g.subjectId, i === 0]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups.map(g => g.subjectId).join('|'), initiallyExpanded])
+  }, [groups.map(g => `${g.subjectId}:${g.focused === true ? 1 : 0}`).join('|'), initiallyExpanded])
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(initial)
 

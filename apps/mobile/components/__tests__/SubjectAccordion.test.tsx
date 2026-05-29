@@ -118,4 +118,53 @@ describe('SubjectAccordion', () => {
     )
     expect(spy).toHaveBeenCalledTimes(5)
   })
+
+  describe("initiallyExpanded='focused'", () => {
+    function makeGroupsWithFocus(): SubjectGroup<Row>[] {
+      return [
+        // Math: not focused
+        { subjectId: 'math', subjectName: 'Mathematics', focused: false, rows: [
+          { id: 't1', label: 'Algebra' },
+        ]},
+        // Sci: focused
+        { subjectId: 'sci', subjectName: 'Science', focused: true, rows: [
+          { id: 't2', label: 'Biology' },
+        ]},
+        // English: focused
+        { subjectId: 'eng', subjectName: 'English', focused: true, rows: [
+          { id: 't3', label: 'Grammar' },
+        ]},
+      ]
+    }
+
+    it('expands every group whose focused === true; leaves others collapsed', () => {
+      const { getByTestId, queryByTestId } = render(
+        <SubjectAccordion groups={makeGroupsWithFocus()} renderRow={renderRow} initiallyExpanded="focused" />
+      )
+      expect(queryByTestId('row-t1')).toBeNull()    // Math (focused=false) → collapsed
+      expect(getByTestId('row-t2')).toBeTruthy()    // Sci (focused=true)  → expanded
+      expect(getByTestId('row-t3')).toBeTruthy()    // English (focused=true) → expanded
+    })
+
+    it("falls back to expanding first when no group has focused=true", () => {
+      const noneFocused: SubjectGroup<Row>[] = [
+        { subjectId: 'math', subjectName: 'Mathematics', focused: false, rows: [{ id: 't1', label: 'Algebra' }]},
+        { subjectId: 'sci',  subjectName: 'Science',     focused: false, rows: [{ id: 't2', label: 'Biology' }]},
+      ]
+      const { getByTestId, queryByTestId } = render(
+        <SubjectAccordion groups={noneFocused} renderRow={renderRow} initiallyExpanded="focused" />
+      )
+      expect(getByTestId('row-t1')).toBeTruthy()    // first → expanded
+      expect(queryByTestId('row-t2')).toBeNull()    // second → collapsed
+    })
+
+    it('falls back to expanding first when focused field is absent on every group', () => {
+      // makeGroups() above has NO focused field at all → analytics-style call site
+      const { getByTestId, queryByTestId } = render(
+        <SubjectAccordion groups={makeGroups()} renderRow={renderRow} initiallyExpanded="focused" />
+      )
+      expect(getByTestId('row-t1')).toBeTruthy()    // first → expanded
+      expect(queryByTestId('row-t4')).toBeNull()    // second → collapsed
+    })
+  })
 })

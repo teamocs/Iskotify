@@ -51,59 +51,80 @@ describe('groupTopicsBySubject', () => {
     })
   })
 
-  describe('focus list filter', () => {
+  describe('focus list highlight (annotates, never filters)', () => {
     const topicIdsByListingSlug = {
-      upcat:    ['t1', 't4'],          // Algebra, Photosynthesis
-      'dost-sei': ['t2'],              // Geometry
-      ched:     ['t99'],               // unknown topic id — should be ignored
+      upcat:    ['t1', 't4'],          // Algebra (math), Photosynthesis (sci)
+      'dost-sei': ['t2'],              // Geometry (math)
+      ched:     ['t99'],               // unknown id — produces no matches
     }
 
-    it('does not filter when focusListingSlugs is empty', () => {
+    it('leaves focused undefined when focusListingSlugs is empty', () => {
       const out = groupTopicsBySubject<T, T>(
         { topics, subjects, focusListingSlugs: [], topicIdsByListingSlug },
         t => t,
       )
       // All 5 topics survive; 2 subjects (math, sci) remain
       expect(out).toHaveLength(2)
-      const allTopics = out.flatMap(g => g.rows)
-      expect(allTopics).toHaveLength(5)
+      expect(out.flatMap(g => g.rows)).toHaveLength(5)
+      expect(out.every(g => g.focused === undefined)).toBe(true)
     })
 
-    it('does not filter when topicIdsByListingSlug is missing even if slugs provided', () => {
+    it('leaves focused undefined when topicIdsByListingSlug is missing even if slugs provided', () => {
       const out = groupTopicsBySubject<T, T>(
         { topics, subjects, focusListingSlugs: ['upcat'] },
         t => t,
       )
       expect(out.flatMap(g => g.rows)).toHaveLength(5)
+      expect(out.every(g => g.focused === undefined)).toBe(true)
     })
 
-    it('filters to union of allowed topic IDs across focus slugs', () => {
-      const out = groupTopicsBySubject<T, T>(
-        { topics, subjects, focusListingSlugs: ['upcat', 'dost-sei'], topicIdsByListingSlug },
-        t => t,
-      )
-      // Allowed: t1, t2, t4 → math has [t1, t2], sci has [t4]
-      const math = out.find(g => g.subjectId === 'math')!
-      const sci  = out.find(g => g.subjectId === 'sci')!
-      expect(math.rows.map(r => r.id).sort()).toEqual(['t1', 't2'])
-      expect(sci.rows.map(r => r.id)).toEqual(['t4'])
-    })
-
-    it('drops subjects whose only topics were filtered out', () => {
+    it('does NOT drop topics or subjects when focus list is active', () => {
       const out = groupTopicsBySubject<T, T>(
         { topics, subjects, focusListingSlugs: ['upcat'], topicIdsByListingSlug },
         t => t,
       )
-      // Allowed: t1 (math), t4 (sci) → both subjects present
+      // All 5 topics still present (no filtering at topic level)
+      expect(out.flatMap(g => g.rows)).toHaveLength(5)
+      // Both subjects still present even though only some topics are in focus
       expect(out).toHaveLength(2)
     })
 
-    it('returns empty when focus slugs match no known topic ids', () => {
+    it('annotates focused=true on subjects with at least one topic in the focus union', () => {
+      const out = groupTopicsBySubject<T, T>(
+        { topics, subjects, focusListingSlugs: ['upcat', 'dost-sei'], topicIdsByListingSlug },
+        t => t,
+      )
+      // Allowed via focus: t1, t2 (math), t4 (sci) → both subjects are focused
+      const math = out.find(g => g.subjectId === 'math')!
+      const sci  = out.find(g => g.subjectId === 'sci')!
+      expect(math.focused).toBe(true)
+      expect(sci.focused).toBe(true)
+    })
+
+    it('annotates focused=false on subjects with no topics in the focus union', () => {
+      // Pretend Filipino has topics — add one so we can verify a non-focused subject
+      const extendedSubjects = [...subjects]
+      const extendedTopics: T[] = [
+        ...topics,
+        { id: 't6', name: 'Balagtasan', subjectId: 'fil', accuracy: null },
+      ]
+      const out = groupTopicsBySubject<T, T>(
+        { topics: extendedTopics, subjects: extendedSubjects, focusListingSlugs: ['upcat'], topicIdsByListingSlug },
+        t => t,
+      )
+      // focus upcat → t1 (math), t4 (sci). Filipino has only t6 → not focused.
+      const fil = out.find(g => g.subjectId === 'fil')!
+      expect(fil.focused).toBe(false)
+    })
+
+    it('all groups focused=false when focus slugs match no known topic ids', () => {
       const out = groupTopicsBySubject<T, T>(
         { topics, subjects, focusListingSlugs: ['ched'], topicIdsByListingSlug },
         t => t,
       )
-      expect(out).toEqual([])
+      // 'ched' maps to t99 which doesn't exist → no subjects are focused
+      expect(out).toHaveLength(2)
+      expect(out.every(g => g.focused === false)).toBe(true)
     })
   })
 

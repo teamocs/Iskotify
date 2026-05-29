@@ -5,6 +5,7 @@ export interface SubjectGroup<T> {
   subjectName: string
   rows: T[]
   summary?: string
+  focused?: boolean
 }
 
 interface GroupInput<R extends { id: string; name: string; subjectId: string; accuracy?: number | null }> {
@@ -15,8 +16,9 @@ interface GroupInput<R extends { id: string; name: string; subjectId: string; ac
 }
 
 /**
- * Pure helper: filter topics by focus list, group by subject, sort, map to caller's row type.
- * Drops subjects with no topics. See spec §4.2 for full behavior.
+ * Pure helper: group topics by subject, sort, map to caller's row type, and annotate
+ * each subject with `focused` when a focus list is active. Never filters topics or
+ * subjects out — callers can use the `focused` flag for UI affordances (e.g. expand-by-default).
  */
 export function groupTopicsBySubject<
   R extends { id: string; name: string; subjectId: string; accuracy?: number | null },
@@ -29,41 +31,43 @@ export function groupTopicsBySubject<
 ): SubjectGroup<T>[] {
   const { topics, subjects, focusListingSlugs, topicIdsByListingSlug } = input
 
-  // 1. Focus-list filter (only when both inputs present)
-  let allowed: Set<string> | null = null
+  // 1. Focus-list annotation set (only when BOTH inputs present and non-empty).
+  //    When this is null, `focused` is left undefined on every group.
+  let focusTopicIds: Set<string> | null = null
   if (focusListingSlugs && focusListingSlugs.length > 0 && topicIdsByListingSlug) {
-    allowed = new Set<string>()
+    focusTopicIds = new Set<string>()
     for (const slug of focusListingSlugs) {
       const ids = topicIdsByListingSlug[slug] ?? []
-      for (const id of ids) allowed.add(id)
+      for (const id of ids) focusTopicIds.add(id)
     }
   }
-  const filtered = allowed ? topics.filter(t => allowed!.has(t.id)) : topics
 
-  // 2. Group by subjectId
+  // 2. Group all topics by subjectId (no filtering).
   const buckets = new Map<string, R[]>()
-  for (const t of filtered) {
+  for (const t of topics) {
     if (!buckets.has(t.subjectId)) buckets.set(t.subjectId, [])
     buckets.get(t.subjectId)!.push(t)
   }
 
-  // 3. Build groups, looking up subject name from subjects array
+  // 3. Build groups, looking up subject name + annotating focus.
   const subjectNameById = new Map(subjects.map(s => [s.id, s.name]))
   const groups: SubjectGroup<T>[] = []
   for (const [subjectId, raws] of buckets.entries()) {
-    // 4. Sort topics inside this subject
     const sortedRaws = sortTopics(raws, sort)
-    // 5. Map to caller's row type
     const rows = sortedRaws.map(rowFor)
-    groups.push({
+    const group: SubjectGroup<T> = {
       subjectId,
       subjectName: subjectNameById.get(subjectId) ?? subjectId,
       rows,
       summary: summaryFor ? summaryFor(rows, sortedRaws) : undefined,
-    })
+    }
+    if (focusTopicIds) {
+      group.focused = sortedRaws.some(r => focusTopicIds!.has(r.id))
+    }
+    groups.push(group)
   }
 
-  // 6. Sort subjects
+  // 4. Sort subjects.
   return sortGroups(groups, buckets, sort)
 }
 
