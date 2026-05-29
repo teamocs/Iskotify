@@ -14,6 +14,10 @@ export interface TopicMastery {
   label: string
   accuracy: number
   sessionCount: number
+  // NEW: present for topic-backed entries, undefined for deck-backed entries.
+  // The Subject accordion uses these to group by subject; deck entries are excluded.
+  topicId?: string
+  subjectId?: string
 }
 
 export interface RecentSession {
@@ -79,7 +83,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     try {
       const [allSessions, topicRows, deckRows] = await Promise.all([
         db.select().from(practiceSessions),
-        db.select({ id: topics.id, name: topics.name }).from(topics),
+        db.select({ id: topics.id, name: topics.name, subjectId: topics.subjectId }).from(topics),
         db.select({ id: savedDecks.id, name: savedDecks.name }).from(savedDecks),
       ])
 
@@ -96,7 +100,8 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       const streak = computeStreak(filtered)
       const weeklyData = computeWeeklyData(filtered)
 
-      const topicMap = new Map(topicRows.map(t => [t.id, t.name]))
+      const topicMap = new Map(topicRows.map(t => [t.id, { name: t.name, subjectId: t.subjectId }]))
+      const topicNameMap = new Map(topicRows.map(t => [t.id, t.name]))
       const deckMap = new Map(deckRows.map(d => [d.id, d.name]))
 
       const grouped: Record<string, { score: number; total: number; count: number }> = {}
@@ -110,15 +115,20 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       }
       const topicMastery: TopicMastery[] = Object.entries(grouped)
         .filter(([, v]) => v.total > 0)
-        .map(([key, v]) => ({
-          // Priority: real topic name → deck name → pre-assess-prefix (or raw key).
-          // resolveTopicLabel ALWAYS returns a non-empty string, so we can't use
-          // it as a non-final fallback — feed it an empty map so it only does
-          // pre-assess prefix handling + raw-key passthrough.
-          label: topicMap.get(key) ?? deckMap.get(key) ?? resolveTopicLabel(key, new Map()),
-          accuracy: Math.round((v.score / v.total) * 100),
-          sessionCount: v.count,
-        }))
+        .map(([key, v]) => {
+          const topic = topicMap.get(key)
+          return {
+            // Priority: real topic name → deck name → pre-assess-prefix (or raw key).
+            // resolveTopicLabel ALWAYS returns a non-empty string, so we can't use
+            // it as a non-final fallback — feed it an empty map so it only does
+            // pre-assess prefix handling + raw-key passthrough.
+            label: topic?.name ?? deckMap.get(key) ?? resolveTopicLabel(key, new Map()),
+            accuracy: Math.round((v.score / v.total) * 100),
+            sessionCount: v.count,
+            topicId: topic ? key : undefined,
+            subjectId: topic?.subjectId,
+          }
+        })
         .sort((a, b) => b.sessionCount - a.sessionCount)
         .slice(0, 5)
 
@@ -129,7 +139,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           let title = 'Session'
           if (s.deckId === '__full__') title = 'Full Review'
           else if (s.deckId === '__weak__') title = 'Weak Topics'
-          else if (s.topicId) title = resolveTopicLabel(s.topicId, topicMap)
+          else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
           else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
           return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
         })
