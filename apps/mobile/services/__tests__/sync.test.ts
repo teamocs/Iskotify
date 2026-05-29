@@ -430,6 +430,306 @@ describe('pullUserData notes restore', () => {
   })
 })
 
+// ─── syncOnLaunch ai_* field tests (real in-memory SQLite) ───────────────────
+//
+// syncOnLaunch's first two db.select() calls use mocked drizzle-orm `eq`/`asc`,
+// so we use a hybrid DB: mock the initial select chain (settings + focus listings)
+// to return controlled values, but delegate db.transaction() to a real
+// better-sqlite3 + drizzle instance. This lets us verify actual SQLite writes
+// for the ai_* columns without fighting the drizzle-orm mock.
+
+function makeRawFlashcardDb(): InstanceType<typeof Database> {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE subjects (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE topics (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      status TEXT NOT NULL
+    );
+    CREATE TABLE flashcards (
+      id TEXT PRIMARY KEY NOT NULL,
+      topic_id TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      explanation TEXT NOT NULL,
+      listing_slugs TEXT NOT NULL DEFAULT '[]',
+      remote_updated_at INTEGER,
+      options TEXT NOT NULL DEFAULT '[]',
+      correct_answer_index INTEGER,
+      ai_options TEXT,
+      ai_correct_index INTEGER,
+      ai_explanation TEXT,
+      ai_enhanced_at INTEGER
+    );
+    CREATE TABLE listings (
+      id TEXT PRIMARY KEY NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      exam_date INTEGER,
+      region TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      requirements TEXT NOT NULL DEFAULT '[]',
+      coverage TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      external_url TEXT NOT NULL DEFAULT '',
+      deadline INTEGER,
+      grant_amount TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE user_settings (
+      id INTEGER PRIMARY KEY NOT NULL,
+      selected_listing_slug TEXT NOT NULL DEFAULT '',
+      last_synced_at INTEGER NOT NULL DEFAULT 0,
+      full_name TEXT NOT NULL DEFAULT '',
+      school TEXT NOT NULL DEFAULT '',
+      grade_level INTEGER,
+      google_id TEXT,
+      email TEXT,
+      notifications_enabled INTEGER DEFAULT 1,
+      theme TEXT NOT NULL DEFAULT 'system',
+      focus_mode_enabled INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE focus_listings (
+      listing_slug TEXT PRIMARY KEY NOT NULL,
+      priority INTEGER NOT NULL,
+      added_at INTEGER NOT NULL
+    );
+    CREATE TABLE saved_listings (
+      id TEXT PRIMARY KEY NOT NULL,
+      saved_at INTEGER NOT NULL
+    );
+    CREATE TABLE saved_decks (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      topic_ids TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE user_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      flashcard_id TEXT NOT NULL,
+      correct INTEGER NOT NULL,
+      answered_at INTEGER NOT NULL
+    );
+    CREATE TABLE practice_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      listing_slug TEXT NOT NULL DEFAULT '',
+      topic_id TEXT NOT NULL DEFAULT '',
+      deck_id TEXT NOT NULL DEFAULT '',
+      score INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      duration_secs INTEGER NOT NULL DEFAULT 0,
+      completed_at INTEGER NOT NULL
+    );
+    CREATE TABLE notes (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT 'text',
+      color TEXT,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      is_trashed INTEGER NOT NULL DEFAULT 0,
+      trashed_at INTEGER,
+      created_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE note_labels (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE note_label_assignments (
+      note_id TEXT NOT NULL,
+      label_id TEXT NOT NULL,
+      PRIMARY KEY (note_id, label_id)
+    );
+  `)
+  return raw
+}
+
+/**
+ * Build a hybrid DB that mocks the two initial select() calls syncOnLaunch
+ * makes (userSettings + focusListings) but wires db.transaction() to a real
+ * drizzle instance backed by the provided raw SQLite DB. This sidesteps the
+ * module-level drizzle-orm `eq`/`asc` mock while still letting us inspect
+ * actual SQLite writes.
+ */
+function makeSyncTestDb(raw: InstanceType<typeof Database>, slug = 'upcat'): DrizzleClient {
+  const realDrizzle = drizzle(raw, { schema }) as any
+
+  const settingsChain = {
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue([{ id: 1, selectedListingSlug: slug, lastSyncedAt: 0 }]),
+  }
+  const focusChain = {
+    from: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockResolvedValue([]),
+  }
+
+  let selectCallCount = 0
+  const db: any = {
+    select: jest.fn().mockImplementation(() => {
+      selectCallCount += 1
+      if (selectCallCount === 1) return settingsChain
+      if (selectCallCount === 2) return focusChain
+      return settingsChain
+    }),
+    transaction: (cb: (tx: any) => void) => realDrizzle.transaction(cb),
+  }
+  return db as DrizzleClient
+}
+
+function makeCardRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'card-1',
+    topic_id: 'topic-1',
+    question: 'Q?',
+    answer: 'A',
+    explanation: 'E',
+    listing_slugs: ['upcat'],
+    options: ['A', 'B', 'C', 'D'],
+    correct_answer_index: 0,
+    updated_at: '2026-05-01T00:00:00Z',
+    ai_options: null,
+    ai_correct_index: null,
+    ai_explanation: null,
+    ai_enhanced_at: null,
+    ...overrides,
+  }
+}
+
+function makeSupabaseForCards(cardRow: Record<string, unknown>) {
+  return (table: string) => {
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+    }
+    if (table === 'flashcards') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        contains: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [cardRow] }),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch ai_* field handling (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('pulls ai_* fields from Supabase into local SQLite', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const aiEnhancedAt = '2026-05-29T12:00:00Z'
+    const cardRow = makeCardRow({
+      ai_options: ['W1', 'A', 'W2', 'W3'],
+      ai_correct_index: 1,
+      ai_explanation: 'because',
+      ai_enhanced_at: aiEnhancedAt,
+    })
+
+    supabaseMock.from.mockImplementation(makeSupabaseForCards(cardRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM flashcards WHERE id = ?').get('card-1') as any
+    expect(row).toBeTruthy()
+    expect(row.ai_options).toBe('["W1","A","W2","W3"]')
+    expect(row.ai_correct_index).toBe(1)
+    expect(row.ai_explanation).toBe('because')
+    expect(row.ai_enhanced_at).toBe(new Date(aiEnhancedAt).getTime())
+  })
+
+  it('does NOT wipe local ai_* when Supabase has ai_enhanced_at NULL', async () => {
+    const raw = makeRawFlashcardDb()
+
+    // Pre-seed local card with Gemma-generated ai_* data
+    const localAiEnhancedAt = new Date('2026-05-28T10:00:00Z').getTime()
+    raw.prepare(`
+      INSERT INTO flashcards (id, topic_id, question, answer, explanation, listing_slugs,
+        options, correct_answer_index, remote_updated_at,
+        ai_options, ai_correct_index, ai_explanation, ai_enhanced_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'card-1', 'topic-1', 'Q?', 'A', 'E', '["upcat"]',
+      '[]', 0, 1000,
+      '["LocalW1","A","LocalW2","LocalW3"]', 1, 'local reason', localAiEnhancedAt,
+    )
+
+    const db = makeSyncTestDb(raw)
+
+    // Supabase returns the same card with ai_enhanced_at = null (not yet enhanced server-side)
+    const cardRow = makeCardRow({ ai_enhanced_at: null })
+    supabaseMock.from.mockImplementation(makeSupabaseForCards(cardRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM flashcards WHERE id = ?').get('card-1') as any
+    expect(row).toBeTruthy()
+    // Local Gemma work must survive the sync
+    expect(row.ai_options).toBe('["LocalW1","A","LocalW2","LocalW3"]')
+    expect(row.ai_correct_index).toBe(1)
+    expect(row.ai_explanation).toBe('local reason')
+    expect(row.ai_enhanced_at).toBe(localAiEnhancedAt)
+  })
+
+  it('overwrites local ai_* when Supabase has fresher ai_enhanced_at', async () => {
+    const raw = makeRawFlashcardDb()
+
+    // Pre-seed local card with old Gemma-generated ai_* data
+    const oldAiEnhancedAt = new Date('2026-05-20T00:00:00Z').getTime()
+    raw.prepare(`
+      INSERT INTO flashcards (id, topic_id, question, answer, explanation, listing_slugs,
+        options, correct_answer_index, remote_updated_at,
+        ai_options, ai_correct_index, ai_explanation, ai_enhanced_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'card-1', 'topic-1', 'Q?', 'A', 'E', '["upcat"]',
+      '[]', 0, 1000,
+      '["OldW1","A","OldW2","OldW3"]', 1, 'old reason', oldAiEnhancedAt,
+    )
+
+    const db = makeSyncTestDb(raw)
+
+    const newAiEnhancedAt = '2026-05-29T12:00:00Z'
+    const cardRow = makeCardRow({
+      ai_options: ['NewW1', 'A', 'NewW2', 'NewW3'],
+      ai_correct_index: 1,
+      ai_explanation: 'new reason',
+      ai_enhanced_at: newAiEnhancedAt,
+    })
+    supabaseMock.from.mockImplementation(makeSupabaseForCards(cardRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM flashcards WHERE id = ?').get('card-1') as any
+    expect(row).toBeTruthy()
+    // Supabase's fresher ai_* should overwrite the local values
+    expect(row.ai_options).toBe('["NewW1","A","NewW2","NewW3"]')
+    expect(row.ai_correct_index).toBe(1)
+    expect(row.ai_explanation).toBe('new reason')
+    expect(row.ai_enhanced_at).toBe(new Date(newAiEnhancedAt).getTime())
+  })
+})
+
 describe('pushUserData includes notes', () => {
   it('includes notes, note_labels, note_label_assignments in the upsert payload', async () => {
     const { supabase } = require('../supabase')

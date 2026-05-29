@@ -194,7 +194,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const cardResults = await Promise.all(
       slugs.map(slug =>
         supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,updated_at')
+          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,updated_at')
           .contains('listing_slugs', [slug])
           .eq('status', 'published')
           .gt('updated_at', since)
@@ -235,7 +235,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
       for (const row of allCards) {
         const remoteUpdatedAt = new Date(row.updated_at).getTime()
-        const vals = {
+        const baseVals = {
           id: row.id, topicId: row.topic_id, question: row.question, answer: row.answer,
           explanation: row.explanation,
           listingSlugs: JSON.stringify(row.listing_slugs ?? []),
@@ -243,9 +243,24 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           correctAnswerIndex: row.correct_answer_index ?? null,
           remoteUpdatedAt,
         }
+
+        // Only include ai_* fields when Supabase actually has them. This preserves
+        // local Gemma work when Supabase hasn't been enhanced yet (fixes the
+        // sync-wipe bug where every re-sync used to null these out).
+        const r = row as any
+        const aiVals = r.ai_enhanced_at
+          ? {
+              aiOptions: r.ai_options ? JSON.stringify(r.ai_options) : null,
+              aiCorrectIndex: r.ai_correct_index ?? null,
+              aiExplanation: r.ai_explanation ?? null,
+              aiEnhancedAt: new Date(r.ai_enhanced_at).getTime(),
+            }
+          : {}
+
+        const vals = { ...baseVals, ...aiVals }
         tx.insert(flashcards).values(vals).onConflictDoUpdate({
           target: flashcards.id,
-          set: { ...vals, aiOptions: null, aiCorrectIndex: null, aiExplanation: null, aiEnhancedAt: null },
+          set: vals,  // ai_* only included when Supabase had them
         }).run()
       }
 
