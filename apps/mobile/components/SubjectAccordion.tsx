@@ -7,6 +7,7 @@ interface Props<T> {
   emptyText?: string
   initiallyExpanded?: 'first' | 'all' | 'none'
   renderRow: (row: T) => React.ReactNode
+  keyExtractor?: (row: T, index: number) => string
 }
 
 export function SubjectAccordion<T>({
@@ -14,6 +15,7 @@ export function SubjectAccordion<T>({
   emptyText,
   initiallyExpanded = 'first',
   renderRow,
+  keyExtractor,
 }: Props<T>) {
   const initial = useMemo<Record<string, boolean>>(() => {
     if (groups.length === 0) return {}
@@ -61,7 +63,7 @@ export function SubjectAccordion<T>({
             {isOpen ? (
               <View style={styles.body}>
                 {group.rows.map((row, idx) => (
-                  <View key={idx} style={styles.rowWrap}>
+                  <View key={keyExtractor ? keyExtractor(row, idx) : idx} style={styles.rowWrap}>
                     {renderRow(row)}
                   </View>
                 ))}

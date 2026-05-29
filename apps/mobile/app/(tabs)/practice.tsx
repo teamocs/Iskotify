@@ -401,6 +401,11 @@ export default function PracticeScreen() {
     [cardCountByTopic]
   )
 
+  const topicRowById = useMemo(
+    () => new Map(topicRows.map(r => [r.topic.id, r])),
+    [topicRows]
+  )
+
   const subjectGroups = useMemo(() => {
     function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
       const practiced = items.filter(i => i.accuracy != null) as Array<{ accuracy: number }>
@@ -419,14 +424,14 @@ export default function PracticeScreen() {
         focusListingSlugs: focusListingsList.map(l => l.slug),
         topicIdsByListingSlug,
       },
-      (t) => topicRows.find(r => r.topic.id === t.id)!,
+      (t) => topicRowById.get(t.id)!,
       (rows, raws) => {
         const allNew = raws.every(r => r.accuracy == null)
         return allNew ? `${rows.length} topics · New` : `${rows.length} topics · ${avgAccuracy(raws)}% avg`
       },
       'accuracy-asc',
     )
-  }, [topicRows, subjects, focusListingsList, topicIdsByListingSlug])
+  }, [topicRows, topicRowById, subjects, focusListingsList, topicIdsByListingSlug])
 
   return (
     <SafeAreaView style={s.root}>
@@ -594,7 +599,11 @@ export default function PracticeScreen() {
               : 'No topics yet'
           }
           initiallyExpanded="first"
-          renderRow={(row) => <TopicCard row={row} s={s} />}
+          keyExtractor={(t) => t.topic.id}
+          renderRow={(row) => {
+            if (!row) return null  // defensive — shouldn't happen, but no crash if it does
+            return <TopicCard row={row} s={s} />
+          }}
         />
       </ScrollView>
 

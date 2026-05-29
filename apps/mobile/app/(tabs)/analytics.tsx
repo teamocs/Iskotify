@@ -229,8 +229,13 @@ export default function AnalyticsScreen() {
           </Text>
           <SubjectAccordion
             groups={subjectGroups}
-            emptyText="Start practicing to see mastery analytics"
+            emptyText={
+              analytics.topicMastery.length > 0
+                ? "Practice individual topics to see subject-grouped mastery"
+                : "Start practicing to see mastery analytics"
+            }
             initiallyExpanded="first"
+            keyExtractor={(t) => t.id}
             renderRow={(row) => (
               <View style={s.masteryRow}>
                 <Text style={s.masteryLabel} numberOfLines={1}>{row.name}</Text>
