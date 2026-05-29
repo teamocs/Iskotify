@@ -15,8 +15,9 @@ describe('buildQuizQuestions', () => {
         aiExplanation: 'AI exp',
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['Wrong1', 'Correct', 'Wrong2', 'Wrong3'])
-      expect(q!.answerIndex).toBe(1)
+      expect(q!.options).toHaveLength(4)
+      expect(new Set(q!.options)).toEqual(new Set(['Wrong1', 'Correct', 'Wrong2', 'Wrong3']))
+      expect(q!.options[q!.answerIndex]).toBe('Correct')
       expect(q!.explanation).toBe('AI exp')
     })
 
@@ -29,7 +30,8 @@ describe('buildQuizQuestions', () => {
         aiExplanation: 'AI exp',
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
+      expect(new Set(q!.options)).toEqual(new Set(['A', 'B', 'C', 'D']))
+      expect(q!.options[q!.answerIndex]).toBe('A')
       expect(q!.explanation).toBe('AI exp')
     })
 
@@ -54,8 +56,8 @@ describe('buildQuizQuestions', () => {
         correctAnswerIndex: 2,
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
-      expect(q!.answerIndex).toBe(2)
+      expect(new Set(q!.options)).toEqual(new Set(['A', 'B', 'C', 'D']))
+      expect(q!.options[q!.answerIndex]).toBe('C')
     })
 
     it('falls through to admin options when aiCorrectIndex is out of bounds', () => {
@@ -68,8 +70,8 @@ describe('buildQuizQuestions', () => {
         correctAnswerIndex: 1,
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
-      expect(q!.answerIndex).toBe(1)
+      expect(new Set(q!.options)).toEqual(new Set(['A', 'B', 'C', 'D']))
+      expect(q!.options[q!.answerIndex]).toBe('B')
     })
 
     it('falls through when aiOptions length is not 4', () => {
@@ -82,8 +84,8 @@ describe('buildQuizQuestions', () => {
         correctAnswerIndex: 0,
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['A', 'B', 'C', 'D'])
-      expect(q!.answerIndex).toBe(0)
+      expect(new Set(q!.options)).toEqual(new Set(['A', 'B', 'C', 'D']))
+      expect(q!.options[q!.answerIndex]).toBe('A')
     })
   })
 
@@ -110,24 +112,24 @@ describe('buildQuizQuestions', () => {
       expect(q!.stem).not.toContain('Carbon dioxide')
     })
 
-    it('handles answer A correctly (answerIndex = 0)', () => {
+    it('handles answer A correctly (correct option is Alpha)', () => {
       const c = card({
         question: 'First letter?\nA. Alpha\nB. Beta\nC. Gamma\nD. Delta',
         answer: 'A. Alpha',
       })
       const [q] = buildQuizQuestions([c])
-      expect(q!.answerIndex).toBe(0)
-      expect(q!.options[0]).toBe('Alpha')
+      expect(q!.options[q!.answerIndex]).toBe('Alpha')
+      expect(q!.options).toContain('Alpha')
     })
 
-    it('handles answer D correctly (answerIndex = 3)', () => {
+    it('handles answer D correctly (correct option is Four)', () => {
       const c = card({
         question: 'Last option?\nA. One\nB. Two\nC. Three\nD. Four',
         answer: 'D. Four',
       })
       const [q] = buildQuizQuestions([c])
-      expect(q!.answerIndex).toBe(3)
-      expect(q!.options[3]).toBe('Four')
+      expect(q!.options[q!.answerIndex]).toBe('Four')
+      expect(q!.options).toContain('Four')
     })
   })
 
@@ -144,7 +146,7 @@ describe('buildQuizQuestions', () => {
   })
 
   describe('stored options (seeded cards)', () => {
-    it('uses stored options and answerIndex directly without modification', () => {
+    it('uses stored options and returns correct answer at answerIndex', () => {
       const c: RawCard = {
         id: 's1', question: 'What is 2+2?', answer: '4',
         options: ['2', '3', '4', '5'], correctAnswerIndex: 2,
@@ -152,8 +154,9 @@ describe('buildQuizQuestions', () => {
       }
       const [q] = buildQuizQuestions([c])
       expect(q!.stem).toBe('What is 2+2?')
-      expect(q!.options).toEqual(['2', '3', '4', '5'])
-      expect(q!.answerIndex).toBe(2)
+      expect(q!.options).toHaveLength(4)
+      expect(new Set(q!.options)).toEqual(new Set(['2', '3', '4', '5']))
+      expect(q!.options[q!.answerIndex]).toBe('4')
     })
 
     it('uses stored options even when question has embedded format', () => {
@@ -166,8 +169,57 @@ describe('buildQuizQuestions', () => {
         explanation: '',
       }
       const [q] = buildQuizQuestions([c])
-      expect(q!.options).toEqual(['Option1', 'Option2', 'Option3', 'Option4'])
-      expect(q!.answerIndex).toBe(1)
+      expect(new Set(q!.options)).toEqual(new Set(['Option1', 'Option2', 'Option3', 'Option4']))
+      expect(q!.options[q!.answerIndex]).toBe('Option2')
+    })
+  })
+
+  describe('per-session shuffle (regression)', () => {
+    it('reshuffles admin-set options across consecutive calls (most of the time)', () => {
+      const c: RawCard = {
+        id: 's1', question: 'What is 2+2?', answer: '4',
+        options: ['2', '3', '4', '5'], correctAnswerIndex: 2,
+        explanation: '',
+      }
+      const orderings = new Set<string>()
+      for (let i = 0; i < 20; i++) {
+        const [q] = buildQuizQuestions([c])
+        orderings.add(q!.options.join('|'))
+      }
+      // 4! = 24 permutations; over 20 trials we should see at least 2 different orderings.
+      // (Flake-resistant: probability of all-identical-orderings is 1/24^19 — vanishing.)
+      expect(orderings.size).toBeGreaterThanOrEqual(2)
+    })
+
+    it('preserves correctness across shuffles (option at answerIndex always equals admin answer)', () => {
+      const c: RawCard = {
+        id: 's2', question: 'Q?', answer: 'X',
+        options: ['A', 'B', 'C', 'X'], correctAnswerIndex: 3,
+        explanation: '',
+      }
+      for (let i = 0; i < 10; i++) {
+        const [q] = buildQuizQuestions([c])
+        expect(q!.options[q!.answerIndex]).toBe('X')
+        expect(q!.options).toHaveLength(4)
+        expect(new Set(q!.options).size).toBe(4)  // no duplicates introduced
+      }
+    })
+
+    it('reshuffles AI-cached options too (Priority 1)', () => {
+      const c: RawCard = {
+        id: 'ai1', question: 'Q?', answer: 'AnswerA',
+        explanation: '',
+        aiOptions: ['DistractorX', 'AnswerA', 'DistractorY', 'DistractorZ'],
+        aiCorrectIndex: 1,
+      }
+      const orderings = new Set<string>()
+      for (let i = 0; i < 20; i++) {
+        const [q] = buildQuizQuestions([c])
+        orderings.add(q!.options.join('|'))
+        // Correctness invariant
+        expect(q!.options[q!.answerIndex]).toBe('AnswerA')
+      }
+      expect(orderings.size).toBeGreaterThanOrEqual(2)
     })
   })
 
@@ -188,6 +240,41 @@ describe('buildQuizQuestions', () => {
       const c = card({ question: 'What is the capital of France?' })
       const [q] = buildQuizQuestions([c])
       expect(q!.stem).toBe('What is the capital of France?')
+    })
+
+    // Regression: this codifies the bug fix where Priority 4 used to pull
+    // distractors from other cards' answers in the same deck — producing
+    // misleading non-sequiturs (e.g. a Biology card getting a History date
+    // as a "wrong answer"). Practice screens must enhance cards via LLM
+    // before reaching this fallback, but when they can't, distractors must
+    // be generic placeholders, never other cards' content.
+    it('does NOT use other cards\' answers as distractors (regression)', () => {
+      const cards: RawCard[] = [
+        card({ id: '1', question: 'Photosynthesis is what?', answer: 'Plants making food' }),
+        card({ id: '2', question: 'Year of EDSA?', answer: '1986' }),
+        card({ id: '3', question: 'Author of Noli?', answer: 'Jose Rizal' }),
+        card({ id: '4', question: 'Capital of PH?', answer: 'Manila' }),
+      ]
+      const [first] = buildQuizQuestions(cards)
+      const otherAnswers = ['1986', 'Jose Rizal', 'Manila']
+      for (const wrong of otherAnswers) {
+        expect(first!.options).not.toContain(wrong)
+      }
+      // The correct answer is still present at answerIndex
+      expect(first!.options[first!.answerIndex]).toBe('Plants making food')
+    })
+
+    it('fills remaining slots with generic placeholder distractors only', () => {
+      const c = card({ id: 'solo', question: 'What is X?', answer: 'Y' })
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toHaveLength(4)
+      expect(q!.options).toContain('Y')
+      // Three distractors must come from the generic placeholder set
+      const placeholders = q!.options.filter(o => o !== 'Y')
+      expect(placeholders).toHaveLength(3)
+      for (const p of placeholders) {
+        expect(['Cannot be determined', 'None of the above', 'More information needed']).toContain(p)
+      }
     })
   })
 })

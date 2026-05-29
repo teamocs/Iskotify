@@ -18,7 +18,17 @@ export interface QuizQuestion {
   explanation: string
 }
 
-const FALLBACKS = ['Cannot be determined', 'None of the above', 'All of the above']
+// Generic, topic-agnostic placeholders used when a card has no admin-set
+// options, no AI-generated options, and no embedded MCQ format. Previous
+// behavior pulled distractors from OTHER cards' answers in the same deck,
+// which produced misleading non-sequiturs (e.g. a Biology card getting
+// a Philippine-history date as a "wrong answer"). Honest placeholders are
+// always better than misleadingly attached real-but-unrelated content.
+const FALLBACKS = [
+  'Cannot be determined',
+  'None of the above',
+  'More information needed',
+]
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -27,6 +37,18 @@ function shuffle<T>(arr: T[]): T[] {
     const tmp = a[i] as T; a[i] = a[j] as T; a[j] = tmp
   }
   return a
+}
+
+function shuffleWithIndex(opts: string[], correctIdx: number): { options: string[]; correctIndex: number } {
+  const a = [...opts]
+  let cIdx = correctIdx
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = a[i] as string; a[i] = a[j] as string; a[j] = tmp
+    if (i === cIdx) cIdx = j
+    else if (j === cIdx) cIdx = i
+  }
+  return { options: a, correctIndex: cIdx }
 }
 
 function stripPrefix(answer: string): string {
@@ -61,12 +83,15 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       card.aiCorrectIndex != null &&
       card.aiCorrectIndex >= 0 && card.aiCorrectIndex <= 3
     ) {
-      return {
-        id: card.id,
-        stem: card.question.trim(),
-        options: card.aiOptions,
-        answerIndex: card.aiCorrectIndex,
-        explanation,
+      {
+        const { options, correctIndex } = shuffleWithIndex(card.aiOptions, card.aiCorrectIndex)
+        return {
+          id: card.id,
+          stem: card.question.trim(),
+          options,
+          answerIndex: correctIndex,
+          explanation,
+        }
       }
     }
 
@@ -76,36 +101,37 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       card.correctAnswerIndex != null &&
       card.correctAnswerIndex >= 0 && card.correctAnswerIndex <= 3
     ) {
-      return {
-        id: card.id,
-        stem: card.question.trim(),
-        options: card.options,
-        answerIndex: card.correctAnswerIndex,
-        explanation,
+      {
+        const { options, correctIndex } = shuffleWithIndex(card.options, card.correctAnswerIndex)
+        return {
+          id: card.id,
+          stem: card.question.trim(),
+          options,
+          answerIndex: correctIndex,
+          explanation,
+        }
       }
     }
 
     // Priority 3: embedded A)/A. parsing
     const embedded = parseEmbedded(card)
-    if (embedded) return { ...embedded, explanation }
-
-    // Priority 4: synthetic distractors from pool
-    const correct = stripPrefix(card.answer)
-    const pool = cards
-      .filter(c => c.id !== card.id)
-      .map(c => stripPrefix(c.answer))
-      .filter(a => a.length > 0 && a.toLowerCase() !== correct.toLowerCase())
-    const unique = [...new Set(pool)]
-    const distractors = shuffle(unique).slice(0, 3)
-
-    let fi = 0
-    while (distractors.length < 3) {
-      const fb = FALLBACKS[fi % FALLBACKS.length]!
-      if (!distractors.includes(fb)) distractors.push(fb)
-      fi++
+    if (embedded) {
+      const { options, correctIndex } = shuffleWithIndex(embedded.options, embedded.answerIndex)
+      return { ...embedded, options, answerIndex: correctIndex, explanation }
     }
 
-    const all = shuffle([correct, ...distractors.slice(0, 3)])
+    // Priority 4: safe placeholder distractors
+    //
+    // Reached only when the LLM hasn't enhanced this card yet AND it has no
+    // admin-set options AND no embedded MCQ format. Practice screens should
+    // call enhanceCardsByIds() before reaching this state — this is the
+    // last-resort fallback for cards enhancement couldn't reach (model not
+    // downloaded, model rejected the card, etc.).
+    //
+    // We deliberately use generic placeholders rather than pulling distractors
+    // from other cards' answers — the latter produces misleading non-sequiturs.
+    const correct = stripPrefix(card.answer)
+    const all = shuffle([correct, ...FALLBACKS.slice(0, 3)])
     return {
       id: card.id,
       stem: card.question.trim(),
