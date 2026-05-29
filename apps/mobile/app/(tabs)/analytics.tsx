@@ -224,7 +224,7 @@ export default function AnalyticsScreen() {
         {/* Subject mastery */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Subject Mastery</Text>
-          <Text style={{ paddingHorizontal: 0, paddingBottom: 4, fontSize: 11, color: '#666' }}>
+          <Text style={{ paddingHorizontal: 0, paddingBottom: 4, fontSize: 11, color: t.textTertiary }}>
             scope: {activeSlug === 'overall' ? 'Overall' : (focusListings.find(l => l.slug === activeSlug)?.title ?? activeSlug)}
           </Text>
           <SubjectAccordion

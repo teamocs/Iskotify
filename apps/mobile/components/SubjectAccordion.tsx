@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import type { SubjectGroup } from '../utils/groupTopicsBySubject'
+import { useTheme } from '../theme/ThemeContext'
 
 interface Props<T> {
   groups: SubjectGroup<T>[]
@@ -17,6 +18,26 @@ export function SubjectAccordion<T>({
   renderRow,
   keyExtractor,
 }: Props<T>) {
+  const { theme: t } = useTheme()
+
+  const styles = useMemo(() => StyleSheet.create({
+    emptyContainer: { paddingVertical: 24, paddingHorizontal: 16, alignItems: 'center' },
+    emptyText: { color: t.textTertiary, fontSize: 14, textAlign: 'center' },
+    group: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.divider },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    chevron: { fontSize: 12, color: t.textSecondary, width: 14 },
+    name: { fontSize: 16, fontWeight: '700', color: t.textPrimary, flex: 1 },
+    summary: { fontSize: 12, color: t.textTertiary },
+    body: { paddingLeft: 12, paddingBottom: 8 },
+    rowWrap: { paddingHorizontal: 4 },
+  }), [t])
+
   const initial = useMemo<Record<string, boolean>>(() => {
     if (groups.length === 0) return {}
     if (initiallyExpanded === 'all') {
@@ -75,21 +96,3 @@ export function SubjectAccordion<T>({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  emptyContainer: { paddingVertical: 24, paddingHorizontal: 16, alignItems: 'center' },
-  emptyText: { color: '#666', fontSize: 14, textAlign: 'center' },
-  group: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e0e0e0' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  chevron: { fontSize: 12, color: '#666', width: 14 },
-  name: { fontSize: 16, fontWeight: '700', color: '#111', flex: 1 },
-  summary: { fontSize: 12, color: '#666' },
-  body: { paddingLeft: 12, paddingBottom: 8 },
-  rowWrap: { paddingHorizontal: 4 },
-})

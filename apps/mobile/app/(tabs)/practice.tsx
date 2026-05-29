@@ -587,7 +587,7 @@ export default function PracticeScreen() {
           <Text style={s.secTitle}>Subjects</Text>
         </View>
         {focusListingsList.length > 0 ? (
-          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 11, color: '#666' }}>
+          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 11, color: t.textTertiary }}>
             focus: {focusListingsList.map(l => l.slug).join(', ')}
           </Text>
         ) : null}

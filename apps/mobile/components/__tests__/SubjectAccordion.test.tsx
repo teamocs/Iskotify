@@ -1,6 +1,21 @@
 import React from 'react'
 import { Text } from 'react-native'
 import { render, fireEvent } from '@testing-library/react-native'
+
+// Mock the theme so we don't need the full ThemeProvider (which depends on useDb).
+jest.mock('../../theme/ThemeContext', () => ({
+  useTheme: () => ({
+    theme: {
+      textPrimary:   '#111',
+      textSecondary: '#666',
+      textTertiary:  '#999',
+      divider:       '#e0e0e0',
+    },
+    typo: {},
+    isDark: false,
+  }),
+}))
+
 import { SubjectAccordion } from '../SubjectAccordion'
 import type { SubjectGroup } from '../../utils/groupTopicsBySubject'
 
