@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
+import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
-  StyleSheet, View, Text, TouchableOpacity, FlatList,
+  StyleSheet, View, Text, TouchableOpacity,
   Modal, TextInput, Alert, ScrollView,
   RefreshControl,
 } from 'react-native'
@@ -399,6 +401,33 @@ export default function PracticeScreen() {
     [cardCountByTopic]
   )
 
+  const subjectGroups = useMemo(() => {
+    function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
+      const practiced = items.filter(i => i.accuracy != null) as Array<{ accuracy: number }>
+      if (practiced.length === 0) return 0
+      return Math.round(practiced.reduce((s, i) => s + i.accuracy, 0) / practiced.length)
+    }
+    return groupTopicsBySubject(
+      {
+        topics: topicRows.map(r => ({
+          id: r.topic.id,
+          name: r.topic.name,
+          subjectId: r.topic.subjectId,
+          accuracy: r.accuracy,
+        })),
+        subjects,
+        focusListingSlugs: focusListingsList.map(l => l.slug),
+        topicIdsByListingSlug,
+      },
+      (t) => topicRows.find(r => r.topic.id === t.id)!,
+      (rows, raws) => {
+        const allNew = raws.every(r => r.accuracy == null)
+        return allNew ? `${rows.length} topics · New` : `${rows.length} topics · ${avgAccuracy(raws)}% avg`
+      },
+      'accuracy-asc',
+    )
+  }, [topicRows, subjects, focusListingsList, topicIdsByListingSlug])
+
   return (
     <SafeAreaView style={s.root}>
       <View style={s.header}>
@@ -432,12 +461,9 @@ export default function PracticeScreen() {
         </ScrollView>
       </View>
 
-      <FlatList
-        data={topicRows}
-        keyExtractor={r => r.topic.id}
+      <ScrollView
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => <TopicCard row={item} s={s} />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -447,119 +473,130 @@ export default function PracticeScreen() {
             progressBackgroundColor={t.surface}
           />
         }
-        ListEmptyComponent={<Text style={s.empty}>No topics found. Try syncing again.</Text>}
-        ListHeaderComponent={
+      >
+        {/* Focus cards row */}
+        {focusListingsList.length > 0 && (
           <>
-            {/* Focus cards row */}
-            {focusListingsList.length > 0 && (
-              <>
-                <View style={s.secRow}>
-                  <Text style={s.secTitle}>My Focus</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingRight: 4, marginBottom: 12 }}
-                >
-                  {focusListingsList.map(row => (
-                    <FocusCard
-                      key={row.slug}
-                      row={row}
-                      isActive={row.slug === activeFocusSlug}
-                      onPress={() => setActiveFocusSlug(row.slug)}
-                    />
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            {/* Quick Start — auto-generated decks for active focus */}
-            {activeFocusSlug ? (
-              <>
-                <View style={s.secRow}>
-                  <Text style={s.secTitle}>Quick Start</Text>
-                  <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
-                </View>
-                <TouchableOpacity
-                  style={qs.card}
-                  onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=all`)}
-                  activeOpacity={0.8}
-                >
-                  <View style={qs.icon}><Text style={{ fontSize: 15 }}>⚡</Text></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={qs.title}>Full Review Deck</Text>
-                    <Text style={qs.sub}>Auto · all topics tagged to this listing</Text>
-                  </View>
-                  <Text style={qs.go}>›</Text>
-                </TouchableOpacity>
-                {weakTopicsForActive.length > 0 && (
-                  <TouchableOpacity
-                    style={qs.card2}
-                    onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=weak`)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={qs.icon2}><Text style={{ fontSize: 15 }}>⚠️</Text></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={qs.title}>Weak Topics Only</Text>
-                      <Text style={qs.sub}>Smart · {weakTopicsForActive.length} weak topics</Text>
-                    </View>
-                    <Text style={[qs.go, { color: 'rgba(245,158,11,0.80)' }]}>›</Text>
-                  </TouchableOpacity>
-                )}
-                <View style={{ height: 4 }} />
-              </>
-            ) : null}
-
-            {/* Recommended section */}
-            {activeRecommended.length > 0 && (
-              <>
-                <View style={s.secRow}>
-                  <Text style={s.secTitle}>Recommended</Text>
-                  <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={rc.row}
-                  style={{ marginBottom: 14 }}
-                >
-                  {activeRecommended.map(row => (
-                    <RecommendedCard key={row.topic.id} row={row} rc={rc} />
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            {/* Saved Decks section */}
             <View style={s.secRow}>
-              <Text style={s.secTitle}>Saved Decks</Text>
-              <TouchableOpacity style={s.addBtn} onPress={() => setModalVisible(true)}>
-                <Text style={s.addBtnTxt}>＋</Text>
-              </TouchableOpacity>
+              <Text style={s.secTitle}>My Focus</Text>
             </View>
-            {decks.length === 0 ? (
-              <Text style={[s.empty, { marginBottom: 14 }]}>No decks yet. Tap ＋ to create one.</Text>
-            ) : (
-              <View style={{ marginBottom: 8 }}>
-                {decks.map(deck => (
-                  <DeckCard
-                    key={deck.id}
-                    deck={deck}
-                    totalCards={deckCardCount(deck)}
-                    onDelete={() => deleteDeck(deck.id)}
-                    s={s}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* Topics section header */}
-            <View style={s.secRow}>
-              <Text style={s.secTitle}>All Topics</Text>
-            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 4, marginBottom: 12 }}
+            >
+              {focusListingsList.map(row => (
+                <FocusCard
+                  key={row.slug}
+                  row={row}
+                  isActive={row.slug === activeFocusSlug}
+                  onPress={() => setActiveFocusSlug(row.slug)}
+                />
+              ))}
+            </ScrollView>
           </>
-        }
-      />
+        )}
+
+        {/* Quick Start — auto-generated decks for active focus */}
+        {activeFocusSlug ? (
+          <>
+            <View style={s.secRow}>
+              <Text style={s.secTitle}>Quick Start</Text>
+              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
+            </View>
+            <TouchableOpacity
+              style={qs.card}
+              onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=all`)}
+              activeOpacity={0.8}
+            >
+              <View style={qs.icon}><Text style={{ fontSize: 15 }}>⚡</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={qs.title}>Full Review Deck</Text>
+                <Text style={qs.sub}>Auto · all topics tagged to this listing</Text>
+              </View>
+              <Text style={qs.go}>›</Text>
+            </TouchableOpacity>
+            {weakTopicsForActive.length > 0 && (
+              <TouchableOpacity
+                style={qs.card2}
+                onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=weak`)}
+                activeOpacity={0.8}
+              >
+                <View style={qs.icon2}><Text style={{ fontSize: 15 }}>⚠️</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={qs.title}>Weak Topics Only</Text>
+                  <Text style={qs.sub}>Smart · {weakTopicsForActive.length} weak topics</Text>
+                </View>
+                <Text style={[qs.go, { color: 'rgba(245,158,11,0.80)' }]}>›</Text>
+              </TouchableOpacity>
+            )}
+            <View style={{ height: 4 }} />
+          </>
+        ) : null}
+
+        {/* Recommended section */}
+        {activeRecommended.length > 0 && (
+          <>
+            <View style={s.secRow}>
+              <Text style={s.secTitle}>Recommended</Text>
+              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={rc.row}
+              style={{ marginBottom: 14 }}
+            >
+              {activeRecommended.map(row => (
+                <RecommendedCard key={row.topic.id} row={row} rc={rc} />
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* Saved Decks section */}
+        <View style={s.secRow}>
+          <Text style={s.secTitle}>Saved Decks</Text>
+          <TouchableOpacity style={s.addBtn} onPress={() => setModalVisible(true)}>
+            <Text style={s.addBtnTxt}>＋</Text>
+          </TouchableOpacity>
+        </View>
+        {decks.length === 0 ? (
+          <Text style={[s.empty, { marginBottom: 14 }]}>No decks yet. Tap ＋ to create one.</Text>
+        ) : (
+          <View style={{ marginBottom: 8 }}>
+            {decks.map(deck => (
+              <DeckCard
+                key={deck.id}
+                deck={deck}
+                totalCards={deckCardCount(deck)}
+                onDelete={() => deleteDeck(deck.id)}
+                s={s}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Subjects section with accordion */}
+        <View style={s.secRow}>
+          <Text style={s.secTitle}>Subjects</Text>
+        </View>
+        {focusListingsList.length > 0 ? (
+          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 11, color: '#666' }}>
+            focus: {focusListingsList.map(l => l.slug).join(', ')}
+          </Text>
+        ) : null}
+        <SubjectAccordion
+          groups={subjectGroups}
+          emptyText={
+            focusListingsList.length > 0
+              ? "Your focus list doesn't have topics yet — they'll appear here after sync"
+              : 'No topics yet'
+          }
+          initiallyExpanded="first"
+          renderRow={(row) => <TopicCard row={row} s={s} />}
+        />
+      </ScrollView>
 
       <CreateDeckModal
         visible={modalVisible}
