@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 
 const MIN_COUNT = 1
 const MAX_COUNT = 25
@@ -27,8 +28,9 @@ export function buildGenerationPrompt(params: {
   topic: string
   count: number
   listingSlugs: string[]
+  existingQuestions?: string[]
 }): string {
-  const { subject, topic, count, listingSlugs } = params
+  const { subject, topic, count, listingSlugs, existingQuestions = [] } = params
   const examLine = listingSlugs.length > 0
     ? `Target these specific exams (match their style and difficulty): ${listingSlugs.join(', ')}.`
     : `Target general Philippine college-entrance and scholarship exam style.`
@@ -68,6 +70,7 @@ Return ONLY valid JSON. No markdown fences. No preamble. Exact shape:
   ]
 }
 
+${existingQuestions.length > 0 ? `\nDO NOT duplicate or paraphrase any of these existing questions in this topic:\n${existingQuestions.map(q => `- ${q}`).join('\n')}\n` : ''}
 Generate ${count} cards now.`
 }
 
@@ -91,12 +94,16 @@ export async function POST(req: NextRequest) {
       subject_name?: string
       topic_name?: string
       listing_slugs?: string[]
+      existing_questions?: string[]
       count?: number
     } | null
 
     const subject = body?.subject_name?.trim() ?? ''
     const topic = body?.topic_name?.trim() ?? ''
     const listingSlugs = Array.isArray(body?.listing_slugs) ? body!.listing_slugs.filter(s => typeof s === 'string') : []
+    const existingQuestions = Array.isArray(body?.existing_questions)
+      ? body!.existing_questions.filter(s => typeof s === 'string')
+      : []
     const requestedCount = typeof body?.count === 'number' ? body.count : DEFAULT_COUNT
     const count = Math.max(MIN_COUNT, Math.min(MAX_COUNT, Math.floor(requestedCount)))
 
@@ -104,7 +111,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'subject_name and topic_name are required' }, { status: 400 })
     }
 
-    const prompt = buildGenerationPrompt({ subject, topic, count, listingSlugs })
+    const prompt = buildGenerationPrompt({ subject, topic, count, listingSlugs, existingQuestions })
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
     const model = genAI.getGenerativeModel({
@@ -146,7 +153,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'AI returned no valid cards' }, { status: 502 })
     }
 
-    return NextResponse.json({ cards: cleaned })
+    // Server-side dedupe against existing_questions: drop any generated card
+    // whose question matches an existing one (case-insensitive, whitespace-normalized).
+    function normalize(s: string): string {
+      return s.toLowerCase().replace(/\s+/g, ' ').trim()
+    }
+    const existingNormalized = new Set(existingQuestions.map(normalize))
+    const deduped = cleaned.filter(c => !existingNormalized.has(normalize(c.question)))
+
+    if (deduped.length === 0) {
+      return NextResponse.json({ error: 'All generated questions duplicated existing ones; try a higher count' }, { status: 502 })
+    }
+
+    // Chain distractor generation for each card. Concurrency cap matches /manual + /backfill.
+    const CONCURRENCY = 4
+    const cardsWithDistractors: Array<{ question: string; answer: string; explanation: string; aiOptions?: string[]; aiCorrectIndex?: number; aiExplanation?: string }> = []
+    for (let i = 0; i < deduped.length; i += CONCURRENCY) {
+      const slice = deduped.slice(i, i + CONCURRENCY)
+      const enriched = await Promise.all(slice.map(async c => {
+        const result = await generateDistractorsForCard({
+          subject, topic, question: c.question, answer: c.answer,
+        })
+        return result
+          ? { ...c, aiOptions: result.options, aiCorrectIndex: result.correctIndex, aiExplanation: result.explanation }
+          : c
+      }))
+      cardsWithDistractors.push(...enriched)
+    }
+
+    return NextResponse.json({ cards: cardsWithDistractors })
   } catch (err) {
     console.error('[generate] unexpected error:', err)
     return NextResponse.json({ error: 'Generation failed' }, { status: 500 })

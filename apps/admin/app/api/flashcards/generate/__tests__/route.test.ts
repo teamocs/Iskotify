@@ -9,6 +9,11 @@ vi.mock('@google/generative-ai', () => ({
   })),
 }))
 
+const mockGenerateDistractors = vi.fn().mockResolvedValue(null)
+vi.mock('@/lib/gemini/generateDistractors', () => ({
+  generateDistractorsForCard: mockGenerateDistractors,
+}))
+
 function makeReq(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/flashcards/generate', {
     method: 'POST',
@@ -26,6 +31,8 @@ beforeEach(() => {
   vi.resetModules()
   vi.stubEnv('GEMINI_API_KEY', 'fake-gemini-key')
   mockGenerateContent.mockReset()
+  mockGenerateDistractors.mockReset()
+  mockGenerateDistractors.mockResolvedValue(null)  // default: distractor gen returns null (no enrichment)
 })
 
 describe('POST /api/flashcards/generate', () => {
@@ -182,6 +189,32 @@ describe('POST /api/flashcards/generate', () => {
     const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra' }))
     expect(res.status).toBe(500)
   })
+
+  it('drops generated cards whose stems duplicate existing_questions (case-insensitive)', async () => {
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => JSON.stringify({
+          cards: [
+            { question: 'WHAT IS 2+2?', answer: '4', explanation: '' },
+            { question: 'What is 3+3?', answer: '6', explanation: '' },
+          ],
+        }),
+      },
+    })
+    const { POST } = await importRoute()
+    const res = await POST(new NextRequest('http://localhost/api/flashcards/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject_name: 'Math', topic_name: 'Algebra',
+        existing_questions: ['What is 2+2?'],
+      }),
+    }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as { cards: Array<{ question: string }> }
+    expect(body.cards).toHaveLength(1)
+    expect(body.cards[0]!.question).toBe('What is 3+3?')
+  })
 })
 
 describe('buildGenerationPrompt', () => {
@@ -215,5 +248,24 @@ describe('buildGenerationPrompt', () => {
     expect(out).toContain('Filipino')
     expect(out).toContain('Panitikan')
     expect(out).toContain('exactly 7 flashcards')
+  })
+
+  it('includes DO-NOT-DUPLICATE directive when existingQuestions provided', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({
+      subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [],
+      existingQuestions: ['What is 2+2?', 'Define a function'],
+    })
+    expect(out).toMatch(/DO NOT duplicate or paraphrase/i)
+    expect(out).toContain('What is 2+2?')
+    expect(out).toContain('Define a function')
+  })
+
+  it('omits the duplicate directive when existingQuestions empty', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({
+      subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [], existingQuestions: [],
+    })
+    expect(out).not.toMatch(/DO NOT duplicate or paraphrase/i)
   })
 })
