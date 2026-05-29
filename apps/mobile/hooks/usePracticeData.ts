@@ -49,6 +49,19 @@ export function computeStrength(
 
 const STRENGTH_PRIORITY: Record<Strength, number> = { New: 0, Weak: 1, Review: 2, Strong: 3 }
 
+// Drop topics that have zero cards in the local flashcards table. A topic record may
+// exist (subjects/topics sync in bulk) while its cards never reached this device because
+// they aren't tagged with the user's focus-list slugs. Showing such "ghost" topics as
+// empty rows in the accordion is confusing — filter them out at the source.
+export function filterTopicsWithCards<T extends { id: string }>(
+  topicList: T[],
+  fcList: Array<{ topicId: string }>,
+): T[] {
+  const counts = new Map<string, number>()
+  for (const fc of fcList) counts.set(fc.topicId, (counts.get(fc.topicId) ?? 0) + 1)
+  return topicList.filter(t => (counts.get(t.id) ?? 0) > 0)
+}
+
 // ── React hook ───────────────────────────────────────────────────────────────
 
 export function usePracticeData(): PracticeData {
@@ -107,9 +120,12 @@ export function usePracticeData(): PracticeData {
         } catch {}
       }
 
+      // Drop ghost topics (records present locally with zero synced cards) BEFORE
+      // anything downstream. Then apply the active subject-chip filter.
+      const visibleTopics = filterTopicsWithCards(topicList, fcList)
       const filteredTopics = selectedSubjectId
-        ? topicList.filter(t => t.subjectId === selectedSubjectId)
-        : topicList
+        ? visibleTopics.filter(t => t.subjectId === selectedSubjectId)
+        : visibleTopics
 
       const rows: TopicRow[] = filteredTopics.map(topic => {
         const fcIds = new Set(fcList.filter(f => f.topicId === topic.id).map(f => f.id))
@@ -140,8 +156,14 @@ export function usePracticeData(): PracticeData {
         countMap[fc.topicId] = (countMap[fc.topicId] ?? 0) + 1
       }
 
+      // Only expose subjects that have non-ghost topics. Without this, subject
+      // chips at the top of Practice would render for subjects whose cards never
+      // synced (e.g. DOST-SEI when the user is UPCAT-only).
+      const subjectIdsWithCards = new Set(visibleTopics.map(t => t.subjectId))
+      const visibleSubjects = subjectRows.filter(s => subjectIdsWithCards.has(s.id))
+
       if (isMountedRef.current) {
-        setAllSubjects(subjectRows)
+        setAllSubjects(visibleSubjects)
         setTopicRows(rows)
         setRecommendedTopics(recommended)
         setTotalCards(fcList.length)

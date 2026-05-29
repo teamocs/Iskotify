@@ -1,4 +1,4 @@
-import { computeStrength } from '../usePracticeData'
+import { computeStrength, filterTopicsWithCards } from '../usePracticeData'
 
 const fcList = [
   { id: 'fc1', topicId: 't1' },
@@ -43,5 +43,44 @@ describe('computeStrength', () => {
     expect(computeStrength('t1', [
       { flashcardId: 'fc3', correct: true }, // fc3 belongs to t2, not t1
     ], fcList)).toBe('New')
+  })
+})
+
+describe('filterTopicsWithCards', () => {
+  it('drops topics with no cards in the flashcard list', () => {
+    const topics = [
+      { id: 't1', name: 'Algebra', subjectId: 'math' },
+      { id: 't2', name: 'Geometry', subjectId: 'math' },
+      { id: 'ghost', name: 'DOST-SEI Examination', subjectId: 'dostsei' },
+    ]
+    const cards = [
+      { topicId: 't1' }, { topicId: 't1' }, { topicId: 't2' },
+    ]
+    const out = filterTopicsWithCards(topics, cards)
+    expect(out.map(t => t.id)).toEqual(['t1', 't2'])
+  })
+
+  it('returns empty when no topics have cards', () => {
+    const topics = [
+      { id: 'ghost1', name: 'A', subjectId: 's1' },
+      { id: 'ghost2', name: 'B', subjectId: 's1' },
+    ]
+    expect(filterTopicsWithCards(topics, [])).toEqual([])
+  })
+
+  it('keeps all topics when every topic has at least one card', () => {
+    const topics = [
+      { id: 't1', name: 'A', subjectId: 's1' },
+      { id: 't2', name: 'B', subjectId: 's1' },
+    ]
+    const cards = [{ topicId: 't1' }, { topicId: 't2' }]
+    const out = filterTopicsWithCards(topics, cards)
+    expect(out).toHaveLength(2)
+  })
+
+  it('preserves topic object identity (does not clone)', () => {
+    const t = { id: 't1', name: 'A', subjectId: 's1' }
+    const out = filterTopicsWithCards([t], [{ topicId: 't1' }])
+    expect(out[0]).toBe(t)
   })
 })
