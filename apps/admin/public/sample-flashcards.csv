@@ -1,0 +1,9 @@
+subject,topic,question,answer,explanation,distractors
+Mathematics,Algebra,What is 2 + 2?,4,Basic addition,3|5|6
+Mathematics,Algebra,Solve x: x + 3 = 7,4,Subtract 3 from both sides,3|5|7
+Science,Biology,What gas do plants release during photosynthesis?,Oxygen,Photosynthesis converts CO2 and water into glucose and oxygen,Carbon dioxide|Nitrogen|Hydrogen
+Science,Biology,Powerhouse of the cell?,Mitochondria,Mitochondria produce ATP through cellular respiration,Nucleus|Ribosome|Chloroplast
+Filipino,Panitikan,Sino ang pambansang bayani ng Pilipinas?,Jose Rizal,,Andres Bonifacio|Emilio Aguinaldo|Apolinario Mabini
+English,Grammar,Plural form of "child"?,Children,,Childs|Childes|Childrens
+History,Philippine History,Year of Philippine independence from Spain?,1898,Declared by Aguinaldo in Kawit,1872|1896|1946
+General Knowledge,Geography,Capital of the Philippines?,Manila,,Cebu|Davao|Quezon City
