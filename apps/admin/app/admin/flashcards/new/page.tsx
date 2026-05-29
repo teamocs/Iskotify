@@ -91,6 +91,7 @@ export default function NewFlashcardsPage() {
           topic_name: topic.trim(),
           listing_slugs: selectedSlugs,
           count: generateCount,
+          existing_questions: cards.map(c => c.question).filter(q => q.trim().length > 0),
         }),
       })
       const body = await res.json() as { cards?: CardRow[]; error?: string }
@@ -136,6 +137,7 @@ export default function NewFlashcardsPage() {
         }),
       })
       if (res.ok) {
+        alert('Saved! AI is generating multiple-choice distractors in the background — they\'ll be ready for students within ~30 seconds per card.')
         router.push('/admin/flashcards')
       } else {
         const body = await res.json() as { error?: string }
@@ -241,6 +243,8 @@ export default function NewFlashcardsPage() {
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                     Generating {generateCount} cards…
                   </>
+                ) : cards.some(c => c.question.trim() || c.answer.trim()) ? (
+                  <>+ Generate {generateCount} more</>
                 ) : (
                   <>✨ Generate {generateCount} flashcards</>
                 )}
