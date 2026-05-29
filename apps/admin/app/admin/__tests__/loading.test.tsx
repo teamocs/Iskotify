@@ -5,8 +5,6 @@ import SyncLoading from '../sync/loading'
 import FlashcardsLoading from '../flashcards/loading'
 import SubjectLoading from '../flashcards/subjects/[id]/loading'
 import CardsLoading from '../flashcards/subjects/[id]/cards/loading'
-import UploadLoading from '../flashcards/upload/loading'
-
 describe('loading skeletons', () => {
   it('ListingsLoading renders topbar + 4 stat cards + table', () => {
     const html = renderToStaticMarkup(<ListingsLoading />)
@@ -34,12 +32,6 @@ describe('loading skeletons', () => {
 
   it('CardsLoading renders topbar + accordion bars', () => {
     const html = renderToStaticMarkup(<CardsLoading />)
-    expect(html).toContain('animate-pulse')
-    expect(html).toContain('h-[52px]')
-  })
-
-  it('UploadLoading renders topbar + form block', () => {
-    const html = renderToStaticMarkup(<UploadLoading />)
     expect(html).toContain('animate-pulse')
     expect(html).toContain('h-[52px]')
   })

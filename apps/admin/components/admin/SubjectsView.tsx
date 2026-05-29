@@ -141,10 +141,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             + Add manually
           </Link>
           <Link
-            href="/admin/flashcards/upload"
+            href="/admin/flashcards/import"
             className="px-3 py-1.5 text-xs font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] transition-colors"
           >
-            Upload PDF
+            Import CSV
           </Link>
         </div>
       </div>
