@@ -2,7 +2,21 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Operator endpoints authenticate via x-admin-secret header (not Supabase session),
+// so they must bypass this middleware. The route handlers themselves enforce the
+// secret check; missing/wrong secret returns 401 from the handler.
+const OPERATOR_ENDPOINTS = [
+  '/api/flashcards/backfill',
+  '/api/flashcards/distractors',
+  '/api/flashcards/sanitize-legacy',
+]
+
 export async function middleware(request: NextRequest) {
+  // Allow operator endpoints through — they have their own auth.
+  if (OPERATOR_ENDPOINTS.some(p => request.nextUrl.pathname.startsWith(p))) {
+    return NextResponse.next({ request })
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const isLoginPage = request.nextUrl.pathname === '/login'
