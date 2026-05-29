@@ -1,10 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
+import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 
 interface CardInput {
   question: string
   answer: string
   explanation?: string
+}
+
+const CONCURRENCY = 4
+
+async function backfillDistractorsFor(
+  cards: Array<{ id: string; question: string; answer: string }>,
+  subjectName: string,
+  topicName: string,
+) {
+  const supabase = createServerClient()
+  for (let i = 0; i < cards.length; i += CONCURRENCY) {
+    const slice = cards.slice(i, i + CONCURRENCY)
+    await Promise.all(slice.map(async card => {
+      const result = await generateDistractorsForCard({
+        subject: subjectName,
+        topic: topicName,
+        question: card.question,
+        answer: card.answer,
+      })
+      if (!result) return
+      await supabase
+        .from('flashcards')
+        .update({
+          ai_options: result.options,
+          ai_correct_index: result.correctIndex,
+          ai_explanation: result.explanation,
+          ai_enhanced_at: new Date().toISOString(),
+        })
+        .eq('id', card.id)
+    }))
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -54,11 +86,19 @@ export async function POST(req: NextRequest) {
       listing_slugs,
     }))
 
-    const { error: cardsError } = await supabase.from('flashcards').insert(flashcards)
+    const { data: inserted, error: cardsError } = await supabase
+      .from('flashcards')
+      .insert(flashcards)
+      .select('id, question, answer')
+
     if (cardsError) {
       console.error('[manual] cards insert error:', cardsError)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
+
+    // Fire-and-forget: generate distractors for each new card in the background.
+    // We return success to the admin immediately; distractors land within ~30s/card.
+    void backfillDistractorsFor(inserted ?? [], subject_name, topic_name)
 
     return NextResponse.json({ ok: true, topic_id: topic.id })
   } catch (err) {

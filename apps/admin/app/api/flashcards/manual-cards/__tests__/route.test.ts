@@ -8,20 +8,26 @@ const mockSingle = vi.fn()
 const mockSelectSingle = vi.fn(() => ({ single: mockSingle }))
 const mockUpsert = vi.fn(() => ({ select: mockSelectSingle }))
 const mockInsertSelect = vi.fn(() => ({ select: mockSelectSingle }))
-const mockInsertFlat = vi.fn().mockResolvedValue({ error: null })
+// flashcards insert now chains .select() — resolve with empty inserted rows
+const mockInsertCardSelect = vi.fn().mockResolvedValue({ data: [], error: null })
+const mockInsertCard = vi.fn(() => ({ select: mockInsertCardSelect }))
 const mockEqFlat = vi.fn().mockResolvedValue({ error: null })
 const mockUpdateEq = vi.fn(() => ({ eq: mockEqFlat }))
-const mockDeleteEq = vi.fn(() => ({ eq: mockEqFlat }))
 
 vi.mock('@iskotify/utils', () => ({
   createServerClient: vi.fn(() => ({
     from: vi.fn((table: string) => {
       if (table === 'flashcard_subjects') return { upsert: mockUpsert }
       if (table === 'flashcard_topics')   return { insert: mockInsertSelect }
-      if (table === 'flashcards')         return { insert: mockInsertFlat, update: mockUpdateEq, delete: () => ({ eq: mockEqFlat }) }
+      if (table === 'flashcards')         return { insert: mockInsertCard, update: mockUpdateEq, delete: () => ({ eq: mockEqFlat }) }
       return {}
     }),
   })),
+}))
+
+// Stub out Gemini so fire-and-forget doesn't make real network calls in tests
+vi.mock('@/lib/gemini/generateDistractors', () => ({
+  generateDistractorsForCard: vi.fn().mockResolvedValue(null),
 }))
 
 // ─── POST /api/flashcards/manual ─────────────────────────────────────────────
@@ -32,7 +38,8 @@ describe('POST /api/flashcards/manual', () => {
     mockSingle.mockClear()
     mockUpsert.mockClear()
     mockInsertSelect.mockClear()
-    mockInsertFlat.mockClear()
+    mockInsertCard.mockClear()
+    mockInsertCardSelect.mockClear()
   })
 
   function makeManualReq(body: object) {
@@ -93,7 +100,7 @@ describe('POST /api/flashcards/manual', () => {
     const body = await res.json()
     expect(body.ok).toBe(true)
     expect(body.topic_id).toBe('topic-1')
-    expect(mockInsertFlat).toHaveBeenCalledWith(
+    expect(mockInsertCard).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ status: 'published', listing_slugs: ['dost-2026'] }),
       ])
