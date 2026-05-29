@@ -22,6 +22,42 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // Batch path: body has `cards` array (used by GenerateMoreModal for AI-generated cards with distractors).
+    // Inserts all cards in one go and preserves ai_* fields; returns { inserted: N }.
+    if (Array.isArray(body?.cards) && body.cards.length > 0) {
+      if (!body.topic_id) {
+        return NextResponse.json({ error: 'topic_id required' }, { status: 400 })
+      }
+      const listingSlugs: string[] = Array.isArray(body.listing_slugs)
+        ? body.listing_slugs.filter((s: unknown) => typeof s === 'string')
+        : []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = body.cards.map((c: any) => ({
+        topic_id: body.topic_id,
+        question: typeof c.question === 'string' ? c.question.trim() : '',
+        answer: typeof c.answer === 'string' ? c.answer.trim() : '',
+        explanation: typeof c.explanation === 'string' ? c.explanation.trim() : '',
+        status: 'published',
+        listing_slugs: listingSlugs,
+        ai_options: Array.isArray(c.aiOptions) ? c.aiOptions : null,
+        ai_correct_index: typeof c.aiCorrectIndex === 'number' ? c.aiCorrectIndex : null,
+        ai_explanation: typeof c.aiExplanation === 'string' ? c.aiExplanation : null,
+        ai_enhanced_at:
+          Array.isArray(c.aiOptions) && typeof c.aiCorrectIndex === 'number'
+            ? new Date().toISOString()
+            : null,
+      }))
+      const supabase = createServerClient()
+      const { error } = await supabase.from('flashcards').insert(rows)
+      if (error) {
+        console.error('[cards/POST batch] insert error:', error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ inserted: rows.length })
+    }
+
+    // Single-card path (existing behavior — unchanged).
     const { topic_id, question, answer, explanation, status, listing_slugs } = body as {
       topic_id?: string
       question?: string

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 
+// Distractor generation can take 15-30s for max 25 cards (5 sequential batches of 4 × ~3s/Gemini call).
+// Override Vercel's default 10s timeout. Requires Pro plan (Hobby plan caps at 60s anyway).
+export const maxDuration = 60
+
 const MIN_COUNT = 1
 const MAX_COUNT = 25
 const DEFAULT_COUNT = 10
