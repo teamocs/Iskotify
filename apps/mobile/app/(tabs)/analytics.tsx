@@ -3,7 +3,10 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl } 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { usePracticeData } from '../../hooks/usePracticeData'
 import { useTheme } from '../../theme/ThemeContext'
+import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
+import { SubjectAccordion } from '../../components/SubjectAccordion'
 
 function StatCard({ value, label, color }: { value: string; label: string; color?: string }) {
   const { theme: t, typo, isDark } = useTheme()
@@ -67,6 +70,31 @@ export default function AnalyticsScreen() {
   const [activeSlug, setActiveSlug] = useState<string | 'overall'>('overall')
   const analytics = useAnalytics(activeSlug)
   const { refresh } = analytics
+  const { subjects } = usePracticeData()
+
+  const subjectGroups = useMemo(() => {
+    function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
+      const practiced = items.filter(i => i.accuracy != null) as Array<{ accuracy: number }>
+      if (practiced.length === 0) return 0
+      return Math.round(practiced.reduce((s, i) => s + i.accuracy, 0) / practiced.length)
+    }
+    const topicEntries = analytics.topicMastery.filter(t => t.topicId != null && t.subjectId != null)
+    return groupTopicsBySubject(
+      {
+        topics: topicEntries.map(t => ({
+          id: t.topicId as string,
+          name: t.label,
+          subjectId: t.subjectId as string,
+          accuracy: t.accuracy,
+          sessionCount: t.sessionCount,
+        })),
+        subjects,
+      },
+      (topic) => topic,
+      (rows) => `${rows.length} topics · ${avgAccuracy(rows)}% avg`,
+      'accuracy-desc',
+    )
+  }, [analytics.topicMastery, subjects])
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -193,21 +221,27 @@ export default function AnalyticsScreen() {
           <WeeklyChart data={analytics.weeklyData} />
         </View>
 
-        {/* Topic mastery */}
-        {analytics.topicMastery.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Topic Mastery</Text>
-            {analytics.topicMastery.map((tm, i) => (
-              <View key={i} style={s.masteryRow}>
-                <Text style={s.masteryLabel} numberOfLines={1}>{tm.label}</Text>
+        {/* Subject mastery */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Subject Mastery</Text>
+          <Text style={{ paddingHorizontal: 0, paddingBottom: 4, fontSize: 11, color: '#666' }}>
+            scope: {activeSlug === 'overall' ? 'Overall' : (focusListings.find(l => l.slug === activeSlug)?.title ?? activeSlug)}
+          </Text>
+          <SubjectAccordion
+            groups={subjectGroups}
+            emptyText="Start practicing to see mastery analytics"
+            initiallyExpanded="first"
+            renderRow={(row) => (
+              <View style={s.masteryRow}>
+                <Text style={s.masteryLabel} numberOfLines={1}>{row.name}</Text>
                 <View style={s.masteryBarBg}>
-                  <View style={[s.masteryBarFill, { width: `${tm.accuracy}%` as any, backgroundColor: tm.accuracy >= 80 ? '#4ade80' : tm.accuracy >= 50 ? '#fbbf24' : '#f87171' }]} />
+                  <View style={[s.masteryBarFill, { width: `${row.accuracy}%` as any, backgroundColor: row.accuracy != null && row.accuracy >= 80 ? '#4ade80' : row.accuracy != null && row.accuracy >= 50 ? '#fbbf24' : '#f87171' }]} />
                 </View>
-                <Text style={s.masteryPct}>{tm.accuracy}%</Text>
+                <Text style={s.masteryPct}>{row.accuracy ?? 0}%</Text>
               </View>
-            ))}
-          </View>
-        )}
+            )}
+          />
+        </View>
 
         {/* Recent sessions */}
         {analytics.recentSessions.length > 0 && (
