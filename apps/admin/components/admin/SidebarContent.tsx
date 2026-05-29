@@ -20,7 +20,8 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     section: 'KNOWLEDGEBASE',
     items: [
       { href: '/admin/flashcards', icon: '🃏', label: 'Knowledgebase' },
-      { href: '/admin/flashcards/upload', icon: '📚', label: 'Upload PDF' },
+      { href: '/admin/flashcards/import', icon: '📥', label: 'Import CSV' },
+      { href: '/admin/flashcards/drafts', icon: '📝', label: 'Drafts' },
     ],
   },
 ]
