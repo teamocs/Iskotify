@@ -12,11 +12,12 @@ interface Topic {
 
 interface Props {
   subjectId: string
+  subjectName: string
   topics: Topic[]
   defaultOpenTopicId?: string
 }
 
-export function SubjectCardsView({ subjectId, topics, defaultOpenTopicId }: Props) {
+export function SubjectCardsView({ subjectId, subjectName, topics, defaultOpenTopicId }: Props) {
   if (topics.length === 0) {
     return (
       <div className="text-center py-16 text-[#6e6e73] text-sm">
@@ -33,6 +34,7 @@ export function SubjectCardsView({ subjectId, topics, defaultOpenTopicId }: Prop
           subjectId={subjectId}
           topic={topic}
           defaultOpen={topic.id === defaultOpenTopicId}
+          subjectName={subjectName}
         />
       ))}
     </div>

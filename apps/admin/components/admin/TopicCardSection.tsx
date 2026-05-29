@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react'
 import { AddCardModal } from './AddCardModal'
+import { GenerateMoreModal } from './GenerateMoreModal'
 
 interface Card {
   id: string
   question: string
   answer: string
   explanation: string | null
+  listing_slugs?: string[]
 }
 
 interface Topic {
@@ -21,12 +23,13 @@ interface Props {
   subjectId: string
   topic: Topic
   defaultOpen: boolean
+  subjectName: string
 }
 
 const textareaCls =
   'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f] resize-none'
 
-export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
+export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }: Props) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const [cards, setCards] = useState<Card[]>([])
   const [page, setPage] = useState(1)
@@ -36,6 +39,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [addingCard, setAddingCard] = useState(false)
+  const [generateMoreOpen, setGenerateMoreOpen] = useState(false)
   const [localCardCount, setLocalCardCount] = useState(topic.cardCount)
   const [editQ, setEditQ] = useState('')
   const [editA, setEditA] = useState('')
@@ -164,12 +168,20 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
           <span className="text-xs text-[#6e6e73]">({localCardCount} cards)</span>
         </button>
         {isOpen && (
-          <button
-            onClick={() => setAddingCard(true)}
-            className="text-xs font-medium text-[#800000] hover:text-[#a00000] px-3 py-1 rounded-[980px] border border-[#800000]/20 hover:bg-[#800000]/5 flex-shrink-0"
-          >
-            + Add Card
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setGenerateMoreOpen(true)}
+              className="text-xs px-3 py-1 rounded-full bg-[#1d1d1f] text-white hover:bg-black"
+            >
+              ✨ Generate more with AI
+            </button>
+            <button
+              onClick={() => setAddingCard(true)}
+              className="text-xs font-medium text-[#800000] hover:text-[#a00000] px-3 py-1 rounded-[980px] border border-[#800000]/20 hover:bg-[#800000]/5"
+            >
+              + Add Card
+            </button>
+          </div>
         )}
       </div>
 
@@ -407,6 +419,17 @@ export function TopicCardSection({ subjectId, topic, defaultOpen }: Props) {
           }}
         />
       )}
+
+      <GenerateMoreModal
+        open={generateMoreOpen}
+        onClose={() => setGenerateMoreOpen(false)}
+        topicId={topic.id}
+        topicName={topic.name}
+        subjectName={subjectName}
+        existingQuestions={cards.map(c => c.question)}
+        listingSlugs={Array.from(new Set(cards.flatMap(c => c.listing_slugs ?? [])))}
+        onSuccess={() => { loadCards(1, true) }}
+      />
     </div>
   )
 }

@@ -20,7 +20,7 @@ export async function GET(
   const supabase = createServerClient()
   const { data, count, error } = await supabase
     .from('flashcards')
-    .select('id, question, answer, explanation', { count: 'exact' })
+    .select('id, question, answer, explanation, listing_slugs', { count: 'exact' })
     .eq('topic_id', topic_id)
     .order('created_at')
     .order('id')

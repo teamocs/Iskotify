@@ -18,6 +18,7 @@ describe('TopicCardSection', () => {
     const html = renderToStaticMarkup(
       React.createElement(TopicCardSection, {
         subjectId: 'sub-1',
+        subjectName: 'Test Subject',
         topic,
         defaultOpen: false,
       })
@@ -32,6 +33,7 @@ describe('TopicCardSection', () => {
     const html = renderToStaticMarkup(
       React.createElement(TopicCardSection, {
         subjectId: 'sub-1',
+        subjectName: 'Test Subject',
         topic,
         defaultOpen: true,
       })
