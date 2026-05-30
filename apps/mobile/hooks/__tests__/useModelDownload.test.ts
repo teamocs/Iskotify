@@ -10,6 +10,8 @@ jest.mock('expo-router', () => ({
 jest.mock('../../services/llm', () => ({
   modelExists: jest.fn(),
   hasEnoughRam: jest.fn(),
+  ensureModelDirectory: jest.fn().mockResolvedValue(undefined),
+  resolveDownloadUrl: jest.fn().mockResolvedValue('https://example.com/model.gguf'),
   MODEL_PATH: '/mock/path/model.gguf',
   MODEL_DOWNLOAD_URL: 'https://example.com/model.gguf',
 }))
@@ -96,7 +98,7 @@ describe('useModelDownload', () => {
     const { result } = renderHook(() => useModelDownload())
     await act(async () => {})
 
-    act(() => {
+    await act(async () => {
       result.current.startDownload()
     })
 

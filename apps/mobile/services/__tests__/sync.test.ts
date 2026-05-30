@@ -189,6 +189,7 @@ function makeTestDb(): DrizzleClient {
       is_archived INTEGER NOT NULL DEFAULT 0,
       is_trashed INTEGER NOT NULL DEFAULT 0,
       trashed_at INTEGER,
+      reminder_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0
     );
@@ -536,6 +537,7 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       is_archived INTEGER NOT NULL DEFAULT 0,
       is_trashed INTEGER NOT NULL DEFAULT 0,
       trashed_at INTEGER,
+      reminder_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0
     );

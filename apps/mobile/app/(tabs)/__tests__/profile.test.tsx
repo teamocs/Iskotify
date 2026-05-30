@@ -108,7 +108,7 @@ describe('ProfileScreen — empty DB', () => {
 
   it('Google row is NOT shown when googleId is empty', () => {
     render(<ProfileScreen />)
-    expect(screen.queryByText('Signed in with Google')).toBeNull()
+    expect(screen.queryByText('Signed in')).toBeNull()
   })
 })
 
@@ -149,7 +149,7 @@ describe('ProfileScreen — with user data', () => {
   it('shows Google row when googleId is present', async () => {
     render(<ProfileScreen />)
     await waitFor(() => {
-      expect(screen.getByText('Signed in with Google')).toBeTruthy()
+      expect(screen.getByText('Signed in')).toBeTruthy()
       expect(screen.getByText('maria@gmail.com')).toBeTruthy()
     })
   })

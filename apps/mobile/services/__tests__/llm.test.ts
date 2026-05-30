@@ -259,7 +259,7 @@ describe('streamChatInference', () => {
     expect(config.n_predict).toBe(60)
     expect(config.top_k).toBe(40)
     expect(config.temperature).toBe(0.2)
-    expect(config.repeat_penalty).toBe(1.1)
+    expect(config.penalty_repeat).toBe(1.1)
     expect(config.top_p).toBeUndefined()
     // NEW: verify Gemma stop tokens
     expect(config.stop).toContain('<end_of_turn>')
