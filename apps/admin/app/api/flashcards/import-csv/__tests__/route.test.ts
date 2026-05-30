@@ -17,6 +17,12 @@ vi.mock('@/lib/csv/importCsvCore', () => ({
   importCsvCore: vi.fn(async () => ({ topic_ids: ['top-1'], total_cards: 2, cards_needing_enhancement: 1 })),
 }))
 
+// Mock next/cache so revalidateTag works outside Next.js request context
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: (...args: any[]) => any) => fn,
+  revalidateTag: vi.fn(),
+}))
+
 import { POST } from '../route'
 
 function makeAuthClient(user: { id: string } | null = { id: 'u1' }) {

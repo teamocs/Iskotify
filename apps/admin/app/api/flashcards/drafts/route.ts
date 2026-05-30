@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
+
+const fetchDrafts = unstable_cache(
+  async () => {
+    const supabase = createServerClient()
+    const { data, error } = await supabase
+      .from('flashcard_topics')
+      .select(`
+        id, name, source_type, created_at,
+        flashcard_subjects:flashcard_subjects!subject_id (id, name),
+        flashcards (options, ai_options)
+      `)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data ?? []
+  },
+  ['flashcards-drafts'],
+  { tags: ['drafts'], revalidate: 30 },
+)
 
 export async function GET(_req: NextRequest) {
   // Auth — cookie-aware client for the user, data client for the role + reads.
@@ -16,19 +36,14 @@ export async function GET(_req: NextRequest) {
 
   // Fetch all draft topics with their subject + raw cards array.
   // We derive counters in JS to keep the query simple and to avoid Postgres array tricks.
-  const { data, error } = await supabase
-    .from('flashcard_topics')
-    .select(`
-      id, name, source_type, created_at,
-      flashcard_subjects:flashcard_subjects!subject_id (id, name),
-      flashcards (options, ai_options)
-    `)
-    .eq('status', 'draft')
-    .order('created_at', { ascending: false })
+  let rawTopics: any[]
+  try {
+    rawTopics = await fetchDrafts()
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message ?? 'Database error' }, { status: 500 })
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const drafts = (data ?? []).map((t: any) => {
+  const drafts = rawTopics.map((t: any) => {
     const cards: Array<{ options: string[] | null; ai_options: string[] | null }> = t.flashcards ?? []
     const total_cards = cards.length
     const cards_with_options = cards.filter(c => Array.isArray(c.options) && c.options.length >= 4).length

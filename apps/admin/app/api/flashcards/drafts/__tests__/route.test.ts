@@ -10,6 +10,12 @@ vi.mock('@iskotify/utils', () => ({
   createServerClient: () => mockServerClient(),
 }))
 
+// Mock next/cache so unstable_cache and revalidateTag work outside Next.js request context
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: (...args: any[]) => any) => fn,
+  revalidateTag: vi.fn(),
+}))
+
 import { GET } from '../route'
 
 function makeReq(): any {

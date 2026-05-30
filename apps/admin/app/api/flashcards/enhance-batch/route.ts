@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
@@ -72,5 +73,6 @@ export async function POST(req: NextRequest) {
     // Pacing now handled by the Redis rate limiter inside generateDistractorsForCard.
   }
 
+  if (enhanced > 0) revalidateTag('drafts')
   return NextResponse.json({ topic_id: topicId, attempted: list.length, enhanced, failed })
 }

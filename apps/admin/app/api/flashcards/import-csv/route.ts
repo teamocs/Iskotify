@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import Papa from 'papaparse'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
@@ -95,5 +96,6 @@ export async function POST(req: NextRequest) {
     }).catch(err => console.error('[import-csv] enhance-batch dispatch failed:', err))
   }
 
+  revalidateTag('drafts')
   return NextResponse.json(result)
 }

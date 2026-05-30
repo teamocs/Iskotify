@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 
@@ -37,5 +38,7 @@ export async function POST(
     .eq('topic_id', topicId)
   if (cardErr) return NextResponse.json({ error: cardErr.message }, { status: 500 })
 
+  revalidateTag('drafts')
+  revalidateTag(`subject-cards:${topicId}`)
   return NextResponse.json({ topic_id: topicId, listing_slugs: slugs })
 }
