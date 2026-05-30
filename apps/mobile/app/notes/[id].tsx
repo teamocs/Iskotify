@@ -21,8 +21,9 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { NOTE_COLORS, parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
-import { notes as notesTable } from '../../db/schema'
+import { notes as notesTable, userSettings } from '../../db/schema'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
+import { syncReminderToCalendar, removeReminderFromCalendar } from '../../services/googleCalendar'
 
 const COLOR_KEYS = [null, 'red', 'pink', 'orange', 'yellow', 'teal', 'green', 'cyan', 'blue', 'cerulean', 'purple', 'gray'] as const
 
@@ -180,7 +181,21 @@ export default function NoteEditorScreen() {
     } else {
       await cancelNoteReminder(id)
     }
-  }, [id, db, title])
+    try {
+      const st = await db.select({ c: userSettings.googleCalendarConnected })
+        .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+      if (st[0]?.c) {
+        const rows = await db.select({ gid: notesTable.googleEventId })
+          .from(notesTable).where(eq(notesTable.id, id)).limit(1)
+        const gid = rows[0]?.gid ?? null
+        if (ms != null) {
+          await syncReminderToCalendar(db, { id, title, content, type, reminderAt: ms, googleEventId: gid })
+        } else {
+          await removeReminderFromCalendar(db, id, gid)
+        }
+      }
+    } catch (err) { console.warn('[notes/calendar] mirror failed:', err) }
+  }, [id, db, title, content, type])
 
   const bgColor = color ? NOTE_COLORS[color] : t.bg
   const textCol = color ? '#2d0a0a' : t.textPrimary
