@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
 
 const DAY_LETTERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const MAX_BACK_MONTHS = 24
@@ -76,7 +78,6 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
     header: { paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerTitle: { color: t.textPrimary, fontSize: typo.lg, fontWeight: '700' },
     arrowBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-    arrowTxt: { color: t.textSecondary, fontSize: typo.lg, fontWeight: '700' },
     todayPill: { backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
     todayTxt: { color: t.textSecondary, fontSize: typo.xs, fontWeight: '600' },
     weekdayRow: { flexDirection: 'row', paddingHorizontal: 8, marginBottom: 4 },
@@ -94,7 +95,6 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
     dotReminder: { backgroundColor: '#fbbf24' },
     dotPractice: { backgroundColor: '#60a5fa' },
     closeBtn: { padding: 6 },
-    closeTxt: { color: t.textTertiary, fontSize: typo.lg },
   }), [t, typo])
 
   const rows: MonthCell[][] = []
@@ -114,18 +114,20 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(-1)} accessibilityLabel="Previous month">
-                <Text style={styles.arrowTxt}>‹</Text>
+                <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
               </Pressable>
               <Text style={styles.headerTitle}>{monthLabel}</Text>
               <Pressable style={styles.arrowBtn} onPress={() => jumpMonths(1)} accessibilityLabel="Next month">
-                <Text style={styles.arrowTxt}>›</Text>
+                <View style={{ transform: [{ scaleX: -1 }] }}>
+                  <Lineicons icon={ChevronLeftOutlined} size={20} color={t.textSecondary} />
+                </View>
               </Pressable>
               <Pressable style={styles.todayPill} onPress={jumpToToday}>
                 <Text style={styles.todayTxt}>Today</Text>
               </Pressable>
             </View>
             <Pressable style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close month sheet">
-              <Text style={styles.closeTxt}>✕</Text>
+              <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
             </Pressable>
           </View>
 

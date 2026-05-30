@@ -102,7 +102,7 @@ describe('DayItemsList', () => {
 
   it('calls onTapAdd when [+ Add reminder] is pressed', () => {
     const onTapAdd = jest.fn()
-    const { getByText } = render(
+    const { getByLabelText } = render(
       <DayItemsList
         exams={[]}
         reminders={[]}
@@ -112,7 +112,7 @@ describe('DayItemsList', () => {
         onDeleteReminder={jest.fn()}
       />
     )
-    fireEvent.press(getByText('+ Add reminder'))
+    fireEvent.press(getByLabelText('Add a new reminder for this day'))
     expect(onTapAdd).toHaveBeenCalledTimes(1)
   })
 })

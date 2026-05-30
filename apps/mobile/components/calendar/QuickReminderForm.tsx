@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Alarm1Outlined } from '@lineiconshq/free-icons'
 
 export interface QuickReminderPayload {
   title: string
@@ -51,7 +53,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
     addChecklistBtn: { paddingVertical: 6, alignSelf: 'flex-start' },
     addChecklistTxt: { color: t.accentText, fontSize: typo.sm, fontWeight: '600' },
     timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    timeChip: { backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 6 },
+    timeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 6 },
     timeTxt: { color: t.textSecondary, fontSize: typo.sm, fontWeight: '600' },
     btnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
     btnSecondary: { backgroundColor: 'transparent', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 980 },
@@ -135,7 +137,8 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
 
       <View style={styles.timeRow}>
         <View style={styles.timeChip}>
-          <Text style={styles.timeTxt}>⏰ 12:00 PM</Text>
+          <Lineicons icon={Alarm1Outlined} size={14} color={t.textSecondary} />
+          <Text style={styles.timeTxt}>12:00 PM</Text>
         </View>
         <Text style={{ color: t.textTertiary, fontSize: typo.xs }}>
           (custom time available in full editor)

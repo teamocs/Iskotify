@@ -348,6 +348,31 @@ export default function HomeScreen() {
     void refresh()
   }
 
+  async function handleSaveAndOpenEditor(payload: QuickReminderPayload) {
+    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const now = Date.now()
+    await db.insert(notesTable).values({
+      id,
+      title: payload.title,
+      content: payload.content,
+      type: payload.type,
+      isPinned: false,
+      isArchived: false,
+      isTrashed: false,
+      reminderAt: payload.reminderAt,
+      createdAt: now,
+      updatedAt: now,
+    })
+    try {
+      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
+    } catch (err) {
+      console.warn('[home/reminder] schedule failed:', err)
+    }
+    setActiveDayMs(null)
+    void refresh()
+    router.push(`/notes/${id}`)
+  }
+
   async function handleDeleteReminder(noteId: string) {
     await db.update(notesTable)
       .set({ reminderAt: null, updatedAt: Date.now() })
@@ -725,6 +750,7 @@ export default function HomeScreen() {
         dayStartMs={activeDayMs ?? 0}
         onClose={() => setActiveDayMs(null)}
         onSaveReminder={handleSaveReminder}
+        onSaveAndOpenEditor={handleSaveAndOpenEditor}
         onOpenNoteEditor={handleOpenNoteEditor}
         onOpenListing={handleOpenListing}
         onDeleteReminder={handleDeleteReminder}

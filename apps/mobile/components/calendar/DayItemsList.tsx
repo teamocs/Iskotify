@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import type { DayExam, DayReminder } from '../../hooks/useDateReminders'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Trash3Outlined, PlusOutlined } from '@lineiconshq/free-icons'
 
 interface Props {
   exams: DayExam[]
@@ -37,7 +39,6 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
     reminderTitle: { color: t.textPrimary, fontSize: typo.sm, fontWeight: '600' },
     reminderTime: { color: t.textTertiary, fontSize: typo.xs, marginTop: 2 },
     deleteBtn: { paddingHorizontal: 6, paddingVertical: 4 },
-    deleteTxt: { color: t.textTertiary, fontSize: typo.md },
     addBtn: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: t.border, borderStyle: 'dashed' },
     addTxt: { color: t.accentText, fontSize: typo.sm, fontWeight: '700' },
     empty: { color: t.textTertiary, fontSize: typo.sm, fontStyle: 'italic' },
@@ -87,7 +88,7 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
                 accessibilityRole="button"
                 accessibilityLabel={`Delete reminder ${r.noteTitle}`}
               >
-                <Text style={styles.deleteTxt}>🗑</Text>
+                <Lineicons icon={Trash3Outlined} size={16} color={t.textTertiary} />
               </Pressable>
             </View>
           ))
@@ -100,7 +101,10 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
         accessibilityRole="button"
         accessibilityLabel="Add a new reminder for this day"
       >
-        <Text style={styles.addTxt}>+ Add reminder</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Lineicons icon={PlusOutlined} size={16} color={t.accentText} />
+          <Text style={styles.addTxt}>Add reminder</Text>
+        </View>
       </Pressable>
     </View>
   )

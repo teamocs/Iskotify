@@ -31,6 +31,7 @@ describe('DateActionSheet', () => {
         dayStartMs={dayStartMs}
         onClose={jest.fn()}
         onSaveReminder={jest.fn()}
+        onSaveAndOpenEditor={jest.fn()}
         onOpenNoteEditor={jest.fn()}
         onOpenListing={jest.fn()}
         onDeleteReminder={jest.fn()}
@@ -48,6 +49,7 @@ describe('DateActionSheet', () => {
         dayStartMs={dayStartMs}
         onClose={jest.fn()}
         onSaveReminder={jest.fn()}
+        onSaveAndOpenEditor={jest.fn()}
         onOpenNoteEditor={jest.fn()}
         onOpenListing={jest.fn()}
         onDeleteReminder={jest.fn()}
@@ -62,19 +64,20 @@ describe('DateActionSheet', () => {
       exams: [{ slug: 'upcat', title: 'UPCAT 2026', label: 'Exam', date: dayStartMs + 9 * 3_600_000 }],
       reminders: [],
     })
-    const { getByText, queryByPlaceholderText } = render(
+    const { getByText, queryByPlaceholderText, getByLabelText } = render(
       <DateActionSheet
         visible={true}
         dayStartMs={dayStartMs}
         onClose={jest.fn()}
         onSaveReminder={jest.fn()}
+        onSaveAndOpenEditor={jest.fn()}
         onOpenNoteEditor={jest.fn()}
         onOpenListing={jest.fn()}
         onDeleteReminder={jest.fn()}
       />
     )
     expect(getByText(/UPCAT 2026/)).toBeTruthy()
-    expect(getByText('+ Add reminder')).toBeTruthy()
+    expect(getByLabelText('Add a new reminder for this day')).toBeTruthy()
     expect(queryByPlaceholderText("What's the reminder?")).toBeNull()
   })
 
@@ -83,18 +86,19 @@ describe('DateActionSheet', () => {
       exams: [{ slug: 'upcat', title: 'UPCAT 2026', label: 'Exam', date: dayStartMs + 9 * 3_600_000 }],
       reminders: [],
     })
-    const { getByText, getByPlaceholderText } = render(
+    const { getByLabelText, getByPlaceholderText } = render(
       <DateActionSheet
         visible={true}
         dayStartMs={dayStartMs}
         onClose={jest.fn()}
         onSaveReminder={jest.fn()}
+        onSaveAndOpenEditor={jest.fn()}
         onOpenNoteEditor={jest.fn()}
         onOpenListing={jest.fn()}
         onDeleteReminder={jest.fn()}
       />
     )
-    fireEvent.press(getByText('+ Add reminder'))
+    fireEvent.press(getByLabelText('Add a new reminder for this day'))
     expect(getByPlaceholderText("What's the reminder?")).toBeTruthy()
   })
 
@@ -107,6 +111,7 @@ describe('DateActionSheet', () => {
         dayStartMs={dayStartMs}
         onClose={jest.fn()}
         onSaveReminder={onSaveReminder}
+        onSaveAndOpenEditor={jest.fn()}
         onOpenNoteEditor={jest.fn()}
         onOpenListing={jest.fn()}
         onDeleteReminder={jest.fn()}
