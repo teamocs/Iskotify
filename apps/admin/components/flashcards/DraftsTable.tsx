@@ -45,52 +45,60 @@ export function DraftsTable() {
   }, [])
 
   if (error) {
-    return <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-300 text-sm">{error}</div>
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">
+        {error}
+      </div>
+    )
   }
   if (drafts === null) {
-    return <div className="text-white/40 text-sm">Loading drafts…</div>
+    return (
+      <div className="rounded-xl border border-black/[0.08] bg-white px-6 py-12 text-center text-[#6e6e73] text-sm">
+        Loading drafts…
+      </div>
+    )
   }
   if (drafts.length === 0) {
     return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-6 py-12 text-center">
-        <div className="text-3xl mb-2">📥</div>
-        <div className="text-white font-semibold mb-1">No drafts</div>
-        <div className="text-white/40 text-sm">Import a CSV to get started.</div>
+      <div className="rounded-2xl border border-black/[0.08] bg-white px-6 py-16 text-center shadow-sm">
+        <div className="text-4xl mb-3">📥</div>
+        <div className="text-[#1d1d1f] font-semibold font-heading mb-1">No drafts</div>
+        <div className="text-[#6e6e73] text-sm">Import a CSV to get started.</div>
       </div>
     )
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
+    <div className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-white/[0.04] text-white/60">
+        <thead className="bg-[#f5f5f7] text-[#6e6e73]">
           <tr>
-            <th className="px-3 py-2 text-left">Subject</th>
-            <th className="px-3 py-2 text-left">Topic</th>
-            <th className="px-3 py-2 text-left">Cards</th>
-            <th className="px-3 py-2 text-left">Enhancement</th>
-            <th className="px-3 py-2 text-left">Source</th>
-            <th className="px-3 py-2 text-left">Created</th>
-            <th className="px-3 py-2 text-right">Action</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Subject</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Topic</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Cards</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Enhancement</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Source</th>
+            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Created</th>
+            <th className="px-4 py-2.5 text-right font-medium uppercase tracking-wider text-[11px]">Action</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-black/[0.06]">
           {drafts.map(d => (
-            <tr key={d.topic_id} className="odd:bg-white/[0.02]">
-              <td className="px-3 py-2 text-white/80">{d.subject_name}</td>
-              <td className="px-3 py-2 text-white">{d.topic_name}</td>
-              <td className="px-3 py-2">{d.total_cards}</td>
-              <td className="px-3 py-2">
+            <tr key={d.topic_id} className="hover:bg-[#fafafb]">
+              <td className="px-4 py-3 text-[#6e6e73]">{d.subject_name}</td>
+              <td className="px-4 py-3 text-[#1d1d1f] font-medium">{d.topic_name}</td>
+              <td className="px-4 py-3 text-[#1d1d1f]">{d.total_cards}</td>
+              <td className="px-4 py-3">
                 <EnhancementCell draft={d} />
               </td>
-              <td className="px-3 py-2">
+              <td className="px-4 py-3">
                 <SourceBadge source={d.source_type} />
               </td>
-              <td className="px-3 py-2 text-white/40 text-xs">{relTime(d.created_at)}</td>
-              <td className="px-3 py-2 text-right">
+              <td className="px-4 py-3 text-[#6e6e73] text-xs">{relTime(d.created_at)}</td>
+              <td className="px-4 py-3 text-right">
                 <Link
                   href={`/admin/flashcards/review/${d.topic_id}`}
-                  className="rounded bg-[#800000]/80 hover:bg-[#9a0a1f] text-white px-3 py-1 text-xs"
+                  className="inline-flex items-center rounded-[980px] bg-[#800000] hover:bg-[#9a0a1f] text-white px-3 py-1.5 text-xs font-medium transition-colors shadow-sm"
                 >
                   Review & Publish
                 </Link>
@@ -105,26 +113,36 @@ export function DraftsTable() {
 
 function EnhancementCell({ draft }: { draft: Draft }) {
   const ready = draft.cards_with_options + draft.cards_enhanced
-  if (draft.cards_needing_enhancement === 0) return <span className="text-green-400">✓ Complete ({ready}/{draft.total_cards})</span>
+  if (draft.cards_needing_enhancement === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-green-700 text-xs font-medium">
+        <span>✓</span> Complete ({ready}/{draft.total_cards})
+      </span>
+    )
+  }
   const pct = Math.round((ready / draft.total_cards) * 100)
   return (
     <div className="flex items-center gap-2">
-      <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
-        <div className="h-full bg-[#800000]" style={{ width: `${pct}%` }} />
+      <div className="w-24 h-1.5 bg-black/[0.08] rounded-full overflow-hidden">
+        <div className="h-full bg-[#800000] transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-white/60 text-xs">{ready}/{draft.total_cards}</span>
+      <span className="text-[#6e6e73] text-xs tabular-nums">{ready}/{draft.total_cards}</span>
     </div>
   )
 }
 
 function SourceBadge({ source }: { source: Draft['source_type'] }) {
   const map: Record<Draft['source_type'], string> = {
-    csv: 'bg-blue-500/20 text-blue-300',
-    pdf: 'bg-amber-500/20 text-amber-300',
-    manual: 'bg-white/10 text-white/60',
-    ai: 'bg-purple-500/20 text-purple-300',
+    csv: 'bg-blue-100 text-blue-800',
+    pdf: 'bg-amber-100 text-amber-800',
+    manual: 'bg-gray-100 text-gray-700',
+    ai: 'bg-purple-100 text-purple-800',
   }
-  return <span className={`px-2 py-0.5 rounded text-xs ${map[source]}`}>{source.toUpperCase()}</span>
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${map[source]}`}>
+      {source.toUpperCase()}
+    </span>
+  )
 }
 
 function relTime(iso: string): string {
