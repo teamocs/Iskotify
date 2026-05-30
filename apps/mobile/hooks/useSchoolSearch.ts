@@ -1,10 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Platform } from 'react-native'
 import { supabase } from '../services/supabase'
 
-const PLACES_URL = 'https://places.googleapis.com/v1/places:autocomplete'
-const PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ?? ''
-const PLACES_KEY_PLACEHOLDER = 'FILL_IN_YOUR_GOOGLE_PLACES_API_KEY'
+const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.vercel.app'
 
 export const MIN_QUERY_LENGTH = 2
 const DEBOUNCE_MS = 300
@@ -87,49 +84,11 @@ async function searchSupabase(q: string): Promise<SchoolResult[]> {
 }
 
 async function searchPlaces(q: string): Promise<SchoolResult[]> {
-  if (!PLACES_KEY || PLACES_KEY === PLACES_KEY_PLACEHOLDER) {
-    throw new Error('Places API key not configured')
-  }
-
-  const platformHeaders: Record<string, string> = Platform.OS === 'ios'
-    ? { 'X-Ios-Bundle-Identifier': 'app.iskotify.mobile' }
-    : Platform.OS === 'android'
-      ? { 'X-Android-Package': 'app.iskotify.mobile' }
-      : {}
-
-  const res = await fetch(PLACES_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': PLACES_KEY,
-      'X-Goog-FieldMask': 'suggestions.placePrediction.structuredFormat',
-      ...platformHeaders,
-    },
-    body: JSON.stringify({
-      input: q,
-      includedPrimaryTypes: ['school', 'secondary_school', 'university'],
-      includedRegionCodes: ['ph'],
-    }),
-  })
-
-  if (!res.ok) throw new Error(`Places API HTTP ${res.status}`)
-
-  const json = await res.json() as {
-    suggestions?: Array<{
-      placePrediction: {
-        structuredFormat: {
-          mainText: { text: string }
-          secondaryText: { text: string }
-        }
-      }
-    }>
-  }
-
-  return (json.suggestions ?? []).map(s => ({
-    name: s.placePrediction.structuredFormat.mainText.text,
-    subtitle: s.placePrediction.structuredFormat.secondaryText.text,
-    source: 'places' as const,
-  }))
+  const url = `${ADMIN_BASE_URL}/api/places/school-search?q=${encodeURIComponent(q)}&lang=en&region=ph`
+  const res = await fetch(url, { method: 'GET' })
+  if (!res.ok) throw new Error(`Places proxy HTTP ${res.status}`)
+  const json = await res.json() as { suggestions?: Array<{ name: string; subtitle: string; source: 'places' }> }
+  return json.suggestions ?? []
 }
 
 // Insert user-contributed schools so the directory grows over time.

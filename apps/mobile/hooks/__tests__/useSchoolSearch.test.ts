@@ -28,20 +28,14 @@ function mockSupabaseSelect(rows: SchoolRow[], error: unknown = null) {
 const MOCK_PLACES_RESPONSE = {
   suggestions: [
     {
-      placePrediction: {
-        structuredFormat: {
-          mainText: { text: 'San Beda University' },
-          secondaryText: { text: 'Mendiola, Manila, Philippines' },
-        },
-      },
+      name: 'San Beda University',
+      subtitle: 'Mendiola, Manila, Philippines',
+      source: 'places' as const,
     },
     {
-      placePrediction: {
-        structuredFormat: {
-          mainText: { text: 'San Juan National High School' },
-          secondaryText: { text: 'San Juan, Metro Manila, Philippines' },
-        },
-      },
+      name: 'San Juan National High School',
+      subtitle: 'San Juan, Metro Manila, Philippines',
+      source: 'places' as const,
     },
   ],
 }
@@ -245,6 +239,10 @@ describe('useSchoolSearch', () => {
       source: 'places',
     })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/api/places/school-search?q='),
+      expect.objectContaining({ method: 'GET' }),
+    )
   })
 
   it('clears results when query drops below MIN_QUERY_LENGTH', async () => {
