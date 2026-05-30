@@ -146,7 +146,8 @@ function makeTestDb(): DrizzleClient {
       email TEXT,
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
-      focus_mode_enabled INTEGER NOT NULL DEFAULT 1
+      focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -190,6 +191,7 @@ function makeTestDb(): DrizzleClient {
       is_trashed INTEGER NOT NULL DEFAULT 0,
       trashed_at INTEGER,
       reminder_at INTEGER,
+      google_event_id TEXT,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0
     );
@@ -494,7 +496,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       email TEXT,
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
-      focus_mode_enabled INTEGER NOT NULL DEFAULT 1
+      focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -538,6 +541,7 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       is_trashed INTEGER NOT NULL DEFAULT 0,
       trashed_at INTEGER,
       reminder_at INTEGER,
+      google_event_id TEXT,
       created_at INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT 0
     );

@@ -188,6 +188,8 @@ const MIGRATIONS = [
   `INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
    SELECT f.id, f.topic_id, f.question, f.answer, f.explanation FROM flashcards f
    WHERE NOT EXISTS (SELECT 1 FROM flashcards_fts WHERE flashcard_id = f.id)`,
+  `ALTER TABLE notes ADD COLUMN google_event_id TEXT`,
+  `ALTER TABLE user_settings ADD COLUMN google_calendar_connected INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

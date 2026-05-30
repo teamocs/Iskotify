@@ -68,6 +68,7 @@ export const userSettings = sqliteTable('user_settings', {
   notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
   theme: text('theme').notNull().default('system'),
   focusModeEnabled: integer('focus_mode_enabled', { mode: 'boolean' }).notNull().default(true),
+  googleCalendarConnected: integer('google_calendar_connected', { mode: 'boolean' }).notNull().default(false),
 })
 
 export const userProgress = sqliteTable('user_progress', {
@@ -143,6 +144,7 @@ export const notes = sqliteTable('notes', {
   isTrashed: integer('is_trashed', { mode: 'boolean' }).notNull().default(false),
   trashedAt: integer('trashed_at'),
   reminderAt: integer('reminder_at'),
+  googleEventId: text('google_event_id'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => [
