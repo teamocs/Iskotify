@@ -67,7 +67,14 @@ export async function DELETE(
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    // 23503 = foreign_key_violation — surface a useful message instead of generic 500.
+    if (error.code === '23503') {
+      return NextResponse.json(
+        { error: 'Cannot delete: this subject is still referenced by other records.', detail: error.message },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })
   }
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return new NextResponse(null, { status: 204 })
