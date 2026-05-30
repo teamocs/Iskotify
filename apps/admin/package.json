@@ -17,6 +17,7 @@
     "@iskotify/ui": "workspace:*",
     "@iskotify/utils": "workspace:*",
     "@supabase/ssr": "^0.10.3",
+    "@upstash/redis": "1.34.3",
     "googleapis": "^144.0.0",
     "nativewind": "^4.1.23",
     "next": "15.5.18",
