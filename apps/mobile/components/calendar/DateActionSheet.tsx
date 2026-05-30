@@ -68,7 +68,12 @@ export function DateActionSheet({
                 <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
               </Pressable>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={{ flexShrink: 1 }}
+              contentContainerStyle={{ flexGrow: 0 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               {showForm ? (
                 <QuickReminderForm
                   dayStartMs={dayStartMs}
