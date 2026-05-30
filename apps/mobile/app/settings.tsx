@@ -12,6 +12,7 @@ import {
   Shield2Outlined,
   ExitOutlined,
   Brush2Outlined,
+  CalendarDaysOutlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
@@ -152,6 +153,15 @@ export default function SettingsScreen() {
           onPress={() => router.push('/help')} />
         <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
           onPress={() => router.push('/privacy')} />
+
+        <Text style={s.secLabel}>Integrations</Text>
+        <SettingsRow
+          icon={CalendarDaysOutlined}
+          iconBg="rgba(31,153,243,0.12)"
+          iconColor="#1f99f3"
+          label="Google Calendar"
+          onPress={() => router.push('/settings/google-calendar')}
+        />
 
         <Text style={s.secLabel}>Session</Text>
         <SettingsRow icon={ExitOutlined} iconBg="rgba(239,68,68,0.10)" iconColor="#f87171" label="Exit App" onPress={handleExitApp} />
