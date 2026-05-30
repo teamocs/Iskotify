@@ -38,6 +38,26 @@ jest.mock('../../../hooks/useModelDownload', () => ({
   }),
 }))
 
+jest.mock('../../../hooks/useDb', () => ({
+  useDb: () => ({
+    insert: jest.fn().mockReturnValue({ values: jest.fn().mockResolvedValue(undefined) }),
+    update: jest.fn().mockReturnValue({ set: jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) }) }),
+  }),
+}))
+
+jest.mock('../../../services/notifications', () => ({
+  scheduleNoteReminder: jest.fn().mockResolvedValue(undefined),
+  cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('../../../components/calendar/DateActionSheet', () => ({
+  DateActionSheet: () => null,
+}))
+
+jest.mock('../../../components/calendar/MonthSheet', () => ({
+  MonthSheet: () => null,
+}))
+
 jest.mock('../../../components/AskKuyaModal', () => ({
   AskKuyaModal: () => null,
 }))

@@ -11,6 +11,13 @@ import { useAiCoach } from '../../hooks/useAiCoach'
 import { useModelDownload } from '../../hooks/useModelDownload'
 import { useTheme } from '../../theme/ThemeContext'
 import { AskKuyaModal } from '../../components/AskKuyaModal'
+import { eq } from 'drizzle-orm'
+import { DateActionSheet } from '../../components/calendar/DateActionSheet'
+import { MonthSheet } from '../../components/calendar/MonthSheet'
+import { useDb } from '../../hooks/useDb'
+import { notes as notesTable } from '../../db/schema'
+import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
+import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -307,6 +314,58 @@ function NotificationModal({
 
 export default function HomeScreen() {
   const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings, noteReminders, refresh } = useHomeStats()
+  const db = useDb()
+  const [activeDayMs, setActiveDayMs] = useState<number | null>(null)
+  const [showMonth, setShowMonth] = useState(false)
+
+  // Derive day indices for amber reminder dots (matches dayIndex math used by CalendarStrip)
+  const reminderDays = useMemo(
+    () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
+    [noteReminders]
+  )
+
+  async function handleSaveReminder(payload: QuickReminderPayload) {
+    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const now = Date.now()
+    await db.insert(notesTable).values({
+      id,
+      title: payload.title,
+      content: payload.content,
+      type: payload.type,
+      isPinned: false,
+      isArchived: false,
+      isTrashed: false,
+      reminderAt: payload.reminderAt,
+      createdAt: now,
+      updatedAt: now,
+    })
+    try {
+      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
+    } catch (err) {
+      console.warn('[home/reminder] schedule failed:', err)
+    }
+    setActiveDayMs(null)
+    void refresh()
+  }
+
+  async function handleDeleteReminder(noteId: string) {
+    await db.update(notesTable)
+      .set({ reminderAt: null, updatedAt: Date.now() })
+      .where(eq(notesTable.id, noteId))
+    try { await cancelNoteReminder(noteId) } catch {}
+    void refresh()
+  }
+
+  function handleOpenNoteEditor(noteId: string) {
+    setActiveDayMs(null)
+    router.push(`/notes/${noteId}`)
+  }
+
+  function handleOpenListing(slug: string) {
+    setActiveDayMs(null)
+    router.push(`/listings/${slug}`)
+  }
+
   const { sessionCount, streak } = useAnalytics('overall')
 
   const [refreshing, setRefreshing] = useState(false)
@@ -517,7 +576,13 @@ export default function HomeScreen() {
 
           {/* 7-day calendar strip — MOVED BELOW AI COACH */}
           <View style={s.calendarWrap}>
-            <CalendarStrip importantDays={importantDays} practiceDays={practiceDays} />
+            <CalendarStrip
+              importantDays={importantDays}
+              practiceDays={practiceDays}
+              reminderDays={reminderDays}
+              onDayPress={setActiveDayMs}
+              onHeaderPress={() => setShowMonth(true)}
+            />
           </View>
 
           {/* Stats row */}
@@ -614,7 +679,19 @@ export default function HomeScreen() {
                 const dayColor = d < 14 ? '#f87171' : d < 30 ? '#fbbf24' : '#4ade80'
                 const isReminder = item.entryType === 'reminder'
                 return (
-                  <View key={item.slug} style={s.upcomingCard}>
+                  <Pressable
+                    key={item.slug}
+                    style={s.upcomingCard}
+                    onPress={() => {
+                      if (item.entryType === 'reminder') {
+                        router.push(`/notes/${item.slug}`)
+                      } else {
+                        router.push(`/listings/${item.slug}`)
+                      }
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${item.title}`}
+                  >
                     <View style={s.upcomingIcon}>
                       {isReminder
                         ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
@@ -628,7 +705,7 @@ export default function HomeScreen() {
                     <View style={[s.upcomingBadge, { backgroundColor: `${dayColor}18`, borderColor: `${dayColor}40` }]}>
                       <Text style={[s.upcomingDays, { color: dayColor }]}>{d < 1 ? 'Today' : `${d}d`}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 )
               })}
             </View>
@@ -643,6 +720,26 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
+      <DateActionSheet
+        visible={activeDayMs != null}
+        dayStartMs={activeDayMs ?? 0}
+        onClose={() => setActiveDayMs(null)}
+        onSaveReminder={handleSaveReminder}
+        onOpenNoteEditor={handleOpenNoteEditor}
+        onOpenListing={handleOpenListing}
+        onDeleteReminder={handleDeleteReminder}
+      />
+      <MonthSheet
+        visible={showMonth}
+        onClose={() => setShowMonth(false)}
+        onDayPress={(ms) => {
+          setShowMonth(false)
+          setActiveDayMs(ms)
+        }}
+        importantDays={importantDays}
+        reminderDays={reminderDays}
+        practiceDays={practiceDays}
+      />
       <NotificationModal
         visible={showNotifModal}
         enabled={notifEnabled}
