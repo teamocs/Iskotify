@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { waitForRateAllow } from '../redis/rateLimiter'
 
 export interface DistractorResult {
   options: string[]      // 4 entries, shuffled, includes the correct answer
@@ -75,6 +76,9 @@ export async function generateDistractorsForCard(input: DistractorInput): Promis
       },
     })
 
+    // Cross-instance rate-limit gate. Replaces the in-process sleep() that used
+    // to live in callers — that only worked under a single Vercel function instance.
+    await waitForRateAllow('gemini:global', { max: 14, windowSec: 60 })
     const result = await model.generateContent(buildPrompt(input))
     const raw = result.response.text()
 
