@@ -17,9 +17,15 @@ const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 function CalendarStrip({
   importantDays,
   practiceDays,
+  reminderDays,
+  onDayPress,
+  onHeaderPress,
 }: {
   importantDays: Set<number>
   practiceDays: Set<number>
+  reminderDays: Set<number>
+  onDayPress: (dayStartMs: number) => void
+  onHeaderPress: () => void
 }) {
   const { theme: t, typo } = useTheme()
   const cs = useMemo(() => StyleSheet.create({
@@ -43,6 +49,7 @@ function CalendarStrip({
     numToday: { color: t.bg },
     dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
     dotActive: { backgroundColor: '#60a5fa' },
+    dotReminder: { backgroundColor: '#fbbf24' },
     dotExam: { backgroundColor: t.accentText },
   }), [t, typo])
 
@@ -58,6 +65,7 @@ function CalendarStrip({
     isToday: boolean
     hasExam: boolean
     hasPractice: boolean
+    hasReminder: boolean
   }> = []
   for (let offset = -3; offset <= 3; offset++) {
     const dayIndex = centerDay + offset
@@ -69,6 +77,7 @@ function CalendarStrip({
       isToday: dayIndex === todayDay,
       hasExam: importantDays.has(dayIndex),
       hasPractice: practiceDays.has(dayIndex),
+      hasReminder: reminderDays.has(dayIndex),
     })
   }
 
@@ -101,7 +110,9 @@ function CalendarStrip({
           >
             <Text style={cs.arrowTxt}>‹</Text>
           </TouchableOpacity>
-          <Text style={cs.monthLbl}>{monthLabel}</Text>
+          <Pressable onPress={onHeaderPress} accessibilityRole="button" accessibilityLabel="Open full month calendar">
+            <Text style={cs.monthLbl}>{monthLabel}</Text>
+          </Pressable>
           <TouchableOpacity
             onPress={() => setWeekOffset(w => w + 1)}
             hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
@@ -128,7 +139,19 @@ function CalendarStrip({
       {/* Days row */}
       <View style={cs.row}>
         {days.map((d, i) => (
-          <View key={i} style={cs.dayCol}>
+          <Pressable
+            key={i}
+            style={cs.dayCol}
+            onPress={() => {
+              // Day index is UTC-based. Build local midnight from the UTC date components
+              // so DateActionSheet shows the same day the user tapped.
+              const utcD = new Date(d.dayIndex * 86_400_000)
+              const localMidnight = new Date(utcD.getUTCFullYear(), utcD.getUTCMonth(), utcD.getUTCDate()).getTime()
+              onDayPress(localMidnight)
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Day ${d.dayNum}`}
+          >
             <Text style={[cs.letter, d.isToday && cs.letterToday]}>
               {d.dayLetter}
             </Text>
@@ -144,9 +167,10 @@ function CalendarStrip({
             <View style={[
               cs.dot,
               d.hasPractice && cs.dotActive,
+              d.hasReminder && cs.dotReminder,
               d.hasExam && cs.dotExam,
             ]} />
-          </View>
+          </Pressable>
         ))}
       </View>
     </View>
