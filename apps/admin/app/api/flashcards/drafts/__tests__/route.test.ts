@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const mockAuthClient = vi.fn()
 const mockServerClient = vi.fn()
+
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: async () => mockAuthClient(),
+}))
 vi.mock('@iskotify/utils', () => ({
   createServerClient: () => mockServerClient(),
 }))
@@ -11,12 +16,19 @@ function makeReq(): any {
   return { url: 'http://localhost/api/flashcards/drafts', headers: new Headers() }
 }
 
-beforeEach(() => { mockServerClient.mockReset() })
+function makeAuthClient(user: { id: string } | null = { id: 'u1' }) {
+  return { auth: { getUser: async () => ({ data: { user } }) } }
+}
+
+beforeEach(() => {
+  mockAuthClient.mockReset()
+  mockServerClient.mockReset()
+  mockAuthClient.mockImplementation(() => makeAuthClient())
+})
 
 describe('GET /api/flashcards/drafts', () => {
   it('returns 403 when caller is not admin', async () => {
     mockServerClient.mockImplementation(() => ({
-      auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
       from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'user' } }) }) }) }),
     }))
     const res = await GET(makeReq())
@@ -25,7 +37,6 @@ describe('GET /api/flashcards/drafts', () => {
 
   it('returns rows for every draft topic with derived progress counters', async () => {
     mockServerClient.mockImplementation(() => ({
-      auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
       from(table: string) {
         if (table === 'profiles') {
           return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'admin' } }) }) }) }

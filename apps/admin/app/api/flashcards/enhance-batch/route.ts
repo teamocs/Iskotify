@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 
 export const runtime = 'nodejs'
@@ -8,11 +9,12 @@ export const maxDuration = 60  // Vercel cap
 const RATE_DELAY_MS = 170  // ~6 req/sec — under Gemini free-tier 15rpm/1500rpd
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerClient()
-
-  // Auth — same admin guard
-  const { data: { user } } = await supabase.auth.getUser()
+  // Auth — cookie-aware client for the user, data client for the role + writes.
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = createServerClient()
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 

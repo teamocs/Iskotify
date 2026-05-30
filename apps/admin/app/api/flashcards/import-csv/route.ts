@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Papa from 'papaparse'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
 import { parseCsvRow, type ValidatedRow, type RawCsvRow } from '@/lib/csv/parseCsvRow'
 import { validateCsvFile, validateHeader, checkDuplicates, EXPECTED_HEADER } from '@/lib/csv/validateCsvFile'
 import { importCsvCore } from '@/lib/csv/importCsvCore'
@@ -8,11 +9,14 @@ import { importCsvCore } from '@/lib/csv/importCsvCore'
 export const runtime = 'nodejs'  // papaparse + File polyfill rely on Node runtime
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerClient()
-
-  // 1. Auth
-  const { data: { user } } = await supabase.auth.getUser()
+  // Auth — middleware gates /api/* on user session. Use the cookie-aware
+  // auth client to recover the user, then the data client for the role check
+  // and downstream DB writes.
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = createServerClient()
   const { data: profile } = await supabase
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

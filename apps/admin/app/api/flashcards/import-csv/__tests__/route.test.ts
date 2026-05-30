@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock @iskotify/utils server client + auth/profile chain
+// The route uses TWO clients: createAuthClient (cookie-aware, for auth.getUser)
+// and createServerClient (data, for profile/DB writes). Mock both.
+const mockAuthClient = vi.fn()
 const mockServerClient = vi.fn()
+
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: async () => mockAuthClient(),
+}))
 vi.mock('@iskotify/utils', () => ({
   createServerClient: () => mockServerClient(),
 }))
@@ -13,12 +19,15 @@ vi.mock('@/lib/csv/importCsvCore', () => ({
 
 import { POST } from '../route'
 
-function makeAuthedClient() {
+function makeAuthClient(user: { id: string } | null = { id: 'u1' }) {
+  return { auth: { getUser: async () => ({ data: { user } }) } }
+}
+
+function makeDataClient(role: 'admin' | 'user' = 'admin') {
   return {
-    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from(table: string) {
       if (table === 'profiles') {
-        return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'admin' } }) }) }) }
+        return { select: () => ({ eq: () => ({ single: async () => ({ data: { role } }) }) }) }
       }
       return {}
     },
@@ -33,13 +42,16 @@ function makeReq(formData: FormData): any {
   }
 }
 
-beforeEach(() => { mockServerClient.mockReset(); mockServerClient.mockImplementation(makeAuthedClient) })
+beforeEach(() => {
+  mockAuthClient.mockReset()
+  mockServerClient.mockReset()
+  mockAuthClient.mockImplementation(() => makeAuthClient())
+  mockServerClient.mockImplementation(() => makeDataClient('admin'))
+})
 
 describe('POST /api/flashcards/import-csv', () => {
   it('returns 401 when user is unauthenticated', async () => {
-    mockServerClient.mockImplementation(() => ({
-      auth: { getUser: async () => ({ data: { user: null } }) },
-    }))
+    mockAuthClient.mockImplementation(() => makeAuthClient(null))
     const fd = new FormData()
     fd.append('file', new File(['x'], 'a.csv', { type: 'text/csv' }))
     const res = await POST(makeReq(fd))
@@ -47,10 +59,7 @@ describe('POST /api/flashcards/import-csv', () => {
   })
 
   it('returns 403 when user is authenticated but not admin', async () => {
-    mockServerClient.mockImplementation(() => ({
-      auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
-      from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'user' } }) }) }) }),
-    }))
+    mockServerClient.mockImplementation(() => makeDataClient('user'))
     const fd = new FormData()
     fd.append('file', new File(['x'], 'a.csv'))
     const res = await POST(makeReq(fd))
