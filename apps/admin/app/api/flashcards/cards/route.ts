@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 
 export async function GET(req: NextRequest) {
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
         console.error('[cards/POST batch] insert error:', error)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
+      revalidateTag('subject-cards')
+      revalidateTag('drafts')
       return NextResponse.json({ inserted: rows.length })
     }
 
@@ -107,6 +110,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
 
+    revalidateTag('subject-cards')
+    revalidateTag('drafts')
     return NextResponse.json({ id: data.id })
   } catch (err) {
     console.error('[cards/POST] unexpected error:', err)

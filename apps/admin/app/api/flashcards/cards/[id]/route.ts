@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 
 export async function PATCH(
@@ -42,6 +43,7 @@ export async function PATCH(
       console.error('[cards] update error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
+    revalidateTag('subject-cards')
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[cards] unexpected error:', err)
@@ -66,6 +68,7 @@ export async function DELETE(
       console.error('[cards] delete error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
+    revalidateTag('subject-cards')
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[cards] unexpected error:', err)

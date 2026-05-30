@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 
 export async function GET(
@@ -47,6 +48,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  revalidateTag('listings')
+  revalidateTag(`subject-cards:${id}`)
   return NextResponse.json(data)
 }
 
@@ -77,5 +80,7 @@ export async function DELETE(
     return NextResponse.json({ error: error.message ?? 'Internal server error' }, { status: 500 })
   }
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  revalidateTag(`subject-cards:${id}`)
+  revalidateTag('drafts')
   return new NextResponse(null, { status: 204 })
 }
