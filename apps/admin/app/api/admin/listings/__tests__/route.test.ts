@@ -19,6 +19,12 @@ vi.mock('@iskotify/utils', () => ({
   })
 }))
 
+// Mock next/cache so unstable_cache and revalidateTag work outside Next.js request context
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: (...args: any[]) => any) => fn,
+  revalidateTag: vi.fn(),
+}))
+
 // Mock next/headers for auth check
 vi.mock('next/headers', () => ({
   cookies: () => ({ getAll: () => [] })

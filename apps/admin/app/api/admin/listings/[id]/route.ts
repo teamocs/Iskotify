@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       console.error('[admin/listings PATCH] supabase error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
+    revalidateTag('listings')
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (err) {
     console.error('[admin/listings PATCH] unexpected:', err)
@@ -30,6 +32,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       console.error('[admin/listings DELETE] supabase error:', error)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
+    revalidateTag('listings')
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (err) {
     console.error('[admin/listings DELETE] unexpected:', err)

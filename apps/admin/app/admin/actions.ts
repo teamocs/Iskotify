@@ -1,7 +1,7 @@
 'use server'
 
 import { headers } from 'next/headers'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 export async function triggerSync(): Promise<{ synced?: number; skipped?: number; closed?: number; error?: string }> {
   const secret = process.env.SYNC_SECRET
@@ -19,6 +19,7 @@ export async function triggerSync(): Promise<{ synced?: number; skipped?: number
     const body = await res.json()
     if (!res.ok) return { error: body.error ?? 'Sync failed' }
     revalidatePath('/admin/listings')
+    revalidateTag('listings')
     return body
   } catch (err) {
     return { error: 'Network error — could not reach sync route' }
