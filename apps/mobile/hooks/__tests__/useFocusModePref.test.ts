@@ -18,7 +18,8 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       email TEXT,
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
-      focus_mode_enabled INTEGER NOT NULL DEFAULT 1
+      focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)
