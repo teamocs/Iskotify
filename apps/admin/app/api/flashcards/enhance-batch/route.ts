@@ -6,8 +6,6 @@ import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
 export const runtime = 'nodejs'
 export const maxDuration = 60  // Vercel cap
 
-const RATE_DELAY_MS = 170  // ~6 req/sec — under Gemini free-tier 15rpm/1500rpd
-
 export async function POST(req: NextRequest) {
   // Auth — cookie-aware client for the user, data client for the role + writes.
   const auth = await createAuthClient()
@@ -71,7 +69,7 @@ export async function POST(req: NextRequest) {
       console.error('[enhance-batch] card failed:', card.id, err)
       failed++
     }
-    await new Promise(r => setTimeout(r, RATE_DELAY_MS))
+    // Pacing now handled by the Redis rate limiter inside generateDistractorsForCard.
   }
 
   return NextResponse.json({ topic_id: topicId, attempted: list.length, enhanced, failed })
