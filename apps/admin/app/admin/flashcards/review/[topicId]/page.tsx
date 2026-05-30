@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Topbar } from '@/components/admin/Topbar'
+import { PublishModal } from '@/components/flashcards/PublishModal'
 
 interface Card {
   id: string
@@ -14,10 +15,16 @@ interface Card {
   ai_options: string[] | null
   ai_correct_index: number | null
   ai_explanation: string | null
+  ai_enhanced_at: string | null
 }
 
-interface Topic { id: string; name: string; subject_name: string }
-interface Listing { slug: string; title: string; type?: string }
+interface Topic {
+  id: string
+  name: string
+  status: string
+  subject_id: string | null
+  subject_name: string
+}
 
 export default function ReviewPage() {
   const params = useParams<{ topicId: string }>()
@@ -26,55 +33,39 @@ export default function ReviewPage() {
 
   const [topic, setTopic] = useState<Topic | null>(null)
   const [cards, setCards] = useState<Card[]>([])
-  const [listings, setListings] = useState<Listing[]>([])
-  const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set())
-  const [publishing, setPublishing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [publishModalOpen, setPublishModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let aborted = false
     async function load() {
+      setLoading(true); setError(null)
       try {
-        const [topicRes, cardsRes, listingsRes] = await Promise.all([
+        const [topicRes, cardsRes] = await Promise.all([
           fetch(`/api/flashcards/topics/${topicId}`),
           fetch(`/api/flashcards/cards?topic_id=${topicId}`),
-          fetch('/api/admin/listings'),
         ])
-        const topicBody = await topicRes.json()
-        const cardsBody = await cardsRes.json()
-        const listingsBody = await listingsRes.json()
-        setTopic(topicBody.topic ?? null)
-        setCards(cardsBody.cards ?? [])
-        setListings(Array.isArray(listingsBody) ? listingsBody : (listingsBody.listings ?? []))
+        if (!topicRes.ok) throw new Error(`Topic load failed (${topicRes.status})`)
+        if (!cardsRes.ok) throw new Error(`Cards load failed (${cardsRes.status})`)
+        const topicBody: Topic = await topicRes.json()
+        const cardsBody: Card[] = await cardsRes.json()
+        if (aborted) return
+        setTopic(topicBody)
+        setCards(cardsBody)
       } catch (e: any) {
-        setError(e?.message ?? 'Failed to load')
+        if (!aborted) setError(e?.message ?? 'Failed to load')
+      } finally {
+        if (!aborted) setLoading(false)
       }
     }
     load()
+    return () => { aborted = true }
   }, [topicId])
 
-  async function handlePublish() {
-    if (selectedSlugs.size === 0) return
-    setPublishing(true)
-    const res = await fetch(`/api/flashcards/publish/${topicId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ listing_slugs: Array.from(selectedSlugs) }),
-    })
-    setPublishing(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Publish failed')
-      return
-    }
+  function handlePublished() {
+    setPublishModalOpen(false)
     router.push('/admin/flashcards/drafts')
-  }
-
-  function toggleSlug(slug: string) {
-    setSelectedSlugs(prev => {
-      const next = new Set(prev)
-      if (next.has(slug)) next.delete(slug); else next.add(slug)
-      return next
-    })
   }
 
   return (
@@ -93,57 +84,42 @@ export default function ReviewPage() {
               {topic?.subject_name ?? '—'}
             </div>
             <h2 className="text-[#1d1d1f] font-heading font-bold text-2xl tracking-tight">
-              {topic?.name ?? 'Loading…'}
+              {loading ? 'Loading…' : (topic?.name ?? 'Topic not found')}
             </h2>
             <p className="text-[#6e6e73] text-sm mt-1">
-              {cards.length} card{cards.length === 1 ? '' : 's'} · pick exam/scholarship tags below, then publish to ship to mobile.
+              {cards.length} card{cards.length === 1 ? '' : 's'}
+              {!loading && cards.length > 0 ? ' · review below, then publish to ship to mobile.' : ''}
             </p>
           </div>
 
-          <section className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-sm">
-            <h3 className="text-[#1d1d1f] text-[13px] font-semibold uppercase tracking-wider mb-3 font-heading">
-              Tag to exams/scholarships
-            </h3>
-            {listings.length === 0 ? (
-              <div className="text-[#6e6e73] text-sm">Loading listings…</div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {listings.map(l => {
-                  const on = selectedSlugs.has(l.slug)
-                  return (
-                    <button
-                      key={l.slug}
-                      onClick={() => toggleSlug(l.slug)}
-                      className={`px-3 py-1.5 rounded-[980px] text-xs font-medium border transition-colors
-                        ${on
-                          ? 'bg-[#800000] text-white border-[#800000] shadow-sm'
-                          : 'bg-white text-[#1d1d1f] border-black/[0.12] hover:border-[#800000]/60 hover:text-[#800000]'}
-                      `}
-                    >
-                      {l.title}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-
           <section className="space-y-3">
             <h3 className="text-[#1d1d1f] text-[13px] font-semibold uppercase tracking-wider font-heading">
-              Cards ({cards.length})
+              Cards
             </h3>
-            {cards.length === 0 ? (
+            {loading ? (
               <div className="rounded-2xl border border-black/[0.08] bg-white px-6 py-12 text-center text-[#6e6e73] text-sm shadow-sm">
                 Loading cards…
+              </div>
+            ) : cards.length === 0 ? (
+              <div className="rounded-2xl border border-black/[0.08] bg-white px-6 py-12 text-center text-[#6e6e73] text-sm shadow-sm">
+                No cards in this topic.
               </div>
             ) : (
               <div className="space-y-3">
                 {cards.map((c, i) => {
-                  const opts = (c.ai_options && c.ai_options.length >= 4) ? c.ai_options : (c.options ?? [])
-                  const correct = (c.ai_correct_index ?? c.correct_answer_index)
+                  const hasAi = Array.isArray(c.ai_options) && c.ai_options.length >= 4
+                  const opts = hasAi ? c.ai_options! : (c.options ?? [])
+                  const correct = hasAi ? c.ai_correct_index : c.correct_answer_index
                   return (
                     <div key={c.id} className="rounded-2xl border border-black/[0.08] bg-white p-5 shadow-sm">
-                      <div className="text-[#6e6e73] text-xs font-medium mb-2">Card {i + 1}</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[#6e6e73] text-xs font-medium">Card {i + 1}</div>
+                        {hasAi && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800">
+                            AI-ENHANCED
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[#1d1d1f] font-medium mb-2 leading-snug">{c.question}</div>
                       <div className="text-[#1d1d1f] text-sm mb-3">
                         <span className="text-[#6e6e73]">Answer: </span>
@@ -166,9 +142,9 @@ export default function ReviewPage() {
                           ⏳ No distractors yet — Gemini will fill in shortly
                         </div>
                       )}
-                      {c.explanation && (
+                      {(hasAi ? c.ai_explanation : c.explanation) && (
                         <div className="text-[#6e6e73] text-xs mt-3 leading-relaxed border-t border-black/[0.06] pt-2">
-                          <span className="font-medium">Explanation:</span> {c.explanation}
+                          <span className="font-medium">Explanation:</span> {hasAi ? c.ai_explanation : c.explanation}
                         </div>
                       )}
                     </div>
@@ -180,23 +156,30 @@ export default function ReviewPage() {
 
           <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={handlePublish}
-              disabled={selectedSlugs.size === 0 || publishing}
+              onClick={() => setPublishModalOpen(true)}
+              disabled={loading || cards.length === 0}
               className={`
                 inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm
-                ${selectedSlugs.size > 0 && !publishing
+                ${!loading && cards.length > 0
                   ? 'bg-green-700 text-white hover:bg-green-800'
                   : 'bg-[#f5f5f7] text-[#6e6e73] cursor-not-allowed'}
               `}
             >
-              {publishing ? 'Publishing…' : `Publish ${cards.length} card${cards.length === 1 ? '' : 's'}`}
+              Publish {cards.length} card{cards.length === 1 ? '' : 's'}…
             </button>
-            <span className="text-[#6e6e73] text-xs">
-              Tag at least one exam/scholarship to enable publish
-            </span>
           </div>
         </div>
       </div>
+
+      <PublishModal
+        open={publishModalOpen}
+        title={`Publish "${topic?.name ?? 'topic'}"`}
+        description={`Pick at least one exam or scholarship tag. All ${cards.length} cards in this topic will be tagged and marked published.`}
+        topicIds={topic ? [topic.id] : []}
+        onClose={() => setPublishModalOpen(false)}
+        onPublished={handlePublished}
+        primaryLabel={`Publish ${cards.length} cards`}
+      />
     </div>
   )
 }

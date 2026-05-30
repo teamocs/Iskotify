@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { PublishModal } from './PublishModal'
 
 interface Draft {
   topic_id: string
@@ -19,6 +20,8 @@ interface Draft {
 export function DraftsTable() {
   const [drafts, setDrafts] = useState<Draft[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
 
   async function fetchDrafts() {
     try {
@@ -34,7 +37,6 @@ export function DraftsTable() {
   useEffect(() => {
     fetchDrafts()
     const iv = setInterval(() => {
-      // Only poll when at least one draft still has pending enhancement
       setDrafts(curr => {
         const stillPending = curr?.some(d => d.cards_needing_enhancement > 0)
         if (stillPending) fetchDrafts()
@@ -43,6 +45,31 @@ export function DraftsTable() {
     }, 5000)
     return () => clearInterval(iv)
   }, [])
+
+  function toggleRow(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (!drafts) return
+    if (selectedIds.size === drafts.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(drafts.map(d => d.topic_id)))
+    }
+  }
+
+  function handleBulkPublished(publishedTopicIds: string[]) {
+    // Remove published topics from local state without waiting for a poll
+    setDrafts(curr => curr?.filter(d => !publishedTopicIds.includes(d.topic_id)) ?? null)
+    setSelectedIds(new Set())
+    setBulkModalOpen(false)
+    fetchDrafts()  // re-sync just in case
+  }
 
   if (error) {
     return (
@@ -68,45 +95,106 @@ export function DraftsTable() {
     )
   }
 
+  const allSelected = selectedIds.size === drafts.length
+  const selectedCount = selectedIds.size
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-sm">
-      <table className="min-w-full text-sm">
-        <thead className="bg-[#f5f5f7] text-[#6e6e73]">
-          <tr>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Subject</th>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Topic</th>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Cards</th>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Enhancement</th>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Source</th>
-            <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Created</th>
-            <th className="px-4 py-2.5 text-right font-medium uppercase tracking-wider text-[11px]">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-black/[0.06]">
-          {drafts.map(d => (
-            <tr key={d.topic_id} className="hover:bg-[#fafafb]">
-              <td className="px-4 py-3 text-[#6e6e73]">{d.subject_name}</td>
-              <td className="px-4 py-3 text-[#1d1d1f] font-medium">{d.topic_name}</td>
-              <td className="px-4 py-3 text-[#1d1d1f]">{d.total_cards}</td>
-              <td className="px-4 py-3">
-                <EnhancementCell draft={d} />
-              </td>
-              <td className="px-4 py-3">
-                <SourceBadge source={d.source_type} />
-              </td>
-              <td className="px-4 py-3 text-[#6e6e73] text-xs">{relTime(d.created_at)}</td>
-              <td className="px-4 py-3 text-right">
-                <Link
-                  href={`/admin/flashcards/review/${d.topic_id}`}
-                  className="inline-flex items-center rounded-[980px] bg-[#800000] hover:bg-[#9a0a1f] text-white px-3 py-1.5 text-xs font-medium transition-colors shadow-sm"
-                >
-                  Review & Publish
-                </Link>
-              </td>
+    <div className="space-y-3">
+      {selectedCount > 0 && (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 rounded-xl border border-[#800000]/30 bg-[#fff5f6] px-4 py-3 shadow-sm">
+          <span className="text-[#1d1d1f] text-sm font-medium">
+            {selectedCount} draft{selectedCount === 1 ? '' : 's'} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 rounded-[980px] text-sm font-medium text-[#1d1d1f] hover:bg-black/[0.05] transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => setBulkModalOpen(true)}
+              className="inline-flex items-center rounded-[980px] bg-green-700 hover:bg-green-800 text-white px-4 py-1.5 text-sm font-semibold shadow-sm"
+            >
+              Publish selected
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-sm">
+        <table className="min-w-full text-sm">
+          <thead className="bg-[#f5f5f7] text-[#6e6e73]">
+            <tr>
+              <th className="px-3 py-2.5 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="rounded border-black/20 text-[#800000] focus:ring-[#800000]/40 cursor-pointer"
+                  aria-label="Select all drafts"
+                />
+              </th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Subject</th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Topic</th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Cards</th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Enhancement</th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Source</th>
+              <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wider text-[11px]">Created</th>
+              <th className="px-4 py-2.5 text-right font-medium uppercase tracking-wider text-[11px]">Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-black/[0.06]">
+            {drafts.map(d => {
+              const checked = selectedIds.has(d.topic_id)
+              return (
+                <tr key={d.topic_id} className={checked ? 'bg-[#fff5f6]' : 'hover:bg-[#fafafb]'}>
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleRow(d.topic_id)}
+                      className="rounded border-black/20 text-[#800000] focus:ring-[#800000]/40 cursor-pointer"
+                      aria-label={`Select ${d.topic_name}`}
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-[#6e6e73]">{d.subject_name}</td>
+                  <td className="px-4 py-3 text-[#1d1d1f] font-medium">{d.topic_name}</td>
+                  <td className="px-4 py-3 text-[#1d1d1f]">{d.total_cards}</td>
+                  <td className="px-4 py-3">
+                    <EnhancementCell draft={d} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <SourceBadge source={d.source_type} />
+                  </td>
+                  <td className="px-4 py-3 text-[#6e6e73] text-xs">{relTime(d.created_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/admin/flashcards/review/${d.topic_id}`}
+                      className="inline-flex items-center rounded-[980px] bg-[#800000] hover:bg-[#9a0a1f] text-white px-3 py-1.5 text-xs font-medium transition-colors shadow-sm"
+                    >
+                      Review & Publish
+                    </Link>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <PublishModal
+        open={bulkModalOpen}
+        title={`Publish ${selectedCount} draft${selectedCount === 1 ? '' : 's'}`}
+        description={
+          `Pick at least one exam/scholarship. All cards across the ${selectedCount} selected topic` +
+          `${selectedCount === 1 ? '' : 's'} will be tagged with the same slugs and marked published.`
+        }
+        topicIds={Array.from(selectedIds)}
+        onClose={() => setBulkModalOpen(false)}
+        onPublished={handleBulkPublished}
+        primaryLabel={`Publish ${selectedCount} draft${selectedCount === 1 ? '' : 's'}`}
+      />
     </div>
   )
 }

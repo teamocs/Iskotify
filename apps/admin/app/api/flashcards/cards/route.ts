@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcards')
-    .select('id, question, answer, explanation')
+    .select('id, question, answer, explanation, options, correct_answer_index, ai_options, ai_correct_index, ai_explanation, ai_enhanced_at')
     .eq('topic_id', topicId)
     .order('created_at')
 

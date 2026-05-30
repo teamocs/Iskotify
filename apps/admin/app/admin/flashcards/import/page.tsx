@@ -6,8 +6,15 @@ import Papa from 'papaparse'
 import { Topbar } from '@/components/admin/Topbar'
 import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
 import { CsvPreviewTable } from '@/components/flashcards/CsvPreviewTable'
+import { PublishModal } from '@/components/flashcards/PublishModal'
 
 interface RowError { rowIndex: number; field: string; message: string }
+
+interface ImportResult {
+  topic_ids: string[]
+  total_cards: number
+  cards_needing_enhancement: number
+}
 
 export default function ImportCsvPage() {
   const router = useRouter()
@@ -18,8 +25,14 @@ export default function ImportCsvPage() {
   const [fileError, setFileError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
 
+  // After successful import we hold the result here and offer two paths:
+  //   1. open PublishModal to tag + publish all imported topics at once
+  //   2. dismiss and go to /drafts to review individually
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [publishModalOpen, setPublishModalOpen] = useState(false)
+
   function handleFile(f: File) {
-    setFile(f); setFileError(null); setRowErrors([])
+    setFile(f); setFileError(null); setRowErrors([]); setImportResult(null)
     if (f.size > 5 * 1024 * 1024) { setFileError('File too large (max 5MB)'); return }
 
     f.text().then(text => {
@@ -40,16 +53,22 @@ export default function ImportCsvPage() {
     fd.append('file', file)
     const res = await fetch('/api/flashcards/import-csv', { method: 'POST', body: fd })
     const body = await res.json()
+    setImporting(false)
     if (!res.ok) {
       if (Array.isArray(body.rowErrors)) setRowErrors(body.rowErrors)
       else setFileError(body.error ?? 'Import failed')
-      setImporting(false)
       return
     }
-    router.push('/admin/flashcards/drafts')
+    setImportResult(body as ImportResult)
   }
 
-  const canImport = file && !fileError && rowErrors.length === 0 && totalRows > 0
+  function handleAfterPublish() {
+    setPublishModalOpen(false)
+    setImportResult(null)
+    router.push('/admin/flashcards')
+  }
+
+  const canImport = file && !fileError && rowErrors.length === 0 && totalRows > 0 && !importResult
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -73,11 +92,19 @@ export default function ImportCsvPage() {
             </div>
           )}
 
-          {file && previewRows.length > 0 && (
+          {file && previewRows.length > 0 && !importResult && (
             <CsvPreviewTable rows={previewRows} totalRows={totalRows} rowErrors={rowErrors} />
           )}
 
-          {file && (
+          {importResult && (
+            <ImportSuccessPanel
+              result={importResult}
+              onPublishNow={() => setPublishModalOpen(true)}
+              onReviewLater={() => router.push('/admin/flashcards/drafts')}
+            />
+          )}
+
+          {file && !importResult && (
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleImport}
@@ -96,6 +123,67 @@ export default function ImportCsvPage() {
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      <PublishModal
+        open={publishModalOpen}
+        title={`Publish ${importResult?.topic_ids.length ?? 0} new topic${(importResult?.topic_ids.length ?? 0) === 1 ? '' : 's'}`}
+        description={
+          `All ${importResult?.total_cards ?? 0} imported cards across ${importResult?.topic_ids.length ?? 0} topic` +
+          `${(importResult?.topic_ids.length ?? 0) === 1 ? '' : 's'} will be tagged with the same exam/scholarship slugs and marked published.`
+        }
+        topicIds={importResult?.topic_ids ?? []}
+        onClose={() => setPublishModalOpen(false)}
+        onPublished={handleAfterPublish}
+        primaryLabel={`Publish all ${importResult?.total_cards ?? 0} cards`}
+      />
+    </div>
+  )
+}
+
+function ImportSuccessPanel({
+  result, onPublishNow, onReviewLater,
+}: {
+  result: ImportResult
+  onPublishNow: () => void
+  onReviewLater: () => void
+}) {
+  const { topic_ids, total_cards, cards_needing_enhancement } = result
+  const topicWord = topic_ids.length === 1 ? 'topic' : 'topics'
+  return (
+    <div className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-lg">
+          ✓
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[#1d1d1f] font-heading font-bold text-base">
+            Imported {total_cards} card{total_cards === 1 ? '' : 's'} across {topic_ids.length} {topicWord}
+          </h3>
+          <p className="text-[#1d1d1f]/70 text-sm mt-1">
+            {cards_needing_enhancement > 0
+              ? `${cards_needing_enhancement} card${cards_needing_enhancement === 1 ? ' is' : 's are'} being enhanced by Gemini in the background.`
+              : 'All cards already have MCQ options — no enhancement needed.'}
+          </p>
+          <p className="text-[#1d1d1f]/70 text-sm mt-2">
+            Cards are saved as <strong>draft</strong>. Would you like to publish them now (pick exam/scholarship tags once for all), or review each topic individually first?
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <button
+              onClick={onPublishNow}
+              className="inline-flex items-center rounded-[980px] bg-green-700 hover:bg-green-800 text-white px-5 py-2 text-sm font-semibold shadow-sm"
+            >
+              Publish now
+            </button>
+            <button
+              onClick={onReviewLater}
+              className="inline-flex items-center rounded-[980px] bg-white hover:bg-[#fafafb] text-[#1d1d1f] border border-black/[0.12] px-5 py-2 text-sm font-medium shadow-sm"
+            >
+              Review individually
+            </button>
+          </div>
         </div>
       </div>
     </div>
