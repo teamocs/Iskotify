@@ -2,13 +2,14 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Operator endpoints authenticate via x-admin-secret header (not Supabase session),
-// so they must bypass this middleware. The route handlers themselves enforce the
-// secret check; missing/wrong secret returns 401 from the handler.
+// Endpoints that bypass Supabase session auth:
+// - Operator endpoints authenticate via x-admin-secret header
+// - The Places proxy is called by the mobile app (no admin session)
 const OPERATOR_ENDPOINTS = [
   '/api/flashcards/backfill',
   '/api/flashcards/distractors',
   '/api/flashcards/sanitize-legacy',
+  '/api/places/school-search',  // mobile-accessible
 ]
 
 export async function middleware(request: NextRequest) {
