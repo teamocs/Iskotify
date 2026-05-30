@@ -8,7 +8,11 @@ import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
 import { CsvPreviewTable } from '@/components/flashcards/CsvPreviewTable'
 import { PublishModal } from '@/components/flashcards/PublishModal'
 
+// Per-request server cap. Keep in sync with the import-csv route.
+const CHUNK_SIZE = 500
+
 interface RowError { rowIndex: number; field: string; message: string }
+type CsvRow = Record<string, string>
 
 interface ImportResult {
   topic_ids: string[]
@@ -16,23 +20,68 @@ interface ImportResult {
   cards_needing_enhancement: number
 }
 
+interface ChunkProgress {
+  done: number
+  total: number
+}
+
+/**
+ * Pack rows into ≤CHUNK_SIZE-row chunks WITHOUT splitting any (subject, topic)
+ * group across chunks. The server inserts a fresh topic per chunk, so splitting
+ * a topic would create duplicate topics with the same name.
+ */
+function chunkRowsByTopic(rows: CsvRow[], chunkSize: number): CsvRow[][] {
+  const groups = new Map<string, CsvRow[]>()
+  for (const r of rows) {
+    const subject = (r.subject ?? '').trim()
+    const topic = (r.topic ?? '').trim()
+    const key = `${subject}::${topic}`
+    const bucket = groups.get(key)
+    if (bucket) bucket.push(r)
+    else groups.set(key, [r])
+  }
+
+  const chunks: CsvRow[][] = []
+  let current: CsvRow[] = []
+  for (const group of groups.values()) {
+    // If adding this whole group would push the chunk over the cap AND the chunk
+    // already has at least one group, start a new chunk first.
+    if (current.length > 0 && current.length + group.length > chunkSize) {
+      chunks.push(current)
+      current = []
+    }
+    current.push(...group)
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
+function rowsToCsv(rows: CsvRow[]): string {
+  // Match the original header order — papaparse preserves field order from data
+  // but we want to be explicit so the server's header validator passes regardless.
+  return Papa.unparse(rows, {
+    columns: ['subject', 'topic', 'question', 'answer', 'explanation', 'distractors'],
+    header: true,
+  })
+}
+
 export default function ImportCsvPage() {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
-  const [previewRows, setPreviewRows] = useState<Array<Record<string, string>>>([])
+  const [allRows, setAllRows] = useState<CsvRow[]>([])
+  const [previewRows, setPreviewRows] = useState<CsvRow[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [rowErrors, setRowErrors] = useState<RowError[]>([])
   const [fileError, setFileError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
+  const [chunkProgress, setChunkProgress] = useState<ChunkProgress | null>(null)
 
-  // After successful import we hold the result here and offer two paths:
-  //   1. open PublishModal to tag + publish all imported topics at once
-  //   2. dismiss and go to /drafts to review individually
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [publishModalOpen, setPublishModalOpen] = useState(false)
 
   function handleFile(f: File) {
-    setFile(f); setFileError(null); setRowErrors([]); setImportResult(null)
+    setFile(f)
+    setFileError(null); setRowErrors([]); setImportResult(null); setChunkProgress(null)
     if (f.size > 5 * 1024 * 1024) { setFileError('File too large (max 5MB)'); return }
 
     f.text().then(text => {
@@ -40,26 +89,61 @@ export default function ImportCsvPage() {
         header: true, skipEmptyLines: true,
         transformHeader: h => h.trim().toLowerCase().replace(/^﻿/, ''),
       })
-      const all = parsed.data as Array<Record<string, string>>
+      const all = parsed.data as CsvRow[]
+      setAllRows(all)
       setTotalRows(all.length)
       setPreviewRows(all.slice(0, 10))
     })
   }
 
   async function handleImport() {
-    if (!file) return
-    setImporting(true); setRowErrors([])
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch('/api/flashcards/import-csv', { method: 'POST', body: fd })
-    const body = await res.json()
-    setImporting(false)
-    if (!res.ok) {
-      if (Array.isArray(body.rowErrors)) setRowErrors(body.rowErrors)
-      else setFileError(body.error ?? 'Import failed')
-      return
+    if (!file || allRows.length === 0) return
+    setImporting(true); setRowErrors([]); setFileError(null)
+
+    const chunks = chunkRowsByTopic(allRows, CHUNK_SIZE)
+    setChunkProgress({ done: 0, total: chunks.length })
+
+    const aggregated: ImportResult = { topic_ids: [], total_cards: 0, cards_needing_enhancement: 0 }
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkRows = chunks[i]!
+      const csv = rowsToCsv(chunkRows)
+      const blob = new File([csv], `chunk-${i + 1}.csv`, { type: 'text/csv' })
+      const fd = new FormData()
+      fd.append('file', blob)
+
+      const res = await fetch('/api/flashcards/import-csv', { method: 'POST', body: fd })
+      const body = await res.json()
+
+      if (!res.ok) {
+        // Tag row errors with their position in the ORIGINAL CSV, not this chunk,
+        // so the preview highlights the right rows.
+        const offset = chunks.slice(0, i).reduce((sum, c) => sum + c.length, 0)
+        if (Array.isArray(body.rowErrors)) {
+          const remapped: RowError[] = body.rowErrors.map((e: RowError) => ({
+            ...e,
+            rowIndex: e.rowIndex + offset,
+          }))
+          setRowErrors(remapped)
+        } else {
+          setFileError(
+            chunks.length > 1
+              ? `Batch ${i + 1} of ${chunks.length} failed: ${body.error ?? 'Import failed'}. ${i} batch${i === 1 ? '' : 'es'} (${aggregated.total_cards} card${aggregated.total_cards === 1 ? '' : 's'}) already saved as drafts.`
+              : (body.error ?? 'Import failed')
+          )
+        }
+        setImporting(false); setChunkProgress(null)
+        return
+      }
+
+      aggregated.topic_ids.push(...(body.topic_ids ?? []))
+      aggregated.total_cards += body.total_cards ?? 0
+      aggregated.cards_needing_enhancement += body.cards_needing_enhancement ?? 0
+      setChunkProgress({ done: i + 1, total: chunks.length })
     }
-    setImportResult(body as ImportResult)
+
+    setImporting(false); setChunkProgress(null)
+    setImportResult(aggregated)
   }
 
   function handleAfterPublish() {
@@ -69,6 +153,7 @@ export default function ImportCsvPage() {
   }
 
   const canImport = file && !fileError && rowErrors.length === 0 && totalRows > 0 && !importResult
+  const chunkCount = chunkRowsByTopic(allRows, CHUNK_SIZE).length
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -81,6 +166,7 @@ export default function ImportCsvPage() {
               Upload a 6-column CSV. Subjects and topics are auto-created on the fly. Cards without a
               <code className="mx-1 px-1.5 py-0.5 rounded bg-[#f5f5f7] text-[12px]">distractors</code>
               value will have their multiple-choice options filled by Gemini in the background.
+              Larger files are uploaded in batches of {CHUNK_SIZE} rows automatically.
             </p>
           </div>
 
@@ -94,6 +180,21 @@ export default function ImportCsvPage() {
 
           {file && previewRows.length > 0 && !importResult && (
             <CsvPreviewTable rows={previewRows} totalRows={totalRows} rowErrors={rowErrors} />
+          )}
+
+          {chunkProgress && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-[#6e6e73]">
+                <span>Uploading batch {chunkProgress.done + (chunkProgress.done < chunkProgress.total ? 1 : 0)} of {chunkProgress.total}…</span>
+                <span className="tabular-nums">{chunkProgress.done}/{chunkProgress.total}</span>
+              </div>
+              <div className="w-full h-1.5 bg-black/[0.08] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#800000] transition-all"
+                  style={{ width: `${(chunkProgress.done / chunkProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
           )}
 
           {importResult && (
@@ -116,7 +217,11 @@ export default function ImportCsvPage() {
                     : 'bg-[#f5f5f7] text-[#6e6e73] cursor-not-allowed'}
                 `}
               >
-                {importing ? 'Importing…' : `Import ${totalRows} card${totalRows === 1 ? '' : 's'}`}
+                {importing
+                  ? 'Importing…'
+                  : chunkCount > 1
+                    ? `Import ${totalRows} cards (${chunkCount} batches)`
+                    : `Import ${totalRows} card${totalRows === 1 ? '' : 's'}`}
               </button>
               {rowErrors.length > 0 && (
                 <span className="text-red-700 text-sm">Fix errors and re-upload</span>

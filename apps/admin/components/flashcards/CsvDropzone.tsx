@@ -42,7 +42,7 @@ export function CsvDropzone({ onFileSelected, disabled }: Props) {
     >
       <div className="text-3xl mb-2">📄</div>
       <div className="text-[#1d1d1f] font-semibold mb-1 font-heading">Drop CSV here or click to browse</div>
-      <div className="text-[#6e6e73] text-sm">Max 5MB · max 1000 rows · UTF-8</div>
+      <div className="text-[#6e6e73] text-sm">Max 5 MB · UTF-8 · larger files are split into batches automatically</div>
       <a
         href="/sample-flashcards.csv"
         onClick={e => e.stopPropagation()}

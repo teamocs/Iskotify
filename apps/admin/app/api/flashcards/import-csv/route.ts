@@ -46,12 +46,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'CSV has no header row' }, { status: 400 })
   }
 
-  // 5. Row count
+  // 5. Row count — per-request cap. The UI chunks larger CSVs into multiple
+  //    requests so this limit only constrains a single chunk, not the whole file.
   if (parsed.data.length === 0) {
     return NextResponse.json({ error: 'CSV has no data rows' }, { status: 400 })
   }
-  if (parsed.data.length > 1000) {
-    return NextResponse.json({ error: `Too many rows (max 1000, got ${parsed.data.length})` }, { status: 400 })
+  if (parsed.data.length > 500) {
+    return NextResponse.json(
+      { error: `Too many rows in one request (max 500, got ${parsed.data.length}). The admin UI splits large CSVs automatically — if you hit this from a script, send smaller batches.` },
+      { status: 400 },
+    )
   }
 
   // 6. Per-row validation
