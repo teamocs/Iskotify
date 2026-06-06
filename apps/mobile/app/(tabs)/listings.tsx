@@ -11,6 +11,10 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { syncOnLaunch } from '../../services/sync'
+import { getSettings } from '../../services/settings'
+import { matchScholarship } from '../../utils/scholarshipMatch'
+import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
+import { MatchPill } from '../../components/scholarships/MatchPill'
 
 type Segment = 'all' | 'exam' | 'scholarship'
 
@@ -23,11 +27,44 @@ interface ListingRow {
   examDate: number | null
   region: string
   provider: string
+  // scholarship-specific fields
+  province: string | null
+  city: string | null
+  scope: string | null
+  isVerified: boolean | null
+  incomeCeiling: number | null
+  gwaRequirement: number | null
+  serviceObligationYears: number | null
+  scholarshipMeta: string | null
 }
 
 function fmtDate(ts: number | null): string {
   if (!ts) return 'Date TBA'
   return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function toMatchInput(l: ListingRow): MatchInput {
+  let meta: Record<string, unknown> = {}
+  try { meta = JSON.parse(l.scholarshipMeta || '{}') } catch { /* ignore */ }
+  return {
+    scope: (l.scope as MatchInput['scope']) || 'national',
+    isVerified: !!l.isVerified,
+    incomeCeiling: l.incomeCeiling ?? null,
+    gwaRequirement: l.gwaRequirement ?? null,
+    serviceObligationYears: l.serviceObligationYears ?? null,
+    province: l.province ?? null,
+    city: l.city ?? null,
+    targetYearLevels: [],
+    hucExcluded: !!meta.huc_excluded,
+  }
+}
+
+function hasAnyMatcherField(profile: StudentProfile): boolean {
+  return (
+    profile.incomeBracket != null ||
+    profile.gwa != null ||
+    profile.province != null
+  )
 }
 
 export default function ListingsScreen() {
@@ -39,8 +76,18 @@ export default function ListingsScreen() {
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<string | null>(null)
 
+  // User profile for eligibility matching
+  const [profile, setProfile] = useState<StudentProfile>({})
+
+  // Scholarship facet state
+  const [facetProvider, setFacetProvider] = useState<string | null>(null)
+  const [facetProvince, setFacetProvince] = useState<string | null>(null)
+  const [facetVerifiedOnly, setFacetVerifiedOnly] = useState(false)
+  const [facetNearMe, setFacetNearMe] = useState(false)
+  const [facetEligibleForMe, setFacetEligibleForMe] = useState(false)
+
   const loadListings = useCallback(async () => {
-    const [rows, saved] = await Promise.all([
+    const [rows, saved, settings] = await Promise.all([
       db.select({
         id: listingsTable.id,
         slug: listingsTable.slug,
@@ -50,17 +97,32 @@ export default function ListingsScreen() {
         examDate: listingsTable.examDate,
         region: listingsTable.region,
         provider: listingsTable.provider,
+        province: listingsTable.province,
+        city: listingsTable.city,
+        scope: listingsTable.scope,
+        isVerified: listingsTable.isVerified,
+        incomeCeiling: listingsTable.incomeCeiling,
+        gwaRequirement: listingsTable.gwaRequirement,
+        serviceObligationYears: listingsTable.serviceObligationYears,
+        scholarshipMeta: listingsTable.scholarshipMeta,
       }).from(listingsTable),
       db.select({ id: savedListingsTable.id }).from(savedListingsTable),
+      getSettings(db),
     ])
     setAll(rows)
     setSavedIds(new Set(saved.map(s => s.id)))
+    setProfile({
+      gradeLevel: settings.gradeLevel ?? undefined,
+      incomeBracket: settings.incomeBracket ?? undefined,
+      gwa: settings.gwa ?? undefined,
+      province: settings.province ?? undefined,
+      city: settings.city ?? undefined,
+    })
   }, [db])
 
   useFocusEffect(useCallback(() => { void loadListings() }, [loadListings]))
 
   const refresh = useCallback(async () => {
-    // Pull fresh listings from Supabase; syncOnLaunch handles offline via try/catch internally
     await syncOnLaunch(db)
     await loadListings()
   }, [db, loadListings])
@@ -88,17 +150,56 @@ export default function ListingsScreen() {
     return Array.from(set).sort()
   }, [all])
 
+  // Scholarship-only derived facet options
+  const scholarships = useMemo(() => all.filter(l => l.type === 'scholarship'), [all])
+
+  const scholarProviders = useMemo(() => {
+    const set = new Set<string>()
+    for (const l of scholarships) { if (l.provider) set.add(l.provider) }
+    return Array.from(set).sort().slice(0, 8) // cap at top 8
+  }, [scholarships])
+
+  const scholarProvinces = useMemo(() => {
+    const set = new Set<string>()
+    for (const l of scholarships) { if (l.province) set.add(l.province) }
+    return Array.from(set).sort()
+  }, [scholarships])
+
+  // Pre-compute match statuses once per listing (only for scholarship segment)
+  const matchStatusMap = useMemo<Map<string, MatchStatus>>(() => {
+    const map = new Map<string, MatchStatus>()
+    for (const l of scholarships) {
+      map.set(l.id, matchScholarship(toMatchInput(l), profile).status)
+    }
+    return map
+  }, [scholarships, profile])
+
+  const profileHasData = useMemo(() => hasAnyMatcherField(profile), [profile])
+
   const filtered = useMemo(() => {
     return all
       .filter(l => segment === 'all' || l.type === segment)
       .filter(l => !regionFilter || l.region === regionFilter)
       .filter(l => !query || l.title.toLowerCase().includes(query.toLowerCase()))
+      // Scholarship facets (only apply when segment is 'scholarship')
+      .filter(l => {
+        if (l.type !== 'scholarship') return true
+        if (facetProvider && l.provider !== facetProvider) return false
+        if (facetProvince && l.province !== facetProvince) return false
+        if (facetVerifiedOnly && !l.isVerified) return false
+        if (facetNearMe && profile.province && l.province !== profile.province) return false
+        if (facetEligibleForMe && profileHasData) {
+          const status = matchStatusMap.get(l.id) ?? 'unknown'
+          if (status !== 'eligible' && status !== 'maybe') return false
+        }
+        return true
+      })
       .sort((a, b) => {
         if (!a.examDate) return 1
         if (!b.examDate) return -1
         return a.examDate - b.examDate
       })
-  }, [all, segment, query, regionFilter])
+  }, [all, segment, query, regionFilter, facetProvider, facetProvince, facetVerifiedOnly, facetNearMe, facetEligibleForMe, matchStatusMap, profile, profileHasData])
 
   const { theme: t, typo, isDark } = useTheme()
   const scholarColor = isDark ? '#4ade80' : '#16a34a'
@@ -122,6 +223,15 @@ export default function ListingsScreen() {
     regionChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
     regionTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
     regionTxtOn: { color: '#fff' },
+    // Facet chips (same pill style, slightly smaller)
+    facetWrap: { marginBottom: 4 },
+    facetRow: { paddingHorizontal: 16, flexDirection: 'row', gap: 7, flexWrap: 'wrap', paddingBottom: 4 },
+    facetChip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 },
+    facetChipOn: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
+    facetChipDisabled: { opacity: 0.4 },
+    facetTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    facetTxtOn: { color: '#fff' },
+    facetLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: 16, marginBottom: 2 },
     list: { paddingHorizontal: 16, paddingBottom: 100 },
     card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
     cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -133,18 +243,24 @@ export default function ListingsScreen() {
     examBadge: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.25)' },
     scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
     typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    row2: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    row2: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     dateText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     regionLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    verifiedBadge: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(34,197,94,0.09)', borderColor: 'rgba(34,197,94,0.25)' },
+    verifiedTxt: { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
+    unverifiedBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, backgroundColor: t.surfaceSubtle, borderColor: t.border },
+    unverifiedTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     bookmarkBtn: { padding: 2, flexShrink: 0 },
     bookmarkIcon: { fontSize: 14, opacity: 0.35 },
     bookmarkIconSaved: { opacity: 1 },
     focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
     focusBadgeTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 32 },
+    eligibleHint: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.xs, marginTop: 6, marginHorizontal: 24 },
   }), [t, typo])
 
   const isExam = (l: ListingRow) => l.type === 'exam'
+  const isScholarshipSegment = segment === 'scholarship'
 
   return (
     <SafeAreaView style={s.root}>
@@ -219,6 +335,71 @@ export default function ListingsScreen() {
         </View>
       )}
 
+      {/* Scholarship facets — only shown in Scholarships segment */}
+      {isScholarshipSegment && (
+        <View style={s.facetWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.regionContent, { paddingBottom: 2 }]}
+          >
+            {/* Verified only */}
+            <TouchableOpacity
+              style={[s.facetChip, facetVerifiedOnly && s.facetChipOn]}
+              onPress={() => setFacetVerifiedOnly(v => !v)}
+            >
+              <Text style={[s.facetTxt, facetVerifiedOnly && s.facetTxtOn]}>✓ Verified</Text>
+            </TouchableOpacity>
+
+            {/* Near me — only when user.province is set */}
+            {profile.province ? (
+              <TouchableOpacity
+                style={[s.facetChip, facetNearMe && s.facetChipOn]}
+                onPress={() => setFacetNearMe(v => !v)}
+              >
+                <Text style={[s.facetTxt, facetNearMe && s.facetTxtOn]}>📍 Near me</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Eligible for me */}
+            <TouchableOpacity
+              style={[s.facetChip, facetEligibleForMe && s.facetChipOn, !profileHasData && s.facetChipDisabled]}
+              onPress={() => { if (profileHasData) setFacetEligibleForMe(v => !v) }}
+              disabled={!profileHasData}
+            >
+              <Text style={[s.facetTxt, facetEligibleForMe && s.facetTxtOn]}>⭐ Eligible for me</Text>
+            </TouchableOpacity>
+
+            {/* Province chips */}
+            {scholarProvinces.map(prov => (
+              <TouchableOpacity
+                key={prov}
+                style={[s.facetChip, facetProvince === prov && s.facetChipOn]}
+                onPress={() => setFacetProvince(prev => prev === prov ? null : prov)}
+              >
+                <Text style={[s.facetTxt, facetProvince === prov && s.facetTxtOn]}>{prov}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Provider chips */}
+            {scholarProviders.map(prov => (
+              <TouchableOpacity
+                key={prov}
+                style={[s.facetChip, facetProvider === prov && s.facetChipOn]}
+                onPress={() => setFacetProvider(prev => prev === prov ? null : prov)}
+              >
+                <Text style={[s.facetTxt, facetProvider === prov && s.facetTxtOn]}>{prov}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Hint when eligible filter is active but profile has no data */}
+          {facetEligibleForMe && !profileHasData ? (
+            <Text style={s.eligibleHint}>Complete your profile (GWA, income, province) to use this filter.</Text>
+          ) : null}
+        </View>
+      )}
+
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
@@ -239,6 +420,9 @@ export default function ListingsScreen() {
         renderItem={({ item: l }) => {
           const exam = isExam(l)
           const isSaved = savedIds.has(l.id)
+          const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id))
+            ? (matchStatusMap.get(l.id) as MatchStatus)
+            : 'unknown'
           return (
             <TouchableOpacity
               style={s.card}
@@ -272,6 +456,16 @@ export default function ListingsScreen() {
                 <View style={s.row2}>
                   <Text style={s.dateText}>{fmtDate(l.examDate)}</Text>
                   {l.region ? <Text style={s.regionLabel}>📍 {l.region}</Text> : null}
+                  {/* Scholarship-specific: province, verified badge, match pill */}
+                  {!exam && l.province ? (
+                    <Text style={s.regionLabel}>{l.province}</Text>
+                  ) : null}
+                  {!exam ? (
+                    l.isVerified
+                      ? <View style={s.verifiedBadge}><Text style={s.verifiedTxt}>✓ Verified</Text></View>
+                      : <View style={s.unverifiedBadge}><Text style={s.unverifiedTxt}>Unverified</Text></View>
+                  ) : null}
+                  {!exam ? <MatchPill status={matchStatus} /> : null}
                 </View>
               </View>
               <TouchableOpacity
