@@ -152,7 +152,11 @@ function makeTestDb(): DrizzleClient {
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
       focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
-      google_calendar_connected INTEGER NOT NULL DEFAULT 0
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0,
+      income_bracket TEXT,
+      gwa REAL,
+      province TEXT,
+      city TEXT
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -489,7 +493,18 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       provider TEXT NOT NULL DEFAULT '',
       external_url TEXT NOT NULL DEFAULT '',
       deadline INTEGER,
-      grant_amount TEXT NOT NULL DEFAULT ''
+      grant_amount TEXT NOT NULL DEFAULT '',
+      province TEXT,
+      city TEXT,
+      scope TEXT NOT NULL DEFAULT 'national',
+      is_verified INTEGER NOT NULL DEFAULT 0,
+      income_ceiling INTEGER,
+      gwa_requirement REAL,
+      monthly_stipend INTEGER,
+      service_obligation_years INTEGER,
+      has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+      application_window TEXT,
+      scholarship_meta TEXT NOT NULL DEFAULT '{}'
     );
     CREATE TABLE user_settings (
       id INTEGER PRIMARY KEY NOT NULL,
@@ -503,7 +518,11 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
       focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
-      google_calendar_connected INTEGER NOT NULL DEFAULT 0
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0,
+      income_bracket TEXT,
+      gwa REAL,
+      province TEXT,
+      city TEXT
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -866,6 +885,86 @@ describe('syncOnLaunch upcat write (real SQLite)', () => {
     const pRow = raw.prepare('SELECT * FROM upcat_passages WHERE set_id = ?').get('set-1') as any
     expect(pRow).toBeTruthy()
     expect(pRow.passage_text).toBe('Once upon a time…')
+  })
+})
+
+function makeSupabaseForListings(listingRow: Record<string, unknown>) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'listings') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [listingRow] }),
+      }
+    }
+    if (table === 'upcat_facts') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [] }),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch scholarship columns (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes scholarship typed columns + meta into listings SQLite row', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const listingRow = {
+      id: 'listing-1',
+      slug: 'dost-sei',
+      title: 'DOST-SEI Scholarship',
+      type: 'scholarship',
+      status: 'active',
+      exam_date: null,
+      region: 'national',
+      description: 'Science scholarship',
+      requirements: [],
+      coverage: 'full',
+      provider: 'DOST',
+      external_url: '',
+      deadline: null,
+      grant_amount: null,
+      province: null,
+      city: null,
+      scope: 'provincial',
+      is_verified: true,
+      income_ceiling: 100000,
+      gwa_requirement: null,
+      monthly_stipend: null,
+      service_obligation_years: null,
+      has_entrance_exam: false,
+      application_window: null,
+      scholarship_meta: { huc_excluded: true },
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForListings(listingRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM listings WHERE id = ?').get('listing-1') as any
+    expect(row).toBeTruthy()
+    expect(row.scope).toBe('provincial')
+    expect(row.is_verified).toBe(1)
+    expect(row.income_ceiling).toBe(100000)
+    expect(row.scholarship_meta).toBe('{"huc_excluded":true}')
   })
 })
 
