@@ -40,6 +40,7 @@ export type Listing = {
   service_obligation_years: number | null
   has_entrance_exam: boolean
   application_window: string | null
+  scholarship_meta: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

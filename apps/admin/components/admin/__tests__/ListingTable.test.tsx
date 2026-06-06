@@ -32,6 +32,7 @@ const base = {
   service_obligation_years: null,
   has_entrance_exam: false,
   application_window: null,
+  scholarship_meta: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 }

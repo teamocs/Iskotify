@@ -54,7 +54,7 @@ export function matchScholarship(listing: MatchInput, student: StudentProfile): 
     else { states.push('ineligible'); reasons.push(`Requires GWA ≥ ${R}% (yours is ${student.gwa}%).`) }
   }
 
-  if (listing.scope === 'provincial' || listing.scope === 'city') {
+  if (listing.scope === 'provincial') {
     hadCriterion = true
     if (listing.province && student.province) {
       if (student.province.trim().toLowerCase() === listing.province.trim().toLowerCase()) {
@@ -65,6 +65,22 @@ export function matchScholarship(listing: MatchInput, student: StudentProfile): 
       } else { states.push('ineligible'); reasons.push(`For residents of ${listing.province}.`) }
     } else if (listing.province && !student.province) {
       states.push('maybe'); warnings.push(`For residents of ${listing.province} — set your province to confirm.`)
+    }
+  }
+
+  if (listing.scope === 'city') {
+    hadCriterion = true
+    if (listing.city) {
+      const lc = listing.city.trim().toLowerCase()
+      if (student.city) {
+        if (student.city.trim().toLowerCase() === lc) {
+          states.push('eligible'); reasons.push(`You are a resident of ${listing.city}.`)
+        } else {
+          states.push('ineligible'); reasons.push(`For residents of ${listing.city}.`)
+        }
+      } else {
+        states.push('maybe'); warnings.push(`For residents of ${listing.city} — set your city to confirm.`)
+      }
     }
   }
 
@@ -82,7 +98,11 @@ export function matchScholarship(listing: MatchInput, student: StudentProfile): 
 
   let status: MatchStatus = 'unknown'
   if (hadCriterion) {
-    status = states.reduce<MatchStatus>((acc, s) => (RANK[s] > RANK[acc] ? s : acc), 'eligible')
+    if (states.length === 0) {
+      status = 'unknown'
+    } else {
+      status = states.reduce<MatchStatus>((acc, s) => (RANK[s] > RANK[acc] ? s : acc), 'eligible')
+    }
   }
   return { status, reasons, warnings }
 }

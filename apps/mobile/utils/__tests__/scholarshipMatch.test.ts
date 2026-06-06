@@ -60,6 +60,28 @@ describe('matchScholarship — LGU residency', () => {
   })
 })
 
+describe('matchScholarship — city-scope residency', () => {
+  it('city match → eligible', () => {
+    const r = matchScholarship(L({ scope: 'city', city: 'Cebu City' }), S({ city: 'Cebu City' }))
+    expect(r.status).toBe('eligible')
+    expect(r.reasons.join(' ')).toMatch(/Cebu City/)
+  })
+  it('city mismatch → ineligible', () => {
+    const r = matchScholarship(L({ scope: 'city', city: 'Cebu City' }), S({ city: 'Davao City' }))
+    expect(r.status).toBe('ineligible')
+    expect(r.reasons.join(' ')).toMatch(/Cebu City/)
+  })
+  it('city-scope + listing.city set + student.city missing → maybe', () => {
+    const r = matchScholarship(L({ scope: 'city', city: 'Cebu City' }), S({}))
+    expect(r.status).toBe('maybe')
+    expect(r.warnings.join(' ')).toMatch(/Cebu City/)
+  })
+  it('city-scope with listing.city null and no other criteria → unknown', () => {
+    const r = matchScholarship(L({ scope: 'city', city: null }), S({ city: 'Cebu City' }))
+    expect(r.status).toBe('unknown')
+  })
+})
+
 describe('matchScholarship — verified + unknown', () => {
   it('unverified always warns', () => {
     expect(matchScholarship(L({ isVerified: false }), S()).warnings.join(' ')).toMatch(/verify|unverified/i)

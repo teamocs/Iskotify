@@ -87,6 +87,7 @@ export function transformSheetRow(row: Record<string, string>): ListingUpsert | 
     service_obligation_years: null,
     has_entrance_exam: false,
     application_window: null,
+    scholarship_meta: null,
     updated_at: new Date().toISOString(),
   }
 }
