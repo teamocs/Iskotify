@@ -20,6 +20,16 @@ jest.mock('@lineiconshq/react-native-lineicons', () => ({
 jest.mock('@lineiconshq/free-icons', () => ({
   User4Outlined: {},
   SparkOutlined: {},
+  Gear1Outlined: {},
+  Upload1Outlined: {},
+  ChevronUpOutlined: {},
+  ChevronDownOutlined: {},
+  XmarkOutlined: {},
+}))
+
+// Mock AnalyticsDashboard so profile tests don't need its full dependency tree
+jest.mock('../../../components/analytics/AnalyticsDashboard', () => ({
+  AnalyticsDashboard: () => null,
 }))
 
 jest.mock('../../../services/export', () => ({

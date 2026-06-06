@@ -26,6 +26,7 @@ import { useFocusListings, type FocusListing } from '../../hooks/useFocusListing
 import { exportUserData, importUserData } from '../../services/export'
 import { supabase } from '../../services/supabase'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
+import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 
 interface ProfileData {
   fullName: string
@@ -209,6 +210,7 @@ export default function ProfileScreen() {
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
   const { theme: t, typo } = useTheme()
   const [draggingSlug, setDraggingSlug] = useState<string | null>(null)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1, backgroundColor: t.bg },
@@ -235,6 +237,10 @@ export default function ProfileScreen() {
     focusSection:  { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
     secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 4, marginBottom: 2 },
+    analyticsSection: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, marginBottom: 10, overflow: 'hidden' },
+    analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+    analyticsBody:    { paddingHorizontal: 16, paddingBottom: 16 },
+    analyticsChevron: { fontSize: 13, color: t.textTertiary, marginLeft: 4 },
   }), [t, typo])
 
   const isMountedRef = useRef(true)
@@ -487,6 +493,25 @@ export default function ProfileScreen() {
                 onDragStart={() => setDraggingSlug(item.slug)}
               />
             ))
+          )}
+        </View>
+
+        {/* Analytics section */}
+        <View style={s.analyticsSection}>
+          <TouchableOpacity
+            style={s.analyticsHeader}
+            activeOpacity={0.8}
+            onPress={() => setAnalyticsOpen(prev => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={analyticsOpen ? 'Collapse analytics' : 'Expand analytics'}
+          >
+            <Text style={s.secTitle}>Analytics</Text>
+            <Text style={s.analyticsChevron}>{analyticsOpen ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {analyticsOpen && (
+            <View style={s.analyticsBody}>
+              <AnalyticsDashboard scrollable={false} />
+            </View>
           )}
         </View>
 
