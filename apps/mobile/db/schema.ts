@@ -166,3 +166,33 @@ export const noteLabelAssignments = sqliteTable('note_label_assignments', {
   primaryKey({ columns: [t.noteId, t.labelId] }),
   index('note_label_assignments_note_idx').on(t.noteId),
 ])
+
+export const upcatPassages = sqliteTable('upcat_passages', {
+  setId: text('set_id').primaryKey(),
+  subtest: text('subtest').notNull(),
+  passageText: text('passage_text').notNull(),
+})
+
+export const upcatQuestions = sqliteTable('upcat_questions', {
+  questionId: text('question_id').primaryKey(),
+  subtest: text('subtest').notNull(),
+  mainSubject: text('main_subject'),
+  topic: text('topic'),
+  subtopic: text('subtopic'),
+  questionFormat: text('question_format'),
+  cognitiveLevel: text('cognitive_level'),
+  difficulty: text('difficulty'),
+  curriculumAlignment: text('curriculum_alignment'),
+  questionText: text('question_text').notNull(),
+  options: text('options').notNull().default('[]'),
+  correctIndex: integer('correct_index').notNull(),
+  explanation: text('explanation').notNull(),
+  setId: text('set_id'),
+  setPosition: integer('set_position'),
+  hasVisual: integer('has_visual', { mode: 'boolean' }).notNull().default(false),
+  status: text('status').notNull().default('published'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+}, (t) => [
+  index('upcat_questions_subtest_idx').on(t.subtest),
+  index('upcat_questions_set_idx').on(t.setId),
+])

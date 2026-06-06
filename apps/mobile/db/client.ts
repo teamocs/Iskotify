@@ -190,6 +190,27 @@ const MIGRATIONS = [
    WHERE NOT EXISTS (SELECT 1 FROM flashcards_fts WHERE flashcard_id = f.id)`,
   `ALTER TABLE notes ADD COLUMN google_event_id TEXT`,
   `ALTER TABLE user_settings ADD COLUMN google_calendar_connected INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS upcat_passages (
+    set_id TEXT PRIMARY KEY NOT NULL,
+    subtest TEXT NOT NULL,
+    passage_text TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS upcat_questions (
+    question_id TEXT PRIMARY KEY NOT NULL,
+    subtest TEXT NOT NULL,
+    main_subject TEXT, topic TEXT, subtopic TEXT,
+    question_format TEXT, cognitive_level TEXT, difficulty TEXT, curriculum_alignment TEXT,
+    question_text TEXT NOT NULL,
+    options TEXT NOT NULL DEFAULT '[]',
+    correct_index INTEGER NOT NULL,
+    explanation TEXT NOT NULL,
+    set_id TEXT, set_position INTEGER,
+    has_visual INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'published',
+    remote_updated_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS upcat_questions_subtest_idx ON upcat_questions (subtest)`,
+  `CREATE INDEX IF NOT EXISTS upcat_questions_set_idx ON upcat_questions (set_id)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
