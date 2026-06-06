@@ -4,6 +4,7 @@ import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedListings, savedDecks, userProgress, practiceSessions,
   notes as notesTable, noteLabels, noteLabelAssignments,
+  upcatPassages, upcatQuestions,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -191,6 +192,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
     ])
 
+    const [upcatPassagesRes, upcatQuestionsRes] = await Promise.all([
+      supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
+      supabase.from('upcat_questions')
+        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,updated_at')
+        .eq('status', 'published')
+        .gt('updated_at', since),
+    ])
+
     const cardResults = await Promise.all(
       slugs.map(slug =>
         supabase.from('flashcards')
@@ -262,6 +271,27 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           target: flashcards.id,
           set: vals,  // ai_* only included when Supabase had them
         }).run()
+      }
+
+      for (const row of (upcatPassagesRes.data ?? [])) {
+        const vals = { setId: row.set_id, subtest: row.subtest, passageText: row.passage_text }
+        tx.insert(upcatPassages).values(vals).onConflictDoUpdate({ target: upcatPassages.setId, set: vals }).run()
+      }
+
+      for (const row of (upcatQuestionsRes.data ?? [])) {
+        const vals = {
+          questionId: row.question_id, subtest: row.subtest,
+          mainSubject: row.main_subject ?? null, topic: row.topic ?? null, subtopic: row.subtopic ?? null,
+          questionFormat: row.question_format ?? null, cognitiveLevel: row.cognitive_level ?? null,
+          difficulty: row.difficulty ?? null, curriculumAlignment: row.curriculum_alignment ?? null,
+          questionText: row.question_text,
+          options: JSON.stringify(row.options ?? []),
+          correctIndex: row.correct_index, explanation: row.explanation,
+          setId: row.set_id ?? null, setPosition: row.set_position ?? null,
+          hasVisual: !!row.has_visual, status: row.status,
+          remoteUpdatedAt: new Date(row.updated_at).getTime(),
+        }
+        tx.insert(upcatQuestions).values(vals).onConflictDoUpdate({ target: upcatQuestions.questionId, set: vals }).run()
       }
 
       const syncedAt = Date.now()

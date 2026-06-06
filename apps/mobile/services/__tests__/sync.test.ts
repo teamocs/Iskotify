@@ -14,11 +14,13 @@ jest.mock('drizzle-orm', () => ({
 }))
 
 function makeSupabaseChain(data: any[] = []) {
+  const resolved = Promise.resolve({ data })
   const chain: any = {
     select: jest.fn().mockReturnThis(),
     contains: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     gt: jest.fn().mockResolvedValue({ data }),
+    then: (resolve: any, reject: any) => resolved.then(resolve, reject),
   }
   return chain
 }
@@ -555,6 +557,25 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       label_id TEXT NOT NULL,
       PRIMARY KEY (note_id, label_id)
     );
+    CREATE TABLE IF NOT EXISTS upcat_passages (
+      set_id TEXT PRIMARY KEY NOT NULL,
+      subtest TEXT NOT NULL,
+      passage_text TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS upcat_questions (
+      question_id TEXT PRIMARY KEY NOT NULL,
+      subtest TEXT NOT NULL,
+      main_subject TEXT, topic TEXT, subtopic TEXT,
+      question_format TEXT, cognitive_level TEXT, difficulty TEXT, curriculum_alignment TEXT,
+      question_text TEXT NOT NULL,
+      options TEXT NOT NULL DEFAULT '[]',
+      correct_index INTEGER NOT NULL,
+      explanation TEXT NOT NULL,
+      set_id TEXT, set_position INTEGER,
+      has_visual INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'published',
+      remote_updated_at INTEGER
+    );
   `)
   return raw
 }
@@ -613,11 +634,13 @@ function makeCardRow(overrides: Record<string, unknown> = {}) {
 
 function makeSupabaseForCards(cardRow: Record<string, unknown>) {
   return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
     const emptyChain: any = {
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'flashcards') {
       return {
