@@ -9,6 +9,7 @@ import { parseTopicIds } from '../../../hooks/useSavedDecks'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
+import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
 import { StatusBar } from 'expo-status-bar'
 import { useFocusModePref } from '../../../hooks/useFocusModePref'
@@ -44,7 +45,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'ready' | 'quiz' | 'results'
+type Phase = 'loading' | 'enhancing' | 'ready' | 'quiz' | 'results'
 
 export default function DeckQuizScreen() {
   const { deckId, listingSlug } = useLocalSearchParams<{ deckId: string; listingSlug?: string }>()
@@ -181,6 +182,7 @@ export default function DeckQuizScreen() {
   const [timeLeft, setTimeLeft] = useState(20)
   const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
   const [timerSecs, setTimerSecs] = useState(20)
+  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
 
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
@@ -209,20 +211,36 @@ export default function DeckQuizScreen() {
       const topicIds = parseTopicIds(deck.topicIds)
       if (topicIds.length === 0) { setPhase('results'); return }
 
-      const cardRows = await db
-        .select({
-          id: flashcardsTable.id,
-          question: flashcardsTable.question,
-          answer: flashcardsTable.answer,
-          explanation: flashcardsTable.explanation,
-          options: flashcardsTable.options,
-          correctAnswerIndex: flashcardsTable.correctAnswerIndex,
-          aiOptions: flashcardsTable.aiOptions,
-          aiCorrectIndex: flashcardsTable.aiCorrectIndex,
-          aiExplanation: flashcardsTable.aiExplanation,
-        })
-        .from(flashcardsTable)
-        .where(inArray(flashcardsTable.topicId, topicIds))
+      async function fetchCards() {
+        return db
+          .select({
+            id: flashcardsTable.id,
+            question: flashcardsTable.question,
+            answer: flashcardsTable.answer,
+            explanation: flashcardsTable.explanation,
+            options: flashcardsTable.options,
+            correctAnswerIndex: flashcardsTable.correctAnswerIndex,
+            aiOptions: flashcardsTable.aiOptions,
+            aiCorrectIndex: flashcardsTable.aiCorrectIndex,
+            aiExplanation: flashcardsTable.aiExplanation,
+            aiEnhancedAt: flashcardsTable.aiEnhancedAt,
+          })
+          .from(flashcardsTable)
+          .where(inArray(flashcardsTable.topicId, topicIds))
+      }
+
+      let cardRows = await fetchCards()
+
+      // On-demand LLM enhancement of unenhanced cards before quiz starts.
+      const unenhancedIds = cardRows
+        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .map(r => r.id)
+      if (unenhancedIds.length > 0) {
+        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
+        setPhase('enhancing')
+        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
+        cardRows = await fetchCards()
+      }
 
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
@@ -379,6 +397,23 @@ export default function DeckQuizScreen() {
     return (
       <SafeAreaView style={s.root}>
         <Text style={s.loadingTxt}>Loading deck…</Text>
+      </SafeAreaView>
+    )
+  }
+
+  if (phase === 'enhancing') {
+    const pct = enhanceProgress.total > 0
+      ? Math.round((enhanceProgress.done / enhanceProgress.total) * 100)
+      : 0
+    return (
+      <SafeAreaView style={s.root}>
+        <Text style={s.loadingTxt}>Preparing quiz options…</Text>
+        <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
+          {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
+        </Text>
+        <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
+          Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
+        </Text>
       </SafeAreaView>
     )
   }

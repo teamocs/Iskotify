@@ -13,6 +13,7 @@ import { eq } from 'drizzle-orm'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../../utils/mcDistractors'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
+import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
 
 const TIMER_OPTIONS = [20, 30, 45, 60] as const
@@ -33,7 +34,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-type Phase = 'loading' | 'ready' | 'quiz' | 'results'
+type Phase = 'loading' | 'enhancing' | 'ready' | 'quiz' | 'results'
 
 export default function ListingQuizScreen() {
   const { slug, mode } = useLocalSearchParams<{ slug: string; mode?: string }>()
@@ -138,6 +139,7 @@ export default function ListingQuizScreen() {
   const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
   const [timerSecs, setTimerSecs] = useState(20)
   const [timeLeft, setTimeLeft] = useState(20)
+  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeLeftRef = useRef(20)
   const advanceRef = useRef<(sel: number | null) => void>(() => {})
@@ -147,19 +149,40 @@ export default function ListingQuizScreen() {
 
   useEffect(() => {
     async function load() {
-      const [listingRows, allCards, progress] = await Promise.all([
+      async function fetchAllCards() {
+        return db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, listingSlugs: flashcardsTable.listingSlugs, options: flashcardsTable.options, correctAnswerIndex: flashcardsTable.correctAnswerIndex, aiOptions: flashcardsTable.aiOptions, aiCorrectIndex: flashcardsTable.aiCorrectIndex, aiExplanation: flashcardsTable.aiExplanation, aiEnhancedAt: flashcardsTable.aiEnhancedAt }).from(flashcardsTable)
+      }
+
+      const [listingRows, initialCards, progress] = await Promise.all([
         db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({ id: flashcardsTable.id, topicId: flashcardsTable.topicId, question: flashcardsTable.question, answer: flashcardsTable.answer, explanation: flashcardsTable.explanation, listingSlugs: flashcardsTable.listingSlugs, options: flashcardsTable.options, correctAnswerIndex: flashcardsTable.correctAnswerIndex, aiOptions: flashcardsTable.aiOptions, aiCorrectIndex: flashcardsTable.aiCorrectIndex, aiExplanation: flashcardsTable.aiExplanation }).from(flashcardsTable),
+        fetchAllCards(),
         db.select({ flashcardId: userProgress.flashcardId, correct: userProgress.correct }).from(userProgress),
       ])
 
       setListingTitle(listingRows[0]?.title ?? slug)
 
       // Filter cards belonging to this listing
-      const matching = allCards.filter(card => {
-        try { return (JSON.parse(card.listingSlugs ?? '[]') as string[]).includes(slug) }
-        catch { return false }
-      })
+      function filterToListing(rows: typeof initialCards) {
+        return rows.filter(card => {
+          try { return (JSON.parse(card.listingSlugs ?? '[]') as string[]).includes(slug) }
+          catch { return false }
+        })
+      }
+
+      let allCards = initialCards
+      let matching = filterToListing(allCards)
+
+      // On-demand LLM enhancement of unenhanced cards in this listing before quiz starts.
+      const unenhancedIds = matching
+        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .map(r => r.id)
+      if (unenhancedIds.length > 0) {
+        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
+        setPhase('enhancing')
+        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
+        allCards = await fetchAllCards()
+        matching = filterToListing(allCards)
+      }
 
       let filtered = matching
       if (mode === 'weak') {
@@ -312,6 +335,23 @@ export default function ListingQuizScreen() {
   if (phase === 'loading') return (
     <SafeAreaView style={s.root}><Text style={s.loadingTxt}>Loading…</Text></SafeAreaView>
   )
+
+  if (phase === 'enhancing') {
+    const pct = enhanceProgress.total > 0
+      ? Math.round((enhanceProgress.done / enhanceProgress.total) * 100)
+      : 0
+    return (
+      <SafeAreaView style={s.root}>
+        <Text style={s.loadingTxt}>Preparing quiz options…</Text>
+        <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
+          {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
+        </Text>
+        <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
+          Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
+        </Text>
+      </SafeAreaView>
+    )
+  }
 
   if (phase === 'ready') {
     const cardOpts: number[] = []

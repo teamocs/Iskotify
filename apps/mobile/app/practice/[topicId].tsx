@@ -8,6 +8,7 @@ import { flashcards as flashcardsTable, topics, userProgress } from '../../db/sc
 import { useRecordSession } from '../../hooks/useRecordSession'
 import { buildQuizQuestions, type QuizQuestion, type RawCard } from '../../utils/mcDistractors'
 import { parseAiOptions } from '../../utils/parseAiOptions'
+import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
 import { StatusBar } from 'expo-status-bar'
 import { useFocusModePref } from '../../hooks/useFocusModePref'
@@ -43,7 +44,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'ready' | 'quiz' | 'results'
+type Phase = 'loading' | 'enhancing' | 'ready' | 'quiz' | 'results'
 
 export default function QuizScreen() {
   const { topicId, listingSlug } = useLocalSearchParams<{ topicId: string; listingSlug?: string }>()
@@ -61,6 +62,7 @@ export default function QuizScreen() {
   const cardCountRef = useRef(MIN_QUESTIONS)
   const [cardCount, setCardCount] = useState(MIN_QUESTIONS)
   const [timerSecs, setTimerSecs] = useState(20)
+  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
 
   const { recordSession } = useRecordSession()
   const startTimeRef = useRef(0)
@@ -209,9 +211,11 @@ export default function QuizScreen() {
 
   useEffect(() => {
     async function load() {
-      const [topicRows, cardRows] = await Promise.all([
-        db.select({ name: topics.name }).from(topics).where(eq(topics.id, topicId)).limit(1),
-        db.select({
+      const topicRows = await db.select({ name: topics.name }).from(topics).where(eq(topics.id, topicId)).limit(1)
+      setTopicName(topicRows[0]?.name ?? 'Quiz')
+
+      async function fetchCards() {
+        return db.select({
           id: flashcardsTable.id,
           question: flashcardsTable.question,
           answer: flashcardsTable.answer,
@@ -221,9 +225,27 @@ export default function QuizScreen() {
           aiOptions: flashcardsTable.aiOptions,
           aiCorrectIndex: flashcardsTable.aiCorrectIndex,
           aiExplanation: flashcardsTable.aiExplanation,
-        }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId)),
-      ])
-      setTopicName(topicRows[0]?.name ?? 'Quiz')
+          aiEnhancedAt: flashcardsTable.aiEnhancedAt,
+        }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId))
+      }
+
+      let cardRows = await fetchCards()
+
+      // On-demand LLM enhancement: any card in this session that doesn't yet
+      // have AI-generated MC distractors gets enhanced now. This is what
+      // prevents the practice screen from falling through to placeholder
+      // distractors (or, in the old behavior, distractors pulled from other
+      // cards' answers — which produced misleading non-sequiturs).
+      const unenhancedIds = cardRows
+        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .map(r => r.id)
+      if (unenhancedIds.length > 0) {
+        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
+        setPhase('enhancing')
+        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
+        cardRows = await fetchCards()
+      }
+
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
         options: JSON.parse(row.options) as string[],
@@ -379,6 +401,23 @@ export default function QuizScreen() {
     return (
       <SafeAreaView style={s.root}>
         <Text style={s.loadingTxt}>Loading quiz…</Text>
+      </SafeAreaView>
+    )
+  }
+
+  if (phase === 'enhancing') {
+    const pct = enhanceProgress.total > 0
+      ? Math.round((enhanceProgress.done / enhanceProgress.total) * 100)
+      : 0
+    return (
+      <SafeAreaView style={s.root}>
+        <Text style={s.loadingTxt}>Preparing quiz options…</Text>
+        <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
+          {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
+        </Text>
+        <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
+          Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
+        </Text>
       </SafeAreaView>
     )
   }
