@@ -4,7 +4,7 @@ import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedListings, savedDecks, userProgress, practiceSessions,
   notes as notesTable, noteLabels, noteLabelAssignments,
-  upcatPassages, upcatQuestions,
+  upcatPassages, upcatQuestions, upcatFacts,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -192,12 +192,15 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
     ])
 
-    const [upcatPassagesRes, upcatQuestionsRes] = await Promise.all([
+    const [upcatPassagesRes, upcatQuestionsRes, upcatFactsRes] = await Promise.all([
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       supabase.from('upcat_questions')
         .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,updated_at')
         .eq('status', 'published')
+        .gt('updated_at', since),
+      supabase.from('upcat_facts')
+        .select('id,topic,question,answer,source,valid_year,updated_at')
         .gt('updated_at', since),
     ])
 
@@ -293,6 +296,15 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt: new Date(row.updated_at).getTime(),
         }
         tx.insert(upcatQuestions).values(vals).onConflictDoUpdate({ target: upcatQuestions.questionId, set: vals }).run()
+      }
+
+      for (const row of (upcatFactsRes.data ?? [])) {
+        const vals = {
+          id: row.id, topic: row.topic, question: row.question, answer: row.answer,
+          source: row.source ?? null, validYear: row.valid_year ?? null,
+          remoteUpdatedAt: new Date(row.updated_at).getTime(),
+        }
+        tx.insert(upcatFacts).values(vals).onConflictDoUpdate({ target: upcatFacts.id, set: vals }).run()
       }
 
       const syncedAt = Date.now()

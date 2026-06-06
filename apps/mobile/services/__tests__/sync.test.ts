@@ -88,7 +88,7 @@ describe('syncOnLaunch', () => {
     expect(db.transaction).not.toHaveBeenCalled()
   })
 
-  it('calls supabase.from for all six tables when slug is set via fallback', async () => {
+  it('calls supabase.from for all seven tables when slug is set via fallback', async () => {
     const { supabase } = require('../supabase')
     const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 }, [])
     await syncOnLaunch(db as any)
@@ -98,6 +98,7 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('flashcards')
     expect(supabase.from).toHaveBeenCalledWith('upcat_questions')
     expect(supabase.from).toHaveBeenCalledWith('upcat_passages')
+    expect(supabase.from).toHaveBeenCalledWith('upcat_facts')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -182,7 +183,8 @@ function makeTestDb(): DrizzleClient {
       score INTEGER NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
-      completed_at INTEGER NOT NULL
+      completed_at INTEGER NOT NULL,
+      subtest TEXT
     );
     CREATE TABLE notes (
       id TEXT PRIMARY KEY NOT NULL,
@@ -578,6 +580,29 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       status TEXT NOT NULL DEFAULT 'published',
       remote_updated_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS upcat_facts (
+      id TEXT PRIMARY KEY NOT NULL,
+      topic TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      source TEXT,
+      valid_year INTEGER,
+      remote_updated_at INTEGER
+    );
+    CREATE VIRTUAL TABLE IF NOT EXISTS upcat_facts_fts USING fts5(
+      fact_id UNINDEXED, topic, question, answer,
+      tokenize = 'unicode61 remove_diacritics 2'
+    );
+    CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ai AFTER INSERT ON upcat_facts BEGIN
+      INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+    END;
+    CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ad AFTER DELETE ON upcat_facts BEGIN
+      DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+    END;
+    CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_au AFTER UPDATE ON upcat_facts BEGIN
+      DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+      INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+    END;
   `)
   return raw
 }
@@ -783,6 +808,12 @@ function makeSupabaseForUpcat(questionRow: Record<string, unknown>, passageRow: 
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
         gt: jest.fn().mockResolvedValue({ data: [questionRow] }),
+      }
+    }
+    if (table === 'upcat_facts') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [] }),
       }
     }
     return emptyChain

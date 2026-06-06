@@ -197,3 +197,13 @@ export const upcatQuestions = sqliteTable('upcat_questions', {
   index('upcat_questions_subtest_idx').on(t.subtest),
   index('upcat_questions_set_idx').on(t.setId),
 ])
+
+export const upcatFacts = sqliteTable('upcat_facts', {
+  id: text('id').primaryKey(),
+  topic: text('topic').notNull(),
+  question: text('question').notNull(),
+  answer: text('answer').notNull(),
+  source: text('source'),
+  validYear: integer('valid_year'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})

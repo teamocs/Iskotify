@@ -212,6 +212,24 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS upcat_questions_subtest_idx ON upcat_questions (subtest)`,
   `CREATE INDEX IF NOT EXISTS upcat_questions_set_idx ON upcat_questions (set_id)`,
   `ALTER TABLE practice_sessions ADD COLUMN subtest TEXT`,
+  `CREATE TABLE IF NOT EXISTS upcat_facts (
+    id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,
+    answer TEXT NOT NULL, source TEXT, valid_year INTEGER, remote_updated_at INTEGER
+  )`,
+  `CREATE VIRTUAL TABLE IF NOT EXISTS upcat_facts_fts USING fts5(
+    fact_id UNINDEXED, topic, question, answer,
+    tokenize = 'unicode61 remove_diacritics 2'
+  )`,
+  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ai AFTER INSERT ON upcat_facts BEGIN
+    INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ad AFTER DELETE ON upcat_facts BEGIN
+    DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+  END`,
+  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_au AFTER UPDATE ON upcat_facts BEGIN
+    DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+    INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+  END`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
