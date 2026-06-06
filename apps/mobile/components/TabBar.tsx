@@ -11,7 +11,7 @@ import {
   Home2Outlined,
   Bolt2Outlined,
   GraduationCap1Outlined,
-  BarChart4Outlined,
+  Bell1Outlined,
   User4Outlined,
 } from '@lineiconshq/free-icons'
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
@@ -22,7 +22,7 @@ const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = 
   index:     { label: 'Home',      icon: Home2Outlined },
   practice:  { label: 'Practice',  icon: Bolt2Outlined },
   listings:  { label: 'Listings',  icon: GraduationCap1Outlined },
-  analytics: { label: 'Analytics', icon: BarChart4Outlined },
+  updates:   { label: 'Updates',   icon: Bell1Outlined },
   profile:   { label: 'Profile',   icon: User4Outlined },
 }
 
