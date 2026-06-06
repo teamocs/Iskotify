@@ -41,6 +41,19 @@ jest.mock('../../../hooks/useSavedDecks', () => ({
   }),
 }))
 
+jest.mock('../../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    sessionCount: 0,
+    avgAccuracy: null,
+    streak: 0,
+    weeklyData: [],
+    topicMastery: [],
+    recentSessions: [],
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}))
+
 // Stub AiModelBanner so we don't pull in expo-notifications /
 // react-native-background-downloader native modules during tests.
 jest.mock('../../../components/AiModelBanner', () => ({
@@ -113,5 +126,25 @@ describe('PracticeScreen', () => {
     render(<PracticeScreen />)
     expect(screen.getByText('Algebra')).toBeTruthy()
     expect(screen.getByText(/12 cards/)).toBeTruthy()
+  })
+
+  it('renders stats header row', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('Accuracy')).toBeTruthy()
+    expect(screen.getByText('Streak')).toBeTruthy()
+    expect(screen.getByText('Exams taken')).toBeTruthy()
+  })
+
+  it('renders AI Study Feedback card with no-data prompt', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('AI Study Feedback')).toBeTruthy()
+    expect(screen.getByText(/Take a few quizzes/)).toBeTruthy()
+  })
+
+  it('does not render Quick Start or Full Review Deck', () => {
+    render(<PracticeScreen />)
+    expect(screen.queryByText('Quick Start')).toBeNull()
+    expect(screen.queryByText('Full Review Deck')).toBeNull()
+    expect(screen.queryByText('Weak Topics Only')).toBeNull()
   })
 })

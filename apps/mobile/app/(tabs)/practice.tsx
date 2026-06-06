@@ -15,6 +15,7 @@ import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useTheme } from '../../theme/ThemeContext'
 import { AiModelBanner } from '../../components/AiModelBanner'
+import { useAnalytics } from '../../hooks/useAnalytics'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -249,13 +250,17 @@ function CreateDeckModal({
 
 // ── Focus card ────────────────────────────────────────────────────────────────
 
-function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: boolean; onPress: () => void }) {
+function FocusCard({ row, isActive, accuracy, onPress, onReview }: { row: FocusListing; isActive: boolean; accuracy: number | null; onPress: () => void; onReview: () => void }) {
   const { theme: t, typo } = useTheme()
   const fc = useMemo(() => StyleSheet.create({
-    card: { minWidth: 110, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 11, marginRight: 8 },
+    card: { minWidth: 120, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 11, marginRight: 8 },
     cardActive: { backgroundColor: t.accentSurface, borderColor: '#831626', borderWidth: 2 },
     badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Lexend_600SemiBold' },
-    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 15, fontFamily: 'Outfit_700Bold' },
+    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 15, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
+    scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+    score: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.textTertiary },
+    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+    reviewBtnTxt: { fontSize: 10, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
     <TouchableOpacity
@@ -265,8 +270,36 @@ function FocusCard({ row, isActive, onPress }: { row: FocusListing; isActive: bo
     >
       <Text style={fc.badge}>#{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}</Text>
       <Text style={fc.name} numberOfLines={2}>{row.title}</Text>
+      <View style={fc.scoreRow}>
+        <Text style={fc.score}>{accuracy != null ? `${accuracy}%` : '—'}</Text>
+        {isActive && (
+          <TouchableOpacity style={fc.reviewBtn} onPress={onReview} activeOpacity={0.8}>
+            <Text style={fc.reviewBtnTxt}>Review</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </TouchableOpacity>
   )
+}
+
+// ── Per-focus analytics wrapper (calls hook per slug) ─────────────────────────
+// React rules require hooks at top level, so we call useAnalytics for up to
+// 5 focus slugs and map results by index.
+
+const MAX_FOCUS = 5
+
+function useFocusAnalyticsMap(slugs: string[]): Map<string, number | null> {
+  const a0 = useAnalytics(slugs[0] ?? '')
+  const a1 = useAnalytics(slugs[1] ?? '')
+  const a2 = useAnalytics(slugs[2] ?? '')
+  const a3 = useAnalytics(slugs[3] ?? '')
+  const a4 = useAnalytics(slugs[4] ?? '')
+  const all = [a0, a1, a2, a3, a4]
+  const map = new Map<string, number | null>()
+  slugs.slice(0, MAX_FOCUS).forEach((slug, i) => {
+    map.set(slug, all[i]?.avgAccuracy ?? null)
+  })
+  return map
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -276,6 +309,9 @@ export default function PracticeScreen() {
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+
+  // Overall analytics (stats header)
+  const overallAnalytics = useAnalytics('overall')
 
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
@@ -290,6 +326,18 @@ export default function PracticeScreen() {
       header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
       title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
       subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+      statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 4 },
+      statItem: { flex: 1, alignItems: 'center' },
+      statValue: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      statLabel: { fontSize: 10, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 },
+      statDivider: { width: 1, height: 30, backgroundColor: t.divider },
+      aiFeedbackCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 14, marginBottom: 12 },
+      aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+      aiFeedbackIcon: { fontSize: 14 },
+      aiFeedbackTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      aiFeedbackPrompt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', marginBottom: 4 },
+      aiFeedbackItem: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: 2 },
+      aiFeedbackEmpty: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
       chipsWrap: { height: 44, marginBottom: 4 },
       chipsScroll: { flex: 1 },
       chipsContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
@@ -363,6 +411,10 @@ export default function PracticeScreen() {
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
 
+  // Per-focus accuracy map — hooks called unconditionally at top level
+  const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
+  const focusAccuracyMap = useFocusAnalyticsMap(focusSlugs)
+
   // Sync activeFocusSlug to first focus listing when list loads
   useEffect(() => {
     if (focusListingsList.length > 0 && !activeFocusSlug) {
@@ -386,12 +438,7 @@ export default function PracticeScreen() {
     [topicRows, activeTopicIds]
   )
 
-  const weakTopicsForActive = useMemo(
-    () => topicRows.filter(r => activeTopicIds.has(r.topic.id) && r.strength === 'Weak'),
-    [topicRows, activeTopicIds]
-  )
-
-  const activeListing = useMemo(
+  const activeListing = useMemo(  // kept for Recommended section label
     () => focusListingsList.find(r => r.slug === activeFocusSlug),
     [focusListingsList, activeFocusSlug]
   )
@@ -433,11 +480,40 @@ export default function PracticeScreen() {
     )
   }, [topicRows, topicRowById, subjects, focusListingsList, topicIdsByListingSlug])
 
+  // AI feedback: weakest subjects from overall topicMastery (bottom by accuracy)
+  const weakSubjectsFeedback = useMemo(() => {
+    const { topicMastery } = overallAnalytics
+    if (topicMastery.length === 0) return null
+    return [...topicMastery]
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 3)
+  }, [overallAnalytics])
+
   return (
     <SafeAreaView style={s.root}>
       <View style={s.header}>
         <Text style={s.title}>Practice</Text>
         <Text style={s.subtitle}>{listing?.title ?? '—'} · {totalCards} cards synced</Text>
+
+        {/* Stats row */}
+        <View style={s.statsRow}>
+          <View style={s.statItem}>
+            <Text style={s.statValue}>
+              {overallAnalytics.avgAccuracy != null ? `${overallAnalytics.avgAccuracy}%` : '—'}
+            </Text>
+            <Text style={s.statLabel}>Accuracy</Text>
+          </View>
+          <View style={s.statDivider} />
+          <View style={s.statItem}>
+            <Text style={s.statValue}>{overallAnalytics.streak > 0 ? `${overallAnalytics.streak}` : '0'} 🔥</Text>
+            <Text style={s.statLabel}>Streak</Text>
+          </View>
+          <View style={s.statDivider} />
+          <View style={s.statItem}>
+            <Text style={s.statValue}>{overallAnalytics.sessionCount}</Text>
+            <Text style={s.statLabel}>Exams taken</Text>
+          </View>
+        </View>
       </View>
 
       {/* AI Reviewer Engine — banner + progress + download bottom-sheet */}
@@ -494,6 +570,28 @@ export default function PracticeScreen() {
           <Text style={qs.go}>›</Text>
         </Pressable>
 
+        {/* AI Study Feedback card */}
+        <View style={s.aiFeedbackCard}>
+          <View style={s.aiFeedbackHeader}>
+            <Text style={s.aiFeedbackIcon}>📊</Text>
+            <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
+          </View>
+          {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
+            <>
+              <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
+              {weakSubjectsFeedback.map((item) => (
+                <Text key={item.label} style={s.aiFeedbackItem}>
+                  · {item.label} ({item.accuracy}%)
+                </Text>
+              ))}
+            </>
+          ) : (
+            <Text style={s.aiFeedbackEmpty}>
+              Take a few quizzes to unlock your personalized study tips.
+            </Text>
+          )}
+        </View>
+
         {/* Focus cards row */}
         {focusListingsList.length > 0 && (
           <>
@@ -510,49 +608,14 @@ export default function PracticeScreen() {
                   key={row.slug}
                   row={row}
                   isActive={row.slug === activeFocusSlug}
+                  accuracy={focusAccuracyMap.get(row.slug) ?? null}
                   onPress={() => setActiveFocusSlug(row.slug)}
+                  onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
                 />
               ))}
             </ScrollView>
           </>
         )}
-
-        {/* Quick Start — auto-generated decks for active focus */}
-        {activeFocusSlug ? (
-          <>
-            <View style={s.secRow}>
-              <Text style={s.secTitle}>Quick Start</Text>
-              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
-            </View>
-            <TouchableOpacity
-              style={qs.card}
-              onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=all`)}
-              activeOpacity={0.8}
-            >
-              <View style={qs.icon}><Text style={{ fontSize: 15 }}>⚡</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={qs.title}>Full Review Deck</Text>
-                <Text style={qs.sub}>Auto · all topics tagged to this listing</Text>
-              </View>
-              <Text style={qs.go}>›</Text>
-            </TouchableOpacity>
-            {weakTopicsForActive.length > 0 && (
-              <TouchableOpacity
-                style={qs.card2}
-                onPress={() => router.push(`/practice/listing/${activeFocusSlug}?mode=weak`)}
-                activeOpacity={0.8}
-              >
-                <View style={qs.icon2}><Text style={{ fontSize: 15 }}>⚠️</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={qs.title}>Weak Topics Only</Text>
-                  <Text style={qs.sub}>Smart · {weakTopicsForActive.length} weak topics</Text>
-                </View>
-                <Text style={[qs.go, { color: 'rgba(245,158,11,0.80)' }]}>›</Text>
-              </TouchableOpacity>
-            )}
-            <View style={{ height: 4 }} />
-          </>
-        ) : null}
 
         {/* Recommended section */}
         {activeRecommended.length > 0 && (
