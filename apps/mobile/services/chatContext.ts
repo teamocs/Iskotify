@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
 import { userSettings } from '../db/schema'
-import { searchFlashcards, type RetrievedFlashcard } from './flashcardRetriever'
+import { searchFlashcards, searchUpcatFacts, type RetrievedFlashcard, type RetrievedUpcatFact } from './flashcardRetriever'
 
 /**
  * One-line student identity for chat prompts. Used as the first line of
@@ -96,16 +96,38 @@ export function formatRetrievedFlashcards(cards: RetrievedFlashcard[]): string |
   return blocks.join('\n---\n')
 }
 
+export function formatUpcatFacts(facts: RetrievedUpcatFact[]): string | null {
+  if (facts.length === 0) return null
+  const lines = facts.map(f => {
+    const suffix = f.validYear != null
+      ? ` (as of ${f.validYear}; verify at upcat.up.edu.ph)`
+      : ' (verify at upcat.up.edu.ph)'
+    return `- ${f.question} → ${f.answer}${suffix}`
+  })
+  return `[UPCAT FACTS]\n${lines.join('\n')}`
+}
+
 /**
  * Retrieve top-K flashcards relevant to the user's question and format them
- * for prompt injection. Returns null when nothing matches (so callers can
- * conditionally skip the [RELEVANT FLASHCARDS] block in the prompt).
+ * for prompt injection. Also appends an [UPCAT FACTS] block when matching
+ * facts exist. Returns null when nothing matches (so callers can conditionally
+ * skip the [RELEVANT FLASHCARDS] block in the prompt).
  */
 export async function buildRetrievedFlashcards(
   db: DrizzleClient,
   question: string,
   limit = 3,
 ): Promise<string | null> {
-  const cards = await searchFlashcards(db, question, limit)
-  return formatRetrievedFlashcards(cards)
+  const [cards, facts] = await Promise.all([
+    searchFlashcards(db, question, limit),
+    searchUpcatFacts(db, question, limit),
+  ])
+  const flashcardsBlock = formatRetrievedFlashcards(cards)
+  const factsBlock = formatUpcatFacts(facts)
+
+  if (!flashcardsBlock && !factsBlock) return null
+  const parts: string[] = []
+  if (flashcardsBlock) parts.push(flashcardsBlock)
+  if (factsBlock) parts.push(factsBlock)
+  return parts.join('\n\n')
 }

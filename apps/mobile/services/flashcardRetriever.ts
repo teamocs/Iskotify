@@ -92,3 +92,57 @@ export async function searchFlashcards(
     return []
   }
 }
+
+export interface RetrievedUpcatFact {
+  topic: string
+  question: string
+  answer: string
+  source: string | null
+  validYear: number | null
+}
+
+/**
+ * Retrieve the top-K most relevant UPCAT facts for a question via SQLite FTS5
+ * BM25 ranking. Mirrors searchFlashcards exactly — same buildFtsQuery sanitizer,
+ * same raw-SQL mechanism, same ordering by BM25 score.
+ * Never throws — failures are logged and treated as "no results".
+ */
+export async function searchUpcatFacts(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<RetrievedUpcatFact[]> {
+  const match = buildFtsQuery(question)
+  if (!match) return []
+  try {
+    const rows = await db.all<{
+      topic: string
+      question: string
+      answer: string
+      source: string | null
+      valid_year: number | null
+    }>(sql`
+      SELECT
+        f.topic,
+        f.question,
+        f.answer,
+        f.source,
+        f.valid_year
+      FROM upcat_facts_fts fts
+      JOIN upcat_facts f ON f.id = fts.fact_id
+      WHERE upcat_facts_fts MATCH ${match}
+      ORDER BY bm25(upcat_facts_fts)
+      LIMIT ${limit}
+    `)
+    return rows.map(r => ({
+      topic: r.topic,
+      question: r.question,
+      answer: r.answer,
+      source: r.source,
+      validYear: r.valid_year,
+    }))
+  } catch (err) {
+    console.warn('[flashcardRetriever] upcat facts search failed:', err)
+    return []
+  }
+}

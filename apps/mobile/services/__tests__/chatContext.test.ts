@@ -212,3 +212,62 @@ describe('buildRetrievedFlashcards', () => {
     expect(await buildRetrievedFlashcards(db, 'anything')).toBeNull()
   })
 })
+
+describe('buildUpcatFactsBlock', () => {
+  function makeDbWithUpcatFacts(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE user_settings (
+        id INTEGER PRIMARY KEY NOT NULL,
+        selected_listing_slug TEXT NOT NULL DEFAULT '',
+        last_synced_at INTEGER NOT NULL DEFAULT 0,
+        full_name TEXT NOT NULL DEFAULT '',
+        school TEXT NOT NULL DEFAULT '',
+        grade_level INTEGER,
+        google_id TEXT,
+        email TEXT,
+        notifications_enabled INTEGER DEFAULT 1,
+        theme TEXT NOT NULL DEFAULT 'system',
+        focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
+        google_calendar_connected INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS upcat_facts (
+        id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,
+        answer TEXT NOT NULL, source TEXT, valid_year INTEGER, remote_updated_at INTEGER
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS upcat_facts_fts USING fts5(
+        fact_id UNINDEXED, topic, question, answer,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+      CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ai AFTER INSERT ON upcat_facts BEGIN
+        INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+      END;
+      CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ad AFTER DELETE ON upcat_facts BEGIN
+        DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_au AFTER UPDATE ON upcat_facts BEGIN
+        DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
+        INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
+      END;
+    `)
+    raw.exec(`
+      INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year)
+      VALUES ('F1', 'UPG', 'What is the UPG?', 'The University Predicted Grade combines UPCAT + grades.', 'official', 2025);
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  it('returns a [UPCAT FACTS] block with answer and verify link when facts match', async () => {
+    const db = makeDbWithUpcatFacts()
+    const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
+    expect(result).toContain('[UPCAT FACTS]')
+    expect(result).toContain('The University Predicted Grade combines UPCAT + grades.')
+    expect(result).toContain('verify at upcat.up.edu.ph')
+  })
+
+  it('includes valid_year in the fact line when present', async () => {
+    const db = makeDbWithUpcatFacts()
+    const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
+    expect(result).toContain('as of 2025')
+  })
+})
