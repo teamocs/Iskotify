@@ -570,6 +570,21 @@ export default function PracticeScreen() {
           <Text style={qs.go}>›</Text>
         </Pressable>
 
+        {/* Admission Score Estimator entry */}
+        <Pressable
+          style={qs.card2}
+          onPress={() => router.push('/estimator')}
+          accessibilityRole="button"
+          accessibilityLabel="Open Admission Score Estimator"
+        >
+          <View style={qs.icon2}><Text style={{ fontSize: 15 }}>📊</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={qs.title}>Admission Score Estimator</Text>
+            <Text style={qs.sub}>Estimate your UP admission score · unofficial</Text>
+          </View>
+          <Text style={qs.go}>›</Text>
+        </Pressable>
+
         {/* AI Study Feedback card */}
         <View style={s.aiFeedbackCard}>
           <View style={s.aiFeedbackHeader}>
