@@ -88,7 +88,7 @@ describe('syncOnLaunch', () => {
     expect(db.transaction).not.toHaveBeenCalled()
   })
 
-  it('calls supabase.from for all four tables when slug is set via fallback', async () => {
+  it('calls supabase.from for all six tables when slug is set via fallback', async () => {
     const { supabase } = require('../supabase')
     const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 }, [])
     await syncOnLaunch(db as any)
@@ -96,6 +96,8 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('flashcard_subjects')
     expect(supabase.from).toHaveBeenCalledWith('flashcard_topics')
     expect(supabase.from).toHaveBeenCalledWith('flashcards')
+    expect(supabase.from).toHaveBeenCalledWith('upcat_questions')
+    expect(supabase.from).toHaveBeenCalledWith('upcat_passages')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -756,6 +758,83 @@ describe('syncOnLaunch ai_* field handling (real SQLite)', () => {
     expect(row.ai_correct_index).toBe(1)
     expect(row.ai_explanation).toBe('new reason')
     expect(row.ai_enhanced_at).toBe(new Date(newAiEnhancedAt).getTime())
+  })
+})
+
+function makeSupabaseForUpcat(questionRow: Record<string, unknown>, passageRow: Record<string, unknown>) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'upcat_passages') {
+      const resolved = Promise.resolve({ data: [passageRow] })
+      return {
+        select: jest.fn().mockReturnThis(),
+        then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+      }
+    }
+    if (table === 'upcat_questions') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [questionRow] }),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch upcat write (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes upcat_questions and upcat_passages rows into SQLite', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const passageRow = {
+      set_id: 'set-1',
+      subtest: 'Reading Comprehension',
+      passage_text: 'Once upon a time…',
+    }
+    const questionRow = {
+      question_id: 'q-1',
+      subtest: 'Reading Comprehension',
+      main_subject: null, topic: null, subtopic: null,
+      question_format: null, cognitive_level: null, difficulty: null, curriculum_alignment: null,
+      question_text: 'What is the main idea?',
+      options: ['a', 'b', 'c', 'd'],
+      correct_index: 2,
+      explanation: 'Because c.',
+      set_id: 'set-1', set_position: 1,
+      has_visual: false,
+      status: 'published',
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForUpcat(questionRow, passageRow))
+
+    await syncOnLaunch(db as any)
+
+    const qRow = raw.prepare('SELECT * FROM upcat_questions WHERE question_id = ?').get('q-1') as any
+    expect(qRow).toBeTruthy()
+    expect(qRow.options).toBe('["a","b","c","d"]')
+    expect(qRow.correct_index).toBe(2)
+    expect(qRow.has_visual).toBe(0)
+
+    const pRow = raw.prepare('SELECT * FROM upcat_passages WHERE set_id = ?').get('set-1') as any
+    expect(pRow).toBeTruthy()
+    expect(pRow.passage_text).toBe('Once upon a time…')
   })
 })
 

@@ -34,3 +34,8 @@ DROP POLICY IF EXISTS upcat_passages_read ON upcat_passages;
 CREATE POLICY upcat_passages_read ON upcat_passages FOR SELECT USING (true);
 DROP POLICY IF EXISTS upcat_questions_read ON upcat_questions;
 CREATE POLICY upcat_questions_read ON upcat_questions FOR SELECT USING (true);
+
+DROP TRIGGER IF EXISTS upcat_questions_updated_at ON upcat_questions;
+CREATE TRIGGER upcat_questions_updated_at
+  BEFORE UPDATE ON upcat_questions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();

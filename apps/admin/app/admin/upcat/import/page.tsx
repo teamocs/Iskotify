@@ -19,7 +19,7 @@ export default function UpcatImportPage() {
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, transformHeader: h => h.trim().toLowerCase().replace(/^﻿/, '') })
       const all = (parsed.data as Array<Record<string, string>>).filter(r => (r.question_id ?? '').trim())
       setTotalRows(all.length); setPreviewRows(all.slice(0, 10))
-    })
+    }).catch(e => setError(e?.message ?? 'Could not read file'))
   }
 
   async function handleImport() {

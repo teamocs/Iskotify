@@ -47,7 +47,7 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
       correct_index: letterToIndex(r.correct_answer),
       explanation: (r.explanation ?? '').trim(),
       set_id: setId || null,
-      set_position: (r.set_position ?? '').trim() ? parseInt(r.set_position, 10) : null,
+      set_position: (() => { const sp = parseInt((r.set_position ?? '').trim(), 10); return Number.isNaN(sp) ? null : sp })(),
       has_visual: (r.has_visual ?? '').trim().toLowerCase() === 'yes',
       status: (r.status ?? '').trim().toLowerCase() === 'approved' ? 'published' : 'draft',
     }

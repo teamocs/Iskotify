@@ -193,6 +193,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     ])
 
     const [upcatPassagesRes, upcatQuestionsRes] = await Promise.all([
+      // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       supabase.from('upcat_questions')
         .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,updated_at')
