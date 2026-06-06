@@ -36,6 +36,16 @@ describe('buildChatPrompt', () => {
     expect(topic).toContain('clear English')
   })
 
+  it('system prompts carry the full persona identity and verification pointer', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    const math = buildChatPrompt('topic', 'Solve 2x + 6 = 14')
+    for (const prompt of [progress, topic, math]) {
+      expect(prompt).toContain('Kuya Baw')
+      expect(prompt).toContain('upcat.up.edu.ph')
+    }
+  })
+
   it('non-math topic prompt no longer carries inline math rules — those moved to SYSTEM_PROMPT_MATH', () => {
     const prompt = buildChatPrompt('topic', 'What is photosynthesis?')
     expect(prompt).not.toContain('complex math')
