@@ -23,7 +23,15 @@ function makeDb(): DrizzleClient {
       income_bracket TEXT,
       gwa REAL,
       province TEXT,
-      city TEXT
+      city TEXT,
+      hs_gwa_g8 REAL,
+      hs_gwa_g9 REAL,
+      hs_gwa_g10 REAL,
+      hs_gwa_g11 REAL,
+      school_type TEXT,
+      is_indigenous INTEGER,
+      target_campus TEXT,
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -147,5 +155,38 @@ describe('updateSettings', () => {
     expect(s.gradeLevel).toBe(12)
     expect(s.province).toBe('Rizal')
     expect(s.incomeBracket).toBe('>1.2M')
+  })
+
+  it('round-trips all Epic E estimator fields in one call', async () => {
+    const db = makeDb()
+    await updateSettings(db, {
+      hsGwaG8: 91.5,
+      hsGwaG9: 92.0,
+      hsGwaG10: 93.5,
+      hsGwaG11: 94.0,
+      schoolType: 'public',
+      isIndigenous: false,
+      targetCampus: 'UP Diliman',
+      scoreDisclaimerAck: true,
+    })
+    const s = await getSettings(db)
+    expect(s.hsGwaG8).toBe(91.5)
+    expect(s.hsGwaG9).toBe(92.0)
+    expect(s.hsGwaG10).toBe(93.5)
+    expect(s.hsGwaG11).toBe(94.0)
+    expect(s.schoolType).toBe('public')
+    expect(s.isIndigenous).toBe(false)
+    expect(s.targetCampus).toBe('UP Diliman')
+    expect(s.scoreDisclaimerAck).toBe(true)
+  })
+
+  it('clears Epic E fields when set to null', async () => {
+    const db = makeDb()
+    await updateSettings(db, { hsGwaG8: 90.0, schoolType: 'private', targetCampus: 'UP Manila' })
+    await updateSettings(db, { hsGwaG8: null, schoolType: null, targetCampus: null })
+    const s = await getSettings(db)
+    expect(s.hsGwaG8).toBeNull()
+    expect(s.schoolType).toBeNull()
+    expect(s.targetCampus).toBeNull()
   })
 })

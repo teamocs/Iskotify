@@ -84,6 +84,14 @@ export const userSettings = sqliteTable('user_settings', {
   gwa: real('gwa'),
   province: text('province'),
   city: text('city'),
+  hsGwaG8: real('hs_gwa_g8'),
+  hsGwaG9: real('hs_gwa_g9'),
+  hsGwaG10: real('hs_gwa_g10'),
+  hsGwaG11: real('hs_gwa_g11'),
+  schoolType: text('school_type'),
+  isIndigenous: integer('is_indigenous', { mode: 'boolean' }),
+  targetCampus: text('target_campus'),
+  scoreDisclaimerAck: integer('score_disclaimer_ack', { mode: 'boolean' }).notNull().default(false),
 })
 
 export const userProgress = sqliteTable('user_progress', {
@@ -228,4 +236,13 @@ export const questionFeedback = sqliteTable('question_feedback', {
   cardId: text('card_id').notNull(),
   reason: text('reason').notNull().default(''),
   createdAt: integer('created_at').notNull(),
+})
+
+export const upcatCutoffs = sqliteTable('upcat_cutoffs', {
+  id: text('id').primaryKey(),
+  campus: text('campus').notNull(),
+  program: text('program'),
+  cutoff: real('cutoff').notNull(),
+  year: integer('year'),
+  isEstimate: integer('is_estimate', { mode: 'boolean' }).notNull().default(true),
 })

@@ -251,6 +251,18 @@ const MIGRATIONS = [
     reason TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL
   )`,
+  `ALTER TABLE user_settings ADD COLUMN hs_gwa_g8 REAL`,
+  `ALTER TABLE user_settings ADD COLUMN hs_gwa_g9 REAL`,
+  `ALTER TABLE user_settings ADD COLUMN hs_gwa_g10 REAL`,
+  `ALTER TABLE user_settings ADD COLUMN hs_gwa_g11 REAL`,
+  `ALTER TABLE user_settings ADD COLUMN school_type TEXT`,
+  `ALTER TABLE user_settings ADD COLUMN is_indigenous INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN target_campus TEXT`,
+  `ALTER TABLE user_settings ADD COLUMN score_disclaimer_ack INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS upcat_cutoffs (
+    id TEXT PRIMARY KEY NOT NULL, campus TEXT NOT NULL, program TEXT,
+    cutoff REAL NOT NULL, year INTEGER, is_estimate INTEGER NOT NULL DEFAULT 1
+  )`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

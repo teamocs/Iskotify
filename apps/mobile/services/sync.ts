@@ -4,7 +4,7 @@ import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedListings, savedDecks, userProgress, practiceSessions,
   notes as notesTable, noteLabels, noteLabelAssignments,
-  upcatPassages, upcatQuestions, upcatFacts,
+  upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -192,7 +192,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
     ])
 
-    const [upcatPassagesRes, upcatQuestionsRes, upcatFactsRes] = await Promise.all([
+    const [upcatPassagesRes, upcatQuestionsRes, upcatFactsRes, upcatCutoffsRes] = await Promise.all([
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       supabase.from('upcat_questions')
@@ -202,6 +202,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('upcat_facts')
         .select('id,topic,question,answer,source,valid_year,updated_at')
         .gt('updated_at', since),
+      // Full pull: small reference table, no cursor needed
+      supabase.from('upcat_cutoffs').select('id,campus,program,cutoff,year,is_estimate'),
     ])
 
     const cardResults = await Promise.all(
@@ -316,6 +318,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt: new Date(row.updated_at).getTime(),
         }
         tx.insert(upcatFacts).values(vals).onConflictDoUpdate({ target: upcatFacts.id, set: vals }).run()
+      }
+
+      for (const row of (upcatCutoffsRes.data ?? [])) {
+        const vals = {
+          id: row.id, campus: row.campus, program: row.program ?? null,
+          cutoff: row.cutoff, year: row.year ?? null, isEstimate: !!row.is_estimate,
+        }
+        tx.insert(upcatCutoffs).values(vals).onConflictDoUpdate({ target: upcatCutoffs.id, set: vals }).run()
       }
 
       const syncedAt = Date.now()

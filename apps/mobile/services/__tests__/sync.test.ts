@@ -88,7 +88,7 @@ describe('syncOnLaunch', () => {
     expect(db.transaction).not.toHaveBeenCalled()
   })
 
-  it('calls supabase.from for all seven tables when slug is set via fallback', async () => {
+  it('calls supabase.from for all eight tables when slug is set via fallback', async () => {
     const { supabase } = require('../supabase')
     const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 }, [])
     await syncOnLaunch(db as any)
@@ -99,6 +99,7 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('upcat_questions')
     expect(supabase.from).toHaveBeenCalledWith('upcat_passages')
     expect(supabase.from).toHaveBeenCalledWith('upcat_facts')
+    expect(supabase.from).toHaveBeenCalledWith('upcat_cutoffs')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -156,7 +157,15 @@ function makeTestDb(): DrizzleClient {
       income_bracket TEXT,
       gwa REAL,
       province TEXT,
-      city TEXT
+      city TEXT,
+      hs_gwa_g8 REAL,
+      hs_gwa_g9 REAL,
+      hs_gwa_g10 REAL,
+      hs_gwa_g11 REAL,
+      school_type TEXT,
+      is_indigenous INTEGER,
+      target_campus TEXT,
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -522,7 +531,15 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       income_bracket TEXT,
       gwa REAL,
       province TEXT,
-      city TEXT
+      city TEXT,
+      hs_gwa_g8 REAL,
+      hs_gwa_g9 REAL,
+      hs_gwa_g10 REAL,
+      hs_gwa_g11 REAL,
+      school_type TEXT,
+      is_indigenous INTEGER,
+      target_campus TEXT,
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -607,6 +624,14 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       source TEXT,
       valid_year INTEGER,
       remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS upcat_cutoffs (
+      id TEXT PRIMARY KEY NOT NULL,
+      campus TEXT NOT NULL,
+      program TEXT,
+      cutoff REAL NOT NULL,
+      year INTEGER,
+      is_estimate INTEGER NOT NULL DEFAULT 1
     );
     CREATE VIRTUAL TABLE IF NOT EXISTS upcat_facts_fts USING fts5(
       fact_id UNINDEXED, topic, question, answer,
@@ -965,6 +990,88 @@ describe('syncOnLaunch scholarship columns (real SQLite)', () => {
     expect(row.is_verified).toBe(1)
     expect(row.income_ceiling).toBe(100000)
     expect(row.scholarship_meta).toBe('{"huc_excluded":true}')
+  })
+})
+
+function makeSupabaseForCutoffs(cutoffRow: Record<string, unknown>) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'upcat_cutoffs') {
+      const resolved = Promise.resolve({ data: [cutoffRow] })
+      return {
+        select: jest.fn().mockReturnThis(),
+        then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch upcat_cutoffs write (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes upcat_cutoffs row into SQLite with correct types', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const cutoffRow = {
+      id: 'cutoff-1',
+      campus: 'UP Diliman',
+      program: 'BS Computer Science',
+      cutoff: 92.5,
+      year: 2024,
+      is_estimate: true,
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForCutoffs(cutoffRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM upcat_cutoffs WHERE id = ?').get('cutoff-1') as any
+    expect(row).toBeTruthy()
+    expect(row.campus).toBe('UP Diliman')
+    expect(row.program).toBe('BS Computer Science')
+    expect(row.cutoff).toBe(92.5)
+    expect(row.year).toBe(2024)
+    expect(row.is_estimate).toBe(1)
+  })
+
+  it('writes upcat_cutoffs row with null program and year', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const cutoffRow = {
+      id: 'cutoff-2',
+      campus: 'UP Manila',
+      program: null,
+      cutoff: 88.0,
+      year: null,
+      is_estimate: false,
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForCutoffs(cutoffRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM upcat_cutoffs WHERE id = ?').get('cutoff-2') as any
+    expect(row).toBeTruthy()
+    expect(row.cutoff).toBe(88.0)
+    expect(row.program).toBeNull()
+    expect(row.year).toBeNull()
+    expect(row.is_estimate).toBe(0)
   })
 })
 

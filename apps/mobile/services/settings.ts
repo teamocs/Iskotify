@@ -19,6 +19,14 @@ export interface UserSettingsData {
   gwa: number | null
   province: string | null
   city: string | null
+  hsGwaG8?: number | null
+  hsGwaG9?: number | null
+  hsGwaG10?: number | null
+  hsGwaG11?: number | null
+  schoolType?: string | null
+  isIndigenous?: boolean | null
+  targetCampus?: string | null
+  scoreDisclaimerAck?: boolean
 }
 
 const DEFAULTS: UserSettingsData = {
@@ -37,6 +45,14 @@ const DEFAULTS: UserSettingsData = {
   gwa: null,
   province: null,
   city: null,
+  hsGwaG8: null,
+  hsGwaG9: null,
+  hsGwaG10: null,
+  hsGwaG11: null,
+  schoolType: null,
+  isIndigenous: null,
+  targetCampus: null,
+  scoreDisclaimerAck: false,
 }
 
 /** Read the singleton user_settings row (id = 1). Returns defaults when no row exists. */
@@ -66,6 +82,14 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     gwa: row.gwa ?? null,
     province: row.province ?? null,
     city: row.city ?? null,
+    hsGwaG8: row.hsGwaG8 ?? null,
+    hsGwaG9: row.hsGwaG9 ?? null,
+    hsGwaG10: row.hsGwaG10 ?? null,
+    hsGwaG11: row.hsGwaG11 ?? null,
+    schoolType: row.schoolType ?? null,
+    isIndigenous: row.isIndigenous ?? null,
+    targetCampus: row.targetCampus ?? null,
+    scoreDisclaimerAck: row.scoreDisclaimerAck ?? false,
   }
 }
 
@@ -91,6 +115,14 @@ export async function updateSettings(
   if ('gwa' in patch) set.gwa = patch.gwa ?? null
   if ('province' in patch) set.province = patch.province ?? null
   if ('city' in patch) set.city = patch.city ?? null
+  if ('hsGwaG8' in patch) set.hsGwaG8 = patch.hsGwaG8 ?? null
+  if ('hsGwaG9' in patch) set.hsGwaG9 = patch.hsGwaG9 ?? null
+  if ('hsGwaG10' in patch) set.hsGwaG10 = patch.hsGwaG10 ?? null
+  if ('hsGwaG11' in patch) set.hsGwaG11 = patch.hsGwaG11 ?? null
+  if ('schoolType' in patch) set.schoolType = patch.schoolType ?? null
+  if ('isIndigenous' in patch) set.isIndigenous = patch.isIndigenous ?? null
+  if ('targetCampus' in patch) set.targetCampus = patch.targetCampus ?? null
+  if ('scoreDisclaimerAck' in patch) set.scoreDisclaimerAck = patch.scoreDisclaimerAck ?? false
 
   await db
     .insert(userSettings)
