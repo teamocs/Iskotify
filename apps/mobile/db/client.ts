@@ -263,6 +263,114 @@ const MIGRATIONS = [
     id TEXT PRIMARY KEY NOT NULL, campus TEXT NOT NULL, program TEXT,
     cutoff REAL NOT NULL, year INTEGER, is_estimate INTEGER NOT NULL DEFAULT 1
   )`,
+
+  // ── Epic D: Career tables ──────────────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS career_courses (
+    course_id TEXT PRIMARY KEY NOT NULL,
+    name TEXT,
+    cluster TEXT,
+    career_tag TEXT,
+    demand TEXT,
+    board_exam INTEGER NOT NULL DEFAULT 0,
+    board_exam_name TEXT,
+    duration_years REAL,
+    top_countries TEXT NOT NULL DEFAULT '[]',
+    summary TEXT,
+    student_tip TEXT,
+    ai_note TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS career_destinations (
+    id TEXT PRIMARY KEY NOT NULL,
+    course_id TEXT,
+    country TEXT,
+    demand_rating TEXT,
+    salary_min REAL,
+    salary_max REAL,
+    salary_local TEXT,
+    salary_type TEXT,
+    visa_pathway TEXT,
+    pr_pathway TEXT,
+    credential TEXT,
+    licensing_exam TEXT,
+    language_required TEXT,
+    timeline_months INTEGER,
+    program_name TEXT,
+    specializations TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    saturation_warning TEXT,
+    source TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS career_countries (
+    code TEXT PRIMARY KEY NOT NULL,
+    name TEXT,
+    region TEXT,
+    immigration_system TEXT,
+    why_demand TEXT,
+    language_required TEXT,
+    pr_pathway TEXT,
+    notes TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS career_programs (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT,
+    country_region TEXT,
+    courses_covered TEXT NOT NULL DEFAULT '[]',
+    managing_body TEXT,
+    slots TEXT,
+    requirements TEXT,
+    immigration_outcome TEXT,
+    website TEXT,
+    notes TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS ai_career_impact (
+    course_id TEXT PRIMARY KEY NOT NULL,
+    course_name TEXT,
+    cluster TEXT,
+    board_exam INTEGER NOT NULL DEFAULT 0,
+    board_exam_name TEXT,
+    automation_risk_low INTEGER,
+    automation_risk_high INTEGER,
+    ai_safety_score INTEGER,
+    ai_safety_label TEXT,
+    color_code TEXT,
+    what_ai_takes_over TEXT NOT NULL DEFAULT '[]',
+    what_stays_human TEXT NOT NULL DEFAULT '[]',
+    new_jobs_emerging TEXT NOT NULL DEFAULT '[]',
+    skills_to_develop TEXT NOT NULL DEFAULT '[]',
+    career_outlook_2030 TEXT,
+    key_stat TEXT,
+    key_source TEXT,
+    key_quote TEXT,
+    quote_by TEXT,
+    ph_advantage TEXT,
+    ph_notes TEXT,
+    kuya_baw_summary TEXT,
+    last_updated TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS career_facts (
+    id TEXT PRIMARY KEY NOT NULL,
+    course_id TEXT,
+    query_type TEXT,
+    course_name TEXT,
+    quick_answer TEXT,
+    key_caveat TEXT,
+    point_to TEXT,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE VIRTUAL TABLE IF NOT EXISTS career_facts_fts USING fts5(
+    fact_id UNINDEXED, course_name, quick_answer, key_caveat, tokenize='unicode61 remove_diacritics 2')`,
+  `CREATE TRIGGER IF NOT EXISTS career_facts_ai AFTER INSERT ON career_facts BEGIN
+    INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat); END`,
+  `CREATE TRIGGER IF NOT EXISTS career_facts_ad AFTER DELETE ON career_facts BEGIN
+    DELETE FROM career_facts_fts WHERE fact_id = old.id; END`,
+  `CREATE TRIGGER IF NOT EXISTS career_facts_au AFTER UPDATE ON career_facts BEGIN
+    DELETE FROM career_facts_fts WHERE fact_id = old.id;
+    INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat); END`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

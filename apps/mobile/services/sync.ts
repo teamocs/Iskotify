@@ -5,6 +5,8 @@ import {
   focusListings, savedListings, savedDecks, userProgress, practiceSessions,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
+  careerCourses, careerDestinations, careerCountries, careerPrograms,
+  aiCareerImpact, careerFacts,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -206,6 +208,28 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('upcat_cutoffs').select('id,campus,program,cutoff,year,is_estimate'),
     ])
 
+    // ── Epic D: Career tables ────────────────────────────────────────────────
+    // Full pull for reference tables (no cursor); incremental for destinations + facts
+    const [
+      careerCoursesRes, careerCountriesRes, careerProgramsRes, aiCareerImpactRes,
+      careerDestinationsRes, careerFactsRes,
+    ] = await Promise.all([
+      supabase.from('career_courses')
+        .select('course_id,name,cluster,career_tag,demand,board_exam,board_exam_name,duration_years,top_countries,summary,student_tip,ai_note'),
+      supabase.from('career_countries')
+        .select('code,name,region,immigration_system,why_demand,language_required,pr_pathway,notes'),
+      supabase.from('career_programs')
+        .select('id,name,country_region,courses_covered,managing_body,slots,requirements,immigration_outcome,website,notes'),
+      supabase.from('ai_career_impact')
+        .select('course_id,course_name,cluster,board_exam,board_exam_name,automation_risk_low,automation_risk_high,ai_safety_score,ai_safety_label,color_code,what_ai_takes_over,what_stays_human,new_jobs_emerging,skills_to_develop,career_outlook_2030,key_stat,key_source,key_quote,quote_by,ph_advantage,ph_notes,kuya_baw_summary,last_updated'),
+      supabase.from('career_destinations')
+        .select('id,course_id,country,demand_rating,salary_min,salary_max,salary_local,salary_type,visa_pathway,pr_pathway,credential,licensing_exam,language_required,timeline_months,program_name,specializations,notes,saturation_warning,source,updated_at')
+        .gt('updated_at', since),
+      supabase.from('career_facts')
+        .select('id,course_id,query_type,course_name,quick_answer,key_caveat,point_to,updated_at')
+        .gt('updated_at', since),
+    ])
+
     const cardResults = await Promise.all(
       slugs.map(slug =>
         supabase.from('flashcards')
@@ -327,6 +351,97 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         }
         tx.insert(upcatCutoffs).values(vals).onConflictDoUpdate({ target: upcatCutoffs.id, set: vals }).run()
       }
+
+      // ── Epic D: Career upserts ─────────────────────────────────────────────
+      for (const row of (careerCoursesRes.data ?? [])) {
+        const vals = {
+          courseId: row.course_id, name: row.name ?? null, cluster: row.cluster ?? null,
+          careerTag: row.career_tag ?? null, demand: row.demand ?? null,
+          boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
+          durationYears: row.duration_years ?? null,
+          topCountries: JSON.stringify(row.top_countries ?? []),
+          summary: row.summary ?? null, studentTip: row.student_tip ?? null,
+          aiNote: row.ai_note ?? null,
+          remoteUpdatedAt: null,
+        }
+        tx.insert(careerCourses).values(vals).onConflictDoUpdate({ target: careerCourses.courseId, set: vals }).run()
+      }
+
+      for (const row of (careerCountriesRes.data ?? [])) {
+        const vals = {
+          code: row.code, name: row.name ?? null, region: row.region ?? null,
+          immigrationSystem: row.immigration_system ?? null, whyDemand: row.why_demand ?? null,
+          languageRequired: row.language_required ?? null, prPathway: row.pr_pathway ?? null,
+          notes: row.notes ?? null,
+          remoteUpdatedAt: null,
+        }
+        tx.insert(careerCountries).values(vals).onConflictDoUpdate({ target: careerCountries.code, set: vals }).run()
+      }
+
+      for (const row of (careerProgramsRes.data ?? [])) {
+        const vals = {
+          id: row.id, name: row.name ?? null, countryRegion: row.country_region ?? null,
+          coursesCovered: JSON.stringify(row.courses_covered ?? []),
+          managingBody: row.managing_body ?? null, slots: row.slots ?? null,
+          requirements: row.requirements ?? null, immigrationOutcome: row.immigration_outcome ?? null,
+          website: row.website ?? null, notes: row.notes ?? null,
+          remoteUpdatedAt: null,
+        }
+        tx.insert(careerPrograms).values(vals).onConflictDoUpdate({ target: careerPrograms.id, set: vals }).run()
+      }
+
+      for (const row of (aiCareerImpactRes.data ?? [])) {
+        const vals = {
+          courseId: row.course_id, courseName: row.course_name ?? null,
+          cluster: row.cluster ?? null,
+          boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
+          automationRiskLow: row.automation_risk_low ?? null,
+          automationRiskHigh: row.automation_risk_high ?? null,
+          aiSafetyScore: row.ai_safety_score ?? null, aiSafetyLabel: row.ai_safety_label ?? null,
+          colorCode: row.color_code ?? null,
+          whatAiTakesOver: JSON.stringify(row.what_ai_takes_over ?? []),
+          whatStaysHuman: JSON.stringify(row.what_stays_human ?? []),
+          newJobsEmerging: JSON.stringify(row.new_jobs_emerging ?? []),
+          skillsToDevelop: JSON.stringify(row.skills_to_develop ?? []),
+          careerOutlook2030: row.career_outlook_2030 ?? null,
+          keyStat: row.key_stat ?? null, keySource: row.key_source ?? null,
+          keyQuote: row.key_quote ?? null, quoteBy: row.quote_by ?? null,
+          phAdvantage: row.ph_advantage ?? null, phNotes: row.ph_notes ?? null,
+          kuyaBawSummary: row.kuya_baw_summary ?? null, lastUpdated: row.last_updated ?? null,
+          remoteUpdatedAt: null,
+        }
+        tx.insert(aiCareerImpact).values(vals).onConflictDoUpdate({ target: aiCareerImpact.courseId, set: vals }).run()
+      }
+
+      for (const row of (careerDestinationsRes.data ?? [])) {
+        const vals = {
+          id: row.id, courseId: row.course_id ?? null, country: row.country ?? null,
+          demandRating: row.demand_rating ?? null,
+          salaryMin: row.salary_min ?? null, salaryMax: row.salary_max ?? null,
+          salaryLocal: row.salary_local ?? null, salaryType: row.salary_type ?? null,
+          visaPathway: row.visa_pathway ?? null, prPathway: row.pr_pathway ?? null,
+          credential: row.credential ?? null, licensingExam: row.licensing_exam ?? null,
+          languageRequired: row.language_required ?? null,
+          timelineMonths: row.timeline_months ?? null,
+          programName: row.program_name ?? null,
+          specializations: JSON.stringify(row.specializations ?? []),
+          notes: row.notes ?? null, saturationWarning: row.saturation_warning ?? null,
+          source: row.source ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(careerDestinations).values(vals).onConflictDoUpdate({ target: careerDestinations.id, set: vals }).run()
+      }
+
+      for (const row of (careerFactsRes.data ?? [])) {
+        const vals = {
+          id: row.id, courseId: row.course_id ?? null, queryType: row.query_type ?? null,
+          courseName: row.course_name ?? null, quickAnswer: row.quick_answer ?? null,
+          keyCaveat: row.key_caveat ?? null, pointTo: row.point_to ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(careerFacts).values(vals).onConflictDoUpdate({ target: careerFacts.id, set: vals }).run()
+      }
+      // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
 
       const syncedAt = Date.now()
       tx.insert(userSettings)

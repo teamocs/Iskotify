@@ -100,6 +100,13 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('upcat_passages')
     expect(supabase.from).toHaveBeenCalledWith('upcat_facts')
     expect(supabase.from).toHaveBeenCalledWith('upcat_cutoffs')
+    // Epic D career tables
+    expect(supabase.from).toHaveBeenCalledWith('career_courses')
+    expect(supabase.from).toHaveBeenCalledWith('career_countries')
+    expect(supabase.from).toHaveBeenCalledWith('career_programs')
+    expect(supabase.from).toHaveBeenCalledWith('ai_career_impact')
+    expect(supabase.from).toHaveBeenCalledWith('career_destinations')
+    expect(supabase.from).toHaveBeenCalledWith('career_facts')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -647,6 +654,117 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
       INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
     END;
+    CREATE TABLE IF NOT EXISTS career_courses (
+      course_id TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      cluster TEXT,
+      career_tag TEXT,
+      demand TEXT,
+      board_exam INTEGER NOT NULL DEFAULT 0,
+      board_exam_name TEXT,
+      duration_years REAL,
+      top_countries TEXT NOT NULL DEFAULT '[]',
+      summary TEXT,
+      student_tip TEXT,
+      ai_note TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS career_destinations (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_id TEXT,
+      country TEXT,
+      demand_rating TEXT,
+      salary_min REAL,
+      salary_max REAL,
+      salary_local TEXT,
+      salary_type TEXT,
+      visa_pathway TEXT,
+      pr_pathway TEXT,
+      credential TEXT,
+      licensing_exam TEXT,
+      language_required TEXT,
+      timeline_months INTEGER,
+      program_name TEXT,
+      specializations TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      saturation_warning TEXT,
+      source TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS career_countries (
+      code TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      region TEXT,
+      immigration_system TEXT,
+      why_demand TEXT,
+      language_required TEXT,
+      pr_pathway TEXT,
+      notes TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS career_programs (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      country_region TEXT,
+      courses_covered TEXT NOT NULL DEFAULT '[]',
+      managing_body TEXT,
+      slots TEXT,
+      requirements TEXT,
+      immigration_outcome TEXT,
+      website TEXT,
+      notes TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS ai_career_impact (
+      course_id TEXT PRIMARY KEY NOT NULL,
+      course_name TEXT,
+      cluster TEXT,
+      board_exam INTEGER NOT NULL DEFAULT 0,
+      board_exam_name TEXT,
+      automation_risk_low INTEGER,
+      automation_risk_high INTEGER,
+      ai_safety_score INTEGER,
+      ai_safety_label TEXT,
+      color_code TEXT,
+      what_ai_takes_over TEXT NOT NULL DEFAULT '[]',
+      what_stays_human TEXT NOT NULL DEFAULT '[]',
+      new_jobs_emerging TEXT NOT NULL DEFAULT '[]',
+      skills_to_develop TEXT NOT NULL DEFAULT '[]',
+      career_outlook_2030 TEXT,
+      key_stat TEXT,
+      key_source TEXT,
+      key_quote TEXT,
+      quote_by TEXT,
+      ph_advantage TEXT,
+      ph_notes TEXT,
+      kuya_baw_summary TEXT,
+      last_updated TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS career_facts (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_id TEXT,
+      query_type TEXT,
+      course_name TEXT,
+      quick_answer TEXT,
+      key_caveat TEXT,
+      point_to TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE VIRTUAL TABLE IF NOT EXISTS career_facts_fts USING fts5(
+      fact_id UNINDEXED, course_name, quick_answer, key_caveat,
+      tokenize='unicode61 remove_diacritics 2'
+    );
+    CREATE TRIGGER IF NOT EXISTS career_facts_ai AFTER INSERT ON career_facts BEGIN
+      INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat);
+    END;
+    CREATE TRIGGER IF NOT EXISTS career_facts_ad AFTER DELETE ON career_facts BEGIN
+      DELETE FROM career_facts_fts WHERE fact_id = old.id;
+    END;
+    CREATE TRIGGER IF NOT EXISTS career_facts_au AFTER UPDATE ON career_facts BEGIN
+      DELETE FROM career_facts_fts WHERE fact_id = old.id;
+      INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat);
+    END;
   `)
   return raw
 }
@@ -1072,6 +1190,136 @@ describe('syncOnLaunch upcat_cutoffs write (real SQLite)', () => {
     expect(row.program).toBeNull()
     expect(row.year).toBeNull()
     expect(row.is_estimate).toBe(0)
+  })
+})
+
+function makeSupabaseForCareer(
+  courseRow: Record<string, unknown>,
+  factRow: Record<string, unknown>,
+) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'career_courses') {
+      const resolved = Promise.resolve({ data: [courseRow] })
+      return {
+        select: jest.fn().mockReturnThis(),
+        then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+      }
+    }
+    if (table === 'career_facts') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [factRow] }),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch career write (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes career_courses row into SQLite with text[] as JSON string', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const courseRow = {
+      course_id: 'course-nursing',
+      name: 'BS Nursing',
+      cluster: 'Health',
+      career_tag: 'nursing',
+      demand: 'high',
+      board_exam: true,
+      board_exam_name: 'NLE',
+      duration_years: 4.0,
+      top_countries: ['Canada', 'UK', 'UAE'],
+      summary: 'Care for patients.',
+      student_tip: 'Practice NCLEX.',
+      ai_note: null,
+    }
+    const factRow = {
+      id: 'fact-nursing-1',
+      course_id: 'course-nursing',
+      query_type: 'salary',
+      course_name: 'BS Nursing',
+      quick_answer: 'CAD 70k-90k per year in Canada',
+      key_caveat: 'Requires NCLEX-RN for Canada',
+      point_to: null,
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForCareer(courseRow, factRow))
+
+    await syncOnLaunch(db as any)
+
+    const cRow = raw.prepare('SELECT * FROM career_courses WHERE course_id = ?').get('course-nursing') as any
+    expect(cRow).toBeTruthy()
+    expect(cRow.name).toBe('BS Nursing')
+    expect(cRow.board_exam).toBe(1)
+    expect(cRow.top_countries).toBe('["Canada","UK","UAE"]')
+    expect(cRow.duration_years).toBe(4.0)
+
+    const fRow = raw.prepare('SELECT * FROM career_facts WHERE id = ?').get('fact-nursing-1') as any
+    expect(fRow).toBeTruthy()
+    expect(fRow.course_name).toBe('BS Nursing')
+    expect(fRow.quick_answer).toBe('CAD 70k-90k per year in Canada')
+    expect(fRow.remote_updated_at).toBe(new Date('2026-06-01T00:00:00Z').getTime())
+
+    // career_facts_fts trigger should have auto-indexed the fact
+    const ftsRow = raw.prepare("SELECT * FROM career_facts_fts WHERE career_facts_fts MATCH 'Nursing'").get() as any
+    expect(ftsRow).toBeTruthy()
+  })
+
+  it('career_facts text[] columns survive round-trip as JSON string', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const courseRow = {
+      course_id: 'course-it',
+      name: 'BS Information Technology',
+      cluster: 'ICT',
+      career_tag: 'it',
+      demand: 'very_high',
+      board_exam: false,
+      board_exam_name: null,
+      duration_years: 4.0,
+      top_countries: [],
+      summary: null,
+      student_tip: null,
+      ai_note: null,
+    }
+    const factRow = {
+      id: 'fact-it-1',
+      course_id: 'course-it',
+      query_type: 'demand',
+      course_name: 'BS Information Technology',
+      quick_answer: 'Extremely high demand globally',
+      key_caveat: null,
+      point_to: null,
+      updated_at: '2026-06-02T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForCareer(courseRow, factRow))
+
+    await syncOnLaunch(db as any)
+
+    const cRow = raw.prepare('SELECT * FROM career_courses WHERE course_id = ?').get('course-it') as any
+    expect(cRow).toBeTruthy()
+    expect(cRow.top_countries).toBe('[]')
+    expect(cRow.board_exam).toBe(0)
   })
 })
 

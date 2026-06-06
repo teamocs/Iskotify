@@ -246,3 +246,108 @@ export const upcatCutoffs = sqliteTable('upcat_cutoffs', {
   year: integer('year'),
   isEstimate: integer('is_estimate', { mode: 'boolean' }).notNull().default(true),
 })
+
+// ── Epic D: Career tables ─────────────────────────────────────────────────────
+
+export const careerCourses = sqliteTable('career_courses', {
+  courseId: text('course_id').primaryKey(),
+  name: text('name'),
+  cluster: text('cluster'),
+  careerTag: text('career_tag'),
+  demand: text('demand'),
+  boardExam: integer('board_exam', { mode: 'boolean' }).notNull().default(false),
+  boardExamName: text('board_exam_name'),
+  durationYears: real('duration_years'),
+  topCountries: text('top_countries').notNull().default('[]'),
+  summary: text('summary'),
+  studentTip: text('student_tip'),
+  aiNote: text('ai_note'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const careerDestinations = sqliteTable('career_destinations', {
+  id: text('id').primaryKey(),
+  courseId: text('course_id'),
+  country: text('country'),
+  demandRating: text('demand_rating'),
+  salaryMin: real('salary_min'),
+  salaryMax: real('salary_max'),
+  salaryLocal: text('salary_local'),
+  salaryType: text('salary_type'),
+  visaPathway: text('visa_pathway'),
+  prPathway: text('pr_pathway'),
+  credential: text('credential'),
+  licensingExam: text('licensing_exam'),
+  languageRequired: text('language_required'),
+  timelineMonths: integer('timeline_months'),
+  programName: text('program_name'),
+  specializations: text('specializations').notNull().default('[]'),
+  notes: text('notes'),
+  saturationWarning: text('saturation_warning'),
+  source: text('source'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const careerCountries = sqliteTable('career_countries', {
+  code: text('code').primaryKey(),
+  name: text('name'),
+  region: text('region'),
+  immigrationSystem: text('immigration_system'),
+  whyDemand: text('why_demand'),
+  languageRequired: text('language_required'),
+  prPathway: text('pr_pathway'),
+  notes: text('notes'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const careerPrograms = sqliteTable('career_programs', {
+  id: text('id').primaryKey(),
+  name: text('name'),
+  countryRegion: text('country_region'),
+  coursesCovered: text('courses_covered').notNull().default('[]'),
+  managingBody: text('managing_body'),
+  slots: text('slots'),
+  requirements: text('requirements'),
+  immigrationOutcome: text('immigration_outcome'),
+  website: text('website'),
+  notes: text('notes'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const aiCareerImpact = sqliteTable('ai_career_impact', {
+  courseId: text('course_id').primaryKey(),
+  courseName: text('course_name'),
+  cluster: text('cluster'),
+  boardExam: integer('board_exam', { mode: 'boolean' }).notNull().default(false),
+  boardExamName: text('board_exam_name'),
+  automationRiskLow: integer('automation_risk_low'),
+  automationRiskHigh: integer('automation_risk_high'),
+  aiSafetyScore: integer('ai_safety_score'),
+  aiSafetyLabel: text('ai_safety_label'),
+  colorCode: text('color_code'),
+  whatAiTakesOver: text('what_ai_takes_over').notNull().default('[]'),
+  whatStaysHuman: text('what_stays_human').notNull().default('[]'),
+  newJobsEmerging: text('new_jobs_emerging').notNull().default('[]'),
+  skillsToDevelop: text('skills_to_develop').notNull().default('[]'),
+  careerOutlook2030: text('career_outlook_2030'),
+  keyStat: text('key_stat'),
+  keySource: text('key_source'),
+  keyQuote: text('key_quote'),
+  quoteBy: text('quote_by'),
+  phAdvantage: text('ph_advantage'),
+  phNotes: text('ph_notes'),
+  kuyaBawSummary: text('kuya_baw_summary'),
+  lastUpdated: text('last_updated'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const careerFacts = sqliteTable('career_facts', {
+  id: text('id').primaryKey(),
+  courseId: text('course_id'),
+  queryType: text('query_type'),
+  courseName: text('course_name'),
+  quickAnswer: text('quick_answer'),
+  keyCaveat: text('key_caveat'),
+  pointTo: text('point_to'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
