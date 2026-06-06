@@ -245,6 +245,12 @@ const MIGRATIONS = [
     DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
     INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
   END`,
+  `CREATE TABLE IF NOT EXISTS question_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  )`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

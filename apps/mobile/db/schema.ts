@@ -222,3 +222,10 @@ export const upcatFacts = sqliteTable('upcat_facts', {
   validYear: integer('valid_year'),
   remoteUpdatedAt: integer('remote_updated_at'),
 })
+
+export const questionFeedback = sqliteTable('question_feedback', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  cardId: text('card_id').notNull(),
+  reason: text('reason').notNull().default(''),
+  createdAt: integer('created_at').notNull(),
+})
