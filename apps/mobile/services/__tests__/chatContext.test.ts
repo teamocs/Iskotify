@@ -42,7 +42,11 @@ function makeDb(): DrizzleClient {
       notifications_enabled INTEGER DEFAULT 1,
       theme TEXT NOT NULL DEFAULT 'system',
       focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
-      google_calendar_connected INTEGER NOT NULL DEFAULT 0
+      google_calendar_connected INTEGER NOT NULL DEFAULT 0,
+      income_bracket TEXT,
+      gwa REAL,
+      province TEXT,
+      city TEXT
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -229,7 +233,11 @@ describe('buildUpcatFactsBlock', () => {
         notifications_enabled INTEGER DEFAULT 1,
         theme TEXT NOT NULL DEFAULT 'system',
         focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
-        google_calendar_connected INTEGER NOT NULL DEFAULT 0
+        google_calendar_connected INTEGER NOT NULL DEFAULT 0,
+        income_bracket TEXT,
+        gwa REAL,
+        province TEXT,
+        city TEXT
       );
       CREATE TABLE IF NOT EXISTS upcat_facts (
         id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,

@@ -44,6 +44,9 @@ const makeDb = (rows: any[] = []) => ({
         orderBy: jest.fn().mockResolvedValue([]),
       })),
       orderBy: jest.fn().mockResolvedValue([]),
+      where: jest.fn(() => ({
+        limit: jest.fn().mockResolvedValue([]),
+      })),
       then: jest.fn((cb: any) => Promise.resolve().then(() => cb(rows))),
     })),
   })),
