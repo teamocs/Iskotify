@@ -123,6 +123,7 @@ const emptyStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  refresh: jest.fn().mockResolvedValue(undefined),
 }
 
 describe('HomeScreen', () => {
@@ -193,5 +194,28 @@ describe('HomeScreen', () => {
     render(<HomeScreen />)
     const settingsBtn = screen.queryByTestId('settings-btn')
     expect(router.push).not.toHaveBeenCalled()
+  })
+
+  it('renders Upcoming Dates section header', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Upcoming Dates')).toBeTruthy()
+  })
+
+  it('shows upcoming listing deadline when present', () => {
+    const futureDate = Date.now() + 7 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      importantDayIndices: [Math.floor(futureDate / 86_400_000)],
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText('UPCAT 2026')).toBeTruthy()
+  })
+
+  it('shows empty state for upcoming dates when no listings', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Add scholarships and exams to your focus list to track upcoming dates')).toBeTruthy()
   })
 })
