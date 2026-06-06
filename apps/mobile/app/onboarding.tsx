@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
-  View, Text, TextInput, FlatList, StyleSheet,
+  View, Text, TextInput, SectionList, StyleSheet,
   TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -378,10 +378,27 @@ export default function OnboardingScreen() {
             <ActivityIndicator color={t.textPrimary} size="large" />
           </View>
         ) : (
-          <FlatList
-            data={listings}
+          <SectionList
+            sections={[
+              { title: 'Exams', data: listings.filter(l => l.type === 'exam') },
+              { title: 'Scholarships', data: listings.filter(l => l.type === 'scholarship') },
+            ].filter(s => s.data.length > 0)}
             keyExtractor={item => item.id}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 160 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 160 }}
+            stickySectionHeadersEnabled={false}
+            renderSectionHeader={({ section }) => (
+              <Text style={{
+                fontFamily: 'Lexend_600SemiBold',
+                fontSize: typo.xs,
+                color: t.textTertiary,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+                marginTop: 16,
+                marginBottom: 8,
+              }}>
+                {section.title}
+              </Text>
+            )}
             renderItem={({ item }) => {
               const priorityIdx = selectedSlugs.indexOf(item.slug)
               const isSelected = priorityIdx !== -1
