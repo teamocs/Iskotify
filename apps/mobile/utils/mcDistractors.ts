@@ -1,3 +1,7 @@
+export function safeParseOptions(s: string | null | undefined): string[] {
+  try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
 export interface RawCard {
   id: string
   question: string

@@ -6,7 +6,7 @@ import { inArray, eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { savedDecks as savedDecksTable, flashcards as flashcardsTable } from '../../../db/schema'
 import { parseTopicIds } from '../../../hooks/useSavedDecks'
-import { buildQuizQuestions, type RawCard } from '../../../utils/mcDistractors'
+import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -93,7 +93,7 @@ export default function DeckQuizScreen() {
 
       // On-demand LLM enhancement of unenhanced cards before quiz starts.
       const unenhancedIds = cardRows
-        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
         .map(r => r.id)
       if (unenhancedIds.length > 0) {
         setEnhanceProgress({ done: 0, total: unenhancedIds.length })
@@ -104,7 +104,7 @@ export default function DeckQuizScreen() {
 
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
-        options: JSON.parse(row.options) as string[],
+        options: safeParseOptions(row.options),
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
         aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,

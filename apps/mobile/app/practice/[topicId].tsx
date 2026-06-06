@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { flashcards as flashcardsTable, topics } from '../../db/schema'
-import { buildQuizQuestions, type RawCard } from '../../utils/mcDistractors'
+import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../utils/mcDistractors'
 import { parseAiOptions } from '../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
@@ -14,7 +14,7 @@ import { FlashcardExam } from '../../components/practice/FlashcardExam'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'enhancing' | 'chooser' | 'exam'
+type Phase = 'loading' | 'enhancing' | 'chooser' | 'exam' | 'empty'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,9 @@ export default function QuizScreen() {
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
+    emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+    emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
+    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: 24 },
     chooserContent: { alignItems: 'center' as const, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 40 },
     icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
     iconTxt: { fontSize: 40 },
@@ -82,7 +85,7 @@ export default function QuizScreen() {
       // On-demand LLM enhancement: any card in this session that doesn't yet
       // have AI-generated MC distractors gets enhanced now.
       const unenhancedIds = cardRows
-        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
         .map(r => r.id)
       if (unenhancedIds.length > 0) {
         setEnhanceProgress({ done: 0, total: unenhancedIds.length })
@@ -93,7 +96,7 @@ export default function QuizScreen() {
 
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
-        options: JSON.parse(row.options) as string[],
+        options: safeParseOptions(row.options),
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
         aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
@@ -101,7 +104,7 @@ export default function QuizScreen() {
       }))
       const parsed = buildQuizQuestions(shuffle(rawCards))
       setAllQuestions(parsed)
-      setPhase('chooser')
+      setPhase(parsed.length === 0 ? 'empty' : 'chooser')
     }
     void load()
   }, [db, topicId])
@@ -129,6 +132,20 @@ export default function QuizScreen() {
         <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
           Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
         </Text>
+      </SafeAreaView>
+    )
+  }
+
+  if (phase === 'empty') {
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={s.emptyWrap}>
+          <Text style={s.emptyTitle}>No cards found</Text>
+          <Text style={s.emptySub}>This topic has no multiple-choice questions.</Text>
+          <Pressable style={s.ghostBtn} onPress={() => router.back()}>
+            <Text style={s.ghostBtnTxt}>← Back</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     )
   }

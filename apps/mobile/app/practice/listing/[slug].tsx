@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
 import { eq } from 'drizzle-orm'
-import { buildQuizQuestions, type RawCard } from '../../../utils/mcDistractors'
+import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -104,7 +104,7 @@ export default function ListingQuizScreen() {
 
       // On-demand LLM enhancement of unenhanced cards in this listing before quiz starts.
       const unenhancedIds = matching
-        .filter(r => r.aiEnhancedAt == null && (!r.options || JSON.parse(r.options || '[]').length !== 4))
+        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
         .map(r => r.id)
       if (unenhancedIds.length > 0) {
         setEnhanceProgress({ done: 0, total: unenhancedIds.length })
@@ -135,7 +135,7 @@ export default function ListingQuizScreen() {
 
       const rawCards: RawCard[] = (shuffle(filtered) as typeof filtered).map(row => ({
         ...row,
-        options: JSON.parse(row.options) as string[],
+        options: safeParseOptions(row.options),
         correctAnswerIndex: row.correctAnswerIndex ?? undefined,
         aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
