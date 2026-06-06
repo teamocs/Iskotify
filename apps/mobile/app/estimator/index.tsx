@@ -580,8 +580,7 @@ export default function EstimatorScreen() {
                   <Text style={s.campusName}>{row.campus}</Text>
                   <Text style={s.campusCutoff}>
                     Cutoff: {row.cutoff.toFixed(2)}
-                    {row.year != null ? ` (${row.year} estimate)` : ''}
-                    {row.isEstimate ? ' estimate' : ''}
+                    {row.year != null ? ` (${row.year} estimate)` : (row.isEstimate ? ' (estimate)' : '')}
                   </Text>
                   {row.gap !== 0 ? (
                     <Text style={s.campusGap}>

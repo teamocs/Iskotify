@@ -156,7 +156,7 @@ INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
-('algorithm-pabigat-01', 'Algorithm/UPG', 'What is the pabigat and when does it apply?', 'The pabigat is a −0.5 penalty applied to your UPG (making it higher/worse). It is applied when you choose a UP campus that is geographically far from where you live — for example, a Metro Manila student choosing UP Visayas or UP Mindanao, or a Bicol student choosing UP Visayas. The exception is if the campus offers a unique program not available elsewhere.', 'UP Office of Admissions', NULL)
+('algorithm-pabigat-01', 'Algorithm/UPG', 'What is the pabigat and when does it apply?', 'The pabigat is a penalty that raises your UPG (makes it worse) when you choose a UP campus geographically far from where you live. Its exact magnitude is not publicly documented; estimates use a small conservative value (~0.05). The exception is if the campus offers a unique program not available elsewhere.', 'UP Office of Admissions', NULL)
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
@@ -172,7 +172,7 @@ INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
-('algorithm-ger-02', 'Algorithm/UPG', 'Bakit may mas mababa ang score na pumasa kaysa sa akin?', 'Dalawang pangunahing dahilan: (1) Palugit — public high school students get a +0.5 UPG bonus na hindi nakukuha ng private school students. (2) Geographic Equity Round — students from underrepresented provinces get priority in the 30% equity slots, even if their UPG is slightly higher (worse) than yours.', 'RMB/Iskotify UPCAT context (Jun 2026)', NULL)
+('algorithm-ger-02', 'Algorithm/UPG', 'Bakit may mas mababa ang score na pumasa kaysa sa akin?', 'Dalawang pangunahing dahilan: (1) Palugit — public high school students get a palugit (a small UPG bonus of about 0.05) na hindi nakukuha ng private school students. (2) Geographic Equity Round — students from underrepresented provinces get priority in the 30% equity slots, even if their UPG is slightly higher (worse) than yours.', 'RMB/Iskotify UPCAT context (Jun 2026)', NULL)
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
