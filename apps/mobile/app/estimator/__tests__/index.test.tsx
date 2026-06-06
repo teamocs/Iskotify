@@ -3,12 +3,16 @@ import { render, screen, act } from '@testing-library/react-native'
 import EstimatorScreen from '../index'
 
 // ── expo-router ──────────────────────────────────────────────────────────────
-jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), back: jest.fn() },
-  useFocusEffect: jest.fn((cb: () => (() => void) | void) => {
-    cb()
-  }),
-}))
+// useFocusEffect must be mocked as a useEffect equivalent so that the callback
+// fires after render (inside the effect phase), not synchronously during render.
+// Calling setState synchronously during render triggers "Too many re-renders".
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react')
+  return {
+    router: { push: jest.fn(), back: jest.fn() },
+    useFocusEffect: (cb: () => (() => void) | void) => useEffect(cb, []),
+  }
+})
 
 // ── safe-area ────────────────────────────────────────────────────────────────
 jest.mock('react-native-safe-area-context', () => ({
@@ -31,12 +35,16 @@ jest.mock('../../../services/settings', () => ({
 }))
 
 // ── useDb ────────────────────────────────────────────────────────────────────
-const mockSelect = jest.fn()
-jest.mock('../../../hooks/useDb', () => ({
-  useDb: () => ({
-    select: () => mockSelect(),
-  }),
-}))
+// IMPORTANT: useDb() must return a *stable* object reference across renders.
+// If a new object is returned each render, the `db` dep inside `useCallback`
+// changes every render → `load` changes → useFocusEffect fires → infinite loop.
+// The factory creates one db instance (and one mockSelect fn) that persist for
+// the whole test file. mockSelect is accessed via jest.requireMock in tests.
+jest.mock('../../../hooks/useDb', () => {
+  const mockSelect = jest.fn()
+  const db = { select: () => mockSelect() }
+  return { useDb: () => db, __mockSelect: mockSelect }
+})
 
 // ── disclaimer components ─────────────────────────────────────────────────────
 jest.mock('../../../components/estimator/ScoreDisclaimerModal', () => ({
@@ -88,7 +96,11 @@ const SAMPLE_RPC_RESULT = {
 }
 
 describe('EstimatorScreen', () => {
+  // Access the stable mockSelect exposed by the useDb factory.
+  // jest.requireMock is evaluated at test-run time (after hoisting), so this is safe.
+  let mockSelect: jest.Mock
   beforeEach(() => {
+    mockSelect = (jest.requireMock('../../../hooks/useDb') as any).__mockSelect
     jest.clearAllMocks()
 
     mockGetSettings.mockResolvedValue(SAMPLE_SETTINGS)

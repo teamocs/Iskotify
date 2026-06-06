@@ -46,7 +46,15 @@ function makeDb(): DrizzleClient {
       income_bracket TEXT,
       gwa REAL,
       province TEXT,
-      city TEXT
+      city TEXT,
+      hs_gwa_g8 REAL,
+      hs_gwa_g9 REAL,
+      hs_gwa_g10 REAL,
+      hs_gwa_g11 REAL,
+      school_type TEXT,
+      is_indigenous INTEGER DEFAULT 0,
+      target_campus TEXT,
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -237,7 +245,15 @@ describe('buildUpcatFactsBlock', () => {
         income_bracket TEXT,
         gwa REAL,
         province TEXT,
-        city TEXT
+        city TEXT,
+        hs_gwa_g8 REAL,
+        hs_gwa_g9 REAL,
+        hs_gwa_g10 REAL,
+        hs_gwa_g11 REAL,
+        school_type TEXT,
+        is_indigenous INTEGER DEFAULT 0,
+        target_campus TEXT,
+        score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS upcat_facts (
         id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,

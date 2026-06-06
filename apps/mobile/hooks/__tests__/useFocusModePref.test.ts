@@ -23,7 +23,15 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       income_bracket TEXT,
       gwa REAL,
       province TEXT,
-      city TEXT
+      city TEXT,
+      hs_gwa_g8 REAL,
+      hs_gwa_g9 REAL,
+      hs_gwa_g10 REAL,
+      hs_gwa_g11 REAL,
+      school_type TEXT,
+      is_indigenous INTEGER DEFAULT 0,
+      target_campus TEXT,
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)
