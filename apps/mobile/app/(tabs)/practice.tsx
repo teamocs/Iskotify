@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
-  StyleSheet, View, Text, TouchableOpacity,
+  StyleSheet, View, Text, TouchableOpacity, Pressable,
   Modal, TextInput, Alert, ScrollView,
   RefreshControl,
 } from 'react-native'
@@ -479,6 +479,21 @@ export default function PracticeScreen() {
           />
         }
       >
+        {/* UPCAT Mock Exam entry */}
+        <Pressable
+          style={qs.card}
+          onPress={() => router.push('/practice/upcat')}
+          accessibilityRole="button"
+          accessibilityLabel="Open UPCAT mock exam"
+        >
+          <View style={qs.icon}><Text style={{ fontSize: 15 }}>🎓</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={qs.title}>UPCAT Mock Exam</Text>
+            <Text style={qs.sub}>Authored questions · timed mock by subtest</Text>
+          </View>
+          <Text style={qs.go}>›</Text>
+        </Pressable>
+
         {/* Focus cards row */}
         {focusListingsList.length > 0 && (
           <>
