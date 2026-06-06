@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real, index, primaryKey } from 'drizzle-orm/sqlite-core'
 
 export const subjects = sqliteTable('subjects', {
   id: text('id').primaryKey(),
@@ -47,6 +47,17 @@ export const listings = sqliteTable('listings', {
   externalUrl: text('external_url').notNull().default(''),
   deadline: integer('deadline'),
   grantAmount: text('grant_amount').notNull().default(''),
+  province: text('province'),
+  city: text('city'),
+  scope: text('scope').notNull().default('national'),
+  isVerified: integer('is_verified', { mode: 'boolean' }).notNull().default(false),
+  incomeCeiling: integer('income_ceiling'),
+  gwaRequirement: integer('gwa_requirement'),
+  monthlyStipend: integer('monthly_stipend'),
+  serviceObligationYears: integer('service_obligation_years'),
+  hasEntranceExam: integer('has_entrance_exam', { mode: 'boolean' }).notNull().default(false),
+  applicationWindow: text('application_window'),
+  scholarshipMeta: text('scholarship_meta').notNull().default('{}'),
 }, (t) => [
   index('listings_slug_idx').on(t.slug),
 ])
@@ -69,6 +80,10 @@ export const userSettings = sqliteTable('user_settings', {
   theme: text('theme').notNull().default('system'),
   focusModeEnabled: integer('focus_mode_enabled', { mode: 'boolean' }).notNull().default(true),
   googleCalendarConnected: integer('google_calendar_connected', { mode: 'boolean' }).notNull().default(false),
+  incomeBracket: text('income_bracket'),
+  gwa: real('gwa'),
+  province: text('province'),
+  city: text('city'),
 })
 
 export const userProgress = sqliteTable('user_progress', {
