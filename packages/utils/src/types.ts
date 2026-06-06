@@ -6,6 +6,8 @@ export type ListingEvent = {
   date: string
 }
 
+export type ListingScope = 'national' | 'regional' | 'provincial' | 'city' | 'school'
+
 export type Listing = {
   id: string
   type: ListingType
@@ -27,6 +29,17 @@ export type Listing = {
   grant_amount: number | null
   external_url: string
   image_url: string
+  // Epic B scholarship typed fields
+  province: string | null
+  city: string | null
+  scope: ListingScope
+  is_verified: boolean
+  income_ceiling: number | null
+  gwa_requirement: number | null
+  monthly_stipend: number | null
+  service_obligation_years: number | null
+  has_entrance_exam: boolean
+  application_window: string | null
   created_at: string
   updated_at: string
 }

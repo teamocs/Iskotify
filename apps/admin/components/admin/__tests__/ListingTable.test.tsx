@@ -21,6 +21,17 @@ const base = {
   grant_amount: null,
   external_url: '',
   image_url: '',
+  // Epic B scholarship typed fields
+  province: null,
+  city: null,
+  scope: 'national' as const,
+  is_verified: false,
+  income_ceiling: null,
+  gwa_requirement: null,
+  monthly_stipend: null,
+  service_obligation_years: null,
+  has_entrance_exam: false,
+  application_window: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 }

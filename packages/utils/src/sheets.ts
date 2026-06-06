@@ -76,6 +76,17 @@ export function transformSheetRow(row: Record<string, string>): ListingUpsert | 
     grant_amount: parseNumber(d.grant_amount),
     external_url: d.external_url,
     image_url: d.image_url,
+    // Epic B scholarship typed fields (sheet rows don't supply these; default values)
+    province: null,
+    city: null,
+    scope: 'national',
+    is_verified: false,
+    income_ceiling: null,
+    gwa_requirement: null,
+    monthly_stipend: null,
+    service_obligation_years: null,
+    has_entrance_exam: false,
+    application_window: null,
     updated_at: new Date().toISOString(),
   }
 }

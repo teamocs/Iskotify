@@ -56,7 +56,18 @@ export async function POST(req: NextRequest) {
       region: body.region,
       grant_amount: body.grant_amount ?? null,
       external_url: body.external_url ?? '',
-      image_url: body.image_url ?? ''
+      image_url: body.image_url ?? '',
+      // Epic B scholarship typed fields
+      province: body.province ?? null,
+      city: body.city ?? null,
+      scope: body.scope ?? 'national',
+      is_verified: body.is_verified ?? false,
+      income_ceiling: body.income_ceiling ?? null,
+      gwa_requirement: body.gwa_requirement ?? null,
+      monthly_stipend: body.monthly_stipend ?? null,
+      service_obligation_years: body.service_obligation_years ?? null,
+      has_entrance_exam: body.has_entrance_exam ?? false,
+      application_window: body.application_window ?? null
     })
     if (error) {
       console.error('[admin/listings POST] supabase error:', error)
