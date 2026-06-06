@@ -152,7 +152,7 @@ INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
-('algorithm-palugit-01', 'Algorithm/UPG', 'What is the palugit and who gets it?', 'The palugit is a +0.5 bonus applied to your UPG (making it lower/better). You receive it if you attended a public general high school, public vocational high school, public barangay national high school, or belong to a cultural minority group. State universities/colleges and science high schools do NOT receive the palugit.', 'UP Office of Admissions', NULL)
+('algorithm-palugit-01', 'Algorithm/UPG', 'What is the palugit and who gets it?', 'The palugit is a bonus of about 0.05 applied to your UPG (lowering it / making it better) — per the original EEAS committee figure (Lontoc 2011); some secondary sources cite 0.5, which is incorrect. You receive it if you attended a public general, public vocational, or public barangay national high school, or belong to a cultural minority group. Public science high schools, SUC-administered high schools, and private schools do NOT receive the palugit.', 'UP Office of Admissions', NULL)
 ON CONFLICT (id) DO UPDATE SET topic=EXCLUDED.topic, question=EXCLUDED.question, answer=EXCLUDED.answer, source=EXCLUDED.source, valid_year=EXCLUDED.valid_year;
 
 INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year) VALUES
