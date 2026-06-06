@@ -283,7 +283,7 @@ function buildDestinationsSeed() {
 
   const tracker = makeNullTracker([
     'course_id', 'country', 'demand_rating', 'salary_min', 'salary_max',
-    'salary_local', 'visa_pathway', 'pr_pathway', 'credential_required',
+    'salary_local', 'visa_pathway', 'pr_pathway', 'credential',
     'licensing_exam', 'language_required', 'timeline_months',
     'program_name', 'specializations', 'notes', 'saturation_warning', 'source',
   ])
@@ -330,8 +330,8 @@ function buildDestinationsSeed() {
     const salary_type = resolveSentinel(get('Salary Type'))
     const visa_pathway = resolveSentinel(get('Visa Pathway'))
     const pr_raw = get('PR Pathway?').trim()
-    const pr_pathway = parseBool(pr_raw)
-    const credential_required = resolveSentinel(get('Credential\nRequired') || get('Credential Required'))
+    const pr_pathway = resolveSentinel(pr_raw)
+    const credential = resolveSentinel(get('Credential\nRequired') || get('Credential Required'))
     const licensing_exam = resolveSentinel(get('Licensing Exam'))
     const language_required = resolveSentinel(get('Language\nRequired') || get('Language Required'))
     const program_name = resolveSentinel(get('Program Name'))
@@ -352,7 +352,7 @@ function buildDestinationsSeed() {
     tracker.record('salary_local', salary_local)
     tracker.record('visa_pathway', visa_pathway)
     tracker.record('pr_pathway', pr_pathway)
-    tracker.record('credential_required', credential_required)
+    tracker.record('credential', credential)
     tracker.record('licensing_exam', licensing_exam)
     tracker.record('language_required', language_required)
     tracker.record('timeline_months', timeline_months)
@@ -362,15 +362,14 @@ function buildDestinationsSeed() {
     tracker.record('saturation_warning', saturation_warning)
     tracker.record('source', source)
 
-    const pr = pr_pathway === null ? 'NULL' : pr_pathway ? 'TRUE' : 'FALSE'
     const specs = sqlArray(specializations)
     const sm = salary_min === null ? 'NULL' : salary_min
     const sx = salary_max === null ? 'NULL' : salary_max
     const tm = timeline_months === null ? 'NULL' : timeline_months
 
     rows.push(
-      `INSERT INTO career_destinations (id, course_id, country, demand_rating, salary_min, salary_max, salary_local, salary_type, visa_pathway, pr_pathway, credential_required, licensing_exam, language_required, timeline_months, program_name, specializations, notes, saturation_warning, source)\n` +
-      `VALUES (${sqlStr(id)}, ${sqlStr(course_id)}, ${sqlStr(country)}, ${sqlStr(demand_rating)}, ${sm}, ${sx}, ${sqlStr(salary_local)}, ${sqlStr(salary_type)}, ${sqlStr(visa_pathway)}, ${pr}, ${sqlStr(credential_required)}, ${sqlStr(licensing_exam)}, ${sqlStr(language_required)}, ${tm}, ${sqlStr(program_name)}, ${specs}, ${sqlStr(notes)}, ${sqlStr(saturation_warning)}, ${sqlStr(source)})\n` +
+      `INSERT INTO career_destinations (id, course_id, country, demand_rating, salary_min, salary_max, salary_local, salary_type, visa_pathway, pr_pathway, credential, licensing_exam, language_required, timeline_months, program_name, specializations, notes, saturation_warning, source)\n` +
+      `VALUES (${sqlStr(id)}, ${sqlStr(course_id)}, ${sqlStr(country)}, ${sqlStr(demand_rating)}, ${sm}, ${sx}, ${sqlStr(salary_local)}, ${sqlStr(salary_type)}, ${sqlStr(visa_pathway)}, ${sqlStr(pr_pathway)}, ${sqlStr(credential)}, ${sqlStr(licensing_exam)}, ${sqlStr(language_required)}, ${tm}, ${sqlStr(program_name)}, ${specs}, ${sqlStr(notes)}, ${sqlStr(saturation_warning)}, ${sqlStr(source)})\n` +
       `ON CONFLICT (id) DO UPDATE SET\n` +
       `  course_id = EXCLUDED.course_id,\n` +
       `  country = EXCLUDED.country,\n` +
@@ -381,7 +380,7 @@ function buildDestinationsSeed() {
       `  salary_type = EXCLUDED.salary_type,\n` +
       `  visa_pathway = EXCLUDED.visa_pathway,\n` +
       `  pr_pathway = EXCLUDED.pr_pathway,\n` +
-      `  credential_required = EXCLUDED.credential_required,\n` +
+      `  credential = EXCLUDED.credential,\n` +
       `  licensing_exam = EXCLUDED.licensing_exam,\n` +
       `  language_required = EXCLUDED.language_required,\n` +
       `  timeline_months = EXCLUDED.timeline_months,\n` +
@@ -415,8 +414,8 @@ function buildCountriesSeed() {
   )
 
   const tracker = makeNullTracker([
-    'name', 'region', 'immigration_system', 'why_demand_exists',
-    'language_required', 'pr_pathway', 'notes_for_students',
+    'name', 'region', 'immigration_system', 'why_demand',
+    'language_required', 'pr_pathway', 'notes',
   ])
 
   const rows = []
@@ -438,30 +437,30 @@ function buildCountriesSeed() {
 
     const region = resolveSentinel(get('Region'))
     const immigration_system = resolveSentinel(get('Immigration System'))
-    const why_demand_exists = resolveSentinel(get('Why Demand Exists'))
+    const why_demand = resolveSentinel(get('Why Demand Exists'))
     const language_required = resolveSentinel(get('Language Required'))
     const pr_pathway = resolveSentinel(get('PR/Citizenship Pathway'))
-    const notes_for_students = resolveSentinel(get('Notes for Students'))
+    const notes = resolveSentinel(get('Notes for Students'))
 
     tracker.record('name', name)
     tracker.record('region', region)
     tracker.record('immigration_system', immigration_system)
-    tracker.record('why_demand_exists', why_demand_exists)
+    tracker.record('why_demand', why_demand)
     tracker.record('language_required', language_required)
     tracker.record('pr_pathway', pr_pathway)
-    tracker.record('notes_for_students', notes_for_students)
+    tracker.record('notes', notes)
 
     rows.push(
-      `INSERT INTO career_countries (code, name, region, immigration_system, why_demand_exists, language_required, pr_pathway, notes_for_students)\n` +
-      `VALUES (${sqlStr(code)}, ${sqlStr(name)}, ${sqlStr(region)}, ${sqlStr(immigration_system)}, ${sqlStr(why_demand_exists)}, ${sqlStr(language_required)}, ${sqlStr(pr_pathway)}, ${sqlStr(notes_for_students)})\n` +
+      `INSERT INTO career_countries (code, name, region, immigration_system, why_demand, language_required, pr_pathway, notes)\n` +
+      `VALUES (${sqlStr(code)}, ${sqlStr(name)}, ${sqlStr(region)}, ${sqlStr(immigration_system)}, ${sqlStr(why_demand)}, ${sqlStr(language_required)}, ${sqlStr(pr_pathway)}, ${sqlStr(notes)})\n` +
       `ON CONFLICT (code) DO UPDATE SET\n` +
       `  name = EXCLUDED.name,\n` +
       `  region = EXCLUDED.region,\n` +
       `  immigration_system = EXCLUDED.immigration_system,\n` +
-      `  why_demand_exists = EXCLUDED.why_demand_exists,\n` +
+      `  why_demand = EXCLUDED.why_demand,\n` +
       `  language_required = EXCLUDED.language_required,\n` +
       `  pr_pathway = EXCLUDED.pr_pathway,\n` +
-      `  notes_for_students = EXCLUDED.notes_for_students;`
+      `  notes = EXCLUDED.notes;`
     )
   }
 
@@ -488,7 +487,7 @@ function buildProgramsSeed() {
 
   const tracker = makeNullTracker([
     'name', 'country_region', 'courses_covered', 'managing_body',
-    'annual_slots', 'key_requirements', 'immigration_outcome', 'website', 'notes',
+    'slots', 'requirements', 'immigration_outcome', 'website', 'notes',
   ])
 
   const rows = []
@@ -512,8 +511,8 @@ function buildProgramsSeed() {
     const courses_raw = get('Courses Covered')
     const courses_covered = splitComma(courses_raw)
     const managing_body = resolveSentinel(get('Managing Body'))
-    const annual_slots = resolveSentinel(get('Annual Slots / Scale'))
-    const key_requirements = resolveSentinel(get('Key Requirements'))
+    const slots = resolveSentinel(get('Annual Slots / Scale'))
+    const requirements = resolveSentinel(get('Key Requirements'))
     const immigration_outcome = resolveSentinel(get('Immigration Outcome'))
     const website = resolveSentinel(get('Website'))
     const notes = resolveSentinel(get('Notes'))
@@ -522,8 +521,8 @@ function buildProgramsSeed() {
     tracker.record('country_region', country_region)
     tracker.record('courses_covered', courses_covered.length ? courses_covered : null)
     tracker.record('managing_body', managing_body)
-    tracker.record('annual_slots', annual_slots)
-    tracker.record('key_requirements', key_requirements)
+    tracker.record('slots', slots)
+    tracker.record('requirements', requirements)
     tracker.record('immigration_outcome', immigration_outcome)
     tracker.record('website', website)
     tracker.record('notes', notes)
@@ -531,15 +530,15 @@ function buildProgramsSeed() {
     const cc = sqlArray(courses_covered)
 
     rows.push(
-      `INSERT INTO career_programs (id, name, country_region, courses_covered, managing_body, annual_slots, key_requirements, immigration_outcome, website, notes)\n` +
-      `VALUES (${sqlStr(id)}, ${sqlStr(name)}, ${sqlStr(country_region)}, ${cc}, ${sqlStr(managing_body)}, ${sqlStr(annual_slots)}, ${sqlStr(key_requirements)}, ${sqlStr(immigration_outcome)}, ${sqlStr(website)}, ${sqlStr(notes)})\n` +
+      `INSERT INTO career_programs (id, name, country_region, courses_covered, managing_body, slots, requirements, immigration_outcome, website, notes)\n` +
+      `VALUES (${sqlStr(id)}, ${sqlStr(name)}, ${sqlStr(country_region)}, ${cc}, ${sqlStr(managing_body)}, ${sqlStr(slots)}, ${sqlStr(requirements)}, ${sqlStr(immigration_outcome)}, ${sqlStr(website)}, ${sqlStr(notes)})\n` +
       `ON CONFLICT (id) DO UPDATE SET\n` +
       `  name = EXCLUDED.name,\n` +
       `  country_region = EXCLUDED.country_region,\n` +
       `  courses_covered = EXCLUDED.courses_covered,\n` +
       `  managing_body = EXCLUDED.managing_body,\n` +
-      `  annual_slots = EXCLUDED.annual_slots,\n` +
-      `  key_requirements = EXCLUDED.key_requirements,\n` +
+      `  slots = EXCLUDED.slots,\n` +
+      `  requirements = EXCLUDED.requirements,\n` +
       `  immigration_outcome = EXCLUDED.immigration_outcome,\n` +
       `  website = EXCLUDED.website,\n` +
       `  notes = EXCLUDED.notes;`

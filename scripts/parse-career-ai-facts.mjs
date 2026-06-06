@@ -303,7 +303,7 @@ function buildAiImpactSQL(records) {
   lines.push('-- Idempotent: safe to re-run (ON CONFLICT DO UPDATE).')
   lines.push('')
   lines.push('INSERT INTO ai_career_impact (')
-  lines.push('  course_id, course_name, course_code, cluster, board_exam, board_exam_name,')
+  lines.push('  course_id, course_name, cluster, board_exam, board_exam_name,')
   lines.push('  automation_risk_low, automation_risk_high, ai_safety_score, ai_safety_label,')
   lines.push('  color_code, what_ai_takes_over, what_stays_human, new_jobs_emerging,')
   lines.push('  skills_to_develop, career_outlook_2030, key_stat, key_source, key_quote,')
@@ -314,7 +314,6 @@ function buildAiImpactSQL(records) {
     const v = [
       sq(r.course_id),
       sq(r.course_name),
-      r.course_code != null ? sq(r.course_code) : 'NULL',
       r.cluster != null ? sq(r.cluster) : 'NULL',
       r.has_board_exam ? 'TRUE' : 'FALSE',
       r.board_exam_name != null ? sq(r.board_exam_name) : 'NULL',
@@ -344,7 +343,6 @@ function buildAiImpactSQL(records) {
   lines.push(...valueLines)
   lines.push('ON CONFLICT (course_id) DO UPDATE SET')
   lines.push('  course_name          = EXCLUDED.course_name,')
-  lines.push('  course_code          = EXCLUDED.course_code,')
   lines.push('  cluster              = EXCLUDED.cluster,')
   lines.push('  board_exam           = EXCLUDED.board_exam,')
   lines.push('  board_exam_name      = EXCLUDED.board_exam_name,')
