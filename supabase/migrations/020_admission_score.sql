@@ -60,3 +60,6 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.estimate_admission_score(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.estimate_admission_score(jsonb) TO authenticated;
+-- App is offline-first with anonymous users; the Manlapaz coefficients are already public
+-- (seeded in upcat_facts), so anon execute is safe and required for the estimator to work for all users.
+GRANT EXECUTE ON FUNCTION public.estimate_admission_score(jsonb) TO anon;
