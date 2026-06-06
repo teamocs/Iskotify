@@ -16,6 +16,34 @@ import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
 import { useTheme } from '../theme/ThemeContext'
+import type { IncomeBracket } from '../utils/scholarshipMatch'
+
+const PH_PROVINCES = [
+  'Abra','Agusan del Norte','Agusan del Sur','Aklan','Albay','Antique','Apayao',
+  'Aurora','Basilan','Bataan','Batanes','Batangas','Benguet','Biliran','Bohol',
+  'Bukidnon','Bulacan','Cagayan','Camarines Norte','Camarines Sur','Camiguin',
+  'Capiz','Catanduanes','Cavite','Cebu','Compostela Valley','Cotabato',
+  'Davao del Norte','Davao del Sur','Davao Occidental','Davao Oriental',
+  'Dinagat Islands','Eastern Samar','Guimaras','Ifugao','Ilocos Norte',
+  'Ilocos Sur','Iloilo','Isabela','Kalinga','La Union','Laguna','Lanao del Norte',
+  'Lanao del Sur','Leyte','Maguindanao','Marinduque','Masbate','Metro Manila',
+  'Misamis Occidental','Misamis Oriental','Mountain Province','Negros Occidental',
+  'Negros Oriental','Northern Samar','Nueva Ecija','Nueva Vizcaya','Occidental Mindoro',
+  'Oriental Mindoro','Palawan','Pampanga','Pangasinan','Quezon','Quirino',
+  'Rizal','Romblon','Samar','Sarangani','Siquijor','Sorsogon','South Cotabato',
+  'Southern Leyte','Sultan Kudarat','Sulu','Surigao del Norte','Surigao del Sur',
+  'Tarlac','Tawi-Tawi','Zambales','Zamboanga del Norte','Zamboanga del Sur',
+  'Zamboanga Sibugay',
+] as const
+
+const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
+  { label: '₱100k or below / yr', value: '<=100k' },
+  { label: '₱100k–₱300k', value: '100k-300k' },
+  { label: '₱300k–₱600k', value: '300k-600k' },
+  { label: '₱600k–₱1.2M', value: '600k-1.2M' },
+  { label: 'Above ₱1.2M', value: '>1.2M' },
+  { label: 'Prefer not to say', value: null },
+]
 
 interface ListingRow { id: string; slug: string; title: string; type: string; exam_date: string | null }
 
@@ -35,10 +63,17 @@ export default function OnboardingScreen() {
   const { theme: t, typo } = useTheme()
 
   // Step 1
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<1 | 2 | 'matcher' | 3>(1)
   const [fullName, setFullName] = useState('')
   const [school, setSchool] = useState('')
   const [gradeLevel, setGradeLevel] = useState<number | null>(null)
+
+  // Matcher step state
+  const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
+  const [gwaText, setGwaText] = useState('')
+  const [gwaError, setGwaError] = useState<string | null>(null)
+  const [province, setProvince] = useState('')
+  const [provinceQuery, setProvinceQuery] = useState('')
 
   // Step 2 state
   const [listings, setListings] = useState<ListingRow[]>([])
@@ -146,12 +181,40 @@ export default function OnboardingScreen() {
       setSelectedSlug(selectedSlugs[0]!)
       await syncOnLaunch(db)
       void runEnhancement(db)  // Fire-and-forget — runs in background, won't block UI
-      setStep(3)
+      setStep('matcher')
     } catch (e) {
       console.error('[onboarding] confirm error:', e)
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleMatcherContinue(skip = false) {
+    if (!skip) {
+      // Validate GWA if provided
+      const gwaNum = gwaText.trim() ? parseFloat(gwaText.trim()) : null
+      if (gwaText.trim() && (isNaN(gwaNum!) || gwaNum! < 75 || gwaNum! > 100)) {
+        setGwaError('GWA must be between 75 and 100.')
+        return
+      }
+      setGwaError(null)
+      // Persist via inline Drizzle (matching the mechanism used for other fields in this screen)
+      try {
+        const patch: Record<string, unknown> = {}
+        if (incomeBracket !== null) patch.incomeBracket = incomeBracket
+        if (gwaNum !== null) patch.gwa = gwaNum
+        if (province.trim()) patch.province = province.trim()
+        if (Object.keys(patch).length > 0) {
+          await db
+            .insert(userSettings)
+            .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
+            .onConflictDoUpdate({ target: userSettings.id, set: patch })
+        }
+      } catch (e) {
+        console.warn('[onboarding] matcher persist error:', e)
+      }
+    }
+    setStep(3)
   }
 
   function handleAssessAnswer(optionIdx: number) {
@@ -221,6 +284,7 @@ export default function OnboardingScreen() {
 
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 28 }}>
               <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
+              <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
               <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
               <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
             </View>
@@ -293,6 +357,7 @@ export default function OnboardingScreen() {
         <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 24 }}>
           <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
           <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
+          <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
           <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
         </View>
 
@@ -395,6 +460,174 @@ export default function OnboardingScreen() {
     )
   }
 
+  // ── Matcher step: Income / GWA / Province (optional) ─────────────────────
+
+  if (step === 'matcher') {
+    const filteredProvinces = provinceQuery.trim().length > 0
+      ? PH_PROVINCES.filter(p => p.toLowerCase().includes(provinceQuery.toLowerCase()))
+      : PH_PROVINCES
+
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 48 }}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          bottomOffset={20}
+        >
+          {/* Step dots */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 28 }}>
+            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+            <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
+            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+          </View>
+
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>
+              Help us match scholarships
+            </Text>
+            <TouchableOpacity onPress={() => void handleMatcherContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: 28, lineHeight: 19 }}>
+            These details let us personalise scholarship eligibility. All fields are optional.
+          </Text>
+
+          {/* Income bracket */}
+          <Text style={labelStyle}>Household Income Bracket</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+            {INCOME_OPTIONS.map(opt => {
+              const active = incomeBracket === opt.value && opt.value !== null
+              const isPreferNotToSay = opt.value === null
+              return (
+                <TouchableOpacity
+                  key={opt.label}
+                  onPress={() => {
+                    if (isPreferNotToSay) {
+                      setIncomeBracket(null)
+                    } else {
+                      setIncomeBracket(prev => prev === opt.value ? null : opt.value)
+                    }
+                  }}
+                  style={{
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    borderRadius: 20,
+                    backgroundColor: active ? '#831626' : t.surface2,
+                    borderWidth: 1,
+                    borderColor: active ? '#831626' : t.border,
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: 'Lexend_500Medium',
+                    fontSize: typo.sm,
+                    color: active ? '#fff' : t.textSecondary,
+                  }}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+
+          {/* GWA */}
+          <Text style={labelStyle}>GWA (General Weighted Average)</Text>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: 8 }}>
+            Your latest general weighted average (percentage)
+          </Text>
+          <TextInput
+            style={[inputStyle, gwaError ? { borderColor: '#f87171' } : {}]}
+            placeholder="e.g. 90.5"
+            placeholderTextColor={t.textTertiary}
+            value={gwaText}
+            onChangeText={text => { setGwaText(text); setGwaError(null) }}
+            keyboardType="decimal-pad"
+            returnKeyType="done"
+          />
+          {gwaError ? (
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#f87171', marginTop: 4 }}>
+              {gwaError}
+            </Text>
+          ) : null}
+
+          {/* Province */}
+          <Text style={[labelStyle, { marginTop: 20 }]}>Province</Text>
+          <TextInput
+            style={[inputStyle, { marginBottom: 6 }]}
+            placeholder="Search province..."
+            placeholderTextColor={t.textTertiary}
+            value={provinceQuery}
+            onChangeText={setProvinceQuery}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="words"
+          />
+          {province.trim() ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <View style={{
+                backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)',
+                borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+              }}>
+                <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
+                  {province}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => { setProvince(''); setProvinceQuery('') }}>
+                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }}>clear</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View style={{
+            maxHeight: 200, borderWidth: 1, borderColor: t.border, borderRadius: 14,
+            overflow: 'hidden', marginBottom: 28,
+          }}>
+            <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              {filteredProvinces.map(p => (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => { setProvince(p); setProvinceQuery(p) }}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 11,
+                    backgroundColor: province === p ? 'rgba(128,0,0,0.12)' : 'transparent',
+                    borderBottomWidth: 1, borderBottomColor: t.border,
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: 'Lexend_400Regular', fontSize: typo.sm,
+                    color: province === p ? t.accentText : t.textPrimary,
+                  }}>
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* CTA */}
+          <TouchableOpacity
+            onPress={() => void handleMatcherContinue(false)}
+            style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 15, alignItems: 'center', marginBottom: 12 }}
+          >
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
+              Next →
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => void handleMatcherContinue(true)}
+            style={{ alignItems: 'center', paddingVertical: 8 }}
+          >
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>
+              Skip for now
+            </Text>
+          </TouchableOpacity>
+        </KeyboardAwareScrollView>
+      </SafeAreaView>
+    )
+  }
+
   // ── Step 3: Pre-assessment ────────────────────────────────────────────────
 
   if (assessDone) {
@@ -470,6 +703,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 20 }}>
+        <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
         <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
         <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
         <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
