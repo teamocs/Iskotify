@@ -11,11 +11,12 @@ import { useAiCoach } from '../../hooks/useAiCoach'
 import { useModelDownload } from '../../hooks/useModelDownload'
 import { useTheme } from '../../theme/ThemeContext'
 import { AskKuyaModal } from '../../components/AskKuyaModal'
-import { eq } from 'drizzle-orm'
+import { eq, asc } from 'drizzle-orm'
 import { DateActionSheet } from '../../components/calendar/DateActionSheet'
 import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { useDb } from '../../hooks/useDb'
-import { notes as notesTable, userSettings } from '../../db/schema'
+import { notes as notesTable, userSettings, listings as listingsTable, focusListings } from '../../db/schema'
+import { getAcquiredRequirementIndices } from '../../services/coachQueue'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import { syncReminderToCalendar, removeReminderFromCalendar } from '../../services/googleCalendar'
 import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
@@ -432,6 +433,39 @@ export default function HomeScreen() {
   const { modelStatus } = useModelDownload(() => {})
   const [chatVisible, setChatVisible] = useState(false)
 
+  // Missing-requirements count across all focused listings
+  const [missingReqCount, setMissingReqCount] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await db
+          .select({
+            slug: focusListings.listingSlug,
+            requirements: listingsTable.requirements,
+          })
+          .from(focusListings)
+          .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
+          .orderBy(asc(focusListings.priority))
+
+        let total = 0
+        for (const row of rows) {
+          let reqs: string[] = []
+          try { reqs = JSON.parse(row.requirements ?? '[]') } catch { reqs = [] }
+          if (reqs.length === 0) continue
+          const acquired = await getAcquiredRequirementIndices(db, row.slug)
+          total += reqs.length - acquired.length
+        }
+        if (!cancelled) setMissingReqCount(total)
+      } catch (e) {
+        console.warn('[home/requirements] count failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  // Re-run whenever focusedListings changes (after refresh)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, focusedListings])
+
   const onAskPress = () => {
     if (modelStatus === 'ready') {
       setChatVisible(true)
@@ -510,6 +544,28 @@ export default function HomeScreen() {
     upcomingMeta: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
     upcomingBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
     upcomingDays: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    reqCard: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 16,
+      padding: 12,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      marginBottom: 8,
+      gap: 10,
+    },
+    reqIcon: {
+      width: 36,
+      height: 36,
+      backgroundColor: 'rgba(252,165,165,0.15)',
+      borderRadius: 10,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      flexShrink: 0,
+    },
+    reqTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    reqSub: { fontSize: typo.xs, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
 
   useEffect(() => {
@@ -649,6 +705,26 @@ export default function HomeScreen() {
               <Text style={s.statLbl}>STREAK</Text>
             </View>
           </View>
+
+          {/* Missing Requirements widget */}
+          {missingReqCount > 0 && focusedListings.length > 0 && (
+            <TouchableOpacity
+              style={s.reqCard}
+              onPress={() => router.push('/requirements')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`${missingReqCount} missing requirements`}
+            >
+              <View style={s.reqIcon}>
+                <Text style={{ fontSize: 18 }}>📋</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.reqTitle}>Kulang na requirements: {missingReqCount}</Text>
+                <Text style={s.reqSub}>Tap to review and check off your requirements</Text>
+              </View>
+              <Text style={s.chevron}>›</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Mini progress card */}
           {sessionCount > 0 && (
