@@ -11,6 +11,9 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
+import { getSettings } from '../../services/settings'
+import { matchScholarship } from '../../utils/scholarshipMatch'
+import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
 
 interface FullListing {
   id: string
@@ -27,6 +30,18 @@ interface FullListing {
   provider: string
   externalUrl: string
   grantAmount: string
+  // scholarship-specific
+  province: string | null
+  city: string | null
+  scope: string
+  isVerified: boolean
+  incomeCeiling: number | null
+  gwaRequirement: number | null
+  monthlyStipend: number | null
+  serviceObligationYears: number | null
+  hasEntranceExam: boolean
+  applicationWindow: string | null
+  scholarshipMeta: string
 }
 
 function fmtDate(ts: number | null | undefined): string {
@@ -48,6 +63,7 @@ export default function ListingDetailScreen() {
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [acquiredCount, setAcquiredCount] = useState(0)
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
@@ -120,17 +136,79 @@ export default function ListingDetailScreen() {
       marginBottom: 12,
     },
     focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
+    // --- scholarship enrichment styles ---
+    matchBlock: { marginHorizontal: 14, marginBottom: 12, borderRadius: 16, padding: 14, borderWidth: 1 },
+    matchEligible: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
+    matchMaybe: { backgroundColor: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)' },
+    matchIneligible: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.22)' },
+    matchPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+    matchPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    matchPillEligible: { backgroundColor: 'rgba(34,197,94,0.18)' },
+    matchPillMaybe: { backgroundColor: 'rgba(245,158,11,0.18)' },
+    matchPillIneligible: { backgroundColor: 'rgba(239,68,68,0.18)' },
+    matchPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    matchPillTxtEligible: { color: '#4ade80' },
+    matchPillTxtMaybe: { color: '#fbbf24' },
+    matchPillTxtIneligible: { color: '#f87171' },
+    matchReason: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 2 },
+    detailGrid: { gap: 8 },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: t.border },
+    detailRowLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
+    detailRowVal: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', textAlign: 'right' },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    chip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+    chipTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    serviceWarning: { marginHorizontal: 14, marginBottom: 12, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: 14, padding: 12 },
+    serviceWarningTxt: { fontSize: typo.sm, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 18 },
+    cautionLine: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 3 },
+    verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+    verifiedBadgePill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+    verifiedPillOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
+    verifiedPillOff: { backgroundColor: t.surface, borderColor: t.border },
+    verifiedPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    verifiedNote: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 15 },
+    otherBenefitLine: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginTop: 2 },
   }), [t, typo])
 
   useEffect(() => {
     async function load() {
-      const [listingRows, savedRows] = await Promise.all([
+      const [listingRows, savedRows, settings] = await Promise.all([
         db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
         db.select({ id: savedListingsTable.id }).from(savedListingsTable),
+        getSettings(db),
       ])
       const l = listingRows[0] ?? null
-      setListing(l)
+      setListing(l as FullListing | null)
       if (l) setSaved(savedRows.some(s => s.id === l.id))
+
+      if (l && l.type === 'scholarship') {
+        let meta: Record<string, unknown> = {}
+        try { meta = JSON.parse((l as FullListing).scholarshipMeta) } catch {}
+        const hucExcluded = !!meta.huc_excluded
+        const targetYearLevels: string[] = Array.isArray(meta.target_year_levels)
+          ? (meta.target_year_levels as unknown[]).map(String)
+          : []
+        const matchInput = {
+          scope: ((l as FullListing).scope ?? 'national') as 'national' | 'regional' | 'provincial' | 'city' | 'school',
+          isVerified: (l as FullListing).isVerified ?? false,
+          incomeCeiling: (l as FullListing).incomeCeiling ?? null,
+          gwaRequirement: (l as FullListing).gwaRequirement ?? null,
+          serviceObligationYears: (l as FullListing).serviceObligationYears ?? null,
+          province: (l as FullListing).province ?? null,
+          city: (l as FullListing).city ?? null,
+          targetYearLevels,
+          hucExcluded,
+        }
+        const studentProfile: StudentProfile = {
+          gradeLevel: settings.gradeLevel ?? undefined,
+          incomeBracket: settings.incomeBracket ?? undefined,
+          gwa: settings.gwa ?? undefined,
+          province: settings.province ?? null,
+          city: settings.city ?? null,
+        }
+        setMatchResult(matchScholarship(matchInput, studentProfile))
+      }
+
       setLoading(false)
     }
     void load()
@@ -174,10 +252,20 @@ export default function ListingDetailScreen() {
   }
 
   const isExam = listing.type === 'exam'
+  const isScholarship = listing.type === 'scholarship'
   const keyDate = listing.examDate ?? listing.deadline
   const daysLeft = daysUntil(keyDate)
   let requirements: string[] = []
   try { requirements = JSON.parse(listing.requirements) } catch {}
+
+  // Parse scholarshipMeta once for render
+  let scholarshipMeta: Record<string, unknown> = {}
+  if (isScholarship) {
+    try { scholarshipMeta = JSON.parse(listing.scholarshipMeta) } catch {}
+  }
+  const otherBenefits: string[] = isScholarship && Array.isArray(scholarshipMeta.other_benefits)
+    ? (scholarshipMeta.other_benefits as unknown[]).map(String)
+    : []
 
   return (
     <SafeAreaView style={s.root}>
@@ -225,6 +313,51 @@ export default function ListingDetailScreen() {
           </View>
         </View>
 
+        {/* Match status block — scholarships only, not 'unknown' */}
+        {isScholarship && matchResult && matchResult.status !== 'unknown' ? (
+          <View style={[
+            s.matchBlock,
+            matchResult.status === 'eligible' ? s.matchEligible
+              : matchResult.status === 'maybe' ? s.matchMaybe
+              : s.matchIneligible,
+          ]}>
+            <View style={s.matchPillRow}>
+              <View style={[
+                s.matchPill,
+                matchResult.status === 'eligible' ? s.matchPillEligible
+                  : matchResult.status === 'maybe' ? s.matchPillMaybe
+                  : s.matchPillIneligible,
+              ]}>
+                <Text style={[
+                  s.matchPillTxt,
+                  matchResult.status === 'eligible' ? s.matchPillTxtEligible
+                    : matchResult.status === 'maybe' ? s.matchPillTxtMaybe
+                    : s.matchPillTxtIneligible,
+                ]}>
+                  {matchResult.status === 'eligible' ? '✓ Eligible'
+                    : matchResult.status === 'maybe' ? 'Maybe'
+                    : 'Not Eligible'}
+                </Text>
+              </View>
+            </View>
+            {matchResult.reasons.map((r, i) => (
+              <Text key={i} style={s.matchReason}>• {r}</Text>
+            ))}
+            {matchResult.warnings.map((w, i) => (
+              <Text key={`w${i}`} style={s.cautionLine}>⚠ {w}</Text>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Service obligation warning banner */}
+        {isScholarship && (listing.serviceObligationYears ?? 0) > 0 ? (
+          <View style={s.serviceWarning}>
+            <Text style={s.serviceWarningTxt}>
+              ⚠️ Requires {listing.serviceObligationYears} year{listing.serviceObligationYears === 1 ? '' : 's'} of service after graduation.
+            </Text>
+          </View>
+        ) : null}
+
         {/* Days countdown */}
         {daysLeft !== null && daysLeft > 0 ? (
           <View style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}>
@@ -263,8 +396,61 @@ export default function ListingDetailScreen() {
           </View>
         ) : null}
 
+        {/* Scholarship detail rows */}
+        {isScholarship ? (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Scholarship Details</Text>
+            <View style={s.detailGrid}>
+              {listing.incomeCeiling != null ? (
+                <View style={s.detailRow}>
+                  <Text style={s.detailRowLabel}>Income Ceiling</Text>
+                  <Text style={s.detailRowVal}>₱{listing.incomeCeiling.toLocaleString()}/yr</Text>
+                </View>
+              ) : null}
+              {listing.gwaRequirement != null ? (
+                <View style={s.detailRow}>
+                  <Text style={s.detailRowLabel}>Minimum GWA</Text>
+                  <Text style={s.detailRowVal}>{listing.gwaRequirement}%</Text>
+                </View>
+              ) : null}
+              {listing.monthlyStipend != null ? (
+                <View style={s.detailRow}>
+                  <Text style={s.detailRowLabel}>Monthly Stipend</Text>
+                  <Text style={[s.detailRowVal, { color: '#4ade80' }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
+                </View>
+              ) : null}
+              {listing.applicationWindow ? (
+                <View style={s.detailRow}>
+                  <Text style={s.detailRowLabel}>Application Window</Text>
+                  <Text style={s.detailRowVal}>{listing.applicationWindow}</Text>
+                </View>
+              ) : null}
+            </View>
+            {/* Scope / region / province chips */}
+            {(listing.scope || listing.province || listing.city) ? (
+              <View style={[s.chipRow, { marginTop: 10 }]}>
+                {listing.scope ? (
+                  <View style={s.chip}>
+                    <Text style={s.chipTxt}>{listing.scope.charAt(0).toUpperCase() + listing.scope.slice(1)}</Text>
+                  </View>
+                ) : null}
+                {listing.province ? (
+                  <View style={s.chip}>
+                    <Text style={s.chipTxt}>📍 {listing.province}</Text>
+                  </View>
+                ) : null}
+                {listing.city ? (
+                  <View style={s.chip}>
+                    <Text style={s.chipTxt}>🏙 {listing.city}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Benefits / Coverage */}
-        {(listing.coverage || listing.grantAmount) ? (
+        {(listing.coverage || listing.grantAmount || otherBenefits.length > 0) ? (
           <View style={s.section}>
             <Text style={s.sectionTitle}>{isExam ? 'Coverage' : 'Benefits'}</Text>
             {listing.grantAmount ? (
@@ -274,6 +460,9 @@ export default function ListingDetailScreen() {
               </View>
             ) : null}
             {listing.coverage ? <Text style={[s.bodyText, { marginTop: 6 }]}>{listing.coverage}</Text> : null}
+            {otherBenefits.map((b, i) => (
+              <Text key={i} style={[s.otherBenefitLine, { marginTop: i === 0 ? 6 : 2 }]}>• {b}</Text>
+            ))}
           </View>
         ) : null}
 
@@ -314,16 +503,38 @@ export default function ListingDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Start practice CTA */}
-        <TouchableOpacity
-          style={s.practiceBtn}
-          onPress={() => router.push('/(tabs)/practice')}
-        >
-          <Text style={s.practiceBtnTxt}>⚡ Start Practicing for this Exam</Text>
-        </TouchableOpacity>
+        {/* Start practice CTA — exams only */}
+        {!isScholarship ? (
+          <TouchableOpacity
+            style={s.practiceBtn}
+            onPress={() => router.push('/(tabs)/practice')}
+          >
+            <Text style={s.practiceBtnTxt}>⚡ Start Practicing for this Exam</Text>
+          </TouchableOpacity>
+        ) : null}
 
-        {/* Official website */}
-        {listing.externalUrl ? (
+        {/* Official website (scholarships always show if present; exams too) */}
+        {isScholarship ? (
+          <View style={{ marginHorizontal: 14, marginBottom: 10 }}>
+            {/* Verified badge + note */}
+            <View style={s.verifiedBadge}>
+              <View style={[s.verifiedBadgePill, listing.isVerified ? s.verifiedPillOn : s.verifiedPillOff]}>
+                <Text style={[s.verifiedPillTxt, { color: listing.isVerified ? '#4ade80' : t.textTertiary }]}>
+                  {listing.isVerified ? '✓ Verified' : 'Unverified'}
+                </Text>
+              </View>
+              <Text style={s.verifiedNote}>Details change yearly — verify on the official site.</Text>
+            </View>
+            {listing.externalUrl ? (
+              <TouchableOpacity
+                style={s.linkBtn}
+                onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
+              >
+                <Text style={s.linkBtnTxt}>Official Website ↗</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : listing.externalUrl ? (
           <TouchableOpacity
             style={s.linkBtn}
             onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
@@ -337,4 +548,3 @@ export default function ListingDetailScreen() {
     </SafeAreaView>
   )
 }
-
