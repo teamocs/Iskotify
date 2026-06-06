@@ -244,7 +244,7 @@ function mapProgram(block) {
     resolveSentinel(get(raw, 'Administering Body', 'Sponsor')) || ''
   )
 
-  const externalUrl = resolveSentinel(get(raw, 'Application Link', 'Official Website')) || null
+  const externalUrl = resolveSentinel(get(raw, 'Application Link', 'Official Website')) || ''
 
   const status = parseStatus(raw)
 
@@ -291,7 +291,7 @@ function mapProgram(block) {
   }
   const bookRaw = decodeMojibake(get(raw, 'Book/Learning Allowance', 'Book Allowance', 'Book/Connectivity Allowance'))
   if (bookRaw && !/^none$/i.test(bookRaw)) coverageParts.push(`Book allowance: ${bookRaw}`)
-  const coverage = coverageParts.join('; ') || resolveSentinel(benefitsRaw) || null
+  const coverage = coverageParts.join('; ') || resolveSentinel(benefitsRaw) || ''
 
   // Scope override: if geographic coverage says Regional, mark scope regional
   const geoCov = get(raw, 'Geographic Coverage')
@@ -374,7 +374,7 @@ function sqlInt(n) {
 }
 
 function sqlArray(arr) {
-  if (!arr || arr.length === 0) return 'NULL'
+  if (!arr || arr.length === 0) return 'ARRAY[]::text[]'
   const inner = arr.map(s => `'${String(s).replace(/'/g, "''")}'`).join(', ')
   return `ARRAY[${inner}]`
 }
@@ -400,7 +400,7 @@ function buildInsert(p) {
     sqlStr(p.status),
     sqlStr(p.title),
     sqlStr(p.slug),
-    sqlStr(p.provider || null),
+    sqlStr(p.provider || ''),
     sqlStr('National'),
     sqlStr(p.externalUrl),
     sqlStr(p.description),
