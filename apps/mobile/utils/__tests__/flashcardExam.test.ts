@@ -1,6 +1,6 @@
 import { pickQuestions, QUICK_SIZE, FULL_CAP } from '../flashcardExam'
 
-const q = (id: string, question = id) => ({ id, question, options: ['a','b','c','d'], correctIndex: 0 }) as any
+const q = (id: string, stem = id) => ({ id, stem, options: ['a','b','c','d'], answerIndex: 0 }) as any
 
 describe('pickQuestions', () => {
   it('full mode returns all up to FULL_CAP, order preserved', () => {
@@ -21,7 +21,7 @@ describe('pickQuestions', () => {
     const items = Array.from({ length: 5 }, (_, i) => q('c'+i))
     expect(pickQuestions(items, 'quick').length).toBe(5)
   })
-  it('drops in-session duplicates by normalized question text', () => {
+  it('drops in-session duplicates by normalized stem text', () => {
     const items = [q('a','What is 2+2?'), q('b','what is 2+2? '), q('c','Other')]
     const out = pickQuestions(items, 'full')
     expect(out.length).toBe(2)

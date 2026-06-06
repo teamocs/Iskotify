@@ -9,10 +9,10 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-export function pickQuestions<T extends { question: string }>(all: T[], mode: 'quick' | 'full'): T[] {
+export function pickQuestions<T extends { stem: string }>(all: T[], mode: 'quick' | 'full'): T[] {
   const seen = new Set<string>()
   const deduped: T[] = []
-  for (const item of all) { const k = norm(item.question); if (k && !seen.has(k)) { seen.add(k); deduped.push(item) } }
+  for (const item of all) { const k = norm(item.stem); if (k && !seen.has(k)) { seen.add(k); deduped.push(item) } }
   if (mode === 'full') return deduped.slice(0, FULL_CAP)
   if (deduped.length <= QUICK_SIZE) return deduped
   return shuffle(deduped).slice(0, QUICK_SIZE)
