@@ -211,6 +211,7 @@ const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS upcat_questions_subtest_idx ON upcat_questions (subtest)`,
   `CREATE INDEX IF NOT EXISTS upcat_questions_set_idx ON upcat_questions (set_id)`,
+  `ALTER TABLE practice_sessions ADD COLUMN subtest TEXT`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

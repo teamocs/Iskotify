@@ -102,6 +102,7 @@ export const practiceSessions = sqliteTable('practice_sessions', {
   total:        integer('total').notNull().default(0),
   durationSecs: integer('duration_secs').notNull().default(0),
   completedAt:  integer('completed_at').notNull(),
+  subtest:      text('subtest'),
 })
 
 export const coachPhrases = sqliteTable('coach_phrases', {

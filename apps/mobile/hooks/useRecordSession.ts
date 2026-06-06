@@ -9,6 +9,7 @@ export interface SessionParams {
   score: number
   total: number
   startTime: number
+  subtest?: string
 }
 
 export interface SessionRecord {
@@ -19,6 +20,7 @@ export interface SessionRecord {
   total: number
   durationSecs: number
   completedAt: number
+  subtest: string | null
 }
 
 export function buildSessionRecord(params: SessionParams): SessionRecord {
@@ -31,6 +33,7 @@ export function buildSessionRecord(params: SessionParams): SessionRecord {
     total: params.total,
     durationSecs: Math.round((completedAt - params.startTime) / 1000),
     completedAt,
+    subtest: params.subtest ?? null,
   }
 }
 

@@ -12,6 +12,7 @@ describe('buildSessionRecord', () => {
     expect(record.score).toBe(8)
     expect(record.total).toBe(10)
     expect(record.completedAt).toBeGreaterThan(startTime)
+    expect(record.subtest).toBeNull()
   })
 
   it('preserves empty string fields', () => {
@@ -21,6 +22,7 @@ describe('buildSessionRecord', () => {
     expect(record.listingSlug).toBe('')
     expect(record.topicId).toBe('')
     expect(record.deckId).toBe('')
+    expect(record.subtest).toBeNull()
   })
 
   it('rounds durationSecs to whole seconds', () => {
@@ -29,5 +31,13 @@ describe('buildSessionRecord', () => {
       listingSlug: '', topicId: '', deckId: '', score: 0, total: 1, startTime,
     })
     expect(Number.isInteger(record.durationSecs)).toBe(true)
+  })
+
+  it('threads subtest tag through when provided', () => {
+    const record = buildSessionRecord({
+      listingSlug: 'upcat-2025', topicId: 'topic-1', deckId: 'deck-1',
+      score: 5, total: 10, startTime: Date.now(), subtest: 'Mathematics',
+    })
+    expect(record.subtest).toBe('Mathematics')
   })
 })
