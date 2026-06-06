@@ -152,7 +152,10 @@ export function buildChatPrompt(
   }
 
   if (safeRetrieved) {
-    sections.push(`[RELEVANT FLASHCARDS]\n${safeRetrieved}`)
+    // safeRetrieved already contains the correct top-level section headers
+    // ([RELEVANT FLASHCARDS] and/or [UPCAT FACTS]) emitted by buildRetrievedFlashcards.
+    // Inject directly — do not re-wrap in another [RELEVANT FLASHCARDS] header.
+    sections.push(safeRetrieved)
   }
 
   sections.push(`[QUESTION]\n${safeQuestion}`)

@@ -257,7 +257,7 @@ describe('buildUpcatFactsBlock', () => {
     return drizzle(raw, { schema }) as unknown as DrizzleClient
   }
 
-  it('returns a [UPCAT FACTS] block with answer and verify link when facts match', async () => {
+  it('returns a top-level [UPCAT FACTS] block with answer and verify link when facts match', async () => {
     const db = makeDbWithUpcatFacts()
     const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
     expect(result).toContain('[UPCAT FACTS]')
@@ -269,5 +269,15 @@ describe('buildUpcatFactsBlock', () => {
     const db = makeDbWithUpcatFacts()
     const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
     expect(result).toContain('as of 2025')
+  })
+
+  it('facts-only: output contains [UPCAT FACTS] and does NOT contain a stray empty [RELEVANT FLASHCARDS] header', async () => {
+    // With no flashcards table, searchFlashcards returns []; only facts match.
+    const db = makeDbWithUpcatFacts()
+    const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
+    // [UPCAT FACTS] must be present as a top-level section
+    expect(result).toContain('[UPCAT FACTS]')
+    // [RELEVANT FLASHCARDS] must NOT appear at all (no stray empty header)
+    expect(result).not.toContain('[RELEVANT FLASHCARDS]')
   })
 })

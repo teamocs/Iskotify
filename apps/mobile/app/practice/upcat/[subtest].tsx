@@ -25,29 +25,43 @@ export default function UpcatExam() {
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const startRef = useState(() => Date.now())[0]
 
+  function parseOptions(raw: string | null | undefined): string[] {
+    try {
+      const v = JSON.parse(raw ?? '[]')
+      return Array.isArray(v) ? (v as string[]) : []
+    } catch {
+      return []
+    }
+  }
+
   useEffect(() => {
     void (async () => {
-      const [qRows, pRows] = await Promise.all([
-        db.select().from(upcatQuestions),
-        db.select().from(upcatPassages),
-      ])
-      const parsed = qRows.map(r => ({
-        questionId: r.questionId,
-        subtest: r.subtest,
-        questionText: r.questionText,
-        options: JSON.parse(r.options) as string[],
-        correctIndex: r.correctIndex,
-        explanation: r.explanation,
-        setId: r.setId,
-        setPosition: r.setPosition,
-      }))
-      const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
-      const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
-      const built = targetSubtests.flatMap(st =>
-        buildExam(parsed, passages, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
-      )
-      setQuestions(built)
-      setPhase(built.length ? 'exam' : 'results')
+      try {
+        const [qRows, pRows] = await Promise.all([
+          db.select().from(upcatQuestions),
+          db.select().from(upcatPassages),
+        ])
+        const parsed = qRows.map(r => ({
+          questionId: r.questionId,
+          subtest: r.subtest,
+          questionText: r.questionText,
+          options: parseOptions(r.options),
+          correctIndex: r.correctIndex,
+          explanation: r.explanation,
+          setId: r.setId,
+          setPosition: r.setPosition,
+        }))
+        const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
+        const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
+        const built = targetSubtests.flatMap(st =>
+          buildExam(parsed, passages, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
+        )
+        setQuestions(built)
+        setPhase(built.length ? 'exam' : 'results')
+      } catch {
+        // Unexpected failure: show results (empty) rather than hang on loading
+        setPhase('results')
+      }
     })()
   }, [db, subtestParam, mode])
 

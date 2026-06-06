@@ -26,17 +26,28 @@ export function buildExam(
   const inSubtest = questions.filter(q => q.subtest === opts.subtest)
 
   const setGroups = new Map<string, RawUpcatQuestion[]>()
-  const standalone: RawUpcatQuestion[] = []
   for (const q of inSubtest) {
     if (q.setId) {
       if (!setGroups.has(q.setId)) setGroups.set(q.setId, [])
       setGroups.get(q.setId)!.push(q)
-    } else standalone.push(q)
+    }
   }
   for (const g of setGroups.values()) g.sort((a, b) => (a.setPosition ?? 0) - (b.setPosition ?? 0))
 
+  // Build units in ORDER OF FIRST APPEARANCE in inSubtest, keeping each
+  // passage set contiguous at the position of its first member.
   type Unit = RawUpcatQuestion[]
-  const units: Unit[] = [...standalone.map(q => [q]), ...setGroups.values()]
+  const emitted = new Set<string>()
+  const units: Unit[] = []
+  for (const q of inSubtest) {
+    if (q.setId) {
+      if (emitted.has(q.setId)) continue
+      emitted.add(q.setId)
+      units.push(setGroups.get(q.setId)!)
+    } else {
+      units.push([q])
+    }
+  }
 
   let chosen: Unit[]
   if (opts.mode === 'full') {

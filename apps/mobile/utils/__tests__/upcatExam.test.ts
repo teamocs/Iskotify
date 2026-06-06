@@ -47,6 +47,19 @@ describe('buildExam', () => {
     expect(out.length).toBeLessThanOrEqual(20)
     expect(out.length).toBeGreaterThan(0)
   })
+
+  it('full mode preserves authored (interleaved) order: standalone, set, standalone', () => {
+    // Input order: L0 (standalone), R0 (set PASS-1, pos 1), R1 (set PASS-1, pos 2), L1 (standalone)
+    const qs = [
+      q({ questionId: 'L0', subtest: 'Reading Comprehension', setId: null, setPosition: null }),
+      q({ questionId: 'R0', subtest: 'Reading Comprehension', setId: 'PASS-1', setPosition: 1 }),
+      q({ questionId: 'R1', subtest: 'Reading Comprehension', setId: 'PASS-1', setPosition: 2 }),
+      q({ questionId: 'L1', subtest: 'Reading Comprehension', setId: null, setPosition: null }),
+    ]
+    const passages: RawUpcatPassage[] = [{ setId: 'PASS-1', subtest: 'Reading Comprehension', passageText: 'Passage' }]
+    const out = buildExam(qs, passages, { subtest: 'Reading Comprehension', mode: 'full' })
+    expect(out.map(x => x.questionId)).toEqual(['L0', 'R0', 'R1', 'L1'])
+  })
 })
 
 describe('scoreExam', () => {

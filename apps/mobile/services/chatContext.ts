@@ -109,9 +109,12 @@ export function formatUpcatFacts(facts: RetrievedUpcatFact[]): string | null {
 
 /**
  * Retrieve top-K flashcards relevant to the user's question and format them
- * for prompt injection. Also appends an [UPCAT FACTS] block when matching
- * facts exist. Returns null when nothing matches (so callers can conditionally
- * skip the [RELEVANT FLASHCARDS] block in the prompt).
+ * for prompt injection. Returns a string that already contains the proper
+ * top-level labeled sections:
+ *   - [RELEVANT FLASHCARDS]\n... when flashcards match
+ *   - [UPCAT FACTS]\n...         when facts match
+ * The two sections are siblings, separated by a blank line.
+ * Returns null when nothing matches.
  */
 export async function buildRetrievedFlashcards(
   db: DrizzleClient,
@@ -122,12 +125,12 @@ export async function buildRetrievedFlashcards(
     searchFlashcards(db, question, limit),
     searchUpcatFacts(db, question, limit),
   ])
-  const flashcardsBlock = formatRetrievedFlashcards(cards)
+  const flashcardsBody = formatRetrievedFlashcards(cards)
   const factsBlock = formatUpcatFacts(facts)
 
-  if (!flashcardsBlock && !factsBlock) return null
+  if (!flashcardsBody && !factsBlock) return null
   const parts: string[] = []
-  if (flashcardsBlock) parts.push(flashcardsBlock)
+  if (flashcardsBody) parts.push(`[RELEVANT FLASHCARDS]\n${flashcardsBody}`)
   if (factsBlock) parts.push(factsBlock)
   return parts.join('\n\n')
 }
