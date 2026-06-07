@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
 import { userSettings } from '../db/schema'
-import { searchFlashcards, searchUpcatFacts, type RetrievedFlashcard, type RetrievedUpcatFact } from './flashcardRetriever'
+import { searchFlashcards, searchUpcatFacts, searchCareerFacts, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
 
 /**
  * One-line student identity for chat prompts. Used as the first line of
@@ -107,13 +107,34 @@ export function formatUpcatFacts(facts: RetrievedUpcatFact[]): string | null {
   return `[UPCAT FACTS]\n${lines.join('\n')}`
 }
 
+export function formatCareerFacts(facts: RetrievedCareerFact[]): string | null {
+  if (facts.length === 0) return null
+  const lines = facts.map(f => {
+    const name = f.courseName ?? 'Career'
+    const answer = f.quickAnswer ?? ''
+    const caveat = f.keyCaveat ? `${f.keyCaveat}; ` : ''
+    return `- ${name}: ${answer} (${caveat}verify with DMW/POEA & official sources)`
+  })
+  return `[CAREER FACTS]\n${lines.join('\n')}`
+}
+
+export function formatAiImpact(impact: RetrievedAiImpact | null): string | null {
+  if (!impact) return null
+  const name = impact.courseName ?? 'Unknown'
+  const score = impact.aiSafetyScore ?? '?'
+  const label = impact.aiSafetyLabel ?? ''
+  const summary = impact.kuyaBawSummary ?? ''
+  return `[AI CAREER IMPACT]\n- ${name} — AI-Safe-Score ${score}/5 (${label}): ${summary}`
+}
+
 /**
  * Retrieve top-K flashcards relevant to the user's question and format them
  * for prompt injection. Returns a string that already contains the proper
- * top-level labeled sections:
+ * top-level labeled sections (siblings, separated by blank lines):
  *   - [RELEVANT FLASHCARDS]\n... when flashcards match
  *   - [UPCAT FACTS]\n...         when facts match
- * The two sections are siblings, separated by a blank line.
+ *   - [CAREER FACTS]\n...        when career facts match
+ *   - [AI CAREER IMPACT]\n...    when ai_career_impact row matches the question
  * Returns null when nothing matches.
  */
 export async function buildRetrievedFlashcards(
@@ -121,16 +142,25 @@ export async function buildRetrievedFlashcards(
   question: string,
   limit = 3,
 ): Promise<string | null> {
-  const [cards, facts] = await Promise.all([
+  const [cards, facts, careerFacts, aiImpact] = await Promise.all([
     searchFlashcards(db, question, limit),
     searchUpcatFacts(db, question, limit),
+    searchCareerFacts(db, question, limit),
+    // Reverse LIKE: find a row where the question contains the course name.
+    // Handles "is computer science AI-proof?" → matches course_name='Computer Science'.
+    searchAiImpactByQuestion(db, question),
   ])
+
   const flashcardsBody = formatRetrievedFlashcards(cards)
   const factsBlock = formatUpcatFacts(facts)
+  const careerBlock = formatCareerFacts(careerFacts)
+  const aiBlock = formatAiImpact(aiImpact)
 
-  if (!flashcardsBody && !factsBlock) return null
+  if (!flashcardsBody && !factsBlock && !careerBlock && !aiBlock) return null
   const parts: string[] = []
   if (flashcardsBody) parts.push(`[RELEVANT FLASHCARDS]\n${flashcardsBody}`)
   if (factsBlock) parts.push(factsBlock)
+  if (careerBlock) parts.push(careerBlock)
+  if (aiBlock) parts.push(aiBlock)
   return parts.join('\n\n')
 }

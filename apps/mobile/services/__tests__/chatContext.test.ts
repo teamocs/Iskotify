@@ -305,3 +305,136 @@ describe('buildUpcatFactsBlock', () => {
     expect(result).not.toContain('[RELEVANT FLASHCARDS]')
   })
 })
+
+describe('buildCareerFactsBlock', () => {
+  function makeDbWithCareerFacts(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE user_settings (
+        id INTEGER PRIMARY KEY NOT NULL,
+        selected_listing_slug TEXT NOT NULL DEFAULT '',
+        last_synced_at INTEGER NOT NULL DEFAULT 0,
+        full_name TEXT NOT NULL DEFAULT '',
+        school TEXT NOT NULL DEFAULT '',
+        grade_level INTEGER,
+        google_id TEXT,
+        email TEXT,
+        notifications_enabled INTEGER DEFAULT 1,
+        theme TEXT NOT NULL DEFAULT 'system',
+        focus_mode_enabled INTEGER NOT NULL DEFAULT 1,
+        google_calendar_connected INTEGER NOT NULL DEFAULT 0,
+        income_bracket TEXT,
+        gwa REAL,
+        province TEXT,
+        city TEXT,
+        hs_gwa_g8 REAL,
+        hs_gwa_g9 REAL,
+        hs_gwa_g10 REAL,
+        hs_gwa_g11 REAL,
+        school_type TEXT,
+        is_indigenous INTEGER DEFAULT 0,
+        target_campus TEXT,
+        score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS career_facts (
+        id TEXT PRIMARY KEY NOT NULL,
+        course_name TEXT,
+        query_type TEXT,
+        quick_answer TEXT,
+        key_caveat TEXT,
+        point_to TEXT,
+        remote_updated_at INTEGER
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS career_facts_fts USING fts5(
+        fact_id UNINDEXED, course_name, query_type, quick_answer,
+        tokenize = 'unicode61 remove_diacritics 2'
+      );
+      CREATE TRIGGER IF NOT EXISTS career_facts_fts_ai AFTER INSERT ON career_facts BEGIN
+        INSERT INTO career_facts_fts (fact_id, course_name, query_type, quick_answer)
+        VALUES (new.id, new.course_name, new.query_type, new.quick_answer);
+      END;
+      CREATE TRIGGER IF NOT EXISTS career_facts_fts_ad AFTER DELETE ON career_facts BEGIN
+        DELETE FROM career_facts_fts WHERE fact_id = old.id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS career_facts_fts_au AFTER UPDATE ON career_facts BEGIN
+        DELETE FROM career_facts_fts WHERE fact_id = old.id;
+        INSERT INTO career_facts_fts (fact_id, course_name, query_type, quick_answer)
+        VALUES (new.id, new.course_name, new.query_type, new.quick_answer);
+      END;
+      CREATE TABLE IF NOT EXISTS ai_career_impact (
+        id TEXT PRIMARY KEY NOT NULL,
+        course_name TEXT,
+        ai_safety_score INTEGER,
+        ai_safety_label TEXT,
+        kuya_baw_summary TEXT,
+        remote_updated_at INTEGER
+      );
+    `)
+    raw.exec(`
+      INSERT INTO career_facts (id, course_name, query_type, quick_answer, key_caveat, point_to)
+      VALUES (
+        'CF1',
+        'Nursing',
+        'destination_countries',
+        'Nursing graduates can work in the US, UK, Canada, and the Middle East.',
+        'visa processing can take 2-3 years',
+        'DMW/POEA'
+      );
+      INSERT INTO ai_career_impact (id, course_name, ai_safety_score, ai_safety_label, kuya_baw_summary)
+      VALUES (
+        'AI1',
+        'Computer Science',
+        4,
+        'Mostly Safe',
+        'CS grads who code AI tools are well-positioned; purely routine coding roles face disruption.'
+      );
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  it('returns a [CAREER FACTS] block with quick_answer and verify-with-DMW/POEA when career facts match', async () => {
+    const db = makeDbWithCareerFacts()
+    const result = await buildRetrievedFlashcards(db, 'where can nursing take me')
+    expect(result).toContain('[CAREER FACTS]')
+    expect(result).toContain('Nursing graduates can work in the US, UK, Canada, and the Middle East.')
+    expect(result).toContain('verify with DMW/POEA')
+  })
+
+  it('includes key_caveat in the career fact line when present', async () => {
+    const db = makeDbWithCareerFacts()
+    const result = await buildRetrievedFlashcards(db, 'where can nursing take me')
+    expect(result).toContain('visa processing can take 2-3 years')
+  })
+
+  it('returns an [AI CAREER IMPACT] block with AI-Safe-Score and kuya summary when course name matches', async () => {
+    const db = makeDbWithCareerFacts()
+    const result = await buildRetrievedFlashcards(db, 'is computer science AI-proof')
+    expect(result).toContain('[AI CAREER IMPACT]')
+    expect(result).toContain('AI-Safe-Score 4/5')
+    expect(result).toContain('Mostly Safe')
+    expect(result).toContain('CS grads who code AI tools are well-positioned')
+  })
+
+  it('[CAREER FACTS] and [AI CAREER IMPACT] are sibling top-level sections (not nested)', async () => {
+    const db = makeDbWithCareerFacts()
+    // A query about nursing returns career facts but no ai impact (no "nursing" in ai_career_impact)
+    const result = await buildRetrievedFlashcards(db, 'where can nursing take me')
+    expect(result).toContain('[CAREER FACTS]')
+    // [AI CAREER IMPACT] should not appear when course name does not match
+    expect(result).not.toContain('[AI CAREER IMPACT]')
+  })
+
+  it('a query matching neither career_facts nor ai_career_impact adds neither block', async () => {
+    const db = makeDbWithCareerFacts()
+    const result = await buildRetrievedFlashcards(db, 'what is photosynthesis')
+    expect(result).toBeNull()
+  })
+
+  it('career-facts-only: no stray empty [RELEVANT FLASHCARDS] or [UPCAT FACTS] header', async () => {
+    const db = makeDbWithCareerFacts()
+    const result = await buildRetrievedFlashcards(db, 'where can nursing take me')
+    expect(result).toContain('[CAREER FACTS]')
+    expect(result).not.toContain('[RELEVANT FLASHCARDS]')
+    expect(result).not.toContain('[UPCAT FACTS]')
+  })
+})

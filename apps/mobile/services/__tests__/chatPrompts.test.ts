@@ -387,6 +387,47 @@ describe('buildChatPrompt — math routing', () => {
   })
 })
 
+describe('Kuya career-advisor persona', () => {
+  it('all three system prompts mention career guidance (DMW/POEA verify phrase)', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    const math = buildChatPrompt('topic', 'Solve 2x + 6 = 14')
+    for (const prompt of [progress, topic, math]) {
+      expect(prompt).toContain('DMW/POEA')
+    }
+  })
+
+  it('all three system prompts tell Kuya to never guarantee jobs/salaries/PR', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    const math = buildChatPrompt('topic', 'Solve 2x + 6 = 14')
+    for (const prompt of [progress, topic, math]) {
+      expect(prompt.toLowerCase()).toMatch(/never guarantee|do not guarantee/i)
+    }
+  })
+
+  it('career guidance language co-exists with existing English-output rule', () => {
+    const topic = buildChatPrompt('topic', 'q')
+    expect(topic).toContain('clear English')
+    expect(topic).toContain('DMW/POEA')
+  })
+
+  it('career guidance language co-exists with existing upcat.up.edu.ph pointer', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    expect(progress).toContain('upcat.up.edu.ph')
+    expect(progress).toContain('DMW/POEA')
+  })
+
+  it('all three prompts still carry the Kuya Baw identity', () => {
+    const progress = buildChatPrompt('progress', 'q', 'ctx')
+    const topic = buildChatPrompt('topic', 'q')
+    const math = buildChatPrompt('topic', 'Solve 2x + 6 = 14')
+    for (const prompt of [progress, topic, math]) {
+      expect(prompt).toContain('Kuya Baw')
+    }
+  })
+})
+
 describe('parseChatChunk', () => {
   it('returns the input unchanged for normal text', () => {
     expect(parseChatChunk('Tara mag-review tayo!')).toBe('Tara mag-review tayo!')
