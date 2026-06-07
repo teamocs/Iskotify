@@ -489,6 +489,14 @@ function boolSql(v) {
   return 'FALSE'  // false or null/undefined → FALSE (column is NOT NULL DEFAULT false)
 }
 
+// boolOrNullSql is used for NULLABLE boolean columns (e.g. free_tuition).
+// null/undefined → 'NULL' to preserve tri-state (unknown vs. known false).
+function boolOrNullSql(v) {
+  if (v === true) return 'TRUE'
+  if (v === false) return 'FALSE'
+  return 'NULL'
+}
+
 const schoolsCols = [
   'id', 'name', 'acronym', 'region', 'province', 'city',
   'type', 'is_suc', 'is_luc', 'rank_in_province', 'deped_school_id'
@@ -581,7 +589,7 @@ profilesSql += profileRows.map(p => {
     escArray(p.scholarships_offered),
     escArray(p.notable_programs),
     escArray(p.prc_strong_boards),
-    boolSql(p.free_tuition),
+    boolOrNullSql(p.free_tuition),
     escInt(p.exam_difficulty),
     esc(p.data_confidence),
   ].join(', ')})`

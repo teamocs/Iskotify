@@ -8,7 +8,6 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import {
   courseSchoolRankings as rankingsTable,
-  courseSchoolQuality as qualityTable,
   courseTaxonomyMap as taxonomyTable,
   aiCareerImpact as aiImpactTable,
 } from '../../../db/schema'
@@ -26,14 +25,6 @@ interface RankingRow {
   wilsonScore: number | null
   rawPassRate: number | null
   totalExaminees: number | null
-}
-
-interface QualityRow {
-  id: string
-  schoolName: string
-  qualityTier: string | null
-  accreditations: string
-  courseGroup: string | null
 }
 
 interface TaxonomyRow {
@@ -61,25 +52,6 @@ function fmtScore(score: number | null): string {
   return score.toFixed(3)
 }
 
-function tierColor(tier: string | null): string {
-  switch ((tier ?? '').toLowerCase()) {
-    case 'top':        return '#4ade80'
-    case 'strong':     return '#86efac'
-    case 'good':       return '#fbbf24'
-    case 'average':    return 'rgba(255,255,255,0.5)'
-    default:           return 'rgba(255,255,255,0.38)'
-  }
-}
-
-function safeParseAccreds(raw: string): string[] {
-  try {
-    const p = JSON.parse(raw)
-    return Array.isArray(p) ? p.map(String).filter(Boolean) : []
-  } catch {
-    return []
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -90,7 +62,6 @@ export default function CourseSchoolsScreen() {
   const { theme: t, typo } = useTheme()
 
   const [rankings, setRankings]   = useState<RankingRow[]>([])
-  const [quality, setQuality]     = useState<QualityRow[]>([])
   const [taxonomy, setTaxonomy]   = useState<TaxonomyRow | null>(null)
   const [aiRow, setAiRow]         = useState<AiRow | null>(null)
   const [loading, setLoading]     = useState(true)
@@ -126,33 +97,13 @@ export default function CourseSchoolsScreen() {
       })
       setRankings(sorted)
 
-      // Load AI impact and quality in parallel if we have a careerCourseId
+      // Load AI impact if we have a careerCourseId
       if (tax?.careerCourseId) {
-        const [aiRows, qualRows] = await Promise.all([
-          db.select({
-            aiSafetyScore: aiImpactTable.aiSafetyScore,
-            aiSafetyLabel: aiImpactTable.aiSafetyLabel,
-          }).from(aiImpactTable).where(eq(aiImpactTable.courseId, tax.careerCourseId)).limit(1),
-
-          db.select({
-            id: qualityTable.id,
-            schoolName: qualityTable.schoolName,
-            qualityTier: qualityTable.qualityTier,
-            accreditations: qualityTable.accreditations,
-            courseGroup: qualityTable.courseGroup,
-          }).from(qualityTable),
-        ])
+        const aiRows = await db.select({
+          aiSafetyScore: aiImpactTable.aiSafetyScore,
+          aiSafetyLabel: aiImpactTable.aiSafetyLabel,
+        }).from(aiImpactTable).where(eq(aiImpactTable.courseId, tax.careerCourseId)).limit(1)
         setAiRow((aiRows[0] ?? null) as AiRow | null)
-        setQuality(qualRows as QualityRow[])
-      } else {
-        const qualRows = await db.select({
-          id: qualityTable.id,
-          schoolName: qualityTable.schoolName,
-          qualityTier: qualityTable.qualityTier,
-          accreditations: qualityTable.accreditations,
-          courseGroup: qualityTable.courseGroup,
-        }).from(qualityTable)
-        setQuality(qualRows as QualityRow[])
       }
 
       setLoading(false)
@@ -187,12 +138,6 @@ export default function CourseSchoolsScreen() {
     metaChip:    { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
     metaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     highlight:   { color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    qualCard:    { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 12, padding: 11, marginBottom: 7, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-    qualDot:     { width: 10, height: 10, borderRadius: 5, marginTop: 3, flexShrink: 0 },
-    qualBody:    { flex: 1 },
-    qualName:    { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-    qualTier:    { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold', fontWeight: '600', marginBottom: 2 },
-    qualAccred:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     disclaimer:  { marginHorizontal: 14, marginBottom: 16, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 12, padding: 12 },
     disclaimerTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 20, fontStyle: 'italic' },
@@ -292,32 +237,6 @@ export default function CourseSchoolsScreen() {
             <Text style={s.empty}>No ranking data available for this course yet.</Text>
           )}
         </View>
-
-        {/* ── Quality / Accreditation (light section) ── */}
-        {quality.length > 0 ? (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Program Quality</Text>
-            {quality.slice(0, 10).map(q => {
-              const accreds = safeParseAccreds(q.accreditations)
-              return (
-                <View key={q.id} style={s.qualCard}>
-                  <View style={[s.qualDot, { backgroundColor: tierColor(q.qualityTier) }]} />
-                  <View style={s.qualBody}>
-                    <Text style={s.qualName} numberOfLines={2}>{q.schoolName}</Text>
-                    {q.qualityTier ? (
-                      <Text style={[s.qualTier, { color: tierColor(q.qualityTier) }]}>
-                        {q.qualityTier} tier
-                      </Text>
-                    ) : null}
-                    {accreds.length > 0 ? (
-                      <Text style={s.qualAccred}>{accreds.join(' · ')}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              )
-            })}
-          </View>
-        ) : null}
 
         {/* ── Disclaimer ── */}
         <View style={s.disclaimer}>

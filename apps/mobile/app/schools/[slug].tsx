@@ -90,7 +90,7 @@ function confidenceBadgeStyle(level: ConfidenceLevel): { bg: string; border: str
 
 function shouldShowDisclaimer(level: ConfidenceLevel): boolean {
   const lvl = (level ?? '').toUpperCase()
-  return lvl !== 'HIGH'
+  return lvl === 'LOW' || lvl === 'MEDIUM' || lvl === 'VERY LOW'
 }
 
 function StarDots({ count, max = 5, filledColor, emptyColor }: {

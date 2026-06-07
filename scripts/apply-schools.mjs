@@ -10,6 +10,11 @@
 //   4) course_school_quality  (on_conflict=id)
 //   5) bar_results            (on_conflict=id)
 //
+// NOTE: course_taxonomy_map is a small static table (board-exam tab → career mapping).
+// It has no row builder — apply it separately via its seed SQL:
+//   supabase/seed/course_taxonomy_map_seed.sql
+// (already applied to the live DB via MCP; re-run that seed when taxonomy changes).
+//
 // Usage: node scripts/apply-schools.mjs
 
 import { readFileSync } from 'node:fs'

@@ -22,6 +22,14 @@ jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
 }))
 
+jest.mock('../../../services/sync', () => ({
+  syncOnLaunch: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('../../../services/settings', () => ({
+  getSettings: jest.fn().mockResolvedValue({}),
+}))
+
 jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
