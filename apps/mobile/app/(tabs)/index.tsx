@@ -15,7 +15,9 @@ import { eq, asc } from 'drizzle-orm'
 import { DateActionSheet } from '../../components/calendar/DateActionSheet'
 import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { useDb } from '../../hooks/useDb'
-import { notes as notesTable, userSettings, listings as listingsTable, focusListings } from '../../db/schema'
+import { notes as notesTable, userSettings, listings as listingsTable, focusListings, admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
+import { daysUntil as admissionsDaysUntil, upcomingEvents } from '../../utils/admissionsFeed'
+import type { FeedItem } from '../../utils/admissionsFeed'
 import { getAcquiredRequirementIndices } from '../../services/coachQueue'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import { syncReminderToCalendar, removeReminderFromCalendar } from '../../services/googleCalendar'
@@ -416,6 +418,54 @@ export default function HomeScreen() {
     router.push(`/listings/${slug}`)
   }
 
+  // ── Admissions feed ─────────────────────────────────────────────────────────
+  const [admissionItems, setAdmissionItems] = useState<FeedItem[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await db.select().from(admissionsUpdatesTable)
+        if (!cancelled) {
+          setAdmissionItems(rows.map(r => ({
+            id: r.id,
+            reportDate: r.reportDate ?? '',
+            severity: r.severity,
+            title: r.title,
+            body: r.body,
+            eventDate: r.eventDate ?? null,
+            eventType: r.eventType ?? null,
+            schoolName: r.schoolName ?? null,
+            actionRequired: r.actionRequired ?? null,
+            sources: r.sources,
+          })))
+        }
+      } catch (e) {
+        console.warn('[home/admissions] load failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [db])
+
+  // UPCAT 2027 countdown — find the first future UPCAT exam row
+  const upcatRow = useMemo(() => {
+    const todayISO = new Date().toISOString().slice(0, 10)
+    return admissionItems.find(item =>
+      item.eventDate != null &&
+      item.eventDate > todayISO &&
+      item.severity === 'urgent' &&
+      item.title.toUpperCase().includes('UPCAT')
+    ) ?? null
+  }, [admissionItems])
+
+  const upcatDaysLeft = upcatRow?.eventDate ? admissionsDaysUntil(upcatRow.eventDate) : 0
+
+  // Admissions events folded into Upcoming Dates (urgent/important/info with future eventDate)
+  const futureAdmissionEvents = useMemo(() => {
+    return upcomingEvents(admissionItems).filter(
+      item => item.severity === 'urgent' || item.severity === 'important' || item.severity === 'info'
+    )
+  }, [admissionItems])
+
   const { sessionCount, streak } = useAnalytics('overall')
 
   const [refreshing, setRefreshing] = useState(false)
@@ -424,7 +474,18 @@ export default function HomeScreen() {
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
-  const importantDays = new Set(importantDayIndices)
+  // Merge admissions eventDates into importantDays for CalendarStrip markers
+  const importantDays = useMemo(() => {
+    const s = new Set(importantDayIndices)
+    for (const item of futureAdmissionEvents) {
+      if (item.eventDate) {
+        const ms = new Date(item.eventDate + 'T00:00:00Z').getTime()
+        if (ms > 0) s.add(Math.floor(ms / 86_400_000))
+      }
+    }
+    return s
+  }, [importantDayIndices, futureAdmissionEvents])
+
   const practiceDays  = new Set(practiceDayIndices)
 
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
@@ -538,6 +599,40 @@ export default function HomeScreen() {
     progressTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     progressSub: { fontSize: typo.xs, color: t.textSecondary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
     progressChevron: { color: t.textTertiary, fontSize: 20 },
+    upcatBanner: {
+      borderRadius: 18,
+      padding: 14,
+      marginBottom: 10,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 12,
+      backgroundColor: 'rgba(128,0,0,0.10)',
+      borderWidth: 1,
+      borderColor: 'rgba(128,0,0,0.28)',
+    },
+    upcatIconCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(128,0,0,0.15)',
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      flexShrink: 0,
+    },
+    upcatTitle: { fontSize: typo.md, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
+    upcatSub: { fontSize: typo.xs, color: t.textSecondary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
+    upcatBadge: {
+      marginLeft: 'auto' as const,
+      backgroundColor: 'rgba(128,0,0,0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(128,0,0,0.30)',
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      alignItems: 'center' as const,
+    },
+    upcatDaysNum: { fontSize: typo.lg, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold', lineHeight: 22 },
+    upcatDaysLbl: { fontSize: 9, color: t.accentText, fontFamily: 'Lexend_600SemiBold', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
     upcomingCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
     upcomingIcon: { width: 36, height: 36, backgroundColor: t.surface2, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     upcomingTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
@@ -577,31 +672,58 @@ export default function HomeScreen() {
   const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
 
   const now = Date.now()
+
+  // Build a de-dupe set: focused listing slugs that already have a date entry
+  const focusedListingDateEntries = focusedListings
+    .map(l => {
+      const keyDate = l.type === 'exam'
+        ? (l.examDate ?? l.deadline)
+        : (l.deadline ?? l.examDate)
+      const label = l.type === 'exam' ? 'Exam' : 'Deadline'
+      return { ...l, keyDate, label, entryType: 'listing' as const }
+    })
+    .filter(l => l.keyDate != null && l.keyDate >= now)
+
+  // Convert admissions events with a future eventDate into widget items.
+  // Only include if the event title isn't already covered by a focused listing slug.
+  const focusedSlugs = new Set(focusedListings.map(l => l.slug))
+  const admissionsDateEntries = futureAdmissionEvents
+    .filter(item => item.eventDate != null)
+    .map(item => {
+      const ms = new Date(item.eventDate! + 'T00:00:00Z').getTime()
+      return {
+        slug: `admission-${item.id}`,
+        priority: 0,
+        title: item.title,
+        type: item.eventType === 'exam' ? 'exam' : 'event',
+        examDate: null as number | null,
+        deadline: null as number | null,
+        keyDate: ms,
+        label: item.eventType === 'exam' ? 'Exam' : item.eventType === 'deadline' ? 'Deadline' : 'Event',
+        entryType: 'admission' as const,
+      }
+    })
+    // Skip items whose eventDate is the same ms as an already-focused listing date
+    .filter(a => !focusedListingDateEntries.some(l => l.keyDate === a.keyDate))
+
   const upcomingDates = [
-    ...focusedListings
-      .map(l => {
-        const keyDate = l.type === 'exam'
-          ? (l.examDate ?? l.deadline)
-          : (l.deadline ?? l.examDate)
-        const label = l.type === 'exam' ? 'Exam' : 'Deadline'
-        return { ...l, keyDate, label, entryType: 'listing' as const }
-      })
-      .filter(l => l.keyDate != null && l.keyDate >= now),
+    ...focusedListingDateEntries,
     ...noteReminders.map(r => ({
       slug: r.noteId,
       priority: 0,
       title: r.noteTitle || 'Untitled note',
       type: 'reminder',
-      examDate: null,
-      deadline: null,
+      examDate: null as number | null,
+      deadline: null as number | null,
       keyDate: r.reminderAt,
       label: 'Reminder',
       entryType: 'reminder' as const,
     })),
+    ...admissionsDateEntries,
   ]
     .filter(l => l.keyDate != null && l.keyDate >= now)
     .sort((a, b) => (a.keyDate ?? 0) - (b.keyDate ?? 0))
-    .slice(0, 5)
+    .slice(0, 7)
 
   return (
     <SafeAreaView style={s.root}>
@@ -705,6 +827,32 @@ export default function HomeScreen() {
               <Text style={s.statLbl}>STREAK</Text>
             </View>
           </View>
+
+          {/* UPCAT 2027 countdown banner */}
+          {upcatRow != null && upcatDaysLeft > 0 && (
+            <TouchableOpacity
+              style={s.upcatBanner}
+              onPress={() => router.push('/practice/upcat')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`UPCAT countdown: ${upcatDaysLeft} days left`}
+              testID="upcat-countdown-banner"
+            >
+              <View style={s.upcatIconCircle}>
+                <Text style={{ fontSize: 20 }}>🎓</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.upcatTitle}>{upcatRow.title}</Text>
+                <Text style={s.upcatSub}>
+                  {new Date(upcatRow.eventDate! + 'T00:00:00Z').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+              <View style={s.upcatBadge}>
+                <Text style={s.upcatDaysNum}>{upcatDaysLeft}</Text>
+                <Text style={s.upcatDaysLbl}>days</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Missing Requirements widget */}
           {missingReqCount > 0 && focusedListings.length > 0 && (
@@ -810,6 +958,8 @@ export default function HomeScreen() {
                     onPress={() => {
                       if (item.entryType === 'reminder') {
                         router.push(`/notes/${item.slug}`)
+                      } else if (item.entryType === 'admission') {
+                        router.push('/practice/upcat')
                       } else {
                         router.push(`/listings/${item.slug}`)
                       }
@@ -820,7 +970,9 @@ export default function HomeScreen() {
                     <View style={s.upcomingIcon}>
                       {isReminder
                         ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
-                        : <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
+                        : item.entryType === 'admission'
+                          ? <Text style={{ fontSize: 16 }}>📌</Text>
+                          : <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
                       }
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>

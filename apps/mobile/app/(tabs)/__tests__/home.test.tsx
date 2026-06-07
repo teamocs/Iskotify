@@ -38,10 +38,18 @@ jest.mock('../../../hooks/useModelDownload', () => ({
   }),
 }))
 
+// Controlled admissions rows — override per-test via mockAdmissionsRows.value
+const mockAdmissionsRows = { value: [] as any[] }
+
 jest.mock('../../../hooks/useDb', () => ({
   useDb: () => ({
     insert: jest.fn().mockReturnValue({ values: jest.fn().mockResolvedValue(undefined) }),
     update: jest.fn().mockReturnValue({ set: jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) }) }),
+    select: jest.fn().mockReturnValue({
+      from: jest.fn().mockImplementation(() => Promise.resolve(mockAdmissionsRows.value)),
+      // support chained .where() used by userSettings check inside reminder handlers
+      where: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue([]) }),
+    }),
   }),
 }))
 
@@ -217,5 +225,59 @@ describe('HomeScreen', () => {
   it('shows empty state for upcoming dates when no listings', () => {
     render(<HomeScreen />)
     expect(screen.getByText('Add scholarships and exams to your focus list to track upcoming dates')).toBeTruthy()
+  })
+
+  it('shows UPCAT countdown banner when an urgent future UPCAT row exists', async () => {
+    const futureDate = new Date(Date.now() + 90 * 86_400_000)
+    const isoDate = futureDate.toISOString().slice(0, 10)
+    mockAdmissionsRows.value = [{
+      id: 'au-upcat-2027',
+      reportDate: '2026-06-01',
+      severity: 'urgent',
+      schoolSlug: 'upcat',
+      schoolName: 'UPCAT',
+      title: 'UPCAT 2027 Exam',
+      body: 'UPCAT 2027 examination schedule.',
+      actionRequired: null,
+      eventDate: isoDate,
+      eventType: 'exam',
+      sources: '[]',
+      verified: true,
+      remoteUpdatedAt: null,
+    }]
+    const { findByTestId } = render(<HomeScreen />)
+    const banner = await findByTestId('upcat-countdown-banner')
+    expect(banner).toBeTruthy()
+    mockAdmissionsRows.value = []
+  })
+
+  it('hides UPCAT banner when no matching admissions row', () => {
+    mockAdmissionsRows.value = []
+    render(<HomeScreen />)
+    expect(screen.queryByTestId('upcat-countdown-banner')).toBeNull()
+  })
+
+  it('folds an admission event into Upcoming Dates widget', async () => {
+    const futureDate = new Date(Date.now() + 30 * 86_400_000)
+    const isoDate = futureDate.toISOString().slice(0, 10)
+    mockAdmissionsRows.value = [{
+      id: 'au-dost-deadline',
+      reportDate: '2026-06-01',
+      severity: 'important',
+      schoolSlug: null,
+      schoolName: 'DOST',
+      title: 'DOST SEI Application Deadline',
+      body: 'Last day to apply.',
+      actionRequired: null,
+      eventDate: isoDate,
+      eventType: 'deadline',
+      sources: '[]',
+      verified: false,
+      remoteUpdatedAt: null,
+    }]
+    const { findByText } = render(<HomeScreen />)
+    const item = await findByText('DOST SEI Application Deadline')
+    expect(item).toBeTruthy()
+    mockAdmissionsRows.value = []
   })
 })
