@@ -200,3 +200,36 @@ export function slugify(name) {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
 }
+
+// --- Region canonicalizer ---
+// Ported from apps/admin/lib/csv/cleaners.ts — keep in sync.
+// Handles all 17 regions + NCR/CAR/BARMM, including Epic C variants:
+//   IVA / IVB (no-hyphen, from universities-per-province),
+//   "Region V", "Region VII", "Region IV-A" prefix forms (from non-board Master).
+const _REGION_MAP = {}
+function _reg(canon, ...aliases) {
+  for (const a of aliases) _REGION_MAP[a.toLowerCase()] = canon
+}
+
+_reg('NCR', 'NCR', 'National Capital Region', 'Metro Manila')
+_reg('CAR', 'CAR', 'Cordillera Administrative Region')
+_reg('Region I (Ilocos)', 'Region I', 'Ilocos', 'Ilocos Region', 'I')
+_reg('Region II (Cagayan Valley)', 'Region II', 'Cagayan Valley', 'II')
+_reg('Region III (Central Luzon)', 'Region III', 'Central Luzon', 'III')
+_reg('Region IV-A (CALABARZON)', 'Region IV-A', 'CALABARZON', 'IV-A', '4A', 'Region 4-A', 'IVA', 'Region IV-A (CALABARZON)')
+_reg('Region IV-B (MIMAROPA)', 'Region IV-B', 'MIMAROPA', 'IV-B', '4B', 'IVB', 'Region IV-B (MIMAROPA)')
+_reg('Region V (Bicol)', 'Region V', 'Bicol', 'Bicol Region', 'V')
+_reg('Region VI (Western Visayas)', 'Region VI', 'Western Visayas', 'VI')
+_reg('Region VII (Central Visayas)', 'Region VII', 'Central Visayas', 'VII')
+_reg('Region VIII (Eastern Visayas)', 'Region VIII', 'Eastern Visayas', 'VIII')
+_reg('Region IX (Zamboanga Peninsula)', 'Region IX', 'Zamboanga Peninsula', 'IX')
+_reg('Region X (Northern Mindanao)', 'Region X', 'Northern Mindanao', 'X')
+_reg('Region XI (Davao)', 'Region XI', 'Davao Region', 'Davao', 'XI')
+_reg('Region XII (SOCCSKSARGEN)', 'Region XII', 'SOCCSKSARGEN', 'XII')
+_reg('Region XIII (Caraga)', 'Region XIII', 'Caraga', 'XIII')
+_reg('BARMM', 'BARMM', 'Bangsamoro', 'Bangsamoro Autonomous Region in Muslim Mindanao', 'ARMM')
+
+export function canonicalizeRegion(raw) {
+  const key = (raw ?? '').trim().toLowerCase()
+  return _REGION_MAP[key] ?? (raw ?? '').trim()
+}

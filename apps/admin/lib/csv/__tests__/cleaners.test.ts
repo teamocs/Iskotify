@@ -48,4 +48,20 @@ describe('canonicalizeRegion', () => {
     }
   })
   it('returns unknown input trimmed', () => { expect(canonicalizeRegion('  Atlantis ')).toBe('Atlantis') })
+
+  it('handles Epic C no-hyphen variants IVA and IVB', () => {
+    expect(canonicalizeRegion('IVA')).toBe('Region IV-A (CALABARZON)')
+    expect(canonicalizeRegion('IVB')).toBe('Region IV-B (MIMAROPA)')
+  })
+  it('handles Region-prefix forms from non-board Master', () => {
+    expect(canonicalizeRegion('Region V')).toBe('Region V (Bicol)')
+    expect(canonicalizeRegion('Region VII')).toBe('Region VII (Central Visayas)')
+    expect(canonicalizeRegion('Region IV-A')).toBe('Region IV-A (CALABARZON)')
+    expect(canonicalizeRegion('Region IV-B')).toBe('Region IV-B (MIMAROPA)')
+  })
+  it('handles existing aliases that must still work', () => {
+    expect(canonicalizeRegion('4A')).toBe('Region IV-A (CALABARZON)')
+    expect(canonicalizeRegion('CALABARZON')).toBe('Region IV-A (CALABARZON)')
+    expect(canonicalizeRegion('NCR')).toBe('NCR')
+  })
 })
