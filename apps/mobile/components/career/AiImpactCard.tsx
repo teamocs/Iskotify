@@ -65,6 +65,7 @@ export function AiImpactCard({ impact }: Props) {
 
   const aiTakesOver   = useMemo(() => safeParseArray(impact.whatAiTakesOver),  [impact.whatAiTakesOver])
   const staysHuman    = useMemo(() => safeParseArray(impact.whatStaysHuman),   [impact.whatStaysHuman])
+  const newJobs       = useMemo(() => safeParseArray(impact.newJobsEmerging),  [impact.newJobsEmerging])
   const skillsRaw     = useMemo(() => safeParseArray(impact.skillsToDevelop),  [impact.skillsToDevelop])
 
   const accentColor = isValidHex(impact.colorCode) ? impact.colorCode : t.accent
@@ -251,6 +252,16 @@ export function AiImpactCard({ impact }: Props) {
             </View>
           ) : null}
         </View>
+      ) : null}
+
+      {/* New jobs emerging */}
+      {newJobs.length > 0 ? (
+        <>
+          <Text style={s.sectionTitle}>🚀 New jobs emerging</Text>
+          {newJobs.map((item, i) => (
+            <Text key={i} style={s.listItem}>• {item}</Text>
+          ))}
+        </>
       ) : null}
 
       {/* Skills to build */}

@@ -10,6 +10,7 @@ import { useDb } from '../../../hooks/useDb'
 import {
   careerCountries as countriesTable,
   careerDestinations as destinationsTable,
+  careerCourses as coursesTable,
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
 import { countryCodeFromName } from '../../../utils/careerSlug'
@@ -76,16 +77,25 @@ export default function CareerCountryScreen() {
 
   const [country, setCountry] = useState<CountryRow | null>(null)
   const [dests, setDests]     = useState<DestRow[]>([])
+  const [courseNameMap, setCourseNameMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [countryRows, allDests] = await Promise.all([
+      const [countryRows, allDests, allCourses] = await Promise.all([
         db.select().from(countriesTable).where(eq(countriesTable.code, code)).limit(1),
         db.select().from(destinationsTable),
+        db.select({ courseId: coursesTable.courseId, name: coursesTable.name }).from(coursesTable),
       ])
 
       setCountry((countryRows[0] ?? null) as CountryRow | null)
+
+      // Build a Map<courseId, name> for display
+      const nameMap = new Map<string, string>()
+      for (const c of allCourses) {
+        if (c.courseId && c.name) nameMap.set(c.courseId, c.name)
+      }
+      setCourseNameMap(nameMap)
 
       // Filter & sort destinations that map to this country code
       const matched = (allDests as DestRow[])
@@ -226,7 +236,11 @@ export default function CareerCountryScreen() {
           {dests.length > 0 ? dests.map(dest => (
             <View key={dest.id} style={s.destCard}>
               <View style={s.destTopRow}>
-                <Text style={s.destCourse} numberOfLines={2}>{dest.courseId ?? '—'}</Text>
+                <Text style={s.destCourse} numberOfLines={2}>
+                  {dest.courseId != null
+                    ? (courseNameMap.get(dest.courseId) ?? dest.courseId)
+                    : '—'}
+                </Text>
                 {dest.demandRating ? (
                   <Text style={s.destDemand}>{dest.demandRating}</Text>
                 ) : null}

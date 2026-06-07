@@ -346,20 +346,20 @@ describe('buildCareerFactsBlock', () => {
         remote_updated_at INTEGER
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS career_facts_fts USING fts5(
-        fact_id UNINDEXED, course_name, query_type, quick_answer,
+        fact_id UNINDEXED, course_name, quick_answer, key_caveat,
         tokenize = 'unicode61 remove_diacritics 2'
       );
       CREATE TRIGGER IF NOT EXISTS career_facts_fts_ai AFTER INSERT ON career_facts BEGIN
-        INSERT INTO career_facts_fts (fact_id, course_name, query_type, quick_answer)
-        VALUES (new.id, new.course_name, new.query_type, new.quick_answer);
+        INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat)
+        VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat);
       END;
       CREATE TRIGGER IF NOT EXISTS career_facts_fts_ad AFTER DELETE ON career_facts BEGIN
         DELETE FROM career_facts_fts WHERE fact_id = old.id;
       END;
       CREATE TRIGGER IF NOT EXISTS career_facts_fts_au AFTER UPDATE ON career_facts BEGIN
         DELETE FROM career_facts_fts WHERE fact_id = old.id;
-        INSERT INTO career_facts_fts (fact_id, course_name, query_type, quick_answer)
-        VALUES (new.id, new.course_name, new.query_type, new.quick_answer);
+        INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat)
+        VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat);
       END;
       CREATE TABLE IF NOT EXISTS ai_career_impact (
         id TEXT PRIMARY KEY NOT NULL,

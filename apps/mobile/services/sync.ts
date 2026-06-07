@@ -362,7 +362,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           topCountries: JSON.stringify(row.top_countries ?? []),
           summary: row.summary ?? null, studentTip: row.student_tip ?? null,
           aiNote: row.ai_note ?? null,
-          remoteUpdatedAt: null,
+          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
         }
         tx.insert(careerCourses).values(vals).onConflictDoUpdate({ target: careerCourses.courseId, set: vals }).run()
       }
@@ -373,7 +373,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           immigrationSystem: row.immigration_system ?? null, whyDemand: row.why_demand ?? null,
           languageRequired: row.language_required ?? null, prPathway: row.pr_pathway ?? null,
           notes: row.notes ?? null,
-          remoteUpdatedAt: null,
+          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
         }
         tx.insert(careerCountries).values(vals).onConflictDoUpdate({ target: careerCountries.code, set: vals }).run()
       }
@@ -385,7 +385,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           managingBody: row.managing_body ?? null, slots: row.slots ?? null,
           requirements: row.requirements ?? null, immigrationOutcome: row.immigration_outcome ?? null,
           website: row.website ?? null, notes: row.notes ?? null,
-          remoteUpdatedAt: null,
+          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
         }
         tx.insert(careerPrograms).values(vals).onConflictDoUpdate({ target: careerPrograms.id, set: vals }).run()
       }
@@ -408,7 +408,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           keyQuote: row.key_quote ?? null, quoteBy: row.quote_by ?? null,
           phAdvantage: row.ph_advantage ?? null, phNotes: row.ph_notes ?? null,
           kuyaBawSummary: row.kuya_baw_summary ?? null, lastUpdated: row.last_updated ?? null,
-          remoteUpdatedAt: null,
+          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
         }
         tx.insert(aiCareerImpact).values(vals).onConflictDoUpdate({ target: aiCareerImpact.courseId, set: vals }).run()
       }

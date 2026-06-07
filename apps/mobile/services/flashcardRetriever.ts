@@ -272,7 +272,8 @@ export async function searchAiImpactByQuestion(
         ai_safety_label,
         kuya_baw_summary
       FROM ai_career_impact
-      WHERE LOWER(${question.trim()}) LIKE '%' || LOWER(course_name) || '%'
+      WHERE LENGTH(course_name) >= 5
+        AND LOWER(${question.trim()}) LIKE '%' || LOWER(course_name) || '%'
       LIMIT 1
     `)
     if (rows.length === 0 || rows[0] == null) return null
