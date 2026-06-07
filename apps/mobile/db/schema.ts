@@ -58,6 +58,7 @@ export const listings = sqliteTable('listings', {
   hasEntranceExam: integer('has_entrance_exam', { mode: 'boolean' }).notNull().default(false),
   applicationWindow: text('application_window'),
   scholarshipMeta: text('scholarship_meta').notNull().default('{}'),
+  resultsDate: integer('results_date'),
 }, (t) => [
   index('listings_slug_idx').on(t.slug),
 ])
@@ -461,4 +462,18 @@ export const courseTaxonomyMap = sqliteTable('course_taxonomy_map', {
   label: text('label'),
   kind: text('kind'),
   remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const admissionsUpdates = sqliteTable('admissions_updates', {
+  id: text('id').primaryKey(), reportDate: text('report_date'), severity: text('severity').notNull(),
+  schoolSlug: text('school_slug'), schoolName: text('school_name'), title: text('title').notNull(),
+  body: text('body').notNull(), actionRequired: text('action_required'),
+  eventDate: text('event_date'), eventType: text('event_type'),
+  sources: text('sources').notNull().default('[]'),
+  verified: integer('verified', { mode: 'boolean' }).notNull().default(false),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const resultWatches = sqliteTable('result_watches', {
+  slug: text('slug').primaryKey(), addedAt: integer('added_at').notNull(),
 })

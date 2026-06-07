@@ -114,6 +114,8 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('course_school_quality')
     expect(supabase.from).toHaveBeenCalledWith('bar_results')
     expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
+    // admissions_updates mirror
+    expect(supabase.from).toHaveBeenCalledWith('admissions_updates')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -527,7 +529,17 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       service_obligation_years INTEGER,
       has_entrance_exam INTEGER NOT NULL DEFAULT 0,
       application_window TEXT,
-      scholarship_meta TEXT NOT NULL DEFAULT '{}'
+      scholarship_meta TEXT NOT NULL DEFAULT '{}',
+      results_date INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS admissions_updates (
+      id TEXT PRIMARY KEY NOT NULL, report_date TEXT, severity TEXT NOT NULL,
+      school_slug TEXT, school_name TEXT, title TEXT NOT NULL, body TEXT NOT NULL,
+      action_required TEXT, event_date TEXT, event_type TEXT,
+      sources TEXT NOT NULL DEFAULT '[]', verified INTEGER NOT NULL DEFAULT 0, remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS result_watches (
+      slug TEXT PRIMARY KEY NOT NULL, added_at INTEGER NOT NULL
     );
     CREATE TABLE user_settings (
       id INTEGER PRIMARY KEY NOT NULL,
@@ -1621,5 +1633,159 @@ describe('syncOnLaunch Epic C university write (real SQLite)', () => {
     expect(rRow.course_tab).toBe('engineering')
     expect(rRow.wilson_score).toBeNull()
     expect(rRow.years_with_data).toBeNull()
+  })
+})
+
+// ─── syncOnLaunch admissions_updates + listings.results_date (real SQLite) ───
+
+function makeSupabaseForAdmissionsUpdates(
+  updateRow: Record<string, unknown>,
+  listingRow?: Record<string, unknown>,
+) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'admissions_updates') {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [updateRow] }),
+      }
+    }
+    if (table === 'listings' && listingRow) {
+      return {
+        select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockResolvedValue({ data: [listingRow] }),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch admissions_updates + listings.results_date (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes admissions_updates row: sources round-trips as JSON string, verified→1', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const updateRow = {
+      id: 'upd-1',
+      report_date: '2026-06-01',
+      severity: 'high',
+      school_slug: 'upcat',
+      school_name: 'University of the Philippines',
+      title: 'UPCAT Results Released',
+      body: 'Results are now available on the UP portal.',
+      action_required: 'Check portal',
+      event_date: '2026-06-15',
+      event_type: 'results_release',
+      sources: ['https://up.edu.ph/upcat', 'https://news.ph/upcat-2026'],
+      verified: true,
+      updated_at: '2026-06-01T08:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForAdmissionsUpdates(updateRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM admissions_updates WHERE id = ?').get('upd-1') as any
+    expect(row).toBeTruthy()
+    expect(row.severity).toBe('high')
+    expect(row.title).toBe('UPCAT Results Released')
+    expect(row.sources).toBe('["https://up.edu.ph/upcat","https://news.ph/upcat-2026"]')
+    expect(row.verified).toBe(1)
+    expect(row.report_date).toBe('2026-06-01')
+    expect(row.event_date).toBe('2026-06-15')
+    expect(row.remote_updated_at).toBe(new Date('2026-06-01T08:00:00Z').getTime())
+  })
+
+  it('admissions_updates row with null sources defaults to "[]"', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const updateRow = {
+      id: 'upd-2',
+      report_date: null,
+      severity: 'low',
+      school_slug: null,
+      school_name: null,
+      title: 'Reminder',
+      body: 'Application deadline approaching.',
+      action_required: null,
+      event_date: null,
+      event_type: null,
+      sources: null,
+      verified: false,
+      updated_at: '2026-06-02T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForAdmissionsUpdates(updateRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM admissions_updates WHERE id = ?').get('upd-2') as any
+    expect(row).toBeTruthy()
+    expect(row.sources).toBe('[]')
+    expect(row.verified).toBe(0)
+    expect(row.report_date).toBeNull()
+    expect(row.school_slug).toBeNull()
+  })
+
+  it('listings.results_date lands as epoch ms from ISO date string', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const listingRow = {
+      id: 'listing-rd',
+      slug: 'upcat-2026',
+      title: 'UPCAT 2026',
+      type: 'entrance_exam',
+      status: 'active',
+      exam_date: null,
+      region: 'national',
+      description: '',
+      requirements: [],
+      coverage: '',
+      provider: 'UP',
+      external_url: '',
+      deadline: null,
+      grant_amount: null,
+      province: null,
+      city: null,
+      scope: 'national',
+      is_verified: false,
+      income_ceiling: null,
+      gwa_requirement: null,
+      monthly_stipend: null,
+      service_obligation_years: null,
+      has_entrance_exam: true,
+      application_window: null,
+      scholarship_meta: {},
+      results_date: '2026-06-15T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForAdmissionsUpdates({
+      id: 'dummy', report_date: null, severity: 'low', school_slug: null, school_name: null,
+      title: 'x', body: 'x', action_required: null, event_date: null, event_type: null,
+      sources: [], verified: false, updated_at: '2026-06-01T00:00:00Z',
+    }, listingRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM listings WHERE id = ?').get('listing-rd') as any
+    expect(row).toBeTruthy()
+    expect(row.results_date).toBe(new Date('2026-06-15T00:00:00Z').getTime())
   })
 })

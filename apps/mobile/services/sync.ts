@@ -9,6 +9,7 @@ import {
   aiCareerImpact, careerFacts,
   tertiarySchools, universityProfiles, courseSchoolRankings,
   courseSchoolQuality, barResults, courseTaxonomyMap,
+  admissionsUpdates,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -188,12 +189,15 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       ? '1970-01-01T00:00:00.000Z'
       : new Date(settings.lastSyncedAt).toISOString()
 
-    const [listingsRes, subjectsRes, topicsRes] = await Promise.all([
+    const [listingsRes, subjectsRes, topicsRes, admissionsUpdatesRes] = await Promise.all([
       supabase.from('listings')
-        .select('id,slug,title,type,status,exam_date,region,description,requirements,coverage,provider,external_url,deadline,grant_amount,province,city,scope,is_verified,income_ceiling,gwa_requirement,monthly_stipend,service_obligation_years,has_entrance_exam,application_window,scholarship_meta')
+        .select('id,slug,title,type,status,exam_date,region,description,requirements,coverage,provider,external_url,deadline,grant_amount,province,city,scope,is_verified,income_ceiling,gwa_requirement,monthly_stipend,service_obligation_years,has_entrance_exam,application_window,scholarship_meta,results_date')
         .gt('updated_at', since),
       supabase.from('flashcard_subjects').select('id,name').gt('updated_at', since),
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
+      supabase.from('admissions_updates')
+        .select('id,report_date,severity,school_slug,school_name,title,body,action_required,event_date,event_type,sources,verified,updated_at')
+        .gt('updated_at', since),
     ])
 
     const [upcatPassagesRes, upcatQuestionsRes, upcatFactsRes, upcatCutoffsRes] = await Promise.all([
@@ -289,8 +293,28 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           hasEntranceExam: !!row.has_entrance_exam,
           applicationWindow: row.application_window ?? null,
           scholarshipMeta: JSON.stringify(row.scholarship_meta ?? {}),
+          resultsDate: row.results_date ? new Date(row.results_date).getTime() : null,
         }
         tx.insert(listings).values(vals).onConflictDoUpdate({ target: listings.id, set: vals }).run()
+      }
+
+      for (const row of (admissionsUpdatesRes.data ?? [])) {
+        const vals = {
+          id: row.id,
+          reportDate: row.report_date ?? null,
+          severity: row.severity,
+          schoolSlug: row.school_slug ?? null,
+          schoolName: row.school_name ?? null,
+          title: row.title,
+          body: row.body,
+          actionRequired: row.action_required ?? null,
+          eventDate: row.event_date ?? null,
+          eventType: row.event_type ?? null,
+          sources: JSON.stringify(row.sources ?? []),
+          verified: !!row.verified,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(admissionsUpdates).values(vals).onConflictDoUpdate({ target: admissionsUpdates.id, set: vals }).run()
       }
 
       for (const row of (subjectsRes.data ?? [])) {

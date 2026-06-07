@@ -475,6 +475,16 @@ const MIGRATIONS = [
     kind TEXT,
     remote_updated_at INTEGER
   )`,
+  `CREATE TABLE IF NOT EXISTS admissions_updates (
+    id TEXT PRIMARY KEY NOT NULL, report_date TEXT, severity TEXT NOT NULL,
+    school_slug TEXT, school_name TEXT, title TEXT NOT NULL, body TEXT NOT NULL,
+    action_required TEXT, event_date TEXT, event_type TEXT,
+    sources TEXT NOT NULL DEFAULT '[]', verified INTEGER NOT NULL DEFAULT 0, remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS result_watches (
+    slug TEXT PRIMARY KEY NOT NULL, added_at INTEGER NOT NULL
+  )`,
+  `ALTER TABLE listings ADD COLUMN results_date INTEGER`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
