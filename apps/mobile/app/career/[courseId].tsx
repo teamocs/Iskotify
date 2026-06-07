@@ -15,6 +15,7 @@ import {
 } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { AiImpactCard, type AiImpactRow } from '../../components/career/AiImpactCard'
+import { countryCodeFromName } from '../../utils/careerSlug'
 
 // ---------------------------------------------------------------------------
 // Types (local — avoid re-exporting db row shapes)
@@ -86,19 +87,6 @@ function safeParseArray(raw: string): string[] {
   }
 }
 
-/**
- * Slugify a country name for routing to /career/country/[slug].
- * Convention: lowercase, runs of non-alphanumeric chars become a single '-',
- * leading/trailing '-' stripped.
- * Example: "United Kingdom" → "united-kingdom"
- * Must match Task 7's country screen and the seeded career_countries.code format.
- */
-function slugifyCountry(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 
 function demandRatingOrder(rating: string | null): number {
   switch ((rating ?? '').toLowerCase()) {
@@ -301,7 +289,7 @@ export default function CourseCareerDetailScreen() {
           <Text style={s.sectionTitle}>Where can this take you?</Text>
           {destinations.length > 0 ? destinations.map(dest => {
             const specializations = safeParseArray(dest.specializations)
-            const countrySlug = dest.country ? slugifyCountry(dest.country) : null
+            const countrySlug = dest.country ? countryCodeFromName(dest.country) : null
             return (
               <View key={dest.id} style={s.destCard}>
                 {/* Country + demand */}

@@ -585,6 +585,21 @@ export default function PracticeScreen() {
           <Text style={qs.go}>›</Text>
         </Pressable>
 
+        {/* Career Paths entry */}
+        <Pressable
+          style={qs.card2}
+          onPress={() => router.push('/career')}
+          accessibilityRole="button"
+          accessibilityLabel="Open Career Paths"
+        >
+          <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🌍</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={qs.title}>Career Paths</Text>
+            <Text style={qs.sub}>Where can your course take you? · AI-Safe-Score</Text>
+          </View>
+          <Text style={qs.go}>›</Text>
+        </Pressable>
+
         {/* AI Study Feedback card */}
         <View style={s.aiFeedbackCard}>
           <View style={s.aiFeedbackHeader}>
