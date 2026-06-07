@@ -73,6 +73,7 @@ describe('ListingsScreen', () => {
 
   it('renders the subtitle', () => {
     render(<ListingsScreen />)
+    // Default segment is 'all' → shows Exams & Scholarships subtitle
     expect(screen.getByText('Exams & Scholarships')).toBeTruthy()
   })
 
@@ -81,6 +82,7 @@ describe('ListingsScreen', () => {
     expect(screen.getByText('All')).toBeTruthy()
     expect(screen.getByText('Exams')).toBeTruthy()
     expect(screen.getByText('Scholarships')).toBeTruthy()
+    expect(screen.getByText('Universities')).toBeTruthy()
   })
 
   it('renders search input', () => {

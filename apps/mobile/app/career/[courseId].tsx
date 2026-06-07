@@ -12,6 +12,7 @@ import {
   careerDestinations as destinationsTable,
   aiCareerImpact as aiImpactTable,
   careerPrograms as programsTable,
+  courseTaxonomyMap as taxonomyTable,
 } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { AiImpactCard, type AiImpactRow } from '../../components/career/AiImpactCard'
@@ -111,15 +112,20 @@ export default function CourseCareerDetailScreen() {
   const [destinations, setDestinations] = useState<DestinationRow[]>([])
   const [aiImpact, setAiImpact]       = useState<AiImpactRow | null>(null)
   const [programs, setPrograms]        = useState<ProgramRow[]>([])
+  const [topSchoolsTab, setTopSchoolsTab] = useState<string | null>(null)
   const [loading, setLoading]          = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [courseRows, destRows, aiRows, allPrograms] = await Promise.all([
+      const [courseRows, destRows, aiRows, allPrograms, taxRows] = await Promise.all([
         db.select().from(coursesTable).where(eq(coursesTable.courseId, courseId)).limit(1),
         db.select().from(destinationsTable).where(eq(destinationsTable.courseId, courseId)),
         db.select().from(aiImpactTable).where(eq(aiImpactTable.courseId, courseId)).limit(1),
         db.select().from(programsTable),
+        db.select({
+          courseTab: taxonomyTable.courseTab,
+          careerCourseId: taxonomyTable.careerCourseId,
+        }).from(taxonomyTable).where(eq(taxonomyTable.careerCourseId, courseId)).limit(1),
       ])
 
       const c = courseRows[0] ?? null
@@ -132,6 +138,10 @@ export default function CourseCareerDetailScreen() {
       setDestinations(sorted)
 
       setAiImpact((aiRows[0] ?? null) as AiImpactRow | null)
+
+      // Top schools tab mapping
+      const taxRow = taxRows[0] ?? null
+      setTopSchoolsTab(taxRow?.courseTab ?? null)
 
       // Filter programs whose coursesCovered includes the course name
       const courseName = (c as CourseRow | null)?.name ?? ''
@@ -187,6 +197,12 @@ export default function CourseCareerDetailScreen() {
     disclaimerTxt:   { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     empty:           { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
     emptySection:    { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
+    schoolsLink:     { marginHorizontal: 14, marginBottom: 14, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    schoolsLinkIcon: { fontSize: 20 },
+    schoolsLinkBody: { flex: 1 },
+    schoolsLinkTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    schoolsLinkSub:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    schoolsLinkArr:  { fontSize: typo.md, color: t.textTertiary },
   }), [t, typo])
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -282,6 +298,22 @@ export default function CourseCareerDetailScreen() {
           <View style={{ marginHorizontal: 14, marginBottom: 2 }}>
             <AiImpactCard impact={aiImpact} />
           </View>
+        ) : null}
+
+        {/* ── Top Schools cross-link ── */}
+        {topSchoolsTab ? (
+          <TouchableOpacity
+            style={s.schoolsLink}
+            onPress={() => router.push(`/schools/course/${topSchoolsTab}` as never)}
+            activeOpacity={0.8}
+          >
+            <Text style={s.schoolsLinkIcon}>🏫</Text>
+            <View style={s.schoolsLinkBody}>
+              <Text style={s.schoolsLinkTitle}>Top schools for this course</Text>
+              <Text style={s.schoolsLinkSub}>PRC board exam rankings by pass rate</Text>
+            </View>
+            <Text style={s.schoolsLinkArr}>›</Text>
+          </TouchableOpacity>
         ) : null}
 
         {/* ── Destinations ── */}

@@ -8,7 +8,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined, Funnel1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
+import { listings as listingsTable, savedListings as savedListingsTable, tertiarySchools as schoolsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { syncOnLaunch } from '../../services/sync'
 import { getSettings } from '../../services/settings'
@@ -16,7 +16,17 @@ import { matchScholarship } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { MatchPill } from '../../components/scholarships/MatchPill'
 
-type Segment = 'all' | 'exam' | 'scholarship'
+type Segment = 'all' | 'exam' | 'scholarship' | 'universities'
+
+interface SchoolRow {
+  id: string
+  name: string
+  acronym: string | null
+  region: string | null
+  type: string | null
+  isSuc: boolean
+  isLuc: boolean
+}
 
 interface ListingRow {
   id: string
@@ -71,10 +81,13 @@ export default function ListingsScreen() {
   const db = useDb()
   const { isInFocus, getPriority } = useFocusListings()
   const [all, setAll] = useState<ListingRow[]>([])
+  const [allSchools, setAllSchools] = useState<SchoolRow[]>([])
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [segment, setSegment] = useState<Segment>('all')
   const [query, setQuery] = useState('')
   const [regionFilter, setRegionFilter] = useState<string | null>(null)
+  const [schoolRegionFilter, setSchoolRegionFilter] = useState<string | null>(null)
+  const [schoolTypeFilter, setSchoolTypeFilter] = useState<string | null>(null)
 
   // User profile for eligibility matching
   const [profile, setProfile] = useState<StudentProfile>({})
@@ -87,7 +100,7 @@ export default function ListingsScreen() {
   const [facetEligibleForMe, setFacetEligibleForMe] = useState(false)
 
   const loadListings = useCallback(async () => {
-    const [rows, saved, settings] = await Promise.all([
+    const [rows, saved, settings, schoolRows] = await Promise.all([
       db.select({
         id: listingsTable.id,
         slug: listingsTable.slug,
@@ -108,8 +121,18 @@ export default function ListingsScreen() {
       }).from(listingsTable),
       db.select({ id: savedListingsTable.id }).from(savedListingsTable),
       getSettings(db),
+      db.select({
+        id: schoolsTable.id,
+        name: schoolsTable.name,
+        acronym: schoolsTable.acronym,
+        region: schoolsTable.region,
+        type: schoolsTable.type,
+        isSuc: schoolsTable.isSuc,
+        isLuc: schoolsTable.isLuc,
+      }).from(schoolsTable),
     ])
     setAll(rows)
+    setAllSchools(schoolRows as SchoolRow[])
     setSavedIds(new Set(saved.map(s => s.id)))
     setProfile({
       gradeLevel: settings.gradeLevel ?? undefined,
@@ -175,6 +198,28 @@ export default function ListingsScreen() {
   }, [scholarships, profile])
 
   const profileHasData = useMemo(() => hasAnyMatcherField(profile), [profile])
+
+  // ── University-segment derived state ──────────────────────────────────────
+  const schoolRegions = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of allSchools) { if (s.region) set.add(s.region) }
+    return Array.from(set).sort()
+  }, [allSchools])
+
+  const schoolTypes = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of allSchools) { if (s.type) set.add(s.type) }
+    return Array.from(set).sort()
+  }, [allSchools])
+
+  const filteredSchools = useMemo(() => {
+    return allSchools
+      .filter(s => !schoolRegionFilter || s.region === schoolRegionFilter)
+      .filter(s => !schoolTypeFilter || s.type === schoolTypeFilter)
+      .filter(s => !query || s.name.toLowerCase().includes(query.toLowerCase()) ||
+        (s.acronym ?? '').toLowerCase().includes(query.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [allSchools, query, schoolRegionFilter, schoolTypeFilter])
 
   const filtered = useMemo(() => {
     return all
@@ -257,10 +302,32 @@ export default function ListingsScreen() {
     focusBadgeTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 32 },
     eligibleHint: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.xs, marginTop: 6, marginHorizontal: 24 },
+    // Universities segment
+    uniCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
+    uniIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'rgba(79,70,229,0.12)', borderWidth: 1, borderColor: 'rgba(79,70,229,0.22)' },
+    uniIconTxt: { fontSize: 16 },
+    uniName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    uniMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+    uniMetaTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    uniBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: 'rgba(79,70,229,0.10)', borderWidth: 1, borderColor: 'rgba(79,70,229,0.20)' },
+    uniBadgeTxt: { fontSize: typo.xs, fontWeight: '600', color: '#818cf8', fontFamily: 'Lexend_600SemiBold' },
+    uniLinks: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
+    uniLinkRow: { flexDirection: 'row', gap: 8 },
+    uniLinkBtn: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    uniLinkTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
+    uniLinkArr: { fontSize: typo.xs, color: t.textTertiary },
   }), [t, typo])
 
   const isExam = (l: ListingRow) => l.type === 'exam'
   const isScholarshipSegment = segment === 'scholarship'
+  const isUniversitiesSegment = segment === 'universities'
+
+  const segmentLabel: Record<Segment, string> = {
+    all: 'All',
+    exam: 'Exams',
+    scholarship: 'Scholarships',
+    universities: 'Universities',
+  }
 
   return (
     <SafeAreaView style={s.root}>
@@ -271,15 +338,17 @@ export default function ListingsScreen() {
 
       <View style={s.header}>
         <Text style={s.title}>Listings</Text>
-        <Text style={s.subtitle}>Exams & Scholarships</Text>
+        <Text style={s.subtitle}>
+          {isUniversitiesSegment ? 'University Directory' : 'Exams & Scholarships'}
+        </Text>
       </View>
 
       {/* Segment control */}
       <View style={s.seg}>
-        {(['all', 'exam', 'scholarship'] as Segment[]).map(seg => (
+        {(['all', 'exam', 'scholarship', 'universities'] as Segment[]).map(seg => (
           <TouchableOpacity key={seg} style={[s.segBtn, segment === seg && s.segBtnOn]} onPress={() => setSegment(seg)}>
             <Text style={[s.segTxt, segment === seg && s.segTxtOn]}>
-              {seg === 'all' ? 'All' : seg === 'exam' ? 'Exams' : 'Scholarships'}
+              {segmentLabel[seg]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -292,7 +361,7 @@ export default function ListingsScreen() {
           style={s.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search listings..."
+          placeholder={isUniversitiesSegment ? 'Search universities...' : 'Search listings...'}
           placeholderTextColor={t.textTertiary}
         />
         {query ? (
@@ -307,8 +376,8 @@ export default function ListingsScreen() {
         )}
       </View>
 
-      {/* Region filter chips */}
-      {regions.length > 0 && (
+      {/* Region filter chips — listings segments only */}
+      {!isUniversitiesSegment && regions.length > 0 ? (
         <View style={s.regionWrap}>
           <ScrollView
             horizontal
@@ -333,7 +402,35 @@ export default function ListingsScreen() {
             ))}
           </ScrollView>
         </View>
-      )}
+      ) : null}
+
+      {/* Universities filter chips */}
+      {isUniversitiesSegment && schoolRegions.length > 0 ? (
+        <View style={s.regionWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.regionContent}
+            style={s.regionScroll}
+          >
+            <TouchableOpacity
+              style={[s.regionChip, !schoolRegionFilter && s.regionChipOn]}
+              onPress={() => setSchoolRegionFilter(null)}
+            >
+              <Text style={[s.regionTxt, !schoolRegionFilter && s.regionTxtOn]}>All Regions</Text>
+            </TouchableOpacity>
+            {schoolRegions.map(r => (
+              <TouchableOpacity
+                key={r}
+                style={[s.regionChip, schoolRegionFilter === r && s.regionChipOn]}
+                onPress={() => setSchoolRegionFilter(prev => prev === r ? null : r)}
+              >
+                <Text style={[s.regionTxt, schoolRegionFilter === r && s.regionTxtOn]}>📍 {r}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
 
       {/* Scholarship facets — only shown in Scholarships segment */}
       {isScholarshipSegment && (
@@ -400,85 +497,183 @@ export default function ListingsScreen() {
         </View>
       )}
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item.id}
-        contentContainerStyle={s.list}
-        showsVerticalScrollIndicator={false}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={t.accent}
-            colors={[t.accent]}
-            progressBackgroundColor={t.surface}
-          />
-        }
-        ListEmptyComponent={<Text style={s.empty}>No listings found.</Text>}
-        renderItem={({ item: l }) => {
-          const exam = isExam(l)
-          const isSaved = savedIds.has(l.id)
-          const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id))
-            ? (matchStatusMap.get(l.id) as MatchStatus)
-            : 'unknown'
-          return (
+      {/* Universities type filter chips */}
+      {isUniversitiesSegment && schoolTypes.length > 0 ? (
+        <View style={s.facetWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[s.regionContent, { paddingBottom: 2 }]}
+          >
             <TouchableOpacity
-              style={s.card}
-              onPress={() => router.push(`/listings/${l.slug}`)}
+              style={[s.facetChip, !schoolTypeFilter && s.facetChipOn]}
+              onPress={() => setSchoolTypeFilter(null)}
+            >
+              <Text style={[s.facetTxt, !schoolTypeFilter && s.facetTxtOn]}>All Types</Text>
+            </TouchableOpacity>
+            {schoolTypes.map(typ => (
+              <TouchableOpacity
+                key={typ}
+                style={[s.facetChip, schoolTypeFilter === typ && s.facetChipOn]}
+                onPress={() => setSchoolTypeFilter(prev => prev === typ ? null : typ)}
+              >
+                <Text style={[s.facetTxt, schoolTypeFilter === typ && s.facetTxtOn]}>{typ}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {/* Universities quick-links */}
+      {isUniversitiesSegment ? (
+        <View style={s.uniLinks}>
+          <View style={s.uniLinkRow}>
+            <TouchableOpacity
+              style={s.uniLinkBtn}
+              onPress={() => router.push('/schools/course' as never)}
+              activeOpacity={0.75}
+            >
+              <Text style={s.uniLinkTxt}>Find top schools by course</Text>
+              <Text style={s.uniLinkArr}>→</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Universities list */}
+      {isUniversitiesSegment ? (
+        <FlatList
+          data={filteredSchools}
+          keyExtractor={item => item.id}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={t.accent}
+              colors={[t.accent]}
+              progressBackgroundColor={t.surface}
+            />
+          }
+          ListEmptyComponent={<Text style={s.empty}>No universities found.</Text>}
+          renderItem={({ item: school }) => (
+            <TouchableOpacity
+              style={s.uniCard}
+              onPress={() => router.push(`/schools/${school.id}` as never)}
               activeOpacity={0.8}
             >
-              <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
-                <Lineicons
-                  icon={exam ? GraduationCap1Outlined : SparkOutlined}
-                  size={16}
-                  color={exam ? t.accentText : scholarColor}
-                />
+              <View style={s.uniIcon}>
+                <Text style={s.uniIconTxt}>🏫</Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={s.row1}>
-                  <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
-                  <View style={[s.typeBadge, exam ? s.examBadge : s.scholarBadge]}>
-                    <Text style={[s.typeTxt, { color: exam ? t.accentText : scholarColor }]}>
-                      {exam ? 'Exam' : 'Scholar'}
-                    </Text>
-                  </View>
-                  {(() => {
-                    const p = getPriority(l.slug)
-                    return p !== null ? (
-                      <View style={s.focusBadge}>
-                        <Text style={s.focusBadgeTxt}>#{p} Focus</Text>
-                      </View>
-                    ) : null
-                  })()}
-                </View>
-                <View style={s.row2}>
-                  <Text style={s.dateText}>{fmtDate(l.examDate)}</Text>
-                  {l.region ? <Text style={s.regionLabel}>📍 {l.region}</Text> : null}
-                  {/* Scholarship-specific: province, verified badge, match pill */}
-                  {!exam && l.province ? (
-                    <Text style={s.regionLabel}>{l.province}</Text>
+                <Text style={s.uniName} numberOfLines={2}>{school.name}</Text>
+                <View style={s.uniMeta}>
+                  {school.region ? <Text style={s.uniMetaTxt}>📍 {school.region}</Text> : null}
+                  {school.type ? (
+                    <View style={s.uniBadge}>
+                      <Text style={s.uniBadgeTxt}>{school.type}</Text>
+                    </View>
                   ) : null}
-                  {!exam ? (
-                    l.isVerified
-                      ? <View style={s.verifiedBadge}><Text style={s.verifiedTxt}>✓ Verified</Text></View>
-                      : <View style={s.unverifiedBadge}><Text style={s.unverifiedTxt}>Unverified</Text></View>
+                  {school.isSuc ? (
+                    <View style={s.uniBadge}>
+                      <Text style={s.uniBadgeTxt}>SUC</Text>
+                    </View>
                   ) : null}
-                  {!exam ? <MatchPill status={matchStatus} /> : null}
+                  {school.isLuc ? (
+                    <View style={s.uniBadge}>
+                      <Text style={s.uniBadgeTxt}>LUC</Text>
+                    </View>
+                  ) : null}
+                  {school.acronym ? <Text style={s.uniMetaTxt}>· {school.acronym}</Text> : null}
                 </View>
               </View>
-              <TouchableOpacity
-                style={s.bookmarkBtn}
-                onPress={() => toggleSave(l.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
-              </TouchableOpacity>
             </TouchableOpacity>
-          )
-        }}
-      />
+          )}
+        />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={t.accent}
+              colors={[t.accent]}
+              progressBackgroundColor={t.surface}
+            />
+          }
+          ListEmptyComponent={<Text style={s.empty}>No listings found.</Text>}
+          renderItem={({ item: l }) => {
+            const exam = isExam(l)
+            const isSaved = savedIds.has(l.id)
+            const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id))
+              ? (matchStatusMap.get(l.id) as MatchStatus)
+              : 'unknown'
+            return (
+              <TouchableOpacity
+                style={s.card}
+                onPress={() => router.push(`/listings/${l.slug}`)}
+                activeOpacity={0.8}
+              >
+                <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
+                  <Lineicons
+                    icon={exam ? GraduationCap1Outlined : SparkOutlined}
+                    size={16}
+                    color={exam ? t.accentText : scholarColor}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={s.row1}>
+                    <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
+                    <View style={[s.typeBadge, exam ? s.examBadge : s.scholarBadge]}>
+                      <Text style={[s.typeTxt, { color: exam ? t.accentText : scholarColor }]}>
+                        {exam ? 'Exam' : 'Scholar'}
+                      </Text>
+                    </View>
+                    {(() => {
+                      const p = getPriority(l.slug)
+                      return p !== null ? (
+                        <View style={s.focusBadge}>
+                          <Text style={s.focusBadgeTxt}>#{p} Focus</Text>
+                        </View>
+                      ) : null
+                    })()}
+                  </View>
+                  <View style={s.row2}>
+                    <Text style={s.dateText}>{fmtDate(l.examDate)}</Text>
+                    {l.region ? <Text style={s.regionLabel}>📍 {l.region}</Text> : null}
+                    {/* Scholarship-specific: province, verified badge, match pill */}
+                    {!exam && l.province ? (
+                      <Text style={s.regionLabel}>{l.province}</Text>
+                    ) : null}
+                    {!exam ? (
+                      l.isVerified
+                        ? <View style={s.verifiedBadge}><Text style={s.verifiedTxt}>✓ Verified</Text></View>
+                        : <View style={s.unverifiedBadge}><Text style={s.unverifiedTxt}>Unverified</Text></View>
+                    ) : null}
+                    {!exam ? <MatchPill status={matchStatus} /> : null}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={s.bookmarkBtn}
+                  onPress={() => toggleSave(l.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            )
+          }}
+        />
+      )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
