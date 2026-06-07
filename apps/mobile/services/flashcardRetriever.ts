@@ -146,3 +146,104 @@ export async function searchUpcatFacts(
     return []
   }
 }
+
+export interface RetrievedCareerFact {
+  courseName: string | null
+  queryType: string | null
+  quickAnswer: string | null
+  keyCaveat: string | null
+  pointTo: string | null
+}
+
+/**
+ * Retrieve the top-K most relevant career facts for a query via SQLite FTS5
+ * BM25 ranking. Mirrors searchUpcatFacts exactly — same buildFtsQuery sanitizer,
+ * same raw-SQL mechanism, JOIN on career_facts_fts → career_facts.
+ * Never throws — failures are logged and treated as "no results".
+ */
+export async function searchCareerFacts(
+  db: DrizzleClient,
+  query: string,
+  limit = 3,
+): Promise<RetrievedCareerFact[]> {
+  const match = buildFtsQuery(query)
+  if (!match) return []
+  try {
+    const rows = await db.all<{
+      course_name: string | null
+      query_type: string | null
+      quick_answer: string | null
+      key_caveat: string | null
+      point_to: string | null
+    }>(sql`
+      SELECT
+        f.course_name,
+        f.query_type,
+        f.quick_answer,
+        f.key_caveat,
+        f.point_to
+      FROM career_facts_fts fts
+      JOIN career_facts f ON f.id = fts.fact_id
+      WHERE career_facts_fts MATCH ${match}
+      ORDER BY bm25(career_facts_fts)
+      LIMIT ${limit}
+    `)
+    return rows.map(r => ({
+      courseName: r.course_name,
+      queryType: r.query_type,
+      quickAnswer: r.quick_answer,
+      keyCaveat: r.key_caveat,
+      pointTo: r.point_to,
+    }))
+  } catch (err) {
+    console.warn('[flashcardRetriever] career facts search failed:', err)
+    return []
+  }
+}
+
+export interface RetrievedAiImpact {
+  courseName: string | null
+  aiSafetyScore: number | null
+  aiSafetyLabel: string | null
+  kuyaBawSummary: string | null
+}
+
+/**
+ * Look up an AI career impact row by course name (case-insensitive LIKE match).
+ * Returns the first match or null. Never throws — failures are logged and
+ * treated as "not found" so chat keeps working when the table is missing.
+ */
+export async function getAiImpactByCourseName(
+  db: DrizzleClient,
+  name: string,
+): Promise<RetrievedAiImpact | null> {
+  if (!name || !name.trim()) return null
+  try {
+    const rows = await db.all<{
+      course_name: string | null
+      ai_safety_score: number | null
+      ai_safety_label: string | null
+      kuya_baw_summary: string | null
+    }>(sql`
+      SELECT
+        course_name,
+        ai_safety_score,
+        ai_safety_label,
+        kuya_baw_summary
+      FROM ai_career_impact
+      WHERE LOWER(course_name) LIKE LOWER(${`%${name.trim()}%`})
+      LIMIT 1
+    `)
+    if (rows.length === 0 || rows[0] == null) return null
+    const r = rows[0]
+    return {
+      courseName: r.course_name,
+      aiSafetyScore: r.ai_safety_score,
+      aiSafetyLabel: r.ai_safety_label,
+      kuyaBawSummary: r.kuya_baw_summary,
+    }
+  } catch (err) {
+    console.warn('[flashcardRetriever] ai impact lookup failed:', err)
+    return null
+  }
+}
