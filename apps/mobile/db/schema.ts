@@ -351,3 +351,114 @@ export const careerFacts = sqliteTable('career_facts', {
   pointTo: text('point_to'),
   remoteUpdatedAt: integer('remote_updated_at'),
 })
+
+// ── Epic C: University / course tables ───────────────────────────────────────
+
+export const tertiarySchools = sqliteTable('tertiary_schools', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  acronym: text('acronym'),
+  region: text('region'),
+  province: text('province'),
+  city: text('city'),
+  type: text('type'),
+  isSuc: integer('is_suc', { mode: 'boolean' }).notNull().default(false),
+  isLuc: integer('is_luc', { mode: 'boolean' }).notNull().default(false),
+  depedSchoolId: integer('deped_school_id'),
+  rankInProvince: integer('rank_in_province'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const universityProfiles = sqliteTable('university_profiles', {
+  schoolId: text('school_id').primaryKey(),
+  dataTier: text('data_tier'),
+  institutionType: text('institution_type'),
+  yearEstablished: text('year_established'),
+  knownForCourses: text('known_for_courses').notNull().default('[]'),
+  prcTopCourses: text('prc_top_courses').notNull().default('[]'),
+  chedCoeCod: text('ched_coe_cod'),
+  accreditation: text('accreditation'),
+  entranceExamName: text('entrance_exam_name'),
+  entranceExamAcronym: text('entrance_exam_acronym'),
+  testingCenterType: text('testing_center_type'),
+  applicationOpen: text('application_open'),
+  applicationClose: text('application_close'),
+  examMonth: text('exam_month'),
+  estimatedPassingRate: text('estimated_passing_rate'),
+  estimatedSlots: text('estimated_slots'),
+  tuitionFeeRange: text('tuition_fee_range'),
+  freeTuition: integer('free_tuition', { mode: 'boolean' }),
+  academicCalendar: text('academic_calendar'),
+  coursesOffered: text('courses_offered').notNull().default('[]'),
+  scholarshipsOffered: text('scholarships_offered').notNull().default('[]'),
+  websiteUrl: text('website_url'),
+  applicationPortalUrl: text('application_portal_url'),
+  facebookUrl: text('facebook_url'),
+  examDifficulty: integer('exam_difficulty'),
+  notablePrograms: text('notable_programs').notNull().default('[]'),
+  prcStrongBoards: text('prc_strong_boards').notNull().default('[]'),
+  notes: text('notes'),
+  dataConfidence: text('data_confidence'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const courseSchoolRankings = sqliteTable('course_school_rankings', {
+  id: text('id').primaryKey(),
+  courseTab: text('course_tab').notNull(),
+  courseName: text('course_name'),
+  rank: integer('rank'),
+  schoolName: text('school_name').notNull(),
+  region: text('region'),
+  province: text('province'),
+  wilsonScore: real('wilson_score'),
+  rawPassRate: real('raw_pass_rate'),
+  totalExaminees: integer('total_examinees'),
+  totalPassers: integer('total_passers'),
+  yearsWithData: text('years_with_data'),
+  examPeriods: integer('exam_periods'),
+  tertiarySchoolId: text('tertiary_school_id'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+}, (t) => [
+  index('course_school_rankings_tab_idx').on(t.courseTab),
+])
+
+export const courseSchoolQuality = sqliteTable('course_school_quality', {
+  id: text('id').primaryKey(),
+  schoolName: text('school_name').notNull(),
+  region: text('region'),
+  province: text('province'),
+  city: text('city'),
+  courseStandardized: text('course_standardized'),
+  courseGroup: text('course_group'),
+  schoolType: text('school_type'),
+  chedCoeCod: text('ched_coe_cod'),
+  qualityScore: integer('quality_score'),
+  qualityTier: text('quality_tier'),
+  accreditations: text('accreditations').notNull().default('[]'),
+  hasPrcBoard: integer('has_prc_board', { mode: 'boolean' }),
+  qsSubjectRank: text('qs_subject_rank'),
+  dataConfidence: text('data_confidence'),
+  tertiarySchoolId: text('tertiary_school_id'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const barResults = sqliteTable('bar_results', {
+  id: text('id').primaryKey(),
+  schoolName: text('school_name').notNull(),
+  region: text('region'),
+  province: text('province'),
+  year: integer('year'),
+  passRate: real('pass_rate'),
+  nationalAvg: real('national_avg'),
+  scRank: integer('sc_rank'),
+  notes: text('notes'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const courseTaxonomyMap = sqliteTable('course_taxonomy_map', {
+  courseTab: text('course_tab').primaryKey(),
+  careerCourseId: text('career_course_id'),
+  label: text('label'),
+  kind: text('kind'),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})

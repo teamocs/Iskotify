@@ -107,6 +107,13 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('ai_career_impact')
     expect(supabase.from).toHaveBeenCalledWith('career_destinations')
     expect(supabase.from).toHaveBeenCalledWith('career_facts')
+    // Epic C university / course tables
+    expect(supabase.from).toHaveBeenCalledWith('tertiary_schools')
+    expect(supabase.from).toHaveBeenCalledWith('university_profiles')
+    expect(supabase.from).toHaveBeenCalledWith('course_school_rankings')
+    expect(supabase.from).toHaveBeenCalledWith('course_school_quality')
+    expect(supabase.from).toHaveBeenCalledWith('bar_results')
+    expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -765,6 +772,108 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       DELETE FROM career_facts_fts WHERE fact_id = old.id;
       INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat);
     END;
+    CREATE TABLE IF NOT EXISTS tertiary_schools (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      acronym TEXT,
+      region TEXT,
+      province TEXT,
+      city TEXT,
+      type TEXT,
+      is_suc INTEGER NOT NULL DEFAULT 0,
+      is_luc INTEGER NOT NULL DEFAULT 0,
+      deped_school_id INTEGER,
+      rank_in_province INTEGER,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS university_profiles (
+      school_id TEXT PRIMARY KEY NOT NULL,
+      data_tier TEXT,
+      institution_type TEXT,
+      year_established TEXT,
+      known_for_courses TEXT NOT NULL DEFAULT '[]',
+      prc_top_courses TEXT NOT NULL DEFAULT '[]',
+      ched_coe_cod TEXT,
+      accreditation TEXT,
+      entrance_exam_name TEXT,
+      entrance_exam_acronym TEXT,
+      testing_center_type TEXT,
+      application_open TEXT,
+      application_close TEXT,
+      exam_month TEXT,
+      estimated_passing_rate TEXT,
+      estimated_slots TEXT,
+      tuition_fee_range TEXT,
+      free_tuition INTEGER,
+      academic_calendar TEXT,
+      courses_offered TEXT NOT NULL DEFAULT '[]',
+      scholarships_offered TEXT NOT NULL DEFAULT '[]',
+      website_url TEXT,
+      application_portal_url TEXT,
+      facebook_url TEXT,
+      exam_difficulty INTEGER,
+      notable_programs TEXT NOT NULL DEFAULT '[]',
+      prc_strong_boards TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      data_confidence TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS course_school_rankings (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_tab TEXT NOT NULL,
+      course_name TEXT,
+      rank INTEGER,
+      school_name TEXT NOT NULL,
+      region TEXT,
+      province TEXT,
+      wilson_score REAL,
+      raw_pass_rate REAL,
+      total_examinees INTEGER,
+      total_passers INTEGER,
+      years_with_data TEXT,
+      exam_periods INTEGER,
+      tertiary_school_id TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS course_school_rankings_tab_idx ON course_school_rankings (course_tab);
+    CREATE TABLE IF NOT EXISTS course_school_quality (
+      id TEXT PRIMARY KEY NOT NULL,
+      school_name TEXT NOT NULL,
+      region TEXT,
+      province TEXT,
+      city TEXT,
+      course_standardized TEXT,
+      course_group TEXT,
+      school_type TEXT,
+      ched_coe_cod TEXT,
+      quality_score INTEGER,
+      quality_tier TEXT,
+      accreditations TEXT NOT NULL DEFAULT '[]',
+      has_prc_board INTEGER,
+      qs_subject_rank TEXT,
+      data_confidence TEXT,
+      tertiary_school_id TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS bar_results (
+      id TEXT PRIMARY KEY NOT NULL,
+      school_name TEXT NOT NULL,
+      region TEXT,
+      province TEXT,
+      year INTEGER,
+      pass_rate REAL,
+      national_avg REAL,
+      sc_rank INTEGER,
+      notes TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS course_taxonomy_map (
+      course_tab TEXT PRIMARY KEY NOT NULL,
+      career_course_id TEXT,
+      label TEXT,
+      kind TEXT,
+      remote_updated_at INTEGER
+    );
   `)
   return raw
 }
@@ -1359,5 +1468,158 @@ describe('pushUserData includes notes', () => {
     expect(payload).toHaveProperty('notes')
     expect(payload).toHaveProperty('note_labels')
     expect(payload).toHaveProperty('note_label_assignments')
+  })
+})
+
+// ─── syncOnLaunch Epic C university write (real SQLite) ───────────────────────
+
+function makeSupabaseForUniversity(
+  schoolRow: Record<string, unknown>,
+  rankingRow: Record<string, unknown>,
+) {
+  return (table: string) => {
+    const emptyResolved = Promise.resolve({ data: [] })
+    const emptyChain: any = {
+      select: jest.fn().mockReturnThis(),
+      contains: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gt: jest.fn().mockResolvedValue({ data: [] }),
+      then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+    }
+    if (table === 'tertiary_schools') {
+      const resolved = Promise.resolve({ data: [schoolRow] })
+      return {
+        select: jest.fn().mockReturnThis(),
+        then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+      }
+    }
+    if (table === 'course_school_rankings') {
+      const resolved = Promise.resolve({ data: [rankingRow] })
+      return {
+        select: jest.fn().mockReturnThis(),
+        then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+      }
+    }
+    return emptyChain
+  }
+}
+
+describe('syncOnLaunch Epic C university write (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('writes tertiary_schools row with boolean→int and remoteUpdatedAt', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const schoolRow = {
+      id: 'school-up-diliman',
+      name: 'University of the Philippines Diliman',
+      acronym: 'UPD',
+      region: 'NCR',
+      province: null,
+      city: 'Quezon City',
+      type: 'SUC',
+      is_suc: true,
+      is_luc: false,
+      deped_school_id: null,
+      rank_in_province: 1,
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+    const rankingRow = {
+      id: 'rank-1',
+      course_tab: 'nursing',
+      course_name: 'BS Nursing',
+      rank: 5,
+      school_name: 'University of the Philippines Diliman',
+      region: 'NCR',
+      province: null,
+      wilson_score: 0.9543,
+      raw_pass_rate: 0.97,
+      total_examinees: 200,
+      total_passers: 194,
+      years_with_data: '2020,2021,2022',
+      exam_periods: 3,
+      tertiary_school_id: 'school-up-diliman',
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForUniversity(schoolRow, rankingRow))
+
+    await syncOnLaunch(db as any)
+
+    const sRow = raw.prepare('SELECT * FROM tertiary_schools WHERE id = ?').get('school-up-diliman') as any
+    expect(sRow).toBeTruthy()
+    expect(sRow.name).toBe('University of the Philippines Diliman')
+    expect(sRow.is_suc).toBe(1)
+    expect(sRow.is_luc).toBe(0)
+    expect(sRow.rank_in_province).toBe(1)
+    expect(sRow.remote_updated_at).toBe(new Date('2026-06-01T00:00:00Z').getTime())
+
+    const rRow = raw.prepare('SELECT * FROM course_school_rankings WHERE id = ?').get('rank-1') as any
+    expect(rRow).toBeTruthy()
+    expect(rRow.course_tab).toBe('nursing')
+    expect(rRow.wilson_score).toBeCloseTo(0.9543)
+    expect(rRow.raw_pass_rate).toBeCloseTo(0.97)
+    expect(rRow.total_examinees).toBe(200)
+    expect(rRow.remote_updated_at).toBe(new Date('2026-06-01T00:00:00Z').getTime())
+  })
+
+  it('course_school_rankings text[] (years_with_data) survives as plain string, accreditations as JSON', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const schoolRow = {
+      id: 'school-2',
+      name: 'De La Salle University',
+      acronym: 'DLSU',
+      region: 'NCR',
+      province: null,
+      city: 'Manila',
+      type: 'Private',
+      is_suc: false,
+      is_luc: false,
+      deped_school_id: null,
+      rank_in_province: null,
+      updated_at: '2026-06-02T00:00:00Z',
+    }
+    const rankingRow = {
+      id: 'rank-2',
+      course_tab: 'engineering',
+      course_name: 'BS Civil Engineering',
+      rank: 3,
+      school_name: 'De La Salle University',
+      region: 'NCR',
+      province: null,
+      wilson_score: null,
+      raw_pass_rate: null,
+      total_examinees: null,
+      total_passers: null,
+      years_with_data: null,
+      exam_periods: null,
+      tertiary_school_id: 'school-2',
+      updated_at: '2026-06-02T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForUniversity(schoolRow, rankingRow))
+
+    await syncOnLaunch(db as any)
+
+    const sRow = raw.prepare('SELECT * FROM tertiary_schools WHERE id = ?').get('school-2') as any
+    expect(sRow).toBeTruthy()
+    expect(sRow.is_suc).toBe(0)
+    expect(sRow.is_luc).toBe(0)
+    expect(sRow.rank_in_province).toBeNull()
+
+    const rRow = raw.prepare('SELECT * FROM course_school_rankings WHERE id = ?').get('rank-2') as any
+    expect(rRow).toBeTruthy()
+    expect(rRow.course_tab).toBe('engineering')
+    expect(rRow.wilson_score).toBeNull()
+    expect(rRow.years_with_data).toBeNull()
   })
 })

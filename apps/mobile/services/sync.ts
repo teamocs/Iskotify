@@ -7,6 +7,8 @@ import {
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
   aiCareerImpact, careerFacts,
+  tertiarySchools, universityProfiles, courseSchoolRankings,
+  courseSchoolQuality, barResults, courseTaxonomyMap,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -230,6 +232,26 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .gt('updated_at', since),
     ])
 
+    // ── Epic C: University / course tables ───────────────────────────────────
+    // Full pull for all 6 (static/slow-changing reference data)
+    const [
+      tertiarySchoolsRes, universityProfilesRes, courseSchoolRankingsRes,
+      courseSchoolQualityRes, barResultsRes, courseTaxonomyMapRes,
+    ] = await Promise.all([
+      supabase.from('tertiary_schools')
+        .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at'),
+      supabase.from('university_profiles')
+        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at'),
+      supabase.from('course_school_rankings')
+        .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at'),
+      supabase.from('course_school_quality')
+        .select('id,school_name,region,province,city,course_standardized,course_group,school_type,ched_coe_cod,quality_score,quality_tier,accreditations,has_prc_board,qs_subject_rank,data_confidence,tertiary_school_id,updated_at'),
+      supabase.from('bar_results')
+        .select('id,school_name,region,province,year,pass_rate,national_avg,sc_rank,notes,updated_at'),
+      supabase.from('course_taxonomy_map')
+        .select('course_tab,career_course_id,label,kind,updated_at'),
+    ])
+
     const cardResults = await Promise.all(
       slugs.map(slug =>
         supabase.from('flashcards')
@@ -442,6 +464,99 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         tx.insert(careerFacts).values(vals).onConflictDoUpdate({ target: careerFacts.id, set: vals }).run()
       }
       // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
+
+      // ── Epic C: University / course upserts ───────────────────────────────
+      for (const row of (tertiarySchoolsRes.data ?? [])) {
+        const vals = {
+          id: row.id, name: row.name, acronym: row.acronym ?? null,
+          region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
+          type: row.type ?? null,
+          isSuc: !!row.is_suc, isLuc: !!row.is_luc,
+          depedSchoolId: row.deped_school_id ?? null,
+          rankInProvince: row.rank_in_province ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(tertiarySchools).values(vals).onConflictDoUpdate({ target: tertiarySchools.id, set: vals }).run()
+      }
+
+      for (const row of (universityProfilesRes.data ?? [])) {
+        const vals = {
+          schoolId: row.school_id, dataTier: row.data_tier ?? null,
+          institutionType: row.institution_type ?? null, yearEstablished: row.year_established ?? null,
+          knownForCourses: JSON.stringify(row.known_for_courses ?? []),
+          prcTopCourses: JSON.stringify(row.prc_top_courses ?? []),
+          chedCoeCod: row.ched_coe_cod ?? null, accreditation: row.accreditation ?? null,
+          entranceExamName: row.entrance_exam_name ?? null, entranceExamAcronym: row.entrance_exam_acronym ?? null,
+          testingCenterType: row.testing_center_type ?? null,
+          applicationOpen: row.application_open ?? null, applicationClose: row.application_close ?? null,
+          examMonth: row.exam_month ?? null,
+          estimatedPassingRate: row.estimated_passing_rate ?? null, estimatedSlots: row.estimated_slots ?? null,
+          tuitionFeeRange: row.tuition_fee_range ?? null,
+          freeTuition: row.free_tuition != null ? !!row.free_tuition : null,
+          academicCalendar: row.academic_calendar ?? null,
+          coursesOffered: JSON.stringify(row.courses_offered ?? []),
+          scholarshipsOffered: JSON.stringify(row.scholarships_offered ?? []),
+          websiteUrl: row.website_url ?? null, applicationPortalUrl: row.application_portal_url ?? null,
+          facebookUrl: row.facebook_url ?? null,
+          examDifficulty: row.exam_difficulty ?? null,
+          notablePrograms: JSON.stringify(row.notable_programs ?? []),
+          prcStrongBoards: JSON.stringify(row.prc_strong_boards ?? []),
+          notes: row.notes ?? null, dataConfidence: row.data_confidence ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(universityProfiles).values(vals).onConflictDoUpdate({ target: universityProfiles.schoolId, set: vals }).run()
+      }
+
+      for (const row of (courseSchoolRankingsRes.data ?? [])) {
+        const vals = {
+          id: row.id, courseTab: row.course_tab, courseName: row.course_name ?? null,
+          rank: row.rank ?? null, schoolName: row.school_name,
+          region: row.region ?? null, province: row.province ?? null,
+          wilsonScore: row.wilson_score ?? null, rawPassRate: row.raw_pass_rate ?? null,
+          totalExaminees: row.total_examinees ?? null, totalPassers: row.total_passers ?? null,
+          yearsWithData: row.years_with_data ?? null, examPeriods: row.exam_periods ?? null,
+          tertiarySchoolId: row.tertiary_school_id ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(courseSchoolRankings).values(vals).onConflictDoUpdate({ target: courseSchoolRankings.id, set: vals }).run()
+      }
+
+      for (const row of (courseSchoolQualityRes.data ?? [])) {
+        const vals = {
+          id: row.id, schoolName: row.school_name,
+          region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
+          courseStandardized: row.course_standardized ?? null, courseGroup: row.course_group ?? null,
+          schoolType: row.school_type ?? null, chedCoeCod: row.ched_coe_cod ?? null,
+          qualityScore: row.quality_score ?? null, qualityTier: row.quality_tier ?? null,
+          accreditations: JSON.stringify(row.accreditations ?? []),
+          hasPrcBoard: row.has_prc_board != null ? !!row.has_prc_board : null,
+          qsSubjectRank: row.qs_subject_rank ?? null, dataConfidence: row.data_confidence ?? null,
+          tertiarySchoolId: row.tertiary_school_id ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(courseSchoolQuality).values(vals).onConflictDoUpdate({ target: courseSchoolQuality.id, set: vals }).run()
+      }
+
+      for (const row of (barResultsRes.data ?? [])) {
+        const vals = {
+          id: row.id, schoolName: row.school_name,
+          region: row.region ?? null, province: row.province ?? null,
+          year: row.year ?? null,
+          passRate: row.pass_rate ?? null, nationalAvg: row.national_avg ?? null,
+          scRank: row.sc_rank ?? null, notes: row.notes ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(barResults).values(vals).onConflictDoUpdate({ target: barResults.id, set: vals }).run()
+      }
+
+      for (const row of (courseTaxonomyMapRes.data ?? [])) {
+        const vals = {
+          courseTab: row.course_tab, careerCourseId: row.career_course_id ?? null,
+          label: row.label ?? null, kind: row.kind ?? null,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(courseTaxonomyMap).values(vals).onConflictDoUpdate({ target: courseTaxonomyMap.courseTab, set: vals }).run()
+      }
 
       const syncedAt = Date.now()
       tx.insert(userSettings)
