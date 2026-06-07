@@ -247,3 +247,44 @@ export async function getAiImpactByCourseName(
     return null
   }
 }
+
+/**
+ * Find an AI career impact row where the user's question contains the course name
+ * (reverse LIKE match). Used when the user asks about a specific course by name
+ * in a longer question, e.g. "is computer science AI-proof?".
+ * Returns the first match or null. Never throws.
+ */
+export async function searchAiImpactByQuestion(
+  db: DrizzleClient,
+  question: string,
+): Promise<RetrievedAiImpact | null> {
+  if (!question || !question.trim()) return null
+  try {
+    const rows = await db.all<{
+      course_name: string | null
+      ai_safety_score: number | null
+      ai_safety_label: string | null
+      kuya_baw_summary: string | null
+    }>(sql`
+      SELECT
+        course_name,
+        ai_safety_score,
+        ai_safety_label,
+        kuya_baw_summary
+      FROM ai_career_impact
+      WHERE LOWER(${question.trim()}) LIKE '%' || LOWER(course_name) || '%'
+      LIMIT 1
+    `)
+    if (rows.length === 0 || rows[0] == null) return null
+    const r = rows[0]
+    return {
+      courseName: r.course_name,
+      aiSafetyScore: r.ai_safety_score,
+      aiSafetyLabel: r.ai_safety_label,
+      kuyaBawSummary: r.kuya_baw_summary,
+    }
+  } catch (err) {
+    console.warn('[flashcardRetriever] ai impact search failed:', err)
+    return null
+  }
+}
