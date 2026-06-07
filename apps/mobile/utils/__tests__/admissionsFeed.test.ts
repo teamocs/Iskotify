@@ -28,6 +28,6 @@ describe('upcomingEvents', () => {
     expect(upcomingEvents([item({ id:'n', eventDate:null })], '2026-06-03')).toEqual([])
   })
   it('SEVERITY_ORDER ranks urgent<important<info<no_change', () => {
-    expect(SEVERITY_ORDER.urgent).toBeLessThan(SEVERITY_ORDER.no_change)
+    expect(SEVERITY_ORDER.urgent!).toBeLessThan(SEVERITY_ORDER.no_change!)
   })
 })

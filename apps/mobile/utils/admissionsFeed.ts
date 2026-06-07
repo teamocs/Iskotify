@@ -21,7 +21,10 @@ export const SEVERITY_ORDER: Record<string, number> = {
 
 /** Parse a YYYY-MM-DD string as UTC midnight to avoid timezone drift. */
 function parseUTCDate(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number)
+  const parts = iso.split('-').map(Number)
+  const y = parts[0] ?? 1970
+  const m = parts[1] ?? 1
+  const d = parts[2] ?? 1
   return new Date(Date.UTC(y, m - 1, d))
 }
 
