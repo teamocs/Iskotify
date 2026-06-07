@@ -205,7 +205,7 @@ function formatShortDate(ms: number): string {
   return new Date(ms).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function daysUntil(ms: number): number {
+function msToDays(ms: number): number {
   return Math.ceil((ms - Date.now()) / 86_400_000)
 }
 
@@ -434,6 +434,7 @@ export default function HomeScreen() {
             body: r.body,
             eventDate: r.eventDate ?? null,
             eventType: r.eventType ?? null,
+            schoolSlug: r.schoolSlug ?? null,
             schoolName: r.schoolName ?? null,
             actionRequired: r.actionRequired ?? null,
             sources: r.sources,
@@ -701,6 +702,7 @@ export default function HomeScreen() {
         keyDate: ms,
         label: item.eventType === 'exam' ? 'Exam' : item.eventType === 'deadline' ? 'Deadline' : 'Event',
         entryType: 'admission' as const,
+        schoolSlug: item.schoolSlug ?? null,
       }
     })
     // Skip items whose eventDate is the same ms as an already-focused listing date
@@ -948,7 +950,7 @@ export default function HomeScreen() {
           {upcomingDates.length > 0 ? (
             <View style={{ gap: 8, marginBottom: 4 }}>
               {upcomingDates.map(item => {
-                const d = daysUntil(item.keyDate!)
+                const d = msToDays(item.keyDate!)
                 const dayColor = d < 14 ? '#f87171' : d < 30 ? '#fbbf24' : '#4ade80'
                 const isReminder = item.entryType === 'reminder'
                 return (
@@ -959,7 +961,12 @@ export default function HomeScreen() {
                       if (item.entryType === 'reminder') {
                         router.push(`/notes/${item.slug}`)
                       } else if (item.entryType === 'admission') {
-                        router.push('/practice/upcat')
+                        const slug = (item as any).schoolSlug
+                        if (slug === 'upcat' || item.title.toUpperCase().includes('UPCAT')) {
+                          router.push('/practice/upcat')
+                        } else {
+                          router.push('/(tabs)/updates')
+                        }
                       } else {
                         router.push(`/listings/${item.slug}`)
                       }

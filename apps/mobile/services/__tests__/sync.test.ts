@@ -1691,7 +1691,10 @@ describe('syncOnLaunch admissions_updates + listings.results_date (real SQLite)'
       action_required: 'Check portal',
       event_date: '2026-06-15',
       event_type: 'results_release',
-      sources: ['https://up.edu.ph/upcat', 'https://news.ph/upcat-2026'],
+      sources: [
+        { label: 'UP Portal', url: 'https://up.edu.ph/upcat' },
+        { label: 'News PH', url: 'https://news.ph/upcat-2026' },
+      ],
       verified: true,
       updated_at: '2026-06-01T08:00:00Z',
     }
@@ -1704,7 +1707,13 @@ describe('syncOnLaunch admissions_updates + listings.results_date (real SQLite)'
     expect(row).toBeTruthy()
     expect(row.severity).toBe('high')
     expect(row.title).toBe('UPCAT Results Released')
-    expect(row.sources).toBe('["https://up.edu.ph/upcat","https://news.ph/upcat-2026"]')
+    // sources must round-trip as JSON array of {label,url} objects
+    const parsedSources = JSON.parse(row.sources) as Array<{ label: string; url: string }>
+    expect(Array.isArray(parsedSources)).toBe(true)
+    expect(parsedSources).toHaveLength(2)
+    expect(parsedSources[0]!.url).toBe('https://up.edu.ph/upcat')
+    expect(parsedSources[1]!.url).toBe('https://news.ph/upcat-2026')
+    expect(parsedSources[0]!.label).toBe('UP Portal')
     expect(row.verified).toBe(1)
     expect(row.report_date).toBe('2026-06-01')
     expect(row.event_date).toBe('2026-06-15')

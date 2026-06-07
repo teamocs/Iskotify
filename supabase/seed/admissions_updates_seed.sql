@@ -1,5 +1,5 @@
 -- admissions_updates seed — June 3, 2026 weekly digest
--- 20 rows: urgent(1) + important(4) + info(6) + no_change(7) + unable_to_verify(2)
+-- 20 rows: urgent(1) + important(3) + info(7) + no_change(7) + 2 unverified(info,verified=false)
 -- Idempotent: ON CONFLICT (id) DO UPDATE
 
 INSERT INTO admissions_updates (

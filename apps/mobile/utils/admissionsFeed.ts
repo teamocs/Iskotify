@@ -6,6 +6,7 @@ export interface FeedItem {
   body: string
   eventDate: string | null
   eventType: string | null
+  schoolSlug?: string | null
   schoolName?: string | null
   actionRequired?: string | null
   sources?: any
