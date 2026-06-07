@@ -8,7 +8,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
+import { listings as listingsTable, savedListings as savedListingsTable, resultWatches } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 import { getSettings } from '../../services/settings'
@@ -30,6 +30,7 @@ interface FullListing {
   provider: string
   externalUrl: string
   grantAmount: string
+  resultsDate: number | null
   // scholarship-specific
   province: string | null
   city: string | null
@@ -64,6 +65,7 @@ export default function ListingDetailScreen() {
   const [loading, setLoading] = useState(true)
   const [acquiredCount, setAcquiredCount] = useState(0)
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
+  const [watchingResults, setWatchingResults] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
@@ -136,6 +138,28 @@ export default function ListingDetailScreen() {
       marginBottom: 12,
     },
     focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
+    watchBtn: {
+      marginHorizontal: 14,
+      borderWidth: 1,
+      borderColor: t.divider,
+      borderRadius: 18,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    watchBtnActive: {
+      borderColor: 'rgba(34,197,94,0.35)',
+      backgroundColor: 'rgba(34,197,94,0.08)',
+    },
+    watchBtnTxt: {
+      fontSize: typo.sm,
+      color: t.textSecondary,
+      fontFamily: 'Lexend_400Regular',
+    },
+    watchBtnTxtActive: {
+      color: '#4ade80',
+      fontFamily: 'Lexend_600SemiBold',
+    },
     // --- scholarship enrichment styles ---
     matchBlock: { marginHorizontal: 14, marginBottom: 12, borderRadius: 16, padding: 14, borderWidth: 1 },
     matchEligible: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
@@ -172,14 +196,16 @@ export default function ListingDetailScreen() {
 
   useEffect(() => {
     async function load() {
-      const [listingRows, savedRows, settings] = await Promise.all([
+      const [listingRows, savedRows, watchRows, settings] = await Promise.all([
         db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
         db.select({ id: savedListingsTable.id }).from(savedListingsTable),
+        db.select({ slug: resultWatches.slug }).from(resultWatches).where(eq(resultWatches.slug, slug)).limit(1),
         getSettings(db),
       ])
       const l = listingRows[0] ?? null
       setListing(l as FullListing | null)
       if (l) setSaved(savedRows.some(s => s.id === l.id))
+      setWatchingResults(watchRows.length > 0)
 
       if (l && l.type === 'scholarship') {
         let meta: Record<string, unknown> = {}
@@ -222,6 +248,17 @@ export default function ListingDetailScreen() {
     } else {
       await db.insert(savedListingsTable).values({ id: listing.id, savedAt: Date.now() }).onConflictDoNothing()
       setSaved(true)
+    }
+  }
+
+  async function toggleResultWatch() {
+    if (!listing) return
+    if (watchingResults) {
+      await db.delete(resultWatches).where(eq(resultWatches.slug, listing.slug))
+      setWatchingResults(false)
+    } else {
+      await db.insert(resultWatches).values({ slug: listing.slug, addedAt: Date.now() }).onConflictDoNothing()
+      setWatchingResults(true)
     }
   }
 
@@ -502,6 +539,21 @@ export default function ListingDetailScreen() {
             </Text>
           </TouchableOpacity>
         )}
+
+        {/* Watch results toggle — exams only */}
+        {isExam ? (
+          <TouchableOpacity
+            style={[s.watchBtn, watchingResults && s.watchBtnActive]}
+            onPress={toggleResultWatch}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={watchingResults ? 'Stop watching results' : 'Watch results'}
+          >
+            <Text style={[s.watchBtnTxt, watchingResults && s.watchBtnTxtActive]}>
+              {watchingResults ? '✓ Watching results' : '🔔 Watch results'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
         {/* Start practice CTA — exams only */}
         {!isScholarship ? (
