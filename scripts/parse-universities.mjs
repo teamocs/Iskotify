@@ -650,3 +650,53 @@ const nullCity = schools.filter(s => !s.city).length
 const nullAcronym = schools.filter(s => !s.acronym).length
 console.log(`NULL rates — region: ${nullRegion}/${schools.length}, province: ${nullProvince}/${schools.length}, city: ${nullCity}/${schools.length}, acronym: ${nullAcronym}/${schools.length}`)
 console.log(`is_suc TRUE: ${schools.filter(s=>s.is_suc===true).length}, FALSE: ${schools.filter(s=>s.is_suc===false).length}, NULL: ${schools.filter(s=>s.is_suc===null).length}`)
+
+// ─── Exported row builders (for apply-schools.mjs) ───
+// schools / profileRows are already built at module load time above.
+export function buildTertiarySchools() {
+  return schools.map(s => ({
+    id: s.id,
+    name: s.name,
+    acronym: s.acronym ?? null,
+    region: s.region ?? null,
+    province: s.province ?? null,
+    city: s.city ?? null,
+    type: s.type ?? null,
+    is_suc: s.is_suc,
+    is_luc: s.is_luc,
+    rank_in_province: s.rank_in_province ?? null,
+    deped_school_id: s.deped_school_id ?? null,
+  }))
+}
+
+export function buildUniversityProfiles() {
+  return profileRows.map(p => ({
+    school_id: p.school_id,
+    data_tier: p.data_tier ?? null,
+    entrance_exam_name: p.entrance_exam_name ?? null,
+    entrance_exam_acronym: p.entrance_exam_acronym ?? null,
+    testing_center_type: p.testing_center_type ?? null,
+    application_open: p.application_open ?? null,
+    application_close: p.application_close ?? null,
+    exam_month: p.exam_month ?? null,
+    estimated_passing_rate: p.estimated_passing_rate ?? null,
+    estimated_slots: p.estimated_slots ?? null,
+    tuition_fee_range: p.tuition_fee_range ?? null,
+    academic_calendar: p.academic_calendar ?? null,
+    website_url: p.website_url ?? null,
+    application_portal_url: p.application_portal_url ?? null,
+    facebook_url: p.facebook_url ?? null,
+    ched_coe_cod: p.ched_coe_cod ?? null,
+    accreditation: p.accreditation ?? null,
+    year_established: p.year_established ?? null,
+    known_for_courses: p.known_for_courses ?? [],
+    prc_top_courses: p.prc_top_courses ?? [],
+    courses_offered: p.courses_offered ?? [],
+    scholarships_offered: p.scholarships_offered ?? [],
+    notable_programs: p.notable_programs ?? [],
+    prc_strong_boards: p.prc_strong_boards ?? [],
+    free_tuition: p.free_tuition ?? null,
+    exam_difficulty: p.exam_difficulty ?? null,
+    data_confidence: p.data_confidence ?? null,
+  }))
+}

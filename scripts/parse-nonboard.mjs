@@ -318,3 +318,74 @@ ON CONFLICT (id) DO UPDATE SET
 
 writeFileSync(outPath, sql, 'utf8')
 console.error(`\nWrote ${sqlRows.length} rows → ${outPath}`)
+
+// --- Exported row builder (for apply-schools.mjs) ---
+// Builds JS row objects (not SQL strings) from the same source data.
+// Uses a fresh ID counter so IDs match exactly what the SQL seed generates.
+export function buildQuality() {
+  const _usedIds = new Map()
+  function _makeId(schoolName, courseStd) {
+    const base = makeSlug(schoolName) + '-' + makeSlug(courseStd)
+    const truncated = base.slice(0, 120)
+    if (!_usedIds.has(truncated)) { _usedIds.set(truncated, 1); return truncated }
+    const count = _usedIds.get(truncated) + 1
+    _usedIds.set(truncated, count)
+    return truncated + '-' + count
+  }
+
+  function _parseBool(s) {
+    if (s == null || s.trim() === '') return null
+    const lower = s.trim().toLowerCase()
+    if (lower === 'true' || lower === '1' || lower === 'yes') return true
+    if (lower === 'false' || lower === '0' || lower === 'no') return false
+    return null
+  }
+
+  function _parseInt(s) {
+    if (s == null || s.trim() === '') return null
+    const v = resolveSentinel(s.trim())
+    if (v == null) return null
+    const n = parseInt(v, 10)
+    return isNaN(n) ? null : n
+  }
+
+  return dataRows.map(cells => {
+    const schoolName = decodeMojibake(col(cells, 'school name'))
+    const regionCode = col(cells, 'region code')
+    const regionName = col(cells, 'region name')
+    const regionRaw = regionName || regionCode
+    const region = resolveSentinel(canonicalizeRegion(regionRaw))
+    const province = resolveSentinel(decodeMojibake(col(cells, 'province')))
+    const city = resolveSentinel(decodeMojibake(col(cells, 'city')))
+    const courseStd = resolveSentinel(decodeMojibake(col(cells, 'course standardized')))
+    const courseGroup = resolveSentinel(decodeMojibake(col(cells, 'course group')))
+    const schoolType = resolveSentinel(decodeMojibake(col(cells, 'school type')))
+    const chedCoeCod = buildChedCoeCod(cells)
+    const qualityScore = _parseInt(col(cells, 'quality score'))
+    const qualityTier = resolveSentinel(decodeMojibake(col(cells, 'quality tier')))
+    const hasPrcBoard = _parseBool(col(cells, 'has prc board'))
+    const qsSubjectRank = resolveSentinel(col(cells, 'qs subject rank'))
+    const dataConfidence = resolveSentinel(decodeMojibake(col(cells, 'data confidence')))
+    const accreditations = buildAccreditations(cells)
+    const id = _makeId(schoolName, courseStd ?? '')
+
+    return {
+      id,
+      school_name: schoolName,
+      region: region ?? null,
+      province: province ?? null,
+      city: city ?? null,
+      course_standardized: courseStd ?? null,
+      course_group: courseGroup ?? null,
+      school_type: schoolType ?? null,
+      ched_coe_cod: chedCoeCod ?? null,
+      quality_score: qualityScore,
+      quality_tier: qualityTier ?? null,
+      accreditations,
+      has_prc_board: hasPrcBoard,
+      qs_subject_rank: qsSubjectRank ?? null,
+      data_confidence: dataConfidence ?? null,
+      tertiary_school_id: null,
+    }
+  })
+}

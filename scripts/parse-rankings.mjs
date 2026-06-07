@@ -545,4 +545,73 @@ function main() {
   console.log(`Wrote: ${barOut}`)
 }
 
-main()
+// Only run main() when this file is the entry point (not when imported as a module)
+const _isMain = process.argv[1] && (
+  process.argv[1].replace(/\\/g, '/').endsWith('/scripts/parse-rankings.mjs') ||
+  process.argv[1].replace(/\\/g, '/').endsWith('/scripts/parse-rankings')
+)
+if (_isMain) main()
+
+// ---------------------------------------------------------------------------
+// Exported row builders (for apply-schools.mjs)
+// ---------------------------------------------------------------------------
+function _loadRankingsData() {
+  const allFiles = readdirSync(EXTRACTED_DIR)
+    .filter(f => f.startsWith('ISKOTIFY_TOP_SCHOOLS_BY_COURSE_v5__') && f.endsWith('.csv'))
+    .sort()
+
+  const allRankingRows = []
+  let barRows = []
+
+  for (const filename of allFiles) {
+    const filePath = resolve(EXTRACTED_DIR, filename)
+    const suffix = filename.replace('ISKOTIFY_TOP_SCHOOLS_BY_COURSE_v5__', '').replace('.csv', '')
+    if (suffix === 'INDEX') continue
+    if (suffix === 'Bar') {
+      barRows = parseBarFile(filePath)
+      continue
+    }
+    const courseTab = FILENAME_TO_TAB[suffix]
+    if (!courseTab) continue
+    const rows = parseBoardFile(filePath, courseTab)
+    allRankingRows.push(...rows)
+  }
+
+  return { allRankingRows, barRows }
+}
+
+export function buildRankings() {
+  const { allRankingRows } = _loadRankingsData()
+  // Return row objects with numeric/null values (not SQL strings)
+  return allRankingRows.map(r => ({
+    id: r.id,
+    course_tab: r.course_tab,
+    course_name: r.course_name ?? null,
+    rank: r.rank,
+    school_name: r.school_name,
+    region: r.region ?? null,
+    province: r.province ?? null,
+    wilson_score: r.wilson_score !== '' && r.wilson_score != null ? parseFloat(String(r.wilson_score).replace(/%/g, '')) || null : null,
+    raw_pass_rate: r.raw_pass_rate !== '' && r.raw_pass_rate != null ? parseFloat(String(r.raw_pass_rate).replace(/%/g, '')) || null : null,
+    total_examinees: r.total_examinees !== '' && r.total_examinees != null ? parseInt(String(r.total_examinees).replace(/,/g, ''), 10) || null : null,
+    total_passers: r.total_passers !== '' && r.total_passers != null ? parseInt(String(r.total_passers).replace(/,/g, ''), 10) || null : null,
+    years_with_data: r.years_with_data ?? null,
+    exam_periods: r.exam_periods !== '' && r.exam_periods != null ? parseInt(String(r.exam_periods).replace(/,/g, ''), 10) || null : null,
+    tertiary_school_id: null,
+  }))
+}
+
+export function buildBarResults() {
+  const { barRows } = _loadRankingsData()
+  return barRows.map(r => ({
+    id: r.id,
+    school_name: r.school_name,
+    region: r.region ?? null,
+    province: r.province ?? null,
+    year: r.year,
+    pass_rate: r.pass_rate !== '' && r.pass_rate != null ? parseFloat(String(r.pass_rate).replace(/%/g, '')) || null : null,
+    national_avg: r.national_avg !== '' && r.national_avg != null ? parseFloat(String(r.national_avg).replace(/%/g, '')) || null : null,
+    sc_rank: r.sc_rank !== '' && r.sc_rank != null ? parseInt(String(r.sc_rank).replace(/,/g, ''), 10) || null : null,
+    notes: r.notes ?? null,
+  }))
+}
