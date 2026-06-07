@@ -178,13 +178,14 @@ function parseArray(cell) {
 }
 
 // ─── 6. Determine is_suc / is_luc from type string ───
+// These columns are NOT NULL DEFAULT false — unknown → false, never null.
 function inferSuc(isSucCol, typeStr) {
   const suc = (isSucCol ?? '').trim().toUpperCase()
   if (suc === 'Y' || suc === 'YES' || suc === 'TRUE' || suc === '1') return true
   if (suc === 'N' || suc === 'NO' || suc === 'FALSE' || suc === '0') return false
   const t = (typeStr ?? '').toLowerCase()
   if (/state|suc|government/.test(t)) return true
-  return null
+  return false  // unknown → false (NOT NULL DEFAULT false)
 }
 function inferLuc(isLucCol, typeStr) {
   const luc = (isLucCol ?? '').trim().toUpperCase()
@@ -192,7 +193,7 @@ function inferLuc(isLucCol, typeStr) {
   if (luc === 'N' || luc === 'NO' || luc === 'FALSE' || luc === '0') return false
   const t = (typeStr ?? '').toLowerCase()
   if (/local|luc/.test(t)) return true
-  return null
+  return false  // unknown → false (NOT NULL DEFAULT false)
 }
 
 // ─── 7. Free tuition inference ───
@@ -367,6 +368,12 @@ for (const r of provinceRows) {
 
 const schools = [...schoolMap.values()]
 
+// Coerce is_suc / is_luc: these are NOT NULL DEFAULT false — null must never reach the seed.
+for (const s of schools) {
+  if (s.is_suc !== true) s.is_suc = false
+  if (s.is_luc !== true) s.is_luc = false
+}
+
 // Verify no duplicate ids
 const idCounts = new Map()
 for (const s of schools) idCounts.set(s.id, (idCounts.get(s.id) ?? 0) + 1)
@@ -475,10 +482,11 @@ console.log(`\nuniversity_profiles: ${profilesEmitted} rows (skipped ${profilesS
 console.log(`free_tuition: TRUE=${freeTuitionTrue}, FALSE=${freeTuitionFalse}, NULL=${freeTuitionNull}`)
 
 // ─── 14. Generate tertiary_schools SQL ───
+// boolSql is used only for is_suc / is_luc (NOT NULL DEFAULT false).
+// Unknown/null → 'FALSE' — never emit NULL for these columns.
 function boolSql(v) {
   if (v === true) return 'TRUE'
-  if (v === false) return 'FALSE'
-  return 'NULL'
+  return 'FALSE'  // false or null/undefined → FALSE (column is NOT NULL DEFAULT false)
 }
 
 const schoolsCols = [
