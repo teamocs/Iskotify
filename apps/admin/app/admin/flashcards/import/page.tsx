@@ -69,6 +69,7 @@ function rowsToCsv(rows: CsvRow[]): string {
 export default function ImportCsvPage() {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
+  const [looksLikeQuestionBank, setLooksLikeQuestionBank] = useState(false)
   const [allRows, setAllRows] = useState<CsvRow[]>([])
   const [previewRows, setPreviewRows] = useState<CsvRow[]>([])
   const [totalRows, setTotalRows] = useState(0)
@@ -82,7 +83,7 @@ export default function ImportCsvPage() {
 
   function handleFile(f: File) {
     setFile(f)
-    setFileError(null); setRowErrors([]); setImportResult(null); setChunkProgress(null)
+    setFileError(null); setRowErrors([]); setImportResult(null); setChunkProgress(null); setLooksLikeQuestionBank(false)
     if (f.size > 5 * 1024 * 1024) { setFileError('File too large (max 5MB)'); return }
 
     f.text().then(text => {
@@ -90,6 +91,11 @@ export default function ImportCsvPage() {
         header: true, skipEmptyLines: true,
         transformHeader: h => h.trim().toLowerCase().replace(/^﻿/, ''),
       })
+      const fields = parsed.meta.fields ?? []
+      // The Question Bank uses A–D option columns / subtests; the 6-column flashcard
+      // format does not. If we see those headers, the admin picked the wrong importer.
+      const qbMarkers = ['q id', 'option a', 'subtest', 'main subject', 'passage / set text']
+      setLooksLikeQuestionBank(qbMarkers.some(m => fields.includes(m)))
       const all = parsed.data as CsvRow[]
       setAllRows(all)
       setTotalRows(all.length)
@@ -177,6 +183,16 @@ export default function ImportCsvPage() {
           </div>
 
           <CsvDropzone onFileSelected={handleFile} disabled={importing} />
+
+          {looksLikeQuestionBank && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 text-sm">
+              <strong>This looks like a Question Bank CSV</strong> (it has Q ID / Subtest / Option A–D columns). This
+              page only imports the 6-column flashcard format. Use{' '}
+              <Link href="/admin/upcat/import" className="text-[#800000] underline font-medium">Import Question Bank</Link>{' '}
+              instead — it validates every row, lets you fix errors inline, preserves passages, and feeds both the
+              mock-exam engine and the flashcard quiz.
+            </div>
+          )}
 
           {fileError && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">
