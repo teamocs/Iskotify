@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import * as Updates from 'expo-updates'
 import { SQLiteProvider } from 'expo-sqlite'
 import { useFonts } from 'expo-font'
 import {
@@ -20,6 +21,7 @@ import { DrizzleProvider } from '../db'
 import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
 import { AiCoachProvider } from '../providers/AiCoachProvider'
+import { KuyaChatProvider } from '../providers/KuyaChatProvider'
 import { syncOnLaunch } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
@@ -97,6 +99,23 @@ function AppInit({ onReady }: { onReady: () => void }) {
   const { isDark } = useTheme()
 
   const initialize = useCallback(async () => {
+    // Proactively pull + apply any pending OTA update so users actually receive
+    // fixes on this launch, instead of only after a second manual relaunch. Bounded
+    // to ~5s so a slow network can't block startup; reloadAsync restarts the app.
+    if (Updates.isEnabled) {
+      try {
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000))
+        const check = await Promise.race([Updates.checkForUpdateAsync(), timeout])
+        if (check && check.isAvailable) {
+          await Updates.fetchUpdateAsync()
+          await Updates.reloadAsync()
+          return  // app restarts with the new bundle; nothing below runs
+        }
+      } catch (e) {
+        console.warn('[layout] OTA check failed (non-fatal):', e)
+      }
+    }
+
     // Navigate based on local DB — instant, no network required
     try {
       const [rows, focusRows] = await Promise.all([
@@ -161,9 +180,11 @@ function AppInit({ onReady }: { onReady: () => void }) {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AiCoachProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
-        </Stack>
+        <KuyaChatProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
+          </Stack>
+        </KuyaChatProvider>
       </AiCoachProvider>
     </>
   )

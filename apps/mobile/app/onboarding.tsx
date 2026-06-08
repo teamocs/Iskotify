@@ -197,7 +197,9 @@ export default function OnboardingScreen() {
   // tertiary_schools) aren't synced into the local DB until after the first sync,
   // which only runs once focus listings are chosen (i.e. after this step).
   useEffect(() => {
-    if (step !== 2 || examCatalog.length > 0) return
+    // Load on step 2 and, as a fallback, on the courses step too — so the course
+    // list/recommendations still populate even if the step-2 fetch was missed.
+    if ((step !== 2 && step !== 'courses') || examCatalog.length > 0) return
     setLoadingExams(true)
     void (async () => {
       try {
@@ -255,25 +257,26 @@ export default function OnboardingScreen() {
     // Need at least one target exam or scholarship to proceed.
     if (selectedExams.length === 0 && selectedSlugs.length === 0) return
     setSaving(true)
+    // Pure computations up front (can't throw) so the persist+navigation below is simple.
+    const now = Date.now()
+    const examSlugs = Array.from(new Set(
+      selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
+    ))
+    // Focus = chosen scholarships first, then any selected exam that maps to a
+    // content slug (only UPCAT has authored cards today). De-duplicated.
+    const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
+    const primarySlug = focusSlugs[0] ?? ''
+    const targetExamsJson = JSON.stringify(
+      selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
+    )
+    const profileFields = {
+      fullName: fullName.trim(),
+      school: school.trim(),
+      schoolRegion: canonicalizeRegion(schoolRegion),
+      gradeLevel: gradeLevel ?? undefined,
+      targetExams: targetExamsJson,
+    }
     try {
-      const now = Date.now()
-      const examSlugs = Array.from(new Set(
-        selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
-      ))
-      // Focus = chosen scholarships first, then any selected exam that maps to a
-      // content slug (only UPCAT has authored cards today). De-duplicated.
-      const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
-      const primarySlug = focusSlugs[0] ?? ''
-      const targetExamsJson = JSON.stringify(
-        selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
-      )
-      const profileFields = {
-        fullName: fullName.trim(),
-        school: school.trim(),
-        schoolRegion: canonicalizeRegion(schoolRegion),
-        gradeLevel: gradeLevel ?? undefined,
-        targetExams: targetExamsJson,
-      }
       await db.transaction(tx => {
         tx.insert(userSettings).values({
           id: 1, selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields,
@@ -297,17 +300,17 @@ export default function OnboardingScreen() {
             .eq('id', data.user.id)
         }
       })
-      // Advance straight to the courses step; sync content in the background so a
-      // slow/failing sync can never block Continue (the home screen re-syncs anyway).
-      setStep('courses')
-      void syncOnLaunch(db)
-        .then(() => runEnhancement(db))
-        .catch(e => console.warn('[onboarding] background sync error:', e))
     } catch (e) {
-      console.error('[onboarding] step 2 confirm error:', e)
-    } finally {
-      setSaving(false)
+      // Persist failure must NOT block Continue — log and proceed; the home screen
+      // re-syncs on launch and the selections live in component state.
+      console.error('[onboarding] step 2 persist error (continuing anyway):', e)
     }
+    // ALWAYS advance to the courses step; sync content in the background.
+    setSaving(false)
+    setStep('courses')
+    void syncOnLaunch(db)
+      .then(() => runEnhancement(db))
+      .catch(e => console.warn('[onboarding] background sync error:', e))
   }
 
   async function handleMatcherContinue(skip = false) {

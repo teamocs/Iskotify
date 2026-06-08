@@ -3,7 +3,7 @@ import { Alert, StyleSheet, View, Text, TouchableOpacity, ScrollView, Modal, Swi
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
+import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineiconshq/free-icons'
 import { useHomeStats, type FocusedListing, type NoteReminder } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useNotifications } from '../../hooks/useNotifications'
@@ -738,6 +738,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/settings')}>
               <Lineicons icon={Gear1Outlined} size={20} color={t.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.iconBtn} onPress={() => router.push('/(tabs)/profile')} accessibilityLabel="Profile">
+              <Lineicons icon={User4Outlined} size={20} color={t.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
