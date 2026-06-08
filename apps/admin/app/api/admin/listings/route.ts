@@ -28,6 +28,30 @@ export async function GET() {
   }
 }
 
+// Edit a listing's course-field tags (admin-gated via middleware). Sets source='manual'.
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const id = body?.id as string | undefined
+    const targetCourses = body?.target_courses
+    if (!id || !Array.isArray(targetCourses)) {
+      return NextResponse.json({ error: 'id and target_courses[] are required' }, { status: 400 })
+    }
+    const db = createServerClient()
+    const { error } = await db.from('listings')
+      .update({ target_courses: targetCourses, target_courses_source: 'manual' })
+      .eq('id', id)
+    if (error) {
+      console.error('[admin/listings PATCH] supabase error:', error)
+      return NextResponse.json({ error: 'Database error' }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[admin/listings PATCH] unexpected:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()

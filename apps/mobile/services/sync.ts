@@ -189,7 +189,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     const [listingsRes, subjectsRes, topicsRes, admissionsUpdatesRes] = await Promise.all([
       supabase.from('listings')
-        .select('id,slug,title,type,status,exam_date,region,description,requirements,coverage,provider,external_url,deadline,grant_amount,province,city,scope,is_verified,income_ceiling,gwa_requirement,monthly_stipend,service_obligation_years,has_entrance_exam,application_window,scholarship_meta,results_date')
+        .select('id,slug,title,type,status,exam_date,region,description,requirements,coverage,provider,external_url,deadline,grant_amount,province,city,scope,is_verified,income_ceiling,gwa_requirement,monthly_stipend,service_obligation_years,has_entrance_exam,application_window,scholarship_meta,results_date,target_courses')
         .gt('updated_at', since),
       supabase.from('flashcard_subjects').select('id,name').gt('updated_at', since),
       supabase.from('flashcard_topics').select('id,name,subject_id,status').gt('updated_at', since),
@@ -292,6 +292,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           applicationWindow: row.application_window ?? null,
           scholarshipMeta: JSON.stringify(row.scholarship_meta ?? {}),
           resultsDate: row.results_date ? new Date(row.results_date).getTime() : null,
+          targetCourses: JSON.stringify(row.target_courses ?? []),
         }
         tx.insert(listings).values(vals).onConflictDoUpdate({ target: listings.id, set: vals }).run()
       }

@@ -533,7 +533,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       has_entrance_exam INTEGER NOT NULL DEFAULT 0,
       application_window TEXT,
       scholarship_meta TEXT NOT NULL DEFAULT '{}',
-      results_date INTEGER
+      results_date INTEGER,
+      target_courses TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS admissions_updates (
       id TEXT PRIMARY KEY NOT NULL, report_date TEXT, severity TEXT NOT NULL,

@@ -59,6 +59,9 @@ export const listings = sqliteTable('listings', {
   applicationWindow: text('application_window'),
   scholarshipMeta: text('scholarship_meta').notNull().default('{}'),
   resultsDate: integer('results_date'),
+  // JSON array of course-cluster names this listing is open to, or ["all"]. Joins to
+  // a student's target course via that course's career_courses.cluster.
+  targetCourses: text('target_courses').notNull().default('[]'),
 }, (t) => [
   index('listings_slug_idx').on(t.slug),
 ])

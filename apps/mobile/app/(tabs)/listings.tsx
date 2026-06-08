@@ -8,7 +8,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { listings as listingsTable, savedListings as savedListingsTable } from '../../db/schema'
+import { listings as listingsTable, savedListings as savedListingsTable, careerCourses } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { syncOnLaunch } from '../../services/sync'
 import { getSettings } from '../../services/settings'
@@ -37,11 +37,16 @@ interface ListingRow extends SearchableListing {
   gwaRequirement: number | null
   serviceObligationYears: number | null
   scholarshipMeta: string | null
+  targetCourses: string[]
 }
 
 function fmtDate(ts: number | null): string {
   if (!ts) return 'Date TBA'
   return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function parseStrArray(s: string | null | undefined): string[] {
+  try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v.map(String) : [] } catch { return [] }
 }
 
 function toMatchInput(l: ListingRow): MatchInput {
@@ -69,6 +74,7 @@ export default function ExamsScreen() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [profile, setProfile] = useState<StudentProfile>({})
   const [userRegion, setUserRegion] = useState<string>('')
+  const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
   const [segment, setSegment] = useState<Segment>('exam')
   const [query, setQuery] = useState('')
 
@@ -78,21 +84,37 @@ export default function ExamsScreen() {
   const [refreshing, setRefreshing] = useState(false)
 
   const loadListings = useCallback(async () => {
-    const [rows, saved, settings] = await Promise.all([
+    const [rows, saved, settings, ccRows] = await Promise.all([
       db.select({
         id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
         type: listingsTable.type, examDate: listingsTable.examDate, region: listingsTable.region,
         provider: listingsTable.provider, province: listingsTable.province, city: listingsTable.city, scope: listingsTable.scope,
         isVerified: listingsTable.isVerified, incomeCeiling: listingsTable.incomeCeiling,
         gwaRequirement: listingsTable.gwaRequirement, serviceObligationYears: listingsTable.serviceObligationYears,
-        scholarshipMeta: listingsTable.scholarshipMeta,
+        scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
       }).from(listingsTable),
       db.select({ id: savedListingsTable.id }).from(savedListingsTable),
       getSettings(db),
+      db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
     ])
-    setAll(rows as ListingRow[])
+    // The local target_courses column stores a JSON array of cluster names (or ["all"]).
+    setAll(rows.map(r => ({ ...r, targetCourses: parseStrArray(r.targetCourses as unknown as string) })) as ListingRow[])
     setSavedIds(new Set(saved.map(s => s.id)))
     setUserRegion(settings.schoolRegion ?? '')
+
+    // Map the user's chosen target courses → their course clusters, so we can flag
+    // course-specific listings that match the student's field.
+    const clusterByCourse = new Map<string, string>()
+    for (const c of ccRows) if (c.cluster) clusterByCourse.set(c.courseId, c.cluster)
+    let userCourses: { careerCourseId?: string | null }[] = []
+    try { const v = JSON.parse(settings.targetCourses ?? '[]'); if (Array.isArray(v)) userCourses = v } catch { /* ignore */ }
+    const uClusters = new Set<string>()
+    for (const uc of userCourses) {
+      const cl = uc.careerCourseId ? clusterByCourse.get(uc.careerCourseId) : undefined
+      if (cl) uClusters.add(cl)
+    }
+    setUserClusters(uClusters)
+
     setProfile({
       gradeLevel: settings.gradeLevel ?? undefined,
       incomeBracket: settings.incomeBracket ?? undefined,
@@ -218,6 +240,9 @@ export default function ExamsScreen() {
     verifiedTxt: { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
     focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
     focusBadgeTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    forCourseBadge: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
+    forCourseTxt: { fontSize: typo.xs, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    eligibleLine: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 3 },
     bookmarkBtn: { padding: 2, flexShrink: 0 },
     bookmarkIcon: { fontSize: 14, opacity: 0.35 },
     bookmarkIconSaved: { opacity: 1 },
@@ -231,6 +256,9 @@ export default function ExamsScreen() {
     const isSaved = savedIds.has(l.id)
     const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id)) ? matchStatusMap.get(l.id)! : 'unknown'
     const p = getPriority(l.slug)
+    const tc = l.targetCourses ?? []
+    const openToAll = tc.length === 0 || tc.includes('all')
+    const forMyCourse = !openToAll && userClusters.size > 0 && tc.some(c => userClusters.has(c))
     return (
       <TouchableOpacity style={s.card} onPress={() => router.push(`/listings/${l.slug}`)} activeOpacity={0.8}>
         <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
@@ -240,6 +268,7 @@ export default function ExamsScreen() {
           <View style={s.row1}>
             <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
             {p !== null ? <View style={s.focusBadge}><Text style={s.focusBadgeTxt}>#{p} Focus</Text></View> : null}
+            {forMyCourse ? <View style={s.forCourseBadge}><Text style={s.forCourseTxt}>✦ For your course</Text></View> : null}
           </View>
           <View style={s.row2}>
             {exam ? <Text style={s.dateText}>{fmtDate(l.examDate)}</Text> : null}
@@ -248,6 +277,7 @@ export default function ExamsScreen() {
             {!exam && l.isVerified ? <View style={s.verifiedBadge}><Text style={s.verifiedTxt}>✓ Verified</Text></View> : null}
             {!exam ? <MatchPill status={matchStatus} /> : null}
           </View>
+          {!openToAll ? <Text style={s.eligibleLine} numberOfLines={1}>🎓 {tc.join(' · ')}</Text> : null}
         </View>
         <TouchableOpacity style={s.bookmarkBtn} onPress={() => toggleSave(l.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
@@ -255,7 +285,7 @@ export default function ExamsScreen() {
       </TouchableOpacity>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, matchStatusMap, getPriority, s, t, scholarColor])
+  }, [savedIds, matchStatusMap, getPriority, userClusters, s, t, scholarColor])
 
   const showAiActive = !!query.trim() && aiResults !== null
   const listHeader = (

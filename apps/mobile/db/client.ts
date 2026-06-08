@@ -489,6 +489,8 @@ const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN target_exams TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE user_settings ADD COLUMN target_courses TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE user_settings ADD COLUMN school_region TEXT NOT NULL DEFAULT ''`,
+  // Course-field eligibility for listings (cluster names or ["all"]) — connects courses to exams/scholarships.
+  `ALTER TABLE listings ADD COLUMN target_courses TEXT NOT NULL DEFAULT '[]'`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

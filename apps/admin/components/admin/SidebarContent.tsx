@@ -10,6 +10,7 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     section: 'LISTINGS',
     items: [
       { href: '/admin/listings', icon: '📋', label: 'All Listings' },
+      { href: '/admin/listings/courses', icon: '🎓', label: 'Course Tags' },
     ],
   },
   {
