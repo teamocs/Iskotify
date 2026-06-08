@@ -236,6 +236,28 @@ export async function runCoachInference(prompt: string): Promise<string | null> 
   })
 }
 
+// ── Raw completion (used by the offline tier of hybrid listing search) ───────
+
+export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<string | null> {
+  return withMutex(async () => {
+    const ctx = await getContext()
+    lastUsedAt = Date.now()
+    try {
+      const result = await ctx.completion({
+        prompt,
+        n_predict: maxTokens,
+        temperature: 0.3,
+        stop: ['<end_of_turn>', '<eos>', '\n\n'],
+      })
+      lastUsedAt = Date.now()
+      return (result.text ?? '').trim() || null
+    } catch (err) {
+      await releaseContext()
+      throw err
+    }
+  })
+}
+
 // ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
 
 export interface StreamChatOptions {
