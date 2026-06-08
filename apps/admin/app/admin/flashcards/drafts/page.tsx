@@ -19,7 +19,7 @@ export default function DraftsPage() {
               </p>
             </div>
             <Link
-              href="/admin/flashcards/import"
+              href="/admin/upcat/import"
               className="inline-flex items-center rounded-[980px] bg-[#800000] hover:bg-[#9a0a1f] text-white px-4 py-2 text-sm font-semibold shadow-sm whitespace-nowrap"
             >
               + Import CSV
