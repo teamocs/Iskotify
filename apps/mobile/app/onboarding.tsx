@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import {
-  View, Text, TextInput, SectionList, FlatList, StyleSheet,
+  View, Text, TextInput, SectionList, StyleSheet,
   TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -11,8 +11,7 @@ import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import {
-  userSettings, practiceSessions, focusListings as focusListingsTable,
-  universityProfiles, tertiarySchools, courseTaxonomyMap, careerCourses, upcatQuestions,
+  userSettings, practiceSessions, focusListings as focusListingsTable, upcatQuestions,
 } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { SchoolPicker } from '../components/SchoolPicker'
@@ -30,6 +29,13 @@ import { canonicalizeRegion } from '../utils/region'
 
 function parseJsonArray(s: string | null | undefined): string[] {
   try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+// Supabase text[] columns arrive as JS arrays; local/JSON ones as strings. Handle both.
+function asArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String)
+  if (typeof v === 'string') return parseJsonArray(v)
+  return []
 }
 
 const PRE_ASSESS_SUBTESTS = ['Mathematics', 'Science', 'Language Proficiency'] as const
@@ -79,7 +85,7 @@ export default function OnboardingScreen() {
   const { theme: t, typo } = useTheme()
 
   // Step 1
-  const [step, setStep] = useState<1 | 2 | 'matcher' | 'exams' | 'courses' | 3>(1)
+  const [step, setStep] = useState<1 | 2 | 'matcher' | 'courses' | 3>(1)
   const [fullName, setFullName] = useState('')
   const [school, setSchool] = useState('')
   const [schoolRegion, setSchoolRegion] = useState('')
@@ -170,51 +176,61 @@ export default function OnboardingScreen() {
     supabase
       .from('listings')
       .select('id,slug,title,type,exam_date')
+      .eq('type', 'scholarship')
       .in('status', ['active', 'upcoming'])
       .order('title')
       .then(({ data, error }) => {
-        if (error) console.error('[onboarding] fetch listings:', error)
+        if (error) console.error('[onboarding] fetch scholarships:', error)
         setListings(data ?? [])
         setLoadingListings(false)
       })
   }, [step])
 
-  // Build the Target University Exams catalog from on-device tables when entering the step.
+  // Build the searchable, region-ordered exam catalog + course data when entering
+  // step 2. Fetched from Supabase because the catalog tables (university_profiles /
+  // tertiary_schools) aren't synced into the local DB until after the first sync,
+  // which only runs once focus listings are chosen (i.e. after this step).
   useEffect(() => {
-    if (step !== 'exams' || examCatalog.length > 0) return
+    if (step !== 2 || examCatalog.length > 0) return
     setLoadingExams(true)
     void (async () => {
       try {
-        const [profRows, schoolRows, taxRows, ccRows] = await Promise.all([
-          db.select({
-            schoolId: universityProfiles.schoolId,
-            dataTier: universityProfiles.dataTier,
-            entranceExamAcronym: universityProfiles.entranceExamAcronym,
-            entranceExamName: universityProfiles.entranceExamName,
-            examMonth: universityProfiles.examMonth,
-            knownForCourses: universityProfiles.knownForCourses,
-            prcTopCourses: universityProfiles.prcTopCourses,
-          }).from(universityProfiles),
-          db.select({
-            id: tertiarySchools.id,
-            name: tertiarySchools.name,
-            acronym: tertiarySchools.acronym,
-            region: tertiarySchools.region,
-            province: tertiarySchools.province,
-            rankInProvince: tertiarySchools.rankInProvince,
-          }).from(tertiarySchools),
-          db.select({ courseTab: courseTaxonomyMap.courseTab, careerCourseId: courseTaxonomyMap.careerCourseId, label: courseTaxonomyMap.label }).from(courseTaxonomyMap),
-          db.select({ courseId: careerCourses.courseId, name: careerCourses.name }).from(careerCourses),
+        const [profRes, schoolRes, taxRes, ccRes] = await Promise.all([
+          supabase.from('university_profiles').select('school_id,data_tier,entrance_exam_acronym,entrance_exam_name,exam_month,known_for_courses,prc_top_courses'),
+          supabase.from('tertiary_schools').select('id,name,acronym,region,province,rank_in_province'),
+          supabase.from('course_taxonomy_map').select('course_tab,career_course_id,label'),
+          supabase.from('career_courses').select('course_id,name'),
         ])
-        const profiles = profRows.map(p => ({
-          ...p,
-          knownForCourses: parseJsonArray(p.knownForCourses),
-          prcTopCourses: parseJsonArray(p.prcTopCourses),
+        const profiles = (profRes.data ?? []).map((p: Record<string, unknown>) => ({
+          schoolId: p.school_id as string,
+          dataTier: (p.data_tier as string) ?? '',
+          entranceExamAcronym: (p.entrance_exam_acronym as string) ?? '',
+          entranceExamName: (p.entrance_exam_name as string) ?? null,
+          examMonth: (p.exam_month as string) ?? null,
+          knownForCourses: asArray(p.known_for_courses),
+          prcTopCourses: asArray(p.prc_top_courses),
         }))
-        taxonomyRef.current = taxRows
-        careerRef.current = ccRows
-        setExamCatalog(buildExamCatalog(profiles, schoolRows))
-        setAllCourses(allCourseOptions(taxRows, ccRows))
+        const schools = (schoolRes.data ?? []).map((s: Record<string, unknown>) => ({
+          id: s.id as string,
+          name: (s.name as string) ?? '',
+          acronym: (s.acronym as string) ?? null,
+          region: (s.region as string) ?? null,
+          province: (s.province as string) ?? null,
+          rankInProvince: (s.rank_in_province as number) ?? null,
+        }))
+        const tax = (taxRes.data ?? []).map((r: Record<string, unknown>) => ({
+          courseTab: (r.course_tab as string) ?? '',
+          careerCourseId: (r.career_course_id as string) ?? '',
+          label: (r.label as string) ?? '',
+        }))
+        const cc = (ccRes.data ?? []).map((r: Record<string, unknown>) => ({
+          courseId: (r.course_id as string) ?? '',
+          name: (r.name as string) ?? '',
+        }))
+        taxonomyRef.current = tax
+        careerRef.current = cc
+        setExamCatalog(buildExamCatalog(profiles, schools))
+        setAllCourses(allCourseOptions(tax, cc))
       } catch (e) {
         console.warn('[onboarding] exam catalog load error:', e)
       } finally {
@@ -229,45 +245,61 @@ export default function OnboardingScreen() {
     setStep(2)
   }
 
-  async function handleConfirmListings() {
-    if (selectedSlugs.length === 0) return
+  async function handleConfirmStep2() {
+    // Need at least one target exam or scholarship to proceed.
+    if (selectedExams.length === 0 && selectedSlugs.length === 0) return
     setSaving(true)
     try {
       const now = Date.now()
+      const examSlugs = Array.from(new Set(
+        selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
+      ))
+      // Focus = chosen scholarships first, then any selected exam that maps to a
+      // content slug (only UPCAT has authored cards today). De-duplicated.
+      const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
+      const primarySlug = focusSlugs[0] ?? ''
+      const targetExamsJson = JSON.stringify(
+        selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
+      )
+      const profileFields = {
+        fullName: fullName.trim(),
+        school: school.trim(),
+        schoolRegion: canonicalizeRegion(schoolRegion),
+        gradeLevel: gradeLevel ?? undefined,
+        targetExams: targetExamsJson,
+      }
       await db.transaction(tx => {
-        const profileFields = {
-          fullName: fullName.trim(),
-          school: school.trim(),
-          schoolRegion: canonicalizeRegion(schoolRegion),
-          gradeLevel: gradeLevel ?? undefined,
-        }
         tx.insert(userSettings).values({
-          id: 1,
-          selectedListingSlug: selectedSlugs[0]!,
-          lastSyncedAt: 0,
-          ...profileFields,
+          id: 1, selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields,
         }).onConflictDoUpdate({
           target: userSettings.id,
-          set: {
-            selectedListingSlug: selectedSlugs[0]!,
-            lastSyncedAt: 0,
-            ...profileFields,
-          },
+          set: { selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields },
         }).run()
-
-        for (let i = 0; i < selectedSlugs.length; i++) {
+        for (let i = 0; i < focusSlugs.length; i++) {
           tx.insert(focusListingsTable)
-            .values({ listingSlug: selectedSlugs[i]!, priority: i + 1, addedAt: now })
+            .values({ listingSlug: focusSlugs[i]!, priority: i + 1, addedAt: now })
             .onConflictDoNothing()
             .run()
         }
       })
-      setSelectedSlug(selectedSlugs[0]!)
-      await syncOnLaunch(db)
-      void runEnhancement(db)  // Fire-and-forget — runs in background, won't block UI
+      setSelectedSlug(primarySlug)
+      setRecommendedCourses(recommendCourses(selectedExams, taxonomyRef.current, careerRef.current))
+      // Best-effort cloud mirror of target exams when signed in.
+      void supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          void supabase.from('profiles')
+            .update({ target_exams: selectedExams.map(e => e.examAcronym) })
+            .eq('id', data.user.id)
+        }
+      })
+      // Advance immediately and sync content in the background, so a slow/failing
+      // sync can never block Continue (the home screen re-syncs on launch anyway).
       setStep('matcher')
+      void syncOnLaunch(db)
+        .then(() => runEnhancement(db))
+        .catch(e => console.warn('[onboarding] background sync error:', e))
     } catch (e) {
-      console.error('[onboarding] confirm error:', e)
+      console.error('[onboarding] step 2 confirm error:', e)
     } finally {
       setSaving(false)
     }
@@ -298,45 +330,6 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] matcher persist error:', e)
       }
     }
-    setStep('exams')
-  }
-
-  async function handleExamsContinue(skip = false) {
-    if (!skip && selectedExams.length > 0) {
-      try {
-        const targetExamsJson = JSON.stringify(
-          selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
-        )
-        const now = Date.now()
-        const slugs = Array.from(new Set(
-          selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
-        ))
-        await db.transaction(tx => {
-          tx.insert(userSettings)
-            .values({ id: 1, targetExams: targetExamsJson } as typeof userSettings.$inferInsert)
-            .onConflictDoUpdate({ target: userSettings.id, set: { targetExams: targetExamsJson } })
-            .run()
-          // Add mapped exam slugs to the focus list so flashcard sync delivers
-          // their content (only UPCAT has authored cards today). Won't duplicate.
-          for (const slug of slugs) {
-            tx.insert(focusListingsTable)
-              .values({ listingSlug: slug, priority: 99, addedAt: now })
-              .onConflictDoNothing()
-              .run()
-          }
-        })
-        void supabase.auth.getUser().then(({ data }) => {
-          if (data.user) {
-            void supabase.from('profiles')
-              .update({ target_exams: selectedExams.map(e => e.examAcronym) })
-              .eq('id', data.user.id)
-          }
-        })
-      } catch (e) {
-        console.warn('[onboarding] exams persist error:', e)
-      }
-    }
-    setRecommendedCourses(recommendCourses(selectedExams, taxonomyRef.current, careerRef.current))
     setStep('courses')
   }
 
@@ -515,6 +508,20 @@ export default function OnboardingScreen() {
   // ── Step 2: Listing picker ────────────────────────────────────────────────
 
   if (step === 2) {
+    const ordered = orderExams(examCatalog, schoolRegion)
+    const q = examQuery.trim()
+    const examItems = searchExams(ordered, q).slice(0, q ? 60 : 80)
+    const scholarshipItems = q
+      ? listings.filter(l => l.title.toLowerCase().includes(q.toLowerCase()))
+      : listings
+    type Step2Item = ExamOption | ListingRow
+    const sections: { key: string; title: string; data: Step2Item[] }[] = [
+      { key: 'exams', title: 'University Entrance Exams', data: examItems },
+      { key: 'sch', title: 'Scholarships', data: scholarshipItems },
+    ].filter(s => s.data.length > 0)
+    const selectedCount = selectedExams.length + selectedSlugs.length
+    const loadingStep2 = loadingExams || loadingListings
+
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 24 }}>
@@ -532,68 +539,76 @@ export default function OnboardingScreen() {
             What are you{'\n'}preparing for?
           </Text>
           <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary }}>
-            Tap to select. First tap = #1 priority.
+            Search and pick your target entrance exams{schoolRegion ? ` — top national schools first, then ${canonicalizeRegion(schoolRegion)}` : ''}, plus any scholarships.
           </Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 14 }]}
+            placeholder="Search exam, university, or scholarship…"
+            placeholderTextColor={t.textTertiary}
+            value={examQuery}
+            onChangeText={setExamQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
         </View>
 
-        {loadingListings ? (
+        {loadingStep2 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={t.textPrimary} size="large" />
           </View>
         ) : (
           <SectionList
-            sections={[
-              { title: 'Exams', data: listings.filter(l => l.type === 'exam') },
-              { title: 'Scholarships', data: listings.filter(l => l.type === 'scholarship') },
-            ].filter(s => s.data.length > 0)}
-            keyExtractor={item => item.id}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 160 }}
+            sections={sections}
+            keyExtractor={(item, i) => ('schoolId' in item ? item.schoolId : item.id) + ':' + i}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 170 }}
+            keyboardShouldPersistTaps="handled"
             stickySectionHeadersEnabled={false}
+            ListEmptyComponent={
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 40 }}>
+                No matches found.
+              </Text>
+            }
             renderSectionHeader={({ section }) => (
-              <Text style={{
-                fontFamily: 'Lexend_600SemiBold',
-                fontSize: typo.xs,
-                color: t.textTertiary,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
-                marginTop: 16,
-                marginBottom: 8,
-              }}>
+              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 16, marginBottom: 8 }}>
                 {section.title}
               </Text>
             )}
-            renderItem={({ item }) => {
-              const priorityIdx = selectedSlugs.indexOf(item.slug)
-              const isSelected = priorityIdx !== -1
+            renderItem={({ item, section }) => {
+              if (section.key === 'exams') {
+                const ex = item as ExamOption
+                const sel = selectedExams.some(s => s.schoolId === ex.schoolId)
+                return (
+                  <TouchableOpacity
+                    onPress={() => setSelectedExams(prev => sel ? prev.filter(s => s.schoolId !== ex.schoolId) : [...prev, ex])}
+                    style={{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }} numberOfLines={2}>{ex.schoolName}</Text>
+                      <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
+                        {ex.examAcronym}{ex.region ? ` · ${ex.region}` : ''}{ex.national ? ' · Top PH' : ''}
+                      </Text>
+                    </View>
+                    <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
+                  </TouchableOpacity>
+                )
+              }
+              const lst = item as ListingRow
+              const sel = selectedSlugs.indexOf(lst.slug) !== -1
               return (
                 <TouchableOpacity
-                  onPress={() => setSelectedSlugs(prev =>
-                    isSelected ? prev.filter(s => s !== item.slug) : [...prev, item.slug]
-                  )}
-                  style={{
-                    backgroundColor: isSelected ? 'rgba(128,0,0,0.20)' : t.surface,
-                    borderRadius: 18, padding: 16, marginBottom: 10,
-                    borderWidth: isSelected ? 2 : 1,
-                    borderColor: isSelected ? '#831626' : t.border,
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                  }}
+                  onPress={() => setSelectedSlugs(prev => sel ? prev.filter(s => s !== lst.slug) : [...prev, lst.slug])}
+                  style={{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}
                 >
-                  {isSelected && (
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#831626', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: '#fff' }}>#{priorityIdx + 1}</Text>
-                    </View>
-                  )}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }}>{item.title}</Text>
-                    {item.exam_date ? (
+                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }}>{lst.title}</Text>
+                    {lst.exam_date ? (
                       <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
-                        {new Date(item.exam_date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        {new Date(lst.exam_date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={{ color: isSelected ? t.accentText : t.textTertiary, fontSize: 18 }}>
-                    {isSelected ? '✓' : '›'}
-                  </Text>
+                  <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
                 </TouchableOpacity>
               )
             }}
@@ -602,30 +617,13 @@ export default function OnboardingScreen() {
 
         {/* Sticky bottom CTA */}
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          {selectedSlugs.length > 0 && (
-            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-              {selectedSlugs.map((slug, i) => {
-                const listing = listings.find(l => l.slug === slug)
-                return (
-                  <View key={slug} style={{ backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
-                      #{i + 1} {listing?.title ?? slug}
-                    </Text>
-                  </View>
-                )
-              })}
-            </View>
-          )}
           <TouchableOpacity
-            disabled={selectedSlugs.length === 0 || saving}
-            onPress={handleConfirmListings}
-            style={{
-              backgroundColor: selectedSlugs.length > 0 ? 'rgba(128,0,0,0.82)' : t.surface2,
-              borderRadius: 16, paddingVertical: 15, alignItems: 'center',
-            }}
+            disabled={selectedCount === 0 || saving}
+            onPress={() => void handleConfirmStep2()}
+            style={{ backgroundColor: selectedCount > 0 ? 'rgba(128,0,0,0.82)' : t.surface2, borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
           >
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: selectedSlugs.length > 0 ? '#fff' : t.textTertiary }}>
-              {saving ? 'Setting up…' : `Continue${selectedSlugs.length > 0 ? ` (${selectedSlugs.length})` : ''} →`}
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: selectedCount > 0 ? '#fff' : t.textTertiary }}>
+              {saving ? 'Setting up…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''} →`}
             </Text>
           </TouchableOpacity>
         </View>
@@ -633,7 +631,7 @@ export default function OnboardingScreen() {
         {saving && (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={t.textPrimary} size="large" />
-            <Text style={{ color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 12, fontSize: typo.sm }}>Syncing your content…</Text>
+            <Text style={{ color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 12, fontSize: typo.sm }}>Setting up your content…</Text>
           </View>
         )}
       </SafeAreaView>
@@ -808,100 +806,6 @@ export default function OnboardingScreen() {
     )
   }
 
-  // ── Target University Exams step ──────────────────────────────────────────
-
-  if (step === 'exams') {
-    const ordered = orderExams(examCatalog, schoolRegion)
-    const filtered = searchExams(ordered, examQuery).slice(0, examQuery.trim() ? 60 : 80)
-    const isExamSelected = (e: ExamOption) => selectedExams.some(s => s.schoolId === e.schoolId)
-    const toggleExam = (e: ExamOption) =>
-      setSelectedExams(prev => isExamSelected(e) ? prev.filter(s => s.schoolId !== e.schoolId) : [...prev, e])
-
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-          <TouchableOpacity onPress={() => setStep('matcher')} style={{ marginBottom: 12 }}>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>
-              Target University Exams
-            </Text>
-            <TouchableOpacity onPress={() => void handleExamsContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: 4 }}>
-            Search and pick the entrance exams you&apos;re aiming for{schoolRegion ? `. Top national schools first, then ${canonicalizeRegion(schoolRegion)}.` : '.'}
-          </Text>
-          <TextInput
-            style={[inputStyle, { marginTop: 14 }]}
-            placeholder="Search university or exam (e.g. UPCAT, Ateneo)…"
-            placeholderTextColor={t.textTertiary}
-            value={examQuery}
-            onChangeText={setExamQuery}
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-        </View>
-
-        {loadingExams ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={t.textPrimary} size="large" />
-          </View>
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={item => item.schoolId}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 40 }}>
-                No matching exams found.
-              </Text>
-            }
-            renderItem={({ item }) => {
-              const sel = isExamSelected(item)
-              return (
-                <TouchableOpacity
-                  onPress={() => toggleExam(item)}
-                  style={{
-                    backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
-                    borderRadius: 16, padding: 14, marginBottom: 10,
-                    borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border,
-                    flexDirection: 'row', alignItems: 'center', gap: 10,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }} numberOfLines={2}>
-                      {item.schoolName}
-                    </Text>
-                    <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
-                      {item.examAcronym}{item.region ? ` · ${item.region}` : ''}{item.national ? ' · Top PH' : ''}
-                    </Text>
-                  </View>
-                  <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-                </TouchableOpacity>
-              )
-            }}
-          />
-        )}
-
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          <TouchableOpacity
-            disabled={selectedExams.length === 0}
-            onPress={() => void handleExamsContinue(false)}
-            style={{ backgroundColor: selectedExams.length > 0 ? 'rgba(128,0,0,0.82)' : t.surface2, borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: selectedExams.length > 0 ? '#fff' : t.textTertiary }}>
-              Continue{selectedExams.length > 0 ? ` (${selectedExams.length})` : ''} →
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    )
-  }
-
   // ── Target Courses step ───────────────────────────────────────────────────
 
   if (step === 'courses') {
@@ -935,7 +839,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-          <TouchableOpacity onPress={() => setStep('exams')} style={{ marginBottom: 12 }}>
+          <TouchableOpacity onPress={() => setStep('matcher')} style={{ marginBottom: 12 }}>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>

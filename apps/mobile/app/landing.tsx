@@ -67,7 +67,12 @@ export default function LandingScreen() {
                       fullName: user.user_metadata?.full_name ?? '',
                     },
                   })
-                await pullUserData(db)
+                // Non-fatal: don't let a data-restore failure abort sign-in.
+                try {
+                  await pullUserData(db)
+                } catch (restoreErr) {
+                  console.warn('[landing] data restore failed (non-fatal):', restoreErr)
+                }
 
                 // Mirror callback.tsx logic: skip onboarding for returning users
                 const [settingsRows, focusRows] = await Promise.all([

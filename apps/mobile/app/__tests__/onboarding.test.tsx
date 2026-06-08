@@ -24,17 +24,26 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
 
-jest.mock('../../services/supabase', () => ({
-  supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        in: jest.fn(() => ({
-          order: jest.fn().mockResolvedValue({ data: [], error: null }),
-        })),
-      })),
-    })),
-  },
-}))
+jest.mock('../../services/supabase', () => {
+  // Permissive chainable query builder: any method returns the same builder, and
+  // awaiting it (or .then) resolves to an empty result. Covers select/eq/in/order/etc.
+  const makeBuilder = () => {
+    const builder: Record<string, unknown> = {}
+    for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) {
+      builder[m] = jest.fn(() => builder)
+    }
+    builder.single = jest.fn().mockResolvedValue({ data: null, error: null })
+    ;(builder as { then: unknown }).then = (resolve: (v: unknown) => unknown) =>
+      resolve({ data: [], error: null })
+    return builder
+  }
+  return {
+    supabase: {
+      from: jest.fn(() => makeBuilder()),
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
+    },
+  }
+})
 
 jest.mock('../../services/sync', () => ({
   syncOnLaunch: jest.fn().mockResolvedValue(undefined),

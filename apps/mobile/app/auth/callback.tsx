@@ -59,7 +59,13 @@ export default function AuthCallback() {
               },
             })
 
-          await pullUserData(db)
+          // Non-fatal: a data-restore failure must not abort an otherwise-successful
+          // sign-in (that would bounce the user back to /landing and look "broken").
+          try {
+            await pullUserData(db)
+          } catch (restoreErr) {
+            console.warn('[auth/callback] data restore failed (non-fatal):', restoreErr)
+          }
 
           // Decide landing screen based on whether the user has prior data restored
           const [settingsRows, focusRows] = await Promise.all([
