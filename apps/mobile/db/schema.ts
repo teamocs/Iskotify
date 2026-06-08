@@ -93,6 +93,11 @@ export const userSettings = sqliteTable('user_settings', {
   isIndigenous: integer('is_indigenous', { mode: 'boolean' }),
   targetCampus: text('target_campus'),
   scoreDisclaimerAck: integer('score_disclaimer_ack', { mode: 'boolean' }).notNull().default(false),
+  // Onboarding "Target University Exams" / "Target Courses" picks (JSON arrays as text).
+  targetExams: text('target_exams').notNull().default('[]'),
+  targetCourses: text('target_courses').notNull().default('[]'),
+  // Canonical region of the user's entered school, used to order target exams.
+  schoolRegion: text('school_region').notNull().default(''),
 })
 
 export const userProgress = sqliteTable('user_progress', {

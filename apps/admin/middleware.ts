@@ -10,7 +10,6 @@ const OPERATOR_ENDPOINTS = [
   '/api/flashcards/distractors',
   '/api/flashcards/sanitize-legacy',
   '/api/places/school-search',  // mobile-accessible
-  '/api/google-calendar/token',  // mobile-called, authed via Supabase Bearer JWT in the handler
 ]
 
 export async function middleware(request: NextRequest) {

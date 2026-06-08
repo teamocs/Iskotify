@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Papa from 'papaparse'
 import { Topbar } from '@/components/admin/Topbar'
 import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
@@ -167,6 +168,11 @@ export default function ImportCsvPage() {
               <code className="mx-1 px-1.5 py-0.5 rounded bg-[#f5f5f7] text-[12px]">distractors</code>
               value will have their multiple-choice options filled by Gemini in the background.
               Larger files are uploaded in batches of {CHUNK_SIZE} rows automatically.
+            </p>
+            <p className="text-[#6e6e73] text-sm mt-2">
+              Importing the authored UPCAT-style Question Bank (with subtests, passages, and Option A–D
+              columns)? Use <Link href="/admin/upcat/import" className="text-[#800000] underline">Import Question Bank</Link> instead —
+              it preserves passages and feeds both the mock-exam engine and the flashcard quiz.
             </p>
           </div>
 

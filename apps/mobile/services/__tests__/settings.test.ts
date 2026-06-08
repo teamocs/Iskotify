@@ -31,7 +31,10 @@ function makeDb(): DrizzleClient {
       school_type TEXT,
       is_indigenous INTEGER,
       target_campus TEXT,
-      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
+      target_exams TEXT NOT NULL DEFAULT '[]',
+      target_courses TEXT NOT NULL DEFAULT '[]',
+      school_region TEXT NOT NULL DEFAULT ''
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient

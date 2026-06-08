@@ -31,7 +31,10 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       school_type TEXT,
       is_indigenous INTEGER DEFAULT 0,
       target_campus TEXT,
-      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0
+      score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
+      target_exams TEXT NOT NULL DEFAULT '[]',
+      target_courses TEXT NOT NULL DEFAULT '[]',
+      school_region TEXT NOT NULL DEFAULT ''
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)

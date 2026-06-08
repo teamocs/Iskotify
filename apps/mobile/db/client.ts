@@ -485,6 +485,10 @@ const MIGRATIONS = [
     slug TEXT PRIMARY KEY NOT NULL, added_at INTEGER NOT NULL
   )`,
   `ALTER TABLE listings ADD COLUMN results_date INTEGER`,
+  // ── Onboarding: target exams / courses + school region ──────────────────────
+  `ALTER TABLE user_settings ADD COLUMN target_exams TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE user_settings ADD COLUMN target_courses TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE user_settings ADD COLUMN school_region TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

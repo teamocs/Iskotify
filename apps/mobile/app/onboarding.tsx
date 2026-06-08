@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import {
-  View, Text, TextInput, SectionList, StyleSheet,
+  View, Text, TextInput, SectionList, FlatList, StyleSheet,
   TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -10,13 +10,29 @@ import { supabase } from '../services/supabase'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { runEnhancement } from '../hooks/useAiEnhancement'
-import { userSettings, practiceSessions, focusListings as focusListingsTable } from '../db/schema'
+import {
+  userSettings, practiceSessions, focusListings as focusListingsTable,
+  universityProfiles, tertiarySchools, courseTaxonomyMap, careerCourses, upcatQuestions,
+} from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
 import { useTheme } from '../theme/ThemeContext'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
+import {
+  buildExamCatalog, orderExams, searchExams, examAcronymToListingSlug,
+  recommendCourses, allCourseOptions,
+  type ExamOption, type CourseOption, type TaxonomyRow, type CareerCourseRow,
+} from '../utils/targetExams'
+import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
+import { canonicalizeRegion } from '../utils/region'
+
+function parseJsonArray(s: string | null | undefined): string[] {
+  try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+const PRE_ASSESS_SUBTESTS = ['Mathematics', 'Science', 'Language Proficiency'] as const
 
 const PH_PROVINCES = [
   'Abra','Agusan del Norte','Agusan del Sur','Aklan','Albay','Antique','Apayao',
@@ -63,10 +79,30 @@ export default function OnboardingScreen() {
   const { theme: t, typo } = useTheme()
 
   // Step 1
-  const [step, setStep] = useState<1 | 2 | 'matcher' | 3>(1)
+  const [step, setStep] = useState<1 | 2 | 'matcher' | 'exams' | 'courses' | 3>(1)
   const [fullName, setFullName] = useState('')
   const [school, setSchool] = useState('')
+  const [schoolRegion, setSchoolRegion] = useState('')
   const [gradeLevel, setGradeLevel] = useState<number | null>(null)
+
+  // Target University Exams step
+  const [examCatalog, setExamCatalog] = useState<ExamOption[]>([])
+  const [examQuery, setExamQuery] = useState('')
+  const [loadingExams, setLoadingExams] = useState(false)
+  const [selectedExams, setSelectedExams] = useState<ExamOption[]>([])
+
+  // Target Courses step
+  const [recommendedCourses, setRecommendedCourses] = useState<CourseOption[]>([])
+  const [allCourses, setAllCourses] = useState<CourseOption[]>([])
+  const [courseQuery, setCourseQuery] = useState('')
+  const [selectedCourses, setSelectedCourses] = useState<CourseOption[]>([])
+
+  // Pre-assessment questions (dynamic: from the exam-tagged bank when available)
+  const [preAssessQuestions, setPreAssessQuestions] = useState<PreAssessQuestion[]>(PRE_ASSESS_QUESTIONS)
+
+  // Raw course taxonomy / career rows (used only to compute recommendations).
+  const taxonomyRef = useRef<TaxonomyRow[]>([])
+  const careerRef = useRef<CareerCourseRow[]>([])
 
   // Matcher step state
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
@@ -96,6 +132,7 @@ export default function OnboardingScreen() {
         if (!s) return
         if (s.fullName) setFullName(s.fullName)
         if (s.school) setSchool(s.school)
+        if (s.schoolRegion) setSchoolRegion(s.schoolRegion)
         if (s.gradeLevel) setGradeLevel(s.gradeLevel)
       } catch (e) {
         console.warn('[onboarding] prefill error:', e)
@@ -142,6 +179,51 @@ export default function OnboardingScreen() {
       })
   }, [step])
 
+  // Build the Target University Exams catalog from on-device tables when entering the step.
+  useEffect(() => {
+    if (step !== 'exams' || examCatalog.length > 0) return
+    setLoadingExams(true)
+    void (async () => {
+      try {
+        const [profRows, schoolRows, taxRows, ccRows] = await Promise.all([
+          db.select({
+            schoolId: universityProfiles.schoolId,
+            dataTier: universityProfiles.dataTier,
+            entranceExamAcronym: universityProfiles.entranceExamAcronym,
+            entranceExamName: universityProfiles.entranceExamName,
+            examMonth: universityProfiles.examMonth,
+            knownForCourses: universityProfiles.knownForCourses,
+            prcTopCourses: universityProfiles.prcTopCourses,
+          }).from(universityProfiles),
+          db.select({
+            id: tertiarySchools.id,
+            name: tertiarySchools.name,
+            acronym: tertiarySchools.acronym,
+            region: tertiarySchools.region,
+            province: tertiarySchools.province,
+            rankInProvince: tertiarySchools.rankInProvince,
+          }).from(tertiarySchools),
+          db.select({ courseTab: courseTaxonomyMap.courseTab, careerCourseId: courseTaxonomyMap.careerCourseId, label: courseTaxonomyMap.label }).from(courseTaxonomyMap),
+          db.select({ courseId: careerCourses.courseId, name: careerCourses.name }).from(careerCourses),
+        ])
+        const profiles = profRows.map(p => ({
+          ...p,
+          knownForCourses: parseJsonArray(p.knownForCourses),
+          prcTopCourses: parseJsonArray(p.prcTopCourses),
+        }))
+        taxonomyRef.current = taxRows
+        careerRef.current = ccRows
+        setExamCatalog(buildExamCatalog(profiles, schoolRows))
+        setAllCourses(allCourseOptions(taxRows, ccRows))
+      } catch (e) {
+        console.warn('[onboarding] exam catalog load error:', e)
+      } finally {
+        setLoadingExams(false)
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
   function handleNextStep() {
     if (!fullName.trim() || !gradeLevel) return
     setStep(2)
@@ -153,21 +235,23 @@ export default function OnboardingScreen() {
     try {
       const now = Date.now()
       await db.transaction(tx => {
+        const profileFields = {
+          fullName: fullName.trim(),
+          school: school.trim(),
+          schoolRegion: canonicalizeRegion(schoolRegion),
+          gradeLevel: gradeLevel ?? undefined,
+        }
         tx.insert(userSettings).values({
           id: 1,
           selectedListingSlug: selectedSlugs[0]!,
           lastSyncedAt: 0,
-          fullName: fullName.trim(),
-          school: school.trim(),
-          gradeLevel: gradeLevel ?? undefined,
+          ...profileFields,
         }).onConflictDoUpdate({
           target: userSettings.id,
           set: {
             selectedListingSlug: selectedSlugs[0]!,
             lastSyncedAt: 0,
-            fullName: fullName.trim(),
-            school: school.trim(),
-            gradeLevel: gradeLevel ?? undefined,
+            ...profileFields,
           },
         }).run()
 
@@ -214,18 +298,98 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] matcher persist error:', e)
       }
     }
+    setStep('exams')
+  }
+
+  async function handleExamsContinue(skip = false) {
+    if (!skip && selectedExams.length > 0) {
+      try {
+        const targetExamsJson = JSON.stringify(
+          selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
+        )
+        const now = Date.now()
+        const slugs = Array.from(new Set(
+          selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
+        ))
+        await db.transaction(tx => {
+          tx.insert(userSettings)
+            .values({ id: 1, targetExams: targetExamsJson } as typeof userSettings.$inferInsert)
+            .onConflictDoUpdate({ target: userSettings.id, set: { targetExams: targetExamsJson } })
+            .run()
+          // Add mapped exam slugs to the focus list so flashcard sync delivers
+          // their content (only UPCAT has authored cards today). Won't duplicate.
+          for (const slug of slugs) {
+            tx.insert(focusListingsTable)
+              .values({ listingSlug: slug, priority: 99, addedAt: now })
+              .onConflictDoNothing()
+              .run()
+          }
+        })
+        void supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            void supabase.from('profiles')
+              .update({ target_exams: selectedExams.map(e => e.examAcronym) })
+              .eq('id', data.user.id)
+          }
+        })
+      } catch (e) {
+        console.warn('[onboarding] exams persist error:', e)
+      }
+    }
+    setRecommendedCourses(recommendCourses(selectedExams, taxonomyRef.current, careerRef.current))
+    setStep('courses')
+  }
+
+  async function loadPreAssessment() {
+    try {
+      const rows = await db.select({
+        questionId: upcatQuestions.questionId,
+        subtest: upcatQuestions.subtest,
+        questionText: upcatQuestions.questionText,
+        options: upcatQuestions.options,
+        correctIndex: upcatQuestions.correctIndex,
+        explanation: upcatQuestions.explanation,
+        setId: upcatQuestions.setId,
+      }).from(upcatQuestions)
+      const built = buildPreAssessFromUpcat(rows, [...PRE_ASSESS_SUBTESTS], 3)
+      if (built.length >= 3) setPreAssessQuestions(built)
+    } catch (e) {
+      console.warn('[onboarding] pre-assessment build error:', e)
+    }
+  }
+
+  async function handleCoursesContinue(skip = false) {
+    if (!skip && selectedCourses.length > 0) {
+      try {
+        const json = JSON.stringify(
+          selectedCourses.map(c => ({ id: c.id, label: c.label, careerCourseId: c.careerCourseId })),
+        )
+        await db.insert(userSettings)
+          .values({ id: 1, targetCourses: json } as typeof userSettings.$inferInsert)
+          .onConflictDoUpdate({ target: userSettings.id, set: { targetCourses: json } })
+        void supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            void supabase.from('profiles')
+              .update({ target_courses: selectedCourses.map(c => c.label) })
+              .eq('id', data.user.id)
+          }
+        })
+      } catch (e) {
+        console.warn('[onboarding] courses persist error:', e)
+      }
+    }
+    await loadPreAssessment()
     setStep(3)
   }
 
   function handleAssessAnswer(optionIdx: number) {
-    const q = PRE_ASSESS_QUESTIONS[assessIdx]
+    const q = preAssessQuestions[assessIdx]
     if (!q) return
     const correct = optionIdx === q.answerIndex
     const newAnswers = [...assessAnswers, { q, correct }]
 
-    if (assessIdx === PRE_ASSESS_QUESTIONS.length - 1) {
+    if (assessIdx === preAssessQuestions.length - 1) {
       const now = Date.now()
-      const PRE_ASSESS_SUBJECTS = ['Mathematics', 'Science', 'English', 'Abstract Reasoning', 'Filipino'] as const
 
       // Group by subject and count correct vs total per subject
       const grouped = new Map<string, { correct: number; total: number }>()
@@ -237,8 +401,7 @@ export default function OnboardingScreen() {
       }
 
       void db.transaction(async tx => {
-        for (const subject of PRE_ASSESS_SUBJECTS) {
-          const stats = grouped.get(subject)
+        for (const [subject, stats] of grouped) {
           if (!stats || stats.total === 0) continue
           await tx.insert(practiceSessions).values({
             listingSlug: '',
@@ -308,7 +471,7 @@ export default function OnboardingScreen() {
             />
 
             <Text style={[labelStyle, { marginTop: 18 }]}>School / University</Text>
-            <SchoolPicker value={school} onChange={setSchool} />
+            <SchoolPicker value={school} onChange={setSchool} onSelectMeta={m => setSchoolRegion(m.region ?? '')} />
 
             <Text style={[labelStyle, { marginTop: 18 }]}>Grade Level *</Text>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: 10 }}>
@@ -645,13 +808,211 @@ export default function OnboardingScreen() {
     )
   }
 
+  // ── Target University Exams step ──────────────────────────────────────────
+
+  if (step === 'exams') {
+    const ordered = orderExams(examCatalog, schoolRegion)
+    const filtered = searchExams(ordered, examQuery).slice(0, examQuery.trim() ? 60 : 80)
+    const isExamSelected = (e: ExamOption) => selectedExams.some(s => s.schoolId === e.schoolId)
+    const toggleExam = (e: ExamOption) =>
+      setSelectedExams(prev => isExamSelected(e) ? prev.filter(s => s.schoolId !== e.schoolId) : [...prev, e])
+
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <TouchableOpacity onPress={() => setStep('matcher')} style={{ marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>
+              Target University Exams
+            </Text>
+            <TouchableOpacity onPress={() => void handleExamsContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: 4 }}>
+            Search and pick the entrance exams you&apos;re aiming for{schoolRegion ? `. Top national schools first, then ${canonicalizeRegion(schoolRegion)}.` : '.'}
+          </Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 14 }]}
+            placeholder="Search university or exam (e.g. UPCAT, Ateneo)…"
+            placeholderTextColor={t.textTertiary}
+            value={examQuery}
+            onChangeText={setExamQuery}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+        </View>
+
+        {loadingExams ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={t.textPrimary} size="large" />
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={item => item.schoolId}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 40 }}>
+                No matching exams found.
+              </Text>
+            }
+            renderItem={({ item }) => {
+              const sel = isExamSelected(item)
+              return (
+                <TouchableOpacity
+                  onPress={() => toggleExam(item)}
+                  style={{
+                    backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
+                    borderRadius: 16, padding: 14, marginBottom: 10,
+                    borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border,
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }} numberOfLines={2}>
+                      {item.schoolName}
+                    </Text>
+                    <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
+                      {item.examAcronym}{item.region ? ` · ${item.region}` : ''}{item.national ? ' · Top PH' : ''}
+                    </Text>
+                  </View>
+                  <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
+                </TouchableOpacity>
+              )
+            }}
+          />
+        )}
+
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
+          <TouchableOpacity
+            disabled={selectedExams.length === 0}
+            onPress={() => void handleExamsContinue(false)}
+            style={{ backgroundColor: selectedExams.length > 0 ? 'rgba(128,0,0,0.82)' : t.surface2, borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
+          >
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: selectedExams.length > 0 ? '#fff' : t.textTertiary }}>
+              Continue{selectedExams.length > 0 ? ` (${selectedExams.length})` : ''} →
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  // ── Target Courses step ───────────────────────────────────────────────────
+
+  if (step === 'courses') {
+    const cq = courseQuery.trim().toLowerCase()
+    const searchResults = cq ? allCourses.filter(c => c.label.toLowerCase().includes(cq)).slice(0, 40) : []
+    const isCourseSelected = (c: CourseOption) => selectedCourses.some(s => s.id === c.id)
+    const toggleCourse = (c: CourseOption) =>
+      setSelectedCourses(prev => isCourseSelected(c) ? prev.filter(s => s.id !== c.id) : [...prev, c])
+
+    // Render helper (called, not used as <CourseRow/>) so it is not re-created as a
+    // new component type on every render — that would remount every row.
+    const renderCourseRow = (c: CourseOption) => {
+      const sel = isCourseSelected(c)
+      return (
+        <TouchableOpacity
+          key={c.id}
+          onPress={() => toggleCourse(c)}
+          style={{
+            backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
+            borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
+            borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border,
+            flexDirection: 'row', alignItems: 'center', gap: 10,
+          }}
+        >
+          <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary, flex: 1 }}>{c.label}</Text>
+          <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
+        </TouchableOpacity>
+      )
+    }
+
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+          <TouchableOpacity onPress={() => setStep('exams')} style={{ marginBottom: 12 }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
+          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>Target Courses</Text>
+            <TouchableOpacity onPress={() => void handleCoursesContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: 4 }}>
+            Pick the courses you&apos;re considering. Recommendations are based on your target exams.
+          </Text>
+          <TextInput
+            style={[inputStyle, { marginTop: 14 }]}
+            placeholder="Search courses (e.g. Nursing, Civil Engineering)…"
+            placeholderTextColor={t.textTertiary}
+            value={courseQuery}
+            onChangeText={setCourseQuery}
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {cq ? (
+            searchResults.length > 0
+              ? searchResults.map(renderCourseRow)
+              : <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: 16 }}>No courses found.</Text>
+          ) : (
+            <>
+              {recommendedCourses.length > 0 && (
+                <>
+                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, marginBottom: 8 }}>
+                    Recommended for you
+                  </Text>
+                  {recommendedCourses.map(renderCourseRow)}
+                </>
+              )}
+              {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).length > 0 && (
+                <>
+                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 16, marginBottom: 8 }}>
+                    Also selected
+                  </Text>
+                  {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).map(renderCourseRow)}
+                </>
+              )}
+              {recommendedCourses.length === 0 && selectedCourses.length === 0 && (
+                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: 16 }}>
+                  Search above to add the courses you&apos;re considering.
+                </Text>
+              )}
+            </>
+          )}
+        </ScrollView>
+
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
+          <TouchableOpacity
+            onPress={() => void handleCoursesContinue(false)}
+            style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
+          >
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
+              Continue{selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''} →
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   // ── Step 3: Pre-assessment ────────────────────────────────────────────────
 
   if (assessDone) {
     const correct = assessAnswers.filter(r => r.correct).length
-    const pct = Math.round((correct / assessAnswers.length) * 100)
 
-    const subjects = ['Mathematics', 'Science', 'English', 'Abstract Reasoning', 'Filipino'] as const
+    const subjects = Array.from(new Set(assessAnswers.map(r => r.q.subject)))
     const bySubject = subjects.map(sub => {
       const qs = assessAnswers.filter(r => r.q.subject === sub)
       const c = qs.filter(r => r.correct).length
@@ -714,7 +1075,7 @@ export default function OnboardingScreen() {
     )
   }
 
-  const q = PRE_ASSESS_QUESTIONS[assessIdx]
+  const q = preAssessQuestions[assessIdx]
   if (!q) return null
 
   return (
@@ -736,12 +1097,12 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
         </View>
         <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 6 }}>
-          {q.subject} · Question {assessIdx + 1} of {PRE_ASSESS_QUESTIONS.length}
+          {q.subject} · Question {assessIdx + 1} of {preAssessQuestions.length}
         </Text>
         <View style={{ height: 3, backgroundColor: t.surface2, borderRadius: 99 }}>
           <View style={{
             height: 3, backgroundColor: '#831626', borderRadius: 99,
-            width: `${((assessIdx + 1) / PRE_ASSESS_QUESTIONS.length) * 100}%` as any,
+            width: `${((assessIdx + 1) / preAssessQuestions.length) * 100}%` as any,
           }} />
         </View>
       </View>

@@ -3,6 +3,7 @@ import Papa from 'papaparse'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 import { importUpcatCore, type RawUpcatRow } from '@/lib/upcat/importUpcatCore'
+import { normalizeQuestionBankHeader } from '@/lib/csv/questionBankHeaders'
 
 export const runtime = 'nodejs'
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   const text = await file.text()
   const parsed = Papa.parse<RawUpcatRow>(text, {
     header: true, skipEmptyLines: true,
-    transformHeader: h => h.trim().toLowerCase().replace(/^﻿/, ''),
+    transformHeader: normalizeQuestionBankHeader,
   })
   const fields = parsed.meta.fields ?? []
   const missing = EXPECTED.filter(c => !fields.includes(c))

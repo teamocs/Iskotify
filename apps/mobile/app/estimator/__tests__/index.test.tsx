@@ -70,6 +70,10 @@ const SAMPLE_SETTINGS = {
   scoreDisclaimerAck: true,
 }
 
+// NOTE: the estimate_admission_score RPC returns LOWERCASE status strings
+// ('likely' | 'possible' | 'unlikely'). The screen normalizes them to the
+// capitalized union the badges render — these fixtures use the real lowercase
+// values so the badge assertions below are a genuine regression test.
 const SAMPLE_RPC_RESULT = {
   point: 2.25,
   low: 2.00,
@@ -81,7 +85,7 @@ const SAMPLE_RPC_RESULT = {
       cutoff: 2.10,
       isEstimate: true,
       year: 2025,
-      status: 'Possible',
+      status: 'possible',
       gap: 0.15,
     },
     {
@@ -89,7 +93,7 @@ const SAMPLE_RPC_RESULT = {
       cutoff: 2.50,
       isEstimate: false,
       year: null,
-      status: 'Likely',
+      status: 'likely',
       gap: -0.25,
     },
   ],

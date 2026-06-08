@@ -154,6 +154,15 @@ function RangeBar({
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
+/** Normalize the RPC's lowercase status to the capitalized UI union. */
+function capitalizeStatus(raw: string | null | undefined): CampusRow['status'] {
+  switch (String(raw ?? '').toLowerCase()) {
+    case 'likely': return 'Likely'
+    case 'possible': return 'Possible'
+    default: return 'Unlikely'
+  }
+}
+
 function StatusBadge({ status }: { status: CampusRow['status'] }) {
   const config =
     status === 'Likely'
@@ -414,7 +423,14 @@ export default function EstimatorScreen() {
         return
       }
 
-      setResult(data as EstimateResult)
+      // RPC returns lowercase status ('likely' | 'possible' | 'unlikely'); normalize
+      // to the capitalized union the UI renders/compares against.
+      const raw = data as Omit<EstimateResult, 'campuses'> & { campuses?: Array<Omit<CampusRow, 'status'> & { status: string }> }
+      const normalized: EstimateResult = {
+        ...raw,
+        campuses: (raw?.campuses ?? []).map(c => ({ ...c, status: capitalizeStatus(c.status) })),
+      }
+      setResult(normalized)
     } catch {
       setError("Couldn't reach the server — connect to get your estimate.")
     } finally {
@@ -482,6 +498,9 @@ export default function EstimatorScreen() {
           >
             <Text style={s.primaryBtnText}>Add your grades</Text>
           </Pressable>
+          <TouchableOpacity onPress={() => router.push('/estimator/gwa')} style={{ marginTop: 16, alignSelf: 'center' }}>
+            <Text style={s.editLink}>Open GWA calculator →</Text>
+          </TouchableOpacity>
         </View>
       ) : error ? (
         /* Offline / server error state */
@@ -594,9 +613,12 @@ export default function EstimatorScreen() {
             ))}
           </View>
 
-          {/* Edit grades link */}
+          {/* Edit grades + GWA calculator links */}
           <TouchableOpacity onPress={() => router.push('/estimator/grades')}>
             <Text style={s.editLink}>Edit grades →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/estimator/gwa')}>
+            <Text style={s.editLink}>Open GWA calculator →</Text>
           </TouchableOpacity>
         </ScrollView>
       ) : null}

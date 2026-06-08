@@ -14,7 +14,6 @@ export interface UserSettingsData {
   notificationsEnabled: boolean | null
   theme: string
   focusModeEnabled: boolean
-  googleCalendarConnected: boolean
   incomeBracket: IncomeBracket | null
   gwa: number | null
   province: string | null
@@ -27,6 +26,10 @@ export interface UserSettingsData {
   isIndigenous?: boolean | null
   targetCampus?: string | null
   scoreDisclaimerAck?: boolean
+  /** JSON-encoded arrays (parsed by callers). */
+  targetExams: string
+  targetCourses: string
+  schoolRegion: string
 }
 
 const DEFAULTS: UserSettingsData = {
@@ -40,7 +43,6 @@ const DEFAULTS: UserSettingsData = {
   notificationsEnabled: true,
   theme: 'system',
   focusModeEnabled: true,
-  googleCalendarConnected: false,
   incomeBracket: null,
   gwa: null,
   province: null,
@@ -53,6 +55,9 @@ const DEFAULTS: UserSettingsData = {
   isIndigenous: null,
   targetCampus: null,
   scoreDisclaimerAck: false,
+  targetExams: '[]',
+  targetCourses: '[]',
+  schoolRegion: '',
 }
 
 /** Read the singleton user_settings row (id = 1). Returns defaults when no row exists. */
@@ -77,7 +82,6 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     notificationsEnabled: row.notificationsEnabled ?? true,
     theme: row.theme ?? 'system',
     focusModeEnabled: row.focusModeEnabled ?? true,
-    googleCalendarConnected: row.googleCalendarConnected ?? false,
     incomeBracket: (row.incomeBracket as IncomeBracket | null) ?? null,
     gwa: row.gwa ?? null,
     province: row.province ?? null,
@@ -90,6 +94,9 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     isIndigenous: row.isIndigenous ?? null,
     targetCampus: row.targetCampus ?? null,
     scoreDisclaimerAck: row.scoreDisclaimerAck ?? false,
+    targetExams: row.targetExams ?? '[]',
+    targetCourses: row.targetCourses ?? '[]',
+    schoolRegion: row.schoolRegion ?? '',
   }
 }
 
@@ -110,7 +117,6 @@ export async function updateSettings(
   if ('notificationsEnabled' in patch) set.notificationsEnabled = patch.notificationsEnabled ?? true
   if (patch.theme !== undefined) set.theme = patch.theme
   if ('focusModeEnabled' in patch) set.focusModeEnabled = patch.focusModeEnabled ?? true
-  if ('googleCalendarConnected' in patch) set.googleCalendarConnected = patch.googleCalendarConnected ?? false
   if ('incomeBracket' in patch) set.incomeBracket = patch.incomeBracket ?? null
   if ('gwa' in patch) set.gwa = patch.gwa ?? null
   if ('province' in patch) set.province = patch.province ?? null
@@ -123,6 +129,9 @@ export async function updateSettings(
   if ('isIndigenous' in patch) set.isIndigenous = patch.isIndigenous ?? null
   if ('targetCampus' in patch) set.targetCampus = patch.targetCampus ?? null
   if ('scoreDisclaimerAck' in patch) set.scoreDisclaimerAck = patch.scoreDisclaimerAck ?? false
+  if (patch.targetExams !== undefined) set.targetExams = patch.targetExams
+  if (patch.targetCourses !== undefined) set.targetCourses = patch.targetCourses
+  if (patch.schoolRegion !== undefined) set.schoolRegion = patch.schoolRegion
 
   await db
     .insert(userSettings)

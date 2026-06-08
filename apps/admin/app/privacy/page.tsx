@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Iskotify',
-  description: 'How Iskotify collects, uses, and protects your data, including optional Google Calendar sync.',
+  description: 'How Iskotify collects, uses, and protects your data.',
 }
 
 const UPDATED = 'May 31, 2026'
@@ -50,48 +50,16 @@ export default function PrivacyPage() {
           our flashcard recommendations. We do not sell your data or share it with advertisers.
         </Section>
 
-        <Section title="Google Calendar Access (Optional)">
-          Iskotify offers an optional feature to sync your study reminders with your Google Calendar.
-          This feature is off by default and only activates when you tap “Connect Google Calendar” in
-          the app’s Settings.
-          <br /><br />
-          <strong>What we access:</strong> when you connect, we request the{' '}
-          <code className="bg-white px-1.5 py-0.5 rounded text-[13px] border border-black/[0.06]">calendar.events</code>{' '}
-          scope, which lets the app create, update, and delete calendar events.
-          <br /><br />
-          <strong>What we do with it:</strong> we create a Google Calendar event for each reminder you
-          set in Iskotify, and we update or delete that event when you change or remove the reminder.
-          We only ever touch events that Iskotify itself created. We do not read, modify, or store
-          your existing personal calendar events.
-          <br /><br />
-          <strong>Token handling:</strong> to keep the connection working, we securely store a Google
-          refresh token on our server (Supabase, protected by row-level security so only your account
-          can access it). We never store this token on your device. You can revoke access anytime by
-          tapping “Disconnect” in Settings, or from your{' '}
-          <a href="https://myaccount.google.com/permissions" className="text-[#800000] underline">Google Account permissions</a>.
-        </Section>
-
-        <Section title="Limited Use Disclosure">
-          Iskotify’s use and transfer of information received from Google APIs adheres to the{' '}
-          <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-[#800000] underline">
-            Google API Services User Data Policy
-          </a>, including the Limited Use requirements. Google Calendar data is used solely to provide
-          the user-facing reminder-sync feature described above. It is never used for advertising,
-          never sold to third parties, never used to train generalized AI or ML models, and never
-          accessed by humans except with your explicit consent or as required for security or law.
-        </Section>
-
         <Section title="Data Storage">
           Your data is stored securely via Supabase. Study progress is also cached locally on your
-          device for offline access. Google Calendar refresh tokens are stored server-side under
-          row-level security and are deleted when you disconnect.
+          device for offline access. Reminders and deadlines are scheduled as local device
+          notifications and are never sent to any third-party calendar service.
         </Section>
 
         <Section title="Your Choices">
           <ul className="list-disc pl-5 space-y-1">
-            <li>Disconnect Google Calendar anytime in Settings — this deletes the stored token.</li>
+            <li>Turn reminder notifications on or off anytime in Settings.</li>
             <li>Request deletion of your account and data by emailing us.</li>
-            <li>Revoke Google access from your Google Account permissions page.</li>
           </ul>
         </Section>
 

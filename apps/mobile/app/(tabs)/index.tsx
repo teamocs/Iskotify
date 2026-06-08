@@ -15,12 +15,11 @@ import { eq, asc } from 'drizzle-orm'
 import { DateActionSheet } from '../../components/calendar/DateActionSheet'
 import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { useDb } from '../../hooks/useDb'
-import { notes as notesTable, userSettings, listings as listingsTable, focusListings, admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
+import { notes as notesTable, listings as listingsTable, focusListings, admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
 import { daysUntil as admissionsDaysUntil, upcomingEvents } from '../../utils/admissionsFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
 import { getAcquiredRequirementIndices } from '../../services/coachQueue'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
-import { syncReminderToCalendar, removeReminderFromCalendar } from '../../services/googleCalendar'
 import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -348,16 +347,6 @@ export default function HomeScreen() {
     } catch (err) {
       console.warn('[home/reminder] schedule failed:', err)
     }
-    try {
-      const st = await db.select({ c: userSettings.googleCalendarConnected })
-        .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-      if (st[0]?.c) {
-        await syncReminderToCalendar(db, {
-          id, title: payload.title, content: payload.content, type: payload.type,
-          reminderAt: payload.reminderAt, googleEventId: null,
-        })
-      }
-    } catch (err) { console.warn('[home/calendar] mirror failed:', err) }
     setActiveDayMs(null)
     void refresh()
   }
@@ -382,29 +371,16 @@ export default function HomeScreen() {
     } catch (err) {
       console.warn('[home/reminder] schedule failed:', err)
     }
-    try {
-      const st = await db.select({ c: userSettings.googleCalendarConnected })
-        .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-      if (st[0]?.c) {
-        await syncReminderToCalendar(db, {
-          id, title: payload.title, content: payload.content, type: payload.type,
-          reminderAt: payload.reminderAt, googleEventId: null,
-        })
-      }
-    } catch (err) { console.warn('[home/calendar] mirror failed:', err) }
     setActiveDayMs(null)
     void refresh()
     router.push(`/notes/${id}`)
   }
 
   async function handleDeleteReminder(noteId: string) {
-    const rows = await db.select({ gid: notesTable.googleEventId })
-      .from(notesTable).where(eq(notesTable.id, noteId)).limit(1)
     await db.update(notesTable)
       .set({ reminderAt: null, updatedAt: Date.now() })
       .where(eq(notesTable.id, noteId))
     try { await cancelNoteReminder(noteId) } catch {}
-    try { await removeReminderFromCalendar(db, noteId, rows[0]?.gid ?? null) } catch {}
     void refresh()
   }
 

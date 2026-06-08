@@ -11,6 +11,8 @@ export interface SchoolResult {
   name: string
   subtitle: string
   source: 'database' | 'places' | 'manual'
+  region?: string
+  province?: string
 }
 
 export interface UseSchoolSearch {
@@ -63,7 +65,7 @@ async function searchSupabase(q: string): Promise<SchoolResult[]> {
   try {
     const { data, error } = await supabase
       .from('schools')
-      .select('name,city,province')
+      .select('name,city,province,region')
       .ilike('name', pattern)
       .limit(DB_LIMIT)
     if (error) {
@@ -75,6 +77,8 @@ async function searchSupabase(q: string): Promise<SchoolResult[]> {
       name: s.name as string,
       subtitle: [s.city, s.province].filter(Boolean).join(', '),
       source: 'database' as const,
+      region: (s.region as string) ?? undefined,
+      province: (s.province as string) ?? undefined,
     }))
     return rankResults(mapped, q)
   } catch (err) {

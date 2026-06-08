@@ -1,6 +1,8 @@
 export interface PreAssessQuestion {
   id: string
-  subject: 'Mathematics' | 'Science' | 'English' | 'Abstract Reasoning' | 'Filipino'
+  // Bundled questions use the 5 labels below; dynamic (exam-tagged) questions use
+  // UPCAT subtest names, so this is a free string used only for grouping/display.
+  subject: string
   stem: string
   options: string[]    // 4 options, no letter prefix
   answerIndex: number  // 0–3

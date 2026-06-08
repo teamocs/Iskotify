@@ -5,9 +5,18 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 interface Props {
   onFileSelected: (file: File) => void
   disabled?: boolean
+  hint?: string
+  sampleHref?: string
+  sampleLabel?: string
 }
 
-export function CsvDropzone({ onFileSelected, disabled }: Props) {
+export function CsvDropzone({
+  onFileSelected,
+  disabled,
+  hint = 'Max 5 MB · UTF-8 · larger files are split into batches automatically',
+  sampleHref = '/sample-flashcards.csv',
+  sampleLabel = 'Download sample CSV',
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -42,14 +51,14 @@ export function CsvDropzone({ onFileSelected, disabled }: Props) {
     >
       <div className="text-3xl mb-2">📄</div>
       <div className="text-[#1d1d1f] font-semibold mb-1 font-heading">Drop CSV here or click to browse</div>
-      <div className="text-[#6e6e73] text-sm">Max 5 MB · UTF-8 · larger files are split into batches automatically</div>
+      <div className="text-[#6e6e73] text-sm">{hint}</div>
       <a
-        href="/sample-flashcards.csv"
+        href={sampleHref}
         onClick={e => e.stopPropagation()}
         download
         className="inline-block mt-4 text-sm text-[#800000] font-medium underline hover:text-[#9a0a1f]"
       >
-        Download sample CSV
+        {sampleLabel}
       </a>
       <input
         ref={inputRef}

@@ -11,9 +11,11 @@ import type { SchoolResult } from '../hooks/useSchoolSearch'
 interface SchoolPickerProps {
   value: string
   onChange: (school: string) => void
+  /** Fires with the picked school's region/province when known (DB results only). */
+  onSelectMeta?: (meta: { region?: string; province?: string }) => void
 }
 
-export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
+export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProps) {
   const [modalVisible, setModalVisible] = useState(false)
   const { query, setQuery, results, loading, error, errorMessage, retry, contributeSchool } = useSchoolSearch()
   const { theme: t, typo, isDark } = useTheme()
@@ -145,21 +147,23 @@ export function SchoolPicker({ value, onChange }: SchoolPickerProps) {
 
   const selectResult = useCallback((r: SchoolResult) => {
     onChange(r.name)
+    onSelectMeta?.({ region: r.region, province: r.province })
     setQuery('')
     setModalVisible(false)
     // Backfill user-selected Places results into the schools directory so
     // future users searching the same school find it in the DB layer.
     if (r.source === 'places') void contributeSchool(r)
-  }, [onChange, setQuery, contributeSchool])
+  }, [onChange, onSelectMeta, setQuery, contributeSchool])
 
   const selectTyped = useCallback(() => {
     const name = query.trim()
     if (!name) return
     onChange(name)
+    onSelectMeta?.({}) // unknown region for free-typed schools
     setQuery('')
     setModalVisible(false)
     void contributeSchool({ name, subtitle: '', source: 'manual' })
-  }, [onChange, query, setQuery, contributeSchool])
+  }, [onChange, onSelectMeta, query, setQuery, contributeSchool])
 
   const renderItem = useCallback(({ item }: { item: SchoolResult }) => (
     <TouchableOpacity onPress={() => selectResult(item)} style={s.listRow}>

@@ -138,6 +138,9 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         notificationsEnabled: remoteSettings.notificationsEnabled ?? true,
         theme: remoteSettings.theme ?? 'system',
         focusModeEnabled: remoteSettings.focusModeEnabled ?? true,
+        targetExams: remoteSettings.targetExams ?? '[]',
+        targetCourses: remoteSettings.targetCourses ?? '[]',
+        schoolRegion: remoteSettings.schoolRegion ?? '',
       }
       tx.insert(userSettings)
         .values(settingsValues)
