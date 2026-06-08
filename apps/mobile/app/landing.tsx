@@ -80,7 +80,9 @@ export default function LandingScreen() {
                   db.select().from(focusListings).limit(1),
                 ])
                 const hasProfile = !!(settingsRows[0]?.fullName?.trim())
-                const hasFocus = focusRows.length > 0
+                // Accept a selected listing OR focus rows (matches _layout.tsx) so a
+                // returning user with restored data isn't pushed back into onboarding.
+                const hasFocus = focusRows.length > 0 || !!settingsRows[0]?.selectedListingSlug
 
                 if (hasProfile && hasFocus) {
                   router.replace('/(tabs)')  // returning user — data fully restored

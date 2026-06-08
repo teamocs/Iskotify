@@ -71,61 +71,14 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
 
   if (error || !data) return
 
-  await db.transaction((tx) => {
-    // Restore focus listings (upsert by listingSlug)
-    const remoteF: typeof focusListings.$inferInsert[] = data.focus_listings ?? []
-    for (const row of remoteF) {
-      tx.insert(focusListings)
-        .values(row)
-        .onConflictDoUpdate({
-          target: focusListings.listingSlug,
-          set: { priority: row.priority, addedAt: row.addedAt },
-        })
-        .run()
-    }
-
-    // Restore saved listings (upsert by id)
-    const remoteS: typeof savedListings.$inferInsert[] = data.saved_listings ?? []
-    for (const row of remoteS) {
-      tx.insert(savedListings)
-        .values(row)
-        .onConflictDoUpdate({ target: savedListings.id, set: { savedAt: row.savedAt } })
-        .run()
-    }
-
-    // Restore saved decks (upsert by id)
-    const remoteD: typeof savedDecks.$inferInsert[] = data.saved_decks ?? []
-    for (const row of remoteD) {
-      tx.insert(savedDecks)
-        .values(row)
-        .onConflictDoUpdate({
-          target: savedDecks.id,
-          set: { name: row.name, topicIds: row.topicIds },
-        })
-        .run()
-    }
-
-    // Restore practice sessions — Supabase is source of truth at sign-in time
-    const remoteSessions: typeof practiceSessions.$inferInsert[] = data.practice_sessions ?? []
-    if (remoteSessions.length > 0) {
-      tx.delete(practiceSessions).run()
-      for (const row of remoteSessions) {
-        tx.insert(practiceSessions).values(row).run()
-      }
-    }
-
-    // Restore user progress (same wipe-and-restore approach)
-    const remoteProgress: typeof userProgress.$inferInsert[] = data.user_progress ?? []
-    if (remoteProgress.length > 0) {
-      tx.delete(userProgress).run()
-      for (const row of remoteProgress) {
-        tx.insert(userProgress).values(row).run()
-      }
-    }
-
-    // Restore full settings row (all writeable fields, not just profile)
-    const remoteSettings = data.settings as Partial<typeof userSettings.$inferInsert> | null
-    if (remoteSettings) {
+  // 1) CRITICAL — restore settings + focus listings independently and resiliently.
+  //    These two gate returning-user detection (skip onboarding), so a bad row in
+  //    ANY other section must not roll them back via a shared transaction. Each is
+  //    its own autocommit + try/catch, and only known columns are written so an
+  //    older backup's extra/changed fields can't cause a "no such column" failure.
+  const remoteSettings = data.settings as Partial<typeof userSettings.$inferInsert> | null
+  if (remoteSettings) {
+    try {
       const settingsValues = {
         id: 1,
         googleId: remoteSettings.googleId ?? '',
@@ -142,37 +95,79 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         targetCourses: remoteSettings.targetCourses ?? '[]',
         schoolRegion: remoteSettings.schoolRegion ?? '',
       }
-      tx.insert(userSettings)
+      await db.insert(userSettings)
         .values(settingsValues)
         .onConflictDoUpdate({ target: userSettings.id, set: settingsValues })
-        .run()
+    } catch (e) {
+      console.warn('[sync] settings restore failed:', e)
     }
+  }
 
-    // Restore notes — wipe and restore (guard matches practice_sessions/user_progress pattern)
-    const remoteNotes: typeof notesTable.$inferInsert[] = data.notes ?? []
-    if (remoteNotes.length > 0) {
-      tx.delete(noteLabelAssignments).run()
-      tx.delete(notesTable).run()
-      for (const row of remoteNotes) {
-        tx.insert(notesTable).values(row).onConflictDoNothing().run()
+  const remoteF: typeof focusListings.$inferInsert[] = data.focus_listings ?? []
+  for (const row of remoteF) {
+    try {
+      const vals = { listingSlug: row.listingSlug, priority: row.priority, addedAt: row.addedAt }
+      await db.insert(focusListings)
+        .values(vals)
+        .onConflictDoUpdate({ target: focusListings.listingSlug, set: { priority: vals.priority, addedAt: vals.addedAt } })
+    } catch (e) {
+      console.warn('[sync] focus restore row failed:', e)
+    }
+  }
+
+  // 2) BEST-EFFORT — saved items, sessions, progress, notes. A failure here (e.g. an
+  //    older backup's row shape) is logged but never blocks sign-in or the critical
+  //    settings/focus restore above.
+  try {
+    await db.transaction((tx) => {
+      const remoteS: typeof savedListings.$inferInsert[] = data.saved_listings ?? []
+      for (const row of remoteS) {
+        tx.insert(savedListings)
+          .values(row)
+          .onConflictDoUpdate({ target: savedListings.id, set: { savedAt: row.savedAt } })
+          .run()
       }
-    }
 
-    // Restore note labels
-    const remoteLabels: typeof noteLabels.$inferInsert[] = data.note_labels ?? []
-    if (remoteLabels.length > 0) {
-      tx.delete(noteLabels).run()
-      for (const row of remoteLabels) {
-        tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+      const remoteD: typeof savedDecks.$inferInsert[] = data.saved_decks ?? []
+      for (const row of remoteD) {
+        tx.insert(savedDecks)
+          .values(row)
+          .onConflictDoUpdate({ target: savedDecks.id, set: { name: row.name, topicIds: row.topicIds } })
+          .run()
       }
-    }
 
-    // Restore note label assignments
-    const remoteAssigns: typeof noteLabelAssignments.$inferInsert[] = data.note_label_assignments ?? []
-    for (const row of remoteAssigns) {
-      tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
-    }
-  })
+      // Practice sessions — Supabase is source of truth at sign-in time (wipe+restore)
+      const remoteSessions: typeof practiceSessions.$inferInsert[] = data.practice_sessions ?? []
+      if (remoteSessions.length > 0) {
+        tx.delete(practiceSessions).run()
+        for (const row of remoteSessions) tx.insert(practiceSessions).values(row).run()
+      }
+
+      const remoteProgress: typeof userProgress.$inferInsert[] = data.user_progress ?? []
+      if (remoteProgress.length > 0) {
+        tx.delete(userProgress).run()
+        for (const row of remoteProgress) tx.insert(userProgress).values(row).run()
+      }
+
+      const remoteNotes: typeof notesTable.$inferInsert[] = data.notes ?? []
+      if (remoteNotes.length > 0) {
+        tx.delete(noteLabelAssignments).run()
+        tx.delete(notesTable).run()
+        for (const row of remoteNotes) tx.insert(notesTable).values(row).onConflictDoNothing().run()
+      }
+
+      const remoteLabels: typeof noteLabels.$inferInsert[] = data.note_labels ?? []
+      if (remoteLabels.length > 0) {
+        tx.delete(noteLabels).run()
+        for (const row of remoteLabels) tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+      }
+
+      const remoteAssigns: typeof noteLabelAssignments.$inferInsert[] = data.note_label_assignments ?? []
+      for (const row of remoteAssigns) tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
+    })
+  } catch (e) {
+    console.warn('[sync] secondary data restore failed (non-fatal):', e)
+  }
 }
 
 export async function syncOnLaunch(db: DrizzleClient): Promise<void> {

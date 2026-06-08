@@ -27,6 +27,7 @@ import { exportUserData, importUserData } from '../../services/export'
 import { supabase } from '../../services/supabase'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
+import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 
 interface ProfileData {
   fullName: string
@@ -495,6 +496,9 @@ export default function ProfileScreen() {
             ))
           )}
         </View>
+
+        {/* Target Courses — editable; lets older-onboarding users add courses later */}
+        <TargetCoursesCard />
 
         {/* Analytics section */}
         <View style={s.analyticsSection}>

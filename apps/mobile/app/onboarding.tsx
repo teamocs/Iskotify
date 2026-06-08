@@ -98,7 +98,6 @@ export default function OnboardingScreen() {
   const [selectedExams, setSelectedExams] = useState<ExamOption[]>([])
 
   // Target Courses step
-  const [recommendedCourses, setRecommendedCourses] = useState<CourseOption[]>([])
   const [allCourses, setAllCourses] = useState<CourseOption[]>([])
   const [courseQuery, setCourseQuery] = useState('')
   const [selectedCourses, setSelectedCourses] = useState<CourseOption[]>([])
@@ -109,6 +108,13 @@ export default function OnboardingScreen() {
   // Raw course taxonomy / career rows (used only to compute recommendations).
   const taxonomyRef = useRef<TaxonomyRow[]>([])
   const careerRef = useRef<CareerCourseRow[]>([])
+
+  // Courses recommended from the selected exams' universities. Computed here (never
+  // in the Continue handler) so it can never throw and stall navigation.
+  const recommendedCourses = useMemo(() => {
+    try { return recommendCourses(selectedExams, taxonomyRef.current, careerRef.current) }
+    catch { return [] }
+  }, [selectedExams, allCourses])
 
   // Matcher step state
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
@@ -283,7 +289,6 @@ export default function OnboardingScreen() {
         }
       })
       setSelectedSlug(primarySlug)
-      setRecommendedCourses(recommendCourses(selectedExams, taxonomyRef.current, careerRef.current))
       // Best-effort cloud mirror of target exams when signed in.
       void supabase.auth.getUser().then(({ data }) => {
         if (data.user) {
@@ -292,9 +297,9 @@ export default function OnboardingScreen() {
             .eq('id', data.user.id)
         }
       })
-      // Advance immediately and sync content in the background, so a slow/failing
-      // sync can never block Continue (the home screen re-syncs on launch anyway).
-      setStep('matcher')
+      // Advance straight to the courses step; sync content in the background so a
+      // slow/failing sync can never block Continue (the home screen re-syncs anyway).
+      setStep('courses')
       void syncOnLaunch(db)
         .then(() => runEnhancement(db))
         .catch(e => console.warn('[onboarding] background sync error:', e))
@@ -330,7 +335,7 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] matcher persist error:', e)
       }
     }
-    setStep('courses')
+    setStep(3)
   }
 
   async function loadPreAssessment() {
@@ -372,7 +377,7 @@ export default function OnboardingScreen() {
       }
     }
     await loadPreAssessment()
-    setStep(3)
+    setStep('matcher')
   }
 
   function handleAssessAnswer(optionIdx: number) {
@@ -812,8 +817,13 @@ export default function OnboardingScreen() {
     const cq = courseQuery.trim().toLowerCase()
     const searchResults = cq ? allCourses.filter(c => c.label.toLowerCase().includes(cq)).slice(0, 40) : []
     const isCourseSelected = (c: CourseOption) => selectedCourses.some(s => s.id === c.id)
+    const MAX_COURSES = 3
     const toggleCourse = (c: CourseOption) =>
-      setSelectedCourses(prev => isCourseSelected(c) ? prev.filter(s => s.id !== c.id) : [...prev, c])
+      setSelectedCourses(prev => {
+        if (isCourseSelected(c)) return prev.filter(s => s.id !== c.id)
+        if (prev.length >= MAX_COURSES) return prev  // cap selection at 3
+        return [...prev, c]
+      })
 
     // Render helper (called, not used as <CourseRow/>) so it is not re-created as a
     // new component type on every render — that would remount every row.
@@ -839,7 +849,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-          <TouchableOpacity onPress={() => setStep('matcher')} style={{ marginBottom: 12 }}>
+          <TouchableOpacity onPress={() => setStep(2)} style={{ marginBottom: 12 }}>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
           </TouchableOpacity>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -849,7 +859,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
           <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: 4 }}>
-            Pick the courses you&apos;re considering. Recommendations are based on your target exams.
+            Pick up to 3 courses ({selectedCourses.length}/3). Recommendations are based on your target exams.
           </Text>
           <TextInput
             style={[inputStyle, { marginTop: 14 }]}

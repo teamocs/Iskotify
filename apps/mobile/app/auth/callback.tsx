@@ -73,7 +73,10 @@ export default function AuthCallback() {
             db.select().from(focusListings).limit(1),
           ])
           const hasProfile = !!(settingsRows[0]?.fullName?.trim())
-          const hasFocus = focusRows.length > 0
+          // Accept a selected listing OR focus rows (older backups may have only the
+          // former) — must match the launch check in _layout.tsx so a returning user
+          // with restored data is never wrongly sent back through onboarding.
+          const hasFocus = focusRows.length > 0 || !!settingsRows[0]?.selectedListingSlug
 
           if (hasProfile && hasFocus) {
             router.replace('/(tabs)')  // returning user with restored data
