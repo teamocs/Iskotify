@@ -10,6 +10,7 @@ const OPERATOR_ENDPOINTS = [
   '/api/flashcards/distractors',
   '/api/flashcards/sanitize-legacy',
   '/api/places/school-search',  // mobile-accessible
+  '/api/search/listings',       // mobile-accessible (hybrid exam/scholarship AI search)
 ]
 
 export async function middleware(request: NextRequest) {
