@@ -10,6 +10,7 @@ import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../uti
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 
@@ -46,16 +47,16 @@ export default function DeckQuizScreen() {
     loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
     emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
-    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: 24 },
+    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: spacing.xxl },
     chooserContent: { alignItems: 'center' as const, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 40 },
-    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
     iconTxt: { fontSize: 40 },
     title: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
     sub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 28, textAlign: 'center' },
-    choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 18, padding: 18, width: '100%', marginBottom: 12 },
+    choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: 18, width: '100%', marginBottom: spacing.md },
     choiceTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
     choiceSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    ghostBtn: { paddingVertical: 12, width: '100%', alignItems: 'center' },
+    ghostBtn: { paddingVertical: spacing.md, width: '100%', alignItems: 'center' },
     ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
 
@@ -150,7 +151,7 @@ export default function DeckQuizScreen() {
         <View style={s.emptyWrap}>
           <Text style={s.emptyTitle}>No MCQ cards</Text>
           <Text style={s.emptySub}>This deck has no multiple-choice questions.</Text>
-          <Pressable style={s.ghostBtn} onPress={() => router.back()}>
+          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
             <Text style={s.ghostBtnTxt}>← Back to Decks</Text>
           </Pressable>
         </View>
@@ -186,17 +187,17 @@ export default function DeckQuizScreen() {
         <Text style={s.title}>{deckName}</Text>
         <Text style={s.sub}>{allQuestions.length} cards available</Text>
 
-        <Pressable style={s.choiceCard} onPress={() => choose('quick')}>
+        <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('quick')}>
           <Text style={s.choiceTitle}>Quick (15)</Text>
           <Text style={s.choiceSub}>~15 sampled questions, shuffled</Text>
         </Pressable>
 
-        <Pressable style={s.choiceCard} onPress={() => choose('full')}>
+        <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('full')}>
           <Text style={s.choiceTitle}>Full</Text>
           <Text style={s.choiceSub}>All {Math.min(allQuestions.length, 60)} questions, in order</Text>
         </Pressable>
 
-        <Pressable style={s.ghostBtn} onPress={() => router.back()}>
+        <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
           <Text style={s.ghostBtnTxt}>← Back</Text>
         </Pressable>
       </ScrollView>

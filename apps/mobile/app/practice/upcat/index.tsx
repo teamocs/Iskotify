@@ -6,6 +6,7 @@ import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions } from '../../../db/schema'
 import { SUBTESTS } from '../../../utils/upcatExam'
 import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, radius } from '../../../theme/tokens'
 
 export default function UpcatHome() {
   const db = useDb()
@@ -25,16 +26,16 @@ export default function UpcatHome() {
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
+    header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xs + 2 },
     title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     sub: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
-    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 16, marginHorizontal: 16, marginBottom: 10 },
+    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, marginHorizontal: spacing.lg, marginBottom: spacing.sm + 2 },
     cardMock: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
     cardTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     cardSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
-    sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, borderTopWidth: 1, borderColor: t.border, gap: 10 },
+    sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: t.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderCurve: 'continuous', padding: spacing.xl, borderTopWidth: 1, borderColor: t.border, gap: spacing.sm + 2 },
     sheetTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    choice: { borderRadius: 14, padding: 14, borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2 },
+    choice: { borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.md + 2, borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2 },
     choiceTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary },
     choiceSub: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2 },
     overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
@@ -66,7 +67,7 @@ export default function UpcatHome() {
         ))}
       </ScrollView>
 
-      {picker && (
+      {picker ? (
         <>
           <Pressable style={s.overlay} onPress={() => setPicker(null)} />
           <View style={s.sheet}>
@@ -81,7 +82,7 @@ export default function UpcatHome() {
             </Pressable>
           </View>
         </>
-      )}
+      ) : null}
     </SafeAreaView>
   )
 }

@@ -9,6 +9,7 @@ import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from 
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, radius } from '../../../theme/tokens'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'loading' | 'exam' | 'results'
@@ -149,12 +150,13 @@ export default function UpcatExam() {
           })}
 
           <Pressable
+            accessibilityRole="button"
             style={s.primaryBtn}
             onPress={() => router.replace(`/practice/upcat/${subtestParam}?mode=${mode}`)}
           >
             <Text style={s.primaryBtnTxt}>Retake exam</Text>
           </Pressable>
-          <Pressable style={s.ghostBtn} onPress={() => router.replace('/practice/upcat')}>
+          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace('/practice/upcat')}>
             <Text style={s.ghostTxt}>← Back to exams</Text>
           </Pressable>
         </ScrollView>
@@ -170,7 +172,7 @@ export default function UpcatExam() {
   return (
     <SafeAreaView style={s.root}>
       <View style={s.topBar}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
@@ -197,6 +199,7 @@ export default function UpcatExam() {
           {q.options.map((o, oi) => (
             <Pressable
               key={oi}
+              accessibilityRole="button"
               style={[s.opt, sel === oi && s.optOn]}
               onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
             >
@@ -211,6 +214,7 @@ export default function UpcatExam() {
 
       <View style={s.footer}>
         <Pressable
+          accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(0, i - 1))}
           disabled={idx === 0}
@@ -218,12 +222,14 @@ export default function UpcatExam() {
           <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
         <Pressable
+          accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
         >
           <Text style={s.footGhostTxt}>{isLast ? 'Review' : 'Skip'}</Text>
         </Pressable>
         <Pressable
+          accessibilityRole="button"
           style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
           disabled={sel === undefined}
           onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
@@ -270,9 +276,10 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       borderWidth: 1,
       borderColor: t.border,
       borderRadius: 20,
+      borderCurve: 'continuous',
       padding: 18,
       marginHorizontal: 14,
-      marginBottom: 12,
+      marginBottom: spacing.md,
     },
     qText: {
       fontSize: typo.lg,
@@ -285,11 +292,12 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     opt: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: spacing.md,
       backgroundColor: t.surface,
       borderWidth: 1.5,
       borderColor: t.border,
       borderRadius: 16,
+      borderCurve: 'continuous',
       paddingVertical: 13,
       paddingHorizontal: 13,
     },
@@ -322,7 +330,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       right: 0,
       bottom: 0,
       flexDirection: 'row',
-      gap: 8,
+      gap: spacing.sm,
       padding: 14,
       backgroundColor: t.bg,
       borderTopWidth: 1,
@@ -330,8 +338,9 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     footBtnGhost: {
       paddingVertical: 13,
-      paddingHorizontal: 16,
-      borderRadius: 14,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.md,
+      borderCurve: 'continuous',
       borderWidth: 1,
       borderColor: t.border,
     },
@@ -344,7 +353,8 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     footBtnPrimary: {
       flex: 1,
       paddingVertical: 13,
-      borderRadius: 14,
+      borderRadius: radius.md,
+      borderCurve: 'continuous',
       backgroundColor: 'rgba(128,0,0,0.85)',
       alignItems: 'center',
     },
@@ -357,6 +367,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     scoreCard: {
       borderRadius: 24,
+      borderCurve: 'continuous',
       padding: 22,
       marginBottom: 18,
       borderWidth: 1,
@@ -400,7 +411,8 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       borderWidth: 1,
       borderColor: t.divider,
       borderRadius: 12,
-      padding: 12,
+      borderCurve: 'continuous',
+      padding: spacing.md,
       marginBottom: 6,
     },
     subtestName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
@@ -409,7 +421,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       color: t.textSecondary,
       fontFamily: 'Lexend_600SemiBold',
     },
-    reviewCard: { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 10 },
+    reviewCard: { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, padding: 14, marginBottom: 10 },
     reviewOk: {
       backgroundColor: 'rgba(34,197,94,0.06)',
       borderColor: 'rgba(34,197,94,0.18)',
@@ -441,9 +453,10 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     primaryBtn: {
       backgroundColor: 'rgba(128,0,0,0.85)',
       borderRadius: 16,
+      borderCurve: 'continuous',
       paddingVertical: 14,
       alignItems: 'center',
-      marginTop: 8,
+      marginTop: spacing.sm,
     },
     primaryBtnTxt: {
       color: '#fff',

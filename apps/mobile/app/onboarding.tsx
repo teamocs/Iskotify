@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   View, Text, TextInput, SectionList, StyleSheet,
-  TouchableOpacity, ActivityIndicator, ScrollView,
+  Pressable, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -18,6 +18,9 @@ import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
 import { useTheme } from '../theme/ThemeContext'
+import { spacing, radius, type Theme } from '../theme/tokens'
+import { Card } from '../components/ui/Card'
+import { AppButton } from '../components/ui/AppButton'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
 import {
   buildExamCatalog, orderExams, searchExams, examAcronymToListingSlug,
@@ -78,6 +81,25 @@ function shuffle<T>(arr: T[]): T[] {
     const tmp = a[i] as T; a[i] = a[j] as T; a[j] = tmp
   }
   return a
+}
+
+// Step progress indicator (token-driven). `active` = which of the 4 steps is current.
+function StepDots({ active, t }: { active: 0 | 1 | 2 | 3; t: Theme }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+      {[0, 1, 2, 3].map(i => (
+        <View
+          key={i}
+          style={{
+            width: i === active ? 24 : 8,
+            height: 4,
+            borderRadius: radius.pill,
+            backgroundColor: i === active ? t.accent : t.surface2,
+          }}
+        />
+      ))}
+    </View>
+  )
 }
 
 export default function OnboardingScreen() {
@@ -155,26 +177,26 @@ export default function OnboardingScreen() {
   }, [])
 
   const assessStyle = useMemo(() => StyleSheet.create({
-    questionCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 22, padding: 20, marginBottom: 4 },
-    questionLabel: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
+    questionCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.xl, marginBottom: spacing.xs },
+    questionLabel: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: spacing.sm, fontFamily: 'Lexend_600SemiBold' },
     questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 23, fontFamily: 'Outfit_600SemiBold' },
-    optionBtn: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
-    optionLetter: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    optionBtn: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: 13, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
+    optionLetter: { width: 28, height: 28, borderRadius: radius.sm, backgroundColor: 'rgba(128,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     optionLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
     optionText: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 19 },
-    resultPct: { fontSize: typo.display, fontWeight: '700', color: t.accentText, letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: 8 },
-    resultTitle: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 8, textAlign: 'center' },
-    resultSub: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20, marginBottom: 28 },
-    resultCounts: { flexDirection: 'row', gap: 40, marginBottom: 32 },
+    resultPct: { fontSize: typo.display, fontWeight: '700', color: t.accentText, letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+    resultTitle: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm, textAlign: 'center' },
+    resultSub: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20, marginBottom: spacing.xxl },
+    resultCounts: { flexDirection: 'row', gap: 40, marginBottom: spacing.xxxl },
     resultCount: { alignItems: 'center' },
     resultNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     resultLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-    primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%' },
+    primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
     primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
   }), [t, typo])
 
-  const labelStyle = { fontFamily: 'Lexend_500Medium' as const, fontSize: typo.sm, color: t.textSecondary, marginBottom: 8 }
-  const inputStyle = { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 14 as number, paddingVertical: 13 as number, fontFamily: 'Lexend_400Regular' as const, fontSize: typo.base, color: t.textPrimary }
+  const labelStyle = { fontFamily: 'Lexend_500Medium' as const, fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.sm }
+  const inputStyle = { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous' as const, paddingHorizontal: spacing.lg as number, paddingVertical: 13 as number, fontFamily: 'Lexend_400Regular' as const, fontSize: typo.base, color: t.textPrimary }
 
   useEffect(() => {
     if (step !== 2) return
@@ -440,74 +462,67 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <KeyboardAwareScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxxl, paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
           style={{ flex: 1 }}
           bottomOffset={20}
         >
 
-            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 28 }}>
-              <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
-              <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-              <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-              <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+            <View style={{ marginBottom: spacing.xxl }}>
+              <StepDots active={0} t={t} />
             </View>
 
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, marginBottom: 6 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, marginBottom: spacing.sm }}>
               Tell us about yourself
             </Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: 28, lineHeight: 19 }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 19 }}>
               This helps us personalise your experience.
             </Text>
 
-            <Text style={labelStyle}>Full Name *</Text>
-            <TextInput
-              style={inputStyle}
-              placeholder="e.g. Juan dela Cruz"
-              placeholderTextColor={t.textTertiary}
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
+            <Card elevated padded>
+              <Text style={labelStyle}>Full Name *</Text>
+              <TextInput
+                style={inputStyle}
+                placeholder="e.g. Juan dela Cruz"
+                placeholderTextColor={t.textTertiary}
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
 
-            <Text style={[labelStyle, { marginTop: 18 }]}>School / University</Text>
-            <SchoolPicker value={school} onChange={setSchool} onSelectMeta={m => setSchoolRegion(m.region ?? '')} />
+              <Text style={[labelStyle, { marginTop: spacing.lg }]}>School / University</Text>
+              <SchoolPicker value={school} onChange={setSchool} onSelectMeta={m => setSchoolRegion(m.region ?? '')} />
 
-            <Text style={[labelStyle, { marginTop: 18 }]}>Grade Level *</Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: 10 }}>
-              Philippines K-12 curriculum — select your current grade
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {GRADES.map(g => {
-                const active = gradeLevel === g
-                return (
-                  <TouchableOpacity
-                    key={g}
-                    onPress={() => setGradeLevel(g)}
-                    style={{
-                      flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center',
-                      backgroundColor: active ? '#831626' : t.surface2,
-                      borderWidth: 1, borderColor: active ? '#831626' : t.border,
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: active ? '#fff' : t.textSecondary }}>
-                      G{g}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-
-            <TouchableOpacity
-              onPress={handleNextStep}
-              disabled={!isValid}
-              style={{ marginTop: 32, backgroundColor: isValid ? 'rgba(128,0,0,0.82)' : t.surface2, borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
-            >
-              <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: isValid ? '#fff' : t.textTertiary }}>
-                Next →
+              <Text style={[labelStyle, { marginTop: spacing.lg }]}>Grade Level *</Text>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: spacing.sm }}>
+                Philippines K-12 curriculum — select your current grade
               </Text>
-            </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                {GRADES.map(g => {
+                  const active = gradeLevel === g
+                  return (
+                    <Pressable
+                      key={g}
+                      onPress={() => setGradeLevel(g)}
+                      style={({ pressed }) => [{
+                        flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', minHeight: 44, justifyContent: 'center',
+                        backgroundColor: active ? t.accent : t.surface2,
+                        borderWidth: 1, borderColor: active ? t.accent : t.border,
+                      }, pressed ? { opacity: 0.85 } : null]}
+                    >
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: active ? '#fff' : t.textSecondary }}>
+                        G{g}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </Card>
+
+            <View style={{ marginTop: spacing.xxxl }}>
+              <AppButton label="Next →" onPress={handleNextStep} disabled={!isValid} />
+            </View>
         </KeyboardAwareScrollView>
       </SafeAreaView>
     )
@@ -532,25 +547,22 @@ export default function OnboardingScreen() {
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 24 }}>
-          <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-          <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
-          <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-          <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl }}>
+          <StepDots active={1} t={t} />
         </View>
 
-        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-          <TouchableOpacity onPress={() => setStep(1)} style={{ marginBottom: 12 }}>
+        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm }}>
+          <Pressable onPress={() => setStep(1)} hitSlop={8} style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, marginBottom: 4 }}>
+          </Pressable>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, marginBottom: spacing.xs }}>
             What are you{'\n'}preparing for?
           </Text>
           <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary }}>
             Search and pick your target entrance exams{schoolRegion ? ` — top national schools first, then ${canonicalizeRegion(schoolRegion)}` : ''}, plus any scholarships.
           </Text>
           <TextInput
-            style={[inputStyle, { marginTop: 14 }]}
+            style={[inputStyle, { marginTop: spacing.md }]}
             placeholder="Search exam, university, or scholarship…"
             placeholderTextColor={t.textTertiary}
             value={examQuery}
@@ -569,7 +581,7 @@ export default function OnboardingScreen() {
           <SectionList
             sections={sections}
             keyExtractor={(item, i) => ('schoolId' in item ? item.schoolId : item.id) + ':' + i}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 170 }}
+            contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xs, paddingBottom: 170 }}
             keyboardShouldPersistTaps="handled"
             stickySectionHeadersEnabled={false}
             ListEmptyComponent={
@@ -578,7 +590,7 @@ export default function OnboardingScreen() {
               </Text>
             }
             renderSectionHeader={({ section }) => (
-              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 16, marginBottom: 8 }}>
+              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm }}>
                 {section.title}
               </Text>
             )}
@@ -587,9 +599,9 @@ export default function OnboardingScreen() {
                 const ex = item as ExamOption
                 const sel = selectedExams.some(s => s.schoolId === ex.schoolId)
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => setSelectedExams(prev => sel ? prev.filter(s => s.schoolId !== ex.schoolId) : [...prev, ex])}
-                    style={{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }} numberOfLines={2}>{ex.schoolName}</Text>
@@ -598,15 +610,15 @@ export default function OnboardingScreen() {
                       </Text>
                     </View>
                     <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 )
               }
               const lst = item as ListingRow
               const sel = selectedSlugs.indexOf(lst.slug) !== -1
               return (
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setSelectedSlugs(prev => sel ? prev.filter(s => s !== lst.slug) : [...prev, lst.slug])}
-                  style={{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }}>{lst.title}</Text>
@@ -617,29 +629,25 @@ export default function OnboardingScreen() {
                     ) : null}
                   </View>
                   <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-                </TouchableOpacity>
+                </Pressable>
               )
             }}
           />
         )}
 
         {/* Sticky bottom CTA */}
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          <TouchableOpacity
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.xxl, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
+          <AppButton
+            label={saving ? 'Setting up…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''} →`}
             disabled={selectedCount === 0 || saving}
             onPress={() => void handleConfirmStep2()}
-            style={{ backgroundColor: selectedCount > 0 ? 'rgba(128,0,0,0.82)' : t.surface2, borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: selectedCount > 0 ? '#fff' : t.textTertiary }}>
-              {saving ? 'Setting up…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''} →`}
-            </Text>
-          </TouchableOpacity>
+          />
         </View>
 
         {saving && (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={t.textPrimary} size="large" />
-            <Text style={{ color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 12, fontSize: typo.sm }}>Setting up your content…</Text>
+            <Text style={{ color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: spacing.md, fontSize: typo.sm }}>Setting up your content…</Text>
           </View>
         )}
       </SafeAreaView>
@@ -656,159 +664,155 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <KeyboardAwareScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 48 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxxl, paddingBottom: 48 }}
           keyboardShouldPersistTaps="handled"
           style={{ flex: 1 }}
           bottomOffset={20}
         >
           {/* Step dots */}
-          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 28 }}>
-            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-            <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
-            <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
+          <View style={{ marginBottom: spacing.xxl }}>
+            <StepDots active={2} t={t} />
           </View>
 
           {/* Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, flex: 1 }}>
               Help us match scholarships
             </Text>
-            <TouchableOpacity onPress={() => void handleMatcherContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
+            <Pressable onPress={() => void handleMatcherContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
               <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: 28, lineHeight: 19 }}>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 19 }}>
             These details let us personalise scholarship eligibility. All fields are optional.
           </Text>
 
           {/* Income bracket */}
-          <Text style={labelStyle}>Household Income Bracket</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            {INCOME_OPTIONS.map(opt => {
-              const active = incomeBracket === opt.value && opt.value !== null
-              const isPreferNotToSay = opt.value === null
-              return (
-                <TouchableOpacity
-                  key={opt.label}
-                  onPress={() => {
-                    if (isPreferNotToSay) {
-                      setIncomeBracket(null)
-                    } else {
-                      setIncomeBracket(prev => prev === opt.value ? null : opt.value)
-                    }
-                  }}
-                  style={{
-                    paddingVertical: 9,
-                    paddingHorizontal: 14,
-                    borderRadius: 20,
-                    backgroundColor: active ? '#831626' : t.surface2,
-                    borderWidth: 1,
-                    borderColor: active ? '#831626' : t.border,
-                  }}
-                >
-                  <Text style={{
-                    fontFamily: 'Lexend_500Medium',
-                    fontSize: typo.sm,
-                    color: active ? '#fff' : t.textSecondary,
-                  }}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
+          <Card elevated padded style={{ marginBottom: spacing.lg }}>
+            <Text style={labelStyle}>Household Income Bracket</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              {INCOME_OPTIONS.map(opt => {
+                const active = incomeBracket === opt.value && opt.value !== null
+                const isPreferNotToSay = opt.value === null
+                return (
+                  <Pressable
+                    key={opt.label}
+                    onPress={() => {
+                      if (isPreferNotToSay) {
+                        setIncomeBracket(null)
+                      } else {
+                        setIncomeBracket(prev => prev === opt.value ? null : opt.value)
+                      }
+                    }}
+                    style={({ pressed }) => [{
+                      paddingVertical: 9,
+                      paddingHorizontal: spacing.lg,
+                      borderRadius: radius.pill,
+                      backgroundColor: active ? t.accent : t.surface2,
+                      borderWidth: 1,
+                      borderColor: active ? t.accent : t.border,
+                    }, pressed ? { opacity: 0.85 } : null]}
+                  >
+                    <Text style={{
+                      fontFamily: 'Lexend_500Medium',
+                      fontSize: typo.sm,
+                      color: active ? '#fff' : t.textSecondary,
+                    }}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </Card>
 
           {/* GWA */}
-          <Text style={labelStyle}>GWA (General Weighted Average)</Text>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: 8 }}>
-            Your latest general weighted average (percentage)
-          </Text>
-          <TextInput
-            style={[inputStyle, gwaError ? { borderColor: '#f87171' } : {}]}
-            placeholder="e.g. 90.5"
-            placeholderTextColor={t.textTertiary}
-            value={gwaText}
-            onChangeText={text => { setGwaText(text); setGwaError(null) }}
-            keyboardType="decimal-pad"
-            returnKeyType="done"
-          />
-          {gwaError ? (
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#f87171', marginTop: 4 }}>
-              {gwaError}
+          <Card elevated padded style={{ marginBottom: spacing.lg }}>
+            <Text style={labelStyle}>GWA (General Weighted Average)</Text>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: spacing.sm }}>
+              Your latest general weighted average (percentage)
             </Text>
-          ) : null}
+            <TextInput
+              style={[inputStyle, gwaError ? { borderColor: '#f87171' } : {}]}
+              placeholder="e.g. 90.5"
+              placeholderTextColor={t.textTertiary}
+              value={gwaText}
+              onChangeText={text => { setGwaText(text); setGwaError(null) }}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+            />
+            {gwaError ? (
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#f87171', marginTop: spacing.xs }}>
+                {gwaError}
+              </Text>
+            ) : null}
+          </Card>
 
           {/* Province */}
-          <Text style={[labelStyle, { marginTop: 20 }]}>Province</Text>
-          <TextInput
-            style={[inputStyle, { marginBottom: 6 }]}
-            placeholder="Search province..."
-            placeholderTextColor={t.textTertiary}
-            value={provinceQuery}
-            onChangeText={setProvinceQuery}
-            returnKeyType="search"
-            autoCorrect={false}
-            autoCapitalize="words"
-          />
-          {province.trim() ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <View style={{
-                backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)',
-                borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
-              }}>
-                <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
-                  {province}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => { setProvince(''); setProvinceQuery('') }}>
-                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }}>clear</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-          <View style={{
-            maxHeight: 200, borderWidth: 1, borderColor: t.border, borderRadius: 14,
-            overflow: 'hidden', marginBottom: 28,
-          }}>
-            <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
-              {filteredProvinces.map(p => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => { setProvince(p); setProvinceQuery(p) }}
-                  style={{
-                    paddingHorizontal: 14, paddingVertical: 11,
-                    backgroundColor: province === p ? 'rgba(128,0,0,0.12)' : 'transparent',
-                    borderBottomWidth: 1, borderBottomColor: t.border,
-                  }}
-                >
-                  <Text style={{
-                    fontFamily: 'Lexend_400Regular', fontSize: typo.sm,
-                    color: province === p ? t.accentText : t.textPrimary,
-                  }}>
-                    {p}
+          <Card elevated padded style={{ marginBottom: spacing.xxl }}>
+            <Text style={labelStyle}>Province</Text>
+            <TextInput
+              style={[inputStyle, { marginBottom: spacing.xs }]}
+              placeholder="Search province..."
+              placeholderTextColor={t.textTertiary}
+              value={provinceQuery}
+              onChangeText={setProvinceQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="words"
+            />
+            {province.trim() ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+                <View style={{
+                  backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)',
+                  borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+                }}>
+                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
+                    {province}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+                </View>
+                <Pressable onPress={() => { setProvince(''); setProvinceQuery('') }} hitSlop={8} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
+                  <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }}>clear</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={{
+              maxHeight: 200, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous',
+              overflow: 'hidden',
+            }}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {filteredProvinces.map(p => (
+                  <Pressable
+                    key={p}
+                    onPress={() => { setProvince(p); setProvinceQuery(p) }}
+                    style={({ pressed }) => [{
+                      paddingHorizontal: spacing.lg, paddingVertical: 11, minHeight: 44, justifyContent: 'center',
+                      backgroundColor: province === p ? 'rgba(128,0,0,0.12)' : 'transparent',
+                      borderBottomWidth: 1, borderBottomColor: t.border,
+                    }, pressed ? { opacity: 0.7 } : null]}
+                  >
+                    <Text style={{
+                      fontFamily: 'Lexend_400Regular', fontSize: typo.sm,
+                      color: province === p ? t.accentText : t.textPrimary,
+                    }}>
+                      {p}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </Card>
 
           {/* CTA */}
-          <TouchableOpacity
-            onPress={() => void handleMatcherContinue(false)}
-            style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 15, alignItems: 'center', marginBottom: 12 }}
-          >
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
-              Next →
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          <AppButton label="Next →" onPress={() => void handleMatcherContinue(false)} />
+          <Pressable
             onPress={() => void handleMatcherContinue(true)}
-            style={{ alignItems: 'center', paddingVertical: 8 }}
+            style={({ pressed }) => [{ alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.md, minHeight: 44, justifyContent: 'center' }, pressed ? { opacity: 0.6 } : null]}
           >
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>
               Skip for now
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </KeyboardAwareScrollView>
       </SafeAreaView>
     )
@@ -833,39 +837,39 @@ export default function OnboardingScreen() {
     const renderCourseRow = (c: CourseOption) => {
       const sel = isCourseSelected(c)
       return (
-        <TouchableOpacity
+        <Pressable
           key={c.id}
           onPress={() => toggleCourse(c)}
-          style={{
+          style={({ pressed }) => [{
             backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
-            borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
-            borderWidth: sel ? 2 : 1, borderColor: sel ? '#831626' : t.border,
-            flexDirection: 'row', alignItems: 'center', gap: 10,
-          }}
+            borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm,
+            borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border,
+            flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44,
+          }, pressed ? { opacity: 0.85 } : null]}
         >
           <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary, flex: 1 }}>{c.label}</Text>
           <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-        </TouchableOpacity>
+        </Pressable>
       )
     }
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-          <TouchableOpacity onPress={() => setStep(2)} style={{ marginBottom: 12 }}>
+        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm }}>
+          <Pressable onPress={() => setStep(2)} hitSlop={8} style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-          </TouchableOpacity>
+          </Pressable>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>Target Courses</Text>
-            <TouchableOpacity onPress={() => void handleCoursesContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, flex: 1 }}>Target Courses</Text>
+            <Pressable onPress={() => void handleCoursesContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
               <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: 4 }}>
+          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: spacing.xs }}>
             Pick up to 3 courses ({selectedCourses.length}/3). Recommendations are based on your target exams.
           </Text>
           <TextInput
-            style={[inputStyle, { marginTop: 14 }]}
+            style={[inputStyle, { marginTop: spacing.md }]}
             placeholder="Search courses (e.g. Nursing, Civil Engineering)…"
             placeholderTextColor={t.textTertiary}
             value={courseQuery}
@@ -876,18 +880,18 @@ export default function OnboardingScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.sm, paddingBottom: 140 }}
           keyboardShouldPersistTaps="handled"
         >
           {cq ? (
             searchResults.length > 0
               ? searchResults.map(renderCourseRow)
-              : <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: 16 }}>No courses found.</Text>
+              : <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: spacing.lg }}>No courses found.</Text>
           ) : (
             <>
               {recommendedCourses.length > 0 && (
                 <>
-                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, marginBottom: 8 }}>
+                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.sm, marginBottom: spacing.sm }}>
                     Recommended for you
                   </Text>
                   {recommendedCourses.map(renderCourseRow)}
@@ -895,14 +899,14 @@ export default function OnboardingScreen() {
               )}
               {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).length > 0 && (
                 <>
-                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: 16, marginBottom: 8 }}>
+                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm }}>
                     Also selected
                   </Text>
                   {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).map(renderCourseRow)}
                 </>
               )}
               {recommendedCourses.length === 0 && selectedCourses.length === 0 && (
-                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: 16 }}>
+                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: spacing.lg }}>
                   Search above to add the courses you&apos;re considering.
                 </Text>
               )}
@@ -910,15 +914,11 @@ export default function OnboardingScreen() {
           )}
         </ScrollView>
 
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          <TouchableOpacity
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.xxl, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
+          <AppButton
+            label={`Continue${selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''} →`}
             onPress={() => void handleCoursesContinue(false)}
-            style={{ backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 16, paddingVertical: 15, alignItems: 'center' }}
-          >
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
-              Continue{selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''} →
-            </Text>
-          </TouchableOpacity>
+          />
         </View>
       </SafeAreaView>
     )
@@ -938,41 +938,41 @@ export default function OnboardingScreen() {
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 28, paddingTop: 40, paddingBottom: 48 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: 40, paddingBottom: 48 }}>
           <Text style={assessStyle.resultTitle}>Assessment Complete!</Text>
           <Text style={assessStyle.resultSub}>
             {correct} of {assessAnswers.length} correct.{'\n'}We've calibrated your starting level.
           </Text>
 
-          <View style={{ marginBottom: 28, gap: 8 }}>
+          <View style={{ marginBottom: spacing.xxl, gap: spacing.sm }}>
             {bySubject.filter(s => s.total > 0).map(({ sub, correct: c, total }) => {
               const pctSub = Math.round((c / total) * 100)
               return (
-                <View key={sub} style={{ backgroundColor: t.surface, borderRadius: 14, padding: 12 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Card key={sub} padded={false} style={{ padding: spacing.md }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary }}>{sub}</Text>
                     <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: pctSub >= 60 ? '#4ade80' : '#f87171' }}>
                       {c}/{total} ({pctSub}%)
                     </Text>
                   </View>
-                  <View style={{ height: 4, backgroundColor: t.surface2, borderRadius: 99 }}>
-                    <View style={{ height: 4, borderRadius: 99, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? '#4ade80' : '#f87171' }} />
+                  <View style={{ height: 4, backgroundColor: t.surface2, borderRadius: radius.pill }}>
+                    <View style={{ height: 4, borderRadius: radius.pill, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? '#4ade80' : '#f87171' }} />
                   </View>
-                </View>
+                </Card>
               )
             })}
           </View>
 
           {selectedSlugs.length > 0 && (
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+            <View style={{ marginBottom: spacing.xxl }}>
+              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm }}>
                 Your Focus List
               </Text>
               {selectedSlugs.map((slug, i) => {
                 const listing = listings.find(l => l.slug === slug)
                 return (
-                  <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center' }}>
+                  <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
+                    <View style={{ width: 28, height: 28, borderRadius: radius.pill, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: '#fff' }}>#{i + 1}</Text>
                     </View>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary, flex: 1 }}>
@@ -984,9 +984,9 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          <TouchableOpacity style={[assessStyle.primaryBtn, { marginTop: 8 }]} onPress={finishOnboarding}>
-            <Text style={assessStyle.primaryBtnTxt}>Start Learning →</Text>
-          </TouchableOpacity>
+          <View style={{ marginTop: spacing.sm }}>
+            <AppButton label="Start Learning →" onPress={finishOnboarding} />
+          </View>
         </ScrollView>
       </SafeAreaView>
     )
@@ -997,52 +997,48 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 24, paddingTop: 20 }}>
-        <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-        <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-        <View style={{ width: 8, height: 4, borderRadius: 2, backgroundColor: t.surface2 }} />
-        <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: '#831626' }} />
+      <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl }}>
+        <StepDots active={3} t={t} />
       </View>
 
-      <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary }}>
+      <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.md }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs }}>
+          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary }}>
             Pre-Assessment
           </Text>
-          <TouchableOpacity onPress={finishOnboarding} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Pressable onPress={finishOnboarding} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 6 }}>
+        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: spacing.sm }}>
           {q.subject} · Question {assessIdx + 1} of {preAssessQuestions.length}
         </Text>
-        <View style={{ height: 3, backgroundColor: t.surface2, borderRadius: 99 }}>
+        <View style={{ height: 3, backgroundColor: t.surface2, borderRadius: radius.pill }}>
           <View style={{
-            height: 3, backgroundColor: '#831626', borderRadius: 99,
+            height: 3, backgroundColor: t.accent, borderRadius: radius.pill,
             width: `${((assessIdx + 1) / preAssessQuestions.length) * 100}%` as any,
           }} />
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View style={assessStyle.questionCard}>
           <Text style={assessStyle.questionLabel}>{q.subject.toUpperCase()}</Text>
           <Text style={assessStyle.questionText}>{q.stem}</Text>
         </View>
 
-        <View style={{ gap: 10, marginTop: 8 }}>
+        <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
           {q.options.map((opt, i) => (
-            <TouchableOpacity
+            <Pressable
               key={i}
-              style={assessStyle.optionBtn}
+              style={({ pressed }) => [assessStyle.optionBtn, pressed ? { opacity: 0.75 } : null]}
               onPress={() => handleAssessAnswer(i)}
-              activeOpacity={0.75}
             >
               <View style={assessStyle.optionLetter}>
                 <Text style={assessStyle.optionLetterTxt}>{(['A', 'B', 'C', 'D'] as const)[i]}</Text>
               </View>
               <Text style={assessStyle.optionText}>{opt}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
       </ScrollView>
