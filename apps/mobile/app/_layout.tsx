@@ -27,6 +27,7 @@ import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
 import { notes as notesTable, userSettings, focusListings as focusListingsTable } from '../db/schema'
 import { eq, and, gt } from 'drizzle-orm'
+import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 import '../global.css'
 
@@ -125,8 +126,12 @@ function AppInit({ onReady }: { onReady: () => void }) {
       const settings = rows[0]
       if (!settings?.fullName) {
         router.replace('/landing')
-      } else if (!settings?.selectedListingSlug && focusRows.length === 0) {
-        // No listing chosen yet — send to onboarding step 2
+      } else if (!hasOnboardingFocus({
+        selectedListingSlug: settings.selectedListingSlug,
+        focusCount: focusRows.length,
+        targetExams: settings.targetExams,
+      })) {
+        // No exam/scholarship chosen yet — send to onboarding step 2
         router.replace('/onboarding')
       }
       // else: returning user — Stack shows tabs automatically

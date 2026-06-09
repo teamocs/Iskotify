@@ -11,6 +11,7 @@ import { pullUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { eq } from 'drizzle-orm'
 import { userSettings, focusListings } from '../db/schema'
+import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { spacing, radius } from '../theme/tokens'
 import { Card } from '../components/ui/Card'
 
@@ -83,9 +84,12 @@ export default function LandingScreen() {
                   db.select().from(focusListings).limit(1),
                 ])
                 const hasProfile = !!(settingsRows[0]?.fullName?.trim())
-                // Accept a selected listing OR focus rows (matches _layout.tsx) so a
-                // returning user with restored data isn't pushed back into onboarding.
-                const hasFocus = focusRows.length > 0 || !!settingsRows[0]?.selectedListingSlug
+                // Treat any chosen exam/scholarship as onboarded (matches _layout.tsx).
+                const hasFocus = hasOnboardingFocus({
+                  selectedListingSlug: settingsRows[0]?.selectedListingSlug,
+                  focusCount: focusRows.length,
+                  targetExams: settingsRows[0]?.targetExams,
+                })
 
                 if (hasProfile && hasFocus) {
                   router.replace('/(tabs)')  // returning user — data fully restored

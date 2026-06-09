@@ -8,6 +8,7 @@ import { useDb } from '../../hooks/useDb'
 import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { eq } from 'drizzle-orm'
+import { hasOnboardingFocus } from '../../utils/onboardingStatus'
 
 // Must be at module level — signals openAuthSessionAsync in landing.tsx to close
 // the browser and return the redirect URL.
@@ -73,10 +74,14 @@ export default function AuthCallback() {
             db.select().from(focusListings).limit(1),
           ])
           const hasProfile = !!(settingsRows[0]?.fullName?.trim())
-          // Accept a selected listing OR focus rows (older backups may have only the
-          // former) — must match the launch check in _layout.tsx so a returning user
-          // with restored data is never wrongly sent back through onboarding.
-          const hasFocus = focusRows.length > 0 || !!settingsRows[0]?.selectedListingSlug
+          // Treat any chosen exam/scholarship as onboarded (matches _layout.tsx). Using
+          // targetExams too means a user whose exam has no authored content listing is
+          // never wrongly looped back through onboarding.
+          const hasFocus = hasOnboardingFocus({
+            selectedListingSlug: settingsRows[0]?.selectedListingSlug,
+            focusCount: focusRows.length,
+            targetExams: settingsRows[0]?.targetExams,
+          })
 
           if (hasProfile && hasFocus) {
             router.replace('/(tabs)')  // returning user with restored data
