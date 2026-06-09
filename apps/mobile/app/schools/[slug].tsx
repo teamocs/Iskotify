@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, View, Text, Pressable,
   Linking, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -9,6 +9,10 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Card } from '../../components/ui/Card'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { spacing, radius } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -139,37 +143,33 @@ export default function SchoolProfileScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1, backgroundColor: t.bg },
-    topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-    backBtn:       { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+    backBtn:       { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     backArrow:     { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle:      { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    scroll:        { paddingBottom: 40 },
     // Hero
-    hero:          { marginHorizontal: 14, borderRadius: 18, padding: 16, marginBottom: 12, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
-    heroName:      { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-    heroAcronym:   { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: 6 },
-    heroLocation:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginBottom: 8 },
-    badgeRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-    badge:         { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1 },
+    heroName:      { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
+    heroAcronym:   { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.sm },
+    heroLocation:  { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginBottom: spacing.sm },
+    badgeRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+    badge:         { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, borderWidth: 1 },
     badgeTxt:      { fontSize: typo.xs, fontFamily: 'Lexend_400Regular' },
     // Section
-    section:       { marginHorizontal: 14, marginBottom: 16 },
-    sectionTitle:  { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.9, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
-    infoCard:      { backgroundColor: t.surface, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 14 },
-    row:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-    rowLabel:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
-    rowValue:      { fontSize: typo.xs, color: t.textPrimary, fontFamily: 'Lexend_400Regular', flex: 2, textAlign: 'right' },
+    section:       { marginTop: spacing.lg },
+    row:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
+    rowLabel:      { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
+    rowValue:      { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', flex: 2, textAlign: 'right' },
     // Chips / pills
-    pillWrap:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    pill:          { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider },
+    pillWrap:      { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    pill:          { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider },
     pillTxt:       { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     // Link buttons
-    linkBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: t.surface, borderRadius: 14, borderWidth: 1, borderColor: t.border, marginBottom: 8 },
+    linkBtn:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: t.surface, borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, marginBottom: spacing.sm },
     linkTxt:       { flex: 1, fontSize: typo.sm, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
     linkArrow:     { fontSize: typo.sm, color: t.textTertiary },
     // Disclaimer
-    disclaimer:    { marginHorizontal: 14, marginBottom: 16, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 12, padding: 12 },
-    disclaimerTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
+    disclaimer:    { marginTop: spacing.lg, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.md },
+    disclaimerTxt: { fontSize: typo.sm, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
     // Empty/error
     empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
   }), [t, typo])
@@ -180,9 +180,13 @@ export default function SchoolProfileScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
       </SafeAreaView>
@@ -195,9 +199,13 @@ export default function SchoolProfileScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <Text style={s.empty}>School not found.</Text>
       </SafeAreaView>
@@ -236,16 +244,20 @@ export default function SchoolProfileScreen() {
 
       {/* Top bar */}
       <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>{school.acronym ?? school.name}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false}>
 
         {/* ── Hero ── */}
-        <View style={s.hero}>
+        <Card elevated style={{ marginTop: spacing.md }}>
           <Text style={s.heroName}>{school.name}</Text>
           {school.acronym ? (
             <Text style={s.heroAcronym}>{school.acronym}</Text>
@@ -286,17 +298,17 @@ export default function SchoolProfileScreen() {
 
           {/* Year established */}
           {profile?.yearEstablished ? (
-            <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 8 }}>
+            <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.sm }}>
               Est. {profile.yearEstablished}
             </Text>
           ) : null}
-        </View>
+        </Card>
 
         {/* ── Accreditation + CHED COE/COD ── */}
         {(profile?.accreditation || profile?.chedCoeCod) ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Accreditation</Text>
-            <View style={s.infoCard}>
+            <SectionHeader title="Accreditation" />
+            <Card elevated>
               {profile?.accreditation ? (
                 <View style={s.row}>
                   <Text style={s.rowLabel}>Accreditation</Text>
@@ -309,15 +321,15 @@ export default function SchoolProfileScreen() {
                   <Text style={s.rowValue}>{profile.chedCoeCod}</Text>
                 </View>
               ) : null}
-            </View>
+            </Card>
           </View>
         ) : null}
 
         {/* ── Tuition ── */}
         {(profile?.tuitionFeeRange || profile?.freeTuition) ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Tuition</Text>
-            <View style={s.infoCard}>
+            <SectionHeader title="Tuition" />
+            <Card elevated>
               {profile?.tuitionFeeRange ? (
                 <View style={s.row}>
                   <Text style={s.rowLabel}>Fee Range</Text>
@@ -336,15 +348,15 @@ export default function SchoolProfileScreen() {
                   <Text style={s.rowValue}>{profile.academicCalendar}</Text>
                 </View>
               ) : null}
-            </View>
+            </Card>
           </View>
         ) : null}
 
         {/* ── Entrance Exam ── */}
         {hasEntranceExam ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Entrance Exam</Text>
-            <View style={s.infoCard}>
+            <SectionHeader title="Entrance Exam" />
+            <Card elevated>
               {(profile?.entranceExamName || profile?.entranceExamAcronym) ? (
                 <View style={s.row}>
                   <Text style={s.rowLabel}>Exam</Text>
@@ -399,14 +411,14 @@ export default function SchoolProfileScreen() {
                   <Text style={s.rowValue}>{profile.estimatedPassingRate}</Text>
                 </View>
               ) : null}
-            </View>
+            </Card>
           </View>
         ) : null}
 
         {/* ── Known For / Notable Programs ── */}
         {(knownForCourses.length > 0 || notablePrograms.length > 0) ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Known For</Text>
+            <SectionHeader title="Known For" />
             <View style={s.pillWrap}>
               {[...knownForCourses, ...notablePrograms].map((item, i) => (
                 <View key={`known-${i}`} style={s.pill}>
@@ -420,7 +432,7 @@ export default function SchoolProfileScreen() {
         {/* ── Courses Offered ── */}
         {coursesOffered.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Courses Offered</Text>
+            <SectionHeader title="Courses Offered" />
             <View style={s.pillWrap}>
               {coursesOffered.map((c, i) => (
                 <View key={`course-${i}`} style={s.pill}>
@@ -434,7 +446,7 @@ export default function SchoolProfileScreen() {
         {/* ── Scholarships Offered ── */}
         {scholarships.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Scholarships Offered</Text>
+            <SectionHeader title="Scholarships Offered" />
             <View style={s.pillWrap}>
               {scholarships.map((sch, i) => (
                 <View key={`sch-${i}`} style={[s.pill, { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.20)' }]}>
@@ -448,7 +460,7 @@ export default function SchoolProfileScreen() {
         {/* ── PRC Strong Boards ── */}
         {prcStrongBoards.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>PRC Strong Boards</Text>
+            <SectionHeader title="PRC Strong Boards" />
             <View style={s.pillWrap}>
               {prcStrongBoards.map((b, i) => (
                 <View key={`prc-${i}`} style={s.pill}>
@@ -462,7 +474,7 @@ export default function SchoolProfileScreen() {
         {/* ── PRC Top Courses ── */}
         {prcTopCourses.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>PRC Top Courses</Text>
+            <SectionHeader title="PRC Top Courses" />
             <View style={s.pillWrap}>
               {prcTopCourses.map((c, i) => (
                 <View key={`prctop-${i}`} style={s.pill}>
@@ -476,36 +488,36 @@ export default function SchoolProfileScreen() {
         {/* ── External Links ── */}
         {hasLinks ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Links</Text>
+            <SectionHeader title="Links" />
             {profile?.websiteUrl ? (
-              <TouchableOpacity
-                style={s.linkBtn}
+              <Pressable
+                style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
                 onPress={() => profile.websiteUrl && Linking.openURL(profile.websiteUrl)}
-                activeOpacity={0.8}
+                accessibilityRole="link"
               >
                 <Text style={s.linkTxt} numberOfLines={1}>Official Website</Text>
                 <Text style={s.linkArrow}>↗</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
             {profile?.applicationPortalUrl ? (
-              <TouchableOpacity
-                style={s.linkBtn}
+              <Pressable
+                style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
                 onPress={() => profile.applicationPortalUrl && Linking.openURL(profile.applicationPortalUrl)}
-                activeOpacity={0.8}
+                accessibilityRole="link"
               >
                 <Text style={s.linkTxt} numberOfLines={1}>Application Portal</Text>
                 <Text style={s.linkArrow}>↗</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
             {profile?.facebookUrl ? (
-              <TouchableOpacity
-                style={s.linkBtn}
+              <Pressable
+                style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
                 onPress={() => profile.facebookUrl && Linking.openURL(profile.facebookUrl)}
-                activeOpacity={0.8}
+                accessibilityRole="link"
               >
                 <Text style={s.linkTxt} numberOfLines={1}>Facebook Page</Text>
                 <Text style={s.linkArrow}>↗</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
           </View>
         ) : null}
@@ -513,12 +525,12 @@ export default function SchoolProfileScreen() {
         {/* ── Notes ── */}
         {profile?.notes ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Notes</Text>
-            <View style={s.infoCard}>
-              <Text style={{ fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17 }}>
+            <SectionHeader title="Notes" />
+            <Card elevated>
+              <Text style={{ fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 }}>
                 {profile.notes}
               </Text>
-            </View>
+            </Card>
           </View>
         ) : null}
 
@@ -530,9 +542,7 @@ export default function SchoolProfileScreen() {
             </Text>
           </View>
         ) : null}
-
-        <View style={{ height: 24 }} />
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

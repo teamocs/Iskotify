@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, Alert, ScrollView, RefreshControl, Platform } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { StyleSheet, View, Text, Pressable, Alert, RefreshControl, Platform } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -19,7 +19,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from 'react-native-reanimated'
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
@@ -28,6 +28,10 @@ import { supabase } from '../../services/supabase'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
+import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Card } from '../../components/ui/Card'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { spacing, radius, typography } from '../../theme/tokens'
 
 interface ProfileData {
   fullName: string
@@ -138,18 +142,20 @@ function FocusListItem({
         ]}
       >
         {/* Drag handle — 6-dot grip */}
-        <TouchableOpacity
+        <Pressable
           onPress={() => Alert.alert('Reorder', 'Long-press this item to drag it up or down, or use the ↑↓ arrows.')}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+          accessibilityRole="button"
           accessibilityLabel="Drag handle"
           accessibilityHint="Long-press to drag and reorder"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
         >
           <DragHandle color={t.textTertiary} />
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Priority badge */}
         <View style={{
-          width: 28, height: 28, borderRadius: 14,
+          width: 28, height: 28, borderRadius: radius.pill,
           backgroundColor: 'rgba(128,0,0,0.82)',
           alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
@@ -167,36 +173,39 @@ function FocusListItem({
         </Text>
 
         {/* Up arrow */}
-        <TouchableOpacity
+        <Pressable
           onPress={onMoveUp}
           disabled={isFirst}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          style={{ padding: 4, opacity: isFirst ? 0.25 : 1 }}
+          accessibilityRole="button"
           accessibilityLabel="Move up"
+          style={({ pressed }) => [{ padding: spacing.xs, opacity: isFirst ? 0.25 : 1 }, pressed && !isFirst ? { opacity: 0.7 } : null]}
         >
           <Lineicons icon={ChevronUpOutlined} size={16} color={t.textSecondary} />
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Down arrow */}
-        <TouchableOpacity
+        <Pressable
           onPress={onMoveDown}
           disabled={isLast}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          style={{ padding: 4, opacity: isLast ? 0.25 : 1 }}
+          accessibilityRole="button"
           accessibilityLabel="Move down"
+          style={({ pressed }) => [{ padding: spacing.xs, opacity: isLast ? 0.25 : 1 }, pressed && !isLast ? { opacity: 0.7 } : null]}
         >
           <Lineicons icon={ChevronDownOutlined} size={16} color={t.textSecondary} />
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Remove */}
-        <TouchableOpacity
+        <Pressable
           onPress={onRemove}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          style={{ padding: 4 }}
+          accessibilityRole="button"
           accessibilityLabel="Remove from focus list"
+          style={({ pressed }) => [{ padding: spacing.xs }, pressed ? { opacity: 0.7 } : null]}
         >
           <Lineicons icon={XmarkOutlined} size={16} color={t.textTertiary} />
-        </TouchableOpacity>
+        </Pressable>
       </Animated.View>
     </GestureDetector>
   )
@@ -206,7 +215,6 @@ function FocusListItem({
 
 export default function ProfileScreen() {
   const db = useDb()
-  const insets = useSafeAreaInsets()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
   const { theme: t, typo } = useTheme()
@@ -215,33 +223,33 @@ export default function ProfileScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1, backgroundColor: t.bg },
-    title:         { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 0 },
-    identityCard:  { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 12 },
-    avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    avatar:        { width: 52, height: 52, borderRadius: 26, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    title:         { fontSize: typography.h2, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+    subtitle:      { fontSize: typography.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
+    avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    avatar:        { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     name:          { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 3 },
-    schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+    schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
     school:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    gradeChip:     { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 980, paddingHorizontal: 6, paddingVertical: 2 },
+    gradeChip:     { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
     gradeText:     { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
     listingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
     listingTitle:  { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
-    googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: t.divider },
-    googleBadge:   { backgroundColor: t.textPrimary, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+    googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: t.divider },
+    googleBadge:   { backgroundColor: t.textPrimary, borderRadius: radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
     googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
     googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
     signedInText:  { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
-    card:          { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
     cardTitle:     { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     cardSub:       { fontSize: typo.sm, color: t.textSecondary, marginTop: 3, fontFamily: 'Lexend_400Regular' },
-    focusSection:  { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
-    secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 4, marginBottom: 2 },
-    analyticsSection: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, marginBottom: 10, overflow: 'hidden' },
-    analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-    analyticsBody:    { paddingHorizontal: 16, paddingBottom: 16 },
-    analyticsChevron: { fontSize: 13, color: t.textTertiary, marginLeft: 4 },
+    actionRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    actionIcon:    { width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+    chevron:       { color: t.textTertiary, fontSize: typo.lg },
+    secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },
+    analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    analyticsBody:    { marginTop: spacing.md },
+    analyticsChevron: { fontSize: typography.sm, color: t.textTertiary, marginLeft: spacing.xs },
   }), [t, typo])
 
   const isMountedRef = useRef(true)
@@ -400,10 +408,11 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={s.root}>
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 110 }}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={s.root} edges={['top']}>
+      <ScreenScroll
+        tabBarInset
+        padded
+        contentContainerStyle={{ paddingTop: spacing.md, gap: spacing.md }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -415,19 +424,26 @@ export default function ProfileScreen() {
         }
       >
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text style={s.title}>Profile</Text>
-          <TouchableOpacity
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.title}>Profile</Text>
+            <Text style={s.subtitle}>Your account, focus list, and data</Text>
+          </View>
+          <Pressable
             onPress={() => router.push('/settings')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' }}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Lineicons icon={Gear1Outlined} size={16} color={t.textSecondary} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Identity card */}
-        <View style={s.identityCard}>
+        <Card elevated>
           <View style={s.avatarRow}>
             <View style={s.avatar}>
               <Lineicons icon={User4Outlined} size={22} color="#fff" />
@@ -461,23 +477,22 @@ export default function ProfileScreen() {
               </View>
             </View>
           ) : null}
-        </View>
+        </Card>
 
         {/* My Focus List */}
-        <View style={s.focusSection}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <Text style={s.secTitle}>My Focus List</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/listings')}>
-              <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: 12, color: t.accentText }}>+ Add More</Text>
-            </TouchableOpacity>
-          </View>
+        <Card elevated>
+          <SectionHeader
+            title="My Focus List"
+            actionLabel="+ Add More"
+            onAction={() => router.push('/(tabs)/listings')}
+          />
 
-          {focusListingsData.length > 1 && (
+          {focusListingsData.length > 1 ? (
             <Text style={s.dragHint}>Long-press the ⠿ handle to drag and reorder</Text>
-          )}
+          ) : null}
 
           {focusListingsData.length === 0 ? (
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 8 }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.sm }}>
               No exams in focus. Tap &quot;+ Add More&quot; to get started.
             </Text>
           ) : (
@@ -495,83 +510,106 @@ export default function ProfileScreen() {
               />
             ))
           )}
-        </View>
+        </Card>
 
         {/* Target Courses — editable; lets older-onboarding users add courses later */}
         <TargetCoursesCard />
 
         {/* Analytics section */}
-        <View style={s.analyticsSection}>
-          <TouchableOpacity
-            style={s.analyticsHeader}
-            activeOpacity={0.8}
+        <Card elevated>
+          <Pressable
+            style={({ pressed }) => [s.analyticsHeader, pressed ? { opacity: 0.7 } : null]}
             onPress={() => setAnalyticsOpen(prev => !prev)}
             accessibilityRole="button"
             accessibilityLabel={analyticsOpen ? 'Collapse analytics' : 'Expand analytics'}
           >
             <Text style={s.secTitle}>Analytics</Text>
             <Text style={s.analyticsChevron}>{analyticsOpen ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {analyticsOpen && (
+          </Pressable>
+          {analyticsOpen ? (
             <View style={s.analyticsBody}>
               <AnalyticsDashboard scrollable={false} />
             </View>
-          )}
-        </View>
+          ) : null}
+        </Card>
 
         {/* Action cards */}
-        <TouchableOpacity onPress={handleExport} style={s.card} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(34,197,94,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-              <Lineicons icon={Upload1Outlined} size={14} color="#16a34a" style={{ transform: [{ rotate: '180deg' }] }} />
+        <Pressable
+          onPress={handleExport}
+          accessibilityRole="button"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+        >
+          <Card elevated>
+            <View style={s.actionRow}>
+              <View style={[s.actionIcon, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
+                <Lineicons icon={Upload1Outlined} size={14} color="#16a34a" style={{ transform: [{ rotate: '180deg' }] }} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>Export Data</Text>
+                <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
+              </View>
+              <Text style={s.chevron}>›</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.cardTitle}>Export Data</Text>
-              <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
-            </View>
-            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
-          </View>
-        </TouchableOpacity>
+          </Card>
+        </Pressable>
 
-        <TouchableOpacity onPress={handleImport} style={s.card} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(96,165,250,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-              <Lineicons icon={Upload1Outlined} size={14} color="#3b82f6" />
+        <Pressable
+          onPress={handleImport}
+          accessibilityRole="button"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+        >
+          <Card elevated>
+            <View style={s.actionRow}>
+              <View style={[s.actionIcon, { backgroundColor: 'rgba(96,165,250,0.12)' }]}>
+                <Lineicons icon={Upload1Outlined} size={14} color="#3b82f6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>Import Data</Text>
+                <Text style={s.cardSub}>Restore from a previously exported JSON file</Text>
+              </View>
+              <Text style={s.chevron}>›</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.cardTitle}>Import Data</Text>
-              <Text style={s.cardSub}>Restore from a previously exported JSON file</Text>
-            </View>
-            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
-          </View>
-        </TouchableOpacity>
+          </Card>
+        </Pressable>
 
-        <TouchableOpacity onPress={handleSignOut} style={s.card} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(148,163,184,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 14, color: t.textSecondary }}>↪</Text>
+        <Pressable
+          onPress={handleSignOut}
+          accessibilityRole="button"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+        >
+          <Card elevated>
+            <View style={s.actionRow}>
+              <View style={[s.actionIcon, { backgroundColor: 'rgba(148,163,184,0.12)' }]}>
+                <Text style={{ fontSize: typo.base, color: t.textSecondary }}>↪</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>Sign Out</Text>
+                <Text style={s.cardSub}>Sign out of your Google account on this device</Text>
+              </View>
+              <Text style={s.chevron}>›</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.cardTitle}>Sign Out</Text>
-              <Text style={s.cardSub}>Sign out of your Google account on this device</Text>
-            </View>
-            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
-          </View>
-        </TouchableOpacity>
+          </Card>
+        </Pressable>
 
-        <TouchableOpacity onPress={handleResetAppData} style={[s.card, { marginBottom: 32 }]} activeOpacity={0.8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.10)', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 14, color: '#dc2626' }}>⚠</Text>
+        <Pressable
+          onPress={handleResetAppData}
+          accessibilityRole="button"
+          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+        >
+          <Card elevated>
+            <View style={s.actionRow}>
+              <View style={[s.actionIcon, { backgroundColor: 'rgba(239,68,68,0.10)' }]}>
+                <Text style={{ fontSize: typo.base, color: '#dc2626' }}>⚠</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: '#dc2626' }]}>Reset App Data</Text>
+                <Text style={s.cardSub}>Permanently delete all local data on this device</Text>
+              </View>
+              <Text style={s.chevron}>›</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: '#dc2626' }]}>Reset App Data</Text>
-              <Text style={s.cardSub}>Permanently delete all local data on this device</Text>
-            </View>
-            <Text style={{ color: t.textTertiary, fontSize: 18 }}>›</Text>
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
+          </Card>
+        </Pressable>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

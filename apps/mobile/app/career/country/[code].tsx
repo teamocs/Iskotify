@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, View, Text, Pressable,
   ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -14,6 +14,10 @@ import {
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
 import { countryCodeFromName } from '../../../utils/careerSlug'
+import { ScreenScroll } from '../../../components/ui/ScreenScroll'
+import { Card } from '../../../components/ui/Card'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { spacing, radius } from '../../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,30 +114,25 @@ export default function CareerCountryScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1, backgroundColor: t.bg },
-    topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-    backBtn:       { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+    backBtn:       { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     backArrow:     { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle:      { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    scroll:        { paddingBottom: 32 },
-    hero:          { marginHorizontal: 14, borderRadius: 18, padding: 16, marginBottom: 12, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
-    heroName:      { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 4 },
-    regionBadge:   { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', marginBottom: 10 },
+    pageTitle:     { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+    regionBadge:   { alignSelf: 'flex-start', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', marginBottom: spacing.sm },
     regionTxt:     { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '700' },
-    section:       { marginHorizontal: 14, marginBottom: 14 },
-    sectionTitle:  { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 6 },
-    infoCard:      { backgroundColor: t.surface, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 14, marginBottom: 10 },
-    infoRow:       { flexDirection: 'row', marginBottom: 7 },
+    whyTxt:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    infoRow:       { flexDirection: 'row', marginBottom: spacing.sm },
     infoLabel:     { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', width: 110, flexShrink: 0 },
     infoValue:     { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 17 },
-    destCard:      { backgroundColor: t.surface, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 14, marginBottom: 10 },
-    destTopRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-    destCourse:    { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: 8 },
+    destTopRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+    destCourse:    { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.sm },
     destDemand:    { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: '#4ade80', flexShrink: 0 },
     destSalary:    { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', fontWeight: '600', marginBottom: 3 },
     destTimeline:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    destLink:      { marginTop: 6, alignSelf: 'flex-start' },
+    destLink:      { marginTop: spacing.sm, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
     destLinkTxt:   { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
-    disclaimer:    { marginHorizontal: 14, marginBottom: 16, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 12, padding: 12 },
+    disclaimer:    { backgroundColor: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.20)' },
     disclaimerTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
     emptySection:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
@@ -145,9 +144,13 @@ export default function CareerCountryScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
       </SafeAreaView>
@@ -160,9 +163,13 @@ export default function CareerCountryScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <Text style={s.empty}>Country not found.</Text>
       </SafeAreaView>
@@ -176,33 +183,37 @@ export default function CareerCountryScreen() {
 
       {/* Top bar */}
       <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>{country.name ?? code}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.md }}>
 
         {/* ── Hero ── */}
-        <View style={s.hero}>
-          <Text style={s.heroName}>{country.name ?? code}</Text>
+        <Card elevated>
+          <Text style={s.pageTitle}>{country.name ?? code}</Text>
           {country.region ? (
             <View style={s.regionBadge}>
               <Text style={s.regionTxt}>{country.region}</Text>
             </View>
           ) : null}
           {country.whyDemand ? (
-            <Text style={{ fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 }}>
+            <Text style={s.whyTxt}>
               {country.whyDemand}
             </Text>
           ) : null}
-        </View>
+        </Card>
 
         {/* ── Country info ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Country Profile</Text>
-          <View style={s.infoCard}>
+        <View>
+          <SectionHeader title="Country Profile" />
+          <Card elevated>
             {country.immigrationSystem ? (
               <View style={s.infoRow}>
                 <Text style={s.infoLabel}>Immigration</Text>
@@ -227,14 +238,14 @@ export default function CareerCountryScreen() {
                 <Text style={s.infoValue}>{country.notes}</Text>
               </View>
             ) : null}
-          </View>
+          </Card>
         </View>
 
         {/* ── Courses in demand ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Courses in demand here</Text>
+        <View style={{ gap: spacing.md }}>
+          <SectionHeader title="Courses in demand here" />
           {dests.length > 0 ? dests.map(dest => (
-            <View key={dest.id} style={s.destCard}>
+            <Card key={dest.id} elevated>
               <View style={s.destTopRow}>
                 <Text style={s.destCourse} numberOfLines={2}>
                   {dest.courseId != null
@@ -250,28 +261,28 @@ export default function CareerCountryScreen() {
                 <Text style={s.destTimeline}>{dest.timelineMonths} mo timeline</Text>
               ) : null}
               {dest.courseId ? (
-                <TouchableOpacity
-                  style={s.destLink}
+                <Pressable
+                  style={({ pressed }) => [s.destLink, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
                   onPress={() => router.push(`/career/${dest.courseId}` as never)}
                 >
                   <Text style={s.destLinkTxt}>View course details →</Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : null}
-            </View>
+            </Card>
           )) : (
             <Text style={s.emptySection}>No course data found for this country yet.</Text>
           )}
         </View>
 
         {/* ── Disclaimer ── */}
-        <View style={s.disclaimer}>
+        <Card style={s.disclaimer}>
           <Text style={s.disclaimerTxt}>
             Verify all pathways, salary ranges, and immigration rules with DMW/POEA and official government sources before making any career decisions.
           </Text>
-        </View>
+        </Card>
 
-        <View style={{ height: 24 }} />
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

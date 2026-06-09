@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
-import { TouchableOpacity } from 'react-native'
 import { eq, asc } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
 import { focusListings, listings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
 import { RequirementsChecklist } from '../components/RequirementsChecklist'
+import { spacing, radius } from '../theme/tokens'
+import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { Card } from '../components/ui/Card'
 
 interface FocusedListingWithReqs {
   slug: string
@@ -65,17 +67,18 @@ export default function RequirementsScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    scroll: { paddingBottom: 100 },
+    scroll: { paddingTop: spacing.sm, gap: spacing.md },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 9,
-      gap: 8,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      gap: spacing.sm,
     },
     backBtn: {
-      width: 32,
-      height: 32,
+      width: 44,
+      height: 44,
+      borderRadius: radius.pill,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -87,20 +90,11 @@ export default function RequirementsScreen() {
       color: t.textPrimary,
       fontFamily: 'Outfit_700Bold',
     },
-    inner: { paddingHorizontal: 16, paddingTop: 8 },
-    sectionCard: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 18,
-      padding: 14,
-      marginBottom: 12,
-    },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 10,
+      marginBottom: spacing.md,
     },
     sectionTitle: {
       fontSize: typo.md,
@@ -113,10 +107,10 @@ export default function RequirementsScreen() {
       backgroundColor: t.surface2,
       borderWidth: 1,
       borderColor: t.border,
-      borderRadius: 980,
+      borderRadius: radius.pill,
       paddingHorizontal: 9,
       paddingVertical: 3,
-      marginLeft: 8,
+      marginLeft: spacing.sm,
     },
     sectionBadgeText: {
       fontSize: typo.xs,
@@ -127,16 +121,16 @@ export default function RequirementsScreen() {
     emptyWrap: {
       alignItems: 'center',
       paddingTop: 80,
-      paddingHorizontal: 32,
+      paddingHorizontal: spacing.lg,
     },
-    emptyIcon: { fontSize: 40, marginBottom: 16 },
+    emptyIcon: { fontSize: 40, marginBottom: spacing.lg },
     emptyTitle: {
       fontSize: typo.lg,
       fontWeight: '700',
       color: t.textPrimary,
       fontFamily: 'Outfit_700Bold',
       textAlign: 'center',
-      marginBottom: 8,
+      marginBottom: spacing.sm,
     },
     emptySub: {
       fontSize: typo.sm,
@@ -151,60 +145,55 @@ export default function RequirementsScreen() {
     <SafeAreaView style={s.root}>
       {/* Top bar */}
       <View style={s.topBar}>
-        <TouchableOpacity
-          style={s.backBtn}
+        <Pressable
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
           onPress={() => router.back()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topBarTitle}>My Requirements</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={s.inner}>
-          {items.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <Text style={s.emptyIcon}>📋</Text>
-              <Text style={s.emptyTitle}>No requirements yet</Text>
-              <Text style={s.emptySub}>
-                Add scholarships or exams with requirements to your focus list to track them here.
-              </Text>
-            </View>
-          ) : (
-            items.map(item => {
-              const acquired = acquiredCounts[item.slug] ?? 0
-              const total = item.requirements.length
-              return (
-                <View key={item.slug} style={s.sectionCard}>
-                  <View style={s.sectionHeader}>
-                    <Text style={s.sectionTitle} numberOfLines={2}>
-                      {item.title}
+      <ScreenScroll tabBarInset={false} contentContainerStyle={s.scroll}>
+        {items.length === 0 ? (
+          <View style={s.emptyWrap}>
+            <Text style={s.emptyIcon}>📋</Text>
+            <Text style={s.emptyTitle}>No requirements yet</Text>
+            <Text style={s.emptySub}>
+              Add scholarships or exams with requirements to your focus list to track them here.
+            </Text>
+          </View>
+        ) : (
+          items.map(item => {
+            const acquired = acquiredCounts[item.slug] ?? 0
+            const total = item.requirements.length
+            return (
+              <Card key={item.slug} elevated>
+                <View style={s.sectionHeader}>
+                  <Text style={s.sectionTitle} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <View style={s.sectionBadge}>
+                    <Text style={s.sectionBadgeText}>
+                      {acquired}/{total} acquired
                     </Text>
-                    <View style={s.sectionBadge}>
-                      <Text style={s.sectionBadgeText}>
-                        {acquired}/{total} acquired
-                      </Text>
-                    </View>
                   </View>
-                  <RequirementsChecklist
-                    listingSlug={item.slug}
-                    requirements={item.requirements}
-                    onAcquiredCountChange={(acq) =>
-                      handleAcquiredCountChange(item.slug, acq)
-                    }
-                  />
                 </View>
-              )
-            })
-          )}
-        </View>
-      </ScrollView>
+                <RequirementsChecklist
+                  listingSlug={item.slug}
+                  requirements={item.requirements}
+                  onAcquiredCountChange={(acq) =>
+                    handleAcquiredCountChange(item.slug, acq)
+                  }
+                />
+              </Card>
+            )
+          })
+        )}
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

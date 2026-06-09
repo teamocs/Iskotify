@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl } from 'react-native'
+import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicator, RefreshControl } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -10,6 +10,8 @@ import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable, careerCourses } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, radius, layout } from '../../theme/tokens'
+import { SectionHeader } from '../../components/ui/SectionHeader'
 import { syncOnLaunch } from '../../services/sync'
 import { getSettings } from '../../services/settings'
 import { matchScholarship } from '../../utils/scholarshipMatch'
@@ -69,6 +71,7 @@ export default function ExamsScreen() {
   const db = useDb()
   const { getPriority } = useFocusListings()
   const { theme: t, typo, isDark } = useTheme()
+  const insets = useSafeAreaInsets()
 
   const [all, setAll] = useState<ListingRow[]>([])
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
@@ -213,43 +216,44 @@ export default function ExamsScreen() {
   const scholarColor = isDark ? '#4ade80' : '#16a34a'
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-    title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-    subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
-    seg: { flexDirection: 'row', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 12, padding: 3, gap: 3, marginHorizontal: 16, marginBottom: 8 },
-    segBtn: { flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center' },
+    header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
+    title: { fontSize: typo.h2, color: t.textPrimary, letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
+    subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
+    seg: { flexDirection: 'row', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.xs, gap: spacing.xs, marginHorizontal: spacing.lg, marginBottom: spacing.sm },
+    segBtn: { flex: 1, minHeight: 44, paddingVertical: spacing.sm, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     segBtnOn: { backgroundColor: 'rgba(128,0,0,0.82)' },
-    segTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    segTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
     segTxtOn: { color: '#fff' },
-    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 9, marginHorizontal: 16, marginBottom: 6 },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginHorizontal: spacing.lg, marginBottom: spacing.sm, minHeight: 48 },
     searchInput: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', padding: 0 },
-    aiHint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: 16, marginBottom: 6 },
+    clearBtn: { padding: spacing.xs },
+    aiHint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
     aiActiveHint: { color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    sectionLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', textTransform: 'uppercase', letterSpacing: 1, marginTop: 8, marginBottom: 8 },
-    list: { paddingHorizontal: 16, paddingBottom: 110 },
-    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 20, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-    cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    list: { paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + layout.tabBarClearance, gap: spacing.sm },
+    card: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    cardIcon: { width: 40, height: 40, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)' },
     scholarIcon: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
-    row1: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
-    cardTitle: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    row2: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    row1: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
+    cardTitle: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    row2: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
     dateText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     regionLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    verifiedBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(34,197,94,0.09)', borderColor: 'rgba(34,197,94,0.25)' },
-    verifiedTxt: { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
-    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
-    focusBadgeTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-    forCourseBadge: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexShrink: 0 },
-    forCourseTxt: { fontSize: typo.xs, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    eligibleLine: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 3 },
-    bookmarkBtn: { padding: 2, flexShrink: 0 },
-    bookmarkIcon: { fontSize: 14, opacity: 0.35 },
+    verifiedBadge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.xs, paddingVertical: 2, backgroundColor: 'rgba(34,197,94,0.09)', borderColor: 'rgba(34,197,94,0.25)' },
+    verifiedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
+    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    forCourseBadge: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    forCourseTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    eligibleLine: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
+    bookmarkBtn: { padding: spacing.sm, flexShrink: 0 },
+    bookmarkIcon: { fontSize: 16, opacity: 0.35 },
     bookmarkIconSaved: { opacity: 1 },
-    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 32 },
-    uniLink: { marginHorizontal: 16, marginBottom: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: t.border, backgroundColor: t.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxxl },
+    sectionWrap: { marginTop: spacing.sm, marginBottom: spacing.xs },
+    uniLink: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
     uniLinkTxt: { flex: 1, fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-  }), [t, typo])
+  }), [t, typo, insets.bottom])
 
   const renderCard = useCallback((l: ListingRow) => {
     const exam = l.type === 'exam'
@@ -260,7 +264,11 @@ export default function ExamsScreen() {
     const openToAll = tc.length === 0 || tc.includes('all')
     const forMyCourse = !openToAll && userClusters.size > 0 && tc.some(c => userClusters.has(c))
     return (
-      <TouchableOpacity style={s.card} onPress={() => router.push(`/listings/${l.slug}`)} activeOpacity={0.8}>
+      <Pressable
+        style={({ pressed }) => [s.card, { boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
+        onPress={() => router.push(`/listings/${l.slug}`)}
+        accessibilityRole="button"
+      >
         <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
           <Lineicons icon={exam ? GraduationCap1Outlined : SparkOutlined} size={16} color={exam ? t.accentText : scholarColor} />
         </View>
@@ -279,10 +287,15 @@ export default function ExamsScreen() {
           </View>
           {!openToAll ? <Text style={s.eligibleLine} numberOfLines={1}>🎓 {tc.join(' · ')}</Text> : null}
         </View>
-        <TouchableOpacity style={s.bookmarkBtn} onPress={() => toggleSave(l.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Pressable
+          style={({ pressed }) => [s.bookmarkBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => toggleSave(l.id)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+        >
           <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedIds, matchStatusMap, getPriority, userClusters, s, t, scholarColor])
@@ -292,9 +305,13 @@ export default function ExamsScreen() {
     <>
       {recommended.length > 0 ? (
         <>
-          <Text style={s.sectionLabel}>★ Recommended for {canonicalizeRegion(userRegion)}</Text>
+          <View style={s.sectionWrap}>
+            <SectionHeader title={`★ Recommended for ${canonicalizeRegion(userRegion)}`} />
+          </View>
           {recommended.map(l => <View key={`rec-${l.id}`}>{renderCard(l)}</View>)}
-          <Text style={s.sectionLabel}>All entrance exams</Text>
+          <View style={s.sectionWrap}>
+            <SectionHeader title="All entrance exams" />
+          </View>
         </>
       ) : null}
     </>
@@ -311,17 +328,22 @@ export default function ExamsScreen() {
         {/* 2-tab segment */}
         <View style={s.seg}>
           {(['exam', 'scholarship'] as Segment[]).map(seg => (
-            <TouchableOpacity key={seg} style={[s.segBtn, segment === seg && s.segBtnOn]} onPress={() => onChangeSegment(seg)}>
+            <Pressable
+              key={seg}
+              style={({ pressed }) => [s.segBtn, segment === seg && s.segBtnOn, pressed && { opacity: 0.7 }]}
+              onPress={() => onChangeSegment(seg)}
+              accessibilityRole="button"
+            >
               <Text style={[s.segTxt, segment === seg && s.segTxtOn]}>
                 {seg === 'exam' ? 'College Entrance Exams' : 'Scholarships'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
 
         {/* Smart search */}
         <View style={s.searchRow}>
-          <Text style={{ fontSize: 13 }}>{aiLoading ? '✨' : '🔍'}</Text>
+          <Text style={{ fontSize: typo.sm }}>{aiLoading ? '✨' : '🔍'}</Text>
           <TextInput
             style={s.searchInput}
             value={query}
@@ -333,9 +355,13 @@ export default function ExamsScreen() {
           />
           {aiLoading ? <ActivityIndicator size="small" color={t.accentText} /> : null}
           {query ? (
-            <TouchableOpacity onPress={() => onChangeQuery('')}>
-              <Text style={{ fontSize: 12, color: t.textTertiary, paddingHorizontal: 4 }}>✕</Text>
-            </TouchableOpacity>
+            <Pressable
+              style={({ pressed }) => [s.clearBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => onChangeQuery('')}
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: typo.xs, color: t.textTertiary }}>✕</Text>
+            </Pressable>
           ) : null}
         </View>
         {query.trim() ? (
@@ -346,10 +372,14 @@ export default function ExamsScreen() {
 
         {/* Universities directory link */}
         {!query.trim() ? (
-          <TouchableOpacity style={s.uniLink} onPress={() => router.push('/schools/course' as never)} activeOpacity={0.75}>
+          <Pressable
+            style={({ pressed }) => [s.uniLink, pressed && { opacity: 0.75 }]}
+            onPress={() => router.push('/schools/course' as never)}
+            accessibilityRole="button"
+          >
             <Text style={s.uniLinkTxt}>🏫 Find top universities by course</Text>
             <Text style={{ fontSize: typo.xs, color: t.textTertiary }}>→</Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
 
         <FlatList

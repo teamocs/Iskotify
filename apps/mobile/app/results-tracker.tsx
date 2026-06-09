@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
-  Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Linking, Pressable, StyleSheet, Text, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
@@ -9,6 +9,9 @@ import { useDb } from '../hooks/useDb'
 import { resultWatches, listings as listingsTable } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
 import { daysUntil } from '../utils/admissionsFeed'
+import { spacing, radius } from '../theme/tokens'
+import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { Card } from '../components/ui/Card'
 
 interface WatchedExam {
   slug: string
@@ -68,42 +71,36 @@ export default function ResultsTrackerScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     topBar: {
       flexDirection: 'row', alignItems: 'center',
-      paddingHorizontal: 14, paddingVertical: 9, gap: 8,
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm,
     },
-    backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topBarTitle: {
-      flex: 1, fontSize: typo.md, fontWeight: '700',
+      flex: 1, fontSize: typo.h2, fontWeight: '700',
       color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-    },
-    scroll: { paddingBottom: 100 },
-    inner: { paddingHorizontal: 14, paddingTop: 4 },
-    card: {
-      backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-      borderRadius: 18, padding: 14, marginBottom: 12,
     },
     cardTitle: {
       fontSize: typo.md, fontWeight: '700',
       color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-      marginBottom: 6, lineHeight: 22,
+      marginBottom: spacing.xs, lineHeight: 22,
     },
     waitingBadge: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
       backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1,
-      borderColor: 'rgba(34,197,94,0.22)', borderRadius: 10,
-      paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start',
-      marginBottom: 8,
+      borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, alignSelf: 'flex-start',
+      marginBottom: spacing.sm,
     },
     waitingTxt: {
       fontSize: typo.xs, fontWeight: '700',
       color: '#4ade80', fontFamily: 'Lexend_600SemiBold',
     },
     readyBadge: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
+      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
       backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1,
-      borderColor: 'rgba(245,158,11,0.28)', borderRadius: 10,
-      paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start',
-      marginBottom: 8,
+      borderColor: 'rgba(245,158,11,0.28)', borderRadius: radius.sm,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, alignSelf: 'flex-start',
+      marginBottom: spacing.sm,
     },
     readyTxt: {
       fontSize: typo.xs, fontWeight: '700',
@@ -111,12 +108,13 @@ export default function ResultsTrackerScreen() {
     },
     subTxt: {
       fontSize: typo.xs, color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular', marginBottom: 10, lineHeight: 17,
+      fontFamily: 'Lexend_400Regular', marginBottom: spacing.md, lineHeight: 17,
     },
-    row: { flexDirection: 'row', gap: 8, marginTop: 2 },
+    row: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs / 2 },
     linkBtn: {
       flex: 1, borderWidth: 1, borderColor: t.divider,
-      borderRadius: 12, paddingVertical: 9, alignItems: 'center',
+      borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center',
+      justifyContent: 'center', minHeight: 44,
     },
     linkBtnTxt: {
       fontSize: typo.sm, color: t.textSecondary,
@@ -124,8 +122,8 @@ export default function ResultsTrackerScreen() {
     },
     removeBtn: {
       borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)',
-      borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14,
-      alignItems: 'center', justifyContent: 'center',
+      borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+      alignItems: 'center', justifyContent: 'center', minHeight: 44,
     },
     removeBtnTxt: {
       fontSize: typo.xs, color: t.accentText,
@@ -133,18 +131,20 @@ export default function ResultsTrackerScreen() {
     },
     removeOnlyBtn: {
       alignSelf: 'flex-start', borderWidth: 1,
-      borderColor: 'rgba(128,0,0,0.28)', borderRadius: 12,
-      paddingVertical: 7, paddingHorizontal: 12,
+      borderColor: 'rgba(128,0,0,0.28)', borderRadius: radius.md,
+      paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
+      alignItems: 'center', justifyContent: 'center', minHeight: 44,
     },
     removeOnlyTxt: {
       fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_400Regular',
     },
-    emptyWrap: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 32 },
-    emptyIcon: { fontSize: 40, marginBottom: 16 },
+    pressed: { opacity: 0.7 },
+    emptyWrap: { alignItems: 'center', paddingTop: 80, paddingHorizontal: spacing.xxl },
+    emptyIcon: { fontSize: 40, marginBottom: spacing.lg },
     emptyTitle: {
       fontSize: typo.lg, fontWeight: '700',
       color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-      textAlign: 'center', marginBottom: 8,
+      textAlign: 'center', marginBottom: spacing.sm,
     },
     emptySub: {
       fontSize: typo.sm, color: t.textTertiary,
@@ -157,102 +157,100 @@ export default function ResultsTrackerScreen() {
   return (
     <SafeAreaView style={s.root}>
       <View style={s.topBar}>
-        <TouchableOpacity
-          style={s.backBtn}
+        <Pressable
+          style={({ pressed }) => [s.backBtn, pressed && s.pressed]}
           onPress={() => router.back()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topBarTitle}>Results Tracker</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={s.inner}>
-          {watches.length === 0 ? (
-            <View style={s.emptyWrap}>
-              <Text style={s.emptyIcon}>🔔</Text>
-              <Text style={s.emptyTitle}>No exams tracked yet</Text>
-              <Text style={s.emptySub}>
-                {"You're not watching any exam results yet. Open an exam and tap 'Watch results'."}
-              </Text>
-            </View>
-          ) : (
-            watches.map(w => {
-              const resultsIso = w.resultsDate ? epochToISO(w.resultsDate) : null
-              const days = resultsIso ? daysUntil(resultsIso, today) : null
-              const isFuture = days !== null && days > 0
-              const displayDate = w.resultsDate ? fmtDate(w.resultsDate) : null
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.xs, gap: spacing.md }}>
+        {watches.length === 0 ? (
+          <View style={s.emptyWrap}>
+            <Text style={s.emptyIcon}>🔔</Text>
+            <Text style={s.emptyTitle}>No exams tracked yet</Text>
+            <Text style={s.emptySub}>
+              {"You're not watching any exam results yet. Open an exam and tap 'Watch results'."}
+            </Text>
+          </View>
+        ) : (
+          watches.map(w => {
+            const resultsIso = w.resultsDate ? epochToISO(w.resultsDate) : null
+            const days = resultsIso ? daysUntil(resultsIso, today) : null
+            const isFuture = days !== null && days > 0
+            const displayDate = w.resultsDate ? fmtDate(w.resultsDate) : null
 
-              return (
-                <View key={w.slug} style={s.card}>
-                  <Text style={s.cardTitle} numberOfLines={2}>
-                    {w.title ?? w.slug}
-                  </Text>
+            return (
+              <Card key={w.slug} elevated>
+                <Text style={s.cardTitle} numberOfLines={2}>
+                  {w.title ?? w.slug}
+                </Text>
 
-                  {isFuture ? (
-                    <>
-                      <View style={s.waitingBadge}>
-                        <Text style={s.waitingTxt}>
-                          Waiting · results ~{displayDate}
-                        </Text>
-                      </View>
-                      <Text style={s.subTxt}>
-                        {days} day{days === 1 ? '' : 's'} to go
+                {isFuture ? (
+                  <>
+                    <View style={s.waitingBadge}>
+                      <Text style={s.waitingTxt}>
+                        Waiting · results ~{displayDate}
                       </Text>
-                    </>
-                  ) : (
-                    <>
-                      <View style={s.readyBadge}>
-                        <Text style={s.readyTxt}>Results may be out — check the official site</Text>
-                      </View>
-                      {displayDate ? (
-                        <Text style={s.subTxt}>Expected: {displayDate}</Text>
-                      ) : (
-                        <Text style={s.subTxt}>Results date not set</Text>
-                      )}
-                    </>
-                  )}
-
-                  <View style={s.row}>
-                    {(!isFuture && w.externalUrl) ? (
-                      <>
-                        <TouchableOpacity
-                          style={s.linkBtn}
-                          onPress={() => w.externalUrl && Linking.openURL(w.externalUrl)}
-                          accessibilityRole="link"
-                          accessibilityLabel="Visit official site"
-                        >
-                          <Text style={s.linkBtnTxt}>Official Site ↗</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={s.removeBtn}
-                          onPress={() => removeWatch(w.slug)}
-                          accessibilityRole="button"
-                          accessibilityLabel="Remove from watch list"
-                        >
-                          <Text style={s.removeBtnTxt}>Remove</Text>
-                        </TouchableOpacity>
-                      </>
+                    </View>
+                    <Text style={s.subTxt}>
+                      {days} day{days === 1 ? '' : 's'} to go
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={s.readyBadge}>
+                      <Text style={s.readyTxt}>Results may be out — check the official site</Text>
+                    </View>
+                    {displayDate ? (
+                      <Text style={s.subTxt}>Expected: {displayDate}</Text>
                     ) : (
-                      <TouchableOpacity
-                        style={s.removeOnlyBtn}
+                      <Text style={s.subTxt}>Results date not set</Text>
+                    )}
+                  </>
+                )}
+
+                <View style={s.row}>
+                  {(!isFuture && w.externalUrl) ? (
+                    <>
+                      <Pressable
+                        style={({ pressed }) => [s.linkBtn, pressed && s.pressed]}
+                        onPress={() => w.externalUrl && Linking.openURL(w.externalUrl)}
+                        accessibilityRole="link"
+                        accessibilityLabel="Visit official site"
+                      >
+                        <Text style={s.linkBtnTxt}>Official Site ↗</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [s.removeBtn, pressed && s.pressed]}
                         onPress={() => removeWatch(w.slug)}
                         accessibilityRole="button"
                         accessibilityLabel="Remove from watch list"
                       >
-                        <Text style={s.removeOnlyTxt}>Remove watch</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                        <Text style={s.removeBtnTxt}>Remove</Text>
+                      </Pressable>
+                    </>
+                  ) : (
+                    <Pressable
+                      style={({ pressed }) => [s.removeOnlyBtn, pressed && s.pressed]}
+                      onPress={() => removeWatch(w.slug)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove from watch list"
+                    >
+                      <Text style={s.removeOnlyTxt}>Remove watch</Text>
+                    </Pressable>
+                  )}
                 </View>
-              )
-            })
-          )}
-        </View>
-      </ScrollView>
+              </Card>
+            )
+          })
+        )}
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

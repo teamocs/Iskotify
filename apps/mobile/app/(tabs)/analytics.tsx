@@ -2,6 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
+import { spacing } from '../../theme/tokens'
 
 /**
  * Analytics tab screen — hidden from the tab bar (href:null in _layout.tsx).
@@ -12,10 +13,10 @@ export default function AnalyticsScreen() {
   const { theme: t, typo } = useTheme()
   const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-    title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-    subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
-    dashWrap: { flex: 1, paddingHorizontal: 16 },
+    header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },
+    title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
+    subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
+    dashWrap: { flex: 1, paddingHorizontal: spacing.lg },
   })
   return (
     <SafeAreaView style={s.root}>

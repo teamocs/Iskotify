@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
+  StyleSheet, View, Text, Pressable, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
@@ -12,6 +12,10 @@ import {
   aiCareerImpact as aiImpactTable,
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, radius } from '../../../theme/tokens'
+import { ScreenScroll } from '../../../components/ui/ScreenScroll'
+import { Card } from '../../../components/ui/Card'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,33 +119,28 @@ export default function CourseSchoolsScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root:        { flex: 1, backgroundColor: t.bg },
-    topBar:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-    backBtn:     { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    topBar:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+    backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
     backArrow:   { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle:    { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    scroll:      { paddingBottom: 40 },
-    hero:        { marginHorizontal: 14, borderRadius: 18, padding: 16, marginBottom: 14, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
-    heroTitle:   { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
-    heroSub:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    aiChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
+    heroTitle:   { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
+    heroSub:     { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    aiChip:      { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignSelf: 'flex-start' },
     aiChipTxt:   { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    careerLink:  { marginTop: 10 },
-    careerLinkTxt: { fontSize: typo.sm, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
-    section:     { marginHorizontal: 14, marginBottom: 16 },
-    sectionTitle: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
-    rankCard:    { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, padding: 12, marginBottom: 8 },
-    rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-    rankBadge:   { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', flexShrink: 0 },
+    careerLink:  { marginTop: spacing.md, minHeight: 44, justifyContent: 'center' },
+    careerLinkTxt: { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
+    rankCard:    { padding: spacing.md },
+    rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    rankBadge:   { width: 28, height: 28, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', flexShrink: 0 },
     rankNum:     { fontSize: typo.xs, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     schoolName:  { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    metaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    metaChip:    { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    metaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    metaChip:    { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2 },
     metaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     highlight:   { color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    disclaimer:  { marginHorizontal: 14, marginBottom: 16, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 12, padding: 12 },
+    disclaimer:  { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, padding: spacing.md },
     disclaimerTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: 20, fontStyle: 'italic' },
-    emptyScreen: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
+    empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xl, fontStyle: 'italic' },
   }), [t, typo])
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -150,9 +149,13 @@ export default function CourseSchoolsScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
       </SafeAreaView>
@@ -164,16 +167,20 @@ export default function CourseSchoolsScreen() {
   return (
     <SafeAreaView style={s.root}>
       <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>Top Schools · {courseLabel}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.sm }}>
 
         {/* ── Hero ── */}
-        <View style={s.hero}>
+        <Card elevated>
           <Text style={s.heroTitle}>{courseLabel}</Text>
           <Text style={s.heroSub}>PRC board exam school rankings by Wilson-adjusted pass rate</Text>
 
@@ -189,21 +196,22 @@ export default function CourseSchoolsScreen() {
 
           {/* Career path cross-link */}
           {taxonomy?.careerCourseId ? (
-            <TouchableOpacity
-              style={s.careerLink}
+            <Pressable
+              style={({ pressed }) => [s.careerLink, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/career/${taxonomy.careerCourseId}` as never)}
+              accessibilityRole="link"
             >
               <Text style={s.careerLinkTxt}>View career paths →</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
-        </View>
+        </Card>
 
         {/* ── PRC Rankings ── */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>School Rankings</Text>
+        <View style={{ gap: spacing.sm }}>
+          <SectionHeader title="School Rankings" />
 
           {rankings.length > 0 ? rankings.map(row => (
-            <View key={row.id} style={s.rankCard}>
+            <Card key={row.id} style={s.rankCard}>
               <View style={s.rankHeader}>
                 <View style={s.rankBadge}>
                   <Text style={s.rankNum}>#{row.rank ?? '—'}</Text>
@@ -232,7 +240,7 @@ export default function CourseSchoolsScreen() {
                   </View>
                 ) : null}
               </View>
-            </View>
+            </Card>
           )) : (
             <Text style={s.empty}>No ranking data available for this course yet.</Text>
           )}
@@ -245,8 +253,7 @@ export default function CourseSchoolsScreen() {
           </Text>
         </View>
 
-        <View style={{ height: 24 }} />
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

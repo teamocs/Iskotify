@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
-  StyleSheet, View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, View, Text, Pressable,
   Linking, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -11,6 +11,11 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, savedListings as savedListingsTable, resultWatches } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
+import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Card } from '../../components/ui/Card'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { AppButton } from '../../components/ui/AppButton'
+import { spacing, radius } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
 import { matchScholarship } from '../../utils/scholarshipMatch'
 import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
@@ -72,80 +77,76 @@ export default function ListingDetailScreen() {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, gap: 8 },
-    backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+    backBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    saveBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+    saveBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     saveBtnIcon: { fontSize: 18, opacity: 0.35 },
     saveBtnIconSaved: { opacity: 1 },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
-    scroll: { paddingBottom: 24 },
-    hero: { marginHorizontal: 14, borderRadius: 22, padding: 16, marginBottom: 10, borderWidth: 1 },
+    hero: { marginTop: spacing.md, borderWidth: 1 },
     heroExam: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
     heroScholar: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.22)' },
-    heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-    typeIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.md },
+    typeIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)' },
     scholarIcon: { backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' },
     heroTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 22, marginBottom: 2 },
     heroProvider: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    typeBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    typeBadge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
     examBadge: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
     scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
     typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
     statusTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
-    regionBadge: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    regionBadge: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
     regionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    countdownCard: { marginHorizontal: 14, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, borderWidth: 1 },
+    countdownCard: { marginTop: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1 },
     countdownNormal: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.20)' },
     countdownUrgent: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.22)' },
     countdownNum: { fontSize: typo.h1, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -1 },
     countdownLabel: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    section: { marginHorizontal: 14, marginBottom: 14 },
-    sectionTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', marginBottom: 10 },
-    datesGrid: { gap: 8 },
-    dateCard: { backgroundColor: t.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: t.border },
+    section: { marginTop: spacing.lg },
+    datesGrid: { gap: spacing.sm },
+    dateCard: { backgroundColor: t.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: t.border },
     dateLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
     dateVal: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     bodyText: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-    grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: 14, padding: 12 },
+    grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: radius.md, padding: spacing.md },
     grantLabel: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     grantVal: { fontSize: typo.lg, fontWeight: '700', color: '#4ade80', fontFamily: 'Outfit_700Bold' },
-    practiceBtn: { marginHorizontal: 14, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 18, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
-    practiceBtnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-    linkBtn: { marginHorizontal: 14, borderWidth: 1, borderColor: t.divider, borderRadius: 18, paddingVertical: 12, alignItems: 'center' },
+    linkBtn: { marginTop: spacing.md, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingVertical: spacing.md, alignItems: 'center' },
     linkBtnTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     focusRemoveBtn: {
-      marginHorizontal: 14,
+      marginTop: spacing.md,
       backgroundColor: 'rgba(128,0,0,0.12)',
       borderWidth: 2,
       borderColor: '#831626',
-      borderRadius: 18,
-      paddingVertical: 12,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      paddingVertical: spacing.md,
       alignItems: 'center',
-      marginBottom: 12,
     },
     focusRemoveTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.accentText },
     focusAddBtn: {
-      marginHorizontal: 14,
+      marginTop: spacing.md,
       backgroundColor: 'rgba(128,0,0,0.82)',
-      borderRadius: 18,
-      paddingVertical: 14,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      paddingVertical: spacing.md,
       alignItems: 'center',
-      marginBottom: 12,
     },
     focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
     watchBtn: {
-      marginHorizontal: 14,
+      marginTop: spacing.md,
       borderWidth: 1,
       borderColor: t.divider,
-      borderRadius: 18,
-      paddingVertical: 12,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      paddingVertical: spacing.md,
       alignItems: 'center',
-      marginBottom: 10,
     },
     watchBtnActive: {
       borderColor: 'rgba(34,197,94,0.35)',
@@ -161,12 +162,12 @@ export default function ListingDetailScreen() {
       fontFamily: 'Lexend_600SemiBold',
     },
     // --- scholarship enrichment styles ---
-    matchBlock: { marginHorizontal: 14, marginBottom: 12, borderRadius: 16, padding: 14, borderWidth: 1 },
+    matchBlock: { marginTop: spacing.md, borderWidth: 1 },
     matchEligible: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
     matchMaybe: { backgroundColor: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)' },
     matchIneligible: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.22)' },
-    matchPillRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-    matchPill: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    matchPillRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+    matchPill: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
     matchPillEligible: { backgroundColor: 'rgba(34,197,94,0.18)' },
     matchPillMaybe: { backgroundColor: 'rgba(245,158,11,0.18)' },
     matchPillIneligible: { backgroundColor: 'rgba(239,68,68,0.18)' },
@@ -175,18 +176,18 @@ export default function ListingDetailScreen() {
     matchPillTxtMaybe: { color: '#fbbf24' },
     matchPillTxtIneligible: { color: '#f87171' },
     matchReason: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 2 },
-    detailGrid: { gap: 8 },
-    detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: t.border },
+    detailGrid: { gap: spacing.sm },
+    detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: t.border },
     detailRowLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
     detailRowVal: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', textAlign: 'right' },
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    chip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+    chip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: spacing.xs },
     chipTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    serviceWarning: { marginHorizontal: 14, marginBottom: 12, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: 14, padding: 12 },
+    serviceWarning: { marginTop: spacing.md, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: radius.md, padding: spacing.md },
     serviceWarningTxt: { fontSize: typo.sm, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 18 },
     cautionLine: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 3 },
-    verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-    verifiedBadgePill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+    verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    verifiedBadgePill: { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, borderWidth: 1 },
     verifiedPillOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
     verifiedPillOff: { backgroundColor: t.surface, borderColor: t.border },
     verifiedPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
@@ -266,9 +267,13 @@ export default function ListingDetailScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />
       </SafeAreaView>
@@ -279,9 +284,13 @@ export default function ListingDetailScreen() {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          >
             <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         <Text style={s.empty}>Listing not found.</Text>
       </SafeAreaView>
@@ -309,19 +318,28 @@ export default function ListingDetailScreen() {
 
       {/* Top bar */}
       <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
         <Text style={s.topBarTitle} numberOfLines={1}>{listing.title}</Text>
-        <TouchableOpacity onPress={toggleSave} style={s.saveBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Pressable
+          onPress={toggleSave}
+          style={({ pressed }) => [s.saveBtn, pressed && { opacity: 0.7 }]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+        >
           <Text style={[s.saveBtnIcon, saved && s.saveBtnIconSaved]}>🔖</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false}>
 
         {/* Hero card */}
-        <View style={[s.hero, isExam ? s.heroExam : s.heroScholar]}>
+        <Card elevated style={[s.hero, isExam ? s.heroExam : s.heroScholar]}>
           <View style={s.heroTop}>
             <View style={[s.typeIcon, isExam ? s.examIcon : s.scholarIcon]}>
               <Text style={{ fontSize: 22 }}>{isExam ? '📋' : '🎓'}</Text>
@@ -348,16 +366,19 @@ export default function ListingDetailScreen() {
               </View>
             ) : null}
           </View>
-        </View>
+        </Card>
 
         {/* Match status block — scholarships only, not 'unknown' */}
         {isScholarship && matchResult && matchResult.status !== 'unknown' ? (
-          <View style={[
-            s.matchBlock,
-            matchResult.status === 'eligible' ? s.matchEligible
-              : matchResult.status === 'maybe' ? s.matchMaybe
-              : s.matchIneligible,
-          ]}>
+          <Card
+            elevated
+            style={[
+              s.matchBlock,
+              matchResult.status === 'eligible' ? s.matchEligible
+                : matchResult.status === 'maybe' ? s.matchMaybe
+                : s.matchIneligible,
+            ]}
+          >
             <View style={s.matchPillRow}>
               <View style={[
                 s.matchPill,
@@ -383,7 +404,7 @@ export default function ListingDetailScreen() {
             {matchResult.warnings.map((w, i) => (
               <Text key={`w${i}`} style={s.cautionLine}>⚠ {w}</Text>
             ))}
-          </View>
+          </Card>
         ) : null}
 
         {/* Service obligation warning banner */}
@@ -397,118 +418,127 @@ export default function ListingDetailScreen() {
 
         {/* Days countdown */}
         {daysLeft !== null && daysLeft > 0 ? (
-          <View style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}>
+          <Card
+            elevated
+            style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}
+          >
             <Text style={[s.countdownNum, { color: daysLeft < 30 ? t.accentText : '#4ade80' }]}>{daysLeft}</Text>
             <Text style={s.countdownLabel}>days until {isExam ? 'exam' : 'deadline'}</Text>
-          </View>
+          </Card>
         ) : null}
 
         {/* Key dates */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Key Dates</Text>
-          <View style={s.datesGrid}>
-            {listing.examDate ? (
-              <View style={s.dateCard}>
-                <Text style={s.dateLabel}>Exam Date</Text>
-                <Text style={s.dateVal}>{fmtDate(listing.examDate)}</Text>
-              </View>
-            ) : null}
-            {listing.deadline ? (
-              <View style={s.dateCard}>
-                <Text style={s.dateLabel}>Application Deadline</Text>
-                <Text style={s.dateVal}>{fmtDate(listing.deadline)}</Text>
-              </View>
-            ) : null}
-            {!listing.examDate && !listing.deadline ? (
-              <Text style={s.bodyText}>Dates to be announced.</Text>
-            ) : null}
-          </View>
+          <SectionHeader title="Key Dates" />
+          <Card elevated>
+            <View style={s.datesGrid}>
+              {listing.examDate ? (
+                <View style={s.dateCard}>
+                  <Text style={s.dateLabel}>Exam Date</Text>
+                  <Text style={s.dateVal}>{fmtDate(listing.examDate)}</Text>
+                </View>
+              ) : null}
+              {listing.deadline ? (
+                <View style={s.dateCard}>
+                  <Text style={s.dateLabel}>Application Deadline</Text>
+                  <Text style={s.dateVal}>{fmtDate(listing.deadline)}</Text>
+                </View>
+              ) : null}
+              {!listing.examDate && !listing.deadline ? (
+                <Text style={s.bodyText}>Dates to be announced.</Text>
+              ) : null}
+            </View>
+          </Card>
         </View>
 
         {/* About */}
         {listing.description ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>About</Text>
-            <Text style={s.bodyText}>{listing.description}</Text>
+            <SectionHeader title="About" />
+            <Card elevated>
+              <Text style={s.bodyText}>{listing.description}</Text>
+            </Card>
           </View>
         ) : null}
 
         {/* Scholarship detail rows */}
         {isScholarship ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>Scholarship Details</Text>
-            <View style={s.detailGrid}>
-              {listing.incomeCeiling != null ? (
-                <View style={s.detailRow}>
-                  <Text style={s.detailRowLabel}>Income Ceiling</Text>
-                  <Text style={s.detailRowVal}>₱{listing.incomeCeiling.toLocaleString()}/yr</Text>
-                </View>
-              ) : null}
-              {listing.gwaRequirement != null ? (
-                <View style={s.detailRow}>
-                  <Text style={s.detailRowLabel}>Minimum GWA</Text>
-                  <Text style={s.detailRowVal}>{listing.gwaRequirement}%</Text>
-                </View>
-              ) : null}
-              {listing.monthlyStipend != null ? (
-                <View style={s.detailRow}>
-                  <Text style={s.detailRowLabel}>Monthly Stipend</Text>
-                  <Text style={[s.detailRowVal, { color: '#4ade80' }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
-                </View>
-              ) : null}
-              {listing.applicationWindow ? (
-                <View style={s.detailRow}>
-                  <Text style={s.detailRowLabel}>Application Window</Text>
-                  <Text style={s.detailRowVal}>{listing.applicationWindow}</Text>
-                </View>
-              ) : null}
-            </View>
-            {/* Scope / region / province chips */}
-            {(listing.scope || listing.province || listing.city) ? (
-              <View style={[s.chipRow, { marginTop: 10 }]}>
-                {listing.scope ? (
-                  <View style={s.chip}>
-                    <Text style={s.chipTxt}>{listing.scope.charAt(0).toUpperCase() + listing.scope.slice(1)}</Text>
+            <SectionHeader title="Scholarship Details" />
+            <Card elevated>
+              <View style={s.detailGrid}>
+                {listing.incomeCeiling != null ? (
+                  <View style={s.detailRow}>
+                    <Text style={s.detailRowLabel}>Income Ceiling</Text>
+                    <Text style={s.detailRowVal}>₱{listing.incomeCeiling.toLocaleString()}/yr</Text>
                   </View>
                 ) : null}
-                {listing.province ? (
-                  <View style={s.chip}>
-                    <Text style={s.chipTxt}>📍 {listing.province}</Text>
+                {listing.gwaRequirement != null ? (
+                  <View style={s.detailRow}>
+                    <Text style={s.detailRowLabel}>Minimum GWA</Text>
+                    <Text style={s.detailRowVal}>{listing.gwaRequirement}%</Text>
                   </View>
                 ) : null}
-                {listing.city ? (
-                  <View style={s.chip}>
-                    <Text style={s.chipTxt}>🏙 {listing.city}</Text>
+                {listing.monthlyStipend != null ? (
+                  <View style={s.detailRow}>
+                    <Text style={s.detailRowLabel}>Monthly Stipend</Text>
+                    <Text style={[s.detailRowVal, { color: '#4ade80' }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
+                  </View>
+                ) : null}
+                {listing.applicationWindow ? (
+                  <View style={s.detailRow}>
+                    <Text style={s.detailRowLabel}>Application Window</Text>
+                    <Text style={s.detailRowVal}>{listing.applicationWindow}</Text>
                   </View>
                 ) : null}
               </View>
-            ) : null}
+              {/* Scope / region / province chips */}
+              {(listing.scope || listing.province || listing.city) ? (
+                <View style={[s.chipRow, { marginTop: spacing.sm }]}>
+                  {listing.scope ? (
+                    <View style={s.chip}>
+                      <Text style={s.chipTxt}>{listing.scope.charAt(0).toUpperCase() + listing.scope.slice(1)}</Text>
+                    </View>
+                  ) : null}
+                  {listing.province ? (
+                    <View style={s.chip}>
+                      <Text style={s.chipTxt}>📍 {listing.province}</Text>
+                    </View>
+                  ) : null}
+                  {listing.city ? (
+                    <View style={s.chip}>
+                      <Text style={s.chipTxt}>🏙 {listing.city}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </Card>
           </View>
         ) : null}
 
         {/* Benefits / Coverage */}
         {(listing.coverage || listing.grantAmount || otherBenefits.length > 0) ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>{isExam ? 'Coverage' : 'Benefits'}</Text>
-            {listing.grantAmount ? (
-              <View style={s.grantRow}>
-                <Text style={s.grantLabel}>Grant Amount</Text>
-                <Text style={s.grantVal}>₱{listing.grantAmount}</Text>
-              </View>
-            ) : null}
-            {listing.coverage ? <Text style={[s.bodyText, { marginTop: 6 }]}>{listing.coverage}</Text> : null}
-            {otherBenefits.map((b, i) => (
-              <Text key={i} style={[s.otherBenefitLine, { marginTop: i === 0 ? 6 : 2 }]}>• {b}</Text>
-            ))}
+            <SectionHeader title={isExam ? 'Coverage' : 'Benefits'} />
+            <Card elevated>
+              {listing.grantAmount ? (
+                <View style={s.grantRow}>
+                  <Text style={s.grantLabel}>Grant Amount</Text>
+                  <Text style={s.grantVal}>₱{listing.grantAmount}</Text>
+                </View>
+              ) : null}
+              {listing.coverage ? <Text style={[s.bodyText, { marginTop: spacing.xs }]}>{listing.coverage}</Text> : null}
+              {otherBenefits.map((b, i) => (
+                <Text key={b} style={[s.otherBenefitLine, { marginTop: i === 0 ? spacing.xs : 2 }]}>• {b}</Text>
+              ))}
+            </Card>
           </View>
         ) : null}
 
         {/* Requirements */}
         {requirements.length > 0 ? (
           <View style={s.section}>
-            <Text style={s.sectionTitle}>
-              Requirements ({acquiredCount}/{requirements.length})
-            </Text>
+            <SectionHeader title={`Requirements (${acquiredCount}/${requirements.length})`} />
             <RequirementsChecklist
               listingSlug={slug}
               requirements={requirements}
@@ -519,55 +549,54 @@ export default function ListingDetailScreen() {
 
         {/* Focus CTA */}
         {inFocus ? (
-          <TouchableOpacity
-            style={s.focusRemoveBtn}
+          <Pressable
+            style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
             onPress={() => removeListing(slug)}
-            activeOpacity={0.8}
+            accessibilityRole="button"
           >
             <Text style={s.focusRemoveTxt}>
               ✓ In Focus #{focusPriority} — Tap to Remove
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : (
-          <TouchableOpacity
-            style={s.focusAddBtn}
+          <Pressable
+            style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
             onPress={() => addListing(slug)}
-            activeOpacity={0.8}
+            accessibilityRole="button"
           >
             <Text style={s.focusAddTxt}>
               + Add to Focus
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {/* Watch results toggle — exams only */}
         {isExam ? (
-          <TouchableOpacity
-            style={[s.watchBtn, watchingResults && s.watchBtnActive]}
+          <Pressable
+            style={({ pressed }) => [s.watchBtn, watchingResults && s.watchBtnActive, pressed && { opacity: 0.8 }]}
             onPress={toggleResultWatch}
-            activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={watchingResults ? 'Stop watching results' : 'Watch results'}
           >
             <Text style={[s.watchBtnTxt, watchingResults && s.watchBtnTxtActive]}>
               {watchingResults ? '✓ Watching results' : '🔔 Watch results'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
 
         {/* Start practice CTA — exams only */}
         {!isScholarship ? (
-          <TouchableOpacity
-            style={s.practiceBtn}
-            onPress={() => router.push('/(tabs)/practice')}
-          >
-            <Text style={s.practiceBtnTxt}>⚡ Start Practicing for this Exam</Text>
-          </TouchableOpacity>
+          <View style={{ marginTop: spacing.md }}>
+            <AppButton
+              label="⚡ Start Practicing for this Exam"
+              onPress={() => router.push('/(tabs)/practice')}
+            />
+          </View>
         ) : null}
 
         {/* Official website (scholarships always show if present; exams too) */}
         {isScholarship ? (
-          <View style={{ marginHorizontal: 14, marginBottom: 10 }}>
+          <View style={{ marginTop: spacing.md }}>
             {/* Verified badge + note */}
             <View style={s.verifiedBadge}>
               <View style={[s.verifiedBadgePill, listing.isVerified ? s.verifiedPillOn : s.verifiedPillOff]}>
@@ -578,25 +607,26 @@ export default function ListingDetailScreen() {
               <Text style={s.verifiedNote}>Details change yearly — verify on the official site.</Text>
             </View>
             {listing.externalUrl ? (
-              <TouchableOpacity
-                style={s.linkBtn}
+              <Pressable
+                style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
                 onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
+                accessibilityRole="button"
               >
                 <Text style={s.linkBtnTxt}>Official Website ↗</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
           </View>
         ) : listing.externalUrl ? (
-          <TouchableOpacity
-            style={s.linkBtn}
+          <Pressable
+            style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
             onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
+            accessibilityRole="button"
           >
             <Text style={s.linkBtnTxt}>Official Website ↗</Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
 
-        <View style={{ height: 48 }} />
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

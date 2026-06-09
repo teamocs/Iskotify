@@ -3,9 +3,7 @@ import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
-  Linking,
+  Pressable,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -19,6 +17,10 @@ import {
   type FeedItem,
 } from '../../utils/admissionsFeed'
 import { NewsDetailModal } from '../../components/updates/NewsDetailModal'
+import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Card } from '../../components/ui/Card'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { spacing, radius } from '../../theme/tokens'
 
 // ── Changelog ─────────────────────────────────────────────────────────────────
 
@@ -64,17 +66,6 @@ function getSeverityConfig(severity: string) {
   return SEVERITY_CONFIG[severity as SeverityKey] ?? SEVERITY_CONFIG.info
 }
 
-// ── Section header ─────────────────────────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  const { theme: t, typo } = useTheme()
-  return (
-    <Text style={[styles.sectionHeader, { color: t.textSecondary, fontSize: typo.xs }]}>
-      {title}
-    </Text>
-  )
-}
-
 // ── Upcoming Events section ────────────────────────────────────────────────────
 
 function UpcomingEventsSection({ items }: { items: FeedItem[] }) {
@@ -84,46 +75,45 @@ function UpcomingEventsSection({ items }: { items: FeedItem[] }) {
   if (events.length === 0) return null
 
   return (
-    <View>
+    <View style={styles.section}>
       <SectionHeader title="UPCOMING EVENTS" />
-      {events.map((item) => {
-        const days = daysUntil(item.eventDate!)
-        const daysLabel = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
-        return (
-          <View
-            key={item.id}
-            style={[styles.card, { backgroundColor: t.surface, borderColor: t.divider }]}
-          >
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                {item.schoolName != null && item.schoolName.length > 0 ? (
-                  <Text style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs }]}>
-                    {item.schoolName}
-                  </Text>
-                ) : null}
-                <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.sm }]}>
-                  {item.title}
-                </Text>
-              </View>
-              {item.eventType != null && item.eventType.length > 0 ? (
-                <View style={[styles.chip, { backgroundColor: t.accentSurface }]}>
-                  <Text style={[styles.chipText, { color: t.accentText, fontSize: typo.xs }]}>
-                    {item.eventType}
+      <View style={styles.cardStack}>
+        {events.map((item) => {
+          const days = daysUntil(item.eventDate!)
+          const daysLabel = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
+          return (
+            <Card key={item.id} elevated>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  {item.schoolName != null && item.schoolName.length > 0 ? (
+                    <Text style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs }]}>
+                      {item.schoolName}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
+                    {item.title}
                   </Text>
                 </View>
-              ) : null}
-            </View>
-            <View style={styles.row}>
-              <Text style={[styles.dateText, { color: t.textSecondary, fontSize: typo.xs }]}>
-                {item.eventDate}
-              </Text>
-              <Text style={[styles.daysLabel, { color: t.accent, fontSize: typo.xs }]}>
-                {daysLabel}
-              </Text>
-            </View>
-          </View>
-        )
-      })}
+                {item.eventType != null && item.eventType.length > 0 ? (
+                  <View style={[styles.chip, { backgroundColor: t.accentSurface }]}>
+                    <Text style={[styles.chipText, { color: t.accentText, fontSize: typo.xs }]}>
+                      {item.eventType}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.row}>
+                <Text style={[styles.dateText, { color: t.textTertiary, fontSize: typo.xs }]}>
+                  {item.eventDate}
+                </Text>
+                <Text style={[styles.daysLabel, { color: t.accentText, fontSize: typo.xs }]}>
+                  {daysLabel}
+                </Text>
+              </View>
+            </Card>
+          )
+        })}
+      </View>
     </View>
   )
 }
@@ -136,53 +126,57 @@ function NewsSection({ items }: { items: FeedItem[] }) {
   const sorted = sortBySeverityThenDate(items).slice(0, 12)
 
   return (
-    <View>
+    <View style={styles.section}>
       <SectionHeader title="ADMISSIONS NEWS" />
-      {sorted.map((item) => {
-        const cfg = getSeverityConfig(item.severity)
-        return (
-          <TouchableOpacity
-            key={item.id}
-            activeOpacity={0.7}
-            onPress={() => setSelected(item)}
-            style={[styles.card, { backgroundColor: t.surface, borderColor: t.divider }]}
-          >
-            <View style={styles.row}>
-              <View
-                style={[
-                  styles.severityBadge,
-                  { backgroundColor: cfg.bg },
-                ]}
-              >
-                <Text style={[styles.severityEmoji]}>{cfg.emoji}</Text>
-                <Text style={[styles.severityText, { color: cfg.text, fontSize: typo.xs }]}>
-                  {cfg.label}
-                </Text>
-              </View>
-              {item.schoolName != null && item.schoolName.length > 0 ? (
+      <View style={styles.cardStack}>
+        {sorted.map((item) => {
+          const cfg = getSeverityConfig(item.severity)
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              onPress={() => setSelected(item)}
+              style={({ pressed }) => [styles.pressableCard, pressed ? { opacity: 0.7 } : null]}
+            >
+              <Card elevated>
+                <View style={styles.row}>
+                  <View
+                    style={[
+                      styles.severityBadge,
+                      { backgroundColor: cfg.bg },
+                    ]}
+                  >
+                    <Text style={styles.severityEmoji}>{cfg.emoji}</Text>
+                    <Text style={[styles.severityText, { color: cfg.text, fontSize: typo.xs }]}>
+                      {cfg.label}
+                    </Text>
+                  </View>
+                  {item.schoolName != null && item.schoolName.length > 0 ? (
+                    <Text
+                      style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs, marginLeft: spacing.sm }]}
+                      numberOfLines={1}
+                    >
+                      {item.schoolName}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text
-                  style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs, marginLeft: 8 }]}
+                  style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base, marginTop: spacing.xs }]}
+                  numberOfLines={2}
+                >
+                  {item.title}
+                </Text>
+                <Text
+                  style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}
                   numberOfLines={1}
                 >
-                  {item.schoolName}
+                  {item.body}
                 </Text>
-              ) : null}
-            </View>
-            <Text
-              style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.sm, marginTop: 4 }]}
-              numberOfLines={2}
-            >
-              {item.title}
-            </Text>
-            <Text
-              style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}
-              numberOfLines={1}
-            >
-              {item.body}
-            </Text>
-          </TouchableOpacity>
-        )
-      })}
+              </Card>
+            </Pressable>
+          )
+        })}
+      </View>
       {selected !== null ? (
         <NewsDetailModal item={selected} onClose={() => setSelected(null)} />
       ) : null}
@@ -195,31 +189,30 @@ function NewsSection({ items }: { items: FeedItem[] }) {
 function ChangelogSection() {
   const { theme: t, typo } = useTheme()
   return (
-    <View>
+    <View style={styles.section}>
       <SectionHeader title="ISKOTIFY UPDATES" />
-      {CHANGELOG.map((entry) => (
-        <View
-          key={entry.version}
-          style={[styles.card, { backgroundColor: t.surface, borderColor: t.divider }]}
-        >
-          <View style={styles.row}>
-            <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.sm }]}>
-              v{entry.version}
-            </Text>
-            <Text style={[styles.dateText, { color: t.textSecondary, fontSize: typo.xs }]}>
-              {entry.date}
-            </Text>
-          </View>
-          {entry.notes.map((note, i) => (
-            <View key={i} style={styles.bulletRow}>
-              <Text style={[styles.bullet, { color: t.textSecondary }]}>{'•'}</Text>
-              <Text style={[styles.bulletText, { color: t.textSecondary, fontSize: typo.xs }]}>
-                {note}
+      <View style={styles.cardStack}>
+        {CHANGELOG.map((entry) => (
+          <Card key={entry.version} elevated>
+            <View style={styles.row}>
+              <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
+                v{entry.version}
+              </Text>
+              <Text style={[styles.dateText, { color: t.textTertiary, fontSize: typo.xs }]}>
+                {entry.date}
               </Text>
             </View>
-          ))}
-        </View>
-      ))}
+            {entry.notes.map((note) => (
+              <View key={`${entry.version}-${note}`} style={styles.bulletRow}>
+                <Text style={[styles.bullet, { color: t.textSecondary }]}>{'•'}</Text>
+                <Text style={[styles.bulletText, { color: t.textSecondary, fontSize: typo.xs }]}>
+                  {note}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        ))}
+      </View>
     </View>
   )
 }
@@ -229,22 +222,24 @@ function ChangelogSection() {
 function ResultsTrackerCard() {
   const { theme: t, typo } = useTheme()
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
+    <Pressable
+      accessibilityRole="button"
       onPress={() => router.push('/results-tracker')}
-      style={[styles.card, styles.trackerCard, { backgroundColor: t.accentSurface, borderColor: t.accent }]}
+      style={({ pressed }) => [styles.pressableCard, pressed ? { opacity: 0.7 } : null]}
     >
-      <Text style={[styles.trackerEmoji]}>{'📋'}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.sm }]}>
-          Results Tracker
-        </Text>
-        <Text style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}>
-          Track school results you&apos;re waiting on
-        </Text>
-      </View>
-      <Text style={[{ color: t.accent, fontSize: typo.base }]}>{'›'}</Text>
-    </TouchableOpacity>
+      <Card elevated style={[styles.trackerCard, { backgroundColor: t.accentSurface, borderColor: t.accent }]}>
+        <Text style={styles.trackerEmoji}>{'📋'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
+            Results Tracker
+          </Text>
+          <Text style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}>
+            Track school results you&apos;re waiting on
+          </Text>
+        </View>
+        <Text style={{ color: t.accent, fontSize: typo.lg }}>{'›'}</Text>
+      </Card>
+    </Pressable>
   )
 }
 
@@ -294,21 +289,18 @@ export default function UpdatesScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bg }]} edges={['top']}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: t.textPrimary, fontSize: typo.xl }]}>Updates</Text>
-        <Text style={[styles.subtitle, { color: t.textSecondary, fontSize: typo.sm }]}>
+        <Text style={[styles.title, { color: t.textPrimary, fontSize: typo.h2 }]}>Updates</Text>
+        <Text style={[styles.subtitle, { color: t.textTertiary, fontSize: typo.sm }]}>
           Events, news &amp; app updates
         </Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScreenScroll tabBarInset padded contentContainerStyle={styles.content}>
         <ResultsTrackerCard />
         <UpcomingEventsSection items={items} />
         {items.length > 0 ? <NewsSection items={items} /> : null}
         <ChangelogSection />
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }
@@ -318,35 +310,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   title: {
-    fontWeight: '700',
-    marginBottom: 4,
+    fontFamily: 'Outfit_700Bold',
+    marginBottom: spacing.xs,
   },
   subtitle: {
     fontWeight: '400',
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 120,
-    gap: 12,
+    paddingTop: spacing.sm,
+    gap: spacing.xl,
   },
-  sectionHeader: {
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-    marginTop: 4,
+  section: {
+    gap: spacing.sm,
   },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 6,
-    marginBottom: 10,
+  cardStack: {
+    gap: spacing.md,
   },
   cardTitle: {
     fontWeight: '600',
@@ -354,16 +337,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   schoolName: {
     fontWeight: '500',
     flexShrink: 1,
   },
   chip: {
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: radius.sm,
+    borderCurve: 'continuous',
   },
   chipText: {
     fontWeight: '600',
@@ -378,13 +362,14 @@ const styles = StyleSheet.create({
   severityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: radius.sm,
+    borderCurve: 'continuous',
   },
   severityEmoji: {
-    fontSize: 11,
+    fontSize: 12,
   },
   severityText: {
     fontWeight: '600',
@@ -392,13 +377,18 @@ const styles = StyleSheet.create({
   bodyPreview: {
     fontWeight: '400',
   },
+  pressableCard: {
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+  },
   bulletRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: spacing.xs,
     alignItems: 'flex-start',
+    marginTop: spacing.xs,
   },
   bullet: {
-    fontSize: 11,
+    fontSize: 12,
     lineHeight: 18,
   },
   bulletText: {
@@ -408,7 +398,7 @@ const styles = StyleSheet.create({
   trackerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
     borderWidth: 1.5,
   },
   trackerEmoji: {

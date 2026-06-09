@@ -14,6 +14,10 @@ import { useFocusListings, type FocusListing } from '../../hooks/useFocusListing
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, radius, typography } from '../../theme/tokens'
+import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Card } from '../../components/ui/Card'
+import { SectionHeader } from '../../components/ui/SectionHeader'
 import { AiModelBanner } from '../../components/AiModelBanner'
 import { useAnalytics } from '../../hooks/useAnalytics'
 
@@ -279,14 +283,14 @@ function CreateDeckModal({
 function FocusCard({ row, isActive, accuracy, onPress, onReview }: { row: FocusListing; isActive: boolean; accuracy: number | null; onPress: () => void; onReview: () => void }) {
   const { theme: t, typo } = useTheme()
   const fc = useMemo(() => StyleSheet.create({
-    card: { minWidth: 120, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 11, marginRight: 8 },
+    card: { minWidth: 120, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, marginRight: spacing.sm },
     cardActive: { backgroundColor: t.accentSurface, borderColor: '#831626', borderWidth: 2 },
-    badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, fontFamily: 'Lexend_600SemiBold' },
-    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 15, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
-    scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+    badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.xs, fontFamily: 'Lexend_600SemiBold' },
+    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm - 2 },
+    scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs / 2 },
     score: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.textTertiary },
-    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-    reviewBtnTxt: { fontSize: 10, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs - 1 },
+    reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
     <Pressable
@@ -339,86 +343,87 @@ function makeStyles(
   return {
     s: StyleSheet.create({
       root: { flex: 1, backgroundColor: t.bg },
-      header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-      title: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-      subtitle: { fontSize: typo.xs, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
-      statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 4 },
+      header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
+      title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+      subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
+      statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.xs },
       statItem: { flex: 1, alignItems: 'center' },
       statValue: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      statLabel: { fontSize: 10, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 },
+      statLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
       statDivider: { width: 1, height: 30, backgroundColor: t.divider },
-      aiFeedbackCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 14, marginBottom: 12 },
-      aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-      aiFeedbackIcon: { fontSize: 14 },
-      aiFeedbackTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      aiFeedbackPrompt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', marginBottom: 4 },
-      aiFeedbackItem: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: 2 },
-      aiFeedbackEmpty: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-      chipsWrap: { height: 44, marginBottom: 4 },
+      aiFeedbackCard: { gap: spacing.xs / 2 },
+      aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+      aiFeedbackIcon: { fontSize: typo.base },
+      aiFeedbackTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      aiFeedbackPrompt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
+      aiFeedbackItem: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs / 2 },
+      aiFeedbackEmpty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
+      chipsWrap: { height: 44, marginBottom: spacing.xs },
       chipsScroll: { flex: 1 },
-      chipsContent: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, alignItems: 'center', paddingVertical: 6 },
-      chip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 5 },
+      chipsContent: { paddingHorizontal: spacing.lg, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm - 2 },
+      chip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1 },
       chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
       chipTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
       chipTxtOn: { color: '#fff' },
-      secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-      secTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: 8 },
-      addBtn: { width: 24, height: 24, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-      addBtnTxt: { color: '#fff', fontSize: 14, lineHeight: 18, fontWeight: '700' },
-      list: { paddingHorizontal: 16, paddingBottom: 100 },
-      topicCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-      topicIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+      secTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
+      addBtn: { width: 28, height: 28, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+      addBtnTxt: { color: '#fff', fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
+      list: { gap: spacing.md },
+      topicCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+      topicIcon: { width: 40, height: 40, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
       topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 1 },
       topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, flexShrink: 0 },
+      badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs - 1, flexShrink: 0 },
       badgeText: { fontSize: typo.xs, fontWeight: '600', fontFamily: 'Lexend_600SemiBold' },
-      deckCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-      deckIcon: { width: 36, height: 36, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      deckCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+      deckIcon: { width: 40, height: 40, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
       deckName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 1 },
       deckSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      deckChevron: { color: t.textTertiary, fontSize: 18 },
-      empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 8 },
+      deckChevron: { color: t.textTertiary, fontSize: typo.lg },
+      empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
+      focusDebug: { paddingBottom: spacing.xs, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     rc: StyleSheet.create({
-      row: { gap: 10, paddingRight: 4 },
-      card: { width: 130, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 18, padding: 12 },
-      badge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 8 },
+      row: { gap: spacing.md, paddingRight: spacing.xs },
+      card: { width: 130, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
+      badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2, alignSelf: 'flex-start', marginBottom: spacing.sm },
       badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-      name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 4, lineHeight: 16 },
+      name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.xs, lineHeight: 16 },
       sub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     qs: StyleSheet.create({
-      card:  { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-      card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: 16, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-      icon:  { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      icon2: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      card:  { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+      card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+      icon:  { width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      icon2: { width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
       title: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
       sub:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-      go:    { fontSize: 18, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
+      go:    { fontSize: typo.lg, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
     }),
     m: StyleSheet.create({
       overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
-      sheet: { backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 36, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
-      headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+      sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, borderCurve: 'continuous', padding: spacing.xl, paddingBottom: spacing.xxxl, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
+      headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
       title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      closeBtn: { color: t.textTertiary, fontSize: 16, padding: 4 },
-      label: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6, fontFamily: 'Lexend_600SemiBold' },
-      input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', marginBottom: 14 },
-      btn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+      closeBtn: { color: t.textTertiary, fontSize: typo.base, padding: spacing.xs },
+      label: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm - 2, fontFamily: 'Lexend_600SemiBold' },
+      input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.lg - 2, paddingVertical: spacing.md - 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.lg - 2 },
+      btn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.md, borderCurve: 'continuous', minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, alignItems: 'center' },
       btnFlex: { flex: 1 },
       btnDisabled: { opacity: 0.4 },
       btnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-      topicList: { maxHeight: 280, marginBottom: 14 },
-      topicRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
-      topicRowOn: { backgroundColor: t.accentSurface, borderRadius: 10, paddingHorizontal: 6 },
-      checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+      topicList: { maxHeight: 280, marginBottom: spacing.lg - 2 },
+      topicRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
+      topicRowOn: { backgroundColor: t.accentSurface, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 2 },
+      checkbox: { width: 22, height: 22, borderRadius: radius.sm - 4, borderCurve: 'continuous', borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
       checkboxOn: { backgroundColor: t.accent, borderColor: t.accent },
-      checkmark: { color: '#fff', fontSize: 11, fontWeight: '700' },
+      checkmark: { color: '#fff', fontSize: typo.xs, fontWeight: '700' },
       topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
       topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      footerRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-      backBtn: { paddingVertical: 12, paddingHorizontal: 4 },
+      footerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+      backBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
       backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     }),
   }
@@ -640,16 +645,16 @@ export default function PracticeScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView
+      <ScreenScroll
+        tabBarInset
         contentContainerStyle={s.list}
-        showsVerticalScrollIndicator={false}
         refreshControl={refreshCtl}
       >
         {/* Quick-link shortcuts */}
         <PracticeShortcuts qs={qs} />
 
         {/* AI Study Feedback card */}
-        <View style={s.aiFeedbackCard}>
+        <Card elevated style={s.aiFeedbackCard}>
           <View style={s.aiFeedbackHeader}>
             <Text style={s.aiFeedbackIcon}>📊</Text>
             <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
@@ -668,18 +673,16 @@ export default function PracticeScreen() {
               Take a few quizzes to unlock your personalized study tips.
             </Text>
           )}
-        </View>
+        </Card>
 
         {/* Focus cards row */}
-        {focusListingsList.length > 0 && (
-          <>
-            <View style={s.secRow}>
-              <Text style={s.secTitle}>My Focus</Text>
-            </View>
+        {focusListingsList.length > 0 ? (
+          <View>
+            <SectionHeader title="My Focus" />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: 4, marginBottom: 12 }}
+              contentContainerStyle={{ paddingRight: spacing.xs }}
             >
               {/* bounded: user-curated focus list, analytics capped at MAX_FOCUS=5; horizontal rail */}
               {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
@@ -694,12 +697,12 @@ export default function PracticeScreen() {
                 />
               ))}
             </ScrollView>
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Recommended section */}
-        {activeRecommended.length > 0 && (
-          <>
+        {activeRecommended.length > 0 ? (
+          <View>
             <View style={s.secRow}>
               <Text style={s.secTitle}>Recommended</Text>
               <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
@@ -708,7 +711,6 @@ export default function PracticeScreen() {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={rc.row}
-              style={{ marginBottom: 14 }}
             >
               {/* bounded: activeRecommended is .slice(0,5), max 5 items; horizontal rail */}
               {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
@@ -716,52 +718,54 @@ export default function PracticeScreen() {
                 <RecommendedCard key={row.topic.id} row={row} rc={rc} />
               ))}
             </ScrollView>
-          </>
-        )}
+          </View>
+        ) : null}
 
         {/* Saved Decks section */}
-        <View style={s.secRow}>
-          <Text style={s.secTitle}>Saved Decks</Text>
-          <Pressable style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]} onPress={() => setModalVisible(true)} accessibilityRole="button" accessibilityLabel="Create deck">
-            <Text style={s.addBtnTxt}>＋</Text>
-          </Pressable>
-        </View>
-        {decks.length === 0 ? (
-          <Text style={[s.empty, { marginBottom: 14 }]}>No decks yet. Tap ＋ to create one.</Text>
-        ) : (
-          <View style={{ marginBottom: 8 }}>
-            {decks.map(deck => (
-              <DeckCard
-                key={deck.id}
-                deck={deck}
-                totalCards={deckCardCount(deck)}
-                onDelete={() => deleteDeck(deck.id)}
-                s={s}
-              />
-            ))}
+        <View>
+          <View style={s.secRow}>
+            <Text style={s.secTitle}>Saved Decks</Text>
+            <Pressable style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]} onPress={() => setModalVisible(true)} accessibilityRole="button" accessibilityLabel="Create deck">
+              <Text style={s.addBtnTxt}>＋</Text>
+            </Pressable>
           </View>
-        )}
+          {decks.length === 0 ? (
+            <Text style={s.empty}>No decks yet. Tap ＋ to create one.</Text>
+          ) : (
+            <View>
+              {decks.map(deck => (
+                <DeckCard
+                  key={deck.id}
+                  deck={deck}
+                  totalCards={deckCardCount(deck)}
+                  onDelete={() => deleteDeck(deck.id)}
+                  s={s}
+                />
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Subjects section with accordion */}
-        <View style={s.secRow}>
-          <Text style={s.secTitle}>Subjects</Text>
+        <View>
+          <SectionHeader title="Subjects" />
+          {focusListingsList.length > 0 ? (
+            <Text style={s.focusDebug}>
+              focus: {focusListingsList.map(l => l.slug).join(', ')}
+            </Text>
+          ) : null}
+          <SubjectAccordion
+            groups={subjectGroups}
+            emptyText="No topics yet — they'll appear here after sync"
+            initiallyExpanded="focused"
+            keyExtractor={(t) => t.topic.id}
+            renderRow={(row) => {
+              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
+              return <TopicCard row={row} s={s} />
+            }}
+          />
         </View>
-        {focusListingsList.length > 0 ? (
-          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 12, color: t.textTertiary }}>
-            focus: {focusListingsList.map(l => l.slug).join(', ')}
-          </Text>
-        ) : null}
-        <SubjectAccordion
-          groups={subjectGroups}
-          emptyText="No topics yet — they'll appear here after sync"
-          initiallyExpanded="focused"
-          keyExtractor={(t) => t.topic.id}
-          renderRow={(row) => {
-            if (!row) return null  // defensive — shouldn't happen, but no crash if it does
-            return <TopicCard row={row} s={s} />
-          }}
-        />
-      </ScrollView>
+      </ScreenScroll>
 
       <CreateDeckModal
         visible={modalVisible}

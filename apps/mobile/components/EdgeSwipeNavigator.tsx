@@ -4,14 +4,19 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
 import { router, usePathname } from 'expo-router'
 
-// Must match the visible tab order in components/TabBar.tsx (the center "Ask Kuya
-// Baw" FAB is not a swipe target). Home ↔ Review ↔ Exams ↔ Updates.
-const TAB_PATHS = ['/', '/practice', '/listings', '/updates'] as const
+// Swipe order follows the navigation sequence: the visible tabs (Home · Review ·
+// Exams · Updates — the center "Ask Kuya Baw" FAB is not a swipe target) then the
+// secondary screens (Analytics, Profile) so they stay swipeable even though they're
+// not in the tab bar. The Home↔Notes swipe (below) is intentionally separate and
+// must stay unchanged.
+const TAB_PATHS = ['/', '/practice', '/listings', '/updates', '/analytics', '/profile'] as const
 const TAB_HREFS = [
   '/(tabs)',
   '/(tabs)/practice',
   '/(tabs)/listings',
   '/(tabs)/updates',
+  '/(tabs)/analytics',
+  '/(tabs)/profile',
 ] as const
 
 const NOTES_PATH = '/notes'

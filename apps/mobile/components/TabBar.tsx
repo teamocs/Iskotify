@@ -80,7 +80,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       style={[
         styles.bar,
         {
-          backgroundColor: t.surface,
+          backgroundColor: t.tabBar,
           borderTopColor: t.border,
           paddingBottom: insets.bottom,
           height: 62 + insets.bottom,
@@ -93,7 +93,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       <View style={styles.centerSlot}>
         <Pressable
           onPress={openKuya}
-          style={({ pressed }) => [styles.fab, { borderColor: t.surface }, pressed && { opacity: 0.88 }]}
+          style={({ pressed }) => [styles.fab, { borderColor: t.tabBar }, pressed && { opacity: 0.88 }]}
           accessibilityRole="button"
           accessibilityLabel="Ask Kuya Baw"
         >

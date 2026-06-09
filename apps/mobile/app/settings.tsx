@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, BackHandler } from 'react-native'
+import { StyleSheet, View, Text, Pressable, Alert, BackHandler } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -16,6 +16,10 @@ import {
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
+import { spacing, radius } from '../theme/tokens'
+import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { Card } from '../components/ui/Card'
+import { SectionHeader } from '../components/ui/SectionHeader'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
@@ -31,25 +35,25 @@ function SettingsRow({
 }) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
-    row: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 9, marginBottom: 4 },
-    rowIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
-    rowLabel: { flex: 1, fontSize: typo.sm, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
+    rowIcon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center' as const, justifyContent: 'center' as const, borderCurve: 'continuous' as const },
+    rowLabel: { flex: 1, fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
     rowChevron: { color: t.textTertiary, fontSize: 18 },
   }), [t, typo])
 
   return (
-    <TouchableOpacity
-      style={[s.row, disabled && { opacity: 0.5 }]}
+    <Pressable
+      style={({ pressed }) => [s.row, disabled && { opacity: 0.5 }, pressed && !disabled && { opacity: 0.7 }]}
       onPress={onPress}
       disabled={disabled}
-      activeOpacity={0.8}
+      accessibilityRole="button"
     >
       <View style={[s.rowIcon, { backgroundColor: iconBg }]}>
-        <Lineicons icon={icon} size={13} color={iconColor} />
+        <Lineicons icon={icon} size={15} color={iconColor} />
       </View>
       <Text style={[s.rowLabel, disabled && { color: t.textTertiary }]}>{label}</Text>
       <Text style={s.rowChevron}>›</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -83,26 +87,26 @@ export default function SettingsScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    backRow: { flexDirection: 'row' as const, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 4 },
-    backBtn: { width: 36, height: 36, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
+    backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
     backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
-    scroll: { paddingHorizontal: 16, paddingBottom: 40 },
-    pageTitle: { fontSize: typo.xl, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
-    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 16 },
+    pageTitle: { fontSize: typo.h2, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
+    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
     versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: t.accentText, fontFamily: 'Outfit_700Bold' },
     versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
     versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    profileCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
-    profileAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: t.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
-    profileName: { fontSize: typo.sm, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    profileSub: { fontSize: typo.xs, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
+    profileCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md },
+    profileAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: t.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
+    profileName: { fontSize: typo.base, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    profileSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
     rowChevron: { color: t.textTertiary, fontSize: 18 },
-    secLabel: { fontSize: typo.xs, fontWeight: '600' as const, letterSpacing: 1.2, textTransform: 'uppercase' as const, color: t.textTertiary, marginBottom: 5, marginTop: 12, fontFamily: 'Lexend_600SemiBold' },
-    appearRow: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 10, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 9, marginBottom: 4 },
-    appearIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surface },
-    appearLabel: { fontSize: typo.sm, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    segWrap: { flexDirection: 'row' as const, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 10, padding: 3, gap: 2, marginLeft: 'auto' as const },
-    segBtn: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 7, alignItems: 'center' as const },
+    divider: { height: 1, backgroundColor: t.divider },
+    section: { gap: spacing.md },
+    appearRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
+    appearIcon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surface2, borderCurve: 'continuous' as const },
+    appearLabel: { fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    segWrap: { flexDirection: 'row' as const, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, padding: 3, gap: 2, marginLeft: 'auto' as const, borderCurve: 'continuous' as const },
+    segBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 7, alignItems: 'center' as const },
     segBtnOn: { backgroundColor: t.accent },
     segTxt: { fontSize: typo.xs, fontWeight: '600' as const, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
     segTxtOn: { color: '#fff' },
@@ -117,12 +121,16 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={s.root}>
       <View style={s.backRow}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <Pressable
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false} padded>
         <Text style={s.pageTitle}>Settings</Text>
         <View style={s.versionBadge}>
           <Text style={s.versionApp}>Iskotify</Text>
@@ -130,52 +138,68 @@ export default function SettingsScreen() {
           <Text style={s.versionNum}>v{version}</Text>
         </View>
 
-        <TouchableOpacity style={s.profileCard} onPress={() => router.push('/(tabs)/profile')} activeOpacity={0.8}>
-          <View style={s.profileAvatar}>
-            <Lineicons icon={User4Outlined} size={18} color="#fff" />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.profileName} numberOfLines={1}>{profileName}</Text>
-            {profileEmail ? (
-              <Text style={s.profileSub} numberOfLines={1}>{profileEmail}</Text>
-            ) : (
-              <Text style={s.profileSub}>View Profile</Text>
-            )}
-          </View>
-          <Text style={s.rowChevron}>›</Text>
-        </TouchableOpacity>
+        <View style={s.section}>
+          <Card elevated>
+            <Pressable
+              style={({ pressed }) => [s.profileCard, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/(tabs)/profile')}
+              accessibilityRole="button"
+            >
+              <View style={s.profileAvatar}>
+                <Lineicons icon={User4Outlined} size={22} color="#fff" />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.profileName} numberOfLines={1}>{profileName}</Text>
+                {profileEmail ? (
+                  <Text style={s.profileSub} numberOfLines={1}>{profileEmail}</Text>
+                ) : (
+                  <Text style={s.profileSub}>View Profile</Text>
+                )}
+              </View>
+              <Text style={s.rowChevron}>›</Text>
+            </Pressable>
+          </Card>
 
-        <Text style={s.secLabel}>App</Text>
-        <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor={t.accentText} label="About Iskotify"
-          onPress={() => router.push('/about')} />
-        <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
-          onPress={() => router.push('/help')} />
-        <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
-          onPress={() => router.push('/privacy')} />
+          <SectionHeader title="App" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor={t.accentText} label="About Iskotify"
+              onPress={() => router.push('/about')} />
+            <View style={s.divider} />
+            <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
+              onPress={() => router.push('/help')} />
+            <View style={s.divider} />
+            <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
+              onPress={() => router.push('/privacy')} />
+          </Card>
 
-        <Text style={s.secLabel}>Session</Text>
-        <SettingsRow icon={ExitOutlined} iconBg="rgba(239,68,68,0.10)" iconColor="#f87171" label="Exit App" onPress={handleExitApp} />
+          <SectionHeader title="Session" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <SettingsRow icon={ExitOutlined} iconBg="rgba(239,68,68,0.10)" iconColor="#f87171" label="Exit App" onPress={handleExitApp} />
+          </Card>
 
-        <Text style={s.secLabel}>Appearance</Text>
-        <View style={s.appearRow}>
-          <View style={s.appearIcon}>
-            <Lineicons icon={Brush2Outlined} size={13} color={t.textSecondary} />
-          </View>
-          <Text style={s.appearLabel}>Theme</Text>
-          <View style={s.segWrap}>
-            {THEME_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.value}
-                style={[s.segBtn, themePref === opt.value && s.segBtnOn]}
-                onPress={() => void setTheme(opt.value)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.segTxt, themePref === opt.value && s.segTxtOn]}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SectionHeader title="Appearance" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <View style={s.appearRow}>
+              <View style={s.appearIcon}>
+                <Lineicons icon={Brush2Outlined} size={15} color={t.textSecondary} />
+              </View>
+              <Text style={s.appearLabel}>Theme</Text>
+              <View style={s.segWrap}>
+                {THEME_OPTIONS.map(opt => (
+                  <Pressable
+                    key={opt.value}
+                    style={({ pressed }) => [s.segBtn, themePref === opt.value && s.segBtnOn, pressed && { opacity: 0.7 }]}
+                    onPress={() => void setTheme(opt.value)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[s.segTxt, themePref === opt.value && s.segTxtOn]}>{opt.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </Card>
         </View>
-      </ScrollView>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }
