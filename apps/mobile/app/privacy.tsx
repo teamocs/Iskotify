@@ -1,8 +1,12 @@
 import { useMemo } from 'react'
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import { StyleSheet, View, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
+import { spacing } from '../theme/tokens'
+import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { Card } from '../components/ui/Card'
+import { SectionHeader } from '../components/ui/SectionHeader'
 
 const SECTIONS = [
   {
@@ -44,49 +48,49 @@ export default function PrivacyScreen() {
 
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
-    backRow: { flexDirection: 'row' as const, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 4 },
-    backBtn: { width: 36, height: 36, alignItems: 'center' as const, justifyContent: 'center' as const },
+    backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
+    backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
     backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
-    scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-    pageTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.xl + 2, color: t.textPrimary, letterSpacing: -0.4, marginBottom: 4, marginTop: 8 },
-    pageSub: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: 20 },
-    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 16, padding: 14, marginBottom: 8 },
-    cardTitle: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.textPrimary, marginBottom: 6 },
+    pageTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, letterSpacing: -0.4, marginTop: spacing.sm },
+    effectiveDate: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.xs, marginBottom: spacing.xl },
+    card: { marginBottom: spacing.md },
     cardBody: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: typo.sm * 1.6 },
-    contactCard: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.2)', borderRadius: 16, padding: 16, marginTop: 8 },
-    contactTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textPrimary, marginBottom: 4 },
+    contactCard: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.2)', marginTop: spacing.xs, marginBottom: spacing.md },
+    contactTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textPrimary, marginBottom: spacing.xs },
     contactBody: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: typo.sm * 1.6 },
-    contactEmail: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.accentText, marginTop: 6 },
-    effectiveDate: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 20 },
+    contactEmail: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.accentText, marginTop: spacing.sm },
   }), [t, typo])
 
   return (
     <SafeAreaView style={s.root}>
       <View style={s.backRow}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <Pressable
+          style={({ pressed }) => [s.backBtn, pressed ? { opacity: 0.6 } : null]}
+          onPress={() => router.back()}
+        >
           <Text style={s.backArrow}>‹</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScreenScroll tabBarInset={false} padded>
         <Text style={s.pageTitle}>Privacy & Terms</Text>
         <Text style={s.effectiveDate}>Effective: May 2026</Text>
 
-        {SECTIONS.map((sec, i) => (
-          <View key={i} style={s.card}>
-            <Text style={s.cardTitle}>{sec.title}</Text>
+        {SECTIONS.map((sec) => (
+          <Card elevated key={sec.title} style={s.card}>
+            <SectionHeader title={sec.title} />
             <Text style={s.cardBody}>{sec.body}</Text>
-          </View>
+          </Card>
         ))}
 
-        <View style={s.contactCard}>
+        <Card elevated style={s.contactCard}>
           <Text style={s.contactTitle}>Questions?</Text>
           <Text style={s.contactBody}>
             For privacy-related requests or concerns, contact us at:
           </Text>
           <Text style={s.contactEmail}>teamocsph@gmail.com</Text>
-        </View>
-      </ScrollView>
+        </Card>
+      </ScreenScroll>
     </SafeAreaView>
   )
 }

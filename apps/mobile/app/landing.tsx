@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTheme } from '../theme/ThemeContext'
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native'
+// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+import { View, Text, Pressable, ActivityIndicator, Alert, Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import * as WebBrowser from 'expo-web-browser'
@@ -10,6 +11,8 @@ import { pullUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { eq } from 'drizzle-orm'
 import { userSettings, focusListings } from '../db/schema'
+import { spacing, radius } from '../theme/tokens'
+import { Card } from '../components/ui/Card'
 
 export default function LandingScreen() {
   const db = useDb()
@@ -111,14 +114,14 @@ export default function LandingScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <View style={{ flex: 1, paddingHorizontal: 28, justifyContent: 'space-between', paddingTop: 56, paddingBottom: 40 }}>
+      <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'space-between', paddingTop: spacing.xxxl + spacing.xxl, paddingBottom: spacing.xxxl }}>
 
         {/* Hero */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg }}>
           {/* Logo */}
           <Image
             source={require('../assets/images/icon.png')}
-            style={{ width: 88, height: 88, borderRadius: 24, marginBottom: 4 }}
+            style={{ width: 88, height: 88, borderRadius: radius.xxl, marginBottom: spacing.xs }}
           />
 
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h1, color: t.textPrimary, textAlign: 'center', letterSpacing: -0.5 }}>
@@ -129,9 +132,9 @@ export default function LandingScreen() {
           </Text>
 
           {/* Feature pills */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'center', marginTop: spacing.sm }}>
             {['Flashcards', 'Progress Tracking', 'Weak Area Focus', 'Sync Across Devices'].map(f => (
-              <View key={f} style={{ backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: 980, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <View key={f} style={{ backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}>
                 <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: t.accentText }}>{f}</Text>
               </View>
             ))}
@@ -139,29 +142,37 @@ export default function LandingScreen() {
         </View>
 
         {/* Actions */}
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: spacing.md }}>
           {/* Google sync info */}
-          <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, padding: 14, gap: 4 }}>
+          <Card style={{ gap: spacing.xs, padding: spacing.lg }}>
             <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary }}>☁️  Back up with Google</Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: 16 }}>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: 18 }}>
               Sign in so your progress and settings are saved. Switch devices anytime and your data comes with you.
             </Text>
-          </View>
+          </Card>
 
           {/* Google sign-in button */}
-          <TouchableOpacity
+          <Pressable
             onPress={handleGoogleSignIn}
             disabled={signingIn}
-            style={{
-              backgroundColor: t.textPrimary,
-              borderRadius: 16,
-              paddingVertical: 15,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 10,
-              opacity: signingIn ? 0.7 : 1,
-            }}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: signingIn, busy: signingIn }}
+            style={({ pressed }) => [
+              {
+                backgroundColor: t.textPrimary,
+                borderRadius: radius.lg,
+                borderCurve: 'continuous',
+                minHeight: 48,
+                paddingVertical: spacing.md + 3,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing.sm,
+                boxShadow: t.shadowSm,
+                opacity: signingIn ? 0.7 : 1,
+              },
+              pressed && !signingIn ? { opacity: 0.85 } : null,
+            ]}
           >
             {signingIn ? (
               <ActivityIndicator color={t.bg} size="small" />
@@ -171,14 +182,21 @@ export default function LandingScreen() {
             <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.bg }}>
               {signingIn ? 'Signing in…' : 'Continue with Google'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Skip */}
-          <TouchableOpacity onPress={handleSkip} style={{ alignItems: 'center', paddingVertical: 10 }}>
+          <Pressable
+            onPress={handleSkip}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              { alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingVertical: spacing.sm },
+              pressed ? { opacity: 0.6 } : null,
+            ]}
+          >
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>
               Skip for now — set up later in Profile
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
       </View>
