@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, ActivityIndicator, StyleSheet,
+  View, Text, TextInput, Pressable, Modal, ScrollView, ActivityIndicator, StyleSheet,
 } from 'react-native'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
@@ -27,6 +27,11 @@ function parseCourses(raw: string | null | undefined): CourseOption[] {
  * later. Reads the course catalog from the local DB (synced on launch) and persists
  * to user_settings.target_courses + profiles.target_courses (best-effort).
  */
+// 5 useState calls below are independent concerns (persisted selection, catalog
+// cache, loading flag, modal visibility, search text) — not an interdependent
+// state machine, and `toggle` fires an async persist inside the setState updater,
+// so a reducer would add risk for no benefit.
+// eslint-disable-next-line react-doctor/prefer-useReducer
 export function TargetCoursesCard() {
   const db = useDb()
   const { theme: t, typo } = useTheme()
@@ -58,7 +63,31 @@ export function TargetCoursesCard() {
         db.select({ courseTab: courseTaxonomyMap.courseTab, careerCourseId: courseTaxonomyMap.careerCourseId, label: courseTaxonomyMap.label }).from(courseTaxonomyMap),
         db.select({ courseId: careerCourses.courseId, name: careerCourses.name }).from(careerCourses),
       ])
-      setAll(allCourseOptions(tax, cc))
+      let options = allCourseOptions(tax, cc)
+
+      // The local catalog is populated by the fire-and-forget launch sync, so it can
+      // still be empty here (sync not finished yet, or the user onboarded on an older
+      // build before the course tables synced). Fall back to a direct Supabase fetch —
+      // the same source the onboarding course step uses — so the picker is never empty
+      // when online. Users who never set courses in onboarding can then add them here.
+      if (options.length === 0) {
+        const [taxRes, ccRes] = await Promise.all([
+          supabase.from('course_taxonomy_map').select('course_tab,career_course_id,label'),
+          supabase.from('career_courses').select('course_id,name'),
+        ])
+        const remoteTax = (taxRes.data ?? []).map(r => ({
+          courseTab: r.course_tab as string,
+          careerCourseId: (r.career_course_id ?? null) as string | null,
+          label: (r.label ?? null) as string | null,
+        }))
+        const remoteCc = (ccRes.data ?? []).map(r => ({
+          courseId: r.course_id as string,
+          name: (r.name ?? null) as string | null,
+        }))
+        options = allCourseOptions(remoteTax, remoteCc)
+      }
+
+      setAll(options)
     } catch (e) {
       console.warn('[courses-card] load catalog:', e)
     } finally {
@@ -131,9 +160,9 @@ export function TargetCoursesCard() {
     <View style={s.card}>
       <View style={s.headerRow}>
         <Text style={s.secTitle}>Target Courses</Text>
-        <TouchableOpacity onPress={openModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Pressable onPress={openModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.6 }}>
           <Text style={s.addLink}>{selected.length > 0 ? 'Edit' : '+ Add courses'}</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {selected.length === 0 ? (
@@ -143,9 +172,9 @@ export function TargetCoursesCard() {
           {selected.map(c => (
             <View key={c.id} style={s.chip}>
               <Text style={s.chipText}>{c.label}</Text>
-              <TouchableOpacity onPress={() => toggle(c)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }} accessibilityLabel={`Remove ${c.label}`}>
+              <Pressable onPress={() => toggle(c)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }} accessibilityLabel={`Remove ${c.label}`} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.5 }}>
                 <Text style={s.chipX}>✕</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ))}
         </View>
@@ -153,14 +182,14 @@ export function TargetCoursesCard() {
 
       <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
         <View style={s.backdrop}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setModalOpen(false)} accessibilityLabel="Close" />
+          <Pressable style={{ flex: 1 }} onPress={() => setModalOpen(false)} accessibilityLabel="Close" />
           <View style={s.sheet}>
             <View style={s.handle} />
             <View style={s.sheetHeader}>
               <Text style={s.sheetTitle}>Target Courses</Text>
-              <TouchableOpacity onPress={() => setModalOpen(false)} accessibilityLabel="Close">
+              <Pressable onPress={() => setModalOpen(false)} accessibilityLabel="Close" accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.5 }}>
                 <Text style={s.closeTxt}>✕</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
             <TextInput
               style={s.input}
@@ -184,19 +213,21 @@ export function TargetCoursesCard() {
                     const sel = selected.some(x => x.id === c.id)
                     const disabled = !sel && atMax
                     return (
-                      <TouchableOpacity
+                      <Pressable
                         key={c.id}
                         onPress={() => toggle(c)}
                         disabled={disabled}
-                        style={[s.row, {
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled, selected: sel }}
+                        style={({ pressed }) => [s.row, {
                           backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
                           borderColor: sel ? '#831626' : t.border,
                           opacity: disabled ? 0.4 : 1,
-                        }]}
+                        }, pressed && !disabled && { opacity: 0.7 }]}
                       >
                         <Text style={s.rowLabel}>{c.label}</Text>
                         <Text style={[s.rowMark, { color: sel ? t.accentText : t.textTertiary }]}>{sel ? '✓' : '＋'}</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     )
                   })
                 )}

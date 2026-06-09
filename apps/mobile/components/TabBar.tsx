@@ -1,11 +1,6 @@
-import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native'
-import { BlurView } from 'expo-blur'
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated'
+// RN Image is fine for a tiny bundled asset; adding expo-image is a native module that would break OTA delivery.
+// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+import { View, Text, Pressable, Image, StyleSheet } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   Home2Outlined,
@@ -13,6 +8,8 @@ import {
   GraduationCap1Outlined,
   Bell1Outlined,
 } from '@lineiconshq/free-icons'
+// Type-only import for the custom tabBar prop; the app uses expo-router Tabs (JS navigator) by design.
+// eslint-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
@@ -25,7 +22,7 @@ const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = 
   updates:   { label: 'Updates', icon: Bell1Outlined },
 }
 
-// Display order around the center floating "Ask Kuya Baw" button.
+// Two tabs on each side of the center "Ask Kuya Baw" button.
 const LEFT_TABS = ['index', 'practice']
 const RIGHT_TABS = ['listings', 'updates']
 
@@ -40,36 +37,24 @@ function NavItem({
   isFocused: boolean
   onPress: () => void
 }) {
-  const { theme: t, typo } = useTheme()
-  const ns = useMemo(() => StyleSheet.create({
-    navItem: { alignItems: 'center', gap: 3, paddingVertical: 7, paddingHorizontal: 9, borderRadius: 22 },
-    navItemActive: { backgroundColor: 'rgba(128,0,0,0.82)' },
-    navLabel: { fontSize: typo.xs, fontWeight: '500', color: t.textSecondary, letterSpacing: 0.15 },
-    navLabelActive: { color: '#fff', fontWeight: '700' },
-  }), [t, typo])
-
-  const scale = useSharedValue(isFocused ? 1.06 : 1)
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
-
-  React.useEffect(() => {
-    scale.value = withSpring(isFocused ? 1.06 : 1, { damping: 12, stiffness: 200 })
-  }, [isFocused])
-
-  function handlePressIn() { scale.value = withSpring(0.9, { damping: 12, stiffness: 200 }) }
-  function handlePressOut() { scale.value = withSpring(isFocused ? 1.06 : 1, { damping: 12, stiffness: 200 }) }
-
+  const { theme: t } = useTheme()
+  const color = isFocused ? t.accentText : t.textTertiary
   return (
-    <TouchableOpacity onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={1}>
-      <Animated.View style={[ns.navItem, isFocused && ns.navItemActive, animStyle]}>
-        <Lineicons icon={icon} size={20} color={isFocused ? '#fff' : t.textSecondary} />
-        <Text style={[ns.navLabel, isFocused && ns.navLabelActive]}>{label}</Text>
-      </Animated.View>
-    </TouchableOpacity>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.item, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isFocused }}
+      accessibilityLabel={label}
+    >
+      <Lineicons icon={icon} size={22} color={color} />
+      <Text style={[styles.label, { color, fontWeight: isFocused ? '700' : '500' }]}>{label}</Text>
+    </Pressable>
   )
 }
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
-  const { theme: t, isDark } = useTheme()
+  const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
   const { open: openKuya } = useKuyaChatModal()
 
@@ -91,50 +76,84 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   }
 
   return (
-    <View style={[styles.wrapper, { bottom: insets.bottom + 20 }]} pointerEvents="box-none">
-      <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[styles.blur, { borderColor: t.border }]}>
-        <View style={[styles.inner, { backgroundColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(128,0,0,0.04)' }]}>
-          {LEFT_TABS.map(renderTab)}
-          <View style={styles.centerGap} />
-          {RIGHT_TABS.map(renderTab)}
-        </View>
-      </BlurView>
+    <View
+      style={[
+        styles.bar,
+        {
+          backgroundColor: t.surface,
+          borderTopColor: t.border,
+          paddingBottom: insets.bottom,
+          height: 62 + insets.bottom,
+        },
+      ]}
+    >
+      {LEFT_TABS.map(renderTab)}
 
-      {/* Center floating "Ask Kuya Baw" — quick access to the Kuya Baw chat */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={openKuya}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel="Ask Kuya Baw"
-      >
-        <View style={[styles.fabCircle, { borderColor: t.bg }]}>
+      {/* Center "Ask Kuya Baw" — raised circular accent button (quick chat access) */}
+      <View style={styles.centerSlot}>
+        <Pressable
+          onPress={openKuya}
+          style={({ pressed }) => [styles.fab, { borderColor: t.surface }, pressed && { opacity: 0.88 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Ask Kuya Baw"
+        >
           <Image
             source={require('../assets/images/kuya-baw-mascot.png')}
             style={styles.fabImg}
             resizeMode="contain"
           />
-        </View>
-        <Text style={[styles.fabLabel, { color: t.textSecondary }]}>Ask Kuya Baw</Text>
-      </TouchableOpacity>
+        </Pressable>
+      </View>
+
+      {RIGHT_TABS.map(renderTab)}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrapper: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  blur: { width: 340, height: 68, borderRadius: 36, overflow: 'hidden', borderWidth: 1 },
-  inner: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 10 },
-  centerGap: { width: 60 },
-  fab: { position: 'absolute', left: 0, right: 0, top: -22, alignItems: 'center', zIndex: 20 },
-  fabCircle: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: 'rgba(128,0,0,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3,
-    shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    borderTopWidth: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 6,
+    // Lift the bar visually off the content above it (cross-platform on new arch).
+    boxShadow: '0px -3px 12px rgba(0,0,0,0.10)',
   },
-  fabImg: { width: 44, height: 44 },
-  fabLabel: { marginTop: 2, fontSize: 9, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: 0.1 },
+  item: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingTop: 6,
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: 'Outfit_600SemiBold',
+    letterSpacing: 0.1,
+  },
+  centerSlot: {
+    width: 72,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(128,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Raise the circle so it pops above the bar's top edge (per the new layout).
+    marginTop: -22,
+    borderWidth: 4,
+    boxShadow: '0px 4px 8px rgba(0,0,0,0.28)',
+  },
+  fabImg: { width: 42, height: 42 },
 })

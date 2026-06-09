@@ -1,16 +1,17 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
 import { router, usePathname } from 'expo-router'
 
-const TAB_PATHS = ['/', '/practice', '/listings', '/analytics', '/profile'] as const
+// Must match the visible tab order in components/TabBar.tsx (the center "Ask Kuya
+// Baw" FAB is not a swipe target). Home ↔ Review ↔ Exams ↔ Updates.
+const TAB_PATHS = ['/', '/practice', '/listings', '/updates'] as const
 const TAB_HREFS = [
   '/(tabs)',
   '/(tabs)/practice',
   '/(tabs)/listings',
-  '/(tabs)/analytics',
-  '/(tabs)/profile',
+  '/(tabs)/updates',
 ] as const
 
 const NOTES_PATH = '/notes'
@@ -20,23 +21,31 @@ const SWIPE_VELOCITY = 300
 export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
+  // Read the live pathname from a ref so `navigateTo` and the Pan gesture stay
+  // referentially stable. Previously both were rebuilt on every route change
+  // (pathname dep), which tore down and re-attached the native gesture handler on
+  // each navigation — adding latency to taps/navigation across the whole app.
+  const pathnameRef = useRef(pathname)
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
+
   const navigateTo = useCallback((direction: 'left' | 'right') => {
+    const current = pathnameRef.current
     // Home ↔ Notes swipe
-    if (direction === 'right' && pathname === '/') {
+    if (direction === 'right' && current === '/') {
       router.navigate(NOTES_PATH as never)
       return
     }
-    if (direction === 'left' && pathname === NOTES_PATH) {
+    if (direction === 'left' && current === NOTES_PATH) {
       router.back()
       return
     }
     // Standard tab swipe
-    const idx = (TAB_PATHS as readonly string[]).indexOf(pathname)
+    const idx = (TAB_PATHS as readonly string[]).indexOf(current)
     if (idx === -1) return
     const next = direction === 'left' ? idx + 1 : idx - 1
     if (next < 0 || next >= TAB_HREFS.length) return
     router.navigate(TAB_HREFS[next] as never)
-  }, [pathname])
+  }, [])
 
   const pan = useMemo(() =>
     Gesture.Pan()

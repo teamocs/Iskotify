@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, memo } from 'react'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
-  StyleSheet, View, Text, TouchableOpacity, Pressable,
-  Modal, TextInput, Alert, ScrollView,
+  StyleSheet, View, Text, Pressable,
+  Modal, TextInput, Alert, ScrollView, FlatList,
   RefreshControl,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
@@ -50,17 +50,17 @@ type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; s
 function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
   const c = useStrengthColor(row.strength)
   return (
-    <TouchableOpacity
-      style={rc.card}
+    <Pressable
+      style={({ pressed }) => [rc.card, pressed && { opacity: 0.8 }]}
       onPress={() => router.push(`/practice/${row.topic.id}`)}
-      activeOpacity={0.8}
+      accessibilityRole="button"
     >
       <View style={[rc.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
         <Text style={[rc.badgeTxt, { color: c.text }]}>{row.strength}</Text>
       </View>
       <Text style={rc.name} numberOfLines={2}>{row.topic.name}</Text>
       <Text style={rc.sub}>{row.cardCount} cards</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -70,7 +70,7 @@ type SStyles = { topicCard: object; topicIcon: object; topicName: object; topicS
 function TopicCard({ row, s }: { row: TopicRow; s: SStyles }) {
   const c = useStrengthColor(row.strength)
   return (
-    <TouchableOpacity style={s.topicCard} onPress={() => router.push(`/practice/${row.topic.id}`)}>
+    <Pressable style={({ pressed }) => [s.topicCard, pressed && { opacity: 0.7 }]} onPress={() => router.push(`/practice/${row.topic.id}`)} accessibilityRole="button">
       <View style={[s.topicIcon, { backgroundColor: c.iconBg }]}>
         <Text style={{ color: c.iconColor, fontSize: 15 }}>📖</Text>
       </View>
@@ -81,7 +81,7 @@ function TopicCard({ row, s }: { row: TopicRow; s: SStyles }) {
       <View style={[s.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
         <Text style={[s.badgeText, { color: c.text }]}>{row.strength}</Text>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -106,11 +106,11 @@ function DeckCard({
   }
 
   return (
-    <TouchableOpacity
-      style={s.deckCard}
+    <Pressable
+      style={({ pressed }) => [s.deckCard, pressed && { opacity: 0.8 }]}
       onPress={() => router.push(`/practice/deck/${deck.id}`)}
       onLongPress={handleLongPress}
-      activeOpacity={0.8}
+      accessibilityRole="button"
     >
       <View style={s.deckIcon}>
         <Text style={{ fontSize: 16 }}>🗂️</Text>
@@ -120,13 +120,39 @@ function DeckCard({
         <Text style={s.deckSub}>{deck.topicIds.length} topic{deck.topicIds.length !== 1 ? 's' : ''} · {totalCards} cards</Text>
       </View>
       <Text style={s.deckChevron}>›</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
 // ── Create Deck Modal ─────────────────────────────────────────────────────────
 
 type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object }
+
+// Memoized row for the deck-topic FlatList — keeps renderItem cheap so a row only
+// re-renders when its own selected state changes.
+const TopicSelectRow = memo(function TopicSelectRow({
+  id, name, cardCount, selected, onToggle, m,
+}: {
+  id: string; name: string; cardCount: number; selected: boolean
+  onToggle: (id: string) => void; m: MStyles
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [m.topicRow, selected && m.topicRowOn, pressed && { opacity: 0.8 }]}
+      onPress={() => onToggle(id)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
+    >
+      <View style={[m.checkbox, selected && m.checkboxOn]}>
+        {selected ? <Text style={m.checkmark}>✓</Text> : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={m.topicName} numberOfLines={1}>{name}</Text>
+        <Text style={m.topicSub}>{cardCount} cards</Text>
+      </View>
+    </Pressable>
+  )
+})
 
 function CreateDeckModal({
   visible,
@@ -152,13 +178,24 @@ function CreateDeckModal({
   }
   function handleClose() { reset(); onClose() }
 
-  function toggleTopic(id: string) {
+  const toggleTopic = useCallback((id: string) => {
     setSelected(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
-  }
+  }, [])
+
+  const renderTopic = useCallback(({ item: row }: { item: TopicRow }) => (
+    <TopicSelectRow
+      id={row.topic.id}
+      name={row.topic.name}
+      cardCount={row.cardCount}
+      selected={selected.has(row.topic.id)}
+      onToggle={toggleTopic}
+      m={m}
+    />
+  ), [selected, toggleTopic, m])
 
   async function handleCreate() {
     if (!name.trim() || selected.size === 0) return
@@ -177,9 +214,9 @@ function CreateDeckModal({
         <View style={[m.sheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
           <View style={m.headerRow}>
             <Text style={m.title}>New Deck</Text>
-            <TouchableOpacity onPress={handleClose}>
+            <Pressable onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close" style={({ pressed }) => pressed && { opacity: 0.7 }}>
               <Text style={m.closeBtn}>✕</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {step === 1 ? (
@@ -195,49 +232,38 @@ function CreateDeckModal({
                 returnKeyType="next"
                 onSubmitEditing={() => { if (name.trim()) setStep(2) }}
               />
-              <TouchableOpacity
-                style={[m.btn, !name.trim() && m.btnDisabled]}
+              <Pressable
+                style={({ pressed }) => [m.btn, !name.trim() && m.btnDisabled, pressed && { opacity: 0.7 }]}
                 disabled={!name.trim()}
                 onPress={() => setStep(2)}
+                accessibilityRole="button"
               >
                 <Text style={m.btnTxt}>Next: Pick Topics →</Text>
-              </TouchableOpacity>
+              </Pressable>
             </>
           ) : (
             <>
               <Text style={m.label}>Select topics  ({selected.size} chosen)</Text>
-              <ScrollView style={m.topicList} showsVerticalScrollIndicator={false}>
-                {topicRows.map(row => {
-                  const on = selected.has(row.topic.id)
-                  return (
-                    <TouchableOpacity
-                      key={row.topic.id}
-                      style={[m.topicRow, on && m.topicRowOn]}
-                      onPress={() => toggleTopic(row.topic.id)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={[m.checkbox, on && m.checkboxOn]}>
-                        {on && <Text style={m.checkmark}>✓</Text>}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={m.topicName} numberOfLines={1}>{row.topic.name}</Text>
-                        <Text style={m.topicSub}>{row.cardCount} cards</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )
-                })}
-              </ScrollView>
+              <FlatList
+                style={m.topicList}
+                data={topicRows}
+                extraData={selected}
+                keyExtractor={(row) => row.topic.id}
+                showsVerticalScrollIndicator={false}
+                renderItem={renderTopic}
+              />
               <View style={m.footerRow}>
-                <TouchableOpacity style={m.backBtn} onPress={() => setStep(1)}>
+                <Pressable style={({ pressed }) => [m.backBtn, pressed && { opacity: 0.7 }]} onPress={() => setStep(1)} accessibilityRole="button">
                   <Text style={m.backTxt}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[m.btn, m.btnFlex, (selected.size === 0 || saving) && m.btnDisabled]}
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [m.btn, m.btnFlex, (selected.size === 0 || saving) && m.btnDisabled, pressed && { opacity: 0.7 }]}
                   disabled={selected.size === 0 || saving}
                   onPress={handleCreate}
+                  accessibilityRole="button"
                 >
                   <Text style={m.btnTxt}>{saving ? 'Saving…' : 'Create Deck'}</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </>
           )}
@@ -263,22 +289,22 @@ function FocusCard({ row, isActive, accuracy, onPress, onReview }: { row: FocusL
     reviewBtnTxt: { fontSize: 10, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      style={[fc.card, isActive && fc.cardActive]}
-      activeOpacity={0.8}
+      style={({ pressed }) => [fc.card, isActive && fc.cardActive, pressed && { opacity: 0.8 }]}
+      accessibilityRole="button"
     >
       <Text style={fc.badge}>#{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}</Text>
       <Text style={fc.name} numberOfLines={2}>{row.title}</Text>
       <View style={fc.scoreRow}>
         <Text style={fc.score}>{accuracy != null ? `${accuracy}%` : '—'}</Text>
         {isActive && (
-          <TouchableOpacity style={fc.reviewBtn} onPress={onReview} activeOpacity={0.8}>
+          <Pressable style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]} onPress={onReview} accessibilityRole="button" accessibilityLabel="Review">
             <Text style={fc.reviewBtnTxt}>Review</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
@@ -304,23 +330,13 @@ function useFocusAnalyticsMap(slugs: string[]): Map<string, number | null> {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
-  const { listing } = useHomeStats()
-  const { decks, createDeck, deleteDeck } = useSavedDecks()
-  const [modalVisible, setModalVisible] = useState(false)
-
-  // Overall analytics (stats header)
-  const overallAnalytics = useAnalytics('overall')
-
-  const [refreshing, setRefreshing] = useState(false)
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    try { await refresh() } finally { setRefreshing(false) }
-  }, [refresh])
-
-  const { theme: t, typo } = useTheme()
-  const styles = useMemo(() => ({
+// Styles factory (module-level) — keeps PracticeScreen's body small; memoized by
+// the screen on (theme, typo).
+function makeStyles(
+  t: ReturnType<typeof useTheme>['theme'],
+  typo: ReturnType<typeof useTheme>['typo'],
+) {
+  return {
     s: StyleSheet.create({
       root: { flex: 1, backgroundColor: t.bg },
       header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
@@ -405,8 +421,90 @@ export default function PracticeScreen() {
       backBtn: { paddingVertical: 12, paddingHorizontal: 4 },
       backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     }),
-  }), [t, typo])
-  const { s, rc, qs, m } = styles
+  }
+}
+
+// Quick-link shortcut cards (UPCAT mock, GWA calculator, Career Paths). Pure
+// presentational — extracted to keep PracticeScreen small.
+function PracticeShortcuts({ qs }: { qs: ReturnType<typeof makeStyles>['qs'] }) {
+  return (
+    <>
+      <Pressable
+        style={qs.card}
+        onPress={() => router.push('/practice/upcat')}
+        accessibilityRole="button"
+        accessibilityLabel="Open UPCAT mock exam"
+      >
+        <View style={qs.icon}><Text style={{ fontSize: 15 }}>🎓</Text></View>
+        <View style={{ flex: 1 }}>
+          <Text style={qs.title}>UPCAT Mock Exam</Text>
+          <Text style={qs.sub}>Authored questions · timed mock by subtest</Text>
+        </View>
+        <Text style={qs.go}>›</Text>
+      </Pressable>
+
+      <Pressable
+        style={qs.card2}
+        onPress={() => router.push('/estimator/gwa')}
+        accessibilityRole="button"
+        accessibilityLabel="Open GWA Calculator"
+      >
+        <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🧮</Text></View>
+        <View style={{ flex: 1 }}>
+          <Text style={qs.title}>GWA Calculator</Text>
+          <Text style={qs.sub}>Compute your General Weighted Average · UP scale</Text>
+        </View>
+        <Text style={qs.go}>›</Text>
+      </Pressable>
+
+      <Pressable
+        style={qs.card2}
+        onPress={() => router.push('/career')}
+        accessibilityRole="button"
+        accessibilityLabel="Open Career Paths"
+      >
+        <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🌍</Text></View>
+        <View style={{ flex: 1 }}>
+          <Text style={qs.title}>Career Paths</Text>
+          <Text style={qs.sub}>Where can your course take you? · AI-Safe-Score</Text>
+        </View>
+        <Text style={qs.go}>›</Text>
+      </Pressable>
+    </>
+  )
+}
+
+export default function PracticeScreen() {
+  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
+  const { listing } = useHomeStats()
+  const { decks, createDeck, deleteDeck } = useSavedDecks()
+  const [modalVisible, setModalVisible] = useState(false)
+
+  // Overall analytics (stats header)
+  const overallAnalytics = useAnalytics('overall')
+
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try { await refresh() } finally { setRefreshing(false) }
+  }, [refresh])
+
+  const { theme: t, typo } = useTheme()
+
+  // Stable element for the ScrollView refreshControl prop. RN's refreshControl
+  // requires a JSX element (no component/render-prop form), so memoize it to avoid
+  // handing the ScrollView a brand-new element on every render.
+  const refreshCtl = useMemo(() => (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={t.accent}
+      colors={[t.accent]}
+      progressBackgroundColor={t.surface}
+    />
+  ), [refreshing, onRefresh, t.accent, t.surface])
+
+  const { s, rc, qs, m } = useMemo(() => makeStyles(t, typo), [t, typo])
 
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
@@ -415,16 +513,14 @@ export default function PracticeScreen() {
   const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
   const focusAccuracyMap = useFocusAnalyticsMap(focusSlugs)
 
-  // Sync activeFocusSlug to first focus listing when list loads
-  useEffect(() => {
-    if (focusListingsList.length > 0 && !activeFocusSlug) {
-      setActiveFocusSlug(focusListingsList[0]!.slug)
-    }
-  }, [focusListingsList])
+  // Default to the first focus listing until the user taps another. Derived during
+  // render (not via an effect) so there's no extra render or stale-state hop; an
+  // explicit user pick wins because the non-empty stored slug short-circuits the ||.
+  const effectiveFocusSlug = activeFocusSlug || focusListingsList[0]?.slug || ''
 
   const activeTopicIds = useMemo(
-    () => new Set(topicIdsByListingSlug[activeFocusSlug] ?? []),
-    [topicIdsByListingSlug, activeFocusSlug]
+    () => new Set(topicIdsByListingSlug[effectiveFocusSlug] ?? []),
+    [topicIdsByListingSlug, effectiveFocusSlug]
   )
 
   const activeRecommended = useMemo(
@@ -439,8 +535,8 @@ export default function PracticeScreen() {
   )
 
   const activeListing = useMemo(  // kept for Recommended section label
-    () => focusListingsList.find(r => r.slug === activeFocusSlug),
-    [focusListingsList, activeFocusSlug]
+    () => focusListingsList.find(r => r.slug === effectiveFocusSlug),
+    [focusListingsList, effectiveFocusSlug]
   )
 
   const deckCardCount = useCallback(
@@ -527,17 +623,19 @@ export default function PracticeScreen() {
           contentContainerStyle={s.chipsContent}
           style={s.chipsScroll}
         >
-          <TouchableOpacity onPress={() => setSelectedSubjectId(null)}>
+          <Pressable onPress={() => setSelectedSubjectId(null)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
             <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
               <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]}>All</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
+          {/* bounded: a handful of exam subjects (<10), horizontal chip rail — virtualization unwarranted */}
+          {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
           {subjects.map(sub => (
-            <TouchableOpacity key={sub.id} onPress={() => setSelectedSubjectId(sub.id)}>
+            <Pressable key={sub.id} onPress={() => setSelectedSubjectId(sub.id)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
               <View style={[s.chip, selectedSubjectId === sub.id && s.chipOn]}>
                 <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]}>{sub.name}</Text>
               </View>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </ScrollView>
       </View>
@@ -545,60 +643,10 @@ export default function PracticeScreen() {
       <ScrollView
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={t.accent}
-            colors={[t.accent]}
-            progressBackgroundColor={t.surface}
-          />
-        }
+        refreshControl={refreshCtl}
       >
-        {/* UPCAT Mock Exam entry */}
-        <Pressable
-          style={qs.card}
-          onPress={() => router.push('/practice/upcat')}
-          accessibilityRole="button"
-          accessibilityLabel="Open UPCAT mock exam"
-        >
-          <View style={qs.icon}><Text style={{ fontSize: 15 }}>🎓</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={qs.title}>UPCAT Mock Exam</Text>
-            <Text style={qs.sub}>Authored questions · timed mock by subtest</Text>
-          </View>
-          <Text style={qs.go}>›</Text>
-        </Pressable>
-
-        {/* Admission Score Estimator entry */}
-        <Pressable
-          style={qs.card2}
-          onPress={() => router.push('/estimator')}
-          accessibilityRole="button"
-          accessibilityLabel="Open Admission Score Estimator"
-        >
-          <View style={qs.icon2}><Text style={{ fontSize: 15 }}>📊</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={qs.title}>Admission Score Estimator</Text>
-            <Text style={qs.sub}>Estimate your UP admission score · unofficial</Text>
-          </View>
-          <Text style={qs.go}>›</Text>
-        </Pressable>
-
-        {/* Career Paths entry */}
-        <Pressable
-          style={qs.card2}
-          onPress={() => router.push('/career')}
-          accessibilityRole="button"
-          accessibilityLabel="Open Career Paths"
-        >
-          <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🌍</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={qs.title}>Career Paths</Text>
-            <Text style={qs.sub}>Where can your course take you? · AI-Safe-Score</Text>
-          </View>
-          <Text style={qs.go}>›</Text>
-        </Pressable>
+        {/* Quick-link shortcuts */}
+        <PracticeShortcuts qs={qs} />
 
         {/* AI Study Feedback card */}
         <View style={s.aiFeedbackCard}>
@@ -633,11 +681,13 @@ export default function PracticeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingRight: 4, marginBottom: 12 }}
             >
+              {/* bounded: user-curated focus list, analytics capped at MAX_FOCUS=5; horizontal rail */}
+              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
               {focusListingsList.map(row => (
                 <FocusCard
                   key={row.slug}
                   row={row}
-                  isActive={row.slug === activeFocusSlug}
+                  isActive={row.slug === effectiveFocusSlug}
                   accuracy={focusAccuracyMap.get(row.slug) ?? null}
                   onPress={() => setActiveFocusSlug(row.slug)}
                   onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
@@ -660,6 +710,8 @@ export default function PracticeScreen() {
               contentContainerStyle={rc.row}
               style={{ marginBottom: 14 }}
             >
+              {/* bounded: activeRecommended is .slice(0,5), max 5 items; horizontal rail */}
+              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
               {activeRecommended.map(row => (
                 <RecommendedCard key={row.topic.id} row={row} rc={rc} />
               ))}
@@ -670,9 +722,9 @@ export default function PracticeScreen() {
         {/* Saved Decks section */}
         <View style={s.secRow}>
           <Text style={s.secTitle}>Saved Decks</Text>
-          <TouchableOpacity style={s.addBtn} onPress={() => setModalVisible(true)}>
+          <Pressable style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]} onPress={() => setModalVisible(true)} accessibilityRole="button" accessibilityLabel="Create deck">
             <Text style={s.addBtnTxt}>＋</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         {decks.length === 0 ? (
           <Text style={[s.empty, { marginBottom: 14 }]}>No decks yet. Tap ＋ to create one.</Text>
@@ -695,7 +747,7 @@ export default function PracticeScreen() {
           <Text style={s.secTitle}>Subjects</Text>
         </View>
         {focusListingsList.length > 0 ? (
-          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 11, color: t.textTertiary }}>
+          <Text style={{ paddingHorizontal: 16, paddingBottom: 4, fontSize: 12, color: t.textTertiary }}>
             focus: {focusListingsList.map(l => l.slug).join(', ')}
           </Text>
         ) : null}
