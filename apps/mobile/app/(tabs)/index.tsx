@@ -9,6 +9,8 @@ import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid, User4Outlined 
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { SplitStatCard } from '../../components/ui/SplitStatCard'
+import { ListCard } from '../../components/ui/ListCard'
 import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats, type FocusedListing, type NoteReminder } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
@@ -574,28 +576,13 @@ export default function HomeScreen() {
       color: t.textSecondary,
     },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 19, fontFamily: 'Lexend_400Regular' },
-    statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-    statCard: { flex: 1, padding: spacing.md, alignItems: 'center' },
-    statVal: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-    statLbl: { fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.xs / 2, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: 'Lexend_600SemiBold' },
     quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
     quickIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
     quickSub: { fontSize: typo.xs, color: 'rgba(255,255,255,0.78)', marginTop: spacing.xs / 4, fontFamily: 'Lexend_400Regular' },
     chevron: { color: t.textTertiary, fontSize: 22 },
     section: { marginTop: spacing.lg },
-    weakCard:   { padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    weakDot:    { width: 8, height: 8, borderRadius: 4, flexShrink: 0, marginTop: 1 },
-    weakTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs + 2 },
-    weakName:   { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', flex: 1 },
-    weakPct:    { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold', flexShrink: 0, marginLeft: spacing.sm },
-    weakTrack:  { height: 4, backgroundColor: t.surfaceSubtle, borderRadius: radius.pill, overflow: 'hidden' },
-    weakBar:    { height: 4, borderRadius: radius.pill },
     empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    progressCard: { padding: spacing.md, flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
-    progressTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    progressSub: { fontSize: typo.xs, color: t.textSecondary, marginTop: spacing.xs / 4, fontFamily: 'Lexend_400Regular' },
-    progressChevron: { color: t.textTertiary, fontSize: 20 },
     upcatBanner: {
       padding: spacing.lg,
       marginBottom: spacing.md,
@@ -629,31 +616,6 @@ export default function HomeScreen() {
     },
     upcatDaysNum: { fontSize: typo.lg, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold', lineHeight: 22 },
     upcatDaysLbl: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-    upcomingCard: { padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    upcomingIcon: { width: 40, height: 40, backgroundColor: t.surface2, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    upcomingTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    upcomingMeta: { fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.xs / 2, fontFamily: 'Lexend_400Regular' },
-    upcomingBadge: { borderWidth: 1, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, flexShrink: 0 },
-    upcomingDays: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    reqCard: {
-      padding: spacing.md,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      marginBottom: spacing.md,
-      gap: spacing.md,
-    },
-    reqIcon: {
-      width: 40,
-      height: 40,
-      backgroundColor: 'rgba(252,165,165,0.15)',
-      borderRadius: radius.sm,
-      borderCurve: 'continuous',
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      flexShrink: 0,
-    },
-    reqTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    reqSub: { fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.xs / 4, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
 
   useEffect(() => {
@@ -819,20 +781,15 @@ export default function HomeScreen() {
             />
           </View>
 
-          {/* Stats row */}
-          <View style={s.statsRow}>
-            <Card elevated style={s.statCard}>
-              <Text style={[s.statVal, { color: t.accentText }]}>{daysLeft ?? '—'}</Text>
-              <Text style={s.statLbl}>DAYS LEFT</Text>
-            </Card>
-            <Card elevated style={s.statCard}>
-              <Text style={s.statVal}>{todayAccuracy !== null ? `${todayAccuracy}%` : '—'}</Text>
-              <Text style={s.statLbl}>ACCURACY</Text>
-            </Card>
-            <Card elevated style={s.statCard}>
-              <Text style={[s.statVal, { color: '#fbbf24' }]}>{streakDays > 0 ? `${streakDays}🔥` : '—'}</Text>
-              <Text style={s.statLbl}>STREAK</Text>
-            </Card>
+          {/* Stats row — split statistics card (design system §3) */}
+          <View style={{ marginBottom: spacing.md }}>
+            <SplitStatCard
+              columns={[
+                { value: daysLeft != null ? String(daysLeft) : '—', label: 'DAYS LEFT', valueColor: t.accentText },
+                { value: todayAccuracy !== null ? `${todayAccuracy}%` : '—', label: 'ACCURACY' },
+                { value: streakDays > 0 ? `${streakDays}🔥` : '—', label: 'STREAK', valueColor: streakDays > 0 ? '#fbbf24' : undefined },
+              ]}
+            />
           </View>
 
           {/* UPCAT 2027 countdown banner */}
@@ -864,42 +821,27 @@ export default function HomeScreen() {
 
           {/* Missing Requirements widget */}
           {missingReqCount > 0 && focusedListings.length > 0 ? (
-            <Pressable
-              onPress={() => router.push('/requirements')}
-              accessibilityRole="button"
-              accessibilityLabel={`${missingReqCount} missing requirements`}
-              style={({ pressed }) => pressed && { opacity: 0.8 }}
-            >
-              <Card elevated style={s.reqCard}>
-                <View style={s.reqIcon}>
-                  <Text style={{ fontSize: 18 }}>📋</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.reqTitle}>Kulang na requirements: {missingReqCount}</Text>
-                  <Text style={s.reqSub}>Tap to review and check off your requirements</Text>
-                </View>
-                <Text style={s.chevron}>›</Text>
-              </Card>
-            </Pressable>
+            <View style={{ marginBottom: spacing.md }}>
+              <ListCard
+                icon={<Text style={{ fontSize: 18 }}>📋</Text>}
+                iconBg="rgba(252,165,165,0.15)"
+                title={`Kulang na requirements: ${missingReqCount}`}
+                subtitle="Tap to review and check off your requirements"
+                onPress={() => router.push('/requirements')}
+              />
+            </View>
           ) : null}
 
           {/* Mini progress card */}
           {sessionCount > 0 ? (
-            <Pressable
-              onPress={() => router.push('/(tabs)/analytics')}
-              style={({ pressed }) => pressed && { opacity: 0.8 }}
-              accessibilityRole="button"
-            >
-              <Card elevated style={s.progressCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.progressTitle}>My Progress</Text>
-                  <Text style={s.progressSub}>
-                    {sessionCount} session{sessionCount !== 1 ? 's' : ''}{streak > 0 ? ` · ${streak}🔥 streak` : ''}
-                  </Text>
-                </View>
-                <Text style={s.progressChevron}>›</Text>
-              </Card>
-            </Pressable>
+            <View style={{ marginBottom: spacing.md }}>
+              <ListCard
+                icon={<Text style={{ fontSize: 18 }}>📈</Text>}
+                title="My Progress"
+                subtitle={`${sessionCount} session${sessionCount !== 1 ? 's' : ''}${streak > 0 ? ` · ${streak}🔥 streak` : ''}`}
+                onPress={() => router.push('/(tabs)/analytics')}
+              />
+            </View>
           ) : null}
 
           {/* Quick Practice CTA */}
@@ -931,26 +873,17 @@ export default function HomeScreen() {
               {weakTopics.map(topic => {
                 const color = weakTopicColor(topic.accuracy)
                 return (
-                  <Pressable
+                  <ListCard
                     key={topic.topicId}
+                    icon={<View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />}
+                    iconBg={`${color}1f`}
+                    title={topic.topicName}
+                    subtitle="Tap to practice"
+                    trailing={<Text style={{ fontSize: typo.sm, fontWeight: '700', color, fontFamily: 'Outfit_700Bold' }}>{topic.accuracy}%</Text>}
+                    progress={topic.accuracy / 100}
+                    progressColor={color}
                     onPress={() => router.push(`/practice/${topic.topicId}`)}
-                    style={({ pressed }) => pressed && { opacity: 0.75 }}
-                    accessibilityRole="button"
-                  >
-                    <Card style={s.weakCard}>
-                      <View style={[s.weakDot, { backgroundColor: color }]} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={s.weakTopRow}>
-                          <Text style={s.weakName} numberOfLines={1}>{topic.topicName}</Text>
-                          <Text style={[s.weakPct, { color }]}>{topic.accuracy}%</Text>
-                        </View>
-                        <View style={s.weakTrack}>
-                          <View style={[s.weakBar, { width: `${topic.accuracy}%` as any, backgroundColor: color }]} />
-                        </View>
-                      </View>
-                      <Text style={s.chevron}>›</Text>
-                    </Card>
-                  </Pressable>
+                  />
                 )
               })}
             </View>
@@ -969,8 +902,23 @@ export default function HomeScreen() {
                 const dayColor = d < 14 ? '#f87171' : d < 30 ? '#fbbf24' : '#4ade80'
                 const isReminder = item.entryType === 'reminder'
                 return (
-                  <Pressable
+                  <ListCard
                     key={item.slug}
+                    iconBg={t.surface2}
+                    icon={
+                      isReminder
+                        ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
+                        : item.entryType === 'admission'
+                          ? <Text style={{ fontSize: 16 }}>📌</Text>
+                          : <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
+                    }
+                    title={item.title}
+                    subtitle={`${item.label} · ${formatShortDate(item.keyDate!)}`}
+                    trailing={
+                      <View style={{ backgroundColor: `${dayColor}18`, borderColor: `${dayColor}40`, borderWidth: 1, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }}>
+                        <Text style={{ fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: dayColor }}>{d < 1 ? 'Today' : `${d}d`}</Text>
+                      </View>
+                    }
                     onPress={() => {
                       if (item.entryType === 'reminder') {
                         router.push(`/notes/${item.slug}`)
@@ -985,28 +933,7 @@ export default function HomeScreen() {
                         router.push(`/listings/${item.slug}`)
                       }
                     }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${item.title}`}
-                    style={({ pressed }) => pressed && { opacity: 0.75 }}
-                  >
-                    <Card style={s.upcomingCard}>
-                      <View style={s.upcomingIcon}>
-                        {isReminder
-                          ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
-                          : item.entryType === 'admission'
-                            ? <Text style={{ fontSize: 16 }}>📌</Text>
-                            : <Text style={{ fontSize: 16 }}>{item.type === 'exam' ? '📝' : '🎓'}</Text>
-                        }
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={s.upcomingTitle} numberOfLines={1}>{item.title}</Text>
-                        <Text style={s.upcomingMeta}>{item.label} · {formatShortDate(item.keyDate!)}</Text>
-                      </View>
-                      <View style={[s.upcomingBadge, { backgroundColor: `${dayColor}18`, borderColor: `${dayColor}40` }]}>
-                        <Text style={[s.upcomingDays, { color: dayColor }]}>{d < 1 ? 'Today' : `${d}d`}</Text>
-                      </View>
-                    </Card>
-                  </Pressable>
+                  />
                 )
               })}
             </View>

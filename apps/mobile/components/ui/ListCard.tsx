@@ -15,11 +15,13 @@ interface Props {
   onLongPress?: () => void
   /** 0–1 progress; renders a thin bar along the bottom edge (Progress List Card variant). */
   progress?: number
+  /** Override the progress bar fill color (e.g. severity red/amber/green). Defaults to accent. */
+  progressColor?: string
 }
 
 /** Full-width list card: leading icon box → title/subtitle → trailing (design system §3). */
 export function ListCard({
-  icon, iconBg, title, subtitle, trailing, showChevron = true, onPress, onLongPress, progress,
+  icon, iconBg, title, subtitle, trailing, showChevron = true, onPress, onLongPress, progress, progressColor,
 }: Props) {
   const { theme: t, typo } = useTheme()
   const Container: typeof Pressable | typeof View = onPress || onLongPress ? Pressable : (View as never)
@@ -59,7 +61,7 @@ export function ListCard({
       </View>
       {progress != null ? (
         <View style={{ height: 3, backgroundColor: t.surface2, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl, overflow: 'hidden' }}>
-          <View style={{ height: 3, width: `${Math.max(0, Math.min(1, progress)) * 100}%`, backgroundColor: t.accent }} />
+          <View style={{ height: 3, width: `${Math.max(0, Math.min(1, progress)) * 100}%`, backgroundColor: progressColor ?? t.accent }} />
         </View>
       ) : null}
     </Container>
