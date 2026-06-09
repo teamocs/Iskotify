@@ -272,7 +272,23 @@ export default function OnboardingScreen() {
 
   function handleNextStep() {
     if (!fullName.trim() || !gradeLevel) return
+    // Advance immediately — the UI transition must never block on a DB write.
     setStep(2)
+    // Persist the profile NOW — separately from step 2's focus transaction — so a new
+    // user's name/grade survive even if a later step or the focus insert fails. fullName
+    // is what gates landing-vs-app on launch, so this prevents the "relaunch loops back
+    // to the startup screen" data-loss bug. Best-effort, fire-and-forget: the expo-sqlite
+    // driver executes synchronously, so the row is written before this returns.
+    const patch = {
+      fullName: fullName.trim(),
+      school: school.trim(),
+      schoolRegion: canonicalizeRegion(schoolRegion),
+      gradeLevel,
+    }
+    void db.insert(userSettings)
+      .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
+      .onConflictDoUpdate({ target: userSettings.id, set: patch })
+      .catch((e: unknown) => console.warn('[onboarding] step 1 persist error:', e))
   }
 
   async function handleConfirmStep2() {
@@ -298,35 +314,39 @@ export default function OnboardingScreen() {
       gradeLevel: gradeLevel ?? undefined,
       targetExams: targetExamsJson,
     }
+    // Persist profile + selection FIRST, in its own statement, so a bad focus-row
+    // insert can't roll it back. selectedListingSlug + targetExams here are what gate
+    // returning-user detection (hasOnboardingFocus), so they MUST survive independently.
     try {
-      await db.transaction(tx => {
-        tx.insert(userSettings).values({
-          id: 1, selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields,
-        }).onConflictDoUpdate({
-          target: userSettings.id,
-          set: { selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields },
-        }).run()
-        for (let i = 0; i < focusSlugs.length; i++) {
-          tx.insert(focusListingsTable)
-            .values({ listingSlug: focusSlugs[i]!, priority: i + 1, addedAt: now })
-            .onConflictDoNothing()
-            .run()
-        }
+      await db.insert(userSettings).values({
+        id: 1, selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields,
+      }).onConflictDoUpdate({
+        target: userSettings.id,
+        set: { selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields },
       })
       setSelectedSlug(primarySlug)
-      // Best-effort cloud mirror of target exams when signed in.
-      void supabase.auth.getUser().then(({ data }) => {
-        if (data.user) {
-          void supabase.from('profiles')
-            .update({ target_exams: selectedExams.map(e => e.examAcronym) })
-            .eq('id', data.user.id)
-        }
-      })
     } catch (e) {
-      // Persist failure must NOT block Continue — log and proceed; the home screen
-      // re-syncs on launch and the selections live in component state.
-      console.error('[onboarding] step 2 persist error (continuing anyway):', e)
+      console.error('[onboarding] step 2 settings persist error:', e)
     }
+    // Focus listings — best-effort, each independent so one bad row can't drop the rest
+    // or the settings write above.
+    for (let i = 0; i < focusSlugs.length; i++) {
+      try {
+        await db.insert(focusListingsTable)
+          .values({ listingSlug: focusSlugs[i]!, priority: i + 1, addedAt: now })
+          .onConflictDoNothing()
+      } catch (e) {
+        console.warn('[onboarding] focus row persist error:', e)
+      }
+    }
+    // Best-effort cloud mirror of target exams when signed in.
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        void supabase.from('profiles')
+          .update({ target_exams: selectedExams.map(e => e.examAcronym) })
+          .eq('id', data.user.id)
+      }
+    })
     // ALWAYS advance to the courses step; sync content in the background.
     setSaving(false)
     setStep('courses')
@@ -423,25 +443,29 @@ export default function OnboardingScreen() {
         grouped.set(r.q.subject, stats)
       }
 
-      void db.transaction(async tx => {
-        for (const [subject, stats] of grouped) {
-          if (!stats || stats.total === 0) continue
-          await tx.insert(practiceSessions).values({
-            listingSlug: '',
-            topicId: `pre-assess-${subject}`,
-            deckId: '',
-            score: stats.correct,
-            total: stats.total,
-            durationSecs: 0,
-            completedAt: now,
-          })
-        }
-      })
-        .then(() => {
-          // Backup the new pre-assessment data to Supabase if signed in (fire-and-forget)
-          void pushUserData(db).catch(err => console.warn('[onboarding] push failed:', err))
+      // Synchronous transaction (Drizzle's expo-sqlite driver is sync — an async
+      // callback would commit BEFORE the awaited inserts ran, silently dropping the
+      // pre-assessment progress). Use .run() inside, matching the rest of the app.
+      try {
+        db.transaction(tx => {
+          for (const [subject, stats] of grouped) {
+            if (!stats || stats.total === 0) continue
+            tx.insert(practiceSessions).values({
+              listingSlug: '',
+              topicId: `pre-assess-${subject}`,
+              deckId: '',
+              score: stats.correct,
+              total: stats.total,
+              durationSecs: 0,
+              completedAt: now,
+            }).run()
+          }
         })
-        .catch(e => console.warn('[onboarding] save assess error:', e))
+        // Backup the new pre-assessment data to Supabase if signed in (fire-and-forget)
+        void pushUserData(db).catch(err => console.warn('[onboarding] push failed:', err))
+      } catch (e) {
+        console.warn('[onboarding] save assess error:', e)
+      }
 
       setAssessAnswers(newAnswers)
       setAssessDone(true)
