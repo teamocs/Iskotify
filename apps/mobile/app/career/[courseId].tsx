@@ -104,6 +104,120 @@ function demandRatingOrder(rating: string | null): number {
 }
 
 // ---------------------------------------------------------------------------
+// Destination card (Wave 3c: collapsed meta, "Details" expand per card)
+// ---------------------------------------------------------------------------
+
+interface DestinationCardProps {
+  dest: DestinationRow
+  fmtSalary: (d: DestinationRow) => string
+  styles: ReturnType<typeof makeStyles>
+}
+
+function DestinationCard({ dest, fmtSalary, styles: s }: DestinationCardProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const specializations = safeParseArray(dest.specializations)
+  const countrySlug = dest.country ? countryCodeFromName(dest.country) : null
+  const hasDetails = !!(
+    dest.visaPathway || dest.prPathway || dest.timelineMonths != null ||
+    dest.credential || dest.languageRequired || specializations.length > 0 ||
+    dest.source || dest.saturationWarning
+  )
+
+  return (
+    <Card elevated>
+      {/* Always visible: country + demand + salary */}
+      <View style={s.destCountryRow}>
+        <Text style={s.destCountry}>{dest.country ?? '—'}</Text>
+        {dest.demandRating ? (
+          <Text style={s.destDemand}>{dest.demandRating}</Text>
+        ) : null}
+      </View>
+      <Text style={s.destSalary}>{fmtSalary(dest)}</Text>
+
+      {/* Compact saturation indicator (always visible when present — safety-relevant) */}
+      {dest.saturationWarning && !detailsOpen ? (
+        <View style={s.saturationIndicator}>
+          <Text style={s.saturationIndicatorTxt}>⚠ Market saturation noted</Text>
+        </View>
+      ) : null}
+
+      {/* Details expand toggle */}
+      {hasDetails ? (
+        <Pressable
+          style={s.detailsToggle}
+          onPress={() => setDetailsOpen(v => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: detailsOpen }}
+          hitSlop={8}
+        >
+          <Text style={s.detailsToggleTxt}>{detailsOpen ? 'Details ↑' : 'Details ↓'}</Text>
+        </Pressable>
+      ) : null}
+
+      {/* Expanded meta details */}
+      {detailsOpen ? (
+        <>
+          <View style={s.destMetaRow}>
+            {dest.visaPathway ? (
+              <View style={s.destMetaChip}>
+                <Text style={s.destMetaTxt}>Visa: {dest.visaPathway}</Text>
+              </View>
+            ) : null}
+            {dest.prPathway ? (
+              <View style={s.destMetaChip}>
+                <Text style={s.destMetaTxt}>PR: {dest.prPathway}</Text>
+              </View>
+            ) : null}
+            {dest.timelineMonths != null ? (
+              <View style={s.destMetaChip}>
+                <Text style={s.destMetaTxt}>{dest.timelineMonths} mo</Text>
+              </View>
+            ) : null}
+            {dest.credential ? (
+              <View style={s.destMetaChip}>
+                <Text style={s.destMetaTxt}>{dest.credential}</Text>
+              </View>
+            ) : null}
+            {dest.languageRequired ? (
+              <View style={s.destMetaChip}>
+                <Text style={s.destMetaTxt}>Lang: {dest.languageRequired}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {specializations.length > 0 ? (
+            <Text style={s.destMetaTxt}>
+              Specializations: {specializations.join(', ')}
+            </Text>
+          ) : null}
+
+          {dest.saturationWarning ? (
+            <View style={s.saturationWarn}>
+              <Text style={s.saturationTxt}>⚠ {dest.saturationWarning}</Text>
+            </View>
+          ) : null}
+
+          {dest.source ? (
+            <Text style={s.destSourceTxt}>Source: {dest.source}</Text>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* Link to country detail screen — always visible */}
+      {countrySlug ? (
+        <Pressable
+          style={({ pressed }) => [s.countryLink, pressed && { opacity: 0.7 }]}
+          onPress={() => router.push(`/career/country/${countrySlug}` as never)}
+          accessibilityRole="button"
+        >
+          <Text style={s.countryLinkTxt}>View {dest.country} details →</Text>
+        </Pressable>
+      ) : null}
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
@@ -118,6 +232,9 @@ export default function CourseCareerDetailScreen() {
   const [programs, setPrograms]        = useState<ProgramRow[]>([])
   const [topSchoolsTab, setTopSchoolsTab] = useState<string | null>(null)
   const [loading, setLoading]          = useState(true)
+
+  // Wave 3c: Programs expand
+  const [programsExpanded, setProgramsExpanded] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -160,51 +277,7 @@ export default function CourseCareerDetailScreen() {
     void load()
   }, [db, courseId])
 
-  const s = useMemo(() => StyleSheet.create({
-    root:            { flex: 1, backgroundColor: t.bg },
-    topBar:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn:         { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    backArrow:       { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topTitle:        { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    pageTitle:       { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
-    heroName:        { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
-    heroCluster:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    badgeRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
-    badge:           { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border },
-    badgeTxt:        { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    demandBadge:     { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
-    demandTxt:       { color: '#4ade80', fontFamily: 'Lexend_600SemiBold', fontWeight: '700', fontSize: typo.xs },
-    boardBadge:      { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
-    boardTxt:        { color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '700', fontSize: typo.xs },
-    summaryTxt:      { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginTop: spacing.md },
-    tipTxt:          { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 16, marginTop: spacing.sm, fontStyle: 'italic' },
-    destCountryRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-    destCountry:     { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    destDemand:      { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: '#4ade80' },
-    destSalary:      { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', fontWeight: '600', marginBottom: 3 },
-    destMetaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.xs },
-    destMetaChip:    { borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border },
-    destMetaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    saturationWarn:  { flexDirection: 'row', alignItems: 'flex-start', gap: 5, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 5, marginTop: spacing.xs },
-    saturationTxt:   { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 15, flex: 1 },
-    destSourceTxt:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic', marginTop: spacing.xs },
-    countryLink:     { marginTop: spacing.sm, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
-    countryLinkTxt:  { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
-    progName:        { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-    progBody:        { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginBottom: 3 },
-    progLink:        { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline', marginTop: spacing.xs },
-    progLinkBtn:     { minHeight: 44, justifyContent: 'center' },
-    disclaimer:      { backgroundColor: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.20)' },
-    disclaimerTxt:   { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    empty:           { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
-    emptySection:    { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-    schoolsLink:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    schoolsLinkIcon: { fontSize: 20 },
-    schoolsLinkBody: { flex: 1 },
-    schoolsLinkTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-    schoolsLinkSub:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    schoolsLinkArr:  { fontSize: typo.md, color: t.textTertiary },
-  }), [t, typo])
+  const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   // ── Loading state ──────────────────────────────────────────────────────────
 
@@ -252,6 +325,11 @@ export default function CourseCareerDetailScreen() {
     }
     return dest.salaryLocal ?? '—'
   }
+
+  // Wave 3c: Programs — show first 1 + "See all (n)" expand
+  const TOP_PROGRAMS = 1
+  const visiblePrograms = programsExpanded ? programs : programs.slice(0, TOP_PROGRAMS)
+  const hiddenProgramCount = programs.length - TOP_PROGRAMS
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -329,100 +407,31 @@ export default function CourseCareerDetailScreen() {
           </Pressable>
         ) : null}
 
-        {/* ── Destinations ── */}
+        {/* ── Destinations (Wave 3c: collapsed meta per card) ── */}
         <View>
           <SectionHeader title="Where can this take you?" />
           {destinations.length > 0 ? (
             <View style={{ gap: spacing.md }}>
-              {destinations.map(dest => {
-                const specializations = safeParseArray(dest.specializations)
-                const countrySlug = dest.country ? countryCodeFromName(dest.country) : null
-                return (
-                  <Card key={dest.id} elevated>
-                    {/* Country + demand */}
-                    <View style={s.destCountryRow}>
-                      <Text style={s.destCountry}>{dest.country ?? '—'}</Text>
-                      {dest.demandRating ? (
-                        <Text style={s.destDemand}>{dest.demandRating}</Text>
-                      ) : null}
-                    </View>
-
-                    {/* Salary */}
-                    <Text style={s.destSalary}>{fmtSalary(dest)}</Text>
-
-                    {/* Meta chips row */}
-                    <View style={s.destMetaRow}>
-                      {dest.visaPathway ? (
-                        <View style={s.destMetaChip}>
-                          <Text style={s.destMetaTxt}>Visa: {dest.visaPathway}</Text>
-                        </View>
-                      ) : null}
-                      {dest.prPathway ? (
-                        <View style={s.destMetaChip}>
-                          <Text style={s.destMetaTxt}>PR: {dest.prPathway}</Text>
-                        </View>
-                      ) : null}
-                      {dest.timelineMonths != null ? (
-                        <View style={s.destMetaChip}>
-                          <Text style={s.destMetaTxt}>{dest.timelineMonths} mo</Text>
-                        </View>
-                      ) : null}
-                      {dest.credential ? (
-                        <View style={s.destMetaChip}>
-                          <Text style={s.destMetaTxt}>{dest.credential}</Text>
-                        </View>
-                      ) : null}
-                      {dest.languageRequired ? (
-                        <View style={s.destMetaChip}>
-                          <Text style={s.destMetaTxt}>Lang: {dest.languageRequired}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {/* Specializations */}
-                    {specializations.length > 0 ? (
-                      <Text style={s.destMetaTxt}>
-                        Specializations: {specializations.join(', ')}
-                      </Text>
-                    ) : null}
-
-                    {/* Saturation warning */}
-                    {dest.saturationWarning ? (
-                      <View style={s.saturationWarn}>
-                        <Text style={s.saturationTxt}>⚠ {dest.saturationWarning}</Text>
-                      </View>
-                    ) : null}
-
-                    {/* Source */}
-                    {dest.source ? (
-                      <Text style={s.destSourceTxt}>Source: {dest.source}</Text>
-                    ) : null}
-
-                    {/* Link to country detail screen */}
-                    {countrySlug ? (
-                      <Pressable
-                        style={({ pressed }) => [s.countryLink, pressed && { opacity: 0.7 }]}
-                        onPress={() => router.push(`/career/country/${countrySlug}` as never)}
-                        accessibilityRole="button"
-                      >
-                        <Text style={s.countryLinkTxt}>View {dest.country} details →</Text>
-                      </Pressable>
-                    ) : null}
-                  </Card>
-                )
-              })}
+              {destinations.map(dest => (
+                <DestinationCard
+                  key={dest.id}
+                  dest={dest}
+                  fmtSalary={fmtSalary}
+                  styles={s}
+                />
+              ))}
             </View>
           ) : (
             <Text style={s.emptySection}>No destination data available yet.</Text>
           )}
         </View>
 
-        {/* ── Bilateral Programs ── */}
+        {/* ── Bilateral Programs (Wave 3c: first 1 + See all) ── */}
         {programs.length > 0 ? (
           <View>
             <SectionHeader title="Programs" />
             <View style={{ gap: spacing.md }}>
-              {programs.map(prog => (
+              {visiblePrograms.map(prog => (
                 <Card key={prog.id} elevated>
                   <Text style={s.progName}>{prog.name ?? '—'}</Text>
                   {prog.managingBody ? (
@@ -452,17 +461,92 @@ export default function CourseCareerDetailScreen() {
                 </Card>
               ))}
             </View>
+            {!programsExpanded && hiddenProgramCount > 0 ? (
+              <Pressable
+                style={s.seeAllBtn}
+                onPress={() => setProgramsExpanded(true)}
+                accessibilityRole="button"
+                hitSlop={8}
+              >
+                <Text style={s.seeAllTxt}>See all ({hiddenProgramCount} more)</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
-        {/* ── Indicative data disclaimer ── */}
-        <Card style={s.disclaimer}>
-          <Text style={s.disclaimerTxt}>
-            ⚠ Salaries, timelines & pathways are indicative — verify with DMW/POEA, embassies & official program sites.
-          </Text>
-        </Card>
+        {/* ── Indicative data disclaimer (Wave 3c: footnote style) ── */}
+        <Text style={s.disclaimerFootnote}>
+          ⚠ Salaries, timelines &amp; pathways are indicative — verify with DMW/POEA, embassies &amp; official program sites.
+        </Text>
 
       </ScreenScroll>
     </SafeAreaView>
   )
+}
+
+function makeStyles(
+  t: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['theme'],
+  typo: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['typo'],
+) {
+  return StyleSheet.create({
+    root:            { flex: 1, backgroundColor: t.bg },
+    topBar:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+    backBtn:         { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+    backArrow:       { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
+    topTitle:        { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    heroName:        { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
+    heroCluster:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    badgeRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
+    badge:           { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border },
+    badgeTxt:        { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    demandBadge:     { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
+    demandTxt:       { color: '#4ade80', fontFamily: 'Lexend_600SemiBold', fontWeight: '700', fontSize: typo.xs },
+    boardBadge:      { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
+    boardTxt:        { color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '700', fontSize: typo.xs },
+    summaryTxt:      { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginTop: spacing.md },
+    tipTxt:          { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 16, marginTop: spacing.sm, fontStyle: 'italic' },
+    destCountryRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+    destCountry:     { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    destDemand:      { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: '#4ade80' },
+    destSalary:      { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', fontWeight: '600', marginBottom: 3 },
+    destMetaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.xs, marginTop: spacing.xs },
+    destMetaChip:    { borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border },
+    destMetaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    // Compact saturation indicator on collapsed card
+    saturationIndicator: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)',
+      borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginTop: spacing.xs, alignSelf: 'flex-start',
+    },
+    saturationIndicatorTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_600SemiBold' },
+    saturationWarn:  { flexDirection: 'row', alignItems: 'flex-start', gap: 5, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 5, marginTop: spacing.xs },
+    saturationTxt:   { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 15, flex: 1 },
+    destSourceTxt:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic', marginTop: spacing.xs },
+    // Details expand toggle
+    detailsToggle:   { marginTop: spacing.sm, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingRight: spacing.md },
+    detailsToggleTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', textDecorationLine: 'underline' },
+    countryLink:     { marginTop: spacing.sm, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+    countryLinkTxt:  { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
+    progName:        { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    progBody:        { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginBottom: 3 },
+    progLink:        { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline', marginTop: spacing.xs },
+    progLinkBtn:     { minHeight: 44, justifyContent: 'center' },
+    // Programs "See all" button
+    seeAllBtn:       { marginTop: spacing.sm, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+    seeAllTxt:       { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    // Disclaimer as footnote
+    disclaimerFootnote: {
+      fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular',
+      lineHeight: 17, fontStyle: 'italic', textAlign: 'center',
+      paddingHorizontal: spacing.md, paddingBottom: spacing.sm,
+    },
+    empty:           { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
+    emptySection:    { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
+    schoolsLink:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    schoolsLinkIcon: { fontSize: 20 },
+    schoolsLinkBody: { flex: 1 },
+    schoolsLinkTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
+    schoolsLinkSub:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    schoolsLinkArr:  { fontSize: typo.md, color: t.textTertiary },
+  })
 }
