@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
@@ -14,6 +14,15 @@ import { spacing, radius } from '../../../theme/tokens'
 const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'loading' | 'exam' | 'results'
 
+function fmtTime(totalSecs: number): string {
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const sec = totalSecs % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(sec).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 export default function UpcatExam() {
   const { subtest: subtestParam, mode } = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
   const db = useDb()
@@ -25,6 +34,13 @@ export default function UpcatExam() {
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const startRef = useState(() => Date.now())[0]
+  // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
+  // an absolute timestamp so the clock stays accurate even if the interval drifts.
+  const SECONDS_PER_QUESTION = 60
+  const [endTime, setEndTime] = useState<number | null>(null)
+  const [remaining, setRemaining] = useState(0)
+  const submittedRef = useRef(false)
+  const submitRef = useRef<() => void>(() => {})
 
   function parseOptions(raw: string | null | undefined): string[] {
     try {
@@ -58,6 +74,7 @@ export default function UpcatExam() {
           buildExam(parsed, passages, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
         )
         setQuestions(built)
+        if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
         setPhase(built.length ? 'exam' : 'results')
       } catch {
         // Unexpected failure: show results (empty) rather than hang on loading
@@ -69,6 +86,8 @@ export default function UpcatExam() {
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   function submit() {
+    if (submittedRef.current) return  // guard against double-submit (timer + tap)
+    submittedRef.current = true
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const result = scoreExam(scored)
     for (const st of Object.keys(result.bySubtest)) {
@@ -85,6 +104,21 @@ export default function UpcatExam() {
     }
     setPhase('results')
   }
+  submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
+
+  // Countdown tick — recomputed from the absolute endTime each second so it stays
+  // accurate; auto-submits when it reaches zero.
+  useEffect(() => {
+    if (phase !== 'exam' || endTime == null) return
+    const tick = () => {
+      const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
+      setRemaining(rem)
+      if (rem <= 0) submitRef.current()
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [phase, endTime])
 
   if (phase === 'loading') {
     return (
@@ -178,6 +212,9 @@ export default function UpcatExam() {
         <Text style={s.topTitle} numberOfLines={1}>
           {subtestParam === 'all' ? 'Full Mock' : subtestParam}
         </Text>
+        <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
+          <Text style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>⏱ {fmtTime(remaining)}</Text>
+        </View>
         <Text style={s.counter}>
           {idx + 1}/{questions.length}
         </Text>
@@ -271,6 +308,23 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       color: t.accentText,
       fontFamily: 'Lexend_600SemiBold',
     },
+    timerPill: {
+      backgroundColor: t.surface2,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.pill,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+    },
+    timerPillLow: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.35)' },
+    timerTxt: {
+      fontSize: typo.xs,
+      fontWeight: '700',
+      color: t.textSecondary,
+      fontFamily: 'Outfit_700Bold',
+      fontVariant: ['tabular-nums'],
+    },
+    timerTxtLow: { color: '#dc2626' },
     qCard: {
       backgroundColor: t.surface,
       borderWidth: 1,
