@@ -13,6 +13,7 @@ const EMPTY: HomeStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: async () => {},
 }
 
@@ -31,6 +32,7 @@ const FULL: HomeStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: async () => {},
 }
 

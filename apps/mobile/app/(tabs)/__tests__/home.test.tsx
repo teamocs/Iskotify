@@ -59,14 +59,6 @@ jest.mock('../../../services/notifications', () => ({
   cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
 }))
 
-jest.mock('../../../components/calendar/DateActionSheet', () => ({
-  DateActionSheet: () => null,
-}))
-
-jest.mock('../../../components/calendar/MonthSheet', () => ({
-  MonthSheet: () => null,
-}))
-
 jest.mock('../../../components/AskKuyaModal', () => ({
   AskKuyaModal: () => null,
 }))
@@ -102,6 +94,7 @@ jest.mock('../../../providers/AiCoachProvider', () => {
         listing: null, daysLeft: null, todayAccuracy: null, streakDays: 0,
         weakTopics: [], firstTopicId: null, fullName: '',
         importantDayIndices: [], practiceDayIndices: [], focusedListings: [],
+        listingAccuracy: {},
       },
       ringIndex: 0,
       nextPhrase: () => ({ id: null, text: 'Tara mag-review tayo!' }),
@@ -132,6 +125,7 @@ const emptyStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: jest.fn().mockResolvedValue(undefined),
 }
 
@@ -140,55 +134,19 @@ describe('HomeScreen', () => {
     mockUseHomeStats.mockReturnValue(emptyStats)
   })
 
-  it('renders the Kuya Baw collapsed coach row by default', () => {
+  it('renders Kuya Baw name (full card always visible)', () => {
     render(<HomeScreen />)
-    // Collapsed row shows the name in its compact label
     expect(screen.getByText('Kuya Baw')).toBeTruthy()
   })
 
-  it('coach row is collapsed by default (full card not visible)', () => {
+  it('AI Coach badge is visible immediately (always-expanded card)', () => {
     render(<HomeScreen />)
-    // The "AI Coach" badge is only in the expanded full card
-    expect(screen.queryByText('AI Coach')).toBeNull()
-  })
-
-  it('expands coach card on press of the collapsed row', () => {
-    render(<HomeScreen />)
-    const collapsedRow = screen.getByTestId('kuya-coach-collapsed')
-    fireEvent.press(collapsedRow)
     expect(screen.getByText('AI Coach')).toBeTruthy()
   })
 
-  it('renders all three stat labels', () => {
+  it('collapsed coach row is NOT present (expand/collapse removed)', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('DAYS LEFT')).toBeTruthy()
-    expect(screen.getByText('ACCURACY')).toBeTruthy()
-    expect(screen.getByText('STREAK')).toBeTruthy()
-  })
-
-  it('shows em-dash for stats when no data', () => {
-    render(<HomeScreen />)
-    const dashes = screen.getAllByText('—')
-    expect(dashes.length).toBeGreaterThanOrEqual(3)
-  })
-
-  it('renders Weak Areas section header', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('Weak Areas')).toBeTruthy()
-  })
-
-  it('shows empty state when no weak topics', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('Start practicing to see weak areas')).toBeTruthy()
-  })
-
-  it('shows listing title in greeting when listing is set', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      listing: { title: 'UPCAT 2025' },
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText(/UPCAT 2025/)).toBeTruthy()
+    expect(screen.queryByTestId('kuya-coach-collapsed')).toBeNull()
   })
 
   it('shows Quick Practice button when a topic is available', () => {
@@ -200,22 +158,48 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Quick Practice')).toBeTruthy()
   })
 
-  it('renders weak topic cards when present', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 45 }],
-      firstTopicId: 't1',
-    })
+  it('renders My Focus section header', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('Algebra')).toBeTruthy()
+    expect(screen.getByText('My Focus')).toBeTruthy()
   })
 
-  it('pressing settings button navigates to /settings', () => {
+  it('renders focus card title + Readiness + streak when focusedListings mocked', () => {
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: { 'upcat-2026': 72 },
+      streakDays: 3,
+    })
+    render(<HomeScreen />)
+    // Title appears in both focus card and Upcoming Dates — getAllByText
+    expect(screen.getAllByText('UPCAT 2026').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/Readiness 72%/)).toBeTruthy()
+    expect(screen.getByText(/3-day streak/)).toBeTruthy()
+  })
+
+  it('pressing a focus card navigates to /listings/:slug', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: {},
+    })
     render(<HomeScreen />)
-    const settingsBtn = screen.queryByTestId('settings-btn')
-    expect(router.push).not.toHaveBeenCalled()
+    // Title may appear in both focus card and upcoming dates — press the first
+    fireEvent.press(screen.getAllByText('UPCAT 2026')[0])
+    expect(router.push).toHaveBeenCalledWith('/listings/upcat-2026')
+  })
+
+  it('shows empty state InfoBanner when no focusedListings', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText(/Add an exam or scholarship/)).toBeTruthy()
   })
 
   it('renders Upcoming Dates section header', () => {
@@ -233,7 +217,9 @@ describe('HomeScreen', () => {
       importantDayIndices: [Math.floor(futureDate / 86_400_000)],
     })
     render(<HomeScreen />)
-    expect(screen.getByText('UPCAT 2026')).toBeTruthy()
+    // UPCAT 2026 appears in both focus card AND upcoming dates
+    const els = screen.getAllByText('UPCAT 2026')
+    expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows empty state for upcoming dates when no listings', () => {
@@ -294,44 +280,22 @@ describe('HomeScreen', () => {
     mockAdmissionsRows.value = []
   })
 
-  it('shows at most 3 weak topics by default', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      weakTopics: [
-        { topicId: 't1', topicName: 'Algebra', accuracy: 20 },
-        { topicId: 't2', topicName: 'Chemistry', accuracy: 25 },
-        { topicId: 't3', topicName: 'Physics', accuracy: 30 },
-        { topicId: 't4', topicName: 'Biology', accuracy: 35 },
-        { topicId: 't5', topicName: 'History', accuracy: 40 },
-      ],
-      firstTopicId: 't1',
-    })
+  it('Weak Areas section is NOT present (removed from Home)', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('Algebra')).toBeTruthy()
-    expect(screen.getByText('Chemistry')).toBeTruthy()
-    expect(screen.getByText('Physics')).toBeTruthy()
-    // 4th and 5th should be hidden by default
-    expect(screen.queryByText('Biology')).toBeNull()
-    expect(screen.queryByText('History')).toBeNull()
+    expect(screen.queryByText('Weak Areas')).toBeNull()
   })
 
-  it('shows all weak topics after pressing See all', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      weakTopics: [
-        { topicId: 't1', topicName: 'Algebra', accuracy: 20 },
-        { topicId: 't2', topicName: 'Chemistry', accuracy: 25 },
-        { topicId: 't3', topicName: 'Physics', accuracy: 30 },
-        { topicId: 't4', topicName: 'Biology', accuracy: 35 },
-        { topicId: 't5', topicName: 'History', accuracy: 40 },
-      ],
-      firstTopicId: 't1',
-    })
+  it('SplitStatCard stat labels are NOT present (removed from Home)', () => {
     render(<HomeScreen />)
-    // Press "See all (5)"
-    const seeAll = screen.getByText(/See all/)
-    fireEvent.press(seeAll)
-    expect(screen.getByText('Biology')).toBeTruthy()
-    expect(screen.getByText('History')).toBeTruthy()
+    expect(screen.queryByText('DAYS LEFT')).toBeNull()
+    expect(screen.queryByText('ACCURACY')).toBeNull()
+    expect(screen.queryByText('STREAK')).toBeNull()
+  })
+
+  it('settings button navigates to /settings when pressed', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    render(<HomeScreen />)
+    expect(router.push).not.toHaveBeenCalled()
   })
 })

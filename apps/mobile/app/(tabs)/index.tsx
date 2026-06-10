@@ -9,8 +9,8 @@ import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid, User4Outlined 
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { SplitStatCard } from '../../components/ui/SplitStatCard'
 import { ListCard } from '../../components/ui/ListCard'
+import { InfoBanner } from '../../components/ui/InfoBanner'
 import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats, type FocusedListing, type NoteReminder } from '../../hooks/useHomeStats'
 import { useAnalytics } from '../../hooks/useAnalytics'
@@ -19,192 +19,10 @@ import { useAiCoach } from '../../hooks/useAiCoach'
 import { useModelDownload } from '../../hooks/useModelDownload'
 import { useTheme } from '../../theme/ThemeContext'
 import { AskKuyaModal } from '../../components/AskKuyaModal'
-import { eq, asc } from 'drizzle-orm'
-import { DateActionSheet } from '../../components/calendar/DateActionSheet'
-import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { useDb } from '../../hooks/useDb'
-import { notes as notesTable, listings as listingsTable, focusListings, admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
+import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
 import { upcomingEvents } from '../../utils/admissionsFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
-import { getAcquiredRequirementIndices } from '../../services/coachQueue'
-import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
-import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
-
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-
-function CalendarStrip({
-  importantDays,
-  practiceDays,
-  reminderDays,
-  onDayPress,
-  onHeaderPress,
-}: {
-  importantDays: Set<number>
-  practiceDays: Set<number>
-  reminderDays: Set<number>
-  onDayPress: (dayStartMs: number) => void
-  onHeaderPress: () => void
-}) {
-  const { theme: t, typo } = useTheme()
-  const cs = useMemo(() => StyleSheet.create({
-    container: { paddingVertical: 6 },
-    navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
-    navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    arrowTxt: { fontSize: typo.xl, color: t.textSecondary, fontFamily: 'Outfit_700Bold', lineHeight: 26 },
-    monthLbl: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold', minWidth: 90, textAlign: 'center' },
-    pill: { marginLeft: 'auto', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
-    pillTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
-    pillExamTxt: { color: t.accentText },
-    row: { flexDirection: 'row', justifyContent: 'space-between' },
-    dayCol: { alignItems: 'center', gap: 3, flex: 1 },
-    letter: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    letterToday: { color: t.accentText },
-    circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    circleToday: { backgroundColor: t.textPrimary },
-    circleExam: { borderWidth: 1.5, borderColor: t.accentText },
-    num: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
-    numToday: { color: t.bg },
-    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
-    dotActive: { backgroundColor: '#60a5fa' },
-    dotReminder: { backgroundColor: '#fbbf24' },
-    dotExam: { backgroundColor: t.accentText },
-  }), [t, typo])
-
-  const [weekOffset, setWeekOffset] = useState(0)
-
-  const todayDay = Math.floor(Date.now() / 86_400_000)
-  const centerDay = todayDay + weekOffset * 7
-
-  const days: Array<{
-    dayIndex: number
-    dayLetter: string
-    dayNum: number
-    isToday: boolean
-    hasExam: boolean
-    hasPractice: boolean
-    hasReminder: boolean
-  }> = []
-  for (let offset = -3; offset <= 3; offset++) {
-    const dayIndex = centerDay + offset
-    const date = new Date(dayIndex * 86_400_000)
-    days.push({
-      dayIndex,
-      dayLetter: DAY_LETTERS[date.getUTCDay()] ?? 'S',
-      dayNum: date.getUTCDate(),
-      isToday: dayIndex === todayDay,
-      hasExam: importantDays.has(dayIndex),
-      hasPractice: practiceDays.has(dayIndex),
-      hasReminder: reminderDays.has(dayIndex),
-    })
-  }
-
-  // Month label — "May 2026" or "May – Jun 2026" when window spans two months
-  const firstDate = new Date((centerDay - 3) * 86_400_000)
-  const lastDate  = new Date((centerDay + 3) * 86_400_000)
-  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
-  const monthLabel =
-    fmt(firstDate) === fmt(lastDate)
-      ? `${fmt(firstDate)} ${lastDate.getUTCFullYear()}`
-      : `${fmt(firstDate)} – ${fmt(lastDate)} ${lastDate.getUTCFullYear()}`
-
-  // Nearest future exam/deadline
-  const futureDays = [...importantDays].filter(d => d > todayDay).sort((a, b) => a - b)
-  const nearestExamDay = futureDays[0] ?? null
-  const examWeekOffset =
-    nearestExamDay != null ? Math.round((nearestExamDay - todayDay) / 7) : null
-
-  const showToday    = weekOffset !== 0
-  const showNextExam = weekOffset === 0 && nearestExamDay != null
-
-  return (
-    <View style={cs.container}>
-      {/* Navigation row */}
-      <View style={cs.navRow}>
-        <View style={cs.navLeft}>
-          <Pressable
-            onPress={() => setWeekOffset(w => w - 1)}
-            hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Previous week"
-            style={({ pressed }) => pressed && { opacity: 0.7 }}
-          >
-            <Text style={cs.arrowTxt}>‹</Text>
-          </Pressable>
-          <Pressable onPress={onHeaderPress} accessibilityRole="button" accessibilityLabel="Open full month calendar">
-            <Text style={cs.monthLbl}>{monthLabel}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setWeekOffset(w => w + 1)}
-            hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Next week"
-            style={({ pressed }) => pressed && { opacity: 0.7 }}
-          >
-            <Text style={cs.arrowTxt}>›</Text>
-          </Pressable>
-        </View>
-
-        {showToday ? (
-          <Pressable
-            onPress={() => setWeekOffset(0)}
-            style={({ pressed }) => [cs.pill, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={cs.pillTxt}>Today</Text>
-          </Pressable>
-        ) : null}
-        {showNextExam && examWeekOffset != null ? (
-          <Pressable
-            onPress={() => setWeekOffset(examWeekOffset)}
-            style={({ pressed }) => [cs.pill, cs.pillExam, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={[cs.pillTxt, cs.pillExamTxt]}>📌 Exam</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Days row */}
-      <View style={cs.row}>
-        {days.map((d, i) => (
-          <Pressable
-            key={i}
-            style={cs.dayCol}
-            onPress={() => {
-              // Day index is UTC-based. Build local midnight from the UTC date components
-              // so DateActionSheet shows the same day the user tapped.
-              const utcD = new Date(d.dayIndex * 86_400_000)
-              const localMidnight = new Date(utcD.getUTCFullYear(), utcD.getUTCMonth(), utcD.getUTCDate()).getTime()
-              onDayPress(localMidnight)
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Day ${d.dayNum}`}
-          >
-            <Text style={[cs.letter, d.isToday && cs.letterToday]}>
-              {d.dayLetter}
-            </Text>
-            <View style={[
-              cs.circle,
-              d.isToday && cs.circleToday,
-              d.hasExam && !d.isToday && cs.circleExam,
-            ]}>
-              <Text style={[cs.num, d.isToday && cs.numToday]}>
-                {d.dayNum}
-              </Text>
-            </View>
-            <View style={[
-              cs.dot,
-              d.hasPractice && cs.dotActive,
-              d.hasReminder && cs.dotReminder,
-              d.hasExam && cs.dotExam,
-            ]} />
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  )
-}
 
 function phHour(): number {
   const now = new Date()
@@ -225,12 +43,6 @@ function formatShortDate(ms: number): string {
 
 function msToDays(ms: number): number {
   return Math.ceil((ms - Date.now()) / 86_400_000)
-}
-
-function weakTopicColor(accuracy: number): string {
-  if (accuracy <= 30) return '#ef4444'
-  if (accuracy <= 50) return '#f97316'
-  return '#eab308'
 }
 
 const NOTIF_TYPES = [
@@ -317,9 +129,9 @@ function NotificationModal({
 
         {/* Notification types */}
         <Text style={nm.sectionLabel}>What you'll receive</Text>
-        {NOTIF_TYPES.map((n, i) => (
+        {NOTIF_TYPES.map((n) => (
           <View
-            key={i}
+            key={n.title}
             style={[nm.typeRow, !enabled && nm.typeRowDisabled]}
           >
             <Text style={nm.typeIcon}>{n.icon}</Text>
@@ -341,88 +153,8 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { daysLeft, todayAccuracy, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, practiceDayIndices, focusedListings, noteReminders, refresh } = useHomeStats()
+  const { daysLeft, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
   const db = useDb()
-  const [activeDayMs, setActiveDayMs] = useState<number | null>(null)
-  const [showMonth, setShowMonth] = useState(false)
-
-  // Progressive-disclosure state
-  const [coachExpanded, setCoachExpanded] = useState(false)
-  const [weakAreasExpanded, setWeakAreasExpanded] = useState(false)
-  const [upcomingExpanded, setUpcomingExpanded] = useState(false)
-
-  // Derive day indices for amber reminder dots (matches dayIndex math used by CalendarStrip)
-  const reminderDays = useMemo(
-    () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
-    [noteReminders]
-  )
-
-  async function handleSaveReminder(payload: QuickReminderPayload) {
-    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    const now = Date.now()
-    await db.insert(notesTable).values({
-      id,
-      title: payload.title,
-      content: payload.content,
-      type: payload.type,
-      isPinned: false,
-      isArchived: false,
-      isTrashed: false,
-      reminderAt: payload.reminderAt,
-      createdAt: now,
-      updatedAt: now,
-    })
-    try {
-      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
-    } catch (err) {
-      console.warn('[home/reminder] schedule failed:', err)
-    }
-    setActiveDayMs(null)
-    void refresh()
-  }
-
-  async function handleSaveAndOpenEditor(payload: QuickReminderPayload) {
-    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    const now = Date.now()
-    await db.insert(notesTable).values({
-      id,
-      title: payload.title,
-      content: payload.content,
-      type: payload.type,
-      isPinned: false,
-      isArchived: false,
-      isTrashed: false,
-      reminderAt: payload.reminderAt,
-      createdAt: now,
-      updatedAt: now,
-    })
-    try {
-      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
-    } catch (err) {
-      console.warn('[home/reminder] schedule failed:', err)
-    }
-    setActiveDayMs(null)
-    void refresh()
-    router.push(`/notes/${id}`)
-  }
-
-  async function handleDeleteReminder(noteId: string) {
-    await db.update(notesTable)
-      .set({ reminderAt: null, updatedAt: Date.now() })
-      .where(eq(notesTable.id, noteId))
-    try { await cancelNoteReminder(noteId) } catch {}
-    void refresh()
-  }
-
-  function handleOpenNoteEditor(noteId: string) {
-    setActiveDayMs(null)
-    router.push(`/notes/${noteId}`)
-  }
-
-  function handleOpenListing(slug: string) {
-    setActiveDayMs(null)
-    router.push(`/listings/${slug}`)
-  }
 
   // ── Admissions feed ─────────────────────────────────────────────────────────
   const [admissionItems, setAdmissionItems] = useState<FeedItem[]>([])
@@ -460,15 +192,13 @@ export default function HomeScreen() {
     )
   }, [admissionItems])
 
-  const { sessionCount, streak } = useAnalytics('overall')
-
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
-  // Merge admissions eventDates into importantDays for CalendarStrip markers
+  // Merge admissions eventDates into importantDays for calendar in Updates
   const importantDays = useMemo(() => {
     const s = new Set(importantDayIndices)
     for (const item of futureAdmissionEvents) {
@@ -480,48 +210,76 @@ export default function HomeScreen() {
     return s
   }, [importantDayIndices, futureAdmissionEvents])
 
-  const practiceDays  = new Set(practiceDayIndices)
-
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
   const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
   const { modelStatus } = useModelDownload(() => {})
   const [chatVisible, setChatVisible] = useState(false)
 
-  // Missing-requirements count across all focused listings
-  const [missingReqCount, setMissingReqCount] = useState(0)
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const rows = await db
-          .select({
-            slug: focusListings.listingSlug,
-            requirements: listingsTable.requirements,
-          })
-          .from(focusListings)
-          .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
-          .orderBy(asc(focusListings.priority))
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false)
 
-        const rowsWithReqs = rows.filter(row => {
-          try { return (JSON.parse(row.requirements ?? '[]') as string[]).length > 0 } catch { return false }
-        })
-        const acquiredLists = await Promise.all(rowsWithReqs.map(r => getAcquiredRequirementIndices(db, r.slug)))
-        let total = 0
-        rowsWithReqs.forEach((row, i) => {
-          let reqs: string[] = []
-          try { reqs = JSON.parse(row.requirements ?? '[]') } catch { reqs = [] }
-          total += reqs.length - (acquiredLists[i]?.length ?? 0)
-        })
-        if (!cancelled) setMissingReqCount(total)
-      } catch (e) {
-        console.warn('[home/requirements] count failed:', e)
+  useEffect(() => {
+    if (focusedListings.length > 0) {
+      void scheduleNotifs(focusedListings)
+    }
+  }, [focusedListings, scheduleNotifs])
+
+  const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
+
+  const now = Date.now()
+
+  // Build upcoming dates list (focused listings + note reminders + admissions events)
+  const focusedListingDateEntries = focusedListings
+    .map(l => {
+      const keyDate = l.type === 'exam'
+        ? (l.examDate ?? l.deadline)
+        : (l.deadline ?? l.examDate)
+      const label = l.type === 'exam' ? 'Exam' : 'Deadline'
+      return { ...l, keyDate, label, entryType: 'listing' as const }
+    })
+    .filter(l => l.keyDate != null && l.keyDate >= now)
+
+  const focusedSlugs = new Set(focusedListings.map(l => l.slug))
+  const admissionsDateEntries = futureAdmissionEvents
+    .filter(item => item.eventDate != null)
+    .map(item => {
+      const ms = new Date(item.eventDate! + 'T00:00:00Z').getTime()
+      return {
+        slug: `admission-${item.id}`,
+        priority: 0,
+        title: item.title,
+        type: item.eventType === 'exam' ? 'exam' : 'event',
+        examDate: null as number | null,
+        deadline: null as number | null,
+        keyDate: ms,
+        label: item.eventType === 'exam' ? 'Exam' : item.eventType === 'deadline' ? 'Deadline' : 'Event',
+        entryType: 'admission' as const,
+        schoolSlug: item.schoolSlug ?? null,
       }
-    })()
-    return () => { cancelled = true }
-  // Re-run whenever focusedListings changes (after refresh)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, focusedListings])
+    })
+    .filter(a => !focusedListingDateEntries.some(l => l.keyDate === a.keyDate))
+
+  const upcomingDates = [
+    ...focusedListingDateEntries,
+    ...noteReminders.map(r => ({
+      slug: r.noteId,
+      priority: 0,
+      title: r.noteTitle || 'Untitled note',
+      type: 'reminder',
+      examDate: null as number | null,
+      deadline: null as number | null,
+      keyDate: r.reminderAt,
+      label: 'Reminder',
+      entryType: 'reminder' as const,
+    })),
+    ...admissionsDateEntries,
+  ]
+    .filter(l => l.keyDate != null && l.keyDate >= now)
+    .sort((a, b) => (a.keyDate ?? 0) - (b.keyDate ?? 0))
+    .slice(0, 7)
+
+  const TOP_N = 3
+  const visibleUpcomingDates = upcomingExpanded ? upcomingDates : upcomingDates.slice(0, TOP_N)
 
   const onAskPress = () => {
     if (modelStatus === 'ready') {
@@ -546,7 +304,6 @@ export default function HomeScreen() {
     greetName: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
     iconBtn: { width: 44, height: 44, backgroundColor: t.surface2, borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
     headerBtns: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-    calendarWrap: { paddingVertical: spacing.sm },
     kuyaCard: { borderColor: 'rgba(128,0,0,0.35)', marginBottom: spacing.md },
     kuyaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
     kuyaAvatarLg: { width: 80, height: 80, borderRadius: radius.md, borderCurve: 'continuous', overflow: 'hidden', flexShrink: 0 },
@@ -570,24 +327,6 @@ export default function HomeScreen() {
       color: t.textSecondary,
     },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 19, fontFamily: 'Lexend_400Regular' },
-    // Collapsed coach row
-    kuyaCollapsedRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: 'rgba(128,0,0,0.25)',
-      borderRadius: radius.xl,
-      borderCurve: 'continuous',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      marginBottom: spacing.md,
-    },
-    kuyaMiniAvatar: { width: 32, height: 32, borderRadius: radius.sm, borderCurve: 'continuous', overflow: 'hidden', flexShrink: 0 },
-    kuyaCollapsedName: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold', marginRight: spacing.xs },
-    kuyaCollapsedTip: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
-    kuyaChevron: { fontSize: 18, color: t.textTertiary, marginLeft: spacing.xs },
     quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl },
     quickIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
@@ -595,10 +334,8 @@ export default function HomeScreen() {
     chevron: { color: t.textTertiary, fontSize: 22 },
     section: { marginTop: spacing.xl },
     empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    // Merged 2-column row for Missing Requirements + My Progress
-    twoColRow: { flexDirection: 'row', gap: spacing.sm },
-    twoColHalf: {
-      flex: 1,
+    // Focus card styles
+    focusCard: {
       backgroundColor: t.surface,
       borderWidth: 1,
       borderColor: t.border,
@@ -606,84 +343,24 @@ export default function HomeScreen() {
       borderCurve: 'continuous',
       boxShadow: t.shadowSm,
       padding: spacing.md,
-      alignItems: 'flex-start',
-      gap: spacing.xs,
     },
-    twoColIcon: { fontSize: 18 },
-    twoColTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 17 },
-    twoColSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 15 },
+    focusCardPressed: { opacity: 0.75 },
+    focusRow1: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs / 2 },
+    focusTitle: { flex: 1, fontSize: typo.base, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    focusBadge: {
+      backgroundColor: t.surface2,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.sm,
+      borderCurve: 'continuous',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+    },
+    focusBadgeText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    focusDaysLeft: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs / 2 },
+    focusMiniStats: { flexDirection: 'row', gap: spacing.md },
+    focusMiniStat: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
-
-  useEffect(() => {
-    if (focusedListings.length > 0) {
-      void scheduleNotifs(focusedListings)
-    }
-  }, [focusedListings, scheduleNotifs])
-
-  const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
-
-  const now = Date.now()
-
-  // Build a de-dupe set: focused listing slugs that already have a date entry
-  const focusedListingDateEntries = focusedListings
-    .map(l => {
-      const keyDate = l.type === 'exam'
-        ? (l.examDate ?? l.deadline)
-        : (l.deadline ?? l.examDate)
-      const label = l.type === 'exam' ? 'Exam' : 'Deadline'
-      return { ...l, keyDate, label, entryType: 'listing' as const }
-    })
-    .filter(l => l.keyDate != null && l.keyDate >= now)
-
-  // Convert admissions events with a future eventDate into widget items.
-  // Only include if the event title isn't already covered by a focused listing slug.
-  const focusedSlugs = new Set(focusedListings.map(l => l.slug))
-  const admissionsDateEntries = futureAdmissionEvents
-    .filter(item => item.eventDate != null)
-    .map(item => {
-      const ms = new Date(item.eventDate! + 'T00:00:00Z').getTime()
-      return {
-        slug: `admission-${item.id}`,
-        priority: 0,
-        title: item.title,
-        type: item.eventType === 'exam' ? 'exam' : 'event',
-        examDate: null as number | null,
-        deadline: null as number | null,
-        keyDate: ms,
-        label: item.eventType === 'exam' ? 'Exam' : item.eventType === 'deadline' ? 'Deadline' : 'Event',
-        entryType: 'admission' as const,
-        schoolSlug: item.schoolSlug ?? null,
-      }
-    })
-    // Skip items whose eventDate is the same ms as an already-focused listing date
-    .filter(a => !focusedListingDateEntries.some(l => l.keyDate === a.keyDate))
-
-  const upcomingDates = [
-    ...focusedListingDateEntries,
-    ...noteReminders.map(r => ({
-      slug: r.noteId,
-      priority: 0,
-      title: r.noteTitle || 'Untitled note',
-      type: 'reminder',
-      examDate: null as number | null,
-      deadline: null as number | null,
-      keyDate: r.reminderAt,
-      label: 'Reminder',
-      entryType: 'reminder' as const,
-    })),
-    ...admissionsDateEntries,
-  ]
-    .filter(l => l.keyDate != null && l.keyDate >= now)
-    .sort((a, b) => (a.keyDate ?? 0) - (b.keyDate ?? 0))
-    .slice(0, 7)
-
-  // Top-3 + See all slicing
-  const TOP_N = 3
-  const visibleWeakTopics = weakAreasExpanded ? weakTopics : weakTopics.slice(0, TOP_N)
-  const visibleUpcomingDates = upcomingExpanded ? upcomingDates : upcomingDates.slice(0, TOP_N)
-
-  const showMissingReq = missingReqCount > 0 && focusedListings.length > 0
-  const showProgress = sessionCount > 0
 
   return (
     <SafeAreaView style={s.root}>
@@ -742,7 +419,42 @@ export default function HomeScreen() {
 
         <View>
 
-          {/* (2) Quick Practice CTA — PRIMARY, promoted directly under greeting */}
+          {/* (2) Kuya Baw FULL card — always expanded */}
+          <Card elevated style={s.kuyaCard}>
+            <View style={s.kuyaRow}>
+              <Pressable
+                style={s.kuyaAvatarLg}
+                onPress={onKuyaTap}
+                hitSlop={12}
+                android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
+                accessibilityRole="button"
+                accessibilityLabel="Tap Kuya Baw for a new tip"
+              >
+                <Image
+                  source={require('../../assets/images/kuya-baw-mascot.png')}
+                  style={{ width: 80, height: 80 }}
+                  resizeMode="contain"
+                />
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <View style={s.kuyaNameRow}>
+                  <Text style={s.kuyaName}>Kuya Baw</Text>
+                  <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
+                  <Pressable
+                    style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
+                    onPress={onAskPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
+                  >
+                    <Text style={s.askPillText}>💬 Ask</Text>
+                  </Pressable>
+                </View>
+                <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
+              </View>
+            </View>
+          </Card>
+
+          {/* (3) Quick Practice CTA */}
           {quickTopicId ? (
             <Pressable
               style={({ pressed }) => [s.quickBtn, pressed && { opacity: 0.85 }]}
@@ -762,130 +474,59 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          {/* (3) Stats card */}
-          <View style={{ marginBottom: spacing.xl }}>
-            <SplitStatCard
-              columns={[
-                { value: daysLeft != null ? String(daysLeft) : '—', label: 'DAYS LEFT', valueColor: t.accentText },
-                { value: todayAccuracy !== null ? `${todayAccuracy}%` : '—', label: 'ACCURACY' },
-                { value: streakDays > 0 ? `${streakDays}🔥` : '—', label: 'STREAK', valueColor: streakDays > 0 ? '#fbbf24' : undefined },
-              ]}
-            />
-          </View>
-
-          {/* (4) Kuya Baw AI Coach — COLLAPSED one-liner, expands inline */}
-          {coachExpanded ? (
-            <Card elevated style={s.kuyaCard}>
-              <View style={s.kuyaRow}>
-                <Pressable
-                  style={s.kuyaAvatarLg}
-                  onPress={onKuyaTap}
-                  hitSlop={12}
-                  android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Tap Kuya Baw for a new tip"
-                >
-                  <Image
-                    source={require('../../assets/images/kuya-baw-mascot.png')}
-                    style={{ width: 80, height: 80 }}
-                    resizeMode="contain"
-                  />
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                  <View style={s.kuyaNameRow}>
-                    <Text style={s.kuyaName}>Kuya Baw</Text>
-                    <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
-                    <Pressable
-                      style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
-                      onPress={onAskPress}
-                      accessibilityRole="button"
-                      accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
-                    >
-                      <Text style={s.askPillText}>💬 Ask</Text>
-                    </Pressable>
-                  </View>
-                  <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
-                  <Pressable
-                    onPress={() => setCoachExpanded(false)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Collapse coach card"
-                    style={{ marginTop: spacing.sm, alignSelf: 'flex-end' }}
-                  >
-                    <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>Show less ‹</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </Card>
-          ) : (
-            <Pressable
-              style={({ pressed }) => [s.kuyaCollapsedRow, pressed && { opacity: 0.8 }]}
-              onPress={() => setCoachExpanded(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Expand Kuya Baw coach card"
-              accessibilityState={{ expanded: false }}
-              testID="kuya-coach-collapsed"
-            >
-              <View style={s.kuyaMiniAvatar}>
-                <Image
-                  source={require('../../assets/images/kuya-baw-mascot.png')}
-                  style={{ width: 32, height: 32 }}
-                  resizeMode="contain"
-                />
-              </View>
-              <Text style={s.kuyaCollapsedName}>Kuya Baw</Text>
-              <Text style={s.kuyaCollapsedTip} numberOfLines={1}>"{kuyaMsg}"</Text>
-              <Text style={s.kuyaChevron}>›</Text>
-            </Pressable>
-          )}
-
-          {/* (5) Calendar strip */}
-          <View style={s.calendarWrap}>
-            <CalendarStrip
-              importantDays={importantDays}
-              practiceDays={practiceDays}
-              reminderDays={reminderDays}
-              onDayPress={setActiveDayMs}
-              onHeaderPress={() => setShowMonth(true)}
-            />
-          </View>
-
-          {/* (6) Weak Areas — top 3 + See all */}
+          {/* (4) My Focus — one card per focusedListings entry */}
           <View style={s.section}>
-            <SectionHeader
-              title="Weak Areas"
-              actionLabel={
-                weakTopics.length > TOP_N
-                  ? (weakAreasExpanded ? 'Show less' : `See all (${weakTopics.length})`)
-                  : undefined
-              }
-              onAction={weakTopics.length > TOP_N ? () => setWeakAreasExpanded(v => !v) : undefined}
-            />
+            <SectionHeader title="My Focus" />
           </View>
-          {weakTopics.length > 0 ? (
+          {focusedListings.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              {visibleWeakTopics.map(topic => {
-                const color = weakTopicColor(topic.accuracy)
+              {focusedListings.map(listing => {
+                const keyDate = listing.type === 'exam'
+                  ? (listing.examDate ?? listing.deadline)
+                  : (listing.deadline ?? listing.examDate)
+                const daysLeft = keyDate != null ? msToDays(keyDate) : null
+                const daysLeftLabel = daysLeft != null
+                  ? (daysLeft < 1 ? 'Today' : `${daysLeft} days left`)
+                  : 'Date TBA'
+                const accuracy = listingAccuracy[listing.slug]
+                const readinessLabel = accuracy != null ? `🎯 Readiness ${accuracy}%` : '🎯 Readiness —%'
+                const streakLabel = streakDays > 0 ? `🔥 ${streakDays}-day streak` : '🔥 No streak yet'
+                const badgeLabel = `#${listing.priority} · ${listing.type}`
+
                 return (
-                  <ListCard
-                    key={topic.topicId}
-                    icon={<View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />}
-                    iconBg={`${color}1f`}
-                    title={topic.topicName}
-                    subtitle="Tap to practice"
-                    trailing={<Text style={{ fontSize: typo.sm, fontWeight: '700', color, fontFamily: 'Outfit_700Bold' }}>{topic.accuracy}%</Text>}
-                    progress={topic.accuracy / 100}
-                    progressColor={color}
-                    onPress={() => router.push(`/practice/${topic.topicId}`)}
-                  />
+                  <Pressable
+                    key={listing.slug}
+                    style={({ pressed }) => [s.focusCard, pressed && s.focusCardPressed]}
+                    onPress={() => router.push(`/listings/${listing.slug}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={listing.title}
+                  >
+                    <View style={s.focusRow1}>
+                      <Text style={s.focusTitle} numberOfLines={1}>{listing.title}</Text>
+                      <View style={s.focusBadge}>
+                        <Text style={s.focusBadgeText}>{badgeLabel}</Text>
+                      </View>
+                    </View>
+                    <Text style={s.focusDaysLeft}>{daysLeftLabel}</Text>
+                    <View style={s.focusMiniStats}>
+                      <Text style={s.focusMiniStat} maxFontSizeMultiplier={1.4}>{readinessLabel}</Text>
+                      <Text style={s.focusMiniStat} maxFontSizeMultiplier={1.4}>{streakLabel}</Text>
+                    </View>
+                  </Pressable>
                 )
               })}
             </View>
           ) : (
-            <Text style={s.empty}>Start practicing to see weak areas</Text>
+            <InfoBanner
+              icon={<Text style={{ fontSize: 16 }}>🎯</Text>}
+              message="Add an exam or scholarship to your focus from the Exams tab"
+              actionLabel="Exams"
+              onAction={() => router.push('/(tabs)/listings')}
+              tone="neutral"
+            />
           )}
 
-          {/* (7) Upcoming Dates — top 3 + See all */}
+          {/* (5) Upcoming Dates — top 3 + See all — LAST section */}
           <View style={s.section}>
             <SectionHeader
               title="Upcoming Dates"
@@ -947,62 +588,9 @@ export default function HomeScreen() {
             </Text>
           )}
 
-          {/* (8) Missing Requirements + My Progress — merged compact 2-column row */}
-          {(showMissingReq || showProgress) ? (
-            <View style={[s.section, { marginBottom: spacing.md }]}>
-              <View style={s.twoColRow}>
-                {showMissingReq ? (
-                  <Pressable
-                    style={({ pressed }) => [s.twoColHalf, pressed && { opacity: 0.75 }]}
-                    onPress={() => router.push('/requirements')}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Missing requirements: ${missingReqCount}`}
-                  >
-                    <Text style={s.twoColIcon}>📋</Text>
-                    <Text style={s.twoColTitle} numberOfLines={1}>Requirements</Text>
-                    <Text style={s.twoColSub} numberOfLines={1}>{missingReqCount} missing</Text>
-                  </Pressable>
-                ) : null}
-                {showProgress ? (
-                  <Pressable
-                    style={({ pressed }) => [s.twoColHalf, pressed && { opacity: 0.75 }]}
-                    onPress={() => router.push('/(tabs)/analytics')}
-                    accessibilityRole="button"
-                    accessibilityLabel="My Progress"
-                  >
-                    <Text style={s.twoColIcon}>📈</Text>
-                    <Text style={s.twoColTitle} numberOfLines={1}>My Progress</Text>
-                    <Text style={s.twoColSub} numberOfLines={2}>{sessionCount} session{sessionCount !== 1 ? 's' : ''}{streak > 0 ? ` · ${streak}🔥` : ''}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
         </View>
       </ScreenScroll>
 
-      <DateActionSheet
-        visible={activeDayMs != null}
-        dayStartMs={activeDayMs ?? 0}
-        onClose={() => setActiveDayMs(null)}
-        onSaveReminder={handleSaveReminder}
-        onSaveAndOpenEditor={handleSaveAndOpenEditor}
-        onOpenNoteEditor={handleOpenNoteEditor}
-        onOpenListing={handleOpenListing}
-        onDeleteReminder={handleDeleteReminder}
-      />
-      <MonthSheet
-        visible={showMonth}
-        onClose={() => setShowMonth(false)}
-        onDayPress={(ms) => {
-          setShowMonth(false)
-          setActiveDayMs(ms)
-        }}
-        importantDays={importantDays}
-        reminderDays={reminderDays}
-        practiceDays={practiceDays}
-      />
       <NotificationModal
         visible={showNotifModal}
         enabled={notifEnabled}

@@ -22,6 +22,7 @@ import {
   getPracticeDayIndices,
   getWeakTopicStats,
   getTopicCardCounts,
+  getListingAccuracy,
 } from '../homeAggregates'
 
 // ── Inlined oracle functions (mirrors useHomeStats pure fns) ──────────────────
@@ -113,6 +114,16 @@ function makeDb(): { raw: InstanceType<typeof Database>; db: DrizzleClient } {
       answered_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS user_progress_answered_at_idx ON user_progress (answered_at);
+    CREATE TABLE practice_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      listing_slug TEXT NOT NULL DEFAULT '',
+      topic_id TEXT NOT NULL DEFAULT '',
+      deck_id TEXT NOT NULL DEFAULT '',
+      score INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      duration_secs INTEGER NOT NULL DEFAULT 0,
+      completed_at INTEGER NOT NULL
+    );
   `)
   const db = drizzle(raw, { schema }) as unknown as DrizzleClient
   return { raw, db }
@@ -363,5 +374,60 @@ describe('getTopicCardCounts — card counts per topic', () => {
     const sqlTopicIds = new Set(rows.map(r => r.topicId))
 
     expect(sqlTopicIds).toEqual(oracleTopicIds)
+  })
+})
+
+// ── getListingAccuracy — per-listing score/total sums from practice_sessions ──
+
+describe('getListingAccuracy — per-listing accuracy from practice_sessions', () => {
+  beforeEach(() => {
+    // Seed practice_sessions: 2 slugs + a zero-total row (excluded) + an empty-slug row (excluded)
+    // slug 'upcat':   score=8, total=10  → 80%
+    // slug 'dost-sei': score=3, total=5  → 60%
+    // total=0 row → excluded by WHERE total > 0
+    // empty slug '' row → excluded by WHERE listing_slug != ''
+    raw.prepare(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)`)
+       .run('upcat', 5, 6, Date.now())
+    raw.prepare(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)`)
+       .run('upcat', 3, 4, Date.now())
+    raw.prepare(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)`)
+       .run('dost-sei', 3, 5, Date.now())
+    // zero-total row — must be excluded
+    raw.prepare(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)`)
+       .run('upcat', 0, 0, Date.now())
+    // empty-slug row — must be excluded
+    raw.prepare(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)`)
+       .run('', 2, 3, Date.now())
+  })
+
+  it('returns summed ok and total per listing slug', async () => {
+    const rows = await getListingAccuracy(db)
+    const map = new Map(rows.map(r => [r.listingSlug, r]))
+    const upcat = map.get('upcat')
+    expect(upcat).toBeDefined()
+    expect(upcat!.ok).toBe(8)   // 5+3
+    expect(upcat!.total).toBe(10) // 6+4
+    const dost = map.get('dost-sei')
+    expect(dost).toBeDefined()
+    expect(dost!.ok).toBe(3)
+    expect(dost!.total).toBe(5)
+  })
+
+  it('excludes zero-total rows so upcat total is only the non-zero rows', async () => {
+    const rows = await getListingAccuracy(db)
+    const upcat = rows.find(r => r.listingSlug === 'upcat')
+    // total should be 10 (6+4), NOT 10+0
+    expect(upcat!.total).toBe(10)
+  })
+
+  it('excludes empty-slug rows', async () => {
+    const rows = await getListingAccuracy(db)
+    expect(rows.find(r => r.listingSlug === '')).toBeUndefined()
+  })
+
+  it('returns empty array when no practice_sessions', async () => {
+    raw.exec('DELETE FROM practice_sessions')
+    const rows = await getListingAccuracy(db)
+    expect(rows).toHaveLength(0)
   })
 })

@@ -9,8 +9,8 @@
  * real-SQLite services Jest project.
  */
 
-import { sql, and, gte, like, eq } from 'drizzle-orm'
-import { userProgress, flashcards, topics } from '../db/schema'
+import { sql, and, gte, like, eq, ne } from 'drizzle-orm'
+import { userProgress, flashcards, topics, practiceSessions } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -33,6 +33,12 @@ export interface WeakTopicStatRow {
 export interface TopicCardCountRow {
   topicId: string
   cardCount: number
+}
+
+export interface ListingAccuracyRow {
+  listingSlug: string
+  ok: number
+  total: number
 }
 
 // ── Aggregate functions ────────────────────────────────────────────────────────
@@ -147,4 +153,39 @@ export async function getTopicNames(
   db: DrizzleClient,
 ): Promise<Array<{ id: string; name: string }>> {
   return db.select({ id: topics.id, name: topics.name }).from(topics)
+}
+
+/**
+ * getListingAccuracy — per-listing score/total sums from practice_sessions.
+ *
+ * SELECT listing_slug, SUM(score), SUM(total)
+ * FROM practice_sessions
+ * WHERE total > 0 AND listing_slug != ''
+ * GROUP BY listing_slug
+ *
+ * Returns an array of { listingSlug, ok, total } rows.
+ * Rows with total=0 are excluded (division by zero guard).
+ * Rows with an empty listing_slug are excluded (sentinel / untagged sessions).
+ */
+export async function getListingAccuracy(
+  db: DrizzleClient,
+): Promise<ListingAccuracyRow[]> {
+  const rows = await db
+    .select({
+      listingSlug: practiceSessions.listingSlug,
+      ok: sql<number>`sum(${practiceSessions.score})`.as('ok'),
+      total: sql<number>`sum(${practiceSessions.total})`.as('total'),
+    })
+    .from(practiceSessions)
+    .where(and(
+      sql`${practiceSessions.total} > 0`,
+      ne(practiceSessions.listingSlug, ''),
+    ))
+    .groupBy(practiceSessions.listingSlug)
+
+  return rows.map(r => ({
+    listingSlug: r.listingSlug,
+    ok: Number(r.ok ?? 0),
+    total: Number(r.total ?? 0),
+  }))
 }

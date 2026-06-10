@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   StyleSheet,
   View,
@@ -7,9 +7,10 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
+import { eq } from 'drizzle-orm'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
-import { admissionsUpdates } from '../../db/schema'
+import { admissionsUpdates, notes as notesTable, listings as listingsTable, focusListings } from '../../db/schema'
 import {
   sortBySeverityThenDate,
   upcomingEvents,
@@ -22,7 +23,13 @@ import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Badge } from '../../components/ui/Badge'
 import { ListCard } from '../../components/ui/ListCard'
+import { CalendarStrip } from '../../components/calendar/CalendarStrip'
+import { DateActionSheet } from '../../components/calendar/DateActionSheet'
+import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { spacing, radius } from '../../theme/tokens'
+import { useHomeStats } from '../../hooks/useHomeStats'
+import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
+import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
 
 // ── Changelog ─────────────────────────────────────────────────────────────────
 
@@ -226,6 +233,92 @@ export default function UpdatesScreen() {
   const db = useDb()
   const [items, setItems] = useState<FeedItem[]>([])
 
+  // Calendar state (moved from Home)
+  const [activeDayMs, setActiveDayMs] = useState<number | null>(null)
+  const [showMonth, setShowMonth] = useState(false)
+
+  // Use cached home stats for calendar data (cheap — same 'home:stats' cache)
+  const { importantDayIndices, practiceDayIndices, noteReminders, refresh } = useHomeStats()
+
+  // Derive important/practice/reminder day sets
+  const importantDays = useMemo(() => new Set(importantDayIndices), [importantDayIndices])
+  const practiceDays = useMemo(() => new Set(practiceDayIndices), [practiceDayIndices])
+  const reminderDays = useMemo(
+    () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
+    [noteReminders]
+  )
+
+  // ── Reminder handlers (moved from Home) ──────────────────────────────────────
+
+  async function handleSaveReminder(payload: QuickReminderPayload) {
+    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const now = Date.now()
+    await db.insert(notesTable).values({
+      id,
+      title: payload.title,
+      content: payload.content,
+      type: payload.type,
+      isPinned: false,
+      isArchived: false,
+      isTrashed: false,
+      reminderAt: payload.reminderAt,
+      createdAt: now,
+      updatedAt: now,
+    })
+    try {
+      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
+    } catch (err) {
+      console.warn('[updates/reminder] schedule failed:', err)
+    }
+    setActiveDayMs(null)
+    void refresh()
+  }
+
+  async function handleSaveAndOpenEditor(payload: QuickReminderPayload) {
+    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const now = Date.now()
+    await db.insert(notesTable).values({
+      id,
+      title: payload.title,
+      content: payload.content,
+      type: payload.type,
+      isPinned: false,
+      isArchived: false,
+      isTrashed: false,
+      reminderAt: payload.reminderAt,
+      createdAt: now,
+      updatedAt: now,
+    })
+    try {
+      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
+    } catch (err) {
+      console.warn('[updates/reminder] schedule failed:', err)
+    }
+    setActiveDayMs(null)
+    void refresh()
+    router.push(`/notes/${id}`)
+  }
+
+  async function handleDeleteReminder(noteId: string) {
+    await db.update(notesTable)
+      .set({ reminderAt: null, updatedAt: Date.now() })
+      .where(eq(notesTable.id, noteId))
+    try { await cancelNoteReminder(noteId) } catch {}
+    void refresh()
+  }
+
+  function handleOpenNoteEditor(noteId: string) {
+    setActiveDayMs(null)
+    router.push(`/notes/${noteId}`)
+  }
+
+  function handleOpenListing(slug: string) {
+    setActiveDayMs(null)
+    router.push(`/listings/${slug}`)
+  }
+
+  // ── Admissions feed ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -272,11 +365,44 @@ export default function UpdatesScreen() {
       </View>
 
       <ScreenScroll tabBarInset padded contentContainerStyle={styles.content}>
+        {/* Calendar strip — moved from Home */}
+        <View style={styles.calendarWrap} testID="updates-calendar-strip">
+          <CalendarStrip
+            importantDays={importantDays}
+            practiceDays={practiceDays}
+            reminderDays={reminderDays}
+            onDayPress={setActiveDayMs}
+            onHeaderPress={() => setShowMonth(true)}
+          />
+        </View>
+
         <ResultsTrackerCard />
         <UpcomingEventsSection items={items} />
         {items.length > 0 ? <NewsSection items={items} /> : null}
         <ChangelogSection />
       </ScreenScroll>
+
+      <DateActionSheet
+        visible={activeDayMs != null}
+        dayStartMs={activeDayMs ?? 0}
+        onClose={() => setActiveDayMs(null)}
+        onSaveReminder={handleSaveReminder}
+        onSaveAndOpenEditor={handleSaveAndOpenEditor}
+        onOpenNoteEditor={handleOpenNoteEditor}
+        onOpenListing={handleOpenListing}
+        onDeleteReminder={handleDeleteReminder}
+      />
+      <MonthSheet
+        visible={showMonth}
+        onClose={() => setShowMonth(false)}
+        onDayPress={(ms) => {
+          setShowMonth(false)
+          setActiveDayMs(ms)
+        }}
+        importantDays={importantDays}
+        reminderDays={reminderDays}
+        practiceDays={practiceDays}
+      />
     </SafeAreaView>
   )
 }
@@ -300,6 +426,9 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: spacing.sm,
     gap: spacing.xl,
+  },
+  calendarWrap: {
+    paddingVertical: spacing.sm,
   },
   section: {
     gap: spacing.sm,

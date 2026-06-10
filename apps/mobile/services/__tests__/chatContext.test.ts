@@ -81,6 +81,7 @@ const STATS_BASE: HomeStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: async () => {},
 }
 

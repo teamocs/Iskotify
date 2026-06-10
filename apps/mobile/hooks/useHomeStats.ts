@@ -9,6 +9,7 @@ import {
   getTodayAccuracy,
   getPracticeDayIndices,
   getWeakTopicStats,
+  getListingAccuracy,
 } from '../services/homeAggregates'
 import { cachedQuery, subscribe } from '../services/queryCache'
 
@@ -45,6 +46,8 @@ export interface HomeStats {
   practiceDayIndices: number[]
   focusedListings: FocusedListing[]
   noteReminders: NoteReminder[]
+  /** slug → rounded accuracy % (0–100). Only present when total sessions > 0. */
+  listingAccuracy: Record<string, number>
   refresh: () => Promise<void>
 }
 
@@ -119,6 +122,7 @@ const DEFAULT: HomeStats = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: async () => {},
 }
 
@@ -151,6 +155,7 @@ export function useHomeStats(): HomeStats {
           firstTopicRows,
           focusedRows,
           reminderRows,
+          listingAccRows,
         ] = await Promise.all([
           db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
           getTodayAccuracy(db, todayStart.getTime()),
@@ -172,6 +177,7 @@ export function useHomeStats(): HomeStats {
           db.select({ id: notesTable.id, title: notesTable.title, reminderAt: notesTable.reminderAt })
             .from(notesTable)
             .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false), gt(notesTable.reminderAt, Date.now()))),
+          getListingAccuracy(db),
         ])
 
         const listing = listingRows[0] ?? null
@@ -184,6 +190,14 @@ export function useHomeStats(): HomeStats {
           : Math.round((todayAccRow.correct / todayAccRow.total) * 100)
 
         const streakDays = computeStreakFromDays(dayIndices)
+
+        // Build slug → rounded % map (only include entries with total > 0)
+        const listingAccuracy: Record<string, number> = {}
+        for (const row of listingAccRows) {
+          if (row.total > 0) {
+            listingAccuracy[row.listingSlug] = Math.round((row.ok / row.total) * 100)
+          }
+        }
 
         const topicMap = new Map(allTopics.map(t => [t.id, t.name]))
         const weakTopics: WeakTopic[] = weakStats
@@ -226,6 +240,7 @@ export function useHomeStats(): HomeStats {
             .filter(r => r.reminderAt != null)
             .map(r => ({ noteId: r.id, noteTitle: r.title, reminderAt: r.reminderAt! }))
             .sort((a, b) => a.reminderAt - b.reminderAt),
+          listingAccuracy,
         }
       }
 

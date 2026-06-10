@@ -31,6 +31,28 @@ jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
 
+jest.mock('../../../hooks/useHomeStats', () => ({
+  useHomeStats: () => ({
+    importantDayIndices: [],
+    practiceDayIndices: [],
+    noteReminders: [],
+    refresh: jest.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+jest.mock('../../../services/notifications', () => ({
+  scheduleNoteReminder: jest.fn().mockResolvedValue(undefined),
+  cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('../../../components/calendar/DateActionSheet', () => ({
+  DateActionSheet: () => null,
+}))
+
+jest.mock('../../../components/calendar/MonthSheet', () => ({
+  MonthSheet: () => null,
+}))
+
 // ── DB factory ────────────────────────────────────────────────────────────────
 
 const TODAY = new Date().toISOString().slice(0, 10)
@@ -179,5 +201,13 @@ describe('UpdatesScreen', () => {
     useDb.mockReturnValue(makeDb())
     render(<UpdatesScreen />)
     expect(screen.getByText('ISKOTIFY UPDATES')).toBeTruthy()
+  })
+
+  it('CalendarStrip wrapper renders on Updates screen', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb())
+    render(<UpdatesScreen />)
+    // The calendar strip container is rendered (month label — current month)
+    expect(screen.getByTestId('updates-calendar-strip')).toBeTruthy()
   })
 })

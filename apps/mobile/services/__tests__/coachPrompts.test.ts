@@ -15,6 +15,7 @@ const BASE: CoachContext = {
   practiceDayIndices: [],
   focusedListings: [],
   noteReminders: [],
+  listingAccuracy: {},
   refresh: async () => {},
   acquiredCount: 3,
   totalRequirements: 5,
