@@ -1,4 +1,4 @@
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand } from '../examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection } from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -80,5 +80,71 @@ describe('estimatePercentileBand', () => {
     expect(estimatePercentileBand(73).percentile).toBe(73)
     expect(estimatePercentileBand(150).percentile).toBe(99)
     expect(estimatePercentileBand(-5).percentile).toBe(1)
+  })
+})
+
+describe('groupReviewBySection', () => {
+  // Helper: build a minimal FlatQuestion-like entry
+  function fq(sectionName: string) { return { sectionName } }
+
+  it('groups questions by section in order of first appearance', () => {
+    const questions = [fq('Math'), fq('Math'), fq('Science'), fq('Science')]
+    const answers = { 0: 0, 1: 1, 2: 2, 3: 3 }
+    const correctIndexes = [0, 0, 0, 0]
+    const sections = groupReviewBySection(questions, answers, correctIndexes)
+    expect(sections.map(s => s.sectionName)).toEqual(['Math', 'Science'])
+  })
+
+  it('places incorrect answers first within a section, then unanswered, then correct', () => {
+    // Q0 correct, Q1 incorrect, Q2 unanswered — all in one section
+    const questions = [fq('A'), fq('A'), fq('A')]
+    const answers: Record<number, number> = { 0: 0, 1: 2 } // Q2 not answered
+    const correctIndexes = [0, 0, 0] // Q0 correct, Q1 wrong (selected 2, correct 0)
+    const sections = groupReviewBySection(questions, answers, correctIndexes)
+    expect(sections).toHaveLength(1)
+    const refs = sections[0]!.questionRefs
+    // wrong first, then unanswered, then correct
+    expect(refs[0]).toMatchObject({ flatIndex: 1, status: 'incorrect' })
+    expect(refs[1]).toMatchObject({ flatIndex: 2, status: 'unanswered' })
+    expect(refs[2]).toMatchObject({ flatIndex: 0, status: 'correct' })
+  })
+
+  it('correctly computes correct/total counts per section', () => {
+    const questions = [fq('Math'), fq('Math'), fq('Science')]
+    const answers: Record<number, number> = { 0: 0, 1: 1, 2: 0 }
+    const correctIndexes = [0, 0, 0] // Math: Q0 correct, Q1 wrong; Science: Q2 correct
+    const sections = groupReviewBySection(questions, answers, correctIndexes)
+    const math = sections.find(s => s.sectionName === 'Math')!
+    const sci = sections.find(s => s.sectionName === 'Science')!
+    expect(math.correct).toBe(1)
+    expect(math.total).toBe(2)
+    expect(sci.correct).toBe(1)
+    expect(sci.total).toBe(1)
+  })
+
+  it('treats unanswered questions (no entry in answers) as unanswered status', () => {
+    const questions = [fq('X')]
+    const answers: Record<number, number> = {}
+    const correctIndexes = [0]
+    const sections = groupReviewBySection(questions, answers, correctIndexes)
+    expect(sections[0]!.questionRefs[0]!.status).toBe('unanswered')
+    expect(sections[0]!.correct).toBe(0)
+    expect(sections[0]!.total).toBe(1)
+  })
+
+  it('preserves original order within each status bucket', () => {
+    // Q0 wrong, Q1 wrong, Q2 correct, Q3 wrong — wrong bucket should be [0,1,3]
+    const questions = [fq('S'), fq('S'), fq('S'), fq('S')]
+    const answers: Record<number, number> = { 0: 1, 1: 1, 2: 0, 3: 1 }
+    const correctIndexes = [0, 0, 0, 0]
+    const sections = groupReviewBySection(questions, answers, correctIndexes)
+    const refs = sections[0]!.questionRefs
+    expect(refs.map(r => r.flatIndex)).toEqual([0, 1, 3, 2])
+    expect(refs.map(r => r.status)).toEqual(['incorrect', 'incorrect', 'incorrect', 'correct'])
+  })
+
+  it('handles empty question list', () => {
+    const sections = groupReviewBySection([], {}, [])
+    expect(sections).toHaveLength(0)
   })
 })

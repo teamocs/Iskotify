@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, type BuiltExam } from '../../../utils/examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, type BuiltExam, type ReviewSection } from '../../../utils/examBuilder'
 import type { ExamQuestion } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
@@ -39,6 +39,81 @@ function computeBounds(built: BuiltExam): SectionBound[] {
     cursor += len
   }
   return bounds
+}
+
+// ---------------------------------------------------------------------------
+// Wave 3b: Review accordion — collapsed sections, wrong-answers-first
+// ---------------------------------------------------------------------------
+
+interface ReviewAccordionProps {
+  reviewSections: ReviewSection[]
+  questions: FlatQuestion[]
+  answers: Record<number, number>
+  styles: ReturnType<typeof makeStyles>
+}
+
+function ReviewAccordion({ reviewSections, questions, answers, styles: s }: ReviewAccordionProps) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  function toggle(name: string) {
+    setExpanded(prev => ({ ...prev, [name]: !prev[name] }))
+  }
+
+  return (
+    <View>
+      {reviewSections.map(sec => {
+        const isOpen = !!expanded[sec.sectionName]
+        const secPct = sec.total > 0 ? Math.round((sec.correct / sec.total) * 100) : 0
+        return (
+          <View key={sec.sectionName} style={s.reviewSectionWrap}>
+            <Pressable
+              style={s.reviewSectionHeader}
+              onPress={() => toggle(sec.sectionName)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isOpen }}
+              hitSlop={8}
+            >
+              <View style={s.reviewSectionHeaderLeft}>
+                <Text style={s.reviewSectionName}>{sec.sectionName}</Text>
+                <Text style={s.reviewSectionCount}>{sec.correct}/{sec.total} correct · {secPct}%</Text>
+              </View>
+              <Text style={s.reviewSectionChevron}>{isOpen ? '▲' : '▼'}</Text>
+            </Pressable>
+            {isOpen ? (
+              <View style={s.reviewSectionBody}>
+                {sec.questionRefs.map(ref => {
+                  const fq = questions[ref.flatIndex]
+                  if (!fq) return null
+                  const q = fq.q
+                  const sel = answers[ref.flatIndex]
+                  const ok = ref.status === 'correct'
+                  return (
+                    <View key={q.questionId} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
+                      <Text style={s.reviewQ}>Q{ref.flatIndex + 1}. {q.questionText}</Text>
+                      {q.options.map((o, oi) => (
+                        <Text
+                          key={oi}
+                          style={[
+                            s.reviewOpt,
+                            oi === q.correctIndex && { color: '#16a34a', fontWeight: '700' },
+                            oi === sel && oi !== q.correctIndex ? { color: '#dc2626' } : null,
+                          ]}
+                        >
+                          {LETTERS[oi]}. {o}
+                          {oi === q.correctIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
+                        </Text>
+                      ))}
+                      {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
+                    </View>
+                  )
+                })}
+              </View>
+            ) : null}
+          </View>
+        )
+      })}
+    </View>
+  )
 }
 
 export default function BlueprintExam() {
@@ -294,6 +369,10 @@ export default function BlueprintExam() {
     const notesWithCutoff = visibleNotes.filter(n => n.minPercentile != null)
     const notesWithoutCutoff = visibleNotes.filter(n => n.minPercentile == null)
 
+    // Wave 3b: grouped review sections with wrong-first ordering
+    const correctIndexes = questions.map(fq => fq.q.correctIndex)
+    const reviewSections = groupReviewBySection(questions, answers, correctIndexes)
+
     return (
       <SafeAreaView style={s.root}>
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -351,31 +430,14 @@ export default function BlueprintExam() {
             </>
           ) : null}
 
+          {/* Wave 3b: Review grouped by section, collapsed accordion, wrong-answers-first */}
           <Text style={s.sectionLbl}>Review</Text>
-          {questions.map((fq, i) => {
-            const q = fq.q
-            const sel = answers[i]
-            const ok = sel === q.correctIndex
-            return (
-              <View key={q.questionId} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
-                <Text style={s.reviewQ}>Q{i + 1}. {q.questionText}</Text>
-                {q.options.map((o, oi) => (
-                  <Text
-                    key={oi}
-                    style={[
-                      s.reviewOpt,
-                      oi === q.correctIndex && { color: '#16a34a', fontWeight: '700' },
-                      oi === sel && oi !== q.correctIndex && { color: '#dc2626' },
-                    ]}
-                  >
-                    {LETTERS[oi]}. {o}
-                    {oi === q.correctIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
-                  </Text>
-                ))}
-                {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
-              </View>
-            )
-          })}
+          <ReviewAccordion
+            reviewSections={reviewSections}
+            questions={questions}
+            answers={answers}
+            styles={s}
+          />
 
           {blueprint.scoringNote ? <Text style={s.footnote}>{blueprint.scoringNote}</Text> : null}
 
@@ -586,6 +648,20 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     subtestName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
     subtestScore: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    // Wave 3b: review section accordion styles
+    reviewSectionWrap: {
+      backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
+      borderRadius: 14, borderCurve: 'continuous', marginBottom: 8, overflow: 'hidden',
+    },
+    reviewSectionHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      padding: 14, minHeight: 44,
+    },
+    reviewSectionHeaderLeft: { flex: 1, gap: 2 },
+    reviewSectionName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    reviewSectionCount: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    reviewSectionChevron: { fontSize: 12, color: t.textTertiary, marginLeft: 8 },
+    reviewSectionBody: { paddingHorizontal: 10, paddingBottom: 10 },
     reviewCard: { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, padding: 14, marginBottom: 10 },
     reviewOk: { backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.18)' },
     reviewBad: { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.18)' },

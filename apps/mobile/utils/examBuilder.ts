@@ -68,3 +68,67 @@ export function estimatePercentileBand(pct: number): PercentileBand {
   else { band = 'Foundational'; blurb = 'Focus on fundamentals before timed mocks.' }
   return { percentile, band, blurb }
 }
+
+// ---------------------------------------------------------------------------
+// Review grouping helpers (Wave 3b)
+// ---------------------------------------------------------------------------
+
+export interface ReviewQuestionRef {
+  /** Flat index into the questions array */
+  flatIndex: number
+  /** 'incorrect' | 'unanswered' | 'correct' — for wrong-first ordering */
+  status: 'incorrect' | 'unanswered' | 'correct'
+}
+
+export interface ReviewSection {
+  sectionName: string
+  /** Sorted: incorrect first, then unanswered, then correct. Within each bucket the original relative order is preserved. */
+  questionRefs: ReviewQuestionRef[]
+  correct: number
+  total: number
+}
+
+/**
+ * Group a flat question list into per-section review buckets with wrong-first ordering.
+ *
+ * @param questions  Flat array of `{ sectionName: string }` items (any superset of this shape).
+ * @param answers    Map of flat index → selected option index.
+ * @param correctIndexes  Map of flat index → correct option index.
+ * @returns Array of ReviewSection in the order the sections first appear in `questions`.
+ */
+export function groupReviewBySection(
+  questions: ReadonlyArray<{ sectionName: string }>,
+  answers: Readonly<Record<number, number>>,
+  correctIndexes: ReadonlyArray<number>,
+): ReviewSection[] {
+  const sectionOrder: string[] = []
+  const sectionMap = new Map<string, { incorrect: ReviewQuestionRef[]; unanswered: ReviewQuestionRef[]; correct: ReviewQuestionRef[] }>()
+
+  questions.forEach((fq, i) => {
+    const name = fq.sectionName
+    if (!sectionMap.has(name)) {
+      sectionOrder.push(name)
+      sectionMap.set(name, { incorrect: [], unanswered: [], correct: [] })
+    }
+    const bucket = sectionMap.get(name)!
+    const sel = answers[i]
+    const correctIdx = correctIndexes[i]!
+    let status: ReviewQuestionRef['status']
+    if (sel === undefined) {
+      status = 'unanswered'
+    } else if (sel === correctIdx) {
+      status = 'correct'
+    } else {
+      status = 'incorrect'
+    }
+    bucket[status === 'incorrect' ? 'incorrect' : status === 'unanswered' ? 'unanswered' : 'correct'].push({ flatIndex: i, status })
+  })
+
+  return sectionOrder.map(name => {
+    const b = sectionMap.get(name)!
+    const questionRefs = [...b.incorrect, ...b.unanswered, ...b.correct]
+    const correct = b.correct.length
+    const total = questionRefs.length
+    return { sectionName: name, questionRefs, correct, total }
+  })
+}
