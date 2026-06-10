@@ -5,6 +5,11 @@
  *   - API key is sent via x-goog-api-key HEADER, never embedded in the URL
  *   - Error messages thrown to callers contain zero key material
  *   - Raw response body is never propagated
+ *
+ * Model-churn resilience assertions:
+ *   - 404 on primary model → falls back to secondary and succeeds
+ *   - workingModelIdx is remembered across calls (sticky)
+ *   - All candidates returning 404 → friendly generic error (no key in message)
  */
 
 const GEMINI_ENDPOINT_PREFIX = 'https://generativelanguage.googleapis.com/v1beta/models/'
@@ -194,5 +199,94 @@ describe('validateGeminiKey', () => {
     const [, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, { body: string }]
     const body = JSON.parse(init.body)
     expect(body.generationConfig.maxOutputTokens).toBe(5)
+  })
+})
+
+describe('generateGeminiReply — model-churn resilience', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.resetModules()
+  })
+
+  it('404 on first model falls back to the second model and succeeds', async () => {
+    const { generateGeminiReply, _resetModelIdxForTests } = require('../geminiClient')
+    _resetModelIdxForTests()
+
+    // First call → 404 (primary model deprecated); second call → 200 (fallback succeeds)
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(makeErrorResponse(404))
+      .mockResolvedValueOnce(makeOkResponse('Fallback reply'))
+
+    const result = await generateGeminiReply('AIza-key', 'system', 'user question')
+    expect(result).toBe('Fallback reply')
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(2)
+
+    // Both calls must use the header, never the URL
+    const calls = (global.fetch as jest.Mock).mock.calls as [string, RequestInit & { headers: Record<string, string> }][]
+    for (const [url, init] of calls) {
+      expect(init.headers['x-goog-api-key']).toBe('AIza-key')
+      expect(url).not.toContain('AIza-key')
+      expect(url.startsWith(GEMINI_ENDPOINT_PREFIX)).toBe(true)
+    }
+  })
+
+  it('sticky workingModelIdx: second call skips straight to the working model (only 1 fetch)', async () => {
+    const { generateGeminiReply, _resetModelIdxForTests } = require('../geminiClient')
+    _resetModelIdxForTests()
+
+    // First call: primary 404 → fallback succeeds (2 fetches, idx advances to 1)
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(makeErrorResponse(404))
+      .mockResolvedValueOnce(makeOkResponse('First reply'))
+    await generateGeminiReply('AIza-key', 'system', 'first question')
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(2)
+
+    // Second call should go directly to the remembered model (1 fetch, not 2)
+    ;(global.fetch as jest.Mock).mockClear()
+    global.fetch = jest.fn().mockResolvedValueOnce(makeOkResponse('Second reply'))
+    const result = await generateGeminiReply('AIza-key', 'system', 'second question')
+    expect(result).toBe('Second reply')
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1)
+  })
+
+  it('all candidates returning 404 → friendly generic error without key material', async () => {
+    const SECRET_KEY = 'AIzaDeprecatedAllKey'
+    const { generateGeminiReply, _resetModelIdxForTests } = require('../geminiClient')
+    _resetModelIdxForTests()
+
+    // Return 404 for every fetch call (all 3 candidates exhausted)
+    global.fetch = jest.fn().mockResolvedValue(makeErrorResponse(404))
+
+    let errorMessage = ''
+    try {
+      await generateGeminiReply(SECRET_KEY, 'system', 'user question')
+    } catch (e) {
+      errorMessage = (e as Error).message
+    }
+
+    // Must be the generic friendly error
+    expect(errorMessage).toBe('Gemini ran into a problem — please try again in a moment.')
+    // Key must not appear in the error
+    expect(errorMessage).not.toContain(SECRET_KEY)
+    // Should have tried all 3 candidates
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(3)
+  })
+
+  it('non-404 errors on primary model are not retried (preserve existing status mapping)', async () => {
+    const { generateGeminiReply, _resetModelIdxForTests } = require('../geminiClient')
+    _resetModelIdxForTests()
+
+    global.fetch = jest.fn().mockResolvedValueOnce(makeErrorResponse(429))
+
+    let errorMessage = ''
+    try {
+      await generateGeminiReply('AIza-key', 'system', 'question')
+    } catch (e) {
+      errorMessage = (e as Error).message
+    }
+
+    // 429 → quota message, no fallback attempted
+    expect(errorMessage).toContain('allowance')
+    expect((global.fetch as jest.Mock)).toHaveBeenCalledTimes(1)
   })
 })

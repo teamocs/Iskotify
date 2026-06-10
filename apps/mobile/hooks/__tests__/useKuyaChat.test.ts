@@ -62,9 +62,15 @@ jest.mock('../../services/geminiClient', () => ({
 
 import { useKuyaChat } from '../useKuyaChat'
 import { streamChatInference, modelExists } from '../../services/llm'
+import { getSettings } from '../../services/settings'
+import { getGeminiKey } from '../../services/geminiKey'
+import { generateGeminiReply } from '../../services/geminiClient'
 
 const mockStream = streamChatInference as jest.MockedFunction<typeof streamChatInference>
 const mockModelExists = modelExists as jest.MockedFunction<typeof modelExists>
+const mockGetSettings = getSettings as jest.MockedFunction<typeof getSettings>
+const mockGetGeminiKey = getGeminiKey as jest.MockedFunction<typeof getGeminiKey>
+const mockGenerateGeminiReply = generateGeminiReply as jest.MockedFunction<typeof generateGeminiReply>
 
 describe('useKuyaChat', () => {
   beforeEach(() => {
@@ -373,6 +379,15 @@ describe('useKuyaChat', () => {
     expect(promptArg).toContain('Prior answer')
   })
 
+  it('sets isModelReady true when gemini is configured even if local model does not exist', async () => {
+    mockModelExists.mockResolvedValue(false)
+    mockGetSettings.mockResolvedValue({ aiProvider: 'gemini' } as never)
+    mockGetGeminiKey.mockResolvedValue('AIza-test')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    expect(result.current.isModelReady).toBe(true)
+  })
+
   it('does NOT clobber a fresh send when a previously-aborted stream resolves late', async () => {
     let resolveFirst: (() => void) | undefined
     mockStream.mockImplementationOnce(async () => {
@@ -415,5 +430,84 @@ describe('useKuyaChat', () => {
     expect(finalAssistant2?.text).toBe('Quick reply')
     expect(finalAssistant2?.isStreaming).toBe(false)
     expect(result.current.isStreaming).toBe(false)
+  })
+})
+
+// ── Gemini send() path ─────────────────────────────────────────────────────────
+describe('useKuyaChat — Gemini provider path', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockModelExists.mockResolvedValue(false)
+    mockOrderBy.mockResolvedValue([])
+    // Switch to Gemini provider for every test in this suite
+    mockGetSettings.mockResolvedValue({ aiProvider: 'gemini' } as never)
+    mockGetGeminiKey.mockResolvedValue('AIza-test')
+    mockGenerateGeminiReply.mockResolvedValue('Gemini reply')
+  })
+
+  it('calls generateGeminiReply exactly once and appends the reply as the assistant message', async () => {
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('hello from gemini')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
+    expect(mockStream).not.toHaveBeenCalled()
+
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Gemini reply')
+    expect(assistantMsg?.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('does NOT call local streamChatInference when Gemini provider is active', async () => {
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('What is photosynthesis?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    expect(mockStream).not.toHaveBeenCalled()
+    expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a friendly error bubble (no crash) when generateGeminiReply rejects', async () => {
+    mockGenerateGeminiReply.mockRejectedValue(
+      new Error("Your free Gemini allowance is used up for now — try again in a bit.")
+    )
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('hello?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    // The hook passes Gemini's mapped error message through directly for Gemini mode
+    expect(assistantMsg?.error).toBe(
+      "Your free Gemini allowance is used up for now — try again in a bit."
+    )
+    expect(assistantMsg?.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+    // No unhandled rejections — no crash
+  })
+
+  it('passes the correct system prompt to generateGeminiReply (canonical prompt, not a duplicate)', async () => {
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('What is photosynthesis?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
+    const [, systemPromptArg] = mockGenerateGeminiReply.mock.calls[0]!
+    // Canonical topic prompt contains the SCOPE_BLOCK redirect example
+    expect(systemPromptArg).toContain('Usapang aral muna tayo')
+    // And the Exams-tab pointer from SCOPE_BLOCK
+    expect(systemPromptArg).toContain('Exams tab')
   })
 })
