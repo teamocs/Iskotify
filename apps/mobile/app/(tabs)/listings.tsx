@@ -234,27 +234,37 @@ export default function ExamsScreen() {
     clearBtn: { padding: spacing.xs },
     aiHint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
     aiActiveHint: { color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    list: { paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + layout.tabBarClearance, gap: spacing.sm },
-    card: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    cardIcon: { width: 40, height: 40, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    // Dense list spacing — rows closer together; gap.sm (8) between items
+    list: { paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + layout.tabBarClearance, gap: spacing.xs },
+    // Dense row: horizontal layout, reduced vertical padding, still ≥44pt minHeight
+    row: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    rowIcon: { width: 32, height: 32, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)' },
     scholarIcon: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
-    row1: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
-    cardTitle: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    row2: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' },
-    dateText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    regionLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    verifiedBadge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.xs, paddingVertical: 2, backgroundColor: 'rgba(34,197,94,0.09)', borderColor: 'rgba(34,197,94,0.25)' },
-    verifiedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
-    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
-    focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-    forCourseBadge: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
-    forCourseTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    rowBody: { flex: 1, minWidth: 0, gap: 3 },
+    rowTitle: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'nowrap' },
+    metaText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flexShrink: 1 },
+    metaSep: { fontSize: typo.xs, color: t.textTertiary, opacity: 0.5 },
+    // Badge styles (≤2 per row; maxFontSizeMultiplier applied inline)
     mockBadge: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
     mockBadgeTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    eligibleLine: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
-    bookmarkBtn: { padding: spacing.sm, flexShrink: 0 },
-    bookmarkIcon: { fontSize: 16, opacity: 0.35 },
+    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    bookmarkBtn: { padding: spacing.xs, flexShrink: 0 },
+    bookmarkIcon: { fontSize: 15, opacity: 0.35 },
     bookmarkIconSaved: { opacity: 1 },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxxl },
     sectionWrap: { marginTop: spacing.sm, marginBottom: spacing.xs },
@@ -262,44 +272,74 @@ export default function ExamsScreen() {
     uniLinkTxt: { flex: 1, fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo, insets.bottom])
 
+  // BADGE DECISION (≤2 per row, no duplicates with tab context):
+  // - Type badge DROPPED — active segment tab already communicates Exams vs Scholarships
+  // - Exams: "📝 Mock" (if blueprint slug published) + region label in meta line
+  // - Scholarships: match pill (eligible/maybe) + region label in meta line
+  // - Verified ✓ and course-specific chips moved to detail screen only
   const renderCard = useCallback((l: ListingRow) => {
     const exam = l.type === 'exam'
     const isSaved = savedIds.has(l.id)
     const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id)) ? matchStatusMap.get(l.id)! : 'unknown'
     const p = getPriority(l.slug)
-    const tc = l.targetCourses ?? []
-    const openToAll = tc.length === 0 || tc.includes('all')
-    const forMyCourse = !openToAll && userClusters.size > 0 && tc.some(c => userClusters.has(c))
     const hasMock = exam && blueprintSlugs.has(l.slug)
+
+    // ONE meta line: date/deadline + separator + region (if present)
+    const datePart = exam ? fmtDate(l.examDate) : null
+    const regionPart = l.region ? `📍 ${l.region}` : (l.province ? l.province : null)
+
     return (
       <Pressable
-        style={({ pressed }) => [s.card, { boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
+        style={({ pressed }) => [s.row, { boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
         onPress={() => router.push(`/listings/${l.slug}`)}
         accessibilityRole="button"
       >
-        <View style={[s.cardIcon, exam ? s.examIcon : s.scholarIcon]}>
-          <Lineicons icon={exam ? GraduationCap1Outlined : SparkOutlined} size={16} color={exam ? t.accentText : scholarColor} />
+        {/* Icon */}
+        <View style={[s.rowIcon, exam ? s.examIcon : s.scholarIcon]}>
+          <Lineicons icon={exam ? GraduationCap1Outlined : SparkOutlined} size={14} color={exam ? t.accentText : scholarColor} />
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={s.row1}>
-            <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
-            {p !== null ? <View style={s.focusBadge}><Text style={s.focusBadgeTxt}>#{p} Focus</Text></View> : null}
-            {forMyCourse ? <View style={s.forCourseBadge}><Text style={s.forCourseTxt}>✦ For your course</Text></View> : null}
-            {hasMock ? <View style={s.mockBadge}><Text style={s.mockBadgeTxt}>📝 Mock</Text></View> : null}
+
+        {/* Body: title + meta */}
+        <View style={s.rowBody}>
+          <Text style={s.rowTitle} numberOfLines={1}>{l.title}</Text>
+          <View style={s.rowMeta}>
+            {datePart ? (
+              <Text style={s.metaText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                {datePart}
+              </Text>
+            ) : null}
+            {datePart && regionPart ? (
+              <Text style={s.metaSep} maxFontSizeMultiplier={1.4}>·</Text>
+            ) : null}
+            {regionPart ? (
+              <Text style={s.metaText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                {regionPart}
+              </Text>
+            ) : null}
+            {/* Scholarship rows: match pill as inline badge in meta (counts as badge #1) */}
+            {!exam && matchStatus !== 'unknown' ? (
+              <MatchPill status={matchStatus} />
+            ) : null}
+            {/* Exam rows: Mock badge (badge #1); focus badge secondary (badge #2) */}
+            {hasMock ? (
+              <View style={s.mockBadge}>
+                <Text style={s.mockBadgeTxt} maxFontSizeMultiplier={1.4}>📝 Mock</Text>
+              </View>
+            ) : null}
+            {/* Focus priority badge — shown only when no hasMock (keep ≤2 total) */}
+            {p !== null && !hasMock ? (
+              <View style={s.focusBadge}>
+                <Text style={s.focusBadgeTxt} maxFontSizeMultiplier={1.4}>#{p} Focus</Text>
+              </View>
+            ) : null}
           </View>
-          <View style={s.row2}>
-            {exam ? <Text style={s.dateText}>{fmtDate(l.examDate)}</Text> : null}
-            {l.region ? <Text style={s.regionLabel}>📍 {l.region}</Text> : null}
-            {!exam && l.province ? <Text style={s.regionLabel}>{l.province}</Text> : null}
-            {!exam && l.isVerified ? <View style={s.verifiedBadge}><Text style={s.verifiedTxt}>✓ Verified</Text></View> : null}
-            {!exam ? <MatchPill status={matchStatus} /> : null}
-          </View>
-          {!openToAll ? <Text style={s.eligibleLine} numberOfLines={1}>🎓 {tc.join(' · ')}</Text> : null}
         </View>
+
+        {/* Bookmark */}
         <Pressable
           style={({ pressed }) => [s.bookmarkBtn, pressed && { opacity: 0.7 }]}
           onPress={() => toggleSave(l.id)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
         >
           <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
@@ -307,7 +347,9 @@ export default function ExamsScreen() {
       </Pressable>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, matchStatusMap, getPriority, userClusters, blueprintSlugs, s, t, scholarColor])
+  }, [savedIds, matchStatusMap, getPriority, blueprintSlugs, s, t, scholarColor])
+
+  const renderItem = useCallback(({ item }: { item: ListingRow }) => renderCard(item), [renderCard])
 
   const showAiActive = !!query.trim() && aiResults !== null
   const listHeader = (
@@ -343,7 +385,7 @@ export default function ExamsScreen() {
               onPress={() => onChangeSegment(seg)}
               accessibilityRole="button"
             >
-              <Text style={[s.segTxt, segment === seg && s.segTxtOn]}>
+              <Text style={[s.segTxt, segment === seg && s.segTxtOn]} maxFontSizeMultiplier={1.4}>
                 {seg === 'exam' ? 'College Entrance Exams' : 'Scholarships'}
               </Text>
             </Pressable>
@@ -421,7 +463,7 @@ export default function ExamsScreen() {
               {query.trim() ? 'No matches found. Try different words.' : `No ${segment === 'exam' ? 'exams' : 'scholarships'} yet.`}
             </Text>
           }
-          renderItem={({ item }) => renderCard(item)}
+          renderItem={renderItem}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
