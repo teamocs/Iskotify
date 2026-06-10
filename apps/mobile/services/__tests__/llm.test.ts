@@ -4,7 +4,11 @@ jest.mock('llama.rn', () => ({
     release: jest.fn().mockResolvedValue(undefined),
   }),
 }))
-jest.mock('expo-file-system/legacy', () => ({ documentDirectory: '/mock/', getInfoAsync: jest.fn() }))
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: '/mock/',
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
+  deleteAsync: jest.fn().mockResolvedValue(undefined),
+}))
 jest.mock('expo-device', () => ({ totalMemory: 4 * 1024 * 1024 * 1024 }))
 
 import { buildPrompt, parseResponse } from '../llm'
@@ -185,6 +189,184 @@ describe('inference mutex', () => {
 
     await expect(runCoachInference('boom')).rejects.toThrow('native crash')
     expect(release).toHaveBeenCalled()
+  })
+})
+
+describe('Gemma 4 E2B model constants', () => {
+  it('MODEL_DOWNLOAD_URL points to bartowski gemma-4-E2B Q4_K_M', () => {
+    const { MODEL_DOWNLOAD_URL } = require('../llm')
+    expect(MODEL_DOWNLOAD_URL).toContain('bartowski')
+    expect(MODEL_DOWNLOAD_URL).toContain('gemma-4-E2B-it')
+    expect(MODEL_DOWNLOAD_URL).toContain('Q4_K_M')
+    expect(MODEL_DOWNLOAD_URL).toContain('google_gemma-4-E2B-it-Q4_K_M.gguf')
+  })
+
+  it('MODEL_SIZE_BYTES is the verified byte count (3,462,678,272)', () => {
+    const { MODEL_SIZE_BYTES } = require('../llm')
+    expect(MODEL_SIZE_BYTES).toBe(3_462_678_272)
+  })
+
+  it('MODEL_SIZE_LABEL is "~3.4 GB"', () => {
+    const { MODEL_SIZE_LABEL } = require('../llm')
+    expect(MODEL_SIZE_LABEL).toBe('~3.4 GB')
+  })
+
+  it('MODEL_PATH uses the new Gemma 4 filename', () => {
+    const { MODEL_PATH } = require('../llm')
+    expect(MODEL_PATH).toContain('google_gemma-4-E2B-it-Q4_K_M.gguf')
+    expect(MODEL_PATH).not.toContain('gemma-3')
+  })
+})
+
+describe('hasEnoughRam — 4 GB gate', () => {
+  it('returns true when device reports 4 GB (4 * 1024^3)', () => {
+    // Default mock: 4 GB — set by the top-level jest.mock('expo-device')
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(true)
+  })
+
+  it('returns false when device reports 2 GB (below 3.6 GB threshold)', () => {
+    jest.resetModules()
+    jest.mock('expo-device', () => ({ totalMemory: 2 * 1024 * 1024 * 1024 }))
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(false)
+  })
+
+  it('returns false when totalMemory is null', () => {
+    jest.resetModules()
+    jest.mock('expo-device', () => ({ totalMemory: null }))
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(false)
+  })
+
+  it('returns true for 3.6 GB exactly (boundary)', () => {
+    jest.resetModules()
+    jest.mock('expo-device', () => ({ totalMemory: 3.6e9 }))
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(true)
+  })
+})
+
+describe('getContext — MTP speculative init + fallback', () => {
+  beforeEach(() => {
+    jest.resetModules()
+    jest.clearAllMocks()
+  })
+
+  it('passes speculative: "mtp" to initLlama on first attempt', async () => {
+    const mockCtx = {
+      completion: jest.fn().mockResolvedValue({ text: 'ok' }),
+      release: jest.fn().mockResolvedValue(undefined),
+    }
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue(mockCtx)
+
+    const { runCoachInference } = require('../llm')
+    await runCoachInference('hello')
+
+    expect(llama.initLlama).toHaveBeenCalledTimes(1)
+    const callArgs = llama.initLlama.mock.calls[0]![0]
+    expect(callArgs.speculative).toBe('mtp')
+    expect(callArgs.n_batch).toBe(512)
+    expect(callArgs.n_threads).toBe(6)
+    expect(callArgs.n_ctx).toBe(2048)
+    expect(callArgs.cache_type_k).toBe('f16')
+    expect(callArgs.cache_type_v).toBe('f16')
+    expect(callArgs.flash_attn_type).toBe('auto')
+  })
+
+  it('retries without speculative when MTP init fails, then succeeds', async () => {
+    const mockCtx = {
+      completion: jest.fn().mockResolvedValue({ text: 'Tara mag-review tayo!' }),
+      release: jest.fn().mockResolvedValue(undefined),
+    }
+    const llama = require('llama.rn')
+    // First call (with MTP) fails; second call (without) succeeds
+    llama.initLlama
+      .mockRejectedValueOnce(new Error('MTP not supported'))
+      .mockResolvedValueOnce(mockCtx)
+
+    const { runCoachInference } = require('../llm')
+    // runCoachInference resolves (no throw) — fallback path succeeded
+    await expect(runCoachInference('hello')).resolves.not.toThrow()
+
+    expect(llama.initLlama).toHaveBeenCalledTimes(2)
+    // First attempt had speculative
+    expect(llama.initLlama.mock.calls[0]![0].speculative).toBe('mtp')
+    // Second attempt (fallback) has NO speculative key
+    expect(llama.initLlama.mock.calls[1]![0].speculative).toBeUndefined()
+  })
+
+  it('propagates error if both MTP and fallback init fail', async () => {
+    const llama = require('llama.rn')
+    llama.initLlama
+      .mockRejectedValueOnce(new Error('MTP not supported'))
+      .mockRejectedValueOnce(new Error('init failed'))
+
+    const { runCoachInference } = require('../llm')
+    await expect(runCoachInference('hello')).rejects.toThrow('init failed')
+  })
+
+  it('n_predict for runInference is 400 (unchanged)', async () => {
+    const completion = jest.fn().mockResolvedValue({
+      text: '{"wrong_option_1":"A","wrong_option_2":"B","wrong_option_3":"C","explanation":"x"}',
+    })
+    const llama = require('llama.rn')
+    llama.initLlama.mockResolvedValue({ completion, release: jest.fn() })
+
+    const { runInference, buildPrompt } = require('../llm')
+    await runInference(buildPrompt({ subjectName: 'Science', topicName: 'Bio', question: 'Q?', answer: 'A' }))
+    expect(completion.mock.calls[0]![0].n_predict).toBe(400)
+  })
+})
+
+describe('modelExists — old model cleanup', () => {
+  beforeEach(() => {
+    jest.resetModules()
+    jest.clearAllMocks()
+  })
+
+  it('returns true when new model exists, deletes old model if present', async () => {
+    const fs = require('expo-file-system/legacy')
+    // New model exists; old model also exists
+    fs.getInfoAsync
+      .mockResolvedValueOnce({ exists: true })  // MODEL_PATH
+      .mockResolvedValueOnce({ exists: true })  // OLD_MODEL_PATH
+    fs.deleteAsync.mockResolvedValue(undefined)
+
+    const { modelExists } = require('../llm')
+    const result = await modelExists()
+
+    expect(result).toBe(true)
+    expect(fs.deleteAsync).toHaveBeenCalledTimes(1)
+    expect(fs.deleteAsync.mock.calls[0]![0]).toContain('gemma-3')
+  })
+
+  it('returns false when new model absent; still deletes old model if present', async () => {
+    const fs = require('expo-file-system/legacy')
+    fs.getInfoAsync
+      .mockResolvedValueOnce({ exists: false }) // MODEL_PATH
+      .mockResolvedValueOnce({ exists: true })  // OLD_MODEL_PATH
+    fs.deleteAsync.mockResolvedValue(undefined)
+
+    const { modelExists } = require('../llm')
+    const result = await modelExists()
+
+    expect(result).toBe(false)
+    expect(fs.deleteAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT call deleteAsync when old model is absent', async () => {
+    const fs = require('expo-file-system/legacy')
+    fs.getInfoAsync
+      .mockResolvedValueOnce({ exists: true })  // MODEL_PATH
+      .mockResolvedValueOnce({ exists: false }) // OLD_MODEL_PATH
+
+    const { modelExists } = require('../llm')
+    const result = await modelExists()
+
+    expect(result).toBe(true)
+    expect(fs.deleteAsync).not.toHaveBeenCalled()
   })
 })
 

@@ -1,5 +1,12 @@
 import { renderHook, act } from '@testing-library/react-native'
 
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: '/mock/',
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
+  deleteAsync: jest.fn().mockResolvedValue(undefined),
+  makeDirectoryAsync: jest.fn().mockResolvedValue(undefined),
+}))
+
 jest.mock('expo-router', () => ({
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react')

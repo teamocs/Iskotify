@@ -3,7 +3,13 @@ import { useFocusEffect } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import { createDownloadTask, setConfig, completeHandler, getExistingDownloadTasks } from '@kesha-antonov/react-native-background-downloader'
 import type { DownloadTask } from '@kesha-antonov/react-native-background-downloader'
+import * as FileSystem from 'expo-file-system/legacy'
 import { modelExists, hasEnoughRam, ensureModelDirectory, MODEL_PATH, MODEL_DOWNLOAD_URL, resolveDownloadUrl } from '../services/llm'
+
+// Old Gemma 3 1B file — delete before starting a new download to free ~750 MB.
+// Matches the OLD_MODEL_PATH in llm.ts (kept in sync manually; llm.ts also
+// deletes it in modelExists() for devices that never trigger a new download).
+const OLD_MODEL_PATH = `${FileSystem.documentDirectory}models/google_gemma-3-1b-it-Q4_K_M.gguf`
 
 export type ModelStatus = 'unknown' | 'absent' | 'downloading' | 'ready' | 'unsupported'
 
@@ -196,6 +202,18 @@ export function useModelDownload(onDownloadComplete?: () => void): UseModelDownl
     setLastError(null)
 
     const destination = MODEL_PATH.replace(/^file:\/\//, '')
+
+    // Step 0 — delete the old Gemma 3 file if present to free ~750 MB before
+    //           the new download starts. Fire-and-forget (non-blocking).
+    FileSystem.getInfoAsync(OLD_MODEL_PATH)
+      .then(info => {
+        if (info.exists) {
+          return FileSystem.deleteAsync(OLD_MODEL_PATH, { idempotent: true })
+            .then(() => console.log('[useModelDownload] deleted old Gemma 3 model'))
+            .catch(err => console.warn('[useModelDownload] old-model delete failed:', err))
+        }
+      })
+      .catch(() => {})
 
     // Step 1 — ensure the models/ directory exists.
     // Step 2 — pre-resolve the final CDN URL before handing it to the native downloader.

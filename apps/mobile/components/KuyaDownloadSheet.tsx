@@ -4,6 +4,7 @@ import { View, Text, Image, Modal, Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 import { useModelDownload } from '../hooks/useModelDownload'
+import { MODEL_SIZE_LABEL } from '../services/llm'
 
 const MB = 1024 * 1024
 
@@ -33,7 +34,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
 
   const percent = Math.round(progress * 100)
   const mbDownloaded = (bytesDownloaded / MB).toFixed(0)
-  const mbTotal = bytesTotal > 0 ? (bytesTotal / MB).toFixed(0) : '~750'
+  const mbTotal = bytesTotal > 0 ? (bytesTotal / MB).toFixed(0) : '~3303'
 
   const isDownloading = modelStatus === 'downloading'
   const isUnsupported = modelStatus === 'unsupported'
@@ -162,11 +163,11 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
 
           {isUnsupported ? (
             <Text style={s.body}>
-              This device doesn't have enough memory (needs ≥ 2 GB RAM) to run Kuya Baw locally.
+              {`This phone doesn't have enough memory for Kuya's on-device brain (needs about 4 GB RAM). You'll be able to use a free Gemini key instead — coming in this update.`}
             </Text>
           ) : (
             <Text style={s.body}>
-              One-time download (~750 MB). Wi-Fi recommended.
+              {`One-time download (${MODEL_SIZE_LABEL}). Wi-Fi strongly recommended.`}
             </Text>
           )}
 

@@ -5,17 +5,24 @@ import { parseCoachPhrase } from './coachPrompts'
 
 export { parseCoachPhrase }
 
-// Correct filename: the bartowski GGUF repo prefixes files with `google_`.
-// Full file list: https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF
-const MODEL_FILENAME = 'google_gemma-3-1b-it-Q4_K_M.gguf'
+// Gemma 4 E2B Q4_K_M from bartowski's GGUF repo (public, ungated).
+// Verified 2026-06-11: HEAD → 302 → 200 unauthenticated; Content-Length 3,462,678,272 bytes.
+// ggml-org only has Q8_0 (too large); unsloth Q4_K_M is 3.1 GB but uses a smaller imatrix;
+// bartowski Q4_K_M at ~3.4 GB is preferred quality for 4 GB-class devices.
+const MODEL_FILENAME = 'google_gemma-4-E2B-it-Q4_K_M.gguf'
+// Old Gemma 3 1B file — used only for cleanup; never downloaded again.
+const OLD_MODEL_FILENAME = 'google_gemma-3-1b-it-Q4_K_M.gguf'
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`
 export const MODEL_PATH = `${MODEL_DIR}${MODEL_FILENAME}`
+const OLD_MODEL_PATH = `${MODEL_DIR}${OLD_MODEL_FILENAME}`
 
-// NOTE: The correct repo slug is `bartowski/google_gemma-3-1b-it-GGUF` (with `google_` prefix).
-// The previous slug `bartowski/gemma-3-1b-it-GGUF` (without the prefix) does not exist and
-// caused all downloads to fail with a 404.  The filename also carries the `google_` prefix.
 export const MODEL_DOWNLOAD_URL =
-  'https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf'
+  'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
+
+/** Exact byte count from a verified unauthenticated HEAD request (2026-06-11). */
+export const MODEL_SIZE_BYTES = 3_462_678_272
+/** Human-readable size label shown in UI copy. */
+export const MODEL_SIZE_LABEL = '~3.4 GB'
 
 /**
  * Resolve the final CDN/S3 URL for the model by following HuggingFace's
@@ -43,7 +50,10 @@ export async function resolveDownloadUrl(): Promise<string> {
   return MODEL_DOWNLOAD_URL
 }
 
-const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
+// Gemma 4 E2B Q4_K_M requires ~4 GB-class devices.
+// We gate at 3.6 GB because OEMs routinely under-report totalMemory (system
+// reservation, firmware, etc.) — a "4 GB" phone typically reports ~3.7–3.9 GB.
+const MIN_RAM_BYTES = 3.6e9
 // Extended from 60 s → 300 s: chat sessions often have a pause between messages;
 // releasing at 60 s was re-incurring the full model-load cost mid-conversation.
 // The context is released when the app backgrounds via releaseContextIfIdle()
@@ -53,12 +63,23 @@ export const IDLE_RELEASE_MS = 300_000
 export function hasEnoughRam(): boolean {
   const total = Device.totalMemory
   if (total === null) return false
+  // Gate: ≥ 3.6 GB counts as a 4 GB-class device (OEM under-reporting margin).
   return total >= MIN_RAM_BYTES
 }
 
 export async function modelExists(): Promise<boolean> {
-  const info = await FileSystem.getInfoAsync(MODEL_PATH)
-  return info.exists
+  const [newInfo, oldInfo] = await Promise.all([
+    FileSystem.getInfoAsync(MODEL_PATH),
+    FileSystem.getInfoAsync(OLD_MODEL_PATH),
+  ])
+  // One-time cleanup: if the old Gemma 3 file is still present, delete it
+  // (frees ~750 MB). Fire-and-forget — don't block the existence check.
+  if (oldInfo.exists) {
+    FileSystem.deleteAsync(OLD_MODEL_PATH, { idempotent: true }).catch(err =>
+      console.warn('[llm] old-model cleanup failed:', err)
+    )
+  }
+  return newInfo.exists
 }
 
 export async function ensureModelDirectory(): Promise<void> {
@@ -88,38 +109,45 @@ async function getContext(): Promise<LlamaContext> {
   // 1536 is NOT comfortable headroom for adversarial prompts (long history +
   // all context blocks simultaneously). Keeping 2048 gives ~700 slack tokens,
   // which is safer and costs < 50 MB extra RAM at q4 KV.  Decision: KEEP 2048.
+  // Gemma 4 E2B supports 128K ctx natively, but 2048 is kept for RAM budget.
   //
   // ── Speculative / MTP ─────────────────────────────────────────────────────
-  // llama.rn 0.12.3 typings expose `speculative?: NativeSpeculativeConfig` with
-  // types 'none' | 'draft-mtp'. The JSDoc says "MTP on recurrent/hybrid
-  // models must be enabled here so llama.cpp can allocate recurrent-state rollback
-  // slots." Gemma 3 1B is a dense transformer — it has NO MTP heads. Enabling
-  // draft-mtp/mtp without a matching second draft model would crash or silently
-  // degrade inference. Gemma 4 is the first Gemma with built-in MTP heads and a
-  // published draft-model. We must NOT add a second model download (RAM + storage
-  // regression on 2 GB-gate devices). speculative is intentionally omitted.
-  ctxRef = await initLlama({
+  // Gemma 4 E2B has built-in MTP heads; llama.rn 0.12.4 'mtp' is an alias for
+  // 'draft-mtp' and requires NO second draft model. MTP must be declared at
+  // context creation so llama.cpp allocates recurrent-state rollback slots.
+  // Fallback path: if init with 'mtp' fails (e.g. older native binary),
+  // retry once without speculative so chat degrades gracefully instead of bricking.
+  const initParams = {
     model: MODEL_PATH.replace(/^file:\/\//, ''),
     n_ctx: 2048,
     // n_threads 4 → 6: typical big.LITTLE phones have ≥8 cores; llama.cpp
     // schedules work onto perf cores — 6 threads saturates them without
     // spilling onto efficiency cores and causing cache thrash.
     n_threads: 6,
-    // Batch size for prompt processing (token parallelism). 512 is a common
-    // sweet-spot for single-sequence mobile inference; default is often 512
-    // already in llama.cpp but explicit here for clarity.
+    // Batch size for prompt processing (token parallelism). 512 is the
+    // sweet-spot for single-sequence mobile inference.
     n_batch: 512,
     // KV cache precision: f16 halves the KV memory vs f32 with negligible
     // quality loss at Q4 quantisation levels. Marked "Experimental" in
     // llama.cpp but widely used in production mobile builds.
-    cache_type_k: 'f16',
-    cache_type_v: 'f16',
+    cache_type_k: 'f16' as const,
+    cache_type_v: 'f16' as const,
     // Flash attention: improves throughput on long contexts; the 'auto' string
     // is accepted by the typings (flash_attn_type?: string). The JSDoc says
     // "only recommended in GPU device" but on CPU it degrades gracefully (the
     // kernel falls back to standard attention if unsupported at runtime).
-    flash_attn_type: 'auto',
-  })
+    // llama.rn 0.12.4 narrowed flash_attn_type to 'auto' | 'on' | 'off'.
+    flash_attn_type: 'auto' as const,
+    // MTP speculative decoding — Gemma 4 E2B built-in heads; no draft model needed.
+    speculative: 'mtp' as const,
+  }
+  try {
+    ctxRef = await initLlama(initParams)
+  } catch (err) {
+    console.warn('[llm] MTP init failed — retrying without speculative:', err)
+    const { speculative: _omit, ...paramsWithoutSpeculative } = initParams
+    ctxRef = await initLlama(paramsWithoutSpeculative)
+  }
   return ctxRef
 }
 
