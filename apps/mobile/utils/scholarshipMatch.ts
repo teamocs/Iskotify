@@ -26,6 +26,22 @@ export interface MatchResult { status: MatchStatus; reasons: string[]; warnings:
 
 const RANK: Record<MatchStatus, number> = { ineligible: 3, maybe: 2, eligible: 1, unknown: 0 }
 
+/** The matcher leans on income, GWA, and province. GWA + province are concrete
+ *  signals every student can give; income may legitimately be "prefer not to say".
+ *  We treat the profile as incomplete (worth prompting) when GWA or province is unset. */
+export function scholarshipProfileIncomplete(s: { gwa: number | null; province: string | null; incomeBracket: IncomeBracket | null }): boolean {
+  return s.gwa == null || !s.province?.trim()
+}
+
+/** Human-readable list of the matching fields still unset (for prompts/subtitles). */
+export function scholarshipProfileMissing(s: { gwa: number | null; province: string | null; incomeBracket: IncomeBracket | null }): string[] {
+  const m: string[] = []
+  if (s.gwa == null) m.push('GWA')
+  if (!s.province?.trim()) m.push('province')
+  if (!s.incomeBracket) m.push('income')
+  return m
+}
+
 export function matchScholarship(listing: MatchInput, student: StudentProfile): MatchResult {
   const reasons: string[] = []
   const warnings: string[] = []

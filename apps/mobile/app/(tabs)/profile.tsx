@@ -24,6 +24,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { exportUserData, importUserData } from '../../services/export'
+import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
@@ -41,6 +42,7 @@ interface ProfileData {
   googleId: string
   email: string
   listingTitle: string
+  scholarshipIncomplete: boolean
 }
 
 const DEFAULT: ProfileData = {
@@ -50,6 +52,7 @@ const DEFAULT: ProfileData = {
   googleId: '',
   email: '',
   listingTitle: 'No exam selected',
+  scholarshipIncomplete: true,
 }
 
 // ── Drag-to-reorder focus item ───────────────────────────────────────────────
@@ -277,6 +280,11 @@ export default function ProfileScreen() {
           googleId: row.googleId ?? '',
           email: row.email ?? '',
           listingTitle,
+          scholarshipIncomplete: scholarshipProfileIncomplete({
+            gwa: row.gwa ?? null,
+            province: row.province ?? null,
+            incomeBracket: (row.incomeBracket as IncomeBracket | null) ?? null,
+          }),
         })
       }
     } catch (e) {
@@ -510,6 +518,15 @@ export default function ProfileScreen() {
 
         {/* Target Courses — editable; lets older-onboarding users add courses later */}
         <TargetCoursesCard />
+
+        {/* Scholarship matching profile — editable income / GWA / province (matcher fields) */}
+        <ListCard
+          icon={<Text style={{ fontSize: 18 }}>🎓</Text>}
+          iconBg={profile.scholarshipIncomplete ? 'rgba(245,158,11,0.14)' : 'rgba(34,197,94,0.12)'}
+          title="Scholarship Profile"
+          subtitle={profile.scholarshipIncomplete ? 'Add income, GWA & province for better matches' : 'Complete — powering your scholarship matches'}
+          onPress={() => router.push('/profile/scholarship-info')}
+        />
 
         {/* Analytics section */}
         <Card elevated>

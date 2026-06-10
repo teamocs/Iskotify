@@ -14,9 +14,10 @@ import { spacing, radius, layout } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { syncOnLaunch } from '../../services/sync'
 import { getSettings } from '../../services/settings'
-import { matchScholarship } from '../../utils/scholarshipMatch'
+import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { MatchPill } from '../../components/scholarships/MatchPill'
+import { InfoBanner } from '../../components/ui/InfoBanner'
 import { searchListings, type SearchableListing } from '../../utils/listingSearch'
 import { aiSearchListings } from '../../services/listingSearch'
 import { canonicalizeRegion } from '../../utils/region'
@@ -380,6 +381,20 @@ export default function ExamsScreen() {
             <Text style={s.uniLinkTxt}>🏫 Find top universities by course</Text>
             <Text style={{ fontSize: typo.xs, color: t.textTertiary }}>→</Text>
           </Pressable>
+        ) : null}
+
+        {/* Prompt to complete the scholarship-matching profile for accurate eligibility. */}
+        {segment === 'scholarship' && !query.trim() && scholarshipProfileIncomplete({
+          gwa: profile.gwa ?? null, province: profile.province ?? null, incomeBracket: profile.incomeBracket ?? null,
+        }) ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <InfoBanner
+              icon={<Text style={{ fontSize: 16 }}>🎓</Text>}
+              message="Add your income, GWA & province to see which scholarships you actually qualify for."
+              actionLabel="Complete"
+              onAction={() => router.push('/profile/scholarship-info')}
+            />
+          </View>
         ) : null}
 
         <FlatList
