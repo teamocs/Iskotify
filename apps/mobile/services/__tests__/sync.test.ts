@@ -19,7 +19,7 @@ function makeSupabaseChain(data: any[] = []) {
     select: jest.fn().mockReturnThis(),
     contains: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
-    gt: jest.fn().mockResolvedValue({ data }),
+    gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data }),
     then: (resolve: any, reject: any) => resolved.then(resolve, reject),
   }
   return chain
@@ -956,7 +956,7 @@ function makeSupabaseForCards(cardRow: Record<string, unknown>) {
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'flashcards') {
@@ -964,7 +964,7 @@ function makeSupabaseForCards(cardRow: Record<string, unknown>) {
         select: jest.fn().mockReturnThis(),
         contains: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
-        gt: jest.fn().mockResolvedValue({ data: [cardRow] }),
+        gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [cardRow] }),
       }
     }
     return emptyChain
@@ -1083,7 +1083,7 @@ function makeSupabaseForUpcat(questionRow: Record<string, unknown>, passageRow: 
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'upcat_passages') {
@@ -1097,7 +1097,7 @@ function makeSupabaseForUpcat(questionRow: Record<string, unknown>, passageRow: 
       return {
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
-        gt: jest.fn().mockResolvedValue({ data: [questionRow] }),
+        gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [questionRow] }),
       }
     }
     if (table === 'upcat_facts') {
@@ -1166,7 +1166,7 @@ function makeSupabaseForListings(listingRow: Record<string, unknown>) {
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'listings') {
@@ -1246,7 +1246,7 @@ function makeSupabaseForCutoffs(cutoffRow: Record<string, unknown>) {
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'upcat_cutoffs') {
@@ -1331,7 +1331,7 @@ function makeSupabaseForCareer(
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'career_courses') {
@@ -1502,7 +1502,7 @@ function makeSupabaseForUniversity(
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'tertiary_schools') {
@@ -1516,6 +1516,8 @@ function makeSupabaseForUniversity(
       const resolved = Promise.resolve({ data: [rankingRow] })
       return {
         select: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        range: jest.fn().mockResolvedValue({ data: [rankingRow] }),
         then: (resolve: any, reject: any) => resolved.then(resolve, reject),
       }
     }
@@ -1655,7 +1657,7 @@ function makeSupabaseForAdmissionsUpdates(
       select: jest.fn().mockReturnThis(),
       contains: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      gt: jest.fn().mockResolvedValue({ data: [] }),
+      gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
       then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
     }
     if (table === 'admissions_updates') {

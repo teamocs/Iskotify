@@ -13,6 +13,26 @@ import {
 } from '../db/schema'
 import { supabase } from './supabase'
 
+// Supabase caps a single SELECT at 1000 rows. For tables that exceed that
+// (flashcards, upcat_questions, course_school_rankings) we page with .range()
+// until a short page returns, so the FULL set reaches the device instead of a
+// silently-truncated first 1000. makeQuery MUST apply a stable .order() so pages
+// don't skip/duplicate rows.
+async function fetchAllPaginated<T = Record<string, unknown>>(
+  makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+  pageSize = 1000,
+): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1)
+    if (error) throw error
+    const rows = data ?? []
+    out.push(...rows)
+    if (rows.length < pageSize) break
+  }
+  return out
+}
+
 export async function syncPrimaryListing(db: DrizzleClient): Promise<void> {
   const rows = await db
     .select({ listingSlug: focusListings.listingSlug })
@@ -198,13 +218,15 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .gt('updated_at', since),
     ])
 
-    const [upcatPassagesRes, upcatQuestionsRes, upcatFactsRes, upcatCutoffsRes] = await Promise.all([
+    const [upcatPassagesRes, upcatQuestionsRows, upcatFactsRes, upcatCutoffsRes] = await Promise.all([
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
-      supabase.from('upcat_questions')
+      fetchAllPaginated((from, to) => supabase.from('upcat_questions')
         .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,updated_at')
         .eq('status', 'published')
-        .gt('updated_at', since),
+        .gt('updated_at', since)
+        .order('question_id')
+        .range(from, to)),
       supabase.from('upcat_facts')
         .select('id,topic,question,answer,source,valid_year,updated_at')
         .gt('updated_at', since),
@@ -237,15 +259,17 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // ── Epic C: University / course tables ───────────────────────────────────
     // Full pull for all 6 (static/slow-changing reference data)
     const [
-      tertiarySchoolsRes, universityProfilesRes, courseSchoolRankingsRes,
+      tertiarySchoolsRes, universityProfilesRes, courseSchoolRankingsRows,
       courseSchoolQualityRes, barResultsRes, courseTaxonomyMapRes,
     ] = await Promise.all([
       supabase.from('tertiary_schools')
         .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at'),
       supabase.from('university_profiles')
         .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at'),
-      supabase.from('course_school_rankings')
-        .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at'),
+      fetchAllPaginated((from, to) => supabase.from('course_school_rankings')
+        .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at')
+        .order('id')
+        .range(from, to)),
       supabase.from('course_school_quality')
         .select('id,school_name,region,province,city,course_standardized,course_group,school_type,ched_coe_cod,quality_score,quality_tier,accreditations,has_prc_board,qs_subject_rank,data_confidence,tertiary_school_id,updated_at'),
       supabase.from('bar_results')
@@ -256,16 +280,18 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     const cardResults = await Promise.all(
       slugs.map(slug =>
-        supabase.from('flashcards')
+        fetchAllPaginated((from, to) => supabase.from('flashcards')
           .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,updated_at')
           .contains('listing_slugs', [slug])
           .eq('status', 'published')
           .gt('updated_at', since)
+          .order('id')
+          .range(from, to))
       )
     )
 
     const seen = new Set<string>()
-    const allCards = cardResults.flatMap(r => r.data ?? []).filter(r => {
+    const allCards = cardResults.flat().filter(r => {
       if (seen.has(r.id)) return false
       seen.add(r.id); return true
     })
@@ -364,7 +390,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         tx.insert(upcatPassages).values(vals).onConflictDoUpdate({ target: upcatPassages.setId, set: vals }).run()
       }
 
-      for (const row of (upcatQuestionsRes.data ?? [])) {
+      for (const row of upcatQuestionsRows) {
         const vals = {
           questionId: row.question_id, subtest: row.subtest,
           mainSubject: row.main_subject ?? null, topic: row.topic ?? null, subtopic: row.subtopic ?? null,
@@ -530,7 +556,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         tx.insert(universityProfiles).values(vals).onConflictDoUpdate({ target: universityProfiles.schoolId, set: vals }).run()
       }
 
-      for (const row of (courseSchoolRankingsRes.data ?? [])) {
+      for (const row of courseSchoolRankingsRows) {
         const vals = {
           id: row.id, courseTab: row.course_tab, courseName: row.course_name ?? null,
           rank: row.rank ?? null, schoolName: row.school_name,
