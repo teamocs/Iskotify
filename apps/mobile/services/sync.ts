@@ -1,5 +1,6 @@
 import { eq, asc } from 'drizzle-orm'
 import { invalidate } from './queryCache'
+import { scheduleWebPersist } from '../db/webPersist'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -711,6 +712,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // Invalidate all query caches so screens reflect fresh synced data
     invalidate('')
+
+    // Schedule a web DB persist after sync (no-op on native)
+    scheduleWebPersist()
 
     // Also push user data backup if signed in
     await pushUserData(db)

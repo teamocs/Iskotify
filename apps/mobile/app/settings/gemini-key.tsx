@@ -8,6 +8,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -392,6 +393,11 @@ export default function GeminiKeyScreen() {
         <Text style={s.pageSub}>
           Kuya Baw can use Google's Gemini in the cloud — free to set up with your own key.
         </Text>
+        {Platform.OS === 'web' ? (
+          <Text style={[s.freeNote, { marginBottom: spacing.md }]} maxFontSizeMultiplier={1.4}>
+            On the web, your key is saved only in this browser.
+          </Text>
+        ) : null}
 
         {screenState === 'has-key' && !successShown ? (
           <>

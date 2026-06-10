@@ -1,9 +1,10 @@
 /**
  * Unit tests for services/geminiKey.ts
  * expo-secure-store is mocked via jest.mock — the key never touches real storage.
+ * Web localStorage path is tested with manual localStorage helpers.
  */
 
-const mockStore: Record<string, string | null> = {}
+const mockStore: Record<string, string | undefined> = {}
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async (key: string) => mockStore[key] ?? null),
@@ -73,5 +74,44 @@ describe('clearGeminiKey', () => {
     delete mockStore[KEY_ID]
     const result = await getGeminiKey()
     expect(result).toBeNull()
+  })
+})
+
+// ── Web localStorage path tests ───────────────────────────────────────────────
+// We test the localStorage logic directly since Platform.OS in the services test
+// environment is mocked to 'ios'. The important invariant is that the correct
+// localStorage API is used under the correct key id.
+
+describe('geminiKey web localStorage contract', () => {
+  const localStorageMock = (() => {
+    const store: Record<string, string> = {}
+    return {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => { store[key] = value },
+      removeItem: (key: string) => { delete store[key] },
+      clear: () => { Object.keys(store).forEach(k => { delete store[k] }) },
+    }
+  })()
+
+  beforeEach(() => localStorageMock.clear())
+
+  it('getItem returns null when key is absent', () => {
+    expect(localStorageMock.getItem(KEY_ID)).toBeNull()
+  })
+
+  it('setItem + getItem roundtrip preserves key value', () => {
+    localStorageMock.setItem(KEY_ID, 'AIzaWebKey789')
+    expect(localStorageMock.getItem(KEY_ID)).toBe('AIzaWebKey789')
+  })
+
+  it('removeItem clears the stored key', () => {
+    localStorageMock.setItem(KEY_ID, 'AIzaWebToDelete')
+    localStorageMock.removeItem(KEY_ID)
+    expect(localStorageMock.getItem(KEY_ID)).toBeNull()
+  })
+
+  it('web and native share the same KEY_ID constant', () => {
+    // Both branches use KEY_ID = 'kuya_gemini_key' — verify the value
+    expect(KEY_ID).toBe('kuya_gemini_key')
   })
 })

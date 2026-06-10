@@ -3,6 +3,7 @@ import type { DrizzleClient } from '../db/client'
 import { userSettings } from '../db/schema'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
 import { invalidate } from './queryCache'
+import { scheduleWebPersist } from '../db/webPersist'
 
 export interface UserSettingsData {
   selectedListingSlug: string
@@ -147,4 +148,5 @@ export async function updateSettings(
   // Invalidate caches that depend on user settings (selected listing, name, etc.)
   invalidate('settings:')
   invalidate('home:')
+  scheduleWebPersist()
 }

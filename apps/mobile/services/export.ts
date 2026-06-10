@@ -50,6 +50,20 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
   const json = JSON.stringify(payload, null, 2)
   const filename = `iskotify-export-${new Date().toISOString().slice(0, 10)}.json`
 
+  // ── Web: Blob + anchor-click download ────────────────────────────────────
+  if (Platform.OS === 'web') {
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    return { status: 'saved', filename }
+  }
+
   if (Platform.OS === 'android') {
     const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync()
     if (!perms.granted) return { status: 'cancelled' }
@@ -79,6 +93,11 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
 type ExportRow = Record<string, unknown>
 
 export async function importUserData(db: DrizzleClient): Promise<void> {
+  // ── Web: import is out of scope for W1 — show a helpful message ──────────
+  if (Platform.OS === 'web') {
+    throw new Error('Data import is available on the mobile app. Export your data there and restore it on the same device.')
+  }
+
   const result = await DocumentPicker.getDocumentAsync({
     type: ['application/json', 'text/plain', '*/*'],
     copyToCacheDirectory: true,

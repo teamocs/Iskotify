@@ -1,6 +1,6 @@
 // RN Image is fine for a bundled asset; expo-image is a native module that would break OTA.
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { View, Text, Image, Modal, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Image, Modal, Pressable, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
@@ -173,91 +173,124 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
             resizeMode="contain"
           />
 
-          <Text style={s.title}>Kuya Baw needs to download his brain 🧠</Text>
-
-          {isUnsupported ? (
-            <Text style={s.body}>
-              {`This phone can't run Kuya's on-device brain — use a free Gemini key instead.`}
-            </Text>
-          ) : (
-            <Text style={s.body}>
-              {`One-time download (${MODEL_SIZE_LABEL}). Wi-Fi strongly recommended.`}
-            </Text>
-          )}
-
-          {hasError ? (
-            <Text style={s.errorText}>
-              {lastError?.message ?? 'Download failed. Please try again.'}
-            </Text>
-          ) : null}
-
-          {isDownloading ? (
-            <View style={s.progressWrap}>
-              <View style={s.progressTrack}>
-                <View style={[s.progressFill, { width: `${percent}%` }]} />
+          {/* Web: model download is not available — show Gemini-only path */}
+          {Platform.OS === 'web' ? (
+            <>
+              <Text style={s.title}>Kuya Baw on the web</Text>
+              <Text style={s.body}>
+                {'On the web, Kuya Baw answers using your free Gemini key.\nAdd your key to start chatting.'}
+              </Text>
+              <View style={s.btnRow}>
+                <Pressable
+                  style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
+                  onPress={() => {
+                    onClose()
+                    router.push('/settings/gemini-key')
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set up Gemini key"
+                >
+                  <Text style={s.btnPrimaryText}>Set up your Gemini key (free)</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]}
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text style={s.btnSecondaryText}>Cancel</Text>
+                </Pressable>
               </View>
-              <Text style={s.progressLabel}>
-                {percent}% — {mbDownloaded} / {mbTotal} MB
-              </Text>
-            </View>
-          ) : null}
+            </>
+          ) : (
+            <>
+              <Text style={s.title}>Kuya Baw needs to download his brain 🧠</Text>
 
-          <View style={s.btnRow}>
-            {isUnsupported ? (
-              <Pressable
-                style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
-                onPress={() => {
-                  onClose()
-                  router.push('/settings/gemini-key')
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Use your own Gemini key"
-              >
-                <Text style={s.btnPrimaryText}>
-                  Use a free Gemini key instead
+              {isUnsupported ? (
+                <Text style={s.body}>
+                  {`This phone can't run Kuya's on-device brain — use a free Gemini key instead.`}
                 </Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
-                onPress={isDownloading ? undefined : startDownload}
-                disabled={isDownloading}
-                accessibilityRole="button"
-                accessibilityLabel={isDownloading ? 'Downloading…' : hasError ? 'Retry download' : 'Download'}
-              >
-                <Text style={s.btnPrimaryText}>
-                  {isDownloading ? 'Downloading…' : hasError ? 'Retry' : 'Download'}
+              ) : (
+                <Text style={s.body}>
+                  {`One-time download (${MODEL_SIZE_LABEL}). Wi-Fi strongly recommended.`}
                 </Text>
-              </Pressable>
-            )}
+              )}
 
-            {isUnsupported ? null : (
-              <Pressable
-                style={({ pressed }) => [s.btnGemini, pressed && { opacity: 0.7 }]}
-                onPress={() => {
-                  onClose()
-                  router.push('/settings/gemini-key')
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Use your own Gemini key instead"
-              >
-                <Text style={s.btnGeminiText}>
-                  Use your own Gemini key instead (free)
+              {hasError ? (
+                <Text style={s.errorText}>
+                  {lastError?.message ?? 'Download failed. Please try again.'}
                 </Text>
-              </Pressable>
-            )}
+              ) : null}
 
-            <Pressable
-              style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]}
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel"
-            >
-              <Text style={s.btnSecondaryText}>
-                {isDownloading ? 'Continue in background' : 'Cancel'}
-              </Text>
-            </Pressable>
-          </View>
+              {isDownloading ? (
+                <View style={s.progressWrap}>
+                  <View style={s.progressTrack}>
+                    <View style={[s.progressFill, { width: `${percent}%` }]} />
+                  </View>
+                  <Text style={s.progressLabel}>
+                    {percent}% — {mbDownloaded} / {mbTotal} MB
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={s.btnRow}>
+                {isUnsupported ? (
+                  <Pressable
+                    style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
+                    onPress={() => {
+                      onClose()
+                      router.push('/settings/gemini-key')
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use your own Gemini key"
+                  >
+                    <Text style={s.btnPrimaryText}>
+                      Use a free Gemini key instead
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
+                    onPress={isDownloading ? undefined : startDownload}
+                    disabled={isDownloading}
+                    accessibilityRole="button"
+                    accessibilityLabel={isDownloading ? 'Downloading…' : hasError ? 'Retry download' : 'Download'}
+                  >
+                    <Text style={s.btnPrimaryText}>
+                      {isDownloading ? 'Downloading…' : hasError ? 'Retry' : 'Download'}
+                    </Text>
+                  </Pressable>
+                )}
+
+                {isUnsupported ? null : (
+                  <Pressable
+                    style={({ pressed }) => [s.btnGemini, pressed && { opacity: 0.7 }]}
+                    onPress={() => {
+                      onClose()
+                      router.push('/settings/gemini-key')
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use your own Gemini key instead"
+                  >
+                    <Text style={s.btnGeminiText}>
+                      Use your own Gemini key instead (free)
+                    </Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]}
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text style={s.btnSecondaryText}>
+                    {isDownloading ? 'Continue in background' : 'Cancel'}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
       </View>
     </Modal>

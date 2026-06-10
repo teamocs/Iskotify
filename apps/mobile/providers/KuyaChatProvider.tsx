@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { Platform } from 'react-native'
 import { AskKuyaModal } from '../components/AskKuyaModal'
 import { KuyaDownloadSheet } from '../components/KuyaDownloadSheet'
 import { modelExists, hasEnoughRam, warmUpLlama } from '../services/llm'
@@ -60,6 +61,18 @@ export function KuyaChatProvider({ children }: { children: ReactNode }) {
 
   // Tap handler: check provider preference first, then model availability.
   const open = useCallback(async () => {
+    // --- Web path: local model is unavailable — only Gemini is supported ---
+    if (Platform.OS === 'web') {
+      const geminiKey = await getGeminiKey()
+      if (geminiKey !== null) {
+        openChat()
+      } else {
+        // Show the sheet in web mode — it will render the Gemini-only UI
+        openSheet()
+      }
+      return
+    }
+
     // --- Gemini cloud path ---
     // Check provider preference + key presence. Both reads are fast and
     // user-initiated so per-tap latency is acceptable (~1–5 ms total).

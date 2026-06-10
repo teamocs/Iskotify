@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Text, Image, InteractionManager } from 'react-native'
+import { Platform, View, Image, InteractionManager } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
@@ -30,6 +29,23 @@ import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 
+// KeyboardProvider is native-only (react-native-keyboard-controller).
+// On web, render children directly — the provider import itself is safe to
+// include in the bundle but its runtime code is no-op on web. We gate the
+// wrapper to avoid any potential side effects.
+let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> | null = null
+if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  KeyboardProvider = require('react-native-keyboard-controller').KeyboardProvider
+}
+
+function KeyboardProviderCompat({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === 'web' || !KeyboardProvider) {
+    return <>{children}</>
+  }
+  return <KeyboardProvider>{children}</KeyboardProvider>
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Outfit_400Regular,
@@ -45,13 +61,35 @@ export default function RootLayout() {
   // Stable callback — never changes, safe as useCallback dep
   const handleReady = useCallback(() => setAppReady(true), [])
 
+  // ── Web: no SQLiteProvider (sql.js used instead via WebDrizzleProvider) ──
   if (Platform.OS === 'web') {
-    return <WebUnsupported />
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <KeyboardProviderCompat>
+          <DrizzleProvider>
+            <ThemeProvider>
+              <AppInit onReady={handleReady} />
+            </ThemeProvider>
+          </DrizzleProvider>
+          {(!appReady || !fontsReady) && (
+            <View style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Image
+                source={require('../assets/images/icon.png')}
+                style={{ width: 80, height: 80, borderRadius: 20 }}
+              />
+            </View>
+          )}
+        </KeyboardProviderCompat>
+      </GestureHandlerRootView>
+    )
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <KeyboardProvider>
+      <KeyboardProviderCompat>
         {/* DB + navigation tree — children only render once SQLite is open */}
         <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
           <DrizzleProvider>
@@ -77,20 +115,8 @@ export default function RootLayout() {
             />
           </View>
         )}
-      </KeyboardProvider>
+      </KeyboardProviderCompat>
     </GestureHandlerRootView>
-  )
-}
-
-function WebUnsupported() {
-  return (
-    <View style={{ flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-      <StatusBar style="light" />
-      <Text style={{ fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 8, textAlign: 'center' }}>Iskotify</Text>
-      <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 20 }}>
-        This app runs on iOS and Android.{'\n'}Scan the QR code from the terminal using Expo Go.
-      </Text>
-    </View>
   )
 }
 

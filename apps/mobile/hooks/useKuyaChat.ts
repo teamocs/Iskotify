@@ -3,6 +3,7 @@ import { AppState, InteractionManager } from 'react-native'
 import { useDb } from './useDb'
 import { useHomeStats } from './useHomeStats'
 import { streamChatInference, modelExists } from '../services/llm'
+import { scheduleWebPersist } from '../db/webPersist'
 import {
   buildChatPrompt, parseChatChunk, isMathQuestion, detectChatMode,
   SYSTEM_PROMPT_PROGRESS, SYSTEM_PROMPT_TOPIC, SYSTEM_PROMPT_MATH,
@@ -288,7 +289,7 @@ export function useKuyaChat(): UseKuyaChat {
             void dbRef.current.transaction(async tx => {
               await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
               await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
-            }).catch(() => {})
+            }).then(() => scheduleWebPersist()).catch(() => {})
             return
           }
 
@@ -340,7 +341,7 @@ export function useKuyaChat(): UseKuyaChat {
           void dbRef.current.transaction(async tx => {
             await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
             await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
-          }).catch(() => {})
+          }).then(() => scheduleWebPersist()).catch(() => {})
 
         } catch (err) {
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return

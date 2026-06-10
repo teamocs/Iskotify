@@ -5,6 +5,7 @@ import { useDb } from './useDb'
 import { focusListings, listings } from '../db/schema'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
+import { scheduleWebPersist } from '../db/webPersist'
 
 export interface FocusListing {
   slug: string
@@ -71,6 +72,7 @@ export function useFocusListings() {
     await db.insert(focusListings)
       .values({ listingSlug: slug, priority: maxPriority + 1, addedAt: Date.now() })
       .onConflictDoNothing()
+    scheduleWebPersist()
     invalidate('home:')
     invalidate('practice:')
     invalidate('chat:')
@@ -87,6 +89,7 @@ export function useFocusListings() {
         tx.update(focusListings).set({ priority: r.priority }).where(eq(focusListings.listingSlug, r.slug)).run()
       }
     })
+    scheduleWebPersist()
     invalidate('home:')
     invalidate('practice:')
     invalidate('chat:')

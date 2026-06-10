@@ -2,6 +2,7 @@ import { useDb } from './useDb'
 import { practiceSessions } from '../db/schema'
 import { pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
+import { scheduleWebPersist } from '../db/webPersist'
 
 export interface SessionParams {
   listingSlug: string
@@ -44,6 +45,7 @@ export function useRecordSession() {
   async function recordSession(params: SessionParams): Promise<void> {
     const record = buildSessionRecord(params)
     await db.insert(practiceSessions).values(record)
+    scheduleWebPersist()
     // Invalidate caches so home/analytics screens reflect the new session
     invalidate('analytics:')
     invalidate('home:')

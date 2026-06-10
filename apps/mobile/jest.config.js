@@ -2,7 +2,10 @@ module.exports = {
   projects: [
     {
       displayName: 'services',
-      testMatch: ['<rootDir>/services/**/__tests__/**/*.test.ts'],
+      testMatch: [
+        '<rootDir>/services/**/__tests__/**/*.test.ts',
+        '<rootDir>/db/**/__tests__/**/*.test.ts',
+      ],
       testEnvironment: 'node',
       globalSetup: '<rootDir>/jest.services.setup.js',
       transform: {
@@ -14,7 +17,7 @@ module.exports = {
         ],
       },
       transformIgnorePatterns: [
-        'node_modules/(?!(@supabase|expo|drizzle-orm))',
+        'node_modules/(?!(@supabase|expo|drizzle-orm|sql\\.js))',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
@@ -22,13 +25,15 @@ module.exports = {
         'expo-file-system/legacy': '<rootDir>/__mocks__/expoFileSystemLegacyMock.js',
         '^expo-web-browser$': '<rootDir>/__mocks__/expoWebBrowserMock.js',
         '^expo-linking$': '<rootDir>/__mocks__/expoLinkingMock.js',
+        '^react-native$': '<rootDir>/__mocks__/reactNativeMock.js',
+        '^expo-secure-store$': '<rootDir>/__mocks__/expoSecureStoreMock.js',
       },
     },
     {
       displayName: 'mobile',
       preset: 'jest-expo',
       testMatch: ['<rootDir>/**/__tests__/**/*.test.{ts,tsx}'],
-      testPathIgnorePatterns: ['<rootDir>/services/'],
+      testPathIgnorePatterns: ['<rootDir>/services/', '<rootDir>/db/web/'],
       transformIgnorePatterns: [
         'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|react-navigation|@react-navigation/.*|react-native-svg|@lineiconshq)',
       ],

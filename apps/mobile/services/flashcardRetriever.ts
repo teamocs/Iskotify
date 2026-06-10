@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm'
+import { sql, like, or } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
+import { flashcards as flashcardsTable, upcatFacts as upcatFactsTable, careerFacts as careerFactsTable } from '../db/schema'
 
 export interface RetrievedFlashcard {
   flashcardId: string
@@ -43,6 +44,165 @@ export function buildFtsQuery(question: string): string {
   if (tokens.length === 0) return ''
   // Cap at 8 tokens to keep the MATCH expression bounded and predictable.
   return tokens.slice(0, 8).map(t => `${t}*`).join(' OR ')
+}
+
+/**
+ * Extract searchable tokens from a query string (same stop-word logic as
+ * buildFtsQuery but returns the raw token array for use in LIKE expressions).
+ * Exported for unit testing.
+ */
+export function extractSearchTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t.length >= 3 && !STOP_WORDS.has(t))
+    .slice(0, 8)
+}
+
+// ── LIKE-based fallback search (used on web where FTS5 is unavailable) ─────
+
+/**
+ * Count how many terms from `tokens` appear in `text` (case-insensitive).
+ * Used as a lightweight relevance proxy when BM25 is unavailable.
+ */
+function countHits(tokens: string[], text: string): number {
+  const lower = text.toLowerCase()
+  return tokens.filter(t => lower.includes(t)).length
+}
+
+/**
+ * LIKE-based flashcard search for environments without FTS5 (web).
+ *
+ * Splits the query into tokens, then for each token builds a LIKE '%token%'
+ * condition across question + answer + explanation (OR'd). Rows that match
+ * any token are returned; they are sorted by descending hit-count (simple
+ * relevance proxy for BM25) and capped at `limit`.
+ *
+ * Never throws — failures are logged and treated as "no results".
+ */
+export async function searchFlashcardsLike(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<RetrievedFlashcard[]> {
+  const tokens = extractSearchTokens(question)
+  if (tokens.length === 0) return []
+  try {
+    // Build OR-chain: each token checked across all three text columns
+    const conditions = tokens.flatMap(t => [
+      like(flashcardsTable.question, `%${t}%`),
+      like(flashcardsTable.answer, `%${t}%`),
+      like(flashcardsTable.explanation, `%${t}%`),
+    ])
+    const rows = await db
+      .select({
+        flashcardId: flashcardsTable.id,
+        topicId: flashcardsTable.topicId,
+        question: flashcardsTable.question,
+        answer: flashcardsTable.answer,
+        explanation: flashcardsTable.explanation,
+      })
+      .from(flashcardsTable)
+      .where(or(...conditions))
+      .limit(limit * 3) // over-fetch so we can re-rank by hit count
+    // Sort by number of token hits (descending) and cap at limit
+    return rows
+      .map(r => ({
+        ...r,
+        score: countHits(tokens, `${r.question} ${r.answer} ${r.explanation}`),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+  } catch (err) {
+    console.warn('[flashcardRetriever] LIKE search failed:', err)
+    return []
+  }
+}
+
+/**
+ * LIKE-based UPCAT facts search for environments without FTS5 (web).
+ * Mirrors searchUpcatFacts shape/contract.
+ * Never throws.
+ */
+export async function searchUpcatFactsLike(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<RetrievedUpcatFact[]> {
+  const tokens = extractSearchTokens(question)
+  if (tokens.length === 0) return []
+  try {
+    const conditions = tokens.flatMap(t => [
+      like(upcatFactsTable.question, `%${t}%`),
+      like(upcatFactsTable.answer, `%${t}%`),
+      like(upcatFactsTable.topic, `%${t}%`),
+    ])
+    const rows = await db
+      .select({
+        topic: upcatFactsTable.topic,
+        question: upcatFactsTable.question,
+        answer: upcatFactsTable.answer,
+        source: upcatFactsTable.source,
+        validYear: upcatFactsTable.validYear,
+      })
+      .from(upcatFactsTable)
+      .where(or(...conditions))
+      .limit(limit * 3)
+    return rows
+      .map(r => ({
+        ...r,
+        _hits: countHits(tokens, `${r.topic} ${r.question} ${r.answer}`),
+      }))
+      .sort((a, b) => b._hits - a._hits)
+      .slice(0, limit)
+      .map(({ _hits: _h, ...r }) => r)
+  } catch (err) {
+    console.warn('[flashcardRetriever] UPCAT LIKE search failed:', err)
+    return []
+  }
+}
+
+/**
+ * LIKE-based career facts search for environments without FTS5 (web).
+ * Mirrors searchCareerFacts shape/contract.
+ * Never throws.
+ */
+export async function searchCareerFactsLike(
+  db: DrizzleClient,
+  query: string,
+  limit = 3,
+): Promise<RetrievedCareerFact[]> {
+  const tokens = extractSearchTokens(query)
+  if (tokens.length === 0) return []
+  try {
+    const conditions = tokens.flatMap(t => [
+      like(careerFactsTable.courseName, `%${t}%`),
+      like(careerFactsTable.quickAnswer, `%${t}%`),
+      like(careerFactsTable.keyCaveat, `%${t}%`),
+    ])
+    const rows = await db
+      .select({
+        courseName: careerFactsTable.courseName,
+        queryType: careerFactsTable.queryType,
+        quickAnswer: careerFactsTable.quickAnswer,
+        keyCaveat: careerFactsTable.keyCaveat,
+        pointTo: careerFactsTable.pointTo,
+      })
+      .from(careerFactsTable)
+      .where(or(...conditions))
+      .limit(limit * 3)
+    return rows
+      .map(r => ({
+        ...r,
+        _hits: countHits(tokens, `${r.courseName ?? ''} ${r.quickAnswer ?? ''} ${r.keyCaveat ?? ''}`),
+      }))
+      .sort((a, b) => b._hits - a._hits)
+      .slice(0, limit)
+      .map(({ _hits: _h, ...r }) => r)
+  } catch (err) {
+    console.warn('[flashcardRetriever] career LIKE search failed:', err)
+    return []
+  }
 }
 
 /**
