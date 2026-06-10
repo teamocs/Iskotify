@@ -36,10 +36,10 @@ export function SplitStatCard({ columns }: { columns: StatColumn[] }) {
               {col.icon}
             </View>
           ) : null}
-          <Text style={{ fontSize: typo.h3, fontWeight: '700', color: col.valueColor ?? t.textPrimary, fontFamily: 'Outfit_700Bold', fontVariant: ['tabular-nums'] }}>
+          <Text style={{ fontSize: typo.h3, fontWeight: '700', color: col.valueColor ?? t.textPrimary, fontFamily: 'Outfit_700Bold', fontVariant: ['tabular-nums'] }} maxFontSizeMultiplier={1.4}>
             {col.value}
           </Text>
-          <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_500Medium', textTransform: 'uppercase', letterSpacing: 0.5 }} maxFontSizeMultiplier={1.4}>
             {col.label}
           </Text>
         </View>

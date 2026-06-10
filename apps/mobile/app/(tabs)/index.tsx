@@ -24,7 +24,7 @@ import { DateActionSheet } from '../../components/calendar/DateActionSheet'
 import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { useDb } from '../../hooks/useDb'
 import { notes as notesTable, listings as listingsTable, focusListings, admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
-import { daysUntil as admissionsDaysUntil, upcomingEvents } from '../../utils/admissionsFeed'
+import { upcomingEvents } from '../../utils/admissionsFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
 import { getAcquiredRequirementIndices } from '../../services/coachQueue'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
@@ -346,6 +346,11 @@ export default function HomeScreen() {
   const [activeDayMs, setActiveDayMs] = useState<number | null>(null)
   const [showMonth, setShowMonth] = useState(false)
 
+  // Progressive-disclosure state
+  const [coachExpanded, setCoachExpanded] = useState(false)
+  const [weakAreasExpanded, setWeakAreasExpanded] = useState(false)
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false)
+
   // Derive day indices for amber reminder dots (matches dayIndex math used by CalendarStrip)
   const reminderDays = useMemo(
     () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
@@ -447,19 +452,6 @@ export default function HomeScreen() {
     })()
     return () => { cancelled = true }
   }, [db])
-
-  // UPCAT 2027 countdown — find the first future UPCAT exam row
-  const upcatRow = useMemo(() => {
-    const todayISO = new Date().toISOString().slice(0, 10)
-    return admissionItems.find(item =>
-      item.eventDate != null &&
-      item.eventDate > todayISO &&
-      item.severity === 'urgent' &&
-      item.title.toUpperCase().includes('UPCAT')
-    ) ?? null
-  }, [admissionItems])
-
-  const upcatDaysLeft = upcatRow?.eventDate ? admissionsDaysUntil(upcatRow.eventDate) : 0
 
   // Admissions events folded into Upcoming Dates (urgent/important/info with future eventDate)
   const futureAdmissionEvents = useMemo(() => {
@@ -578,46 +570,48 @@ export default function HomeScreen() {
       color: t.textSecondary,
     },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 19, fontFamily: 'Lexend_400Regular' },
-    quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+    // Collapsed coach row
+    kuyaCollapsedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: 'rgba(128,0,0,0.25)',
+      borderRadius: radius.xl,
+      borderCurve: 'continuous',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    kuyaMiniAvatar: { width: 32, height: 32, borderRadius: radius.sm, borderCurve: 'continuous', overflow: 'hidden', flexShrink: 0 },
+    kuyaCollapsedName: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold', marginRight: spacing.xs },
+    kuyaCollapsedTip: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
+    kuyaChevron: { fontSize: 18, color: t.textTertiary, marginLeft: spacing.xs },
+    quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl },
     quickIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
     quickSub: { fontSize: typo.xs, color: 'rgba(255,255,255,0.78)', marginTop: spacing.xs / 4, fontFamily: 'Lexend_400Regular' },
     chevron: { color: t.textTertiary, fontSize: 22 },
-    section: { marginTop: spacing.lg },
+    section: { marginTop: spacing.xl },
     empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    upcatBanner: {
-      padding: spacing.lg,
-      marginBottom: spacing.md,
-      flexDirection: 'row' as const,
-      alignItems: 'center' as const,
-      gap: spacing.md,
-      backgroundColor: 'rgba(128,0,0,0.10)',
-      borderColor: 'rgba(128,0,0,0.28)',
-    },
-    upcatIconCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: radius.pill,
-      backgroundColor: 'rgba(128,0,0,0.15)',
-      alignItems: 'center' as const,
-      justifyContent: 'center' as const,
-      flexShrink: 0,
-    },
-    upcatTitle: { fontSize: typo.md, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
-    upcatSub: { fontSize: typo.xs, color: t.textSecondary, marginTop: spacing.xs / 2, fontFamily: 'Lexend_400Regular' },
-    upcatBadge: {
-      marginLeft: 'auto' as const,
-      backgroundColor: 'rgba(128,0,0,0.12)',
+    // Merged 2-column row for Missing Requirements + My Progress
+    twoColRow: { flexDirection: 'row', gap: spacing.sm },
+    twoColHalf: {
+      flex: 1,
+      backgroundColor: t.surface,
       borderWidth: 1,
-      borderColor: 'rgba(128,0,0,0.30)',
-      borderRadius: radius.sm,
+      borderColor: t.border,
+      borderRadius: radius.xl,
       borderCurve: 'continuous',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs + 1,
-      alignItems: 'center' as const,
+      boxShadow: t.shadowSm,
+      padding: spacing.md,
+      alignItems: 'flex-start',
+      gap: spacing.xs,
     },
-    upcatDaysNum: { fontSize: typo.lg, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold', lineHeight: 22 },
-    upcatDaysLbl: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+    twoColIcon: { fontSize: 18 },
+    twoColTitle: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 17 },
+    twoColSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 15 },
   }), [t, typo])
 
   useEffect(() => {
@@ -683,6 +677,14 @@ export default function HomeScreen() {
     .sort((a, b) => (a.keyDate ?? 0) - (b.keyDate ?? 0))
     .slice(0, 7)
 
+  // Top-3 + See all slicing
+  const TOP_N = 3
+  const visibleWeakTopics = weakAreasExpanded ? weakTopics : weakTopics.slice(0, TOP_N)
+  const visibleUpcomingDates = upcomingExpanded ? upcomingDates : upcomingDates.slice(0, TOP_N)
+
+  const showMissingReq = missingReqCount > 0 && focusedListings.length > 0
+  const showProgress = sessionCount > 0
+
   return (
     <SafeAreaView style={s.root}>
       <ScreenScroll
@@ -699,7 +701,7 @@ export default function HomeScreen() {
         }
       >
 
-        {/* Greeting row — ENLARGED */}
+        {/* (1) Greeting row */}
         <View style={s.greetRow}>
           <View>
             <Text style={s.greetTime}>{timeGreeting()}</Text>
@@ -710,6 +712,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => setShowNotifModal(true)}
               accessibilityRole="button"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Lineicons
                 icon={notifEnabled ? Bell1Solid : Bell1Outlined}
@@ -721,6 +724,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => router.push('/settings')}
               accessibilityRole="button"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Lineicons icon={Gear1Outlined} size={20} color={t.textSecondary} />
             </Pressable>
@@ -729,6 +733,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/(tabs)/profile')}
               accessibilityRole="button"
               accessibilityLabel="Profile"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Lineicons icon={User4Outlined} size={20} color={t.textSecondary} />
             </Pressable>
@@ -737,116 +742,7 @@ export default function HomeScreen() {
 
         <View>
 
-          {/* Kuya Baw AI Coach card — LARGER MASCOT */}
-          <Card elevated style={s.kuyaCard}>
-            <View style={s.kuyaRow}>
-              <Pressable
-                style={s.kuyaAvatarLg}
-                onPress={onKuyaTap}
-                hitSlop={12}
-                android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
-                accessibilityRole="button"
-                accessibilityLabel="Tap Kuya Baw for a new tip"
-              >
-                <Image
-                  source={require('../../assets/images/kuya-baw-mascot.png')}
-                  style={{ width: 80, height: 80 }}
-                  resizeMode="contain"
-                />
-              </Pressable>
-              <View style={{ flex: 1 }}>
-                <View style={s.kuyaNameRow}>
-                  <Text style={s.kuyaName}>Kuya Baw</Text>
-                  <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
-                  <Pressable
-                    style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
-                    onPress={onAskPress}
-                    accessibilityRole="button"
-                    accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
-                  >
-                    <Text style={s.askPillText}>💬 Ask</Text>
-                  </Pressable>
-                </View>
-                <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
-              </View>
-            </View>
-          </Card>
-
-          {/* 7-day calendar strip — MOVED BELOW AI COACH */}
-          <View style={s.calendarWrap}>
-            <CalendarStrip
-              importantDays={importantDays}
-              practiceDays={practiceDays}
-              reminderDays={reminderDays}
-              onDayPress={setActiveDayMs}
-              onHeaderPress={() => setShowMonth(true)}
-            />
-          </View>
-
-          {/* Stats row — split statistics card (design system §3) */}
-          <View style={{ marginBottom: spacing.md }}>
-            <SplitStatCard
-              columns={[
-                { value: daysLeft != null ? String(daysLeft) : '—', label: 'DAYS LEFT', valueColor: t.accentText },
-                { value: todayAccuracy !== null ? `${todayAccuracy}%` : '—', label: 'ACCURACY' },
-                { value: streakDays > 0 ? `${streakDays}🔥` : '—', label: 'STREAK', valueColor: streakDays > 0 ? '#fbbf24' : undefined },
-              ]}
-            />
-          </View>
-
-          {/* UPCAT 2027 countdown banner */}
-          {upcatRow != null && upcatDaysLeft > 0 ? (
-            <Pressable
-              onPress={() => router.push('/practice/exam/upcat')}
-              accessibilityRole="button"
-              accessibilityLabel={`UPCAT countdown: ${upcatDaysLeft} days left`}
-              testID="upcat-countdown-banner"
-              style={({ pressed }) => pressed && { opacity: 0.8 }}
-            >
-              <Card elevated style={s.upcatBanner}>
-                <View style={s.upcatIconCircle}>
-                  <Text style={{ fontSize: 20 }}>🎓</Text>
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.upcatTitle}>{upcatRow.title}</Text>
-                  <Text style={s.upcatSub}>
-                    {new Date(upcatRow.eventDate! + 'T00:00:00Z').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </Text>
-                </View>
-                <View style={s.upcatBadge}>
-                  <Text style={s.upcatDaysNum}>{upcatDaysLeft}</Text>
-                  <Text style={s.upcatDaysLbl}>days</Text>
-                </View>
-              </Card>
-            </Pressable>
-          ) : null}
-
-          {/* Missing Requirements widget */}
-          {missingReqCount > 0 && focusedListings.length > 0 ? (
-            <View style={{ marginBottom: spacing.md }}>
-              <ListCard
-                icon={<Text style={{ fontSize: 18 }}>📋</Text>}
-                iconBg="rgba(252,165,165,0.15)"
-                title={`Kulang na requirements: ${missingReqCount}`}
-                subtitle="Tap to review and check off your requirements"
-                onPress={() => router.push('/requirements')}
-              />
-            </View>
-          ) : null}
-
-          {/* Mini progress card */}
-          {sessionCount > 0 ? (
-            <View style={{ marginBottom: spacing.md }}>
-              <ListCard
-                icon={<Text style={{ fontSize: 18 }}>📈</Text>}
-                title="My Progress"
-                subtitle={`${sessionCount} session${sessionCount !== 1 ? 's' : ''}${streak > 0 ? ` · ${streak}🔥 streak` : ''}`}
-                onPress={() => router.push('/(tabs)/analytics')}
-              />
-            </View>
-          ) : null}
-
-          {/* Quick Practice CTA */}
+          {/* (2) Quick Practice CTA — PRIMARY, promoted directly under greeting */}
           {quickTopicId ? (
             <Pressable
               style={({ pressed }) => [s.quickBtn, pressed && { opacity: 0.85 }]}
@@ -866,13 +762,109 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
 
-          {/* Weak Areas */}
+          {/* (3) Stats card */}
+          <View style={{ marginBottom: spacing.xl }}>
+            <SplitStatCard
+              columns={[
+                { value: daysLeft != null ? String(daysLeft) : '—', label: 'DAYS LEFT', valueColor: t.accentText },
+                { value: todayAccuracy !== null ? `${todayAccuracy}%` : '—', label: 'ACCURACY' },
+                { value: streakDays > 0 ? `${streakDays}🔥` : '—', label: 'STREAK', valueColor: streakDays > 0 ? '#fbbf24' : undefined },
+              ]}
+            />
+          </View>
+
+          {/* (4) Kuya Baw AI Coach — COLLAPSED one-liner, expands inline */}
+          {coachExpanded ? (
+            <Card elevated style={s.kuyaCard}>
+              <View style={s.kuyaRow}>
+                <Pressable
+                  style={s.kuyaAvatarLg}
+                  onPress={onKuyaTap}
+                  hitSlop={12}
+                  android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tap Kuya Baw for a new tip"
+                >
+                  <Image
+                    source={require('../../assets/images/kuya-baw-mascot.png')}
+                    style={{ width: 80, height: 80 }}
+                    resizeMode="contain"
+                  />
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <View style={s.kuyaNameRow}>
+                    <Text style={s.kuyaName}>Kuya Baw</Text>
+                    <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
+                    <Pressable
+                      style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
+                      onPress={onAskPress}
+                      accessibilityRole="button"
+                      accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
+                    >
+                      <Text style={s.askPillText}>💬 Ask</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
+                  <Pressable
+                    onPress={() => setCoachExpanded(false)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Collapse coach card"
+                    style={{ marginTop: spacing.sm, alignSelf: 'flex-end' }}
+                  >
+                    <Text style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>Show less ‹</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Card>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.kuyaCollapsedRow, pressed && { opacity: 0.8 }]}
+              onPress={() => setCoachExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Expand Kuya Baw coach card"
+              accessibilityState={{ expanded: false }}
+              testID="kuya-coach-collapsed"
+            >
+              <View style={s.kuyaMiniAvatar}>
+                <Image
+                  source={require('../../assets/images/kuya-baw-mascot.png')}
+                  style={{ width: 32, height: 32 }}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={s.kuyaCollapsedName}>Kuya Baw</Text>
+              <Text style={s.kuyaCollapsedTip} numberOfLines={1}>"{kuyaMsg}"</Text>
+              <Text style={s.kuyaChevron}>›</Text>
+            </Pressable>
+          )}
+
+          {/* (5) Calendar strip */}
+          <View style={s.calendarWrap}>
+            <CalendarStrip
+              importantDays={importantDays}
+              practiceDays={practiceDays}
+              reminderDays={reminderDays}
+              onDayPress={setActiveDayMs}
+              onHeaderPress={() => setShowMonth(true)}
+            />
+          </View>
+
+          {/* (6) Weak Areas — top 3 + See all */}
           <View style={s.section}>
-            <SectionHeader title="Weak Areas" />
+            <SectionHeader
+              title="Weak Areas"
+              actionLabel={
+                weakTopics.length > TOP_N
+                  ? (weakAreasExpanded ? 'Show less' : `See all (${weakTopics.length})`)
+                  : undefined
+              }
+              onAction={weakTopics.length > TOP_N ? () => setWeakAreasExpanded(v => !v) : undefined}
+            />
           </View>
           {weakTopics.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              {weakTopics.map(topic => {
+              {visibleWeakTopics.map(topic => {
                 const color = weakTopicColor(topic.accuracy)
                 return (
                   <ListCard
@@ -893,13 +885,21 @@ export default function HomeScreen() {
             <Text style={s.empty}>Start practicing to see weak areas</Text>
           )}
 
-          {/* Upcoming Important Dates */}
+          {/* (7) Upcoming Dates — top 3 + See all */}
           <View style={s.section}>
-            <SectionHeader title="Upcoming Dates" />
+            <SectionHeader
+              title="Upcoming Dates"
+              actionLabel={
+                upcomingDates.length > TOP_N
+                  ? (upcomingExpanded ? 'Show less' : `See all (${upcomingDates.length})`)
+                  : undefined
+              }
+              onAction={upcomingDates.length > TOP_N ? () => setUpcomingExpanded(v => !v) : undefined}
+            />
           </View>
           {upcomingDates.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              {upcomingDates.map(item => {
+              {visibleUpcomingDates.map(item => {
                 const d = msToDays(item.keyDate!)
                 const dayColor = d < 14 ? '#f87171' : d < 30 ? '#fbbf24' : '#4ade80'
                 const isReminder = item.entryType === 'reminder'
@@ -947,6 +947,38 @@ export default function HomeScreen() {
             </Text>
           )}
 
+          {/* (8) Missing Requirements + My Progress — merged compact 2-column row */}
+          {(showMissingReq || showProgress) ? (
+            <View style={[s.section, { marginBottom: spacing.md }]}>
+              <View style={s.twoColRow}>
+                {showMissingReq ? (
+                  <Pressable
+                    style={({ pressed }) => [s.twoColHalf, pressed && { opacity: 0.75 }]}
+                    onPress={() => router.push('/requirements')}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Missing requirements: ${missingReqCount}`}
+                  >
+                    <Text style={s.twoColIcon}>📋</Text>
+                    <Text style={s.twoColTitle} numberOfLines={1}>Requirements</Text>
+                    <Text style={s.twoColSub} numberOfLines={1}>{missingReqCount} missing</Text>
+                  </Pressable>
+                ) : null}
+                {showProgress ? (
+                  <Pressable
+                    style={({ pressed }) => [s.twoColHalf, pressed && { opacity: 0.75 }]}
+                    onPress={() => router.push('/(tabs)/analytics')}
+                    accessibilityRole="button"
+                    accessibilityLabel="My Progress"
+                  >
+                    <Text style={s.twoColIcon}>📈</Text>
+                    <Text style={s.twoColTitle} numberOfLines={1}>My Progress</Text>
+                    <Text style={s.twoColSub} numberOfLines={2}>{sessionCount} session{sessionCount !== 1 ? 's' : ''}{streak > 0 ? ` · ${streak}🔥` : ''}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
         </View>
       </ScreenScroll>
 
@@ -982,6 +1014,3 @@ export default function HomeScreen() {
     </SafeAreaView>
   )
 }
-
-
-

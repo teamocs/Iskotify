@@ -29,7 +29,7 @@ export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }
         paddingVertical: 2,
       }}
     >
-      <Text style={{ fontSize: typo.xs, fontWeight: '700', color: fg, fontFamily: 'Lexend_600SemiBold' }}>{label}</Text>
+      <Text style={{ fontSize: typo.xs, fontWeight: '700', color: fg, fontFamily: 'Lexend_600SemiBold' }} maxFontSizeMultiplier={1.4}>{label}</Text>
     </View>
   )
 }

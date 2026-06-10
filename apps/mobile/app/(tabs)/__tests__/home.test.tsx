@@ -25,6 +25,7 @@ jest.mock('@lineiconshq/free-icons', () => ({
   SparkOutlined: {},
   Bell1Outlined: {},
   Bell1Solid: {},
+  User4Outlined: {},
 }))
 
 jest.mock('../../../hooks/useModelDownload', () => ({
@@ -139,9 +140,22 @@ describe('HomeScreen', () => {
     mockUseHomeStats.mockReturnValue(emptyStats)
   })
 
-  it('renders the Kuya Baw AI coach card', () => {
+  it('renders the Kuya Baw collapsed coach row by default', () => {
     render(<HomeScreen />)
+    // Collapsed row shows the name in its compact label
     expect(screen.getByText('Kuya Baw')).toBeTruthy()
+  })
+
+  it('coach row is collapsed by default (full card not visible)', () => {
+    render(<HomeScreen />)
+    // The "AI Coach" badge is only in the expanded full card
+    expect(screen.queryByText('AI Coach')).toBeNull()
+  })
+
+  it('expands coach card on press of the collapsed row', () => {
+    render(<HomeScreen />)
+    const collapsedRow = screen.getByTestId('kuya-coach-collapsed')
+    fireEvent.press(collapsedRow)
     expect(screen.getByText('AI Coach')).toBeTruthy()
   })
 
@@ -227,7 +241,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Add scholarships and exams to your focus list to track upcoming dates')).toBeTruthy()
   })
 
-  it('shows UPCAT countdown banner when an urgent future UPCAT row exists', async () => {
+  it('UPCAT countdown banner is not rendered (removed in Wave 1a)', () => {
     const futureDate = new Date(Date.now() + 90 * 86_400_000)
     const isoDate = futureDate.toISOString().slice(0, 10)
     mockAdmissionsRows.value = [{
@@ -245,13 +259,12 @@ describe('HomeScreen', () => {
       verified: true,
       remoteUpdatedAt: null,
     }]
-    const { findByTestId } = render(<HomeScreen />)
-    const banner = await findByTestId('upcat-countdown-banner')
-    expect(banner).toBeTruthy()
+    render(<HomeScreen />)
+    expect(screen.queryByTestId('upcat-countdown-banner')).toBeNull()
     mockAdmissionsRows.value = []
   })
 
-  it('hides UPCAT banner when no matching admissions row', () => {
+  it('upcat-countdown-banner testID is absent (banner removed)', () => {
     mockAdmissionsRows.value = []
     render(<HomeScreen />)
     expect(screen.queryByTestId('upcat-countdown-banner')).toBeNull()
@@ -279,5 +292,46 @@ describe('HomeScreen', () => {
     const item = await findByText('DOST SEI Application Deadline')
     expect(item).toBeTruthy()
     mockAdmissionsRows.value = []
+  })
+
+  it('shows at most 3 weak topics by default', () => {
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      weakTopics: [
+        { topicId: 't1', topicName: 'Algebra', accuracy: 20 },
+        { topicId: 't2', topicName: 'Chemistry', accuracy: 25 },
+        { topicId: 't3', topicName: 'Physics', accuracy: 30 },
+        { topicId: 't4', topicName: 'Biology', accuracy: 35 },
+        { topicId: 't5', topicName: 'History', accuracy: 40 },
+      ],
+      firstTopicId: 't1',
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText('Algebra')).toBeTruthy()
+    expect(screen.getByText('Chemistry')).toBeTruthy()
+    expect(screen.getByText('Physics')).toBeTruthy()
+    // 4th and 5th should be hidden by default
+    expect(screen.queryByText('Biology')).toBeNull()
+    expect(screen.queryByText('History')).toBeNull()
+  })
+
+  it('shows all weak topics after pressing See all', () => {
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      weakTopics: [
+        { topicId: 't1', topicName: 'Algebra', accuracy: 20 },
+        { topicId: 't2', topicName: 'Chemistry', accuracy: 25 },
+        { topicId: 't3', topicName: 'Physics', accuracy: 30 },
+        { topicId: 't4', topicName: 'Biology', accuracy: 35 },
+        { topicId: 't5', topicName: 'History', accuracy: 40 },
+      ],
+      firstTopicId: 't1',
+    })
+    render(<HomeScreen />)
+    // Press "See all (5)"
+    const seeAll = screen.getByText(/See all/)
+    fireEvent.press(seeAll)
+    expect(screen.getByText('Biology')).toBeTruthy()
+    expect(screen.getByText('History')).toBeTruthy()
   })
 })
