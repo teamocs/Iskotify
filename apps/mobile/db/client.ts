@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS flashcards (
   answer TEXT NOT NULL,
   explanation TEXT NOT NULL,
   listing_slugs TEXT NOT NULL DEFAULT '[]',
-  remote_updated_at INTEGER
+  remote_updated_at INTEGER,
+  status TEXT NOT NULL DEFAULT 'published'
 );
 CREATE INDEX IF NOT EXISTS flashcards_topic_id_idx ON flashcards (topic_id);
 CREATE TABLE IF NOT EXISTS listings (
@@ -544,6 +545,11 @@ export const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS user_progress_answered_at_idx ON user_progress (answered_at)`,
   `CREATE INDEX IF NOT EXISTS practice_sessions_completed_at_idx ON practice_sessions (completed_at)`,
   `CREATE INDEX IF NOT EXISTS practice_sessions_listing_slug_idx ON practice_sessions (listing_slug)`,
+
+  // ── Task 3.2: flashcards.status for unpublish propagation ─────────────────
+  // Devices get a full re-pull via SYNC_REV=2 so all existing rows are backfilled
+  // to 'published' by the DEFAULT and then correct status values are synced down.
+  `ALTER TABLE flashcards ADD COLUMN status TEXT NOT NULL DEFAULT 'published'`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

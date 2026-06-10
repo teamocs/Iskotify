@@ -20,7 +20,8 @@ function makeDbWithFts(): DrizzleClient {
       ai_options TEXT,
       ai_correct_index INTEGER,
       ai_explanation TEXT,
-      ai_enhanced_at INTEGER
+      ai_enhanced_at INTEGER,
+      status TEXT NOT NULL DEFAULT 'published'
     );
     CREATE VIRTUAL TABLE flashcards_fts USING fts5(
       flashcard_id UNINDEXED,

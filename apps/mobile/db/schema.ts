@@ -28,6 +28,7 @@ export const flashcards = sqliteTable('flashcards', {
   aiCorrectIndex: integer('ai_correct_index'),
   aiExplanation: text('ai_explanation'),
   aiEnhancedAt: integer('ai_enhanced_at'),
+  status: text('status').notNull().default('published'),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
 ])

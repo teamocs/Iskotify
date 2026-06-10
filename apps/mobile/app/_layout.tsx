@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Text, Image } from 'react-native'
+import { Platform, View, Text, Image, InteractionManager } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { Stack, router } from 'expo-router'
@@ -166,11 +166,14 @@ function AppInit({ onReady }: { onReady: () => void }) {
       }
     })()
 
-    // Background sync — fire and forget, never blocks navigation.
+    // Background sync — deferred until after all interactions/animations finish so
+    // the initial navigation render is not jank-blocked by I/O.
     // After sync completes, kick off AI enhancement in the background (fire-and-forget).
-    syncOnLaunch(db)
-      .then(() => { void runEnhancement(db) })
-      .catch(e => console.warn('[layout] bg sync:', e))
+    InteractionManager.runAfterInteractions(() => {
+      void syncOnLaunch(db)
+        .then(() => { void runEnhancement(db) })
+        .catch(e => console.warn('[layout] bg sync:', e))
+    })
 
     // Request notification permission on startup (non-blocking)
     requestNotificationPermissions().catch(e => console.warn('[layout] notif permission:', e))

@@ -8,7 +8,11 @@ import { invalidate } from './queryCache'
 // Reason for rev 1: pre-pagination builds capped Supabase at 1000 rows so up
 // to ~253 flashcards never reached devices. The paginated fetch now pulls all
 // 1253+. Forcing a full re-pull recovers those missed cards.
-const SYNC_REV = 1
+// Reason for rev 2: incremental-mirror cutover + status backfill. All catalog
+// tables (career, university, blueprint) now use an updated_at cursor instead
+// of full-pull, and flashcards gains a local status column. A full re-pull
+// baselines all devices with the correct status values.
+const SYNC_REV = 2
 import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
@@ -235,31 +239,34 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       fetchAllPaginated((from, to) => supabase.from('upcat_questions')
         .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,updated_at')
-        .eq('status', 'published')
         .gt('updated_at', since)
         .order('question_id')
         .range(from, to)),
       supabase.from('upcat_facts')
         .select('id,topic,question,answer,source,valid_year,updated_at')
         .gt('updated_at', since),
-      // Full pull: small reference table, no cursor needed
-      supabase.from('upcat_cutoffs').select('id,campus,program,cutoff,year,is_estimate'),
+      supabase.from('upcat_cutoffs').select('id,campus,program,cutoff,year,is_estimate,updated_at')
+        .gt('updated_at', since),
     ])
 
     // ── Epic D: Career tables ────────────────────────────────────────────────
-    // Full pull for reference tables (no cursor); incremental for destinations + facts
+    // All tables now use incremental cursor via updated_at
     const [
       careerCoursesRes, careerCountriesRes, careerProgramsRes, aiCareerImpactRes,
       careerDestinationsRes, careerFactsRes,
     ] = await Promise.all([
       supabase.from('career_courses')
-        .select('course_id,name,cluster,career_tag,demand,board_exam,board_exam_name,duration_years,top_countries,summary,student_tip,ai_note'),
+        .select('course_id,name,cluster,career_tag,demand,board_exam,board_exam_name,duration_years,top_countries,summary,student_tip,ai_note,updated_at')
+        .gt('updated_at', since),
       supabase.from('career_countries')
-        .select('code,name,region,immigration_system,why_demand,language_required,pr_pathway,notes'),
+        .select('code,name,region,immigration_system,why_demand,language_required,pr_pathway,notes,updated_at')
+        .gt('updated_at', since),
       supabase.from('career_programs')
-        .select('id,name,country_region,courses_covered,managing_body,slots,requirements,immigration_outcome,website,notes'),
+        .select('id,name,country_region,courses_covered,managing_body,slots,requirements,immigration_outcome,website,notes,updated_at')
+        .gt('updated_at', since),
       supabase.from('ai_career_impact')
-        .select('course_id,course_name,cluster,board_exam,board_exam_name,automation_risk_low,automation_risk_high,ai_safety_score,ai_safety_label,color_code,what_ai_takes_over,what_stays_human,new_jobs_emerging,skills_to_develop,career_outlook_2030,key_stat,key_source,key_quote,quote_by,ph_advantage,ph_notes,kuya_baw_summary,last_updated'),
+        .select('course_id,course_name,cluster,board_exam,board_exam_name,automation_risk_low,automation_risk_high,ai_safety_score,ai_safety_label,color_code,what_ai_takes_over,what_stays_human,new_jobs_emerging,skills_to_develop,career_outlook_2030,key_stat,key_source,key_quote,quote_by,ph_advantage,ph_notes,kuya_baw_summary,last_updated,updated_at')
+        .gt('updated_at', since),
       supabase.from('career_destinations')
         .select('id,course_id,country,demand_rating,salary_min,salary_max,salary_local,salary_type,visa_pathway,pr_pathway,credential,licensing_exam,language_required,timeline_months,program_name,specializations,notes,saturation_warning,source,updated_at')
         .gt('updated_at', since),
@@ -269,41 +276,53 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     ])
 
     // ── Epic C: University / course tables ───────────────────────────────────
-    // Full pull for all 6 (static/slow-changing reference data)
+    // All tables now use incremental cursor via updated_at
     const [
       tertiarySchoolsRes, universityProfilesRes, courseSchoolRankingsRows,
       courseSchoolQualityRes, barResultsRes, courseTaxonomyMapRes,
     ] = await Promise.all([
       supabase.from('tertiary_schools')
-        .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at'),
+        .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at')
+        .gt('updated_at', since),
       supabase.from('university_profiles')
-        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at'),
+        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at')
+        .gt('updated_at', since),
       fetchAllPaginated((from, to) => supabase.from('course_school_rankings')
         .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at')
+        .gt('updated_at', since)
         .order('id')
         .range(from, to)),
       supabase.from('course_school_quality')
-        .select('id,school_name,region,province,city,course_standardized,course_group,school_type,ched_coe_cod,quality_score,quality_tier,accreditations,has_prc_board,qs_subject_rank,data_confidence,tertiary_school_id,updated_at'),
+        .select('id,school_name,region,province,city,course_standardized,course_group,school_type,ched_coe_cod,quality_score,quality_tier,accreditations,has_prc_board,qs_subject_rank,data_confidence,tertiary_school_id,updated_at')
+        .gt('updated_at', since),
       supabase.from('bar_results')
-        .select('id,school_name,region,province,year,pass_rate,national_avg,sc_rank,notes,updated_at'),
+        .select('id,school_name,region,province,year,pass_rate,national_avg,sc_rank,notes,updated_at')
+        .gt('updated_at', since),
       supabase.from('course_taxonomy_map')
-        .select('course_tab,career_course_id,label,kind,updated_at'),
+        .select('course_tab,career_course_id,label,kind,updated_at')
+        .gt('updated_at', since),
     ])
 
-    // ── Exam Blueprints (full pull — small reference tables) ──────────────────
+    // ── Exam Blueprints (incremental cursor — local readers filter status) ────
+    // NOTE: .eq('status','published') removed from blueprints so unpublish propagates.
+    // Local readers (examBlueprints.ts getExamBlueprint / listPublishedBlueprintSlugs)
+    // already filter status='published' in JS — verified in examBlueprints.ts:22,43.
     const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes] = await Promise.all([
-      supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at'),
-      supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at').eq('status', 'published'),
-      supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at'),
-      supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at'),
+      supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at')
+        .gt('updated_at', since),
+      supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at')
+        .gt('updated_at', since),
+      supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at')
+        .gt('updated_at', since),
+      supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at')
+        .gt('updated_at', since),
     ])
 
     const cardResults = await Promise.all(
       slugs.map(slug =>
         fetchAllPaginated((from, to) => supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,updated_at')
+          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,updated_at')
           .contains('listing_slugs', [slug])
-          .eq('status', 'published')
           .gt('updated_at', since)
           .order('id')
           .range(from, to))
@@ -391,6 +410,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           options: JSON.stringify(row.options ?? []),
           correctAnswerIndex: row.correct_answer_index ?? null,
           remoteUpdatedAt,
+          // status synced so unpublished cards propagate to device (local readers filter published)
+          status: (row as any).status ?? 'published',
         }
 
         // Only include ai_* fields when Supabase actually has them. This preserves
@@ -471,7 +492,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           topCountries: JSON.stringify(row.top_countries ?? []),
           summary: row.summary ?? null, studentTip: row.student_tip ?? null,
           aiNote: row.ai_note ?? null,
-          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(careerCourses).values(vals).onConflictDoUpdate({ target: careerCourses.courseId, set: vals }).run()
       }
@@ -482,7 +503,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           immigrationSystem: row.immigration_system ?? null, whyDemand: row.why_demand ?? null,
           languageRequired: row.language_required ?? null, prPathway: row.pr_pathway ?? null,
           notes: row.notes ?? null,
-          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(careerCountries).values(vals).onConflictDoUpdate({ target: careerCountries.code, set: vals }).run()
       }
@@ -494,7 +515,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           managingBody: row.managing_body ?? null, slots: row.slots ?? null,
           requirements: row.requirements ?? null, immigrationOutcome: row.immigration_outcome ?? null,
           website: row.website ?? null, notes: row.notes ?? null,
-          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(careerPrograms).values(vals).onConflictDoUpdate({ target: careerPrograms.id, set: vals }).run()
       }
@@ -517,7 +538,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           keyQuote: row.key_quote ?? null, quoteBy: row.quote_by ?? null,
           phAdvantage: row.ph_advantage ?? null, phNotes: row.ph_notes ?? null,
           kuyaBawSummary: row.kuya_baw_summary ?? null, lastUpdated: row.last_updated ?? null,
-          remoteUpdatedAt: null, // full-pull (no cursor); remoteUpdatedAt unused for these — populate if incremental pull is added
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(aiCareerImpact).values(vals).onConflictDoUpdate({ target: aiCareerImpact.courseId, set: vals }).run()
       }

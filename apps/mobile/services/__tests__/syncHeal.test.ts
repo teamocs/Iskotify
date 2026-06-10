@@ -49,7 +49,8 @@ function makeHealDb(): InstanceType<typeof Database> {
       ai_options TEXT,
       ai_correct_index INTEGER,
       ai_explanation TEXT,
-      ai_enhanced_at INTEGER
+      ai_enhanced_at INTEGER,
+      status TEXT NOT NULL DEFAULT 'published'
     );
     CREATE TABLE listings (
       id TEXT PRIMARY KEY NOT NULL, slug TEXT NOT NULL UNIQUE,
@@ -309,7 +310,7 @@ describe('syncHeal — syncRev cursor heal', () => {
     supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
   })
 
-  it('uses epoch since when syncRev=0 (needs heal), and persists syncRev=1 after sync', async () => {
+  it('uses epoch since when syncRev=0 (needs heal), and persists syncRev=2 after sync', async () => {
     const raw = makeHealDb()
     // Device state: lastSyncedAt=T2=5000ms, syncRev=0
     const T2 = 5000
@@ -327,13 +328,13 @@ describe('syncHeal — syncRev cursor heal', () => {
     // Must have pulled with epoch since (full re-pull) not T2
     expect(capturedGt.value).toBe('1970-01-01T00:00:00.000Z')
 
-    // syncRev=1 must be persisted in user_settings
+    // syncRev=2 must be persisted in user_settings (SYNC_REV bumped to 2)
     const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
     expect(row).toBeTruthy()
-    expect(row.sync_rev).toBe(1)
+    expect(row.sync_rev).toBe(2)
   })
 
-  it('uses incremental cursor when syncRev=1 (already healed)', async () => {
+  it('uses epoch since when syncRev=1 (below SYNC_REV=2, needs heal)', async () => {
     const raw = makeHealDb()
     const T2 = 5000
     raw.prepare(
@@ -347,16 +348,38 @@ describe('syncHeal — syncRev cursor heal', () => {
     const db = makeHealSyncDb(raw, settingsRow)
     await syncOnLaunch(db as any)
 
+    // syncRev=1 < SYNC_REV=2 → must still use epoch for full re-pull
+    expect(capturedGt.value).toBe('1970-01-01T00:00:00.000Z')
+
+    // syncRev bumped to 2
+    const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
+    expect(row.sync_rev).toBe(2)
+  })
+
+  it('uses incremental cursor when syncRev=2 (already healed to current rev)', async () => {
+    const raw = makeHealDb()
+    const T2 = 5000
+    raw.prepare(
+      'INSERT INTO user_settings (id, selected_listing_slug, last_synced_at, sync_rev) VALUES (1, ?, ?, 2)'
+    ).run('upcat', T2)
+
+    const settingsRow = { id: 1, selectedListingSlug: 'upcat', lastSyncedAt: T2, syncRev: 2 }
+    const capturedGt: { value: string | null } = { value: null }
+    makeEmptySupabase(capturedGt)
+
+    const db = makeHealSyncDb(raw, settingsRow)
+    await syncOnLaunch(db as any)
+
     // Must NOT use epoch — must use the actual lastSyncedAt cursor
     expect(capturedGt.value).not.toBe('1970-01-01T00:00:00.000Z')
     expect(capturedGt.value).toBe(new Date(T2).toISOString())
 
-    // syncRev stays 1
+    // syncRev stays 2
     const row = raw.prepare('SELECT sync_rev FROM user_settings WHERE id = 1').get() as any
-    expect(row.sync_rev).toBe(1)
+    expect(row.sync_rev).toBe(2)
   })
 
-  it('cursor write (lastSyncedAt + syncRev=1) is persisted after first sync', async () => {
+  it('cursor write (lastSyncedAt + syncRev=2) is persisted after first sync', async () => {
     const raw = makeHealDb()
     // Fresh device: lastSyncedAt=0, syncRev=0
     raw.prepare(
@@ -378,6 +401,6 @@ describe('syncHeal — syncRev cursor heal', () => {
     expect(row.last_synced_at).toBeGreaterThanOrEqual(before)
     expect(row.last_synced_at).toBeLessThanOrEqual(after + 100)
     // syncRev written in the LAST transaction (the cursor write)
-    expect(row.sync_rev).toBe(1)
+    expect(row.sync_rev).toBe(2)
   })
 })

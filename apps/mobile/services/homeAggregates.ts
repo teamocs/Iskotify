@@ -9,7 +9,7 @@
  * real-SQLite services Jest project.
  */
 
-import { sql, and, gte, like } from 'drizzle-orm'
+import { sql, and, gte, like, eq } from 'drizzle-orm'
 import { userProgress, flashcards, topics } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
 
@@ -86,6 +86,7 @@ export async function getPracticeDayIndices(db: DrizzleClient): Promise<number[]
  *
  * Returns { topicId, total, ok } for every topic that has at least one progress row.
  * Caller filters to accuracy < 60% and sorts to produce WeakTopics.
+ * Only counts published flashcards (status='published').
  */
 export async function getWeakTopicStats(db: DrizzleClient): Promise<WeakTopicStatRow[]> {
   const rows = await db
@@ -96,6 +97,7 @@ export async function getWeakTopicStats(db: DrizzleClient): Promise<WeakTopicSta
     })
     .from(userProgress)
     .innerJoin(flashcards, sql`${userProgress.flashcardId} = ${flashcards.id}`)
+    .where(eq(flashcards.status, 'published'))
     .groupBy(flashcards.topicId)
 
   return rows.map(r => ({
@@ -106,20 +108,21 @@ export async function getWeakTopicStats(db: DrizzleClient): Promise<WeakTopicSta
 }
 
 /**
- * getTopicCardCounts — count flashcards per topic, optionally filtered to a listing slug.
+ * getTopicCardCounts — count published flashcards per topic, optionally filtered to a listing slug.
  *
  * listingSlug filter: uses LIKE '%"<slug>"%' against the listing_slugs JSON array column.
  * Slug characters are [a-z0-9-] so no special escaping needed.
- *
- * TODO(task3): filter status='published' once the flashcards.status column is added.
+ * Only counts published flashcards (status='published') so draft/unpublished cards
+ * are excluded from the deck counts shown in the UI.
  */
 export async function getTopicCardCounts(
   db: DrizzleClient,
   listingSlug?: string,
 ): Promise<TopicCardCountRow[]> {
+  const statusFilter = eq(flashcards.status, 'published')
   const whereClause = listingSlug
-    ? like(flashcards.listingSlugs, `%"${listingSlug}"%`)
-    : undefined
+    ? and(statusFilter, like(flashcards.listingSlugs, `%"${listingSlug}"%`))
+    : statusFilter
 
   const rows = await db
     .select({

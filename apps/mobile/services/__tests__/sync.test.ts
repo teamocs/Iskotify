@@ -9,7 +9,13 @@ jest.mock('../supabase', () => ({
 }))
 
 jest.mock('drizzle-orm', () => ({
-  eq: jest.fn((col, val) => ({ col, val, __isEq: true })),
+  // Spread real implementations so sql, and, like, gte, eq, inArray etc. work
+  // in homeAggregates and other service modules called from this test file.
+  ...jest.requireActual('drizzle-orm'),
+  // asc is intercepted here so makeFocusChain's .orderBy(asc(...)) works with
+  // the mock chain. eq is NOT overridden — the real eq is used everywhere
+  // (sync.ts initial selects use a mocked db.select chain, so eq's return
+  // value is passed to a mock .where() that ignores it anyway).
   asc: jest.fn(col => col),
 }))
 
@@ -510,7 +516,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       ai_options TEXT,
       ai_correct_index INTEGER,
       ai_explanation TEXT,
-      ai_enhanced_at INTEGER
+      ai_enhanced_at INTEGER,
+      status TEXT NOT NULL DEFAULT 'published'
     );
     CREATE TABLE listings (
       id TEXT PRIMARY KEY NOT NULL,
@@ -917,7 +924,7 @@ function makeSyncTestDb(raw: InstanceType<typeof Database>, slug = 'upcat'): Dri
   const settingsChain = {
     from: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockResolvedValue([{ id: 1, selectedListingSlug: slug, lastSyncedAt: 0, syncRev: 1 }]),
+    limit: jest.fn().mockResolvedValue([{ id: 1, selectedListingSlug: slug, lastSyncedAt: 0, syncRev: 2 }]),
   }
   const focusChain = {
     from: jest.fn().mockReturnThis(),
@@ -1258,10 +1265,15 @@ function makeSupabaseForCutoffs(cutoffRow: Record<string, unknown>) {
     }
     if (table === 'upcat_cutoffs') {
       const resolved = Promise.resolve({ data: [cutoffRow] })
-      return {
+      // upcat_cutoffs now uses .gt('updated_at', since) — mock must chain through gt
+      const chain: any = {
         select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockImplementation(() => ({
+          then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+        })),
         then: (resolve: any, reject: any) => resolved.then(resolve, reject),
       }
+      return chain
     }
     return emptyChain
   }
@@ -1343,8 +1355,12 @@ function makeSupabaseForCareer(
     }
     if (table === 'career_courses') {
       const resolved = Promise.resolve({ data: [courseRow] })
+      // career_courses now uses .gt('updated_at', since) incremental cursor
       return {
         select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockImplementation(() => ({
+          then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+        })),
         then: (resolve: any, reject: any) => resolved.then(resolve, reject),
       }
     }
@@ -1514,15 +1530,24 @@ function makeSupabaseForUniversity(
     }
     if (table === 'tertiary_schools') {
       const resolved = Promise.resolve({ data: [schoolRow] })
+      // tertiary_schools now uses .gt('updated_at', since) incremental cursor
       return {
         select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockImplementation(() => ({
+          then: (resolve: any, reject: any) => resolved.then(resolve, reject),
+        })),
         then: (resolve: any, reject: any) => resolved.then(resolve, reject),
       }
     }
     if (table === 'course_school_rankings') {
       const resolved = Promise.resolve({ data: [rankingRow] })
+      // course_school_rankings now uses .gt('updated_at', since) BEFORE .order().range()
       return {
         select: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockImplementation(() => ({
+          order: jest.fn().mockReturnThis(),
+          range: jest.fn().mockResolvedValue({ data: [rankingRow] }),
+        })),
         order: jest.fn().mockReturnThis(),
         range: jest.fn().mockResolvedValue({ data: [rankingRow] }),
         then: (resolve: any, reject: any) => resolved.then(resolve, reject),
@@ -1812,5 +1837,180 @@ describe('syncOnLaunch admissions_updates + listings.results_date (real SQLite)'
     const row = raw.prepare('SELECT * FROM listings WHERE id = ?').get('listing-rd') as any
     expect(row).toBeTruthy()
     expect(row.results_date).toBe(new Date('2026-06-15T00:00:00Z').getTime())
+  })
+})
+
+// ─── Task 3.5: Incremental mirror + unpublish propagation assertions ──────────
+
+describe('Task 3.5 — incremental catalog mirror assertions (mock-chain level)', () => {
+  it('career_courses query chain includes gt("updated_at", ...) cursor', async () => {
+    const { supabase } = require('../supabase')
+
+    // Capture the chain built for career_courses
+    let careerCoursesChain: any = null
+    const originalFrom = supabase.from.getMockImplementation()
+    supabase.from.mockImplementation((table: string) => {
+      const chain = makeSupabaseChain()
+      if (table === 'career_courses') careerCoursesChain = chain
+      return chain
+    })
+
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0, syncRev: 2 }, [])
+    await syncOnLaunch(db as any)
+
+    expect(careerCoursesChain).not.toBeNull()
+    // The chain should have had gt called (incremental cursor)
+    expect(careerCoursesChain.gt).toHaveBeenCalledWith('updated_at', expect.any(String))
+
+    if (originalFrom) supabase.from.mockImplementation(originalFrom)
+  })
+
+  it('flashcards chain: select includes "status", no eq("status",...) call', async () => {
+    const { supabase } = require('../supabase')
+
+    let flashcardsChain: any = null
+    supabase.from.mockImplementation((table: string) => {
+      const chain = makeSupabaseChain()
+      if (table === 'flashcards') flashcardsChain = chain
+      return chain
+    })
+
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0, syncRev: 2 }, [])
+    await syncOnLaunch(db as any)
+
+    expect(flashcardsChain).not.toBeNull()
+    // select must have been called with a string containing 'status'
+    const selectArg: string = flashcardsChain.select.mock.calls[0]?.[0] ?? ''
+    expect(selectArg).toContain('status')
+    // eq must NOT have been called with 'status' (unpublish propagation: filter removed from remote pull)
+    const eqCalls: Array<[string, unknown]> = flashcardsChain.eq.mock.calls
+    const statusEqCall = eqCalls.find(([col]) => col === 'status')
+    expect(statusEqCall).toBeUndefined()
+  })
+
+  it('exam_blueprints chain: no eq("status","published") call (unpublish propagates via local filter)', async () => {
+    const { supabase } = require('../supabase')
+
+    let blueprintsChain: any = null
+    supabase.from.mockImplementation((table: string) => {
+      const chain = makeSupabaseChain()
+      if (table === 'exam_blueprints') blueprintsChain = chain
+      return chain
+    })
+
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0, syncRev: 2 }, [])
+    await syncOnLaunch(db as any)
+
+    expect(blueprintsChain).not.toBeNull()
+    const eqCalls: Array<[string, unknown]> = blueprintsChain.eq.mock.calls
+    const statusEqCall = eqCalls.find(([col]) => col === 'status')
+    expect(statusEqCall).toBeUndefined()
+    // gt cursor IS applied
+    expect(blueprintsChain.gt).toHaveBeenCalledWith('updated_at', expect.any(String))
+  })
+})
+
+// ─── Task 3.5: flashcard status='draft' excluded from aggregate counts ────────
+
+import {
+  getTopicCardCounts,
+  getWeakTopicStats,
+} from '../homeAggregates'
+
+function makeAggregateTestDb(): InstanceType<typeof Database> {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE flashcards (
+      id TEXT PRIMARY KEY NOT NULL,
+      topic_id TEXT NOT NULL,
+      question TEXT NOT NULL DEFAULT '',
+      answer TEXT NOT NULL DEFAULT '',
+      explanation TEXT NOT NULL DEFAULT '',
+      listing_slugs TEXT NOT NULL DEFAULT '[]',
+      options TEXT NOT NULL DEFAULT '[]',
+      correct_answer_index INTEGER,
+      remote_updated_at INTEGER,
+      ai_options TEXT,
+      ai_correct_index INTEGER,
+      ai_explanation TEXT,
+      ai_enhanced_at INTEGER,
+      status TEXT NOT NULL DEFAULT 'published'
+    );
+    CREATE INDEX IF NOT EXISTS flashcards_topic_id_idx ON flashcards (topic_id);
+    CREATE TABLE user_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      flashcard_id TEXT NOT NULL,
+      correct INTEGER NOT NULL,
+      answered_at INTEGER NOT NULL
+    );
+    CREATE TABLE topics (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'published'
+    );
+  `)
+  return raw
+}
+
+describe('Task 3.5 — status=draft flashcards excluded from aggregates', () => {
+  it('getTopicCardCounts excludes draft cards from count', async () => {
+    const raw = makeAggregateTestDb()
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+
+    raw.exec(`
+      INSERT INTO topics (id, name, subject_id) VALUES ('t1', 'Algebra', 's1');
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-pub', 't1', '["upcat"]', 'published');
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-draft', 't1', '["upcat"]', 'draft');
+    `)
+
+    const counts = await getTopicCardCounts(db as any)
+    // Only the published card should be counted
+    const t1Count = counts.find(r => r.topicId === 't1')?.cardCount ?? 0
+    expect(t1Count).toBe(1)
+  })
+
+  it('getTopicCardCounts with listingSlug filter also excludes draft cards', async () => {
+    const raw = makeAggregateTestDb()
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+
+    raw.exec(`
+      INSERT INTO topics (id, name, subject_id) VALUES ('t1', 'Algebra', 's1');
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-pub', 't1', '["upcat"]', 'published');
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-draft', 't1', '["upcat"]', 'draft');
+    `)
+
+    const counts = await getTopicCardCounts(db as any, 'upcat')
+    const t1Count = counts.find(r => r.topicId === 't1')?.cardCount ?? 0
+    expect(t1Count).toBe(1)
+  })
+
+  it('getWeakTopicStats excludes progress rows joined to draft flashcards', async () => {
+    const raw = makeAggregateTestDb()
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+
+    raw.exec(`
+      INSERT INTO topics (id, name, subject_id) VALUES ('t1', 'Algebra', 's1');
+      -- published flashcard with correct answers
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-pub', 't1', '["upcat"]', 'published');
+      -- draft flashcard with wrong answers (should not count)
+      INSERT INTO flashcards (id, topic_id, listing_slugs, status) VALUES ('fc-draft', 't1', '["upcat"]', 'draft');
+      -- progress: published card answered correctly, draft card answered wrong
+      INSERT INTO user_progress (flashcard_id, correct, answered_at) VALUES ('fc-pub', 1, 1000);
+      INSERT INTO user_progress (flashcard_id, correct, answered_at) VALUES ('fc-draft', 0, 2000);
+    `)
+
+    const stats = await getWeakTopicStats(db as any)
+    const t1Stat = stats.find(r => r.topicId === 't1')
+    // Only the published card's progress counts → 1 correct / 1 total = 100% (not weak, no row expected)
+    // OR: if returned, accuracy should be 100% (1/1 correct)
+    if (t1Stat) {
+      expect(t1Stat.total).toBe(1)
+      expect(t1Stat.ok).toBe(1)
+    } else {
+      // t1Stat not found because all progress for t1 is through a published card
+      // and published card had correct=1, which means accuracy=100% → not weak — that's fine
+      expect(t1Stat).toBeUndefined()
+    }
   })
 })

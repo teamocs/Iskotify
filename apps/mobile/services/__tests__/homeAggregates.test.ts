@@ -98,6 +98,7 @@ function makeDb(): { raw: InstanceType<typeof Database>; db: DrizzleClient } {
       listing_slugs TEXT NOT NULL DEFAULT '[]',
       options TEXT NOT NULL DEFAULT '[]',
       correct_answer_index INTEGER,
+      status TEXT NOT NULL DEFAULT 'published',
       remote_updated_at INTEGER,
       ai_options TEXT,
       ai_correct_index INTEGER,
