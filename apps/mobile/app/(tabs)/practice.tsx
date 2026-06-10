@@ -654,20 +654,20 @@ export default function PracticeScreen() {
             />
             <View style={rc.grid}>
               {orderedBlueprints.slice(0, 4).map(blueprint => (
-                <View key={bp.slug} style={rc.cardWrap}>
+                <View key={blueprint.slug} style={rc.cardWrap}>
                   <Pressable
                     style={({ pressed }) => [rc.mockCard, pressed && { opacity: 0.8 }]}
-                    onPress={() => router.push(`/practice/exam/${bp.slug}`)}
+                    onPress={() => router.push(`/practice/exam/${blueprint.slug}`)}
                     accessibilityRole="button"
                   >
                     <Text style={rc.mockCardTitle}>
-                      {bp.acronym}
+                      {blueprint.acronym}
                     </Text>
                     <Text numberOfLines={1} style={rc.mockCardName}>
-                      {bp.name}
+                      {blueprint.name}
                     </Text>
                     <Text maxFontSizeMultiplier={1.4} style={rc.mockCardMeta}>
-                      {bp.totalItems} items · {Math.round(bp.totalTimeMinutes / 60 * 10) / 10}h
+                      {blueprint.totalItems} items · {Math.round(blueprint.totalTimeMinutes / 60 * 10) / 10}h
                     </Text>
                   </Pressable>
                 </View>
