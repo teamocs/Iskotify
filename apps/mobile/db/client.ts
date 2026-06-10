@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS user_progress (
   answered_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS user_progress_flashcard_id_idx ON user_progress (flashcard_id);
+CREATE INDEX IF NOT EXISTS user_progress_answered_at_idx ON user_progress (answered_at);
 CREATE TABLE IF NOT EXISTS saved_decks (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
@@ -538,6 +539,11 @@ export const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS exam_course_notes_slug_idx ON exam_course_notes (blueprint_slug)`,
   // ── Sync heal: force a full re-pull on devices that hit the pre-pagination 1000-row cap ──
   `ALTER TABLE user_settings ADD COLUMN sync_rev INTEGER NOT NULL DEFAULT 0`,
+
+  // ── Task 2.1: Hot-path indexes for aggregate queries ──────────────────────
+  `CREATE INDEX IF NOT EXISTS user_progress_answered_at_idx ON user_progress (answered_at)`,
+  `CREATE INDEX IF NOT EXISTS practice_sessions_completed_at_idx ON practice_sessions (completed_at)`,
+  `CREATE INDEX IF NOT EXISTS practice_sessions_listing_slug_idx ON practice_sessions (listing_slug)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

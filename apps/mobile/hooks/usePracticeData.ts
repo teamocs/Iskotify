@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
+import { InteractionManager } from 'react-native'
 import { eq } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { subjects, topics, flashcards, userProgress, userSettings } from '../db/schema'
+import { getTopicCardCounts } from '../services/homeAggregates'
+import { cachedQuery, invalidate, subscribe } from '../services/queryCache'
 
 export type Strength = 'New' | 'Weak' | 'Review' | 'Strong'
 
@@ -82,96 +85,115 @@ export function usePracticeData(): PracticeData {
     if (loadingRef.current) return
     loadingRef.current = true
     try {
-      const [subjectRows, topicList, fcList, progressList, settingsRows] = await Promise.all([
-        db.select().from(subjects),
-        db.select().from(topics),
-        db.select({
-          id: flashcards.id,
-          topicId: flashcards.topicId,
-          listingSlugs: flashcards.listingSlugs,
-        }).from(flashcards),
-        db.select({
-          flashcardId: userProgress.flashcardId,
-          correct: userProgress.correct,
-          answeredAt: userProgress.answeredAt,
-        }).from(userProgress),
-        db.select({ selectedListingSlug: userSettings.selectedListingSlug })
-          .from(userSettings).where(eq(userSettings.id, 1)).limit(1),
-      ])
-
+      const settingsRows = await db.select({ selectedListingSlug: userSettings.selectedListingSlug })
+        .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
       const slug = settingsRows[0]?.selectedListingSlug ?? ''
 
-      const recommendedTopicIds = new Set<string>()
-      if (slug) {
+      const cacheKey = `practice:data:${slug}`
+
+      const fetcher = async () => {
+        const [subjectRows, topicList, fcList, progressList, topicCardCounts] = await Promise.all([
+          db.select().from(subjects),
+          db.select().from(topics),
+          db.select({
+            id: flashcards.id,
+            topicId: flashcards.topicId,
+            listingSlugs: flashcards.listingSlugs,
+          }).from(flashcards),
+          db.select({
+            flashcardId: userProgress.flashcardId,
+            correct: userProgress.correct,
+            answeredAt: userProgress.answeredAt,
+          }).from(userProgress),
+          // SQL aggregate for per-topic card counts — replaces JSON.parse loop
+          getTopicCardCounts(db, slug || undefined),
+        ])
+
+        // Build topicIdsBySlug using SQL aggregate data
+        // getTopicCardCounts gives us topic→count for the current slug.
+        // For the full topicIdsBySlug map (all slugs), we still need the fcList
+        // (this is used for topicIdsByListingSlug which is a multi-slug map).
+        // We keep this JS loop for the full slug map only.
+        const topicIdsBySlug: Record<string, string[]> = {}
         for (const fc of fcList) {
           try {
             const slugs = JSON.parse(fc.listingSlugs ?? '[]') as string[]
-            if (slugs.includes(slug)) recommendedTopicIds.add(fc.topicId)
+            for (const s of slugs) {
+              if (!topicIdsBySlug[s]) topicIdsBySlug[s] = []
+              if (!topicIdsBySlug[s]!.includes(fc.topicId)) topicIdsBySlug[s]!.push(fc.topicId)
+            }
           } catch {}
         }
-      }
 
-      const topicIdsBySlug: Record<string, string[]> = {}
-      for (const fc of fcList) {
-        try {
-          const slugs = JSON.parse(fc.listingSlugs ?? '[]') as string[]
-          for (const s of slugs) {
-            if (!topicIdsBySlug[s]) topicIdsBySlug[s] = []
-            if (!topicIdsBySlug[s]!.includes(fc.topicId)) topicIdsBySlug[s]!.push(fc.topicId)
-          }
-        } catch {}
-      }
-
-      // Drop ghost topics (records present locally with zero synced cards) BEFORE
-      // anything downstream. Then apply the active subject-chip filter.
-      const visibleTopics = filterTopicsWithCards(topicList, fcList)
-      const filteredTopics = selectedSubjectId
-        ? visibleTopics.filter(t => t.subjectId === selectedSubjectId)
-        : visibleTopics
-
-      const rows: TopicRow[] = filteredTopics.map(topic => {
-        const fcIds = new Set(fcList.filter(f => f.topicId === topic.id).map(f => f.id))
-        const tp = progressList.filter(p => fcIds.has(p.flashcardId))
-        const lastPracticedAt = tp.length > 0 ? Math.max(...tp.map(p => p.answeredAt)) : null
-        const cardCount = fcList.filter(f => f.topicId === topic.id).length
-        const correct = tp.filter(p => isCorrectAnswer(p.correct)).length
-        const accuracy = tp.length > 0 ? Math.round((correct / tp.length) * 100) : null
-        return {
-          topic,
-          cardCount,
-          lastPracticedAt,
-          accuracy,
-          strength: computeStrength(topic.id, progressList, fcList),
+        // Build card count map from SQL aggregate
+        const countMap: Record<string, number> = {}
+        for (const row of topicCardCounts) {
+          countMap[row.topicId] = row.cardCount
         }
-      })
 
-      const recommended = rows
-        .filter(r => recommendedTopicIds.has(r.topic.id))
-        .sort((a, b) =>
-          STRENGTH_PRIORITY[a.strength] - STRENGTH_PRIORITY[b.strength] ||
-          b.cardCount - a.cardCount
-        )
-        .slice(0, 5)
+        // Also compute total count from full fcList (includes all topics)
+        const allCountMap: Record<string, number> = {}
+        for (const fc of fcList) {
+          allCountMap[fc.topicId] = (allCountMap[fc.topicId] ?? 0) + 1
+        }
 
-      const countMap: Record<string, number> = {}
-      for (const fc of fcList) {
-        countMap[fc.topicId] = (countMap[fc.topicId] ?? 0) + 1
+        // Recommended topic IDs from SQL aggregate (those with cards in the slug)
+        const recommendedTopicIds = new Set(topicCardCounts.map(r => r.topicId))
+
+        // Drop ghost topics BEFORE anything downstream
+        const visibleTopics = filterTopicsWithCards(topicList, fcList)
+        const filteredTopics = selectedSubjectId
+          ? visibleTopics.filter(t => t.subjectId === selectedSubjectId)
+          : visibleTopics
+
+        const rows: TopicRow[] = filteredTopics.map(topic => {
+          const fcIds = new Set(fcList.filter(f => f.topicId === topic.id).map(f => f.id))
+          const tp = progressList.filter(p => fcIds.has(p.flashcardId))
+          const lastPracticedAt = tp.length > 0 ? Math.max(...tp.map(p => p.answeredAt)) : null
+          const cardCount = allCountMap[topic.id] ?? 0
+          const correct = tp.filter(p => isCorrectAnswer(p.correct)).length
+          const accuracy = tp.length > 0 ? Math.round((correct / tp.length) * 100) : null
+          return {
+            topic,
+            cardCount,
+            lastPracticedAt,
+            accuracy,
+            strength: computeStrength(topic.id, progressList, fcList),
+          }
+        })
+
+        const recommended = rows
+          .filter(r => recommendedTopicIds.has(r.topic.id))
+          .sort((a, b) =>
+            STRENGTH_PRIORITY[a.strength] - STRENGTH_PRIORITY[b.strength] ||
+            b.cardCount - a.cardCount
+          )
+          .slice(0, 5)
+
+        // Only expose subjects that have non-ghost topics
+        const subjectIdsWithCards = new Set(visibleTopics.map(t => t.subjectId))
+        const visibleSubjects = subjectRows.filter(s => subjectIdsWithCards.has(s.id))
+
+        return {
+          allSubjects: visibleSubjects,
+          topicRows: rows,
+          recommendedTopics: recommended,
+          totalCards: fcList.length,
+          cardCountByTopic: allCountMap,
+          topicIdsByListingSlug: topicIdsBySlug,
+        }
       }
 
-      // Only expose subjects that have non-ghost topics. Without this, subject
-      // chips at the top of Practice would render for subjects whose cards never
-      // synced (e.g. DOST-SEI when the user is UPCAT-only).
-      const subjectIdsWithCards = new Set(visibleTopics.map(t => t.subjectId))
-      const visibleSubjects = subjectRows.filter(s => subjectIdsWithCards.has(s.id))
+      const result = await cachedQuery(cacheKey, 30_000, fetcher)
 
       lastLoadRef.current = Date.now()
       if (isMountedRef.current) {
-        setAllSubjects(visibleSubjects)
-        setTopicRows(rows)
-        setRecommendedTopics(recommended)
-        setTotalCards(fcList.length)
-        setCardCountByTopic(countMap)
-        setTopicIdsByListingSlug(topicIdsBySlug)
+        setAllSubjects(result.allSubjects)
+        setTopicRows(result.topicRows)
+        setRecommendedTopics(result.recommendedTopics)
+        setTotalCards(result.totalCards)
+        setCardCountByTopic(result.cardCountByTopic)
+        setTopicIdsByListingSlug(result.topicIdsByListingSlug)
       }
     } catch (e) {
       console.error('[usePracticeData] load error:', e)
@@ -185,9 +207,20 @@ export function usePracticeData(): PracticeData {
     return () => { isMountedRef.current = false }
   }, [])
 
-  useFocusEffect(useCallback(() => { void load() }, [load]))
+  // Subscribe to 'practice:' prefix — background cache refresh notifies us to reload
+  useEffect(() => {
+    const unsub = subscribe('practice:', () => {
+      void load()
+    })
+    return unsub
+  }, [load])
+
+  useFocusEffect(useCallback(() => {
+    InteractionManager.runAfterInteractions(() => { void load() })
+  }, [load]))
 
   const refresh = useCallback(async () => {
+    invalidate('practice:')
     lastLoadRef.current = 0
     await load()
   }, [load])

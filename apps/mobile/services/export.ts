@@ -15,6 +15,7 @@ import {
   noteLabels,
   noteLabelAssignments,
 } from '../db/schema'
+import { invalidate } from './queryCache'
 
 const { StorageAccessFramework } = FileSystem
 
@@ -239,4 +240,7 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     if (!noteId || !labelId) continue
     await db.insert(noteLabelAssignments).values({ noteId, labelId }).onConflictDoNothing()
   }
+
+  // Invalidate all caches after a full data import
+  invalidate('')
 }

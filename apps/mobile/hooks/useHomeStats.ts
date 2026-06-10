@@ -1,9 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { eq, asc, gt, and } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
+import { InteractionManager } from 'react-native'
 import { useDb } from './useDb'
-import { userSettings, listings as listingsTable, userProgress, flashcards, topics, focusListings, notes as notesTable } from '../db/schema'
+import { userSettings, listings as listingsTable, topics, focusListings, notes as notesTable } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
+import {
+  getTodayAccuracy,
+  getPracticeDayIndices,
+  getWeakTopicStats,
+} from '../services/homeAggregates'
+import { cachedQuery, subscribe } from '../services/queryCache'
 
 export interface WeakTopic {
   topicId: string
@@ -46,10 +53,20 @@ export interface HomeStats {
 export function computeStreak(rows: Array<{ answeredAt: number }>): number {
   if (rows.length === 0) return 0
   const days = new Set(rows.map(r => Math.floor(r.answeredAt / 86_400_000)))
+  return computeStreakFromDays(Array.from(days))
+}
+
+/**
+ * computeStreakFromDays — streak from a list of day-bucket indices (floor(ms/86400000)).
+ * Sibling of computeStreak that works on pre-computed day indices (from SQL aggregate).
+ */
+export function computeStreakFromDays(days: number[]): number {
+  if (days.length === 0) return 0
+  const daySet = new Set(days)
   const today = Math.floor(Date.now() / 86_400_000)
-  let d = days.has(today) ? today : today - 1
+  let d = daySet.has(today) ? today : today - 1
   let streak = 0
-  while (days.has(d)) { streak++; d-- }
+  while (daySet.has(d)) { streak++; d-- }
   return streak
 }
 
@@ -117,56 +134,74 @@ export function useHomeStats(): HomeStats {
     if (loadingRef.current) return
     loadingRef.current = true
     try {
-      const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-      const slug = settingsRows[0]?.selectedListingSlug
-      if (!slug) {
-        if (isMountedRef.current) setStats(DEFAULT)
-        return
-      }
+      const fetcher = async () => {
+        const settingsRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+        const slug = settingsRows[0]?.selectedListingSlug
+        if (!slug) return null // signal: no listing selected
 
-      const [listingRows, allProgress, allFc, allTopics, firstTopicRows, focusedRows, reminderRows] = await Promise.all([
-        db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({
-          flashcardId: userProgress.flashcardId,
-          correct: userProgress.correct,
-          answeredAt: userProgress.answeredAt,
-        }).from(userProgress),
-        db.select({ id: flashcards.id, topicId: flashcards.topicId }).from(flashcards),
-        db.select({ id: topics.id, name: topics.name }).from(topics),
-        db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
-        db.select({
-          slug: focusListings.listingSlug,
-          priority: focusListings.priority,
-          title: listingsTable.title,
-          type: listingsTable.type,
-          examDate: listingsTable.examDate,
-          deadline: listingsTable.deadline,
-        }).from(focusListings)
-          .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
-          .orderBy(asc(focusListings.priority)),
-        // Active notes with a future reminder
-        db.select({ id: notesTable.id, title: notesTable.title, reminderAt: notesTable.reminderAt })
-          .from(notesTable)
-          .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false), gt(notesTable.reminderAt, Date.now()))),
-      ])
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
 
-      const listing = listingRows[0] ?? null
-      const daysLeft = listing?.examDate
-        ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
-        : null
+        const [
+          listingRows,
+          todayAccRow,
+          dayIndices,
+          weakStats,
+          allTopics,
+          firstTopicRows,
+          focusedRows,
+          reminderRows,
+        ] = await Promise.all([
+          db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
+          getTodayAccuracy(db, todayStart.getTime()),
+          getPracticeDayIndices(db),
+          getWeakTopicStats(db),
+          db.select({ id: topics.id, name: topics.name }).from(topics),
+          db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
+          db.select({
+            slug: focusListings.listingSlug,
+            priority: focusListings.priority,
+            title: listingsTable.title,
+            type: listingsTable.type,
+            examDate: listingsTable.examDate,
+            deadline: listingsTable.deadline,
+          }).from(focusListings)
+            .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
+            .orderBy(asc(focusListings.priority)),
+          // Active notes with a future reminder
+          db.select({ id: notesTable.id, title: notesTable.title, reminderAt: notesTable.reminderAt })
+            .from(notesTable)
+            .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false), gt(notesTable.reminderAt, Date.now()))),
+        ])
 
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
-      const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
+        const listing = listingRows[0] ?? null
+        const daysLeft = listing?.examDate
+          ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
+          : null
 
-      lastLoadRef.current = Date.now()
-      if (isMountedRef.current) {
-        setStats({
+        const todayAccuracy = todayAccRow.total === 0
+          ? null
+          : Math.round((todayAccRow.correct / todayAccRow.total) * 100)
+
+        const streakDays = computeStreakFromDays(dayIndices)
+
+        const topicMap = new Map(allTopics.map(t => [t.id, t.name]))
+        const weakTopics: WeakTopic[] = weakStats
+          .map(s => ({
+            topicId: s.topicId,
+            topicName: resolveTopicLabel(s.topicId, topicMap),
+            accuracy: Math.round((s.ok / s.total) * 100),
+          }))
+          .filter(t => t.accuracy < 60)
+          .sort((a, b) => a.accuracy - b.accuracy || a.topicId.localeCompare(b.topicId))
+          .slice(0, 4)
+
+        return {
           listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,
           daysLeft,
-          todayAccuracy: computeTodayAccuracy(todayRows),
-          streakDays: computeStreak(allProgress),
-          weakTopics: computeWeakTopics(allProgress, allFc, allTopics),
+          todayAccuracy,
+          streakDays,
+          weakTopics,
           firstTopicId: firstTopicRows[0]?.id ?? null,
           fullName: settingsRows[0]?.fullName ?? '',
           importantDayIndices: [
@@ -174,12 +209,11 @@ export function useHomeStats(): HomeStats {
               r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
               r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
             ]).filter((d): d is number => d != null),
-            // Merge note reminder day indices
             ...reminderRows
               .filter(r => r.reminderAt != null)
               .map(r => Math.floor(r.reminderAt! / 86_400_000)),
           ],
-          practiceDayIndices: allProgress.map(p => Math.floor(p.answeredAt / 86_400_000)),
+          practiceDayIndices: dayIndices,
           focusedListings: focusedRows.map(r => ({
             slug: r.slug,
             priority: r.priority,
@@ -192,8 +226,18 @@ export function useHomeStats(): HomeStats {
             .filter(r => r.reminderAt != null)
             .map(r => ({ noteId: r.id, noteTitle: r.title, reminderAt: r.reminderAt! }))
             .sort((a, b) => a.reminderAt - b.reminderAt),
-          refresh: load,
-        })
+        }
+      }
+
+      const result = await cachedQuery<Omit<HomeStats, 'refresh'> | null>('home:stats', 30_000, fetcher)
+
+      lastLoadRef.current = Date.now()
+      if (isMountedRef.current) {
+        if (result === null) {
+          setStats(DEFAULT)
+        } else {
+          setStats(prev => ({ ...prev, ...result }))
+        }
       }
     } catch (e) {
       console.error('[useHomeStats] load error:', e)
@@ -207,7 +251,17 @@ export function useHomeStats(): HomeStats {
     return () => { isMountedRef.current = false }
   }, [])
 
-  useFocusEffect(useCallback(() => { void load() }, [load]))
+  // Subscribe to 'home:' prefix — background cache refresh notifies us to reload
+  useEffect(() => {
+    const unsub = subscribe('home:', () => {
+      void load()
+    })
+    return unsub
+  }, [load])
+
+  useFocusEffect(useCallback(() => {
+    InteractionManager.runAfterInteractions(() => { void load() })
+  }, [load]))
 
   // Return a referentially-stable object: a fresh `{ ...stats }` on every render
   // makes every consumer (incl. the app-wide AiCoachProvider) treat `stats` as

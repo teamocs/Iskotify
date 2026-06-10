@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { userSettings } from '../db/schema'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
+import { invalidate } from './queryCache'
 
 export interface UserSettingsData {
   selectedListingSlug: string
@@ -137,4 +138,8 @@ export async function updateSettings(
     .insert(userSettings)
     .values({ id: 1, ...set } as typeof userSettings.$inferInsert)
     .onConflictDoUpdate({ target: userSettings.id, set })
+
+  // Invalidate caches that depend on user settings (selected listing, name, etc.)
+  invalidate('settings:')
+  invalidate('home:')
 }

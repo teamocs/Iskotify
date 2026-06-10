@@ -1,6 +1,7 @@
 import { useDb } from './useDb'
 import { practiceSessions } from '../db/schema'
 import { pushUserData } from '../services/sync'
+import { invalidate } from '../services/queryCache'
 
 export interface SessionParams {
   listingSlug: string
@@ -43,6 +44,10 @@ export function useRecordSession() {
   async function recordSession(params: SessionParams): Promise<void> {
     const record = buildSessionRecord(params)
     await db.insert(practiceSessions).values(record)
+    // Invalidate caches so home/analytics screens reflect the new session
+    invalidate('analytics:')
+    invalidate('home:')
+    invalidate('practice:')
     // Best-effort backup to Supabase if signed in. Don't block the UI on this.
     void pushUserData(db).catch(err => console.warn('[recordSession] push failed:', err))
   }

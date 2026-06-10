@@ -1,4 +1,5 @@
 import { eq, asc } from 'drizzle-orm'
+import { invalidate } from './queryCache'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -694,6 +695,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]!, syncRev: SYNC_REV } })
         .run()
     })
+
+    // Invalidate all query caches so screens reflect fresh synced data
+    invalidate('')
 
     // Also push user data backup if signed in
     await pushUserData(db)

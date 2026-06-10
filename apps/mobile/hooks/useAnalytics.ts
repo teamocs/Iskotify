@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { practiceSessions, topics, savedDecks } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
+import { cachedQuery, subscribe } from '../services/queryCache'
 
 export interface WeeklyBar {
   dayLabel: string
@@ -139,52 +140,58 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     if (loadingRef.current) return
     loadingRef.current = true
     try {
-      const [allSessions, topicRows, deckRows] = await Promise.all([
-        db.select().from(practiceSessions),
-        db.select({ id: topics.id, name: topics.name, subjectId: topics.subjectId }).from(topics),
-        db.select({ id: savedDecks.id, name: savedDecks.name }).from(savedDecks),
-      ])
+      const fetcher = async () => {
+        const [allSessions, topicRows, deckRows] = await Promise.all([
+          db.select().from(practiceSessions),
+          db.select({ id: topics.id, name: topics.name, subjectId: topics.subjectId }).from(topics),
+          db.select({ id: savedDecks.id, name: savedDecks.name }).from(savedDecks),
+        ])
 
-      const filtered = slug === 'overall'
-        ? allSessions
-        : allSessions.filter(s => s.listingSlug === slug)
+        const filtered = slug === 'overall'
+          ? allSessions
+          : allSessions.filter(s => s.listingSlug === slug)
 
-      const sessionCount = filtered.length
-      const withScore = filtered.filter(s => s.total > 0)
-      const avgAccuracy = withScore.length > 0
-        ? Math.round(withScore.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / withScore.length)
-        : null
+        const sessionCount = filtered.length
+        const withScore = filtered.filter(s => s.total > 0)
+        const avgAccuracy = withScore.length > 0
+          ? Math.round(withScore.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / withScore.length)
+          : null
 
-      const streak = computeStreak(filtered)
-      const weeklyData = computeWeeklyData(filtered)
+        const streak = computeStreak(filtered)
+        const weeklyData = computeWeeklyData(filtered)
 
-      const topicNameMap = new Map(topicRows.map(t => [t.id, t.name]))
-      const deckMap = new Map(deckRows.map(d => [d.id, d.name]))
-      // subjectId lookup used for accordion grouping in Subject Mastery view
-      const topicSubjectMap = new Map(topicRows.map(t => [t.id, t.subjectId]))
+        const topicNameMap = new Map(topicRows.map(t => [t.id, t.name]))
+        const deckMap = new Map(deckRows.map(d => [d.id, d.name]))
+        // subjectId lookup used for accordion grouping in Subject Mastery view
+        const topicSubjectMap = new Map(topicRows.map(t => [t.id, t.subjectId]))
 
-      const topicMastery: TopicMastery[] = computeTopicMastery(filtered, topicNameMap, deckMap)
-        .map(m => ({
-          ...m,
-          // Populate subjectId for topic-backed entries so the Subject accordion works
-          subjectId: m.topicId ? topicSubjectMap.get(m.topicId) : undefined,
-        }))
+        const topicMastery: TopicMastery[] = computeTopicMastery(filtered, topicNameMap, deckMap)
+          .map(m => ({
+            ...m,
+            // Populate subjectId for topic-backed entries so the Subject accordion works
+            subjectId: m.topicId ? topicSubjectMap.get(m.topicId) : undefined,
+          }))
 
-      const recentSessions: RecentSession[] = filtered
-        .sort((a, b) => b.completedAt - a.completedAt)
-        .slice(0, 10)
-        .map(s => {
-          let title = 'Session'
-          if (s.deckId === '__full__') title = 'Full Review'
-          else if (s.deckId === '__weak__') title = 'Weak Topics'
-          else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
-          else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
-          else if (s.subtest) title = s.subtest
-          return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
-        })
+        const recentSessions: RecentSession[] = filtered
+          .sort((a, b) => b.completedAt - a.completedAt)
+          .slice(0, 10)
+          .map(s => {
+            let title = 'Session'
+            if (s.deckId === '__full__') title = 'Full Review'
+            else if (s.deckId === '__weak__') title = 'Weak Topics'
+            else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
+            else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
+            else if (s.subtest) title = s.subtest
+            return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
+          })
+
+        return { sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions, isLoading: false }
+      }
+
+      const result = await cachedQuery(`analytics:${slug}`, 30_000, fetcher)
 
       if (isMountedRef.current) {
-        setData({ sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions, isLoading: false })
+        setData(result)
       }
     } catch (e) {
       console.error('[useAnalytics] load error:', e)
@@ -197,6 +204,14 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     isMountedRef.current = true
     return () => { isMountedRef.current = false }
   }, [])
+
+  // Subscribe to 'analytics:' prefix — background cache refresh notifies us to reload
+  useEffect(() => {
+    const unsub = subscribe('analytics:', () => {
+      void load()
+    })
+    return unsub
+  }, [load])
 
   useFocusEffect(useCallback(() => { void load() }, [load]))
 
