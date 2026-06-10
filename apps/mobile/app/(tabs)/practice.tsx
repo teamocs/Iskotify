@@ -26,6 +26,7 @@ import { SplitStatCard } from '../../components/ui/SplitStatCard'
 import { ListCard } from '../../components/ui/ListCard'
 import { Badge } from '../../components/ui/Badge'
 import { useAnalytics } from '../../hooks/useAnalytics'
+import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
 
 // Maps a topic strength to a design-system Badge tone.
 const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
@@ -349,10 +350,11 @@ function useFocusAnalyticsMap(slugs: string[]): Map<string, number | null> {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 // Styles factory (module-level) — keeps PracticeScreen's body small; memoized by
-// the screen on (theme, typo).
+// the screen on (theme, typo, breakpoint).
 function makeStyles(
   t: ReturnType<typeof useTheme>['theme'],
   typo: ReturnType<typeof useTheme>['typo'],
+  bp: import('../../hooks/useBreakpoint').Breakpoint,
 ) {
   return {
     s: StyleSheet.create({
@@ -395,7 +397,7 @@ function makeStyles(
     }),
     rc: StyleSheet.create({
       grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-      cardWrap: { width: '48%' },
+      cardWrap: { width: gridItemWidth(bp) },
       card: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
       badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2, alignSelf: 'flex-start', marginBottom: spacing.sm },
       badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
@@ -454,6 +456,7 @@ export default function PracticeScreen() {
   }, [refresh])
 
   const { theme: t, typo } = useTheme()
+  const bp = useBreakpoint()
 
   // Stable element for the ScrollView refreshControl prop. RN's refreshControl
   // requires a JSX element (no component/render-prop form), so memoize it to avoid
@@ -468,7 +471,7 @@ export default function PracticeScreen() {
     />
   ), [refreshing, onRefresh, t.accent, t.surface])
 
-  const { s, rc, m } = useMemo(() => makeStyles(t, typo), [t, typo])
+  const { s, rc, m } = useMemo(() => makeStyles(t, typo, bp), [t, typo, bp])
 
   const db = useDb()
   const { focusListings: focusListingsList } = useFocusListings()
