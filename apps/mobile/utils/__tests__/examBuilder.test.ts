@@ -1,4 +1,4 @@
-import { buildBlueprintExam, scoreBlueprintExam } from '../examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand } from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -43,5 +43,42 @@ describe('scoreBlueprintExam', () => {
     const s = scoreBlueprintExam(10, 6, 2, true, 0.25) // 2 blank
     expect(s).toMatchObject({ correct: 6, wrong: 2, blank: 2 })
     expect(s.adjusted).toBeCloseTo(6 - 0.5)
+  })
+})
+
+describe('filterCourseNotesByClusters', () => {
+  const notes = [
+    { courseCluster: 'all', note: 'A', minPercentile: null },
+    { courseCluster: 'Health Sciences', note: 'B', minPercentile: 90 },
+    { courseCluster: 'Engineering', note: 'C', minPercentile: 90 },
+  ]
+  it('returns ALL notes when the student has no target clusters', () => {
+    expect(filterCourseNotesByClusters(notes, [])).toEqual(notes)
+  })
+  it('keeps "all" notes plus notes matching the student clusters', () => {
+    const out = filterCourseNotesByClusters(notes, ['Health Sciences'])
+    expect(out.map(n => n.note)).toEqual(['A', 'B'])
+  })
+  it('keeps only "all" when no cluster matches', () => {
+    const out = filterCourseNotesByClusters(notes, ['Law'])
+    expect(out.map(n => n.note)).toEqual(['A'])
+  })
+  it('is case-insensitive on cluster names', () => {
+    const out = filterCourseNotesByClusters(notes, ['health sciences'])
+    expect(out.map(n => n.note)).toEqual(['A', 'B'])
+  })
+})
+
+describe('estimatePercentileBand', () => {
+  it('clamps and labels tiers', () => {
+    expect(estimatePercentileBand(95).band).toBe('Top tier')
+    expect(estimatePercentileBand(80).band).toBe('Competitive')
+    expect(estimatePercentileBand(60).band).toBe('Developing')
+    expect(estimatePercentileBand(20).band).toBe('Foundational')
+  })
+  it('returns a percentile equal to the clamped raw pct', () => {
+    expect(estimatePercentileBand(73).percentile).toBe(73)
+    expect(estimatePercentileBand(150).percentile).toBe(99)
+    expect(estimatePercentileBand(-5).percentile).toBe(1)
   })
 })
