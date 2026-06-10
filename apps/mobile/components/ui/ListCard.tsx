@@ -17,11 +17,13 @@ interface Props {
   progress?: number
   /** Override the progress bar fill color (e.g. severity red/amber/green). Defaults to accent. */
   progressColor?: string
+  /** Override the title color (e.g. danger red for destructive rows). Defaults to textPrimary. */
+  titleColor?: string
 }
 
 /** Full-width list card: leading icon box → title/subtitle → trailing (design system §3). */
 export function ListCard({
-  icon, iconBg, title, subtitle, trailing, showChevron = true, onPress, onLongPress, progress, progressColor,
+  icon, iconBg, title, subtitle, trailing, showChevron = true, onPress, onLongPress, progress, progressColor, titleColor,
 }: Props) {
   const { theme: t, typo } = useTheme()
   const Container: typeof Pressable | typeof View = onPress || onLongPress ? Pressable : (View as never)
@@ -48,7 +50,7 @@ export function ListCard({
           </View>
         ) : null}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: typo.base, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' }} numberOfLines={1}>
+          <Text style={{ fontSize: typo.base, fontWeight: '700', color: titleColor ?? t.textPrimary, fontFamily: 'Outfit_700Bold' }} numberOfLines={1}>
             {title}
           </Text>
           {subtitle ? (

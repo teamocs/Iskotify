@@ -31,6 +31,7 @@ import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { ListCard } from '../../components/ui/ListCard'
 import { spacing, radius, typography } from '../../theme/tokens'
 
 interface ProfileData {
@@ -240,11 +241,6 @@ export default function ProfileScreen() {
     googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
     signedInText:  { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
-    cardTitle:     { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    cardSub:       { fontSize: typo.sm, color: t.textSecondary, marginTop: 3, fontFamily: 'Lexend_400Regular' },
-    actionRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    actionIcon:    { width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-    chevron:       { color: t.textTertiary, fontSize: typo.lg },
     secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },
     analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -534,81 +530,35 @@ export default function ProfileScreen() {
         </Card>
 
         {/* Action cards */}
-        <Pressable
+        <ListCard
+          icon={<Lineicons icon={Upload1Outlined} size={16} color="#16a34a" style={{ transform: [{ rotate: '180deg' }] }} />}
+          iconBg="rgba(34,197,94,0.12)"
+          title="Export Data"
+          subtitle="Save your preferences as a JSON file"
           onPress={handleExport}
-          accessibilityRole="button"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
-        >
-          <Card elevated>
-            <View style={s.actionRow}>
-              <View style={[s.actionIcon, { backgroundColor: 'rgba(34,197,94,0.12)' }]}>
-                <Lineicons icon={Upload1Outlined} size={14} color="#16a34a" style={{ transform: [{ rotate: '180deg' }] }} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle}>Export Data</Text>
-                <Text style={s.cardSub}>Save your preferences as a JSON file</Text>
-              </View>
-              <Text style={s.chevron}>›</Text>
-            </View>
-          </Card>
-        </Pressable>
-
-        <Pressable
+        />
+        <ListCard
+          icon={<Lineicons icon={Upload1Outlined} size={16} color="#3b82f6" />}
+          iconBg="rgba(96,165,250,0.12)"
+          title="Import Data"
+          subtitle="Restore from a previously exported JSON file"
           onPress={handleImport}
-          accessibilityRole="button"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
-        >
-          <Card elevated>
-            <View style={s.actionRow}>
-              <View style={[s.actionIcon, { backgroundColor: 'rgba(96,165,250,0.12)' }]}>
-                <Lineicons icon={Upload1Outlined} size={14} color="#3b82f6" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle}>Import Data</Text>
-                <Text style={s.cardSub}>Restore from a previously exported JSON file</Text>
-              </View>
-              <Text style={s.chevron}>›</Text>
-            </View>
-          </Card>
-        </Pressable>
-
-        <Pressable
+        />
+        <ListCard
+          icon={<Text style={{ fontSize: typo.base, color: t.textSecondary }}>↪</Text>}
+          iconBg="rgba(148,163,184,0.12)"
+          title="Sign Out"
+          subtitle="Sign out of your Google account on this device"
           onPress={handleSignOut}
-          accessibilityRole="button"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
-        >
-          <Card elevated>
-            <View style={s.actionRow}>
-              <View style={[s.actionIcon, { backgroundColor: 'rgba(148,163,184,0.12)' }]}>
-                <Text style={{ fontSize: typo.base, color: t.textSecondary }}>↪</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle}>Sign Out</Text>
-                <Text style={s.cardSub}>Sign out of your Google account on this device</Text>
-              </View>
-              <Text style={s.chevron}>›</Text>
-            </View>
-          </Card>
-        </Pressable>
-
-        <Pressable
+        />
+        <ListCard
+          icon={<Text style={{ fontSize: typo.base, color: '#dc2626' }}>⚠</Text>}
+          iconBg="rgba(239,68,68,0.10)"
+          title="Reset App Data"
+          titleColor="#dc2626"
+          subtitle="Permanently delete all local data on this device"
           onPress={handleResetAppData}
-          accessibilityRole="button"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
-        >
-          <Card elevated>
-            <View style={s.actionRow}>
-              <View style={[s.actionIcon, { backgroundColor: 'rgba(239,68,68,0.10)' }]}>
-                <Text style={{ fontSize: typo.base, color: '#dc2626' }}>⚠</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.cardTitle, { color: '#dc2626' }]}>Reset App Data</Text>
-                <Text style={s.cardSub}>Permanently delete all local data on this device</Text>
-              </View>
-              <Text style={s.chevron}>›</Text>
-            </View>
-          </Card>
-        </Pressable>
+        />
       </ScreenScroll>
     </SafeAreaView>
   )
