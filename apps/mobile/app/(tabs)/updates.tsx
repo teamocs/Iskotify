@@ -20,6 +20,8 @@ import { NewsDetailModal } from '../../components/updates/NewsDetailModal'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { Badge } from '../../components/ui/Badge'
+import { ListCard } from '../../components/ui/ListCard'
 import { spacing, radius } from '../../theme/tokens'
 
 // ── Changelog ─────────────────────────────────────────────────────────────────
@@ -54,12 +56,12 @@ type SeverityKey = 'urgent' | 'important' | 'info' | 'no_change'
 
 const SEVERITY_CONFIG: Record<
   SeverityKey,
-  { emoji: string; bg: string; text: string; label: string }
+  { label: string; tone: 'accent' | 'neutral' | 'success' | 'warning' | 'danger' }
 > = {
-  urgent:    { emoji: '🔴', bg: '#fee2e2', text: '#991b1b', label: 'Urgent' },
-  important: { emoji: '🟠', bg: '#ffedd5', text: '#9a3412', label: 'Important' },
-  info:      { emoji: '🟡', bg: '#fef9c3', text: '#854d0e', label: 'Info' },
-  no_change: { emoji: '✅', bg: '#dcfce7', text: '#166534', label: 'No Change' },
+  urgent:    { label: 'Urgent', tone: 'danger' },
+  important: { label: 'Important', tone: 'warning' },
+  info:      { label: 'Info', tone: 'accent' },
+  no_change: { label: 'No Change', tone: 'success' },
 }
 
 function getSeverityConfig(severity: string) {
@@ -95,11 +97,7 @@ function UpcomingEventsSection({ items }: { items: FeedItem[] }) {
                   </Text>
                 </View>
                 {item.eventType != null && item.eventType.length > 0 ? (
-                  <View style={[styles.chip, { backgroundColor: t.accentSurface }]}>
-                    <Text style={[styles.chipText, { color: t.accentText, fontSize: typo.xs }]}>
-                      {item.eventType}
-                    </Text>
-                  </View>
+                  <Badge label={item.eventType} tone="accent" />
                 ) : null}
               </View>
               <View style={styles.row}>
@@ -140,17 +138,7 @@ function NewsSection({ items }: { items: FeedItem[] }) {
             >
               <Card elevated>
                 <View style={styles.row}>
-                  <View
-                    style={[
-                      styles.severityBadge,
-                      { backgroundColor: cfg.bg },
-                    ]}
-                  >
-                    <Text style={styles.severityEmoji}>{cfg.emoji}</Text>
-                    <Text style={[styles.severityText, { color: cfg.text, fontSize: typo.xs }]}>
-                      {cfg.label}
-                    </Text>
-                  </View>
+                  <Badge label={cfg.label} tone={cfg.tone} />
                   {item.schoolName != null && item.schoolName.length > 0 ? (
                     <Text
                       style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs, marginLeft: spacing.sm }]}
@@ -220,26 +208,14 @@ function ChangelogSection() {
 // ── Results Tracker entry card ─────────────────────────────────────────────────
 
 function ResultsTrackerCard() {
-  const { theme: t, typo } = useTheme()
   return (
-    <Pressable
-      accessibilityRole="button"
+    <ListCard
+      icon={<Text style={{ fontSize: 22 }}>📋</Text>}
+      iconBg="rgba(128,0,0,0.18)"
+      title="Results Tracker"
+      subtitle="Track school results you're waiting on"
       onPress={() => router.push('/results-tracker')}
-      style={({ pressed }) => [styles.pressableCard, pressed ? { opacity: 0.7 } : null]}
-    >
-      <Card elevated style={[styles.trackerCard, { backgroundColor: t.accentSurface, borderColor: t.accent }]}>
-        <Text style={styles.trackerEmoji}>{'📋'}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
-            Results Tracker
-          </Text>
-          <Text style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}>
-            Track school results you&apos;re waiting on
-          </Text>
-        </View>
-        <Text style={{ color: t.accent, fontSize: typo.lg }}>{'›'}</Text>
-      </Card>
-    </Pressable>
+    />
   )
 }
 
@@ -343,36 +319,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flexShrink: 1,
   },
-  chip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    borderCurve: 'continuous',
-  },
-  chipText: {
-    fontWeight: '600',
-  },
   dateText: {
     fontWeight: '400',
   },
   daysLabel: {
     fontWeight: '600',
     marginLeft: 'auto',
-  },
-  severityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    borderCurve: 'continuous',
-  },
-  severityEmoji: {
-    fontSize: 12,
-  },
-  severityText: {
-    fontWeight: '600',
   },
   bodyPreview: {
     fontWeight: '400',
@@ -394,14 +346,5 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     lineHeight: 18,
-  },
-  trackerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderWidth: 1.5,
-  },
-  trackerEmoji: {
-    fontSize: 24,
   },
 })
