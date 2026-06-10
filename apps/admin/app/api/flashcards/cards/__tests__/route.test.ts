@@ -9,11 +9,22 @@ vi.mock('next/cache', () => ({
 vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
 
-// Sibling lookup chain: .select().eq().limit().single()
+// Flexible select chain supporting both:
+//   dedup guard:  .select().eq().eq().limit()   (awaited — returns dedupResult)
+//   sibling slug: .select().eq().limit().single()
 const mockSiblingSingle = vi.fn()
-const mockSiblingLimit = vi.fn(() => ({ single: mockSiblingSingle }))
-const mockSiblingEq = vi.fn(() => ({ limit: mockSiblingLimit }))
-const mockSiblingSelect = vi.fn(() => ({ eq: mockSiblingEq }))
+const dedupResult: { value: { data: any[]; error: null } } = { value: { data: [], error: null } }
+function makeSelectChain(): any {
+  const chain: any = {
+    eq: vi.fn(() => chain),
+    limit: vi.fn(() => ({
+      single: mockSiblingSingle,
+      then: (resolve: any, reject: any) => Promise.resolve(dedupResult.value).then(resolve, reject),
+    })),
+  }
+  return chain
+}
+const mockSiblingSelect = vi.fn(() => makeSelectChain())
 
 // Insert chain: .insert().select().single()  (single-card path)
 const mockInsertSingle = vi.fn()
@@ -35,6 +46,24 @@ describe('POST /api/flashcards/cards', () => {
     mockSiblingSingle.mockClear()
     mockInsert.mockClear()
     mockInsertSingle.mockClear()
+    dedupResult.value = { data: [], error: null }  // no duplicates by default
+  })
+
+  it('returns 409 when a published card with the same question + answer already exists', async () => {
+    dedupResult.value = { data: [{ id: 'existing', answer: '4' }], error: null }
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', question: 'What is 2+2?', answer: '4', listing_slugs: ['upcat'] }))
+    expect(res.status).toBe(409)
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
+  it('allows a same-question card when the answer differs (not a duplicate)', async () => {
+    dedupResult.value = { data: [{ id: 'existing', answer: 'receive' }], error: null }
+    mockInsertSingle.mockResolvedValueOnce({ data: { id: 'card-new' }, error: null })
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', question: 'Choose the correctly spelled word.', answer: 'definitely', listing_slugs: ['upcat'] }))
+    expect(res.status).toBe(200)
+    expect(mockInsert).toHaveBeenCalled()
   })
 
   function makeReq(body: object) {

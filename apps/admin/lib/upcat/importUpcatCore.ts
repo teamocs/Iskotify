@@ -10,7 +10,16 @@ export interface RawUpcatRow {
   correct_answer: string; explanation: string; status: string
 }
 
-export interface ImportUpcatResult { passages: number; questions: number }
+export interface ImportUpcatResult { passages: number; questions: number; duplicatesDrafted: number }
+
+// Content fingerprint for duplicate detection. Compares question text AND options
+// (NOT text alone) — many legitimate questions share a generic stem ("Choose the
+// correctly spelled word.", "What is the main idea of the passage?") but differ in
+// their options, so a text-only check would wrongly flag them.
+function contentKey(text: string, options: string[]): string {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+  return norm(text) + ' ||| ' + options.map(norm).join(' | ')
+}
 
 // Must match the mobile client's SUBTESTS (apps/mobile/utils/upcatExam.ts); rows
 // with any other subtest would never surface in a built exam, so we reject them.
@@ -76,8 +85,44 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
     }
   })
 
+  // 3. Dedup guard — a question that duplicates an existing one (same text+options
+  //    under a DIFFERENT question_id) or an earlier row in this batch must NOT be
+  //    published. Demote it to 'draft' so an admin can review/merge instead of
+  //    silently shipping a duplicate into the live exam. (Re-importing the same
+  //    question_id is an update, not a duplicate.)
+  const existing: { question_id: string; question_text: string; options: unknown }[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error: selErr } = await client
+      .from('upcat_questions')
+      .select('question_id,question_text,options')
+      .range(from, from + 999)
+    if (selErr) break
+    const batch = (data ?? []) as { question_id: string; question_text: string; options: unknown }[]
+    existing.push(...batch)
+    if (batch.length < 1000) break
+  }
+  const keyToIds = new Map<string, Set<string>>()
+  for (const e of existing) {
+    const opts = Array.isArray(e.options) ? (e.options as string[]) : []
+    const k = contentKey(e.question_text ?? '', opts)
+    if (!keyToIds.has(k)) keyToIds.set(k, new Set())
+    keyToIds.get(k)!.add(e.question_id)
+  }
+  let duplicatesDrafted = 0
+  const batchSeen = new Map<string, string>() // contentKey -> first question_id in this batch
+  for (const row of questionRows) {
+    const k = contentKey(row.question_text, row.options)
+    const dupExisting = (keyToIds.get(k) && [...keyToIds.get(k)!].some(id => id !== row.question_id)) || false
+    const dupBatch = batchSeen.has(k) && batchSeen.get(k) !== row.question_id
+    if ((dupExisting || dupBatch) && row.status === 'published') {
+      row.status = 'draft'
+      duplicatesDrafted++
+    }
+    if (!batchSeen.has(k)) batchSeen.set(k, row.question_id)
+  }
+
   const { error } = await client.from('upcat_questions').upsert(questionRows, { onConflict: 'question_id' })
   if (error) throw new Error(`question upsert failed: ${error.message}`)
 
-  return { passages: passages.size, questions: questionRows.length }
+  return { passages: passages.size, questions: questionRows.length, duplicatesDrafted }
 }

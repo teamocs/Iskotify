@@ -79,6 +79,27 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerClient()
 
+    // Dedup guard: don't let a manual add create a duplicate PUBLISHED card. We compare
+    // question AND answer (not question alone) — many valid cards share a generic stem
+    // ("Choose the correctly spelled word.") but have different answers/options.
+    const effectiveStatus = status ?? 'published'
+    if (effectiveStatus === 'published') {
+      const qn = question.trim()
+      const an = answer.trim().toLowerCase()
+      const { data: sameQ } = await supabase
+        .from('flashcards')
+        .select('id, answer')
+        .eq('status', 'published')
+        .eq('question', qn)
+        .limit(50)
+      if ((sameQ ?? []).some(c => (c.answer ?? '').trim().toLowerCase() === an)) {
+        return NextResponse.json(
+          { error: 'A published card with this exact question and answer already exists. Edit the existing card or save this as a draft.' },
+          { status: 409 },
+        )
+      }
+    }
+
     let resolvedSlugs: string[]
     if (listing_slugs && listing_slugs.length > 0) {
       resolvedSlugs = listing_slugs
