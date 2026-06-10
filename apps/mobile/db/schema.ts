@@ -224,6 +224,7 @@ export const upcatQuestions = sqliteTable('upcat_questions', {
   setPosition: integer('set_position'),
   hasVisual: integer('has_visual', { mode: 'boolean' }).notNull().default(false),
   status: text('status').notNull().default('published'),
+  skillCategory: text('skill_category'),
   remoteUpdatedAt: integer('remote_updated_at'),
 }, (t) => [
   index('upcat_questions_subtest_idx').on(t.subtest),
@@ -485,3 +486,50 @@ export const admissionsUpdates = sqliteTable('admissions_updates', {
 export const resultWatches = sqliteTable('result_watches', {
   slug: text('slug').primaryKey(), addedAt: integer('added_at').notNull(),
 })
+
+// ── Exam Blueprints (data-driven exam mechanics) ─────────────────────────────
+
+export const examSkillCategories = sqliteTable('exam_skill_categories', {
+  name: text('name').primaryKey(),
+  requiresSpatialLogic: integer('requires_spatial_logic', { mode: 'boolean' }).notNull().default(false),
+  displayOrder: integer('display_order').notNull().default(0),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const examBlueprints = sqliteTable('exam_blueprints', {
+  slug: text('slug').primaryKey(),
+  name: text('name').notNull().default(''),
+  acronym: text('acronym').notNull().default(''),
+  totalItems: integer('total_items').notNull().default(0),
+  totalTimeMinutes: integer('total_time_minutes').notNull().default(0),
+  hasGuessingPenalty: integer('has_guessing_penalty', { mode: 'boolean' }).notNull().default(false),
+  guessingPenalty: real('guessing_penalty').notNull().default(0.25),
+  sectionBlocked: integer('section_blocked', { mode: 'boolean' }).notNull().default(false),
+  scoringNote: text('scoring_note').notNull().default(''),
+  mechanicsNote: text('mechanics_note').notNull().default(''),
+  status: text('status').notNull().default('draft'),
+  displayOrder: integer('display_order').notNull().default(0),
+  remoteUpdatedAt: integer('remote_updated_at'),
+})
+
+export const examBlueprintSections = sqliteTable('exam_blueprint_sections', {
+  id: text('id').primaryKey(),
+  blueprintSlug: text('blueprint_slug').notNull(),
+  name: text('name').notNull().default(''),
+  skillCategory: text('skill_category').notNull().default(''),
+  itemCount: integer('item_count').notNull().default(0),
+  timeMinutes: integer('time_minutes'),
+  requiresSpatialLogic: integer('requires_spatial_logic', { mode: 'boolean' }).notNull().default(false),
+  displayOrder: integer('display_order').notNull().default(0),
+  remoteUpdatedAt: integer('remote_updated_at'),
+}, (t) => [index('exam_blueprint_sections_slug_idx').on(t.blueprintSlug)])
+
+export const examCourseNotes = sqliteTable('exam_course_notes', {
+  id: text('id').primaryKey(),
+  blueprintSlug: text('blueprint_slug').notNull(),
+  courseCluster: text('course_cluster').notNull().default('all'),
+  note: text('note').notNull().default(''),
+  minPercentile: integer('min_percentile'),
+  displayOrder: integer('display_order').notNull().default(0),
+  remoteUpdatedAt: integer('remote_updated_at'),
+}, (t) => [index('exam_course_notes_slug_idx').on(t.blueprintSlug)])
