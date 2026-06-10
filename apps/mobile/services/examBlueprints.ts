@@ -1,6 +1,6 @@
 import { eq, asc, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
-import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages } from '../db/schema'
+import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages, userSettings, careerCourses } from '../db/schema'
 import type { RawUpcatQuestion, RawUpcatPassage } from '../utils/upcatExam'
 
 export interface BlueprintSection {
@@ -68,4 +68,18 @@ export async function getQuestionsByCategory(db: DrizzleClient, categories: stri
 export async function getAllPassages(db: DrizzleClient): Promise<RawUpcatPassage[]> {
   const rows = await db.select().from(upcatPassages)
   return rows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
+}
+
+/** Resolve the student's target courses → the distinct career_courses.cluster names,
+ *  used to filter a blueprint's course-cut-off notes. Empty array if none set. */
+export async function getTargetCourseClusters(db: DrizzleClient): Promise<string[]> {
+  const rows = await db.select({ tc: userSettings.targetCourses }).from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+  let parsed: { careerCourseId?: string | null }[] = []
+  try { const v = JSON.parse(rows[0]?.tc ?? '[]'); if (Array.isArray(v)) parsed = v } catch { /* ignore */ }
+  const ids = parsed.map(c => c?.careerCourseId).filter((x): x is string => !!x)
+  if (ids.length === 0) return []
+  const ccRows = await db.select({ cluster: careerCourses.cluster }).from(careerCourses).where(inArray(careerCourses.courseId, ids))
+  const clusters = new Set<string>()
+  for (const r of ccRows) if (r.cluster) clusters.add(r.cluster)
+  return Array.from(clusters)
 }

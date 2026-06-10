@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
-import { examBlueprints, examBlueprintSections, examCourseNotes } from '../../db/schema'
+import { examBlueprints, examBlueprintSections, examCourseNotes, userSettings, careerCourses } from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
-import { getExamBlueprint, listPublishedBlueprintSlugs, getQuestionsByCategory } from '../examBlueprints'
+import { getExamBlueprint, listPublishedBlueprintSlugs, getQuestionsByCategory, getTargetCourseClusters } from '../examBlueprints'
 import { upcatQuestions } from '../../db/schema'
 
 function makeDb() {
@@ -55,5 +55,40 @@ describe('getQuestionsByCategory', () => {
     expect(map.get('Mathematics')![0]!.options).toEqual(['1','2','3','4'])
     expect(map.get('Science')).toHaveLength(1)
     expect(map.get('Spatial') ?? []).toHaveLength(0)
+  })
+})
+
+describe('getTargetCourseClusters', () => {
+  it('resolves target course careerCourseId to cluster names', async () => {
+    const db = makeDb()
+    await db.insert(careerCourses).values({ courseId: 'cc-nur', name: 'Nursing', cluster: 'Health Sciences' })
+    await db.insert(userSettings).values({ id: 1, targetCourses: JSON.stringify([{ id: 'tax:nur', label: 'Nursing', careerCourseId: 'cc-nur' }]) })
+    const clusters = await getTargetCourseClusters(db)
+    expect(clusters).toEqual(['Health Sciences'])
+  })
+
+  it('returns [] when target_courses is empty or absent', async () => {
+    const db = makeDb()
+    await db.insert(userSettings).values({ id: 1, targetCourses: '[]' })
+    expect(await getTargetCourseClusters(db)).toEqual([])
+  })
+
+  it('skips entries with null careerCourseId and deduplicates clusters', async () => {
+    const db = makeDb()
+    await db.insert(careerCourses).values([
+      { courseId: 'cc-eng', name: 'Engineering', cluster: 'Engineering' },
+      { courseId: 'cc-civil', name: 'Civil Eng', cluster: 'Engineering' },
+    ])
+    await db.insert(userSettings).values({
+      id: 1,
+      targetCourses: JSON.stringify([
+        { id: 'tax:eng', label: 'Engineering', careerCourseId: 'cc-eng' },
+        { id: 'tax:civil', label: 'Civil Eng', careerCourseId: 'cc-civil' },
+        { id: 'tax:other', label: 'Other', careerCourseId: null },
+        { id: 'tax:unmatched', label: 'Unmatched', careerCourseId: 'cc-ghost' },
+      ]),
+    })
+    const clusters = await getTargetCourseClusters(db)
+    expect(clusters).toEqual(['Engineering'])
   })
 })
