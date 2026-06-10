@@ -85,8 +85,6 @@ const emptyPracticeData = {
   subjects: [],
   topicRows: [],
   recommendedTopics: [],
-  selectedSubjectId: null,
-  setSelectedSubjectId: jest.fn(),
   totalCards: 0,
   cardCountByTopic: {},
   topicIdsByListingSlug: {},
@@ -118,28 +116,10 @@ describe('PracticeScreen', () => {
     expect(screen.getByText(/0 cards synced/)).toBeTruthy()
   })
 
-  it('renders All subject chip', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('All')).toBeTruthy()
-  })
-
   it('shows listing title in subtitle when listing is set', () => {
     mockUseHomeStats.mockReturnValue({ listing: { title: 'UPCAT 2025' } })
     render(<PracticeScreen />)
     expect(screen.getByText(/UPCAT 2025/)).toBeTruthy()
-  })
-
-  it('renders subject chips for each subject', () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [
-        { id: 's1', name: 'Mathematics' },
-        { id: 's2', name: 'Science' },
-      ],
-    })
-    render(<PracticeScreen />)
-    expect(screen.getByText('Mathematics')).toBeTruthy()
-    expect(screen.getByText('Science')).toBeTruthy()
   })
 
   it('renders topic cards when topics are present', () => {
@@ -291,7 +271,7 @@ describe('PracticeScreen', () => {
     expect(screen.queryByText('EXTRA')).toBeNull()
   })
 
-  it('focus card with a matching blueprint shows Mock exam button', async () => {
+  it('Mock exam button never renders on focus cards (regardless of blueprint match)', async () => {
     mockListPublishedBlueprints.mockResolvedValue([
       { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
     ])
@@ -301,21 +281,19 @@ describe('PracticeScreen', () => {
     )
     render(<PracticeScreen />)
     await act(async () => {})
-    // upcat focus card should have a "Mock exam" button
-    const mockBtns = screen.getAllByText('Mock exam')
-    expect(mockBtns.length).toBeGreaterThanOrEqual(1)
+    // Mock exam button must not appear anywhere on focus cards
+    expect(screen.queryByText('Mock exam')).toBeNull()
   })
 
-  it('focus card without a matching blueprint does NOT show Mock exam button', async () => {
-    mockListPublishedBlueprints.mockResolvedValue([
-      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
-    ])
-    // Only 'other' in focus — no blueprint for it
+  it('Review button renders on every focus card without tapping', async () => {
+    // 2 focus listings — both should show Review without any tap
     ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
-      { slug: 'other', priority: 1, addedAt: 0, title: 'Other Exam', type: 'exam' },
+      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
+      { slug: 'acet', priority: 2, addedAt: 0, title: 'ACET 2025', type: 'exam' },
     )
     render(<PracticeScreen />)
     await act(async () => {})
-    expect(screen.queryByText('Mock exam')).toBeNull()
+    const reviewBtns = screen.getAllByText('Review')
+    expect(reviewBtns.length).toBe(2)
   })
 })

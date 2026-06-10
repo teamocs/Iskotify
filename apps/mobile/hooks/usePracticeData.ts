@@ -21,8 +21,6 @@ export interface PracticeData {
   subjects: Array<{ id: string; name: string }>
   topicRows: TopicRow[]
   recommendedTopics: TopicRow[]
-  selectedSubjectId: string | null
-  setSelectedSubjectId: (id: string | null) => void
   totalCards: number
   cardCountByTopic: Record<string, number>
   topicIdsByListingSlug: Record<string, string[]>
@@ -69,7 +67,6 @@ export function filterTopicsWithCards<T extends { id: string }>(
 
 export function usePracticeData(): PracticeData {
   const db = useDb()
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
   const [allSubjects, setAllSubjects] = useState<Array<{ id: string; name: string }>>([])
   const [topicRows, setTopicRows] = useState<TopicRow[]>([])
   const [recommendedTopics, setRecommendedTopics] = useState<TopicRow[]>([])
@@ -142,11 +139,8 @@ export function usePracticeData(): PracticeData {
 
         // Drop ghost topics BEFORE anything downstream
         const visibleTopics = filterTopicsWithCards(topicList, fcList)
-        const filteredTopics = selectedSubjectId
-          ? visibleTopics.filter(t => t.subjectId === selectedSubjectId)
-          : visibleTopics
 
-        const rows: TopicRow[] = filteredTopics.map(topic => {
+        const rows: TopicRow[] = visibleTopics.map(topic => {
           const fcIds = new Set(fcList.filter(f => f.topicId === topic.id).map(f => f.id))
           const tp = progressList.filter(p => fcIds.has(p.flashcardId))
           const lastPracticedAt = tp.length > 0 ? Math.max(...tp.map(p => p.answeredAt)) : null
@@ -200,7 +194,7 @@ export function usePracticeData(): PracticeData {
     } finally {
       loadingRef.current = false
     }
-  }, [db, selectedSubjectId])
+  }, [db])
 
   useEffect(() => {
     isMountedRef.current = true
@@ -229,8 +223,6 @@ export function usePracticeData(): PracticeData {
     subjects: allSubjects,
     topicRows,
     recommendedTopics,
-    selectedSubjectId,
-    setSelectedSubjectId,
     totalCards,
     cardCountByTopic,
     topicIdsByListingSlug,

@@ -25,7 +25,6 @@ import { SectionHeader } from '../../components/ui/SectionHeader'
 import { SplitStatCard } from '../../components/ui/SplitStatCard'
 import { ListCard } from '../../components/ui/ListCard'
 import { Badge } from '../../components/ui/Badge'
-import { AiModelBanner } from '../../components/AiModelBanner'
 import { useAnalytics } from '../../hooks/useAnalytics'
 
 // Maps a topic strength to a design-system Badge tone.
@@ -282,14 +281,12 @@ function CreateDeckModal({
 
 // ── Focus card ────────────────────────────────────────────────────────────────
 
-function FocusCard({ row, isActive, accuracy, hasMockBlueprint, onPress, onReview, onMock }: {
+function FocusCard({ row, isActive, accuracy, onPress, onReview }: {
   row: FocusListing
   isActive: boolean
   accuracy: number | null
-  hasMockBlueprint: boolean
   onPress: () => void
   onReview: () => void
-  onMock: () => void
 }) {
   const { theme: t, typo } = useTheme()
   const fc = useMemo(() => StyleSheet.create({
@@ -302,8 +299,6 @@ function FocusCard({ row, isActive, accuracy, hasMockBlueprint, onPress, onRevie
     actionsCol: { marginTop: spacing.xs, gap: spacing.xs },
     reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
     reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-    mockBtn: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-    mockBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
     <Pressable
@@ -316,32 +311,17 @@ function FocusCard({ row, isActive, accuracy, hasMockBlueprint, onPress, onRevie
       <View style={fc.scoreRow}>
         <Text style={fc.score}>{accuracy != null ? `${accuracy}%` : '—'}</Text>
       </View>
-      {(isActive || hasMockBlueprint) ? (
-        <View style={fc.actionsCol}>
-          {isActive ? (
-            <Pressable
-              style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]}
-              onPress={onReview}
-              accessibilityRole="button"
-              accessibilityLabel="Review"
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Text style={fc.reviewBtnTxt} maxFontSizeMultiplier={1.4}>Review</Text>
-            </Pressable>
-          ) : null}
-          {hasMockBlueprint ? (
-            <Pressable
-              style={({ pressed }) => [fc.mockBtn, pressed && { opacity: 0.8 }]}
-              onPress={onMock}
-              accessibilityRole="button"
-              accessibilityLabel="Mock exam"
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Text style={fc.mockBtnTxt} maxFontSizeMultiplier={1.4}>Mock exam</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+      <View style={fc.actionsCol}>
+        <Pressable
+          style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]}
+          onPress={onReview}
+          accessibilityRole="button"
+          accessibilityLabel="Review"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
+          <Text style={fc.reviewBtnTxt} maxFontSizeMultiplier={1.4}>Review</Text>
+        </Pressable>
+      </View>
     </Pressable>
   )
 }
@@ -405,14 +385,6 @@ function makeStyles(
       collapsedLabel: { flex: 1, fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
       collapsedSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
       collapsedChevron: { fontSize: 18, color: t.textTertiary },
-      // Chips
-      chipsWrap: { height: 44, marginBottom: spacing.xs },
-      chipsScroll: { flex: 1 },
-      chipsContent: { paddingHorizontal: spacing.lg, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm - 2 },
-      chip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1 },
-      chipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
-      chipTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-      chipTxtOn: { color: '#fff' },
       secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
       secTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
       secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
@@ -464,7 +436,7 @@ function makeStyles(
 }
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
+  const { subjects, topicRows, recommendedTopics, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
@@ -517,8 +489,6 @@ export default function PracticeScreen() {
     const unsub = subscribe('practice:blueprints:', () => { void pull() })
     return () => { cancelled = true; unsub() }
   }, [db])
-
-  const blueprintSlugSet = useMemo(() => new Set(blueprints.map(b => b.slug)), [blueprints])
 
   // Per-focus accuracy map — hooks called unconditionally at top level
   const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
@@ -627,39 +597,31 @@ export default function PracticeScreen() {
         </View>
       </View>
 
-      {/* AI Reviewer Engine — banner + progress + download bottom-sheet */}
-      <AiModelBanner />
-
-      {/* (2) Subject filter chips */}
-      <View style={s.chipsWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.chipsContent}
-          style={s.chipsScroll}
-        >
-          <Pressable onPress={() => setSelectedSubjectId(null)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
-            <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
-              <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]} maxFontSizeMultiplier={1.4}>All</Text>
-            </View>
-          </Pressable>
-          {/* bounded: a handful of exam subjects (<10), horizontal chip rail — virtualization unwarranted */}
-          {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
-          {subjects.map(sub => (
-            <Pressable key={sub.id} onPress={() => setSelectedSubjectId(sub.id)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
-              <View style={[s.chip, selectedSubjectId === sub.id && s.chipOn]}>
-                <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]} maxFontSizeMultiplier={1.4}>{sub.name}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
       <ScreenScroll
         tabBarInset
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
+        {/* (2) My Focus 2-col grid */}
+        {focusListingsList.length > 0 ? (
+          <View>
+            <SectionHeader title="My Focus" />
+            <View style={rc.grid}>
+              {focusListingsList.map(row => (
+                <View key={row.slug} style={rc.cardWrap}>
+                  <FocusCard
+                    row={row}
+                    isActive={row.slug === effectiveFocusSlug}
+                    accuracy={focusAccuracyMap.get(row.slug) ?? null}
+                    onPress={() => setActiveFocusSlug(row.slug)}
+                    onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {/* (3) Recommended 2-col grid — "what next" */}
         {activeRecommended.length > 0 ? (
           <View>
@@ -677,49 +639,7 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* (4) Subjects accordion — PROMOTED (core list) */}
-        <View>
-          <SectionHeader title="Subjects" />
-          {focusListingsList.length > 0 ? (
-            <Text style={s.focusDebug}>
-              focus: {focusListingsList.map(l => l.slug).join(', ')}
-            </Text>
-          ) : null}
-          <SubjectAccordion
-            groups={subjectGroups}
-            emptyText="No topics yet — they'll appear here after sync"
-            initiallyExpanded="focused"
-            keyExtractor={(t) => t.topic.id}
-            renderRow={(row) => {
-              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
-              return <TopicCard row={row} />
-            }}
-          />
-        </View>
-
-        {/* (5) Focus 2-col grid */}
-        {focusListingsList.length > 0 ? (
-          <View>
-            <SectionHeader title="My Focus" />
-            <View style={rc.grid}>
-              {focusListingsList.map(row => (
-                <View key={row.slug} style={rc.cardWrap}>
-                  <FocusCard
-                    row={row}
-                    isActive={row.slug === effectiveFocusSlug}
-                    accuracy={focusAccuracyMap.get(row.slug) ?? null}
-                    hasMockBlueprint={blueprintSlugSet.has(row.slug)}
-                    onPress={() => setActiveFocusSlug(row.slug)}
-                    onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
-                    onMock={() => router.push(`/practice/exam/${row.slug}`)}
-                  />
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* (5b) Mock Exams section */}
+        {/* (4) Mock Exams section */}
         {blueprints.length > 0 ? (
           <View>
             <SectionHeader
@@ -750,6 +670,26 @@ export default function PracticeScreen() {
             </View>
           </View>
         ) : null}
+
+        {/* (5) Subjects accordion */}
+        <View>
+          <SectionHeader title="Subjects" />
+          {focusListingsList.length > 0 ? (
+            <Text style={s.focusDebug}>
+              focus: {focusListingsList.map(l => l.slug).join(', ')}
+            </Text>
+          ) : null}
+          <SubjectAccordion
+            groups={subjectGroups}
+            emptyText="No topics yet — they'll appear here after sync"
+            initiallyExpanded="focused"
+            keyExtractor={(t) => t.topic.id}
+            renderRow={(row) => {
+              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
+              return <TopicCard row={row} />
+            }}
+          />
+        </View>
 
         {/* (6) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
         <View>
