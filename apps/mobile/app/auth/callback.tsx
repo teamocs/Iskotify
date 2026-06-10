@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { View, ActivityIndicator } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
-import { pullUserData } from '../../services/sync'
+import { pullUserData, pushUserData } from '../../services/sync'
 import { useDb } from '../../hooks/useDb'
 import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
@@ -41,31 +41,38 @@ export default function AuthCallback() {
 
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          // Seed minimal local profile from Google's user_metadata so pullUserData
-          // has a row to merge against. pullUserData will overwrite these with the
-          // remote settings if a backup exists.
+          // Preserve a name the user typed during (anonymous) onboarding — only fall
+          // back to the Google display name when there's no local name yet. Writing the
+          // Google name unconditionally would clobber the onboarding name (or blank it
+          // when Google has no full_name), which then re-triggers onboarding.
+          const existing = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+          const localName = existing[0]?.fullName?.trim()
+          const nameToUse = localName || (user.user_metadata?.full_name ?? '')
           await db.insert(userSettings)
-            .values({
-              id: 1,
-              googleId: user.id,
-              email: user.email ?? '',
-              fullName: user.user_metadata?.full_name ?? '',
-            })
+            .values({ id: 1, googleId: user.id, email: user.email ?? '', fullName: nameToUse })
             .onConflictDoUpdate({
               target: userSettings.id,
-              set: {
-                googleId: user.id,
-                email: user.email ?? '',
-                fullName: user.user_metadata?.full_name ?? '',
-              },
+              set: { googleId: user.id, email: user.email ?? '', fullName: nameToUse },
             })
 
-          // Non-fatal: a data-restore failure must not abort an otherwise-successful
-          // sign-in (that would bounce the user back to /landing and look "broken").
+          // Restore vs back up: if this account already has a cloud backup, this is a
+          // returning login (possibly a new device) → restore it. If it has NO backup
+          // yet, this is a first sign-in after anonymous onboarding → push the local
+          // data up so it's preserved and available on other devices. Both non-fatal:
+          // a sync failure must never bounce an otherwise-successful sign-in to /landing.
+          let hasCloudBackup = false
           try {
-            await pullUserData(db)
-          } catch (restoreErr) {
-            console.warn('[auth/callback] data restore failed (non-fatal):', restoreErr)
+            const { data: backup } = await supabase
+              .from('user_app_data').select('user_id').eq('user_id', user.id).limit(1).maybeSingle()
+            hasCloudBackup = !!backup
+          } catch (e) {
+            console.warn('[auth/callback] backup check failed (non-fatal):', e)
+          }
+          try {
+            if (hasCloudBackup) await pullUserData(db)
+            else await pushUserData(db)
+          } catch (syncErr) {
+            console.warn('[auth/callback] sync failed (non-fatal):', syncErr)
           }
 
           // Decide landing screen based on whether the user has prior data restored

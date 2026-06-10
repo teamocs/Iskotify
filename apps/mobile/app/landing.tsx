@@ -7,7 +7,7 @@ import { router } from 'expo-router'
 import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
-import { pullUserData } from '../services/sync'
+import { pullUserData, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { eq } from 'drizzle-orm'
 import { userSettings, focusListings } from '../db/schema'
@@ -54,28 +54,33 @@ export default function LandingScreen() {
             if (!error || session) {
               const { data: { user } } = await supabase.auth.getUser()
               if (user) {
+                // Preserve a name typed during anonymous onboarding; only fall back to
+                // the Google display name when there's no local name yet (blanking it
+                // would re-trigger onboarding).
+                const existing = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+                const localName = existing[0]?.fullName?.trim()
+                const nameToUse = localName || (user.user_metadata?.full_name ?? '')
                 await db.insert(userSettings)
-                  .values({
-                    id: 1,
-                    googleId: user.id,
-                    email: user.email ?? '',
-                    fullName: user.user_metadata?.full_name ?? '',
-                    selectedListingSlug: '',
-                    lastSyncedAt: 0,
-                  })
+                  .values({ id: 1, googleId: user.id, email: user.email ?? '', fullName: nameToUse, selectedListingSlug: '', lastSyncedAt: 0 })
                   .onConflictDoUpdate({
                     target: userSettings.id,
-                    set: {
-                      googleId: user.id,
-                      email: user.email ?? '',
-                      fullName: user.user_metadata?.full_name ?? '',
-                    },
+                    set: { googleId: user.id, email: user.email ?? '', fullName: nameToUse },
                   })
-                // Non-fatal: don't let a data-restore failure abort sign-in.
+                // Restore an existing cloud backup (returning login / new device), or push
+                // this device's anonymous-onboarding data up on a first sign-in. Non-fatal.
+                let hasCloudBackup = false
                 try {
-                  await pullUserData(db)
+                  const { data: backup } = await supabase
+                    .from('user_app_data').select('user_id').eq('user_id', user.id).limit(1).maybeSingle()
+                  hasCloudBackup = !!backup
+                } catch (e) {
+                  console.warn('[landing] backup check failed (non-fatal):', e)
+                }
+                try {
+                  if (hasCloudBackup) await pullUserData(db)
+                  else await pushUserData(db)
                 } catch (restoreErr) {
-                  console.warn('[landing] data restore failed (non-fatal):', restoreErr)
+                  console.warn('[landing] sync failed (non-fatal):', restoreErr)
                 }
 
                 // Mirror callback.tsx logic: skip onboarding for returning users
