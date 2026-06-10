@@ -18,8 +18,16 @@ import { spacing, radius, typography } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { SplitStatCard } from '../../components/ui/SplitStatCard'
+import { ListCard } from '../../components/ui/ListCard'
+import { Badge } from '../../components/ui/Badge'
 import { AiModelBanner } from '../../components/AiModelBanner'
 import { useAnalytics } from '../../hooks/useAnalytics'
+
+// Maps a topic strength to a design-system Badge tone.
+const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
+  New: 'accent', Weak: 'danger', Review: 'warning', Strong: 'success',
+}
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -70,22 +78,19 @@ function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
 
 // ── Topic card ────────────────────────────────────────────────────────────────
 
-type SStyles = { topicCard: object; topicIcon: object; topicName: object; topicSub: object; badge: object; badgeText: object; deckCard: object; deckIcon: object; deckName: object; deckSub: object; deckChevron: object; root: object; header: object; title: object; subtitle: object; chipsWrap: object; chipsScroll: object; chipsContent: object; chip: object; chipOn: object; chipTxt: object; chipTxtOn: object; secRow: object; secTitle: object; secSub: object; addBtn: object; addBtnTxt: object; list: object; empty: object }
-function TopicCard({ row, s }: { row: TopicRow; s: SStyles }) {
+function TopicCard({ row }: { row: TopicRow }) {
   const c = useStrengthColor(row.strength)
   return (
-    <Pressable style={({ pressed }) => [s.topicCard, pressed && { opacity: 0.7 }]} onPress={() => router.push(`/practice/${row.topic.id}`)} accessibilityRole="button">
-      <View style={[s.topicIcon, { backgroundColor: c.iconBg }]}>
-        <Text style={{ color: c.iconColor, fontSize: 15 }}>📖</Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={s.topicName} numberOfLines={1}>{row.topic.name}</Text>
-        <Text style={s.topicSub}>{row.cardCount} cards · {lastPracticedLabel(row.lastPracticedAt)}</Text>
-      </View>
-      <View style={[s.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
-        <Text style={[s.badgeText, { color: c.text }]}>{row.strength}</Text>
-      </View>
-    </Pressable>
+    <View style={{ marginBottom: spacing.sm }}>
+      <ListCard
+        icon={<Text style={{ color: c.iconColor, fontSize: 15 }}>📖</Text>}
+        iconBg={c.iconBg}
+        title={row.topic.name}
+        subtitle={`${row.cardCount} cards · ${lastPracticedLabel(row.lastPracticedAt)}`}
+        trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
+        onPress={() => router.push(`/practice/${row.topic.id}`)}
+      />
+    </View>
   )
 }
 
@@ -95,12 +100,10 @@ function DeckCard({
   deck,
   totalCards,
   onDelete,
-  s,
 }: {
   deck: SavedDeck
   totalCards: number
   onDelete: () => void
-  s: SStyles
 }) {
   function handleLongPress() {
     Alert.alert('Delete Deck', `Delete "${deck.name}"?`, [
@@ -110,21 +113,15 @@ function DeckCard({
   }
 
   return (
-    <Pressable
-      style={({ pressed }) => [s.deckCard, pressed && { opacity: 0.8 }]}
-      onPress={() => router.push(`/practice/deck/${deck.id}`)}
-      onLongPress={handleLongPress}
-      accessibilityRole="button"
-    >
-      <View style={s.deckIcon}>
-        <Text style={{ fontSize: 16 }}>🗂️</Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={s.deckName} numberOfLines={1}>{deck.name}</Text>
-        <Text style={s.deckSub}>{deck.topicIds.length} topic{deck.topicIds.length !== 1 ? 's' : ''} · {totalCards} cards</Text>
-      </View>
-      <Text style={s.deckChevron}>›</Text>
-    </Pressable>
+    <View style={{ marginBottom: spacing.sm }}>
+      <ListCard
+        icon={<Text style={{ fontSize: 16 }}>🗂️</Text>}
+        title={deck.name}
+        subtitle={`${deck.topicIds.length} topic${deck.topicIds.length !== 1 ? 's' : ''} · ${totalCards} cards`}
+        onPress={() => router.push(`/practice/deck/${deck.id}`)}
+        onLongPress={handleLongPress}
+      />
+    </View>
   )
 }
 
@@ -346,11 +343,6 @@ function makeStyles(
       header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
       title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
       subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
-      statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.xs },
-      statItem: { flex: 1, alignItems: 'center' },
-      statValue: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      statLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
-      statDivider: { width: 1, height: 30, backgroundColor: t.divider },
       aiFeedbackCard: { gap: spacing.xs / 2 },
       aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
       aiFeedbackIcon: { fontSize: typo.base },
@@ -371,17 +363,6 @@ function makeStyles(
       addBtn: { width: 28, height: 28, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
       addBtnTxt: { color: '#fff', fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
       list: { gap: spacing.md },
-      topicCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-      topicIcon: { width: 40, height: 40, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 1 },
-      topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs - 1, flexShrink: 0 },
-      badgeText: { fontSize: typo.xs, fontWeight: '600', fontFamily: 'Lexend_600SemiBold' },
-      deckCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-      deckIcon: { width: 40, height: 40, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      deckName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 1 },
-      deckSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      deckChevron: { color: t.textTertiary, fontSize: typo.lg },
       empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
       focusDebug: { paddingBottom: spacing.xs, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
@@ -392,15 +373,6 @@ function makeStyles(
       badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
       name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.xs, lineHeight: 16 },
       sub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    }),
-    qs: StyleSheet.create({
-      card:  { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.28)', borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-      card2: { backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-      icon:  { width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: 'rgba(128,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      icon2: { width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      title: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      sub:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-      go:    { fontSize: typo.lg, color: 'rgba(128,0,0,0.80)', marginLeft: 'auto', flexShrink: 0 },
     }),
     m: StyleSheet.create({
       overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
@@ -431,51 +403,31 @@ function makeStyles(
 
 // Quick-link shortcut cards (UPCAT mock, GWA calculator, Career Paths). Pure
 // presentational — extracted to keep PracticeScreen small.
-function PracticeShortcuts({ qs }: { qs: ReturnType<typeof makeStyles>['qs'] }) {
+function PracticeShortcuts() {
   return (
-    <>
-      <Pressable
-        style={qs.card}
+    <View style={{ gap: spacing.sm }}>
+      <ListCard
+        icon={<Text style={{ fontSize: 15 }}>🎓</Text>}
+        iconBg="rgba(128,0,0,0.18)"
+        title="UPCAT Mock Exam"
+        subtitle="Authored questions · timed mock by subtest"
         onPress={() => router.push('/practice/upcat')}
-        accessibilityRole="button"
-        accessibilityLabel="Open UPCAT mock exam"
-      >
-        <View style={qs.icon}><Text style={{ fontSize: 15 }}>🎓</Text></View>
-        <View style={{ flex: 1 }}>
-          <Text style={qs.title}>UPCAT Mock Exam</Text>
-          <Text style={qs.sub}>Authored questions · timed mock by subtest</Text>
-        </View>
-        <Text style={qs.go}>›</Text>
-      </Pressable>
-
-      <Pressable
-        style={qs.card2}
+      />
+      <ListCard
+        icon={<Text style={{ fontSize: 15 }}>🧮</Text>}
+        iconBg="rgba(245,158,11,0.14)"
+        title="GWA Calculator"
+        subtitle="Compute your General Weighted Average · UP scale"
         onPress={() => router.push('/estimator/gwa')}
-        accessibilityRole="button"
-        accessibilityLabel="Open GWA Calculator"
-      >
-        <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🧮</Text></View>
-        <View style={{ flex: 1 }}>
-          <Text style={qs.title}>GWA Calculator</Text>
-          <Text style={qs.sub}>Compute your General Weighted Average · UP scale</Text>
-        </View>
-        <Text style={qs.go}>›</Text>
-      </Pressable>
-
-      <Pressable
-        style={qs.card2}
+      />
+      <ListCard
+        icon={<Text style={{ fontSize: 15 }}>🌍</Text>}
+        iconBg="rgba(245,158,11,0.14)"
+        title="Career Paths"
+        subtitle="Where can your course take you? · AI-Safe-Score"
         onPress={() => router.push('/career')}
-        accessibilityRole="button"
-        accessibilityLabel="Open Career Paths"
-      >
-        <View style={qs.icon2}><Text style={{ fontSize: 15 }}>🌍</Text></View>
-        <View style={{ flex: 1 }}>
-          <Text style={qs.title}>Career Paths</Text>
-          <Text style={qs.sub}>Where can your course take you? · AI-Safe-Score</Text>
-        </View>
-        <Text style={qs.go}>›</Text>
-      </Pressable>
-    </>
+      />
+    </View>
   )
 }
 
@@ -509,7 +461,7 @@ export default function PracticeScreen() {
     />
   ), [refreshing, onRefresh, t.accent, t.surface])
 
-  const { s, rc, qs, m } = useMemo(() => makeStyles(t, typo), [t, typo])
+  const { s, rc, m } = useMemo(() => makeStyles(t, typo), [t, typo])
 
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
@@ -596,24 +548,15 @@ export default function PracticeScreen() {
         <Text style={s.title}>Practice</Text>
         <Text style={s.subtitle}>{listing?.title ?? '—'} · {totalCards} cards synced</Text>
 
-        {/* Stats row */}
-        <View style={s.statsRow}>
-          <View style={s.statItem}>
-            <Text style={s.statValue}>
-              {overallAnalytics.avgAccuracy != null ? `${overallAnalytics.avgAccuracy}%` : '—'}
-            </Text>
-            <Text style={s.statLabel}>Accuracy</Text>
-          </View>
-          <View style={s.statDivider} />
-          <View style={s.statItem}>
-            <Text style={s.statValue}>{overallAnalytics.streak > 0 ? `${overallAnalytics.streak}` : '0'} 🔥</Text>
-            <Text style={s.statLabel}>Streak</Text>
-          </View>
-          <View style={s.statDivider} />
-          <View style={s.statItem}>
-            <Text style={s.statValue}>{overallAnalytics.sessionCount}</Text>
-            <Text style={s.statLabel}>Exams taken</Text>
-          </View>
+        {/* Stats row — split statistics card (design system §3) */}
+        <View style={{ marginTop: spacing.md }}>
+          <SplitStatCard
+            columns={[
+              { value: overallAnalytics.avgAccuracy != null ? `${overallAnalytics.avgAccuracy}%` : '—', label: 'Accuracy' },
+              { value: `${overallAnalytics.streak} 🔥`, label: 'Streak' },
+              { value: String(overallAnalytics.sessionCount), label: 'Exams taken' },
+            ]}
+          />
         </View>
       </View>
 
@@ -651,7 +594,7 @@ export default function PracticeScreen() {
         refreshControl={refreshCtl}
       >
         {/* Quick-link shortcuts */}
-        <PracticeShortcuts qs={qs} />
+        <PracticeShortcuts />
 
         {/* AI Study Feedback card */}
         <Card elevated style={s.aiFeedbackCard}>
@@ -739,7 +682,6 @@ export default function PracticeScreen() {
                   deck={deck}
                   totalCards={deckCardCount(deck)}
                   onDelete={() => deleteDeck(deck.id)}
-                  s={s}
                 />
               ))}
             </View>
@@ -761,7 +703,7 @@ export default function PracticeScreen() {
             keyExtractor={(t) => t.topic.id}
             renderRow={(row) => {
               if (!row) return null  // defensive — shouldn't happen, but no crash if it does
-              return <TopicCard row={row} s={s} />
+              return <TopicCard row={row} />
             }}
           />
         </View>
