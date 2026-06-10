@@ -469,6 +469,7 @@ export default function GeminiKeyScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
+              spellCheck={false}
               textContentType="password"
               accessibilityLabel="API key input"
             />

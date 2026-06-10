@@ -1,0 +1,26 @@
+{
+  "buildCommand": "npx expo export -p web",
+  "outputDirectory": "dist",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @iskotify/mobile...",
+  "framework": null,
+  "rewrites": [
+    { "source": "/career/:courseId", "destination": "/career/[courseId].html" },
+    { "source": "/career/country/:code", "destination": "/career/country/[code].html" },
+    { "source": "/listings/:slug", "destination": "/listings/[slug].html" },
+    { "source": "/notes/:id", "destination": "/notes/[id].html" },
+    { "source": "/practice/deck/:deckId", "destination": "/practice/deck/[deckId].html" },
+    { "source": "/practice/exam/:slug", "destination": "/practice/exam/[slug].html" },
+    { "source": "/practice/listing/:slug", "destination": "/practice/listing/[slug].html" },
+    { "source": "/practice/upcat/:subtest", "destination": "/practice/upcat/[subtest].html" },
+    { "source": "/schools/:slug", "destination": "/schools/[slug].html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}
