@@ -1,4 +1,4 @@
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState } from '../examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState, orderBlueprintsForUser } from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -202,5 +202,44 @@ describe('sectionChipState', () => {
   it('preserves start values in returned chips', () => {
     const chips = sectionChipState(bounds3, 0, 0, false)
     expect(chips.map(c => c.start)).toEqual([0, 3, 6])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// orderBlueprintsForUser (C2)
+// ---------------------------------------------------------------------------
+
+describe('orderBlueprintsForUser', () => {
+  const bps = [
+    { slug: 'upcat' },
+    { slug: 'acet' },
+    { slug: 'ustet' },
+    { slug: 'dcat' },
+  ]
+
+  it('places focus-slug blueprints first, ordered by focus position', () => {
+    const result = orderBlueprintsForUser(bps, ['ustet', 'upcat'])
+    expect(result.map(b => b.slug)).toEqual(['ustet', 'upcat', 'acet', 'dcat'])
+  })
+
+  it('non-focus blueprints keep their relative (displayOrder) order', () => {
+    const result = orderBlueprintsForUser(bps, ['dcat'])
+    expect(result.map(b => b.slug)).toEqual(['dcat', 'upcat', 'acet', 'ustet'])
+  })
+
+  it('returns unchanged order when focusSlugs is empty', () => {
+    const result = orderBlueprintsForUser(bps, [])
+    expect(result.map(b => b.slug)).toEqual(['upcat', 'acet', 'ustet', 'dcat'])
+  })
+
+  it('ignores focus slugs that do not appear in blueprints', () => {
+    const result = orderBlueprintsForUser(bps, ['ghost', 'acet'])
+    expect(result.map(b => b.slug)).toEqual(['acet', 'upcat', 'ustet', 'dcat'])
+  })
+
+  it('does not mutate the input array', () => {
+    const original = [...bps]
+    orderBlueprintsForUser(bps, ['ustet'])
+    expect(bps.map(b => b.slug)).toEqual(original.map(b => b.slug))
   })
 })

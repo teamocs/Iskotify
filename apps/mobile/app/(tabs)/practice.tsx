@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from 'react'
+import { useState, useCallback, useMemo, memo, useEffect } from 'react'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
@@ -11,6 +11,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
+import { useDb } from '../../hooks/useDb'
+import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
+import { cachedQuery } from '../../services/queryCache'
+import { orderBlueprintsForUser } from '../../utils/examBuilder'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useTheme } from '../../theme/ThemeContext'
@@ -58,7 +62,7 @@ function lastPracticedLabel(ts: number | null): string {
 
 // ── Recommended card (horizontal scroll) ─────────────────────────────────────
 
-type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; row: object }
+type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; grid: object; cardWrap: object }
 function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
   const c = useStrengthColor(row.strength)
   return (
@@ -66,6 +70,7 @@ function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
       style={({ pressed }) => [rc.card, pressed && { opacity: 0.8 }]}
       onPress={() => router.push(`/practice/${row.topic.id}`)}
       accessibilityRole="button"
+      // card fills its 48% wrapper — no fixed width here
     >
       <View style={[rc.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
         <Text style={[rc.badgeTxt, { color: c.text }]}>{row.strength}</Text>
@@ -277,17 +282,28 @@ function CreateDeckModal({
 
 // ── Focus card ────────────────────────────────────────────────────────────────
 
-function FocusCard({ row, isActive, accuracy, onPress, onReview }: { row: FocusListing; isActive: boolean; accuracy: number | null; onPress: () => void; onReview: () => void }) {
+function FocusCard({ row, isActive, accuracy, hasMockBlueprint, onPress, onReview, onMock }: {
+  row: FocusListing
+  isActive: boolean
+  accuracy: number | null
+  hasMockBlueprint: boolean
+  onPress: () => void
+  onReview: () => void
+  onMock: () => void
+}) {
   const { theme: t, typo } = useTheme()
   const fc = useMemo(() => StyleSheet.create({
-    card: { minWidth: 120, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md, marginRight: spacing.sm },
+    card: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
     cardActive: { backgroundColor: t.accentSurface, borderColor: '#831626', borderWidth: 2 },
     badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.xs, fontFamily: 'Lexend_600SemiBold' },
     name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm - 2 },
     scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs / 2 },
     score: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.textTertiary },
-    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs - 1 },
+    actionsCol: { marginTop: spacing.xs, gap: spacing.xs },
+    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
     reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    mockBtn: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+    mockBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
     <Pressable
@@ -299,12 +315,33 @@ function FocusCard({ row, isActive, accuracy, onPress, onReview }: { row: FocusL
       <Text style={fc.name} numberOfLines={2}>{row.title}</Text>
       <View style={fc.scoreRow}>
         <Text style={fc.score}>{accuracy != null ? `${accuracy}%` : '—'}</Text>
-        {isActive && (
-          <Pressable style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]} onPress={onReview} accessibilityRole="button" accessibilityLabel="Review">
-            <Text style={fc.reviewBtnTxt}>Review</Text>
-          </Pressable>
-        )}
       </View>
+      {(isActive || hasMockBlueprint) ? (
+        <View style={fc.actionsCol}>
+          {isActive ? (
+            <Pressable
+              style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]}
+              onPress={onReview}
+              accessibilityRole="button"
+              accessibilityLabel="Review"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Text style={fc.reviewBtnTxt} maxFontSizeMultiplier={1.4}>Review</Text>
+            </Pressable>
+          ) : null}
+          {hasMockBlueprint ? (
+            <Pressable
+              style={({ pressed }) => [fc.mockBtn, pressed && { opacity: 0.8 }]}
+              onPress={onMock}
+              accessibilityRole="button"
+              accessibilityLabel="Mock exam"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Text style={fc.mockBtnTxt} maxFontSizeMultiplier={1.4}>Mock exam</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -386,8 +423,9 @@ function makeStyles(
       focusDebug: { paddingBottom: spacing.xs, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     rc: StyleSheet.create({
-      row: { gap: spacing.md, paddingRight: spacing.xs },
-      card: { width: 130, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
+      grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+      cardWrap: { width: '48%' },
+      card: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
       badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2, alignSelf: 'flex-start', marginBottom: spacing.sm },
       badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
       name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.xs, lineHeight: 16 },
@@ -456,12 +494,31 @@ export default function PracticeScreen() {
 
   const { s, rc, m } = useMemo(() => makeStyles(t, typo), [t, typo])
 
+  const db = useDb()
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
+
+  // Published blueprints — fetched once, cached 30s, drives Focus mock buttons + Mock Exams section
+  const [blueprints, setBlueprints] = useState<PublishedBlueprint[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db)).then(result => {
+      if (!cancelled) setBlueprints(result)
+    })
+    return () => { cancelled = true }
+  }, [db])
+
+  const blueprintSlugSet = useMemo(() => new Set(blueprints.map(b => b.slug)), [blueprints])
 
   // Per-focus accuracy map — hooks called unconditionally at top level
   const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
   const focusAccuracyMap = useFocusAnalyticsMap(focusSlugs)
+
+  // Blueprints ordered by focus-first, then displayOrder
+  const orderedBlueprints = useMemo(
+    () => orderBlueprintsForUser(blueprints, focusSlugs),
+    [blueprints, focusSlugs]
+  )
 
   // Default to the first focus listing until the user taps another. Derived during
   // render (not via an effect) so there's no extra render or stale-state hop; an
@@ -593,24 +650,20 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
-        {/* (3) Recommended rail — "what next" */}
+        {/* (3) Recommended 2-col grid — "what next" */}
         {activeRecommended.length > 0 ? (
           <View>
             <View style={s.secRow}>
               <Text style={s.secTitle}>Recommended</Text>
               <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={rc.row}
-            >
-              {/* bounded: activeRecommended is .slice(0,5), max 5 items; horizontal rail */}
-              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
-              {activeRecommended.map(row => (
-                <RecommendedCard key={row.topic.id} row={row} rc={rc} />
+            <View style={rc.grid}>
+              {activeRecommended.slice(0, 4).map(row => (
+                <View key={row.topic.id} style={rc.cardWrap}>
+                  <RecommendedCard row={row} rc={rc} />
+                </View>
               ))}
-            </ScrollView>
+            </View>
           </View>
         ) : null}
 
@@ -634,28 +687,67 @@ export default function PracticeScreen() {
           />
         </View>
 
-        {/* (5) Focus rail */}
+        {/* (5) Focus 2-col grid */}
         {focusListingsList.length > 0 ? (
           <View>
             <SectionHeader title="My Focus" />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: spacing.xs }}
-            >
-              {/* bounded: user-curated focus list, analytics capped at MAX_FOCUS=5; horizontal rail */}
-              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {focusListingsList.map(row => (
-                <FocusCard
-                  key={row.slug}
-                  row={row}
-                  isActive={row.slug === effectiveFocusSlug}
-                  accuracy={focusAccuracyMap.get(row.slug) ?? null}
-                  onPress={() => setActiveFocusSlug(row.slug)}
-                  onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
-                />
+                <View key={row.slug} style={{ width: '48%' }}>
+                  <FocusCard
+                    row={row}
+                    isActive={row.slug === effectiveFocusSlug}
+                    accuracy={focusAccuracyMap.get(row.slug) ?? null}
+                    hasMockBlueprint={blueprintSlugSet.has(row.slug)}
+                    onPress={() => setActiveFocusSlug(row.slug)}
+                    onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
+                    onMock={() => router.push(`/practice/exam/${row.slug}`)}
+                  />
+                </View>
               ))}
-            </ScrollView>
+            </View>
+          </View>
+        ) : null}
+
+        {/* (5b) Mock Exams section */}
+        {blueprints.length > 0 ? (
+          <View>
+            <SectionHeader
+              title="Mock Exams"
+              actionLabel="See all"
+              onAction={() => router.push('/practice/exam')}
+            />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+              {orderedBlueprints.slice(0, 4).map(bp => (
+                <View key={bp.slug} style={{ width: '48%' }}>
+                  <Pressable
+                    style={({ pressed }) => [{
+                      flex: 1,
+                      backgroundColor: t.surface,
+                      borderWidth: 1,
+                      borderColor: t.border,
+                      borderRadius: radius.lg,
+                      borderCurve: 'continuous',
+                      boxShadow: t.shadowSm,
+                      padding: spacing.md,
+                      opacity: pressed ? 0.8 : 1,
+                    }]}
+                    onPress={() => router.push(`/practice/exam/${bp.slug}`)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={{ fontSize: typo.md, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: t.textPrimary, marginBottom: spacing.xs }}>
+                      {bp.acronym}
+                    </Text>
+                    <Text numberOfLines={1} style={{ fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs }}>
+                      {bp.name}
+                    </Text>
+                    <Text maxFontSizeMultiplier={1.4} style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>
+                      {bp.totalItems} items · {Math.round(bp.totalTimeMinutes / 60 * 10) / 10}h
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
           </View>
         ) : null}
 

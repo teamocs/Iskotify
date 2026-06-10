@@ -43,6 +43,35 @@ export async function listPublishedBlueprintSlugs(db: DrizzleClient): Promise<st
   return rows.filter(r => r.status === 'published').map(r => r.slug)
 }
 
+export interface PublishedBlueprint {
+  slug: string
+  name: string
+  acronym: string
+  totalItems: number
+  totalTimeMinutes: number
+}
+
+/** Published blueprints with summary fields, ordered by displayOrder. */
+export async function listPublishedBlueprints(db: DrizzleClient): Promise<PublishedBlueprint[]> {
+  const rows = await db.select({
+    slug: examBlueprints.slug,
+    name: examBlueprints.name,
+    acronym: examBlueprints.acronym,
+    totalItems: examBlueprints.totalItems,
+    totalTimeMinutes: examBlueprints.totalTimeMinutes,
+    status: examBlueprints.status,
+  }).from(examBlueprints).orderBy(asc(examBlueprints.displayOrder))
+  return rows
+    .filter(r => r.status === 'published')
+    .map(r => ({
+      slug: r.slug,
+      name: r.name,
+      acronym: r.acronym,
+      totalItems: r.totalItems,
+      totalTimeMinutes: r.totalTimeMinutes,
+    }))
+}
+
 function parseOptions(raw: string | null | undefined): string[] {
   try { const v = JSON.parse(raw ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
 }

@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import { examBlueprints, examBlueprintSections, examCourseNotes, userSettings, careerCourses } from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
-import { getExamBlueprint, listPublishedBlueprintSlugs, getQuestionsByCategory, getTargetCourseClusters } from '../examBlueprints'
+import { getExamBlueprint, listPublishedBlueprintSlugs, listPublishedBlueprints, getQuestionsByCategory, getTargetCourseClusters } from '../examBlueprints'
 import { upcatQuestions } from '../../db/schema'
 
 function makeDb() {
@@ -40,6 +40,49 @@ describe('getExamBlueprint', () => {
       { slug: 'acet', name: 'ACET', status: 'draft', displayOrder: 2 },
     ])
     expect(await listPublishedBlueprintSlugs(db)).toEqual(['upcat'])
+  })
+})
+
+describe('listPublishedBlueprints', () => {
+  it('returns only published blueprints (draft excluded)', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values([
+      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', status: 'published', totalItems: 180, totalTimeMinutes: 300, displayOrder: 1 },
+      { slug: 'acet', name: 'ACET', acronym: 'ACET', status: 'draft', totalItems: 120, totalTimeMinutes: 180, displayOrder: 2 },
+    ])
+    const results = await listPublishedBlueprints(db)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.slug).toBe('upcat')
+  })
+
+  it('returns blueprints ordered by displayOrder', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values([
+      { slug: 'ustet', name: 'USTET', acronym: 'USTET', status: 'published', totalItems: 100, totalTimeMinutes: 120, displayOrder: 3 },
+      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', status: 'published', totalItems: 180, totalTimeMinutes: 300, displayOrder: 1 },
+      { slug: 'acet', name: 'ACET', acronym: 'ACET', status: 'published', totalItems: 120, totalTimeMinutes: 180, displayOrder: 2 },
+    ])
+    const results = await listPublishedBlueprints(db)
+    expect(results.map(r => r.slug)).toEqual(['upcat', 'acet', 'ustet'])
+  })
+
+  it('maps fields: slug, name, acronym, totalItems, totalTimeMinutes', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values({
+      slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', status: 'published',
+      totalItems: 180, totalTimeMinutes: 300, displayOrder: 1,
+    })
+    const results = await listPublishedBlueprints(db)
+    expect(results[0]).toMatchObject({
+      slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 300,
+    })
+  })
+
+  it('returns empty array when no published blueprints exist', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values({ slug: 'draft', name: 'Draft', acronym: 'D', status: 'draft', displayOrder: 1 })
+    const results = await listPublishedBlueprints(db)
+    expect(results).toHaveLength(0)
   })
 })
 

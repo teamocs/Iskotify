@@ -97,6 +97,23 @@ export function estimatePercentileBand(pct: number): PercentileBand {
 }
 
 // ---------------------------------------------------------------------------
+// Blueprint ordering helper (C2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recommended-first ordering: blueprints whose slug appears in focusSlugs come first,
+ * ordered by their position in focusSlugs (focus priority); the rest keep their existing
+ * relative order (displayOrder from the query). Pure — caller slices to cap.
+ */
+export function orderBlueprintsForUser<T extends { slug: string }>(blueprints: T[], focusSlugs: string[]): T[] {
+  const focusSet = new Set(focusSlugs)
+  const focusIndex = new Map(focusSlugs.map((slug, i) => [slug, i]))
+  const focused = blueprints.filter(b => focusSet.has(b.slug)).sort((a, b) => (focusIndex.get(a.slug) ?? 0) - (focusIndex.get(b.slug) ?? 0))
+  const rest = blueprints.filter(b => !focusSet.has(b.slug))
+  return [...focused, ...rest]
+}
+
+// ---------------------------------------------------------------------------
 // Review grouping helpers (Wave 3b)
 // ---------------------------------------------------------------------------
 
