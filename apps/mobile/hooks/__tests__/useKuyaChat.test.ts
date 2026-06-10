@@ -380,9 +380,12 @@ describe('useKuyaChat', () => {
   })
 
   it('sets isModelReady true when gemini is configured even if local model does not exist', async () => {
-    mockModelExists.mockResolvedValue(false)
-    mockGetSettings.mockResolvedValue({ aiProvider: 'gemini' } as never)
-    mockGetGeminiKey.mockResolvedValue('AIza-test')
+    mockModelExists.mockResolvedValueOnce(false)
+    // ...Once so the gemini overrides cannot leak into later tests in this file
+    // (a persistent mockResolvedValue here silently flipped the clobber test
+    // onto the instant-resolving Gemini path).
+    mockGetSettings.mockResolvedValueOnce({ aiProvider: 'gemini' } as never)
+    mockGetGeminiKey.mockResolvedValueOnce('AIza-test')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     expect(result.current.isModelReady).toBe(true)

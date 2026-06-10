@@ -35,7 +35,8 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
-      sync_rev INTEGER NOT NULL DEFAULT 0
+      sync_rev INTEGER NOT NULL DEFAULT 0,
+      ai_provider TEXT NOT NULL DEFAULT 'local'
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)
