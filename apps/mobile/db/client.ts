@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/expo-sqlite'
 import type { SQLiteDatabase } from 'expo-sqlite'
 import * as schema from './schema'
 
-const CREATE_SQL = `
+export const CREATE_SQL = `
 PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS subjects (
   id TEXT PRIMARY KEY NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS saved_listings (
 );
 `
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN full_name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE user_settings ADD COLUMN school TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE user_settings ADD COLUMN grade_level INTEGER`,

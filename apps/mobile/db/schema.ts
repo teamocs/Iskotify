@@ -93,7 +93,7 @@ export const userSettings = sqliteTable('user_settings', {
   hsGwaG10: real('hs_gwa_g10'),
   hsGwaG11: real('hs_gwa_g11'),
   schoolType: text('school_type'),
-  isIndigenous: integer('is_indigenous', { mode: 'boolean' }),
+  isIndigenous: integer('is_indigenous', { mode: 'boolean' }).notNull().default(false),
   targetCampus: text('target_campus'),
   scoreDisclaimerAck: integer('score_disclaimer_ack', { mode: 'boolean' }).notNull().default(false),
   // Onboarding "Target University Exams" / "Target Courses" picks (JSON arrays as text).
