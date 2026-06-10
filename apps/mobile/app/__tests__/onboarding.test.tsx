@@ -45,8 +45,12 @@ jest.mock('../../services/supabase', () => {
   }
 })
 
+// Sync mock: controlled per-test. Variable is `mock`-prefixed so Jest's
+// factory hoisting allows referencing it inside jest.mock().
+let mockSyncImpl: () => Promise<void> = () => Promise.resolve()
+
 jest.mock('../../services/sync', () => ({
-  syncOnLaunch: jest.fn().mockResolvedValue(undefined),
+  syncOnLaunch: jest.fn(() => mockSyncImpl()),
   pushUserData: jest.fn().mockResolvedValue(undefined),
 }))
 
@@ -129,6 +133,7 @@ describe('OnboardingScreen — Step 1', () => {
   })
 })
 
+
 describe('OnboardingScreen — Pre-assessment DB writes', () => {
   beforeEach(() => {
     insertedTables.length = 0
@@ -180,5 +185,239 @@ describe('OnboardingScreen — Pre-assessment DB writes', () => {
     for (const subject of subjects) {
       expect(questionSubjects.has(subject)).toBe(true)
     }
+  })
+})
+
+// ─── Readiness gate tests ─────────────────────────────────────────────────────
+//
+// Strategy: override the supabase `from()` mock within each test so that
+// university_profiles returns a single exam entry, which populates the exam
+// catalog and makes the UP Diliman / UPCAT entry selectable in step 2.
+// Then we confirm step 2, which kicks off handleConfirmStep2 and the sync.
+// The sync promise is controlled via mockSyncImpl so we can test each gate state.
+
+function makeSyncBuilder(data: Record<string, unknown>[]) {
+  const builder: Record<string, unknown> = {}
+  for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) {
+    builder[m] = jest.fn(() => builder)
+  }
+  builder.single = jest.fn().mockResolvedValue({ data: null, error: null })
+  ;(builder as { then: unknown }).then = (resolve: (v: unknown) => unknown) =>
+    resolve({ data, error: null })
+  return builder
+}
+
+// Advance through step 1 and step 2, using a supabase mock that returns one
+// exam (UP Diliman / UPCAT) so the exam item is renderable and selectable.
+// After confirming step 2, navigates through courses+skip and matcher+skip to
+// land on step 3 (pre-assessment), then returns.
+async function advanceThroughStep2({ syncImpl }: { syncImpl: () => Promise<void> }) {
+  mockSyncImpl = syncImpl
+
+  const profileData = [{
+    school_id: 'upd',
+    data_tier: 'tier1',
+    entrance_exam_acronym: 'UPCAT',
+    entrance_exam_name: 'UP College Admission Test',
+    exam_month: 'August',
+    known_for_courses: [],
+    prc_top_courses: [],
+  }]
+  const schoolData = [{
+    id: 'upd',
+    name: 'University of the Philippines Diliman',
+    acronym: 'UP Diliman',
+    region: 'NCR',
+    province: 'Metro Manila',
+    rank_in_province: 1,
+  }]
+
+  const { supabase } = require('../../services/supabase')
+  supabase.from.mockImplementation((table: string) => {
+    if (table === 'university_profiles') return makeSyncBuilder(profileData)
+    if (table === 'tertiary_schools') return makeSyncBuilder(schoolData)
+    // all others (listings, course_taxonomy_map, career_courses) → empty
+    return makeSyncBuilder([])
+  })
+
+  render(<OnboardingScreen />)
+
+  // Step 1
+  fireEvent.changeText(screen.getByPlaceholderText('e.g. Juan dela Cruz'), 'Test User')
+  fireEvent.press(screen.getByText('G11'))
+  fireEvent.press(screen.getByText('Next →'))
+
+  // Step 2: wait for the exam catalog to load then select the exam
+  await act(async () => {
+    await Promise.resolve()
+  })
+
+  // The exam card should now be visible — select it
+  const examCard = await screen.findByText('University of the Philippines Diliman')
+  fireEvent.press(examCard)
+
+  // Confirm step 2 — this fires handleConfirmStep2 which sets syncStatus='running'
+  await act(async () => {
+    fireEvent.press(screen.getByText(/Continue/))
+    await Promise.resolve()
+  })
+
+  // Now on courses step — skip it
+  await act(async () => {
+    fireEvent.press(screen.getByText('Skip'))
+    await Promise.resolve()
+  })
+
+  // Now on matcher step — skip it
+  await act(async () => {
+    fireEvent.press(screen.getByText('Skip for now'))
+    await Promise.resolve()
+  })
+
+  // Now on step 3 (pre-assessment)
+}
+
+describe('OnboardingScreen — Readiness gate', () => {
+  const { router } = require('expo-router')
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockSyncImpl = () => Promise.resolve()
+  })
+
+  it('finishing while sync is running shows the gate and does NOT navigate', async () => {
+    // Sync stays pending until resolved manually
+    let resolveSync!: () => void
+    const pendingSync = new Promise<void>(res => { resolveSync = res })
+    mockSyncImpl = () => pendingSync
+
+    await advanceThroughStep2({ syncImpl: () => pendingSync })
+
+    // Press "Skip" on the pre-assessment step (calls finishOnboarding while sync is running)
+    await act(async () => {
+      fireEvent.press(screen.getByText('Skip'))
+    })
+
+    // Gate must be visible with the loading copy
+    expect(screen.getByText('Hang tight, almost there! 🎒')).toBeTruthy()
+    expect(screen.getByText(/We're preparing your reviewers/)).toBeTruthy()
+    // router.replace must NOT have been called yet
+    expect(router.replace).not.toHaveBeenCalled()
+
+    // Cleanup: resolve the promise so no dangling async state warnings
+    await act(async () => { resolveSync() })
+  })
+
+  it('sync resolving while gate is visible auto-navigates to tabs', async () => {
+    let resolveSync!: () => void
+    const pendingSync = new Promise<void>(res => { resolveSync = res })
+    mockSyncImpl = () => pendingSync
+
+    await advanceThroughStep2({ syncImpl: () => pendingSync })
+
+    // Trigger gate
+    await act(async () => {
+      fireEvent.press(screen.getByText('Skip'))
+    })
+    expect(screen.getByText('Hang tight, almost there! 🎒')).toBeTruthy()
+    expect(router.replace).not.toHaveBeenCalled()
+
+    // Now resolve sync — should trigger auto-navigation
+    await act(async () => {
+      resolveSync()
+      await Promise.resolve()
+    })
+
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+  })
+
+  it('sync error shows error copy; Try again re-fires syncOnLaunch; Continue anyway routes', async () => {
+    let rejectSync!: (e: Error) => void
+    const failingSync = new Promise<void>((_, rej) => { rejectSync = rej })
+    mockSyncImpl = () => failingSync
+
+    await advanceThroughStep2({ syncImpl: () => failingSync })
+
+    // Trigger gate
+    await act(async () => {
+      fireEvent.press(screen.getByText('Skip'))
+    })
+
+    // Reject the sync
+    await act(async () => {
+      rejectSync(new Error('network error'))
+      await Promise.resolve()
+    })
+
+    // Error copy should be visible
+    expect(screen.getByText("Hmm, that didn't load 😅")).toBeTruthy()
+    expect(screen.getByText('Please check your internet connection and try again.')).toBeTruthy()
+
+    // "Continue anyway" should navigate immediately from the error state
+    await act(async () => {
+      fireEvent.press(screen.getByText('Continue anyway'))
+    })
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+  })
+
+  it('pressing Try again in error state re-fires syncOnLaunch', async () => {
+    let rejectSync!: (e: Error) => void
+    const failingSync = new Promise<void>((_, rej) => { rejectSync = rej })
+    mockSyncImpl = () => failingSync
+
+    await advanceThroughStep2({ syncImpl: () => failingSync })
+
+    // Trigger gate
+    await act(async () => {
+      fireEvent.press(screen.getByText('Skip'))
+    })
+
+    // Reject the sync to enter error state
+    await act(async () => {
+      rejectSync(new Error('network error'))
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText("Hmm, that didn't load 😅")).toBeTruthy()
+
+    const { syncOnLaunch } = require('../../services/sync')
+    const callsBefore = syncOnLaunch.mock.calls.length
+
+    // Set up a new pending sync for the retry
+    let resolveRetry!: () => void
+    const retryPromise = new Promise<void>(res => { resolveRetry = res })
+    mockSyncImpl = () => retryPromise
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Try again'))
+      await Promise.resolve()
+    })
+
+    expect(syncOnLaunch.mock.calls.length).toBeGreaterThan(callsBefore)
+
+    // Cleanup: resolve the pending retry
+    await act(async () => { resolveRetry() })
+  })
+
+  it('finishing when sync already resolved navigates immediately without showing gate', async () => {
+    // Sync resolves immediately (default mockSyncImpl)
+    mockSyncImpl = () => Promise.resolve()
+
+    await advanceThroughStep2({ syncImpl: () => Promise.resolve() })
+
+    // Wait for the immediately-resolving sync to complete
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // Press Skip — syncStatus should be 'done' at this point
+    await act(async () => {
+      fireEvent.press(screen.getByText('Skip'))
+    })
+
+    // Should have navigated immediately — gate copy must NOT appear
+    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+    expect(screen.queryByText('Hang tight, almost there! 🎒')).toBeNull()
   })
 })

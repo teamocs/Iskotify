@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import {
   View, Text, TextInput, SectionList, StyleSheet,
-  Pressable, ActivityIndicator, ScrollView,
+  Pressable, ActivityIndicator, ScrollView, Image,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -160,6 +160,10 @@ export default function OnboardingScreen() {
   const [assessIdx, setAssessIdx] = useState(0)
   const [assessAnswers, setAssessAnswers] = useState<Array<{ q: PreAssessQuestion; correct: boolean }>>([])
   const [assessDone, setAssessDone] = useState(false)
+
+  // Readiness gate — tracks background sync initiated in handleConfirmStep2
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [gateVisible, setGateVisible] = useState(false)
 
   // Pre-fill profile from Google sign-in data (seeded into DB by auth/callback.tsx)
   useEffect(() => {
@@ -354,9 +358,16 @@ export default function OnboardingScreen() {
     // ALWAYS advance to the courses step; sync content in the background.
     setSaving(false)
     setStep('courses')
-    void syncOnLaunch(db)
-      .then(() => runEnhancement(db))
-      .catch(e => console.warn('[onboarding] background sync error:', e))
+    setSyncStatus('running')
+    syncOnLaunch(db)
+      .then(() => {
+        setSyncStatus('done')
+        void runEnhancement(db)
+      })
+      .catch(e => {
+        console.warn('[onboarding] background sync error:', e)
+        setSyncStatus('error')
+      })
   }
 
   async function handleMatcherContinue(skip = false) {
@@ -479,8 +490,115 @@ export default function OnboardingScreen() {
     }
   }
 
+  // Auto-navigate when sync finishes while the gate is showing
+  useEffect(() => {
+    if (gateVisible && syncStatus === 'done') {
+      router.replace('/(tabs)')
+    }
+  }, [gateVisible, syncStatus])
+
   function finishOnboarding() {
-    router.replace('/(tabs)')
+    if (syncStatus === 'done' || syncStatus === 'idle') {
+      router.replace('/(tabs)')
+    } else {
+      setGateVisible(true)
+    }
+  }
+
+  function retrySync() {
+    setSyncStatus('running')
+    syncOnLaunch(db)
+      .then(() => {
+        setSyncStatus('done')
+        void runEnhancement(db)
+      })
+      .catch(e => {
+        console.warn('[onboarding] retry sync error:', e)
+        setSyncStatus('error')
+      })
+  }
+
+  // ── Getting Ready gate ───────────────────────────────────────────────────
+
+  if (gateVisible) {
+    const isError = syncStatus === 'error'
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <View style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: spacing.xxl,
+        }}>
+          <Image
+            source={require('../assets/images/kuya-baw-mascot.png')}
+            style={{ width: 120, height: 120, marginBottom: spacing.xxl }}
+            resizeMode="contain"
+          />
+          <Text style={{
+            fontFamily: 'Outfit_700Bold',
+            fontSize: typo.h2,
+            color: t.textPrimary,
+            textAlign: 'center',
+            marginBottom: spacing.md,
+          }}>
+            {isError ? "Hmm, that didn't load 😅" : 'Hang tight, almost there! 🎒'}
+          </Text>
+          <Text style={{
+            fontFamily: 'Lexend_400Regular',
+            fontSize: typo.md,
+            color: t.textSecondary,
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: spacing.xxl,
+          }}>
+            {isError
+              ? 'Please check your internet connection and try again.'
+              : "We're preparing your reviewers, exams, and scholarship matches based on what you picked. First-time setup usually takes under a minute."}
+          </Text>
+          {isError ? (
+            <View style={{ width: '100%', gap: spacing.md }}>
+              <Pressable
+                onPress={retrySync}
+                style={({ pressed }) => [{
+                  backgroundColor: 'rgba(128,0,0,0.82)',
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  paddingVertical: 15,
+                  paddingHorizontal: spacing.xxl,
+                  alignItems: 'center',
+                  minHeight: 44,
+                  justifyContent: 'center',
+                }, pressed ? { opacity: 0.85 } : null]}
+              >
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
+                  Try again
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.replace('/(tabs)')}
+                style={({ pressed }) => [{
+                  paddingVertical: 15,
+                  paddingHorizontal: spacing.xxl,
+                  alignItems: 'center',
+                  minHeight: 44,
+                  justifyContent: 'center',
+                }, pressed ? { opacity: 0.6 } : null]}
+              >
+                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textSecondary }}>
+                  Continue anyway
+                </Text>
+                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', marginTop: spacing.xs }}>
+                  {`We'll finish getting things ready next time you open the app.`}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <ActivityIndicator color={t.accent} size="large" />
+          )}
+        </View>
+      </SafeAreaView>
+    )
   }
 
   // ── Step 1: Profile ───────────────────────────────────────────────────────
