@@ -38,6 +38,64 @@ export interface AnalyticsData {
   refresh: () => Promise<void>
 }
 
+// ── Exported pure function (tested in hooks/__tests__/useAnalytics.test.ts) ──
+
+/**
+ * Two-tier mastery grouping:
+ *   Tier 1: real topicId or deckId (existing behaviour)
+ *   Tier 2: subtest string — handles UPCAT/USTET session records that carry
+ *            subtest='Mathematics' etc. and have topicId='' + deckId=''
+ *
+ * Sentinels '__full__' and '__weak__' are still skipped.
+ */
+export function computeTopicMastery(
+  sessions: Array<{
+    topicId: string
+    deckId: string
+    subtest: string | null | undefined
+    score: number
+    total: number
+  }>,
+  topicNameMap: Map<string, string>,
+  deckMap: Map<string, string>,
+): TopicMastery[] {
+  const grouped: Record<string, { score: number; total: number; count: number }> = {}
+  for (const s of sessions) {
+    const key = s.topicId || s.deckId || (s.subtest ? 'subtest:' + s.subtest : '')
+    if (!key || key === '__full__' || key === '__weak__') continue
+    if (!grouped[key]) grouped[key] = { score: 0, total: 0, count: 0 }
+    grouped[key]!.score += s.score
+    grouped[key]!.total += s.total
+    grouped[key]!.count += 1
+  }
+  return Object.entries(grouped)
+    .filter(([, v]) => v.total > 0)
+    .map(([key, v]) => {
+      let label: string
+      let topicId: string | undefined
+      let subjectId: string | undefined
+      if (key.startsWith('subtest:')) {
+        label = key.slice('subtest:'.length)
+      } else if (topicNameMap.has(key)) {
+        label = topicNameMap.get(key)!
+        topicId = key
+      } else if (deckMap.has(key)) {
+        label = deckMap.get(key)!
+      } else {
+        label = key
+      }
+      return {
+        label,
+        accuracy: Math.round((v.score / v.total) * 100),
+        sessionCount: v.count,
+        topicId,
+        subjectId,
+      }
+    })
+    .sort((a, b) => b.sessionCount - a.sessionCount)
+    .slice(0, 5)
+}
+
 export function computeStreak(sessions: { completedAt: number }[]): number {
   if (sessions.length === 0) return 0
   const dayMs = 86_400_000
@@ -100,37 +158,17 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       const streak = computeStreak(filtered)
       const weeklyData = computeWeeklyData(filtered)
 
-      const topicMap = new Map(topicRows.map(t => [t.id, { name: t.name, subjectId: t.subjectId }]))
       const topicNameMap = new Map(topicRows.map(t => [t.id, t.name]))
       const deckMap = new Map(deckRows.map(d => [d.id, d.name]))
+      // subjectId lookup used for accordion grouping in Subject Mastery view
+      const topicSubjectMap = new Map(topicRows.map(t => [t.id, t.subjectId]))
 
-      const grouped: Record<string, { score: number; total: number; count: number }> = {}
-      for (const s of filtered) {
-        const key = s.topicId || s.deckId
-        if (!key || key === '__full__' || key === '__weak__') continue
-        if (!grouped[key]) grouped[key] = { score: 0, total: 0, count: 0 }
-        grouped[key]!.score += s.score
-        grouped[key]!.total += s.total
-        grouped[key]!.count += 1
-      }
-      const topicMastery: TopicMastery[] = Object.entries(grouped)
-        .filter(([, v]) => v.total > 0)
-        .map(([key, v]) => {
-          const topic = topicMap.get(key)
-          return {
-            // Priority: real topic name → deck name → pre-assess-prefix (or raw key).
-            // resolveTopicLabel ALWAYS returns a non-empty string, so we can't use
-            // it as a non-final fallback — feed it an empty map so it only does
-            // pre-assess prefix handling + raw-key passthrough.
-            label: topic?.name ?? deckMap.get(key) ?? resolveTopicLabel(key, new Map()),
-            accuracy: Math.round((v.score / v.total) * 100),
-            sessionCount: v.count,
-            topicId: topic ? key : undefined,
-            subjectId: topic?.subjectId,
-          }
-        })
-        .sort((a, b) => b.sessionCount - a.sessionCount)
-        .slice(0, 5)
+      const topicMastery: TopicMastery[] = computeTopicMastery(filtered, topicNameMap, deckMap)
+        .map(m => ({
+          ...m,
+          // Populate subjectId for topic-backed entries so the Subject accordion works
+          subjectId: m.topicId ? topicSubjectMap.get(m.topicId) : undefined,
+        }))
 
       const recentSessions: RecentSession[] = filtered
         .sort((a, b) => b.completedAt - a.completedAt)
@@ -141,6 +179,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           else if (s.deckId === '__weak__') title = 'Weak Topics'
           else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
           else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
+          else if (s.subtest) title = s.subtest
           return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
         })
 

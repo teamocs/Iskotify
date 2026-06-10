@@ -16,10 +16,14 @@ export interface FlashcardExamProps {
   questions: QuizQuestion[]
   listingSlug?: string
   subtest?: string
+  /** Pass the launching topicId for single-topic quizzes so analytics groups correctly. */
+  topicId?: string
+  /** Pass the launching deckId (or '__full__'/'__weak__' sentinel) for deck quizzes. */
+  deckId?: string
   onExit: () => void
 }
 
-export function FlashcardExam({ title, questions, listingSlug, subtest, onExit }: FlashcardExamProps) {
+export function FlashcardExam({ title, questions, listingSlug, subtest, topicId, deckId, onExit }: FlashcardExamProps) {
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
@@ -51,8 +55,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, onExit }
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
     void recordSession({
       listingSlug: listingSlug ?? '',
-      topicId: '',
-      deckId: '',
+      topicId: topicId ?? '',
+      deckId: deckId ?? '',
       score,
       total: questions.length,
       startTime: startRef,

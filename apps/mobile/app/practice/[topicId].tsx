@@ -159,6 +159,7 @@ export default function QuizScreen() {
         title={topicName}
         questions={examQuestions}
         listingSlug={listingSlug}
+        topicId={topicId}
         onExit={() => router.back()}
       />
     )

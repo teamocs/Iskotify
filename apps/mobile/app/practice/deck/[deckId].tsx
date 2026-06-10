@@ -167,6 +167,7 @@ export default function DeckQuizScreen() {
         title={deckName}
         questions={examQuestions}
         listingSlug={listingSlug}
+        deckId={deckId}
         onExit={() => router.back()}
       />
     )
