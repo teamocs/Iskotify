@@ -14,10 +14,11 @@ module.exports = {
         ],
       },
       transformIgnorePatterns: [
-        'node_modules/(?!(@supabase|expo))',
+        'node_modules/(?!(@supabase|expo|drizzle-orm))',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
+        '^expo-sqlite$': '<rootDir>/__mocks__/expoSqliteMock.js',
         'expo-file-system/legacy': '<rootDir>/__mocks__/expoFileSystemLegacyMock.js',
         '^expo-web-browser$': '<rootDir>/__mocks__/expoWebBrowserMock.js',
         '^expo-linking$': '<rootDir>/__mocks__/expoLinkingMock.js',
