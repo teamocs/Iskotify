@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, act } from '@testing-library/react-native'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native'
 import OnboardingScreen from '../onboarding'
 import { practiceSessions, userProgress } from '../../db/schema'
 
@@ -405,19 +405,13 @@ describe('OnboardingScreen — Readiness gate', () => {
 
     await advanceThroughStep2({ syncImpl: () => Promise.resolve() })
 
-    // Wait for the immediately-resolving sync to complete
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    // Press Skip — syncStatus should be 'done' at this point
+    // Press Skip — syncStatus should be 'done' at this point (sync resolved immediately)
     await act(async () => {
       fireEvent.press(screen.getByText('Skip'))
     })
 
-    // Should have navigated immediately — gate copy must NOT appear
-    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+    // Should have navigated immediately — waitFor handles microtask flushing
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'))
     expect(screen.queryByText('Hang tight, almost there! 🎒')).toBeNull()
   })
 })

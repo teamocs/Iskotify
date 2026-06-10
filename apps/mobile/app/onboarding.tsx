@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import {
   View, Text, TextInput, SectionList, StyleSheet,
   Pressable, ActivityIndicator, ScrollView, Image,
@@ -165,6 +165,17 @@ export default function OnboardingScreen() {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [gateVisible, setGateVisible] = useState(false)
 
+  // Unmount guard — prevents setState calls on an unmounted component
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
+
+  // Re-entry guard for the sync chain — use a ref so the closure inside the
+  // promise chain sees the current value rather than a stale captured state.
+  const syncRunningRef = useRef(false)
+
   // Pre-fill profile from Google sign-in data (seeded into DB by auth/callback.tsx)
   useEffect(() => {
     async function prefill() {
@@ -201,6 +212,18 @@ export default function OnboardingScreen() {
     resultLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
     primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
     primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+  }), [t, typo])
+
+  // Gate-specific styles — memoised alongside assessStyle so they update with theme
+  const gateStyle = useMemo(() => StyleSheet.create({
+    container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
+    mascot: { width: 120, height: 120, marginBottom: spacing.xxl },
+    heading: { fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, textAlign: 'center', marginBottom: spacing.md },
+    body: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xxl },
+    btnGroup: { width: '100%', gap: spacing.md },
+    ghostBtn: { paddingVertical: 15, paddingHorizontal: spacing.xxl, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
+    ghostBtnTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textSecondary },
+    ghostBtnSub: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', marginTop: spacing.xs },
   }), [t, typo])
 
   const labelStyle = { fontFamily: 'Lexend_500Medium' as const, fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.sm }
@@ -277,6 +300,30 @@ export default function OnboardingScreen() {
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
+
+  // ── Deduplicated sync chain ───────────────────────────────────────────────
+  // Used by both handleConfirmStep2 (initial) and retrySync.
+  // Re-entry is guarded via syncRunningRef (not syncStatus state, which would be
+  // stale inside the promise callbacks). Unmount guard (aliveRef) wraps every
+  // setState so we never update state on an unmounted component.
+  const startContentSync = useCallback((_reason: 'initial' | 'retry') => {
+    if (syncRunningRef.current) return
+    syncRunningRef.current = true
+    if (aliveRef.current) setSyncStatus('running')
+    syncOnLaunch(db)
+      .then(() => {
+        syncRunningRef.current = false
+        if (aliveRef.current) setSyncStatus('done')
+        void runEnhancement(db).catch(e => console.warn('[onboarding] enhancement error:', e))
+      })
+      .catch(e => {
+        syncRunningRef.current = false
+        console.warn('[onboarding] sync error:', e)
+        if (aliveRef.current) setSyncStatus('error')
+      })
+  // db is stable (useDb returns the same instance); aliveRef/syncRunningRef are refs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db])
 
   function handleNextStep() {
     if (!fullName.trim() || !gradeLevel) return
@@ -358,16 +405,7 @@ export default function OnboardingScreen() {
     // ALWAYS advance to the courses step; sync content in the background.
     setSaving(false)
     setStep('courses')
-    setSyncStatus('running')
-    syncOnLaunch(db)
-      .then(() => {
-        setSyncStatus('done')
-        void runEnhancement(db)
-      })
-      .catch(e => {
-        console.warn('[onboarding] background sync error:', e)
-        setSyncStatus('error')
-      })
+    startContentSync('initial')
   }
 
   async function handleMatcherContinue(skip = false) {
@@ -493,7 +531,7 @@ export default function OnboardingScreen() {
   // Auto-navigate when sync finishes while the gate is showing
   useEffect(() => {
     if (gateVisible && syncStatus === 'done') {
-      router.replace('/(tabs)')
+      if (aliveRef.current) router.replace('/(tabs)')
     }
   }, [gateVisible, syncStatus])
 
@@ -506,16 +544,7 @@ export default function OnboardingScreen() {
   }
 
   function retrySync() {
-    setSyncStatus('running')
-    syncOnLaunch(db)
-      .then(() => {
-        setSyncStatus('done')
-        void runEnhancement(db)
-      })
-      .catch(e => {
-        console.warn('[onboarding] retry sync error:', e)
-        setSyncStatus('error')
-      })
+    startContentSync('retry')
   }
 
   // ── Getting Ready gate ───────────────────────────────────────────────────
@@ -524,79 +553,41 @@ export default function OnboardingScreen() {
     const isError = syncStatus === 'error'
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingHorizontal: spacing.xxl,
-        }}>
-          <Image
-            source={require('../assets/images/kuya-baw-mascot.png')}
-            style={{ width: 120, height: 120, marginBottom: spacing.xxl }}
-            resizeMode="contain"
-          />
-          <Text style={{
-            fontFamily: 'Outfit_700Bold',
-            fontSize: typo.h2,
-            color: t.textPrimary,
-            textAlign: 'center',
-            marginBottom: spacing.md,
-          }}>
-            {isError ? "Hmm, that didn't load 😅" : 'Hang tight, almost there! 🎒'}
-          </Text>
-          <Text style={{
-            fontFamily: 'Lexend_400Regular',
-            fontSize: typo.md,
-            color: t.textSecondary,
-            textAlign: 'center',
-            lineHeight: 22,
-            marginBottom: spacing.xxl,
-          }}>
-            {isError
-              ? 'Please check your internet connection and try again.'
-              : "We're preparing your reviewers, exams, and scholarship matches based on what you picked. First-time setup usually takes under a minute."}
-          </Text>
-          {isError ? (
-            <View style={{ width: '100%', gap: spacing.md }}>
-              <Pressable
-                onPress={retrySync}
-                style={({ pressed }) => [{
-                  backgroundColor: 'rgba(128,0,0,0.82)',
-                  borderRadius: radius.md,
-                  borderCurve: 'continuous',
-                  paddingVertical: 15,
-                  paddingHorizontal: spacing.xxl,
-                  alignItems: 'center',
-                  minHeight: 44,
-                  justifyContent: 'center',
-                }, pressed ? { opacity: 0.85 } : null]}
-              >
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
-                  Try again
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.replace('/(tabs)')}
-                style={({ pressed }) => [{
-                  paddingVertical: 15,
-                  paddingHorizontal: spacing.xxl,
-                  alignItems: 'center',
-                  minHeight: 44,
-                  justifyContent: 'center',
-                }, pressed ? { opacity: 0.6 } : null]}
-              >
-                <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textSecondary }}>
-                  Continue anyway
-                </Text>
-                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', marginTop: spacing.xs }}>
-                  {`We'll finish getting things ready next time you open the app.`}
-                </Text>
-              </Pressable>
-            </View>
-          ) : (
-            <ActivityIndicator color={t.accent} size="large" />
-          )}
-        </View>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
+          <View style={gateStyle.container}>
+            <Image
+              source={require('../assets/images/kuya-baw-mascot.png')}
+              style={gateStyle.mascot}
+              resizeMode="contain"
+            />
+            <Text style={gateStyle.heading}>
+              {isError ? "Hmm, that didn't load 😅" : 'Hang tight, almost there! 🎒'}
+            </Text>
+            <Text style={gateStyle.body}>
+              {isError
+                ? 'Please check your internet connection and try again.'
+                : "We're preparing your reviewers, exams, and scholarship matches based on what you picked. First-time setup usually takes under a minute."}
+            </Text>
+            {isError ? (
+              <View style={gateStyle.btnGroup}>
+                <AppButton label="Try again" onPress={retrySync} />
+                <Pressable
+                  onPress={() => router.replace('/(tabs)')}
+                  style={({ pressed }) => [gateStyle.ghostBtn, pressed ? { opacity: 0.6 } : null]}
+                >
+                  <Text style={gateStyle.ghostBtnTxt}>
+                    Continue anyway
+                  </Text>
+                  <Text style={gateStyle.ghostBtnSub}>
+                    {`We'll finish getting things ready next time you open the app.`}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ActivityIndicator color={t.accent} size="large" />
+            )}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     )
   }
