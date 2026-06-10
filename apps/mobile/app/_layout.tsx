@@ -284,9 +284,26 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
   useEffect(() => {
     // initialize() may return a cleanup fn on web (supabase subscription).
+    // Guard against the case where the component unmounts before initialize()
+    // resolves: set disposed=true in cleanup, then if the promise resolves
+    // after that, call fn() immediately so the subscription never leaks.
     let cleanup: (() => void) | undefined
-    initialize().then(fn => { cleanup = fn }).catch(() => { /* errors logged inside */ })
-    return () => cleanup?.()
+    let disposed = false
+    initialize()
+      .then(fn => {
+        if (disposed) {
+          // Already unmounted — call the cleanup immediately so the
+          // subscription (created inside initialize) is unsubscribed.
+          fn?.()
+        } else {
+          cleanup = fn
+        }
+      })
+      .catch(() => { /* errors logged inside */ })
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
   }, [initialize])
 
   return (

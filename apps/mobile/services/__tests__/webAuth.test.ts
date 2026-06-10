@@ -34,12 +34,14 @@ jest.mock('../supabase', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks()
+  jest.spyOn(console, 'warn').mockImplementation(() => {})
   // Provide a minimal window.location for sendPasswordReset / signInWithGoogleWeb
   ;(global as any).window = { location: { origin: 'https://iskotify.app' } }
 })
 
 afterEach(() => {
   delete (global as any).window
+  jest.restoreAllMocks()
 })
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -168,6 +170,22 @@ describe('signUpWithEmail', () => {
     const result = await signUpWithEmail('user@example.com', 'password123')
     expect(result.ok).toBe(false)
   })
+
+  it('returns friendly fallback for unmapped sign-up errors and warns', async () => {
+    mockSignUp.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: 'some_unknown_supabase_code' },
+    })
+    const result = await signUpWithEmail('user@example.com', 'password123')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Something went wrong — please try again.')
+    }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped sign-up/),
+      'some_unknown_supabase_code',
+    )
+  })
 })
 
 // ── signInWithEmail ───────────────────────────────────────────────────────────
@@ -217,6 +235,21 @@ describe('signInWithEmail', () => {
     const result = await signInWithEmail('user@example.com', 'password123')
     expect(result.ok).toBe(false)
   })
+
+  it('returns friendly fallback for unmapped sign-in errors and warns', async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      error: { message: 'some_unexpected_server_error' },
+    })
+    const result = await signInWithEmail('user@example.com', 'password123')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Something went wrong — please try again.')
+    }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped sign-in/),
+      'some_unexpected_server_error',
+    )
+  })
 })
 
 // ── sendPasswordReset ────────────────────────────────────────────────────────
@@ -231,13 +264,18 @@ describe('sendPasswordReset', () => {
     })
   })
 
-  it('returns ok:false on supabase error', async () => {
+  it('returns ok:false with friendly fallback on supabase error', async () => {
     mockResetPasswordForEmail.mockResolvedValue({ error: { message: 'Email not found' } })
     const result = await sendPasswordReset('nobody@example.com')
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBe('Email not found')
+      // M3: raw message no longer leaked — friendly fallback is returned
+      expect(result.error).toBe('Something went wrong — please try again.')
     }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped password-reset/),
+      'Email not found',
+    )
   })
 
   it('returns ok:false when supabase throws', async () => {
@@ -260,10 +298,17 @@ describe('signInWithGoogleWeb', () => {
     })
   })
 
-  it('returns ok:false on supabase error', async () => {
+  it('returns ok:false with friendly fallback on supabase error', async () => {
     mockSignInWithOAuth.mockResolvedValue({ error: { message: 'OAuth failed' } })
     const result = await signInWithGoogleWeb()
     expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Something went wrong — please try again.')
+    }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped Google OAuth/),
+      'OAuth failed',
+    )
   })
 
   it('returns ok:false when supabase throws', async () => {
@@ -276,7 +321,18 @@ describe('signInWithGoogleWeb', () => {
 // ── signInWithGoogleIdToken ───────────────────────────────────────────────────
 
 describe('signInWithGoogleIdToken', () => {
-  it('calls signInWithIdToken with google provider and the credential', async () => {
+  it('calls signInWithIdToken with google provider, token, and nonce', async () => {
+    mockSignInWithIdToken.mockResolvedValue({ error: null })
+    const result = await signInWithGoogleIdToken('id-token-xyz', 'raw-nonce-abc')
+    expect(result.ok).toBe(true)
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith({
+      provider: 'google',
+      token: 'id-token-xyz',
+      nonce: 'raw-nonce-abc',
+    })
+  })
+
+  it('calls signInWithIdToken without nonce when nonce is omitted', async () => {
     mockSignInWithIdToken.mockResolvedValue({ error: null })
     const result = await signInWithGoogleIdToken('id-token-xyz')
     expect(result.ok).toBe(true)
@@ -286,10 +342,17 @@ describe('signInWithGoogleIdToken', () => {
     })
   })
 
-  it('returns ok:false on supabase error', async () => {
+  it('returns ok:false with friendly fallback on supabase error', async () => {
     mockSignInWithIdToken.mockResolvedValue({ error: { message: 'Invalid token' } })
-    const result = await signInWithGoogleIdToken('bad-token')
+    const result = await signInWithGoogleIdToken('bad-token', 'nonce')
     expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Something went wrong — please try again.')
+    }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped Google ID token/),
+      'Invalid token',
+    )
   })
 
   it('returns ok:false when supabase throws', async () => {

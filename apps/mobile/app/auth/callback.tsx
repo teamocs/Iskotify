@@ -62,8 +62,11 @@ export default function AuthCallback() {
 
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (error) {
-          // Code may already be exchanged by the fallback in landing.tsx.
-          // If a session already exists, just proceed.
+          // On web, detectSessionInUrl:true makes supabase-js auto-exchange
+          // the PKCE code before this callback runs, so exchangeCodeForSession
+          // returns "code already used". That's fine — check for an existing
+          // session and treat it as success. Also handles the case where
+          // landing.tsx already did the exchange on native.
           const { data: { session } } = await supabase.auth.getSession()
           if (!session) throw error
         }

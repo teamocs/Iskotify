@@ -24,6 +24,8 @@ export function isValidPassword(password: string): boolean {
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
 
+const FALLBACK_ERROR = 'Something went wrong — please try again.'
+
 function mapSignUpError(message: string): string {
   const m = message.toLowerCase()
   if (m.includes('already registered') || m.includes('user already exists') || m.includes('email address is already registered')) {
@@ -38,7 +40,9 @@ function mapSignUpError(message: string): string {
   if (m.includes('invalid email') || m.includes('valid email')) {
     return 'Please enter a valid email address.'
   }
-  return message
+  // Unmapped error: log raw message for debugging, return friendly fallback
+  console.warn('[webAuth] unmapped sign-up error:', message)
+  return FALLBACK_ERROR
 }
 
 function mapSignInError(message: string): string {
@@ -55,7 +59,9 @@ function mapSignInError(message: string): string {
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Too many sign-in attempts — please wait a moment and try again.'
   }
-  return message
+  // Unmapped error: log raw message for debugging, return friendly fallback
+  console.warn('[webAuth] unmapped sign-in error:', message)
+  return FALLBACK_ERROR
 }
 
 // ── Auth functions ────────────────────────────────────────────────────────────
@@ -123,7 +129,8 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
       redirectTo,
     })
     if (error) {
-      return { ok: false, error: error.message }
+      console.warn('[webAuth] unmapped password-reset error:', error.message)
+      return { ok: false, error: FALLBACK_ERROR }
     }
     return { ok: true, data: undefined }
   } catch (e) {
@@ -146,7 +153,8 @@ export async function signInWithGoogleWeb(): Promise<AuthResult> {
       options: { redirectTo },
     })
     if (error) {
-      return { ok: false, error: error.message }
+      console.warn('[webAuth] unmapped Google OAuth error:', error.message)
+      return { ok: false, error: FALLBACK_ERROR }
     }
     // OAuth redirects the browser — caller doesn't need to handle data.
     return { ok: true, data: undefined }
@@ -157,17 +165,25 @@ export async function signInWithGoogleWeb(): Promise<AuthResult> {
 
 /**
  * Sign in with a Google credential token (for One Tap / GIS callback).
+ *
+ * @param credential - The ID token JWT from Google's GIS callback.
+ * @param nonce      - The raw (un-hashed) nonce that was passed to
+ *                     google.accounts.id.initialize as SHA-256(nonce).
+ *                     Supabase uses this to verify the nonce claim in the JWT.
  */
 export async function signInWithGoogleIdToken(
   credential: string,
+  nonce?: string,
 ): Promise<AuthResult> {
   try {
     const { error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: credential,
+      ...(nonce !== undefined ? { nonce } : {}),
     })
     if (error) {
-      return { ok: false, error: error.message }
+      console.warn('[webAuth] unmapped Google ID token error:', error.message)
+      return { ok: false, error: FALLBACK_ERROR }
     }
     return { ok: true, data: undefined }
   } catch (e) {
