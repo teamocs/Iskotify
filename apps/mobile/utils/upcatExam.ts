@@ -4,6 +4,7 @@ export type Subtest = typeof SUBTESTS[number]
 export interface RawUpcatQuestion {
   questionId: string; subtest: string; questionText: string; options: string[]
   correctIndex: number; explanation: string; setId: string | null; setPosition: number | null
+  mainSubject?: string | null; topic?: string | null
 }
 export interface RawUpcatPassage { setId: string; subtest: string; passageText: string }
 export interface ExamQuestion extends RawUpcatQuestion { passageText: string | null }

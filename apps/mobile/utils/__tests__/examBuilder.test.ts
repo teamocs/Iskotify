@@ -1,4 +1,4 @@
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection } from '../examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState } from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -146,5 +146,61 @@ describe('groupReviewBySection', () => {
   it('handles empty question list', () => {
     const sections = groupReviewBySection([], {}, [])
     expect(sections).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// sectionChipState (B2)
+// ---------------------------------------------------------------------------
+
+const bounds3 = [
+  { name: 'Math', start: 0, end: 3 },
+  { name: 'Science', start: 3, end: 6 },
+  { name: 'English', start: 6, end: 9 },
+]
+
+describe('sectionChipState', () => {
+  describe('when sectionBlocked=true', () => {
+    it('only the active section is enabled; others are disabled', () => {
+      const chips = sectionChipState(bounds3, 4, 3, true) // idx=4 → Science active
+      expect(chips.find(c => c.name === 'Math')!.disabled).toBe(true)
+      expect(chips.find(c => c.name === 'Science')!.disabled).toBe(false)
+      expect(chips.find(c => c.name === 'English')!.disabled).toBe(true)
+    })
+
+    it('marks active correctly at the start boundary', () => {
+      const chips = sectionChipState(bounds3, 3, 3, true) // idx=3 → first item of Science
+      expect(chips.find(c => c.name === 'Science')!.active).toBe(true)
+      expect(chips.find(c => c.name === 'Science')!.disabled).toBe(false)
+    })
+
+    it('marks active correctly at one-before-end boundary', () => {
+      const chips = sectionChipState(bounds3, 5, 3, true) // idx=5 → last item of Science (end=6)
+      expect(chips.find(c => c.name === 'Science')!.active).toBe(true)
+      expect(chips.find(c => c.name === 'English')!.active).toBe(false)
+    })
+  })
+
+  describe('when sectionBlocked=false', () => {
+    it('all chips are enabled regardless of active state', () => {
+      const chips = sectionChipState(bounds3, 1, 0, false)
+      expect(chips.every(c => !c.disabled)).toBe(true)
+    })
+
+    it('still marks the correct section as active', () => {
+      const chips = sectionChipState(bounds3, 7, 0, false) // idx=7 → English
+      expect(chips.find(c => c.name === 'English')!.active).toBe(true)
+      expect(chips.find(c => c.name === 'Math')!.active).toBe(false)
+      expect(chips.find(c => c.name === 'Science')!.active).toBe(false)
+    })
+  })
+
+  it('returns empty array for empty bounds', () => {
+    expect(sectionChipState([], 0, 0, false)).toHaveLength(0)
+  })
+
+  it('preserves start values in returned chips', () => {
+    const chips = sectionChipState(bounds3, 0, 0, false)
+    expect(chips.map(c => c.start)).toEqual([0, 3, 6])
   })
 })

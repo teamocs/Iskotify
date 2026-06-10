@@ -56,6 +56,33 @@ describe('getQuestionsByCategory', () => {
     expect(map.get('Science')).toHaveLength(1)
     expect(map.get('Spatial') ?? []).toHaveLength(0)
   })
+
+  it('maps mainSubject and topic from the row into the returned question', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values({
+      questionId: 'b1-q1', subtest: 'Science', skillCategory: 'Science',
+      questionText: 'What is the powerhouse of the cell?',
+      options: JSON.stringify(['Nucleus', 'Ribosome', 'Mitochondria', 'Vacuole']),
+      correctIndex: 2, explanation: 'Mitochondria produce ATP.',
+      mainSubject: 'Biology', topic: 'Cell Biology',
+    })
+    const map = await getQuestionsByCategory(db, ['Science'])
+    const q = map.get('Science')![0]!
+    expect(q.mainSubject).toBe('Biology')
+    expect(q.topic).toBe('Cell Biology')
+  })
+
+  it('returns null for mainSubject and topic when the columns are not populated', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values({
+      questionId: 'b1-q2', subtest: 'Mathematics', skillCategory: 'Mathematics',
+      questionText: '2+2?', options: JSON.stringify(['1','2','3','4']), correctIndex: 3, explanation: '',
+    })
+    const map = await getQuestionsByCategory(db, ['Mathematics'])
+    const q = map.get('Mathematics')![0]!
+    expect(q.mainSubject).toBeNull()
+    expect(q.topic).toBeNull()
+  })
 })
 
 describe('getTargetCourseClusters', () => {

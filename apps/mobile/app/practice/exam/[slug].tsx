@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, type BuiltExam, type ReviewSection } from '../../../utils/examBuilder'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState, type BuiltExam, type ReviewSection } from '../../../utils/examBuilder'
 import type { ExamQuestion } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
@@ -148,6 +148,12 @@ export default function BlueprintExam() {
 
   const bounds = useMemo(() => (built ? computeBounds(built) : []), [built])
   const sectionBlocked = !!blueprint?.sectionBlocked && bounds.length > 0
+
+  // B2: section chip state — recomputed whenever idx, floorIdx, or sectionBlocked changes.
+  const sectionChips = useMemo(
+    () => sectionChipState(bounds, idx, floorIdx, sectionBlocked),
+    [bounds, idx, floorIdx, sectionBlocked],
+  )
 
   useEffect(() => {
     void (async () => {
@@ -489,8 +495,31 @@ export default function BlueprintExam() {
 
       <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (i >= floorIdx) setIdx(i) }} />
 
+      {bounds.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
+          {sectionChips.map(chip => (
+            <Pressable
+              key={chip.name}
+              style={[s.sChip, chip.active && s.sChipOn, chip.disabled && s.sChipDisabled]}
+              disabled={chip.disabled}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: chip.disabled }}
+              onPress={() => { if (!chip.disabled) setIdx(Math.max(chip.start, floorIdx)) }}
+            >
+              <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={[s.sChipTxt, chip.active && s.sChipTxtOn]}>{chip.name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
+        <View style={s.subjectBar}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={s.subjectBarText}>
+            <Text style={s.subjectBold}>{fq.q.mainSubject != null ? fq.q.mainSubject : fq.sectionName}</Text>
+            {fq.q.topic != null ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
+          </Text>
+        </View>
         <View style={s.qCard}>
           <Text style={s.qText}>{q.questionText}</Text>
         </View>
@@ -586,6 +615,18 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     courseCluster: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
     courseNoteTxt: { fontSize: typo.xs, color: t.textSecondary, marginTop: 2, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
+    // B2: section chip row
+    chipRow: { paddingHorizontal: 14, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.xs, marginBottom: spacing.xs },
+    sChip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1 },
+    sChipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
+    sChipDisabled: { opacity: 0.4 },
+    sChipTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    sChipTxtOn: { color: '#fff' },
+    // B1: subject/topic bar
+    subjectBar: { paddingHorizontal: 14, marginBottom: spacing.xs },
+    subjectBarText: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    subjectBold: { color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm },
+    subjectTopic: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm },
     qCard: {
       backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
       padding: 18, marginHorizontal: 14, marginBottom: spacing.md,

@@ -1,6 +1,33 @@
 import type { ExamBlueprint, BlueprintSection } from '../services/examBlueprints'
 import type { RawUpcatQuestion, RawUpcatPassage, ExamQuestion } from './upcatExam'
 
+// ---------------------------------------------------------------------------
+// Section chip state (B2)
+// ---------------------------------------------------------------------------
+
+export interface SectionChip { name: string; start: number; active: boolean; disabled: boolean }
+
+/**
+ * Compute display state for the section-chip row shown under the QuestionNavigator.
+ *
+ * @param bounds        Array of { name, start, end } section boundaries.
+ * @param idx           Current flat question index.
+ * @param floorIdx      Lowest index the user may navigate back to (sections before this are locked).
+ * @param sectionBlocked  Whether the blueprint enforces section-locked timing.
+ */
+export function sectionChipState(
+  bounds: { name: string; start: number; end: number }[],
+  idx: number,
+  floorIdx: number,
+  sectionBlocked: boolean,
+): SectionChip[] {
+  return bounds.map(b => {
+    const active = b.start <= idx && idx < b.end
+    const disabled = sectionBlocked ? !active : false
+    return { name: b.name, start: b.start, active, disabled }
+  })
+}
+
 export interface BuiltSection { section: BlueprintSection; questions: ExamQuestion[]; available: number }
 export interface BuiltExam { runnable: BuiltSection[]; comingSoon: BlueprintSection[]; totalQuestions: number }
 
