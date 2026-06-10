@@ -140,6 +140,10 @@ export default function OnboardingScreen() {
 
   // Matcher step state
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
+  // "Prefer not to say" is an explicit, selectable choice — distinct from "not yet
+  // answered". Both leave incomeBracket null (no income filter), but this flag lets
+  // the chip show as selected so the option is actually pickable.
+  const [incomePreferNotToSay, setIncomePreferNotToSay] = useState(false)
   const [gwaText, setGwaText] = useState('')
   const [gwaError, setGwaError] = useState<string | null>(null)
   const [province, setProvince] = useState('')
@@ -716,15 +720,19 @@ export default function OnboardingScreen() {
             <Text style={labelStyle}>Household Income Bracket</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {INCOME_OPTIONS.map(opt => {
-                const active = incomeBracket === opt.value && opt.value !== null
                 const isPreferNotToSay = opt.value === null
+                const active = isPreferNotToSay
+                  ? incomePreferNotToSay
+                  : (!incomePreferNotToSay && incomeBracket === opt.value)
                 return (
                   <Pressable
                     key={opt.label}
                     onPress={() => {
                       if (isPreferNotToSay) {
+                        setIncomePreferNotToSay(true)
                         setIncomeBracket(null)
                       } else {
+                        setIncomePreferNotToSay(false)
                         setIncomeBracket(prev => prev === opt.value ? null : opt.value)
                       }
                     }}
