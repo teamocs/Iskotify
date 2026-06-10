@@ -1,5 +1,18 @@
 export type ChatMode = 'progress' | 'topic'
 
+// Appended to all three prompts — keeps Kuya Baw on-scope and prevents
+// hallucinating exam dates/deadlines not supplied in the context blocks.
+// The math prompt's no-refusal rule for MATH takes precedence because the
+// scope block only redirects "ANYTHING else" (non-academic, non-app topics).
+const SCOPE_BLOCK =
+  `SCOPE: You help ONLY with (a) academics — math, science, English, study skills; ` +
+  `(b) this app's data — exams, scholarships, courses, the student's progress. ` +
+  `For ANYTHING else (gossip, politics, relationships, money advice, current events), ` +
+  `reply with exactly one friendly sentence redirecting to studying, e.g. ` +
+  `'Usapang aral muna tayo — ask me about your review or your target exams! 📚'. ` +
+  `NEVER invent exam dates, deadlines, cutoffs, or listings not shown in the context blocks; ` +
+  `if not in context, say you don't have that info and point to the Exams tab.`
+
 const SYSTEM_PROMPT_PROGRESS =
   `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
   `Be supportive but honest — never guarantee exam results, admission, or specific cutoff/UPG scores.\n` +
@@ -14,7 +27,8 @@ const SYSTEM_PROMPT_PROGRESS =
   `RULES:\n` +
   `- Maximum 2 sentences. Be direct. No preamble.\n` +
   `- Address the student in second person (you/your).\n` +
-  `- End with one specific action when relevant.`
+  `- End with one specific action when relevant.\n` +
+  SCOPE_BLOCK
 
 const SYSTEM_PROMPT_TOPIC =
   `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
@@ -30,11 +44,15 @@ const SYSTEM_PROMPT_TOPIC =
   `RULES:\n` +
   `- Maximum 2 sentences total. Be direct. No preamble.\n` +
   `- If unsure, say "I'm not sure — check your textbook."\n` +
-  `- Address the student in second person (you/your).`
+  `- Address the student in second person (you/your).\n` +
+  SCOPE_BLOCK
 
 // Dedicated prompt for math questions: forces step-by-step output, gives a
 // worked example so Gemma 1B matches the expected shape, and lifts the
 // 2-sentence cap (math doesn't fit in 2 sentences).
+// NOTE: SCOPE_BLOCK is appended but the "Never refuse" math rule comes BEFORE
+// it, so for actual math questions the no-refusal rule governs. The scope block
+// only redirects off-topic non-math, non-academic content.
 const SYSTEM_PROMPT_MATH =
   `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
   `Be supportive but honest — never guarantee exam results, admission, or specific cutoff/UPG scores.\n` +
@@ -58,7 +76,8 @@ const SYSTEM_PROMPT_MATH =
   `Answer: x = 4\n` +
   `\n` +
   `Notation: x^2 for squared, sqrt(N) for square root, * for multiply, / for divide.\n` +
-  `Address the student in second person (you/your).`
+  `Address the student in second person (you/your).\n` +
+  SCOPE_BLOCK
 
 const STRONG_MATH_KEYWORDS =
   /\b(solve|calculate|compute|evaluate|simplify|factor|differentiate|integrate|equation|derivative|integral|fraction|polynomial|quadratic|logarithm|sine|cosine|tangent|sin|cos|tan|log|theorem|hypotenuse)\b/i
@@ -133,6 +152,8 @@ export function buildChatPrompt(
   dataContext?: string,
   history?: Array<{ role: 'user' | 'assistant'; text: string }>,
   retrieved?: string,
+  listingsCtx?: string,
+  courseCtx?: string,
 ): string {
   const sanitize = (s: string) =>
     s.replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '').replace(/<(start|end)_of_turn>/g, '')
@@ -156,6 +177,11 @@ export function buildChatPrompt(
       : '(no stats available yet)'
     sections.push(`[STUDENT CONTEXT]\n${ctx}`)
   }
+
+  // Listings and course connection context — inserted after [STUDENT CONTEXT],
+  // before [RELEVANT FLASHCARDS]. Omitted when undefined (no matching data).
+  if (listingsCtx) sections.push(listingsCtx)
+  if (courseCtx) sections.push(courseCtx)
 
   if (safeRetrieved) {
     // safeRetrieved already contains the correct top-level section headers

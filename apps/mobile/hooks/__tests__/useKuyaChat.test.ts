@@ -45,6 +45,8 @@ jest.mock('../../services/llm', () => ({
 jest.mock('../../services/chatContext', () => ({
   buildProgressContext: jest.fn().mockResolvedValue('ctx'),
   buildRetrievedFlashcards: jest.fn().mockResolvedValue(null),
+  buildListingsContext: jest.fn().mockResolvedValue(undefined),
+  buildCourseConnectionContext: jest.fn().mockResolvedValue(undefined),
 }))
 
 import { useKuyaChat } from '../useKuyaChat'

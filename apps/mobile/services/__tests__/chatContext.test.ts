@@ -8,6 +8,8 @@ import {
   loadStudentIdentity,
   formatRetrievedFlashcards,
   buildRetrievedFlashcards,
+  buildListingsContext,
+  buildCourseConnectionContext,
 } from '../chatContext'
 import type { RetrievedFlashcard } from '../flashcardRetriever'
 
@@ -448,5 +450,224 @@ describe('buildCareerFactsBlock', () => {
     expect(result).toContain('[CAREER FACTS]')
     expect(result).not.toContain('[RELEVANT FLASHCARDS]')
     expect(result).not.toContain('[UPCAT FACTS]')
+  })
+})
+
+// ── Task 3 TDD: buildListingsContext ──────────────────────────────────────────
+
+describe('buildListingsContext', () => {
+  function makeDbWithListings(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'published',
+        exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]',
+        coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER,
+        grant_amount TEXT NOT NULL DEFAULT '',
+        province TEXT,
+        city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER,
+        gwa_requirement INTEGER,
+        monthly_stipend INTEGER,
+        service_obligation_years INTEGER,
+        has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT,
+        scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER,
+        target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+    `)
+    // One exam listing: UPCAT 2026
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, exam_date, provider)
+      VALUES ('L1', 'upcat-2026', 'UPCAT 2026', 'exam', 'published', 1751328000000, 'University of the Philippines');
+    `)
+    // One scholarship listing: DOST SEI
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, deadline, grant_amount, provider)
+      VALUES ('L2', 'dost-sei', 'DOST-SEI Merit Scholarship', 'scholarship', 'published', 1748736000000, '₱40,000/year', 'DOST');
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  it('returns a [LISTINGS] block with title + exam date when question mentions UPCAT', async () => {
+    const db = makeDbWithListings()
+    const result = await buildListingsContext(db, 'when is the UPCAT?')
+    expect(result).toBeDefined()
+    expect(result).toContain('[LISTINGS]')
+    expect(result).toContain('UPCAT 2026')
+  })
+
+  it('returns a [LISTINGS] block for slug match (upcat)', async () => {
+    const db = makeDbWithListings()
+    const result = await buildListingsContext(db, 'tell me about the upcat')
+    expect(result).toBeDefined()
+    expect(result).toContain('UPCAT 2026')
+  })
+
+  it('returns a [LISTINGS] block with deadline for scholarship question', async () => {
+    const db = makeDbWithListings()
+    const result = await buildListingsContext(db, 'when is the DOST scholarship deadline?')
+    expect(result).toBeDefined()
+    expect(result).toContain('[LISTINGS]')
+    expect(result).toContain('DOST-SEI Merit Scholarship')
+  })
+
+  it('returns undefined when no listing token matches the question', async () => {
+    const db = makeDbWithListings()
+    const result = await buildListingsContext(db, 'what is photosynthesis?')
+    expect(result).toBeUndefined()
+  })
+
+  it('limits to at most 2 listings per block', async () => {
+    const db = makeDbWithListings()
+    // Both "UPCAT" and "DOST" match if we mention both — but result must have at most 2
+    const result = await buildListingsContext(db, 'compare UPCAT and DOST scholarship')
+    if (result !== undefined) {
+      const lines = result.split('\n').filter(l => l.startsWith('-'))
+      expect(lines.length).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it('each listing line stays under 160 chars (token-tight)', async () => {
+    const db = makeDbWithListings()
+    const result = await buildListingsContext(db, 'when is the UPCAT?')
+    if (result !== undefined) {
+      const lines = result.split('\n').filter(l => l.startsWith('-'))
+      for (const line of lines) {
+        expect(line.length).toBeLessThanOrEqual(160)
+      }
+    }
+  })
+})
+
+// ── Task 3 TDD: buildCourseConnectionContext ──────────────────────────────────
+
+describe('buildCourseConnectionContext', () => {
+  function makeDbWithCourses(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE career_courses (
+        course_id TEXT PRIMARY KEY NOT NULL,
+        name TEXT,
+        cluster TEXT,
+        career_tag TEXT,
+        demand TEXT,
+        board_exam INTEGER NOT NULL DEFAULT 0,
+        board_exam_name TEXT,
+        duration_years REAL,
+        top_countries TEXT NOT NULL DEFAULT '[]',
+        summary TEXT,
+        student_tip TEXT,
+        ai_note TEXT,
+        remote_updated_at INTEGER
+      );
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'published',
+        exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]',
+        coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER,
+        grant_amount TEXT NOT NULL DEFAULT '',
+        province TEXT,
+        city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER,
+        gwa_requirement INTEGER,
+        monthly_stipend INTEGER,
+        service_obligation_years INTEGER,
+        has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT,
+        scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER,
+        target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+      CREATE TABLE focus_listings (
+        listing_slug TEXT PRIMARY KEY NOT NULL,
+        priority INTEGER NOT NULL,
+        added_at INTEGER NOT NULL
+      );
+    `)
+    // Nursing course
+    raw.exec(`
+      INSERT INTO career_courses (course_id, name, cluster, demand, board_exam, board_exam_name)
+      VALUES ('C1', 'Nursing', 'Health Sciences', 'High', 1, 'Nursing Board Exam');
+    `)
+    // UPCAT listing accepts Health Sciences
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, target_courses)
+      VALUES ('L1', 'upcat-2026', 'UPCAT 2026', 'exam', 'published', '["Health Sciences"]');
+    `)
+    // DOST scholarship open to all
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, target_courses)
+      VALUES ('L2', 'dost-sei', 'DOST-SEI Merit Scholarship', 'scholarship', 'published', '["all"]');
+    `)
+    // User has both focused
+    raw.exec(`
+      INSERT INTO focus_listings (listing_slug, priority, added_at) VALUES ('upcat-2026', 1, 0);
+      INSERT INTO focus_listings (listing_slug, priority, added_at) VALUES ('dost-sei', 2, 0);
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  it('returns a [COURSES] block with cluster, board exam, and demand when course name matches', async () => {
+    const db = makeDbWithCourses()
+    const result = await buildCourseConnectionContext(db, 'is nursing a good course?')
+    expect(result).toBeDefined()
+    expect(result).toContain('[COURSES]')
+    expect(result).toContain('Nursing')
+    expect(result).toContain('Health Sciences')
+    expect(result).toContain('Nursing Board Exam')
+  })
+
+  it('includes focused listings that accept the matched course cluster', async () => {
+    const db = makeDbWithCourses()
+    const result = await buildCourseConnectionContext(db, 'is nursing a good course?')
+    expect(result).toBeDefined()
+    expect(result).toContain('UPCAT 2026')
+  })
+
+  it('includes "all" listings (DOST) in the accepted-by set', async () => {
+    const db = makeDbWithCourses()
+    const result = await buildCourseConnectionContext(db, 'is nursing a good course?')
+    expect(result).toBeDefined()
+    expect(result).toContain('DOST-SEI')
+  })
+
+  it('returns undefined when no course name matches the question', async () => {
+    const db = makeDbWithCourses()
+    const result = await buildCourseConnectionContext(db, 'what is photosynthesis?')
+    expect(result).toBeUndefined()
+  })
+
+  it('limits to at most 2 courses', async () => {
+    const db = makeDbWithCourses()
+    const result = await buildCourseConnectionContext(db, 'is nursing a good course?')
+    if (result !== undefined) {
+      const lines = result.split('\n').filter(l => l.startsWith('-'))
+      expect(lines.length).toBeLessThanOrEqual(2)
+    }
   })
 })

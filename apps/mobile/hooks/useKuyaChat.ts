@@ -6,7 +6,12 @@ import { streamChatInference, modelExists } from '../services/llm'
 import {
   buildChatPrompt, parseChatChunk, isMathQuestion, detectChatMode,
 } from '../services/chatPrompts'
-import { buildProgressContext, buildRetrievedFlashcards } from '../services/chatContext'
+import {
+  buildProgressContext,
+  buildRetrievedFlashcards,
+  buildListingsContext,
+  buildCourseConnectionContext,
+} from '../services/chatContext'
 import { chatMessages } from '../db/schema'
 
 export interface ChatMessage {
@@ -158,15 +163,25 @@ export function useKuyaChat(): UseKuyaChat {
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
         try {
-          // Run progress-context (DB read) and FTS5 retrieval in parallel so
-          // first-token latency is bounded by whichever is slower, not their sum.
-          const [dataCtx, retrieved] = await Promise.all([
+          // Run all context builders in parallel so first-token latency is
+          // bounded by whichever is slowest, not their sum.
+          const [dataCtx, retrieved, listingsCtx, courseCtx] = await Promise.all([
             mode === 'progress'
               ? buildProgressContext(dbRef.current, stats)
               : Promise.resolve(undefined),
             buildRetrievedFlashcards(dbRef.current, trimmed, 3),
+            buildListingsContext(dbRef.current, trimmed),
+            buildCourseConnectionContext(dbRef.current, trimmed),
           ])
-          const prompt = buildChatPrompt(mode, trimmed, dataCtx, historyForPrompt, retrieved ?? undefined)
+          const prompt = buildChatPrompt(
+            mode,
+            trimmed,
+            dataCtx,
+            historyForPrompt,
+            retrieved ?? undefined,
+            listingsCtx ?? undefined,
+            courseCtx ?? undefined,
+          )
 
           // Math questions need a bigger budget (multi-step solutions exceed 60 tokens)
           // and tighter sampling (less hallucinated arithmetic).

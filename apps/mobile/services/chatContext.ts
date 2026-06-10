@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
-import { userSettings } from '../db/schema'
+import { userSettings, listings, careerCourses, focusListings } from '../db/schema'
 import { searchFlashcards, searchUpcatFacts, searchCareerFacts, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
 
 /**
@@ -163,4 +163,178 @@ export async function buildRetrievedFlashcards(
   if (careerBlock) parts.push(careerBlock)
   if (aiBlock) parts.push(aiBlock)
   return parts.join('\n\n')
+}
+
+// ── Listing + course context builders (Task 3) ────────────────────────────────
+
+/**
+ * Extract lowercase tokens (alpha-only, ≥3 chars) from a string for matching.
+ */
+function tokenize(s: string): string[] {
+  return s.toLowerCase().match(/[a-z]{3,}/g) ?? []
+}
+
+/**
+ * Return true if at least one token from `source` appears in the `questionTokens` set.
+ */
+function hasTokenOverlap(source: string, questionTokens: Set<string>): boolean {
+  for (const tok of tokenize(source)) {
+    if (questionTokens.has(tok)) return true
+  }
+  return false
+}
+
+/**
+ * Format a Unix-epoch integer as a readable date string (YYYY-MM-DD).
+ * Returns '' when the value is null/undefined/0.
+ */
+function fmtDate(epochMs: number | null | undefined): string {
+  if (!epochMs) return ''
+  return new Date(epochMs).toISOString().slice(0, 10)
+}
+
+/**
+ * Build a compact [LISTINGS] context block for listings whose title, slug, or
+ * acronym tokens overlap with the user's question. Returns undefined when nothing
+ * matches (so the prompt is unchanged for unrelated questions).
+ *
+ * Format:
+ *   [LISTINGS]
+ *   - <title> (<type>): exam <date> / deadline <date>; <grant or provider>
+ *
+ * At most 2 listings, each line token-truncated to stay under 160 chars.
+ */
+export async function buildListingsContext(
+  db: DrizzleClient,
+  question: string,
+): Promise<string | undefined> {
+  try {
+    const rows = await db
+      .select({
+        slug: listings.slug,
+        title: listings.title,
+        type: listings.type,
+        examDate: listings.examDate,
+        deadline: listings.deadline,
+        grantAmount: listings.grantAmount,
+        provider: listings.provider,
+      })
+      .from(listings)
+
+    const questionTokens = new Set(tokenize(question))
+
+    const matched = rows.filter(row => {
+      // Match on title words, slug tokens, or an acronym (first letter of each title word)
+      const acronym = row.title
+        .split(/\s+/)
+        .map(w => w[0] ?? '')
+        .join('')
+        .toLowerCase()
+      return (
+        hasTokenOverlap(row.title, questionTokens) ||
+        hasTokenOverlap(row.slug, questionTokens) ||
+        (acronym.length >= 2 && questionTokens.has(acronym))
+      )
+    })
+
+    if (matched.length === 0) return undefined
+
+    const lines = matched.slice(0, 2).map(row => {
+      const parts: string[] = [`${truncate(row.title, 60)} (${row.type})`]
+      const examDateStr = fmtDate(row.examDate)
+      const deadlineStr = fmtDate(row.deadline)
+      if (examDateStr) parts.push(`exam ${examDateStr}`)
+      if (deadlineStr) parts.push(`deadline ${deadlineStr}`)
+      const extra = row.grantAmount || row.provider
+      if (extra) parts.push(truncate(extra, 40))
+      return `- ${parts.join('; ')}`
+    })
+
+    return `[LISTINGS]\n${lines.join('\n')}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Build a compact [COURSES] context block for career courses whose name tokens
+ * overlap with the user's question. Also resolves which of the student's focused
+ * listings accept the matched course (via targetCourses JSON ∩ {cluster, 'all'}).
+ *
+ * Returns undefined when nothing matches.
+ *
+ * Format:
+ *   [COURSES]
+ *   - <name> (cluster: <cluster>; board: <boardExamName>; demand: <demand>)
+ *     Accepted by your focused: <listing titles>
+ */
+export async function buildCourseConnectionContext(
+  db: DrizzleClient,
+  question: string,
+): Promise<string | undefined> {
+  try {
+    const [courseRows, focusRows] = await Promise.all([
+      db.select({
+        courseId: careerCourses.courseId,
+        name: careerCourses.name,
+        cluster: careerCourses.cluster,
+        boardExam: careerCourses.boardExam,
+        boardExamName: careerCourses.boardExamName,
+        demand: careerCourses.demand,
+      }).from(careerCourses),
+      db.select({ listingSlug: focusListings.listingSlug }).from(focusListings),
+    ])
+
+    const questionTokens = new Set(tokenize(question))
+
+    const matched = courseRows.filter(row =>
+      row.name !== null && hasTokenOverlap(row.name, questionTokens)
+    )
+
+    if (matched.length === 0) return undefined
+
+    // Load focused listing titles + targetCourses in one shot
+    const focusSlugs = focusRows.map(r => r.listingSlug)
+    const focusedListings = focusSlugs.length > 0
+      ? await db.select({
+          slug: listings.slug,
+          title: listings.title,
+          targetCourses: listings.targetCourses,
+        }).from(listings).where(inArray(listings.slug, focusSlugs))
+      : []
+
+    const lines = matched.slice(0, 2).map(row => {
+      const namePart = truncate(row.name ?? 'Unknown', 40)
+      const clusterPart = row.cluster ? `cluster: ${truncate(row.cluster, 30)}` : null
+      const boardPart = row.boardExam && row.boardExamName
+        ? `board: ${truncate(row.boardExamName, 30)}`
+        : row.boardExam ? 'has board exam' : null
+      const demandPart = row.demand ? `demand: ${row.demand}` : null
+      const meta = [clusterPart, boardPart, demandPart].filter(Boolean).join('; ')
+
+      // Find focused listings that accept this course's cluster (or 'all')
+      const cluster = row.cluster ?? ''
+      const acceptedTitles = focusedListings
+        .filter(fl => {
+          try {
+            const tc: string[] = JSON.parse(fl.targetCourses ?? '[]')
+            return tc.includes('all') || (cluster && tc.includes(cluster))
+          } catch {
+            return false
+          }
+        })
+        .map(fl => fl.title)
+        .join(', ')
+
+      const mainLine = `- ${namePart}${meta ? ` (${meta})` : ''}`
+      const acceptedLine = acceptedTitles
+        ? `  Accepted by your focused: ${truncate(acceptedTitles, 80)}`
+        : null
+      return [mainLine, acceptedLine].filter(Boolean).join('\n')
+    })
+
+    return `[COURSES]\n${lines.join('\n')}`
+  } catch {
+    return undefined
+  }
 }
