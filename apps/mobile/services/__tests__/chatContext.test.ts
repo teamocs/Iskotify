@@ -675,6 +675,160 @@ describe('buildCourseConnectionContext', () => {
   })
 })
 
+// ── C1 TDD: Platform-aware retrieval (web mode uses LIKE fallback) ────────────
+//
+// These tests verify that buildRetrievedFlashcards routes through the LIKE-based
+// variants when Platform.OS === 'web'.  The db is created WITHOUT any FTS virtual
+// tables — mirroring real web reality where sql.js skips them — so the FTS
+// functions would throw and return [] if called, but the LIKE path succeeds.
+//
+// Strategy: jest.resetModules() + jest.doMock() before each dynamic require.
+// This forces fresh module evaluation with Platform.OS already set to 'web'
+// so that the flashcardRetriever module captures the correct value at load time.
+// The top-level static imports (buildRetrievedFlashcards etc.) are NOT used
+// inside these tests — they use dynamically required module instances instead.
+
+/**
+ * A db with plain tables (no FTS virtual tables) seeded with content.
+ * This mirrors the web environment where openWebDatabase skips FTS creation.
+ */
+function makeWebLikeDb(): DrizzleClient {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE flashcards (
+      id TEXT PRIMARY KEY NOT NULL,
+      topic_id TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      explanation TEXT NOT NULL,
+      listing_slugs TEXT NOT NULL DEFAULT '[]',
+      options TEXT NOT NULL DEFAULT '[]',
+      correct_answer_index INTEGER,
+      remote_updated_at INTEGER,
+      ai_options TEXT,
+      ai_correct_index INTEGER,
+      ai_explanation TEXT,
+      ai_enhanced_at INTEGER,
+      status TEXT NOT NULL DEFAULT 'published'
+    );
+    CREATE TABLE upcat_facts (
+      id TEXT PRIMARY KEY NOT NULL,
+      topic TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      source TEXT,
+      valid_year INTEGER,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE career_facts (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_id TEXT,
+      query_type TEXT,
+      course_name TEXT,
+      quick_answer TEXT,
+      key_caveat TEXT,
+      point_to TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE ai_career_impact (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_name TEXT,
+      ai_safety_score INTEGER,
+      ai_safety_label TEXT,
+      kuya_baw_summary TEXT,
+      remote_updated_at INTEGER
+    );
+  `)
+  // Note: NO FTS virtual tables created — mirrors web sql.js environment.
+  raw.exec(`
+    INSERT INTO flashcards (id, topic_id, question, answer, explanation)
+    VALUES ('wf1', 't1', 'What is photosynthesis?', 'Plants make food from sunlight', 'Uses chlorophyll');
+
+    INSERT INTO upcat_facts (id, topic, question, answer, source, valid_year)
+    VALUES ('wu1', 'UPG', 'What is the UPG?', 'University Predicted Grade from UPCAT + HS grades.', 'official', 2025);
+
+    INSERT INTO career_facts (id, course_id, course_name, query_type, quick_answer, key_caveat, point_to)
+    VALUES ('wc1', 'nursing', 'Nursing', 'abroad', 'Nurses can work in 30+ countries', 'NCLEX required', 'DMW');
+
+    INSERT INTO ai_career_impact (id, course_name, ai_safety_score, ai_safety_label, kuya_baw_summary)
+    VALUES ('wai1', 'Computer Science', 4, 'Mostly Safe', 'CS grads who build AI tools are well-positioned.');
+  `)
+  return drizzle(raw, { schema }) as unknown as DrizzleClient
+}
+
+describe('C1: buildRetrievedFlashcards — web mode routes through LIKE fallback', () => {
+  // Each test that needs Platform.OS='web' uses jest.resetModules() + jest.doMock()
+  // so that flashcardRetriever.ts and chatContext.ts are freshly evaluated with
+  // the mocked Platform already in place.  afterEach restores the module registry.
+
+  afterEach(() => {
+    jest.resetModules()
+  })
+
+  /**
+   * Require chatContext with Platform.OS forced to the given value.
+   * Must be called after jest.resetModules() so the module graph is fresh.
+   */
+  function requireChatContextWithPlatform(os: string): { buildRetrievedFlashcards: typeof import('../chatContext').buildRetrievedFlashcards } {
+    jest.doMock('react-native', () => ({
+      Platform: { OS: os, select: (spec: Record<string, unknown>) => spec[os] ?? spec['default'] },
+    }))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('../chatContext')
+  }
+
+  it('RED→GREEN: on web, returns [RELEVANT FLASHCARDS] via LIKE even without FTS tables', async () => {
+    jest.resetModules()
+    const { buildRetrievedFlashcards: brf } = requireChatContextWithPlatform('web')
+    const db = makeWebLikeDb()
+    const result = await brf(db, 'what is photosynthesis')
+    expect(result).not.toBeNull()
+    expect(result).toContain('[RELEVANT FLASHCARDS]')
+    expect(result).toContain('Plants make food from sunlight')
+  })
+
+  it('RED→GREEN: on web, returns [UPCAT FACTS] via LIKE even without FTS tables', async () => {
+    jest.resetModules()
+    const { buildRetrievedFlashcards: brf } = requireChatContextWithPlatform('web')
+    const db = makeWebLikeDb()
+    const result = await brf(db, 'how does the UPG work')
+    expect(result).not.toBeNull()
+    expect(result).toContain('[UPCAT FACTS]')
+    expect(result).toContain('University Predicted Grade')
+  })
+
+  it('RED→GREEN: on web, returns [CAREER FACTS] via LIKE even without FTS tables', async () => {
+    jest.resetModules()
+    const { buildRetrievedFlashcards: brf } = requireChatContextWithPlatform('web')
+    const db = makeWebLikeDb()
+    const result = await brf(db, 'where can nursing take me abroad')
+    expect(result).not.toBeNull()
+    expect(result).toContain('[CAREER FACTS]')
+    expect(result).toContain('Nurses can work in 30+ countries')
+  })
+
+  it('RED→GREEN: on web, [AI CAREER IMPACT] still works (plain LIKE — unchanged path)', async () => {
+    jest.resetModules()
+    const { buildRetrievedFlashcards: brf } = requireChatContextWithPlatform('web')
+    const db = makeWebLikeDb()
+    const result = await brf(db, 'is computer science AI-proof')
+    expect(result).not.toBeNull()
+    expect(result).toContain('[AI CAREER IMPACT]')
+    expect(result).toContain('AI-Safe-Score 4/5')
+  })
+
+  it('native: on ios, FTS path is taken (throws → [] on no FTS tables, returns null)', async () => {
+    jest.resetModules()
+    const { buildRetrievedFlashcards: brf } = requireChatContextWithPlatform('ios')
+    // No FTS tables → FTS throws → all [] → null
+    const db = makeWebLikeDb()
+    const result = await brf(db, 'what is photosynthesis')
+    // On native with no FTS tables the FTS fns return [] and aiImpact still runs via plain LIKE.
+    // photosynthesis is not a course name so aiImpact also returns null → overall null.
+    expect(result).toBeNull()
+  })
+})
+
 // ── C1 TDD: queryCache integration for context builders ───────────────────────
 //
 // Strategy: use the real in-memory SQLite DB but wrap `db.select` in a

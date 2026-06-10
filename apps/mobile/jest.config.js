@@ -4,7 +4,7 @@ module.exports = {
       displayName: 'services',
       testMatch: [
         '<rootDir>/services/**/__tests__/**/*.test.ts',
-        '<rootDir>/db/**/__tests__/**/*.test.ts',
+        '<rootDir>/db/web/**/__tests__/**/*.test.ts',
       ],
       testEnvironment: 'node',
       globalSetup: '<rootDir>/jest.services.setup.js',

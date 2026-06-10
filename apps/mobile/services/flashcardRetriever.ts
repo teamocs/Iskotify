@@ -1,4 +1,5 @@
 import { sql, like, or } from 'drizzle-orm'
+import { Platform } from 'react-native'
 import type { DrizzleClient } from '../db/client'
 import { flashcards as flashcardsTable, upcatFacts as upcatFactsTable, careerFacts as careerFactsTable } from '../db/schema'
 
@@ -406,6 +407,61 @@ export async function getAiImpactByCourseName(
     console.warn('[flashcardRetriever] ai impact lookup failed:', err)
     return null
   }
+}
+
+// ── Platform-aware auto wrappers ──────────────────────────────────────────────
+//
+// On web, expo-sqlite's FTS5 virtual tables are not created (sql.js skips them).
+// Calling the FTS variants throws and returns []. The *Auto wrappers detect
+// Platform.OS === 'web' at call-time and route to the LIKE fallback instead.
+//
+// Design choice: thin wrappers here rather than branching inside chatContext so
+// that (a) the platform logic lives in one place next to the implementations it
+// selects between, and (b) chatContext stays clean — one import, one call per
+// retriever. The LIKE variants are never imported into the native bundle path,
+// which keeps the native bundle size unchanged (tree-shaking eliminates dead
+// exports; here they're all in the same file so that argument is moot, but the
+// code flow is at least clear).
+//
+// searchAiImpactByQuestion already uses plain SQL LIKE — no auto wrapper needed.
+
+/**
+ * searchFlashcardsAuto — uses FTS on native, LIKE fallback on web.
+ */
+export function searchFlashcardsAuto(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<RetrievedFlashcard[]> {
+  return Platform.OS === 'web'
+    ? searchFlashcardsLike(db, question, limit)
+    : searchFlashcards(db, question, limit)
+}
+
+/**
+ * searchUpcatFactsAuto — uses FTS on native, LIKE fallback on web.
+ */
+export function searchUpcatFactsAuto(
+  db: DrizzleClient,
+  question: string,
+  limit = 3,
+): Promise<RetrievedUpcatFact[]> {
+  return Platform.OS === 'web'
+    ? searchUpcatFactsLike(db, question, limit)
+    : searchUpcatFacts(db, question, limit)
+}
+
+/**
+ * searchCareerFactsAuto — uses FTS on native, LIKE fallback on web.
+ */
+export function searchCareerFactsAuto(
+  db: DrizzleClient,
+  query: string,
+  limit = 3,
+): Promise<RetrievedCareerFact[]> {
+  return Platform.OS === 'web'
+    ? searchCareerFactsLike(db, query, limit)
+    : searchCareerFacts(db, query, limit)
 }
 
 /**

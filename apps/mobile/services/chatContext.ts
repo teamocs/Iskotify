@@ -2,7 +2,7 @@ import { eq, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
 import { userSettings, listings, careerCourses, focusListings } from '../db/schema'
-import { searchFlashcards, searchUpcatFacts, searchCareerFacts, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
+import { searchFlashcardsAuto, searchUpcatFactsAuto, searchCareerFactsAuto, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
 import { cachedQuery } from './queryCache'
 
 // TTL for stable table reads that feed context builders.
@@ -149,11 +149,13 @@ export async function buildRetrievedFlashcards(
   limit = 3,
 ): Promise<string | null> {
   const [cards, facts, careerFacts, aiImpact] = await Promise.all([
-    searchFlashcards(db, question, limit),
-    searchUpcatFacts(db, question, limit),
-    searchCareerFacts(db, question, limit),
+    // Auto variants: FTS on native, LIKE fallback on web (FTS tables not created by sql.js).
+    searchFlashcardsAuto(db, question, limit),
+    searchUpcatFactsAuto(db, question, limit),
+    searchCareerFactsAuto(db, question, limit),
     // Reverse LIKE: find a row where the question contains the course name.
     // Handles "is computer science AI-proof?" → matches course_name='Computer Science'.
+    // searchAiImpactByQuestion uses plain LIKE already — no platform gate needed.
     searchAiImpactByQuestion(db, question),
   ])
 
