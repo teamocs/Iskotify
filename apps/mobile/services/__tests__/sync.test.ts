@@ -119,9 +119,11 @@ describe('syncOnLaunch', () => {
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
-    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 1000 }, [])
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 1000, syncRev: 1 }, [])
     await syncOnLaunch(db as any)
-    expect(db.transaction).toHaveBeenCalledTimes(1)
+    // 6 sequential transactions: listings, subjects+topics+flashcards, upcat,
+    // career, university, blueprints+cursor
+    expect(db.transaction).toHaveBeenCalledTimes(6)
   })
 
   it('does not throw when supabase fails', async () => {
@@ -142,7 +144,9 @@ describe('syncOnLaunch', () => {
     // flashcards should be fetched twice (once per slug)
     const flashcardCalls = supabase.from.mock.calls.filter((c: string[]) => c[0] === 'flashcards')
     expect(flashcardCalls).toHaveLength(2)
-    expect(db.transaction).toHaveBeenCalledTimes(1)
+    // 6 sequential transactions: listings, subjects+topics+flashcards, upcat,
+    // career, university, blueprints+cursor
+    expect(db.transaction).toHaveBeenCalledTimes(6)
   })
 })
 

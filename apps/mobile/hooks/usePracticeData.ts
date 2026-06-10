@@ -75,8 +75,10 @@ export function usePracticeData(): PracticeData {
   const [topicIdsByListingSlug, setTopicIdsByListingSlug] = useState<Record<string, string[]>>({})
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
+  const lastLoadRef = useRef(0)
 
   const load = useCallback(async () => {
+    if (Date.now() - lastLoadRef.current < 2000) return
     if (loadingRef.current) return
     loadingRef.current = true
     try {
@@ -162,6 +164,7 @@ export function usePracticeData(): PracticeData {
       const subjectIdsWithCards = new Set(visibleTopics.map(t => t.subjectId))
       const visibleSubjects = subjectRows.filter(s => subjectIdsWithCards.has(s.id))
 
+      lastLoadRef.current = Date.now()
       if (isMountedRef.current) {
         setAllSubjects(visibleSubjects)
         setTopicRows(rows)
@@ -184,6 +187,11 @@ export function usePracticeData(): PracticeData {
 
   useFocusEffect(useCallback(() => { void load() }, [load]))
 
+  const refresh = useCallback(async () => {
+    lastLoadRef.current = 0
+    await load()
+  }, [load])
+
   return {
     subjects: allSubjects,
     topicRows,
@@ -193,6 +201,6 @@ export function usePracticeData(): PracticeData {
     totalCards,
     cardCountByTopic,
     topicIdsByListingSlug,
-    refresh: load,
+    refresh,
   }
 }

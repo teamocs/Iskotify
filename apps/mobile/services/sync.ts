@@ -315,6 +315,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       seen.add(r.id); return true
     })
 
+    // ── Tx 1: listings + admissions_updates ──────────────────────────────────
+    // (Cursor write is intentionally LAST so an interrupted sync re-pulls next launch)
     await db.transaction((tx) => {
       for (const row of (listingsRes.data ?? [])) {
         const examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
@@ -360,7 +362,13 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         }
         tx.insert(admissionsUpdates).values(vals).onConflictDoUpdate({ target: admissionsUpdates.id, set: vals }).run()
       }
+    })
 
+    // Yield JS thread between transactions so the UI stays responsive
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // ── Tx 2: subjects + topics + flashcards ──────────────────────────────────
+    await db.transaction((tx) => {
       for (const row of (subjectsRes.data ?? [])) {
         tx.insert(subjects).values({ id: row.id, name: row.name })
           .onConflictDoUpdate({ target: subjects.id, set: { name: row.name } }).run()
@@ -403,7 +411,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           set: vals,  // ai_* only included when Supabase had them
         }).run()
       }
+    })
 
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // ── Tx 3: upcat passages / questions / facts / cutoffs ────────────────────
+    await db.transaction((tx) => {
       for (const row of (upcatPassagesRes.data ?? [])) {
         const vals = { setId: row.set_id, subtest: row.subtest, passageText: row.passage_text }
         tx.insert(upcatPassages).values(vals).onConflictDoUpdate({ target: upcatPassages.setId, set: vals }).run()
@@ -442,8 +455,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         }
         tx.insert(upcatCutoffs).values(vals).onConflictDoUpdate({ target: upcatCutoffs.id, set: vals }).run()
       }
+    })
 
-      // ── Epic D: Career upserts ─────────────────────────────────────────────
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // ── Tx 4: career tables ───────────────────────────────────────────────────
+    await db.transaction((tx) => {
       for (const row of (careerCoursesRes.data ?? [])) {
         const vals = {
           courseId: row.course_id, name: row.name ?? null, cluster: row.cluster ?? null,
@@ -533,8 +550,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         tx.insert(careerFacts).values(vals).onConflictDoUpdate({ target: careerFacts.id, set: vals }).run()
       }
       // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
+    })
 
-      // ── Epic C: University / course upserts ───────────────────────────────
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // ── Tx 5: university / course tables ──────────────────────────────────────
+    await db.transaction((tx) => {
       for (const row of (tertiarySchoolsRes.data ?? [])) {
         const vals = {
           id: row.id, name: row.name, acronym: row.acronym ?? null,
@@ -626,7 +647,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         }
         tx.insert(courseTaxonomyMap).values(vals).onConflictDoUpdate({ target: courseTaxonomyMap.courseTab, set: vals }).run()
       }
+    })
 
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    // ── Tx 6: blueprints + skill categories + course notes + cursor write ──────
+    // Cursor (lastSyncedAt + syncRev) is written LAST so an interrupted sync
+    // forces a full re-pull on the next launch.
+    await db.transaction((tx) => {
       for (const row of (skillCatRes.data ?? [])) {
         const vals = { name: row.name, requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0, remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null }
         tx.insert(examSkillCategories).values(vals).onConflictDoUpdate({ target: examSkillCategories.name, set: vals }).run()

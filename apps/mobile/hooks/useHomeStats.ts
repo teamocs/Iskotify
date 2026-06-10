@@ -110,8 +110,10 @@ export function useHomeStats(): HomeStats {
   const [stats, setStats] = useState<HomeStats>(DEFAULT)
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
+  const lastLoadRef = useRef(0)
 
   const load = useCallback(async () => {
+    if (Date.now() - lastLoadRef.current < 2000) return
     if (loadingRef.current) return
     loadingRef.current = true
     try {
@@ -157,6 +159,7 @@ export function useHomeStats(): HomeStats {
       todayStart.setHours(0, 0, 0, 0)
       const todayRows = allProgress.filter(p => p.answeredAt >= todayStart.getTime())
 
+      lastLoadRef.current = Date.now()
       if (isMountedRef.current) {
         setStats({
           listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,

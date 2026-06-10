@@ -511,14 +511,16 @@ export default function HomeScreen() {
           .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
           .orderBy(asc(focusListings.priority))
 
+        const rowsWithReqs = rows.filter(row => {
+          try { return (JSON.parse(row.requirements ?? '[]') as string[]).length > 0 } catch { return false }
+        })
+        const acquiredLists = await Promise.all(rowsWithReqs.map(r => getAcquiredRequirementIndices(db, r.slug)))
         let total = 0
-        for (const row of rows) {
+        rowsWithReqs.forEach((row, i) => {
           let reqs: string[] = []
           try { reqs = JSON.parse(row.requirements ?? '[]') } catch { reqs = [] }
-          if (reqs.length === 0) continue
-          const acquired = await getAcquiredRequirementIndices(db, row.slug)
-          total += reqs.length - acquired.length
-        }
+          total += reqs.length - (acquiredLists[i]?.length ?? 0)
+        })
         if (!cancelled) setMissingReqCount(total)
       } catch (e) {
         console.warn('[home/requirements] count failed:', e)
