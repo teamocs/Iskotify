@@ -56,12 +56,6 @@ jest.mock('../../../hooks/useAnalytics', () => ({
   }),
 }))
 
-// Stub AiModelBanner so we don't pull in expo-notifications /
-// react-native-background-downloader native modules during tests.
-jest.mock('../../../components/AiModelBanner', () => ({
-  AiModelBanner: () => null,
-}))
-
 // Mock useDb so the screen does not require a real DrizzleProvider
 jest.mock('../../../hooks/useDb', () => ({
   useDb: () => ({}),
