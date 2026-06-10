@@ -17,6 +17,7 @@ import { SectionHeader } from '../../components/ui/SectionHeader'
 import { AppButton } from '../../components/ui/AppButton'
 import { spacing, radius } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
+import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
 import { matchScholarship } from '../../utils/scholarshipMatch'
 import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
 
@@ -71,6 +72,7 @@ export default function ListingDetailScreen() {
   const [acquiredCount, setAcquiredCount] = useState(0)
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
   const [watchingResults, setWatchingResults] = useState(false)
+  const [hasBlueprint, setHasBlueprint] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
@@ -237,6 +239,11 @@ export default function ListingDetailScreen() {
       }
 
       setLoading(false)
+
+      // Non-blocking: check if this listing has a published blueprint.
+      listPublishedBlueprintSlugs(db).then(slugs => {
+        setHasBlueprint(slugs.includes(slug))
+      }).catch(() => { /* ignore — CTA simply won't appear */ })
     }
     void load()
   }, [db, slug])
@@ -586,7 +593,13 @@ export default function ListingDetailScreen() {
 
         {/* Start practice CTA — exams only */}
         {!isScholarship ? (
-          <View style={{ marginTop: spacing.md }}>
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            {hasBlueprint ? (
+              <AppButton
+                label="📝 Take Mock Exam"
+                onPress={() => router.push(`/practice/exam/${slug}`)}
+              />
+            ) : null}
             <AppButton
               label="⚡ Start Practicing for this Exam"
               onPress={() => router.push('/(tabs)/practice')}
