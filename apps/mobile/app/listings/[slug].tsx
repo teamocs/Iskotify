@@ -63,6 +63,57 @@ function daysUntil(ts: number | null | undefined): number | null {
   return Math.ceil((ts - Date.now()) / 86_400_000)
 }
 
+// ── Collapsible section ─────────────────────────────────────────────────────
+interface CollapsibleSectionProps {
+  title: string
+  preview: string
+  children: React.ReactNode
+  defaultExpanded?: boolean
+}
+
+function CollapsibleSection({ title, preview, children, defaultExpanded = false }: CollapsibleSectionProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const { theme: t, typo } = useTheme()
+  return (
+    <View style={{ marginTop: spacing.xl }}>
+      <Pressable
+        onPress={() => setExpanded(v => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={({ pressed }) => [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: spacing.sm,
+            opacity: pressed ? 0.7 : 1,
+          },
+        ]}
+      >
+        <View style={{ flex: 1, minWidth: 0, marginRight: spacing.sm }}>
+          <Text style={{ fontSize: typo.md, fontFamily: 'Outfit_700Bold', color: t.textPrimary }}>
+            {title}
+          </Text>
+          {!expanded && preview ? (
+            <Text
+              style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 }}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.4}
+            >
+              {preview}
+            </Text>
+          ) : null}
+        </View>
+        <Text style={{ fontSize: typo.md, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>
+          {expanded ? '↑' : '↓'}
+        </Text>
+      </Pressable>
+      {expanded ? children : null}
+    </View>
+  )
+}
+
 export default function ListingDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
@@ -71,6 +122,7 @@ export default function ListingDetailScreen() {
   const [loading, setLoading] = useState(true)
   const [acquiredCount, setAcquiredCount] = useState(0)
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
+  const [matchMoreExpanded, setMatchMoreExpanded] = useState(false)
   const [watchingResults, setWatchingResults] = useState(false)
   const [hasBlueprint, setHasBlueprint] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
@@ -110,7 +162,7 @@ export default function ListingDetailScreen() {
     countdownUrgent: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.22)' },
     countdownNum: { fontSize: typo.h1, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -1 },
     countdownLabel: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    section: { marginTop: spacing.lg },
+    section: { marginTop: spacing.xl },
     datesGrid: { gap: spacing.sm },
     dateCard: { backgroundColor: t.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: t.border },
     dateLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -178,6 +230,12 @@ export default function ListingDetailScreen() {
     matchPillTxtMaybe: { color: '#fbbf24' },
     matchPillTxtIneligible: { color: '#f87171' },
     matchReason: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 2 },
+    matchMoreBtn: {
+      marginTop: spacing.xs,
+      paddingVertical: spacing.xs,
+      alignSelf: 'flex-start',
+    },
+    matchMoreTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     detailGrid: { gap: spacing.sm },
     detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: t.border },
     detailRowLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
@@ -195,6 +253,8 @@ export default function ListingDetailScreen() {
     verifiedPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     verifiedNote: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 15 },
     otherBenefitLine: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginTop: 2 },
+    // Divider between above-the-fold and lower section
+    lowerDivider: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: t.divider },
   }), [t, typo])
 
   useEffect(() => {
@@ -320,6 +380,32 @@ export default function ListingDetailScreen() {
     ? (scholarshipMeta.other_benefits as unknown[]).map(String)
     : []
 
+  // Match reasons/warnings split: first 2 visible, rest behind "More"
+  const visibleReasons = matchResult ? matchResult.reasons.slice(0, 2) : []
+  const hiddenReasons = matchResult ? matchResult.reasons.slice(2) : []
+  const hasMoreReasons = hiddenReasons.length > 0 || (matchResult ? matchResult.warnings.length > 0 : false)
+
+  // Collapsible section preview builders
+  const aboutPreview = listing.description
+    ? listing.description.slice(0, 60).replace(/\n/g, ' ').trim() + (listing.description.length > 60 ? '…' : '')
+    : ''
+
+  const detailsPreview = (() => {
+    const parts: string[] = []
+    if (listing.incomeCeiling != null) parts.push(`₱${listing.incomeCeiling.toLocaleString()}/yr`)
+    if (listing.gwaRequirement != null) parts.push(`GWA ${listing.gwaRequirement}`)
+    return parts.join(' · ')
+  })()
+
+  const benefitsPreview = (() => {
+    if (listing.grantAmount) return `₱${listing.grantAmount}`
+    if (otherBenefits.length > 0) return otherBenefits[0] ?? ''
+    if (listing.coverage) return listing.coverage.slice(0, 60).trim() + (listing.coverage.length > 60 ? '…' : '')
+    return ''
+  })()
+
+  const hasBenefits = !!(listing.coverage || listing.grantAmount || otherBenefits.length > 0)
+
   return (
     <SafeAreaView style={s.root}>
 
@@ -344,6 +430,8 @@ export default function ListingDetailScreen() {
       </View>
 
       <ScreenScroll tabBarInset={false}>
+
+        {/* ── ABOVE THE FOLD ─────────────────────────────────────── */}
 
         {/* Hero card */}
         <Card elevated style={[s.hero, isExam ? s.heroExam : s.heroScholar]}>
@@ -405,16 +493,38 @@ export default function ListingDetailScreen() {
                 </Text>
               </View>
             </View>
-            {matchResult.reasons.map((r, i) => (
-              <Text key={i} style={s.matchReason}>• {r}</Text>
+            {/* First 2 reasons always visible */}
+            {visibleReasons.map((r) => (
+              <Text key={r} style={s.matchReason}>• {r}</Text>
             ))}
-            {matchResult.warnings.map((w, i) => (
-              <Text key={`w${i}`} style={s.cautionLine}>⚠ {w}</Text>
-            ))}
+            {/* Remaining reasons + warnings behind inline "More" expand */}
+            {matchMoreExpanded ? (
+              <>
+                {hiddenReasons.map((r) => (
+                  <Text key={r} style={s.matchReason}>• {r}</Text>
+                ))}
+                {matchResult.warnings.map((w) => (
+                  <Text key={w} style={s.cautionLine}>⚠ {w}</Text>
+                ))}
+              </>
+            ) : null}
+            {hasMoreReasons ? (
+              <Pressable
+                onPress={() => setMatchMoreExpanded(v => !v)}
+                style={({ pressed }) => [s.matchMoreBtn, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: matchMoreExpanded }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={s.matchMoreTxt}>
+                  {matchMoreExpanded ? 'Show less ↑' : `More (${hiddenReasons.length + matchResult.warnings.length}) ↓`}
+                </Text>
+              </Pressable>
+            ) : null}
           </Card>
         ) : null}
 
-        {/* Service obligation warning banner */}
+        {/* Service obligation warning — safety info, always visible */}
         {isScholarship && (listing.serviceObligationYears ?? 0) > 0 ? (
           <View style={s.serviceWarning}>
             <Text style={s.serviceWarningTxt}>
@@ -458,20 +568,122 @@ export default function ListingDetailScreen() {
           </Card>
         </View>
 
-        {/* About */}
-        {listing.description ? (
-          <View style={s.section}>
-            <SectionHeader title="About" />
-            <Card elevated>
-              <Text style={s.bodyText}>{listing.description}</Text>
-            </Card>
+        {/* ── PRIMARY CTAs — directly after Key Dates ─────────────── */}
+
+        {/* Exams: "📝 Take Mock Exam" (if hasBlueprint) + Add-to-Focus */}
+        {isExam ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            {hasBlueprint ? (
+              <AppButton
+                label="📝 Take Mock Exam"
+                onPress={() => router.push(`/practice/exam/${slug}`)}
+              />
+            ) : null}
+            {inFocus ? (
+              <Pressable
+                style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => removeListing(slug)}
+                accessibilityRole="button"
+              >
+                <Text style={s.focusRemoveTxt}>
+                  ✓ In Focus #{focusPriority} — Tap to Remove
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => addListing(slug)}
+                accessibilityRole="button"
+              >
+                <Text style={s.focusAddTxt}>+ Add to Focus</Text>
+              </Pressable>
+            )}
           </View>
         ) : null}
 
-        {/* Scholarship detail rows */}
+        {/* Scholarships: Add-to-Focus only (no mock exam) */}
         {isScholarship ? (
+          <View style={{ marginTop: spacing.md }}>
+            {inFocus ? (
+              <Pressable
+                style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => removeListing(slug)}
+                accessibilityRole="button"
+              >
+                <Text style={s.focusRemoveTxt}>
+                  ✓ In Focus #{focusPriority} — Tap to Remove
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => addListing(slug)}
+                accessibilityRole="button"
+              >
+                <Text style={s.focusAddTxt}>+ Add to Focus</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+
+        {/* Requirements checklist — positioned after primary CTA */}
+        {requirements.length > 0 ? (
           <View style={s.section}>
-            <SectionHeader title="Scholarship Details" />
+            <SectionHeader title={`Requirements (${acquiredCount}/${requirements.length})`} />
+            <RequirementsChecklist
+              listingSlug={slug}
+              requirements={requirements}
+              onAcquiredCountChange={(a) => setAcquiredCount(a)}
+            />
+          </View>
+        ) : null}
+
+        {/* ── LOWER SECTION (disclosure) ───────────────────────────── */}
+        <View style={s.lowerDivider} />
+
+        {/* Watch results toggle — exams only (moved to lower section) */}
+        {isExam ? (
+          <Pressable
+            style={({ pressed }) => [s.watchBtn, watchingResults && s.watchBtnActive, pressed && { opacity: 0.8 }]}
+            onPress={toggleResultWatch}
+            accessibilityRole="button"
+            accessibilityLabel={watchingResults ? 'Stop watching results' : 'Watch results'}
+          >
+            <Text style={[s.watchBtnTxt, watchingResults && s.watchBtnTxtActive]}>
+              {watchingResults ? '✓ Watching results' : '🔔 Watch results'}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {/* Start practice CTA — exams only (moved to lower section) */}
+        {isExam ? (
+          <View style={{ marginTop: spacing.md }}>
+            <AppButton
+              label="⚡ Start Practicing for this Exam"
+              onPress={() => router.push('/(tabs)/practice')}
+              variant="secondary"
+            />
+          </View>
+        ) : null}
+
+        {/* About — collapsible, preview = first ~60 chars */}
+        {listing.description ? (
+          <CollapsibleSection
+            title="About"
+            preview={aboutPreview}
+          >
+            <Card elevated>
+              <Text style={s.bodyText}>{listing.description}</Text>
+            </Card>
+          </CollapsibleSection>
+        ) : null}
+
+        {/* Scholarship Details — collapsible, preview = income ceiling + GWA */}
+        {isScholarship ? (
+          <CollapsibleSection
+            title="Scholarship Details"
+            preview={detailsPreview}
+          >
             <Card elevated>
               <View style={s.detailGrid}>
                 {listing.incomeCeiling != null ? (
@@ -520,13 +732,15 @@ export default function ListingDetailScreen() {
                 </View>
               ) : null}
             </Card>
-          </View>
+          </CollapsibleSection>
         ) : null}
 
-        {/* Benefits / Coverage */}
-        {(listing.coverage || listing.grantAmount || otherBenefits.length > 0) ? (
-          <View style={s.section}>
-            <SectionHeader title={isExam ? 'Coverage' : 'Benefits'} />
+        {/* Benefits / Coverage — collapsible, preview = grant amount or first benefit */}
+        {hasBenefits ? (
+          <CollapsibleSection
+            title={isExam ? 'Coverage' : 'Benefits'}
+            preview={benefitsPreview}
+          >
             <Card elevated>
               {listing.grantAmount ? (
                 <View style={s.grantRow}>
@@ -539,78 +753,12 @@ export default function ListingDetailScreen() {
                 <Text key={b} style={[s.otherBenefitLine, { marginTop: i === 0 ? spacing.xs : 2 }]}>• {b}</Text>
               ))}
             </Card>
-          </View>
+          </CollapsibleSection>
         ) : null}
 
-        {/* Requirements */}
-        {requirements.length > 0 ? (
-          <View style={s.section}>
-            <SectionHeader title={`Requirements (${acquiredCount}/${requirements.length})`} />
-            <RequirementsChecklist
-              listingSlug={slug}
-              requirements={requirements}
-              onAcquiredCountChange={(a) => setAcquiredCount(a)}
-            />
-          </View>
-        ) : null}
-
-        {/* Focus CTA */}
-        {inFocus ? (
-          <Pressable
-            style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
-            onPress={() => removeListing(slug)}
-            accessibilityRole="button"
-          >
-            <Text style={s.focusRemoveTxt}>
-              ✓ In Focus #{focusPriority} — Tap to Remove
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
-            onPress={() => addListing(slug)}
-            accessibilityRole="button"
-          >
-            <Text style={s.focusAddTxt}>
-              + Add to Focus
-            </Text>
-          </Pressable>
-        )}
-
-        {/* Watch results toggle — exams only */}
-        {isExam ? (
-          <Pressable
-            style={({ pressed }) => [s.watchBtn, watchingResults && s.watchBtnActive, pressed && { opacity: 0.8 }]}
-            onPress={toggleResultWatch}
-            accessibilityRole="button"
-            accessibilityLabel={watchingResults ? 'Stop watching results' : 'Watch results'}
-          >
-            <Text style={[s.watchBtnTxt, watchingResults && s.watchBtnTxtActive]}>
-              {watchingResults ? '✓ Watching results' : '🔔 Watch results'}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Start practice CTA — exams only */}
-        {!isScholarship ? (
-          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-            {hasBlueprint ? (
-              <AppButton
-                label="📝 Take Mock Exam"
-                onPress={() => router.push(`/practice/exam/${slug}`)}
-              />
-            ) : null}
-            <AppButton
-              label="⚡ Start Practicing for this Exam"
-              onPress={() => router.push('/(tabs)/practice')}
-            />
-          </View>
-        ) : null}
-
-        {/* Official website (scholarships always show if present; exams too) */}
+        {/* Official website + Verified badge — bottom of screen */}
         {isScholarship ? (
-          <View style={{ marginTop: spacing.md }}>
-            {/* Verified badge + note */}
+          <View style={{ marginTop: spacing.xl }}>
             <View style={s.verifiedBadge}>
               <View style={[s.verifiedBadgePill, listing.isVerified ? s.verifiedPillOn : s.verifiedPillOff]}>
                 <Text style={[s.verifiedPillTxt, { color: listing.isVerified ? '#4ade80' : t.textTertiary }]}>
@@ -631,7 +779,7 @@ export default function ListingDetailScreen() {
           </View>
         ) : listing.externalUrl ? (
           <Pressable
-            style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [s.linkBtn, { marginTop: spacing.xl }, pressed && { opacity: 0.8 }]}
             onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
             accessibilityRole="button"
           >
