@@ -647,6 +647,7 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       set_id TEXT, set_position INTEGER,
       has_visual INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'published',
+      skill_category TEXT,
       remote_updated_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS upcat_facts (

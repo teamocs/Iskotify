@@ -10,6 +10,7 @@ import {
   tertiarySchools, universityProfiles, courseSchoolRankings,
   courseSchoolQuality, barResults, courseTaxonomyMap,
   admissionsUpdates,
+  examSkillCategories, examBlueprints, examBlueprintSections, examCourseNotes,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -222,7 +223,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       fetchAllPaginated((from, to) => supabase.from('upcat_questions')
-        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,updated_at')
+        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,updated_at')
         .eq('status', 'published')
         .gt('updated_at', since)
         .order('question_id')
@@ -276,6 +277,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .select('id,school_name,region,province,year,pass_rate,national_avg,sc_rank,notes,updated_at'),
       supabase.from('course_taxonomy_map')
         .select('course_tab,career_course_id,label,kind,updated_at'),
+    ])
+
+    // ── Exam Blueprints (full pull — small reference tables) ──────────────────
+    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes] = await Promise.all([
+      supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at'),
+      supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at').eq('status', 'published'),
+      supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at'),
+      supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at'),
     ])
 
     const cardResults = await Promise.all(
@@ -401,6 +410,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           correctIndex: row.correct_index, explanation: row.explanation,
           setId: row.set_id ?? null, setPosition: row.set_position ?? null,
           hasVisual: !!row.has_visual, status: row.status,
+          skillCategory: row.skill_category ?? null,
           remoteUpdatedAt: new Date(row.updated_at).getTime(),
         }
         tx.insert(upcatQuestions).values(vals).onConflictDoUpdate({ target: upcatQuestions.questionId, set: vals }).run()
@@ -605,6 +615,39 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(courseTaxonomyMap).values(vals).onConflictDoUpdate({ target: courseTaxonomyMap.courseTab, set: vals }).run()
+      }
+
+      for (const row of (skillCatRes.data ?? [])) {
+        const vals = { name: row.name, requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0, remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null }
+        tx.insert(examSkillCategories).values(vals).onConflictDoUpdate({ target: examSkillCategories.name, set: vals }).run()
+      }
+      for (const row of (blueprintsRes.data ?? [])) {
+        const vals = {
+          slug: row.slug, name: row.name, acronym: row.acronym ?? '',
+          totalItems: row.total_items ?? 0, totalTimeMinutes: row.total_time_minutes ?? 0,
+          hasGuessingPenalty: !!row.has_guessing_penalty, guessingPenalty: row.guessing_penalty ?? 0.25,
+          sectionBlocked: !!row.section_blocked, scoringNote: row.scoring_note ?? '', mechanicsNote: row.mechanics_note ?? '',
+          status: row.status ?? 'draft', displayOrder: row.display_order ?? 0,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(examBlueprints).values(vals).onConflictDoUpdate({ target: examBlueprints.slug, set: vals }).run()
+      }
+      for (const row of (sectionsRes.data ?? [])) {
+        const vals = {
+          id: row.id, blueprintSlug: row.blueprint_slug, name: row.name, skillCategory: row.skill_category ?? '',
+          itemCount: row.item_count ?? 0, timeMinutes: row.time_minutes ?? null,
+          requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(examBlueprintSections).values(vals).onConflictDoUpdate({ target: examBlueprintSections.id, set: vals }).run()
+      }
+      for (const row of (courseNotesRes.data ?? [])) {
+        const vals = {
+          id: row.id, blueprintSlug: row.blueprint_slug, courseCluster: row.course_cluster ?? 'all',
+          note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
+          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(examCourseNotes).values(vals).onConflictDoUpdate({ target: examCourseNotes.id, set: vals }).run()
       }
 
       const syncedAt = Date.now()
