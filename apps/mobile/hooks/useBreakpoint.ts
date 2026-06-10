@@ -14,8 +14,9 @@ export function breakpointForWidth(width: number): Breakpoint {
 
 /**
  * Returns the current breakpoint based on window width.
- * On native (phone), width is always phone-width so this naturally returns 'sm'.
- * No Platform branch needed.
+ * NOTE: native TABLETS (iPad / large Android) also report md/lg here — callers
+ * applying web-only layout (sidebar, max-width, 3-col grids) must gate on
+ * Platform.OS === 'web' themselves; the native app's layout stays phone-shaped.
  */
 export function useBreakpoint(): Breakpoint {
   const { width } = useWindowDimensions()

@@ -4,7 +4,7 @@ import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
   StyleSheet, View, Text, Pressable,
   Modal, TextInput, Alert, FlatList,
-  RefreshControl,
+  RefreshControl, Platform,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -456,7 +456,10 @@ export default function PracticeScreen() {
   }, [refresh])
 
   const { theme: t, typo } = useTheme()
-  const bp = useBreakpoint()
+  // Web-only adaptive grids: native tablets (iPad etc.) keep the phone 2-col
+  // layout — the native app's rendering must not change with viewport width.
+  const bpRaw = useBreakpoint()
+  const bp = Platform.OS === 'web' ? bpRaw : 'sm'
 
   // Stable element for the ScrollView refreshControl prop. RN's refreshControl
   // requires a JSX element (no component/render-prop form), so memoize it to avoid
@@ -650,7 +653,7 @@ export default function PracticeScreen() {
               onAction={() => router.push('/practice/exam')}
             />
             <View style={rc.grid}>
-              {orderedBlueprints.slice(0, 4).map(bp => (
+              {orderedBlueprints.slice(0, 4).map(blueprint => (
                 <View key={bp.slug} style={rc.cardWrap}>
                   <Pressable
                     style={({ pressed }) => [rc.mockCard, pressed && { opacity: 0.8 }]}
