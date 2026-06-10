@@ -1,6 +1,7 @@
-import { eq, asc } from 'drizzle-orm'
+import { eq, asc, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
-import { examBlueprints, examBlueprintSections, examCourseNotes } from '../db/schema'
+import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages } from '../db/schema'
+import type { RawUpcatQuestion, RawUpcatPassage } from '../utils/upcatExam'
 
 export interface BlueprintSection {
   id: string; name: string; skillCategory: string; itemCount: number
@@ -40,4 +41,31 @@ export async function listPublishedBlueprintSlugs(db: DrizzleClient): Promise<st
   const rows = await db.select({ slug: examBlueprints.slug, status: examBlueprints.status, order: examBlueprints.displayOrder })
     .from(examBlueprints).orderBy(asc(examBlueprints.displayOrder))
   return rows.filter(r => r.status === 'published').map(r => r.slug)
+}
+
+function parseOptions(raw: string | null | undefined): string[] {
+  try { const v = JSON.parse(raw ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+/** Load local questions for the given skill categories, grouped by category, parsed into
+ *  the shape the builder/exam engine expects. */
+export async function getQuestionsByCategory(db: DrizzleClient, categories: string[]): Promise<Map<string, RawUpcatQuestion[]>> {
+  const map = new Map<string, RawUpcatQuestion[]>()
+  if (categories.length === 0) return map
+  const rows = await db.select().from(upcatQuestions).where(inArray(upcatQuestions.skillCategory, categories))
+  for (const r of rows) {
+    const cat = r.skillCategory ?? ''
+    if (!map.has(cat)) map.set(cat, [])
+    map.get(cat)!.push({
+      questionId: r.questionId, subtest: r.subtest, questionText: r.questionText,
+      options: parseOptions(r.options), correctIndex: r.correctIndex, explanation: r.explanation,
+      setId: r.setId, setPosition: r.setPosition,
+    })
+  }
+  return map
+}
+
+export async function getAllPassages(db: DrizzleClient): Promise<RawUpcatPassage[]> {
+  const rows = await db.select().from(upcatPassages)
+  return rows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
 }

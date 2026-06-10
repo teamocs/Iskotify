@@ -3,7 +3,8 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import { examBlueprints, examBlueprintSections, examCourseNotes } from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
-import { getExamBlueprint, listPublishedBlueprintSlugs } from '../examBlueprints'
+import { getExamBlueprint, listPublishedBlueprintSlugs, getQuestionsByCategory } from '../examBlueprints'
+import { upcatQuestions } from '../../db/schema'
 
 function makeDb() {
   const raw = new Database(':memory:')
@@ -39,5 +40,20 @@ describe('getExamBlueprint', () => {
       { slug: 'acet', name: 'ACET', status: 'draft', displayOrder: 2 },
     ])
     expect(await listPublishedBlueprintSlugs(db)).toEqual(['upcat'])
+  })
+})
+
+describe('getQuestionsByCategory', () => {
+  it('groups parsed questions by skill_category', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values([
+      { questionId: 'm1', subtest: 'Mathematics', skillCategory: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1','2','3','4']), correctIndex: 1, explanation: '' },
+      { questionId: 's1', subtest: 'Science', skillCategory: 'Science', questionText: 'H2O?', options: JSON.stringify(['a','b','c','d']), correctIndex: 0, explanation: '' },
+    ])
+    const map = await getQuestionsByCategory(db, ['Mathematics', 'Science', 'Spatial'])
+    expect(map.get('Mathematics')).toHaveLength(1)
+    expect(map.get('Mathematics')![0]!.options).toEqual(['1','2','3','4'])
+    expect(map.get('Science')).toHaveLength(1)
+    expect(map.get('Spatial') ?? []).toHaveLength(0)
   })
 })
