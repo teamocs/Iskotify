@@ -516,8 +516,8 @@ export default function BlueprintExam() {
         {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
         <View style={s.subjectBar}>
           <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={s.subjectBarText}>
-            <Text style={s.subjectBold}>{fq.q.mainSubject != null ? fq.q.mainSubject : fq.sectionName}</Text>
-            {fq.q.topic != null ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
+            <Text style={s.subjectBold}>{fq.q.mainSubject ? fq.q.mainSubject : fq.sectionName}</Text>
+            {fq.q.topic ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
           </Text>
         </View>
         <View style={s.qCard}>
