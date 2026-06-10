@@ -397,7 +397,7 @@ export default function OnboardingScreen() {
         correctIndex: upcatQuestions.correctIndex,
         explanation: upcatQuestions.explanation,
         setId: upcatQuestions.setId,
-      }).from(upcatQuestions)
+      }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
       const built = buildPreAssessFromUpcat(rows, [...PRE_ASSESS_SUBTESTS], 3)
       if (built.length >= 3) setPreAssessQuestions(built)
     } catch (e) {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
+import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions, upcatPassages } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
@@ -55,7 +56,7 @@ export default function UpcatExam() {
     void (async () => {
       try {
         const [qRows, pRows] = await Promise.all([
-          db.select().from(upcatQuestions),
+          db.select().from(upcatQuestions).where(eq(upcatQuestions.status, 'published')),
           db.select().from(upcatPassages),
         ])
         const parsed = qRows.map(r => ({

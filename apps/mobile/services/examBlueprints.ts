@@ -1,4 +1,4 @@
-import { eq, asc, inArray } from 'drizzle-orm'
+import { eq, asc, and, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages, userSettings, careerCourses } from '../db/schema'
 import type { RawUpcatQuestion, RawUpcatPassage } from '../utils/upcatExam'
@@ -52,7 +52,8 @@ function parseOptions(raw: string | null | undefined): string[] {
 export async function getQuestionsByCategory(db: DrizzleClient, categories: string[]): Promise<Map<string, RawUpcatQuestion[]>> {
   const map = new Map<string, RawUpcatQuestion[]>()
   if (categories.length === 0) return map
-  const rows = await db.select().from(upcatQuestions).where(inArray(upcatQuestions.skillCategory, categories))
+  const rows = await db.select().from(upcatQuestions)
+    .where(and(inArray(upcatQuestions.skillCategory, categories), eq(upcatQuestions.status, 'published')))
   for (const r of rows) {
     const cat = r.skillCategory ?? ''
     if (!map.has(cat)) map.set(cat, [])
