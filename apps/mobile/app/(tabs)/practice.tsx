@@ -343,6 +343,7 @@ function makeStyles(
       header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
       title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
       subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
+      // AI Study Feedback
       aiFeedbackCard: { gap: spacing.xs / 2 },
       aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
       aiFeedbackIcon: { fontSize: typo.base },
@@ -350,6 +351,24 @@ function makeStyles(
       aiFeedbackPrompt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
       aiFeedbackItem: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs / 2 },
       aiFeedbackEmpty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
+      // Collapsed row (shared for AI feedback + study tools)
+      collapsedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: t.surface,
+        borderWidth: 1,
+        borderColor: t.border,
+        borderRadius: radius.xl,
+        borderCurve: 'continuous',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm + 2,
+      },
+      collapsedIcon: { fontSize: 16, width: 22, textAlign: 'center' },
+      collapsedLabel: { flex: 1, fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+      collapsedSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      collapsedChevron: { fontSize: 18, color: t.textTertiary },
+      // Chips
       chipsWrap: { height: 44, marginBottom: spacing.xs },
       chipsScroll: { flex: 1 },
       chipsContent: { paddingHorizontal: spacing.lg, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.sm - 2 },
@@ -362,7 +381,7 @@ function makeStyles(
       secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
       addBtn: { width: 28, height: 28, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
       addBtnTxt: { color: '#fff', fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
-      list: { gap: spacing.md },
+      list: { gap: spacing.xl },
       empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
       focusDebug: { paddingBottom: spacing.xs, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
@@ -401,41 +420,15 @@ function makeStyles(
   }
 }
 
-// Quick-link shortcut cards (UPCAT mock, GWA calculator, Career Paths). Pure
-// presentational — extracted to keep PracticeScreen small.
-function PracticeShortcuts() {
-  return (
-    <View style={{ gap: spacing.sm }}>
-      <ListCard
-        icon={<Text style={{ fontSize: 15 }}>🎓</Text>}
-        iconBg="rgba(128,0,0,0.18)"
-        title="UPCAT Mock Exam"
-        subtitle="Authored questions · timed mock by subtest"
-        onPress={() => router.push('/practice/upcat')}
-      />
-      <ListCard
-        icon={<Text style={{ fontSize: 15 }}>🧮</Text>}
-        iconBg="rgba(245,158,11,0.14)"
-        title="GWA Calculator"
-        subtitle="Compute your General Weighted Average · UP scale"
-        onPress={() => router.push('/estimator/gwa')}
-      />
-      <ListCard
-        icon={<Text style={{ fontSize: 15 }}>🌍</Text>}
-        iconBg="rgba(245,158,11,0.14)"
-        title="Career Paths"
-        subtitle="Where can your course take you? · AI-Safe-Score"
-        onPress={() => router.push('/career')}
-      />
-    </View>
-  )
-}
-
 export default function PracticeScreen() {
   const { subjects, topicRows, recommendedTopics, selectedSubjectId, setSelectedSubjectId, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
   const { listing } = useHomeStats()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+
+  // Progressive-disclosure state
+  const [aiFeedbackExpanded, setAiFeedbackExpanded] = useState(false)
+  const [studyToolsExpanded, setStudyToolsExpanded] = useState(false)
 
   // Overall analytics (stats header)
   const overallAnalytics = useAnalytics('overall')
@@ -542,8 +535,15 @@ export default function PracticeScreen() {
       .slice(0, 3)
   }, [overallAnalytics])
 
+  // Build collapsed AI feedback summary label
+  const aiFeedbackSummary = useMemo(() => {
+    if (!weakSubjectsFeedback || weakSubjectsFeedback.length === 0) return 'No data yet'
+    return `Weak: ${weakSubjectsFeedback.map(i => i.label).join(', ')}`
+  }, [weakSubjectsFeedback])
+
   return (
     <SafeAreaView style={s.root}>
+      {/* (1) Header + stats */}
       <View style={s.header}>
         <Text style={s.title}>Practice</Text>
         <Text style={s.subtitle}>{listing?.title ?? '—'} · {totalCards} cards synced</Text>
@@ -563,7 +563,7 @@ export default function PracticeScreen() {
       {/* AI Reviewer Engine — banner + progress + download bottom-sheet */}
       <AiModelBanner />
 
-      {/* Subject filter chips */}
+      {/* (2) Subject filter chips */}
       <View style={s.chipsWrap}>
         <ScrollView
           horizontal
@@ -573,7 +573,7 @@ export default function PracticeScreen() {
         >
           <Pressable onPress={() => setSelectedSubjectId(null)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
             <View style={[s.chip, !selectedSubjectId && s.chipOn]}>
-              <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]}>All</Text>
+              <Text style={[s.chipTxt, !selectedSubjectId && s.chipTxtOn]} maxFontSizeMultiplier={1.4}>All</Text>
             </View>
           </Pressable>
           {/* bounded: a handful of exam subjects (<10), horizontal chip rail — virtualization unwarranted */}
@@ -581,7 +581,7 @@ export default function PracticeScreen() {
           {subjects.map(sub => (
             <Pressable key={sub.id} onPress={() => setSelectedSubjectId(sub.id)} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.7 }}>
               <View style={[s.chip, selectedSubjectId === sub.id && s.chipOn]}>
-                <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]}>{sub.name}</Text>
+                <Text style={[s.chipTxt, selectedSubjectId === sub.id && s.chipTxtOn]} maxFontSizeMultiplier={1.4}>{sub.name}</Text>
               </View>
             </Pressable>
           ))}
@@ -593,32 +593,48 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
-        {/* Quick-link shortcuts */}
-        <PracticeShortcuts />
-
-        {/* AI Study Feedback card */}
-        <Card elevated style={s.aiFeedbackCard}>
-          <View style={s.aiFeedbackHeader}>
-            <Text style={s.aiFeedbackIcon}>📊</Text>
-            <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
-          </View>
-          {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
-            <>
-              <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
-              {weakSubjectsFeedback.map((item) => (
-                <Text key={item.label} style={s.aiFeedbackItem}>
-                  · {item.label} ({item.accuracy}%)
-                </Text>
+        {/* (3) Recommended rail — "what next" */}
+        {activeRecommended.length > 0 ? (
+          <View>
+            <View style={s.secRow}>
+              <Text style={s.secTitle}>Recommended</Text>
+              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={rc.row}
+            >
+              {/* bounded: activeRecommended is .slice(0,5), max 5 items; horizontal rail */}
+              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
+              {activeRecommended.map(row => (
+                <RecommendedCard key={row.topic.id} row={row} rc={rc} />
               ))}
-            </>
-          ) : (
-            <Text style={s.aiFeedbackEmpty}>
-              Take a few quizzes to unlock your personalized study tips.
-            </Text>
-          )}
-        </Card>
+            </ScrollView>
+          </View>
+        ) : null}
 
-        {/* Focus cards row */}
+        {/* (4) Subjects accordion — PROMOTED (core list) */}
+        <View>
+          <SectionHeader title="Subjects" />
+          {focusListingsList.length > 0 ? (
+            <Text style={s.focusDebug}>
+              focus: {focusListingsList.map(l => l.slug).join(', ')}
+            </Text>
+          ) : null}
+          <SubjectAccordion
+            groups={subjectGroups}
+            emptyText="No topics yet — they'll appear here after sync"
+            initiallyExpanded="focused"
+            keyExtractor={(t) => t.topic.id}
+            renderRow={(row) => {
+              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
+              return <TopicCard row={row} />
+            }}
+          />
+        </View>
+
+        {/* (5) Focus rail */}
         {focusListingsList.length > 0 ? (
           <View>
             <SectionHeader title="My Focus" />
@@ -643,38 +659,21 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* Recommended section */}
-        {activeRecommended.length > 0 ? (
-          <View>
-            <View style={s.secRow}>
-              <Text style={s.secTitle}>Recommended</Text>
-              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={rc.row}
-            >
-              {/* bounded: activeRecommended is .slice(0,5), max 5 items; horizontal rail */}
-              {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
-              {activeRecommended.map(row => (
-                <RecommendedCard key={row.topic.id} row={row} rc={rc} />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* Saved Decks section */}
+        {/* (6) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
         <View>
           <View style={s.secRow}>
             <Text style={s.secTitle}>Saved Decks</Text>
-            <Pressable style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]} onPress={() => setModalVisible(true)} accessibilityRole="button" accessibilityLabel="Create deck">
+            <Pressable
+              style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => setModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Create deck"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text style={s.addBtnTxt}>＋</Text>
             </Pressable>
           </View>
-          {decks.length === 0 ? (
-            <Text style={s.empty}>No decks yet. Tap ＋ to create one.</Text>
-          ) : (
+          {decks.length > 0 ? (
             <View>
               {decks.map(deck => (
                 <DeckCard
@@ -685,28 +684,118 @@ export default function PracticeScreen() {
                 />
               ))}
             </View>
+          ) : null}
+        </View>
+
+        {/* (7) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
+        <View>
+          {aiFeedbackExpanded ? (
+            <Card elevated style={s.aiFeedbackCard}>
+              <View style={s.aiFeedbackHeader}>
+                <Text style={s.aiFeedbackIcon}>📊</Text>
+                <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
+                <Pressable
+                  onPress={() => setAiFeedbackExpanded(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Collapse AI Study Feedback"
+                  style={{ marginLeft: 'auto' }}
+                >
+                  <Text style={{ fontSize: 18, color: t.textTertiary }}>‹</Text>
+                </Pressable>
+              </View>
+              {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
+                <>
+                  <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
+                  {weakSubjectsFeedback.map((item) => (
+                    <Text key={item.label} style={s.aiFeedbackItem}>
+                      · {item.label} ({item.accuracy}%)
+                    </Text>
+                  ))}
+                </>
+              ) : (
+                <Text style={s.aiFeedbackEmpty}>
+                  Take a few quizzes to unlock your personalized study tips.
+                </Text>
+              )}
+            </Card>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
+              onPress={() => setAiFeedbackExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Expand AI Study Feedback"
+              accessibilityState={{ expanded: false }}
+              testID="ai-feedback-collapsed"
+            >
+              <Text style={s.collapsedIcon}>📊</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.collapsedLabel}>AI Study Feedback</Text>
+                <Text style={s.collapsedSub} numberOfLines={1}>{aiFeedbackSummary}</Text>
+              </View>
+              <Text style={s.collapsedChevron}>›</Text>
+            </Pressable>
           )}
         </View>
 
-        {/* Subjects section with accordion */}
+        {/* (8) Study tools — collapsed "Study tools" row expanding inline to 3 links */}
         <View>
-          <SectionHeader title="Subjects" />
-          {focusListingsList.length > 0 ? (
-            <Text style={s.focusDebug}>
-              focus: {focusListingsList.map(l => l.slug).join(', ')}
-            </Text>
-          ) : null}
-          <SubjectAccordion
-            groups={subjectGroups}
-            emptyText="No topics yet — they'll appear here after sync"
-            initiallyExpanded="focused"
-            keyExtractor={(t) => t.topic.id}
-            renderRow={(row) => {
-              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
-              return <TopicCard row={row} />
-            }}
-          />
+          {studyToolsExpanded ? (
+            <View>
+              <View style={[s.secRow, { marginBottom: spacing.sm }]}>
+                <Text style={s.secTitle}>Study Tools</Text>
+                <Pressable
+                  onPress={() => setStudyToolsExpanded(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Collapse study tools"
+                >
+                  <Text style={{ fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>Show less ‹</Text>
+                </Pressable>
+              </View>
+              <View style={{ gap: spacing.sm }}>
+                <ListCard
+                  icon={<Text style={{ fontSize: 15 }}>🎓</Text>}
+                  iconBg="rgba(128,0,0,0.18)"
+                  title="UPCAT Mock Exam"
+                  subtitle="Authored questions · timed mock by subtest"
+                  onPress={() => router.push('/practice/upcat')}
+                />
+                <ListCard
+                  icon={<Text style={{ fontSize: 15 }}>🧮</Text>}
+                  iconBg="rgba(245,158,11,0.14)"
+                  title="GWA Calculator"
+                  subtitle="Compute your General Weighted Average · UP scale"
+                  onPress={() => router.push('/estimator/gwa')}
+                />
+                <ListCard
+                  icon={<Text style={{ fontSize: 15 }}>🌍</Text>}
+                  iconBg="rgba(245,158,11,0.14)"
+                  title="Career Paths"
+                  subtitle="Where can your course take you? · AI-Safe-Score"
+                  onPress={() => router.push('/career')}
+                />
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
+              onPress={() => setStudyToolsExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Expand Study Tools"
+              accessibilityState={{ expanded: false }}
+              testID="study-tools-collapsed"
+            >
+              <Text style={s.collapsedIcon}>🛠️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.collapsedLabel}>Study Tools</Text>
+                <Text style={s.collapsedSub}>UPCAT Mock · GWA Calculator · Career Paths</Text>
+              </View>
+              <Text style={s.collapsedChevron}>›</Text>
+            </Pressable>
+          )}
         </View>
+
       </ScreenScroll>
 
       <CreateDeckModal
@@ -719,4 +808,3 @@ export default function PracticeScreen() {
     </SafeAreaView>
   )
 }
-

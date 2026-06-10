@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react-native'
+import { render, screen, fireEvent } from '@testing-library/react-native'
 import PracticeScreen from '../practice'
 
 jest.mock('expo-router', () => ({
@@ -135,10 +135,51 @@ describe('PracticeScreen', () => {
     expect(screen.getByText('Exams taken')).toBeTruthy()
   })
 
-  it('renders AI Study Feedback card with no-data prompt', () => {
+  it('renders Subjects section header (promoted)', () => {
     render(<PracticeScreen />)
-    expect(screen.getByText('AI Study Feedback')).toBeTruthy()
+    expect(screen.getByText('Subjects')).toBeTruthy()
+  })
+
+  it('AI Study Feedback is collapsed by default — shows collapsed row', () => {
+    render(<PracticeScreen />)
+    // The collapsed row title is visible
+    expect(screen.getAllByText('AI Study Feedback').length).toBeGreaterThanOrEqual(1)
+    // The collapsed testID is present
+    expect(screen.getByTestId('ai-feedback-collapsed')).toBeTruthy()
+  })
+
+  it('AI Study Feedback expands on press', () => {
+    render(<PracticeScreen />)
+    const collapsed = screen.getByTestId('ai-feedback-collapsed')
+    fireEvent.press(collapsed)
+    // After expand, the full card is shown with the no-data prompt
     expect(screen.getByText(/Take a few quizzes/)).toBeTruthy()
+  })
+
+  it('Study Tools is collapsed by default — shows collapsed row', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByTestId('study-tools-collapsed')).toBeTruthy()
+    expect(screen.getByText('Study Tools')).toBeTruthy()
+  })
+
+  it('Study Tools expands to show 3 links on press', () => {
+    render(<PracticeScreen />)
+    const collapsed = screen.getByTestId('study-tools-collapsed')
+    fireEvent.press(collapsed)
+    expect(screen.getByText('UPCAT Mock Exam')).toBeTruthy()
+    expect(screen.getByText('GWA Calculator')).toBeTruthy()
+    expect(screen.getByText('Career Paths')).toBeTruthy()
+  })
+
+  it('Saved Decks section header always shown (create deck reachable)', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('Saved Decks')).toBeTruthy()
+  })
+
+  it('Saved Decks empty placeholder is not shown when decks are empty', () => {
+    render(<PracticeScreen />)
+    // The old "No decks yet. Tap ＋ to create one." placeholder is removed
+    expect(screen.queryByText(/No decks yet/)).toBeNull()
   })
 
   it('does not render Quick Start or Full Review Deck', () => {
