@@ -26,7 +26,7 @@ import { useFocusListings, type FocusListing } from '../../hooks/useFocusListing
 import { exportUserData, importUserData } from '../../services/export'
 import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
-import { userSettings, listings, userProgress, practiceSessions, focusListings, savedListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
+import { userSettings, listings, userProgress, practiceSessions, focusListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -394,7 +394,6 @@ export default function ProfileScreen() {
                 tx.delete(userProgress).run()
                 tx.delete(practiceSessions).run()
                 tx.delete(focusListings).run()
-                tx.delete(savedListings).run()
                 tx.delete(savedDecks).run()
                 tx.delete(userSettings).run()
                 tx.delete(userRequirements).run()

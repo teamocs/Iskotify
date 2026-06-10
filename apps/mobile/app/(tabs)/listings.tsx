@@ -3,12 +3,11 @@ import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicat
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
-import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { listings as listingsTable, savedListings as savedListingsTable, careerCourses } from '../../db/schema'
+import { listings as listingsTable, careerCourses } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, layout } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -76,7 +75,6 @@ export default function ExamsScreen() {
   const insets = useSafeAreaInsets()
 
   const [all, setAll] = useState<ListingRow[]>([])
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [profile, setProfile] = useState<StudentProfile>({})
   const [userRegion, setUserRegion] = useState<string>('')
   const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
@@ -90,7 +88,7 @@ export default function ExamsScreen() {
   const [refreshing, setRefreshing] = useState(false)
 
   const loadListings = useCallback(async () => {
-    const [rows, saved, settings, ccRows, bpSlugs] = await Promise.all([
+    const [rows, settings, ccRows, bpSlugs] = await Promise.all([
       db.select({
         id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
         type: listingsTable.type, examDate: listingsTable.examDate, region: listingsTable.region,
@@ -99,14 +97,12 @@ export default function ExamsScreen() {
         gwaRequirement: listingsTable.gwaRequirement, serviceObligationYears: listingsTable.serviceObligationYears,
         scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
       }).from(listingsTable),
-      db.select({ id: savedListingsTable.id }).from(savedListingsTable),
       getSettings(db),
       db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
       listPublishedBlueprintSlugs(db),
     ])
     // The local target_courses column stores a JSON array of cluster names (or ["all"]).
     setAll(rows.map(r => ({ ...r, targetCourses: parseStrArray(r.targetCourses as unknown as string) })) as ListingRow[])
-    setSavedIds(new Set(saved.map(s => s.id)))
     setUserRegion(settings.schoolRegion ?? '')
 
     // Map the user's chosen target courses → their course clusters, so we can flag
@@ -138,16 +134,6 @@ export default function ExamsScreen() {
     setRefreshing(true)
     try { await syncOnLaunch(db); await loadListings() } finally { setRefreshing(false) }
   }, [db, loadListings])
-
-  async function toggleSave(listingId: string) {
-    if (savedIds.has(listingId)) {
-      await db.delete(savedListingsTable).where(eq(savedListingsTable.id, listingId))
-      setSavedIds(prev => { const next = new Set(prev); next.delete(listingId); return next })
-    } else {
-      await db.insert(savedListingsTable).values({ id: listingId, savedAt: Date.now() }).onConflictDoNothing()
-      setSavedIds(prev => new Set([...prev, listingId]))
-    }
-  }
 
   const typeListings = useMemo(() => all.filter(l => l.type === segment), [all, segment])
 
@@ -263,9 +249,6 @@ export default function ExamsScreen() {
     mockBadgeTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
     focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
     focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
-    bookmarkBtn: { padding: spacing.xs, flexShrink: 0 },
-    bookmarkIcon: { fontSize: 15, opacity: 0.35 },
-    bookmarkIconSaved: { opacity: 1 },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxxl },
     sectionWrap: { marginTop: spacing.sm, marginBottom: spacing.xs },
     uniLink: { marginHorizontal: spacing.lg, marginBottom: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
@@ -279,7 +262,6 @@ export default function ExamsScreen() {
   // - Verified ✓ and course-specific chips moved to detail screen only
   const renderCard = useCallback((l: ListingRow) => {
     const exam = l.type === 'exam'
-    const isSaved = savedIds.has(l.id)
     const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id)) ? matchStatusMap.get(l.id)! : 'unknown'
     const p = getPriority(l.slug)
     const hasMock = exam && blueprintSlugs.has(l.slug)
@@ -335,19 +317,10 @@ export default function ExamsScreen() {
           </View>
         </View>
 
-        {/* Bookmark */}
-        <Pressable
-          style={({ pressed }) => [s.bookmarkBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => toggleSave(l.id)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-        >
-          <Text style={[s.bookmarkIcon, isSaved && s.bookmarkIconSaved]}>🔖</Text>
-        </Pressable>
       </Pressable>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, matchStatusMap, getPriority, blueprintSlugs, s, t, scholarColor])
+  }, [matchStatusMap, getPriority, blueprintSlugs, s, t, scholarColor])
 
   const renderItem = useCallback(({ item }: { item: ListingRow }) => renderCard(item), [renderCard])
 

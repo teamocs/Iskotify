@@ -105,7 +105,6 @@ function makeHealDb(): InstanceType<typeof Database> {
       priority INTEGER NOT NULL,
       added_at INTEGER NOT NULL
     );
-    CREATE TABLE saved_listings (id TEXT PRIMARY KEY NOT NULL, saved_at INTEGER NOT NULL);
     CREATE TABLE saved_decks (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, topic_ids TEXT NOT NULL DEFAULT '[]', created_at INTEGER NOT NULL);
     CREATE TABLE user_progress (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, flashcard_id TEXT NOT NULL, correct INTEGER NOT NULL, answered_at INTEGER NOT NULL);
     CREATE TABLE practice_sessions (

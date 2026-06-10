@@ -202,10 +202,6 @@ function makeTestDb(): DrizzleClient {
       priority INTEGER NOT NULL,
       added_at INTEGER NOT NULL
     );
-    CREATE TABLE saved_listings (
-      id TEXT PRIMARY KEY NOT NULL,
-      saved_at INTEGER NOT NULL
-    );
     CREATE TABLE saved_decks (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
@@ -285,7 +281,7 @@ describe('pullUserData', () => {
     await expect(pullUserData(db)).resolves.toBeUndefined()
   })
 
-  it('restores focus_listings + saved_listings + saved_decks from remote', async () => {
+  it('restores focus_listings + saved_decks from remote (saved_listings removed)', async () => {
     const fromBuilder = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -293,7 +289,7 @@ describe('pullUserData', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [{ listingSlug: 'upcat-2026', priority: 1, addedAt: 100 }],
-          saved_listings: [{ id: 'list-1', savedAt: 200 }],
+          // saved_listings field may be present in old remote payloads — must be ignored silently
           saved_decks: [{ id: 'deck-1', name: 'My Deck', topicIds: '[]', createdAt: 300 }],
           user_progress: [],
           practice_sessions: [],
@@ -308,8 +304,6 @@ describe('pullUserData', () => {
     const focusRows = await db.select().from(schema.focusListings)
     expect(focusRows).toHaveLength(1)
     expect(focusRows[0]?.listingSlug).toBe('upcat-2026')
-    const savedRows = await db.select().from(schema.savedListings)
-    expect(savedRows).toHaveLength(1)
     const deckRows = await db.select().from(schema.savedDecks)
     expect(deckRows).toHaveLength(1)
   })
@@ -322,7 +316,6 @@ describe('pullUserData', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [],
-          saved_listings: [],
           saved_decks: [],
           user_progress: [
             { flashcardId: 'fc-1', correct: 1, answeredAt: 500 },
@@ -350,7 +343,6 @@ describe('pullUserData', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [],
-          saved_listings: [],
           saved_decks: [],
           user_progress: [],
           practice_sessions: [
@@ -378,7 +370,6 @@ describe('pullUserData', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [],
-          saved_listings: [],
           saved_decks: [],
           user_progress: [],
           practice_sessions: [],
@@ -429,7 +420,6 @@ describe('pullUserData notes restore', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [],
-          saved_listings: [],
           saved_decks: [],
           user_progress: [],
           practice_sessions: [],
@@ -459,7 +449,6 @@ describe('pullUserData notes restore', () => {
       single: jest.fn().mockResolvedValue({
         data: {
           focus_listings: [],
-          saved_listings: [],
           saved_decks: [],
           user_progress: [],
           practice_sessions: [],
@@ -591,10 +580,6 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       listing_slug TEXT PRIMARY KEY NOT NULL,
       priority INTEGER NOT NULL,
       added_at INTEGER NOT NULL
-    );
-    CREATE TABLE saved_listings (
-      id TEXT PRIMARY KEY NOT NULL,
-      saved_at INTEGER NOT NULL
     );
     CREATE TABLE saved_decks (
       id TEXT PRIMARY KEY NOT NULL,
@@ -1492,7 +1477,6 @@ describe('pushUserData includes notes', () => {
     const db: any = {
       select: jest.fn()
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // focusListings
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // savedListings
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // savedDecks
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userProgress
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // practiceSessions

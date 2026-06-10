@@ -67,11 +67,6 @@ export const listings = sqliteTable('listings', {
   index('listings_slug_idx').on(t.slug),
 ])
 
-export const savedListings = sqliteTable('saved_listings', {
-  id: text('id').primaryKey(),
-  savedAt: integer('saved_at').notNull(),
-})
-
 export const userSettings = sqliteTable('user_settings', {
   id: integer('id').primaryKey(),
   selectedListingSlug: text('selected_listing_slug').notNull().default(''),

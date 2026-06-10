@@ -7,7 +7,6 @@ import type { DrizzleClient } from '../db/client'
 import {
   userSettings,
   focusListings,
-  savedListings,
   savedDecks,
   userProgress,
   practiceSessions,
@@ -24,10 +23,9 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, saved, decks, progress, sessions, noteRows, labelRows, assignRows] = await Promise.all([
+  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
-    db.select().from(savedListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
     db.select().from(practiceSessions),
@@ -40,7 +38,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     exported_at: new Date().toISOString(),
     settings: settings[0] ?? null,
     focus_listings: focus,
-    saved_listings: saved,
+    // Note: old export files may contain saved_listings — it is ignored on import (field removed).
     saved_decks: decks,
     user_progress: progress,
     practice_sessions: sessions,
@@ -145,17 +143,7 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     }).onConflictDoNothing()
   }
 
-  // Saved listings — replace entirely
-  await db.delete(savedListings)
-  const savedRows = Array.isArray(data.saved_listings) ? (data.saved_listings as ExportRow[]) : []
-  for (const row of savedRows) {
-    const id = String(row.id ?? '')
-    if (!id) continue
-    await db.insert(savedListings).values({
-      id,
-      savedAt: Number(row.savedAt ?? row.saved_at ?? Date.now()),
-    }).onConflictDoNothing()
-  }
+  // Note: old export files may contain saved_listings — it is ignored here (field removed).
 
   // Saved decks — replace entirely
   await db.delete(savedDecks)

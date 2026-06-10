@@ -100,11 +100,11 @@ const BASE_SCHOLARSHIP_LISTING = {
   scholarshipMeta: '{}',
 }
 
-// The screen runs 4 parallel queries via db.select():
+// The screen runs 3 parallel queries via db.select():
 //   [0] listingRows  → .from(listings).where(eq(slug)).limit(1)  → [listing]
-//   [1] savedRows    → .from(savedListings)                      → []
-//   [2] watchRows    → .from(resultWatches).where(...).limit(1)  → []
-//   [3] settings     → handled by getSettings mock (not db.select)
+//   [1] watchRows    → .from(resultWatches).where(...).limit(1)  → []
+//   [2] settings     → handled by getSettings mock (not db.select)
+// savedListings was removed from this screen (bookmark feature deleted).
 // We track call count to return listing only on the first call.
 function makeDb(listing: any = null) {
   let callCount = 0
@@ -119,8 +119,6 @@ function makeDb(listing: any = null) {
               callIndex === 0 && listing ? [listing] : []
             ),
           })),
-          // savedListings query has no .where(), just .from().then()
-          then: jest.fn((cb: any) => Promise.resolve().then(() => cb([]))),
         })),
       }
     }),

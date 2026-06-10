@@ -16,7 +16,7 @@ const SYNC_REV = 2
 import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
-  focusListings, savedListings, savedDecks, userProgress, practiceSessions,
+  focusListings, savedDecks, userProgress, practiceSessions,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -65,9 +65,8 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const [focus, saved, decks, progress, sessions, settings, noteRows, labelRows, assignRows] = await Promise.all([
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows] = await Promise.all([
     db.select().from(focusListings),
-    db.select().from(savedListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
     db.select().from(practiceSessions),
@@ -80,7 +79,6 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   await supabase.from('user_app_data').upsert({
     user_id: user.id,
     focus_listings: focus,
-    saved_listings: saved,
     saved_decks: decks,
     user_progress: progress,
     practice_sessions: sessions,
@@ -153,16 +151,10 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
   // 2) BEST-EFFORT — saved items, sessions, progress, notes. A failure here (e.g. an
   //    older backup's row shape) is logged but never blocks sign-in or the critical
   //    settings/focus restore above.
+  //    Note: old remote payloads may contain a saved_listings field — it is simply
+  //    ignored here (field removed from app). No crash on presence.
   try {
     await db.transaction((tx) => {
-      const remoteS: typeof savedListings.$inferInsert[] = data.saved_listings ?? []
-      for (const row of remoteS) {
-        tx.insert(savedListings)
-          .values(row)
-          .onConflictDoUpdate({ target: savedListings.id, set: { savedAt: row.savedAt } })
-          .run()
-      }
-
       const remoteD: typeof savedDecks.$inferInsert[] = data.saved_decks ?? []
       for (const row of remoteD) {
         tx.insert(savedDecks)

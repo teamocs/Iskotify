@@ -8,7 +8,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { listings as listingsTable, savedListings as savedListingsTable, resultWatches } from '../../db/schema'
+import { listings as listingsTable, resultWatches } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -118,7 +118,6 @@ export default function ListingDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
   const [listing, setListing] = useState<FullListing | null>(null)
-  const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [acquiredCount, setAcquiredCount] = useState(0)
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
@@ -135,9 +134,6 @@ export default function ListingDetailScreen() {
     backBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    saveBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-    saveBtnIcon: { fontSize: 18, opacity: 0.35 },
-    saveBtnIconSaved: { opacity: 1 },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
     hero: { marginTop: spacing.md, borderWidth: 1 },
     heroExam: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
@@ -259,15 +255,13 @@ export default function ListingDetailScreen() {
 
   useEffect(() => {
     async function load() {
-      const [listingRows, savedRows, watchRows, settings] = await Promise.all([
+      const [listingRows, watchRows, settings] = await Promise.all([
         db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({ id: savedListingsTable.id }).from(savedListingsTable),
         db.select({ slug: resultWatches.slug }).from(resultWatches).where(eq(resultWatches.slug, slug)).limit(1),
         getSettings(db),
       ])
       const l = listingRows[0] ?? null
       setListing(l as FullListing | null)
-      if (l) setSaved(savedRows.some(s => s.id === l.id))
       setWatchingResults(watchRows.length > 0)
 
       if (l && l.type === 'scholarship') {
@@ -307,17 +301,6 @@ export default function ListingDetailScreen() {
     }
     void load()
   }, [db, slug])
-
-  async function toggleSave() {
-    if (!listing) return
-    if (saved) {
-      await db.delete(savedListingsTable).where(eq(savedListingsTable.id, listing.id))
-      setSaved(false)
-    } else {
-      await db.insert(savedListingsTable).values({ id: listing.id, savedAt: Date.now() }).onConflictDoNothing()
-      setSaved(true)
-    }
-  }
 
   async function toggleResultWatch() {
     if (!listing) return
@@ -419,14 +402,6 @@ export default function ListingDetailScreen() {
           <Text style={s.backArrow}>‹</Text>
         </Pressable>
         <Text style={s.topBarTitle} numberOfLines={1}>{listing.title}</Text>
-        <Pressable
-          onPress={toggleSave}
-          style={({ pressed }) => [s.saveBtn, pressed && { opacity: 0.7 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-        >
-          <Text style={[s.saveBtnIcon, saved && s.saveBtnIconSaved]}>🔖</Text>
-        </Pressable>
       </View>
 
       <ScreenScroll tabBarInset={false}>

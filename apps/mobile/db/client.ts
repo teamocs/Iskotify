@@ -59,12 +59,10 @@ CREATE TABLE IF NOT EXISTS saved_decks (
   topic_ids TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS saved_listings (
-  id TEXT PRIMARY KEY NOT NULL,
-  saved_at INTEGER NOT NULL
-);
 `
 
+// Note: existing devices keep a harmless orphaned saved_listings table — no DROP migration added.
+// The saved_listings feature was removed; fresh installs no longer create the table via CREATE_SQL.
 export const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN full_name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE user_settings ADD COLUMN school TEXT NOT NULL DEFAULT ''`,
