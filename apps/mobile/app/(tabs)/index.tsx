@@ -12,8 +12,7 @@ import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
 import { InfoBanner } from '../../components/ui/InfoBanner'
 import { spacing, radius } from '../../theme/tokens'
-import { useHomeStats, type FocusedListing, type NoteReminder } from '../../hooks/useHomeStats'
-import { useAnalytics } from '../../hooks/useAnalytics'
+import { useHomeStats } from '../../hooks/useHomeStats'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
 import { useModelDownload } from '../../hooks/useModelDownload'
@@ -153,7 +152,7 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { daysLeft, streakDays, weakTopics, firstTopicId, fullName, importantDayIndices, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
+  const { streakDays, weakTopics, firstTopicId, fullName, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
   const db = useDb()
 
   // ── Admissions feed ─────────────────────────────────────────────────────────
@@ -197,18 +196,6 @@ export default function HomeScreen() {
     setRefreshing(true)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
-
-  // Merge admissions eventDates into importantDays for calendar in Updates
-  const importantDays = useMemo(() => {
-    const s = new Set(importantDayIndices)
-    for (const item of futureAdmissionEvents) {
-      if (item.eventDate) {
-        const ms = new Date(item.eventDate + 'T00:00:00Z').getTime()
-        if (ms > 0) s.add(Math.floor(ms / 86_400_000))
-      }
-    }
-    return s
-  }, [importantDayIndices, futureAdmissionEvents])
 
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
