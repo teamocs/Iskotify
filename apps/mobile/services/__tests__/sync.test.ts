@@ -184,7 +184,8 @@ function makeTestDb(): DrizzleClient {
       score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
-      school_region TEXT NOT NULL DEFAULT ''
+      school_region TEXT NOT NULL DEFAULT '',
+      sync_rev INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -572,7 +573,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
-      school_region TEXT NOT NULL DEFAULT ''
+      school_region TEXT NOT NULL DEFAULT '',
+      sync_rev INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -911,7 +913,7 @@ function makeSyncTestDb(raw: InstanceType<typeof Database>, slug = 'upcat'): Dri
   const settingsChain = {
     from: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockResolvedValue([{ id: 1, selectedListingSlug: slug, lastSyncedAt: 0 }]),
+    limit: jest.fn().mockResolvedValue([{ id: 1, selectedListingSlug: slug, lastSyncedAt: 0, syncRev: 1 }]),
   }
   const focusChain = {
     from: jest.fn().mockReturnThis(),

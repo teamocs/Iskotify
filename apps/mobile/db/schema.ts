@@ -101,6 +101,9 @@ export const userSettings = sqliteTable('user_settings', {
   targetCourses: text('target_courses').notNull().default('[]'),
   // Canonical region of the user's entered school, used to order target exams.
   schoolRegion: text('school_region').notNull().default(''),
+  // Monotonic schema version for the sync cursor. When SYNC_REV in sync.ts is
+  // bumped, devices with a lower stored value do a full re-pull on next launch.
+  syncRev: integer('sync_rev').notNull().default(0),
 })
 
 export const userProgress = sqliteTable('user_progress', {

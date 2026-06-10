@@ -536,6 +536,8 @@ export const MIGRATIONS = [
     remote_updated_at INTEGER
   )`,
   `CREATE INDEX IF NOT EXISTS exam_course_notes_slug_idx ON exam_course_notes (blueprint_slug)`,
+  // ── Sync heal: force a full re-pull on devices that hit the pre-pagination 1000-row cap ──
+  `ALTER TABLE user_settings ADD COLUMN sync_rev INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

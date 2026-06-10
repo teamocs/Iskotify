@@ -1,4 +1,13 @@
 import { eq, asc } from 'drizzle-orm'
+
+// ── Sync heal ──────────────────────────────────────────────────────────────────
+// Bump this when a bug causes devices to miss rows they should have synced.
+// Devices with a stored syncRev < SYNC_REV will do a full re-pull on next
+// launch (since = epoch), then write syncRev = SYNC_REV into the settings row.
+// Reason for rev 1: pre-pagination builds capped Supabase at 1000 rows so up
+// to ~253 flashcards never reached devices. The paginated fetch now pulls all
+// 1253+. Forcing a full re-pull recovers those missed cards.
+const SYNC_REV = 1
 import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
@@ -204,7 +213,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     if (slugs.length === 0 && settings.selectedListingSlug) slugs = [settings.selectedListingSlug]
     if (slugs.length === 0) return
 
-    const since = settings.lastSyncedAt === 0
+    const needsHeal = (settings.syncRev ?? 0) < SYNC_REV
+    const since = needsHeal || settings.lastSyncedAt === 0
       ? '1970-01-01T00:00:00.000Z'
       : new Date(settings.lastSyncedAt).toISOString()
 
@@ -652,8 +662,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
       const syncedAt = Date.now()
       tx.insert(userSettings)
-        .values({ id: 1, selectedListingSlug: slugs[0]!, lastSyncedAt: syncedAt })
-        .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]! } })
+        .values({ id: 1, selectedListingSlug: slugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
+        .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]!, syncRev: SYNC_REV } })
         .run()
     })
 

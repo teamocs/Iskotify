@@ -57,7 +57,8 @@ function makeDb(): DrizzleClient {
       score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
-      school_region TEXT NOT NULL DEFAULT ''
+      school_region TEXT NOT NULL DEFAULT '',
+      sync_rev INTEGER NOT NULL DEFAULT 0
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -259,7 +260,8 @@ describe('buildUpcatFactsBlock', () => {
         score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
-      school_region TEXT NOT NULL DEFAULT ''
+      school_region TEXT NOT NULL DEFAULT '',
+      sync_rev INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS upcat_facts (
         id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,
@@ -343,7 +345,8 @@ describe('buildCareerFactsBlock', () => {
         score_disclaimer_ack INTEGER NOT NULL DEFAULT 0,
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
-      school_region TEXT NOT NULL DEFAULT ''
+      school_region TEXT NOT NULL DEFAULT '',
+      sync_rev INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS career_facts (
         id TEXT PRIMARY KEY NOT NULL,
