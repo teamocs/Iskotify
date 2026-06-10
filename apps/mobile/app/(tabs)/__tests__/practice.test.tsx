@@ -93,7 +93,14 @@ const emptyPracticeData = {
 }
 
 describe('PracticeScreen', () => {
+  // Drain any microtask-queued state updates (e.g. cachedQuery resolving) so React
+  // doesn't warn "not wrapped in act" between tests.
+  afterEach(async () => {
+    await act(async () => {})
+  })
+
   beforeEach(() => {
+    mockListPublishedBlueprints.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockUseHomeStats.mockReturnValue({ listing: null })
     mockListPublishedBlueprints.mockResolvedValue([])

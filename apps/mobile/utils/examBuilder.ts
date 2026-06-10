@@ -108,6 +108,8 @@ export function estimatePercentileBand(pct: number): PercentileBand {
 export function orderBlueprintsForUser<T extends { slug: string }>(blueprints: T[], focusSlugs: string[]): T[] {
   const focusSet = new Set(focusSlugs)
   const focusIndex = new Map(focusSlugs.map((slug, i) => [slug, i]))
+  // ?? 0 is belt-and-suspenders: both slugs are already confirmed in focusSet above,
+  // so focusIndex.get() will always return a number — the fallback is unreachable.
   const focused = blueprints.filter(b => focusSet.has(b.slug)).sort((a, b) => (focusIndex.get(a.slug) ?? 0) - (focusIndex.get(b.slug) ?? 0))
   const rest = blueprints.filter(b => !focusSet.has(b.slug))
   return [...focused, ...rest]

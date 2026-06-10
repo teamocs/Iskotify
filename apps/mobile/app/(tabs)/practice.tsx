@@ -13,7 +13,7 @@ import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePr
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { useDb } from '../../hooks/useDb'
 import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
-import { cachedQuery } from '../../services/queryCache'
+import { cachedQuery, subscribe } from '../../services/queryCache'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
@@ -60,7 +60,7 @@ function lastPracticedLabel(ts: number | null): string {
   return `${days}d ago`
 }
 
-// ── Recommended card (horizontal scroll) ─────────────────────────────────────
+// ── Recommended card (2-col grid) ────────────────────────────────────────────
 
 type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; grid: object; cardWrap: object }
 function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
@@ -430,6 +430,11 @@ function makeStyles(
       badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
       name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.xs, lineHeight: 16 },
       sub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      // Mock Exam card base (pressed opacity stays in the function-form style array)
+      mockCard: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
+      mockCardTitle: { fontSize: typo.md, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: t.textPrimary, marginBottom: spacing.xs },
+      mockCardName: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs },
+      mockCardMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     m: StyleSheet.create({
       overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
@@ -498,14 +503,19 @@ export default function PracticeScreen() {
   const { focusListings: focusListingsList } = useFocusListings()
   const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
 
-  // Published blueprints — fetched once, cached 30s, drives Focus mock buttons + Mock Exams section
+  // Published blueprints — fetched on mount and re-pulled whenever the cache
+  // key is invalidated (e.g. after a sync that fires invalidate('practice:')).
   const [blueprints, setBlueprints] = useState<PublishedBlueprint[]>([])
   useEffect(() => {
     let cancelled = false
-    void cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db)).then(result => {
-      if (!cancelled) setBlueprints(result)
-    })
-    return () => { cancelled = true }
+    function pull() {
+      return cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db)).then(result => {
+        if (!cancelled) setBlueprints(result)
+      })
+    }
+    void pull()
+    const unsub = subscribe('practice:blueprints:', () => { void pull() })
+    return () => { cancelled = true; unsub() }
   }, [db])
 
   const blueprintSlugSet = useMemo(() => new Set(blueprints.map(b => b.slug)), [blueprints])
@@ -691,9 +701,9 @@ export default function PracticeScreen() {
         {focusListingsList.length > 0 ? (
           <View>
             <SectionHeader title="My Focus" />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            <View style={rc.grid}>
               {focusListingsList.map(row => (
-                <View key={row.slug} style={{ width: '48%' }}>
+                <View key={row.slug} style={rc.cardWrap}>
                   <FocusCard
                     row={row}
                     isActive={row.slug === effectiveFocusSlug}
@@ -717,31 +727,21 @@ export default function PracticeScreen() {
               actionLabel="See all"
               onAction={() => router.push('/practice/exam')}
             />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            <View style={rc.grid}>
               {orderedBlueprints.slice(0, 4).map(bp => (
-                <View key={bp.slug} style={{ width: '48%' }}>
+                <View key={bp.slug} style={rc.cardWrap}>
                   <Pressable
-                    style={({ pressed }) => [{
-                      flex: 1,
-                      backgroundColor: t.surface,
-                      borderWidth: 1,
-                      borderColor: t.border,
-                      borderRadius: radius.lg,
-                      borderCurve: 'continuous',
-                      boxShadow: t.shadowSm,
-                      padding: spacing.md,
-                      opacity: pressed ? 0.8 : 1,
-                    }]}
+                    style={({ pressed }) => [rc.mockCard, pressed && { opacity: 0.8 }]}
                     onPress={() => router.push(`/practice/exam/${bp.slug}`)}
                     accessibilityRole="button"
                   >
-                    <Text style={{ fontSize: typo.md, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: t.textPrimary, marginBottom: spacing.xs }}>
+                    <Text style={rc.mockCardTitle}>
                       {bp.acronym}
                     </Text>
-                    <Text numberOfLines={1} style={{ fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs }}>
+                    <Text numberOfLines={1} style={rc.mockCardName}>
                       {bp.name}
                     </Text>
-                    <Text maxFontSizeMultiplier={1.4} style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>
+                    <Text maxFontSizeMultiplier={1.4} style={rc.mockCardMeta}>
                       {bp.totalItems} items · {Math.round(bp.totalTimeMinutes / 60 * 10) / 10}h
                     </Text>
                   </Pressable>
