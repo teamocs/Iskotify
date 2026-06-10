@@ -491,6 +491,51 @@ export const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN school_region TEXT NOT NULL DEFAULT ''`,
   // Course-field eligibility for listings (cluster names or ["all"]) — connects courses to exams/scholarships.
   `ALTER TABLE listings ADD COLUMN target_courses TEXT NOT NULL DEFAULT '[]'`,
+  // ── Exam Blueprints (data-driven exam mechanics) ───────────────────────────
+  `ALTER TABLE upcat_questions ADD COLUMN skill_category TEXT`,
+  `CREATE TABLE IF NOT EXISTS exam_skill_categories (
+    name TEXT PRIMARY KEY NOT NULL,
+    requires_spatial_logic INTEGER NOT NULL DEFAULT 0,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS exam_blueprints (
+    slug TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    acronym TEXT NOT NULL DEFAULT '',
+    total_items INTEGER NOT NULL DEFAULT 0,
+    total_time_minutes INTEGER NOT NULL DEFAULT 0,
+    has_guessing_penalty INTEGER NOT NULL DEFAULT 0,
+    guessing_penalty REAL NOT NULL DEFAULT 0.25,
+    section_blocked INTEGER NOT NULL DEFAULT 0,
+    scoring_note TEXT NOT NULL DEFAULT '',
+    mechanics_note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'draft',
+    display_order INTEGER NOT NULL DEFAULT 0,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE TABLE IF NOT EXISTS exam_blueprint_sections (
+    id TEXT PRIMARY KEY NOT NULL,
+    blueprint_slug TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    skill_category TEXT NOT NULL DEFAULT '',
+    item_count INTEGER NOT NULL DEFAULT 0,
+    time_minutes INTEGER,
+    requires_spatial_logic INTEGER NOT NULL DEFAULT 0,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS exam_blueprint_sections_slug_idx ON exam_blueprint_sections (blueprint_slug)`,
+  `CREATE TABLE IF NOT EXISTS exam_course_notes (
+    id TEXT PRIMARY KEY NOT NULL,
+    blueprint_slug TEXT NOT NULL,
+    course_cluster TEXT NOT NULL DEFAULT 'all',
+    note TEXT NOT NULL DEFAULT '',
+    min_percentile INTEGER,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    remote_updated_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS exam_course_notes_slug_idx ON exam_course_notes (blueprint_slug)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
