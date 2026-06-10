@@ -1,6 +1,5 @@
 // Learn more https://docs.expo.dev/guides/monorepos
 const { getDefaultConfig } = require("expo/metro-config");
-const { withNativeWind } = require("nativewind/metro");
 const path = require("path");
 
 const projectRoot = __dirname;
@@ -25,6 +24,4 @@ config.resolver.sourceExts = [...(config.resolver.sourceExts ?? []), 'svg'];
 // 4. Keep wasm as a binary asset
 config.resolver.assetExts = [...config.resolver.assetExts, 'wasm'];
 
-module.exports = withNativeWind(config, {
-  input: path.resolve(projectRoot, "global.css")
-});
+module.exports = config;

@@ -29,7 +29,6 @@ import { notes as notesTable, userSettings, focusListings as focusListingsTable 
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
-import '../global.css'
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
