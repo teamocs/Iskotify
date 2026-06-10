@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { useRecordSession } from '../../../hooks/useRecordSession'
-import { getExamBlueprint, getQuestionsByCategory, getAllPassages, type ExamBlueprint } from '../../../services/examBlueprints'
-import { buildBlueprintExam, scoreBlueprintExam, type BuiltExam } from '../../../utils/examBuilder'
+import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
+import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, type BuiltExam } from '../../../utils/examBuilder'
 import type { ExamQuestion } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
@@ -50,6 +50,7 @@ export default function BlueprintExam() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [blueprint, setBlueprint] = useState<ExamBlueprint | null>(null)
   const [built, setBuilt] = useState<BuiltExam | null>(null)
+  const [courseClusters, setCourseClusters] = useState<string[]>([])
   const [questions, setQuestions] = useState<FlatQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -79,10 +80,10 @@ export default function BlueprintExam() {
         const bp = await getExamBlueprint(db, slug)
         if (!bp) { setQuestions([]); setBuilt(null); setPhase('empty'); return }
         const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
-        const [pools, passages] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db)])
+        const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
         const b = buildBlueprintExam(bp, pools, passages)
         const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
-        setBlueprint(bp); setBuilt(b); setQuestions(flat)
+        setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
         setPhase(flat.length ? 'prestart' : 'empty')
       } catch {
         // Unexpected failure: show the empty/back screen rather than hang on loading.
@@ -92,6 +93,11 @@ export default function BlueprintExam() {
   }, [db, slug])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
+
+  const visibleNotes = useMemo(
+    () => blueprint ? filterCourseNotesByClusters(blueprint.courseNotes, courseClusters) : [],
+    [blueprint, courseClusters],
+  )
 
   // --- Start the exam: arm the total timer (and the first section timer if blocked). ---
   function startExam() {
@@ -238,11 +244,15 @@ export default function BlueprintExam() {
             )
           })}
 
-          {blueprint.courseNotes.length ? (
+          {visibleNotes.length ? (
             <>
-              <Text style={s.sectionLbl}>Course cut-offs</Text>
-              {blueprint.courseNotes.map((cn, i) => (
-                <View key={i} style={s.courseNote}>
+              <Text style={s.sectionLbl}>
+                {courseClusters.length > 0 && visibleNotes.length < blueprint.courseNotes.length
+                  ? 'Cut-offs for your courses'
+                  : 'Course cut-offs'}
+              </Text>
+              {visibleNotes.map((cn, i) => (
+                <View key={`${cn.courseCluster}-${i}`} style={s.courseNote}>
                   <Text style={s.courseCluster}>{cn.courseCluster}</Text>
                   <Text style={s.courseNoteTxt}>{cn.note}</Text>
                 </View>
@@ -269,6 +279,7 @@ export default function BlueprintExam() {
     const total = questions.length
     const score = scoreBlueprintExam(total, correct, wrong, blueprint.hasGuessingPenalty, blueprint.guessingPenalty)
     const pct = total ? Math.round((correct / total) * 100) : 0
+    const pb = estimatePercentileBand(pct)
 
     // Per-section raw breakdown.
     const bySection = new Map<string, { correct: number; total: number }>()
@@ -278,6 +289,10 @@ export default function BlueprintExam() {
       if (answers[i] === fq.q.correctIndex) cur.correct++
       bySection.set(fq.sectionName, cur)
     })
+
+    // Cut-off notes that have a minPercentile (for verdict) or just a note.
+    const notesWithCutoff = visibleNotes.filter(n => n.minPercentile != null)
+    const notesWithoutCutoff = visibleNotes.filter(n => n.minPercentile == null)
 
     return (
       <SafeAreaView style={s.root}>
@@ -291,6 +306,13 @@ export default function BlueprintExam() {
             ) : null}
           </View>
 
+          <View style={s.bandCard}>
+            <Text style={s.bandPct}>est. ~{pb.percentile}th</Text>
+            <Text style={s.bandLabel}>{pb.band}</Text>
+            <Text style={s.bandBlurb}>{pb.blurb}</Text>
+            <Text style={s.bandDisclaimer}>Estimated percentile (not a normed score)</Text>
+          </View>
+
           <Text style={s.sectionLbl}>Per-section</Text>
           {Array.from(bySection.entries()).map(([name, b]) => (
             <View key={name} style={s.subtestRow}>
@@ -300,6 +322,34 @@ export default function BlueprintExam() {
               </Text>
             </View>
           ))}
+
+          {visibleNotes.length > 0 ? (
+            <>
+              <Text style={s.sectionLbl}>Course cut-offs</Text>
+              {notesWithCutoff.map((cn, i) => {
+                const onTrack = pb.percentile >= (cn.minPercentile ?? 0)
+                return (
+                  <View key={`cutoff-${cn.courseCluster}-${i}`} style={s.courseNote}>
+                    <View style={s.cutoffRow}>
+                      <Text style={s.courseCluster}>{cn.courseCluster}</Text>
+                      <View style={[s.verdictPill, onTrack ? s.verdictOn : s.verdictOff]}>
+                        <Text style={[s.verdictTxt, onTrack ? s.verdictTxtOn : s.verdictTxtOff]}>
+                          {onTrack ? '✓ On track (est.)' : `Below cut-off (need ${cn.minPercentile}th)`}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={s.courseNoteTxt}>{cn.note}</Text>
+                  </View>
+                )
+              })}
+              {notesWithoutCutoff.map((cn, i) => (
+                <View key={`note-${cn.courseCluster}-${i}`} style={s.courseNote}>
+                  <Text style={s.courseCluster}>{cn.courseCluster}</Text>
+                  <Text style={s.courseNoteTxt}>{cn.note}</Text>
+                </View>
+              ))}
+            </>
+          ) : null}
 
           <Text style={s.sectionLbl}>Review</Text>
           {questions.map((fq, i) => {
@@ -504,6 +554,21 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     footDisabled: { opacity: 0.4 },
     footPrimaryTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    bandCard: {
+      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
+      padding: 18, marginBottom: spacing.md, alignItems: 'center',
+    },
+    bandPct: { fontSize: 36, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
+    bandLabel: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginTop: 2 },
+    bandBlurb: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 4, textAlign: 'center', lineHeight: 20 },
+    bandDisclaimer: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 6, fontStyle: 'italic' },
+    cutoffRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    verdictPill: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1 },
+    verdictOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.30)' },
+    verdictOff: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)' },
+    verdictTxt: { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
+    verdictTxtOn: { color: '#16a34a' },
+    verdictTxtOff: { color: '#dc2626' },
     scoreCard: { borderRadius: 24, borderCurve: 'continuous', padding: 22, marginBottom: 18, borderWidth: 1, alignItems: 'center' },
     pass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
     fail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
