@@ -392,7 +392,6 @@ function makeStyles(
       addBtnTxt: { color: '#fff', fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
       list: { gap: spacing.xl },
       empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
-      focusDebug: { paddingBottom: spacing.xs, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     rc: StyleSheet.create({
       grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -674,11 +673,6 @@ export default function PracticeScreen() {
         {/* (5) Subjects accordion */}
         <View>
           <SectionHeader title="Subjects" />
-          {focusListingsList.length > 0 ? (
-            <Text style={s.focusDebug}>
-              focus: {focusListingsList.map(l => l.slug).join(', ')}
-            </Text>
-          ) : null}
           <SubjectAccordion
             groups={subjectGroups}
             emptyText="No topics yet — they'll appear here after sync"
