@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 // RN Image is fine for tiny bundled assets; adding expo-image is a native module that would break OTA delivery.
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { Alert, StyleSheet, View, Text, Modal, Switch, Platform, Image, Pressable, RefreshControl } from 'react-native'
+import { StyleSheet, View, Text, Modal, Switch, Platform, Image, Pressable, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -15,9 +15,8 @@ import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
-import { useModelDownload } from '../../hooks/useModelDownload'
 import { useTheme } from '../../theme/ThemeContext'
-import { AskKuyaModal } from '../../components/AskKuyaModal'
+import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 import { useDb } from '../../hooks/useDb'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
 import { upcomingEvents } from '../../utils/admissionsFeed'
@@ -200,8 +199,7 @@ export default function HomeScreen() {
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
   const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
-  const { modelStatus } = useModelDownload(() => {})
-  const [chatVisible, setChatVisible] = useState(false)
+  const { open: openKuya } = useKuyaChatModal()
 
   const [upcomingExpanded, setUpcomingExpanded] = useState(false)
 
@@ -268,20 +266,6 @@ export default function HomeScreen() {
   const TOP_N = 3
   const visibleUpcomingDates = upcomingExpanded ? upcomingDates : upcomingDates.slice(0, TOP_N)
 
-  const onAskPress = () => {
-    if (modelStatus === 'ready') {
-      setChatVisible(true)
-    } else {
-      Alert.alert(
-        'Install AI Reviewer first',
-        'Tap "Get it" to download the AI Reviewer engine.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Get it', onPress: () => router.push('/(tabs)/practice') },
-        ],
-      )
-    }
-  }
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -307,7 +291,6 @@ export default function HomeScreen() {
       borderWidth: 1,
       borderColor: t.border,
     },
-    askPillDisabled: { opacity: 0.5 },
     askPillText: {
       fontFamily: 'Lexend_500Medium',
       fontSize: typo.xs,
@@ -428,10 +411,10 @@ export default function HomeScreen() {
                   <Text style={s.kuyaName}>Kuya Baw</Text>
                   <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
                   <Pressable
-                    style={[s.askPill, modelStatus !== 'ready' && s.askPillDisabled]}
-                    onPress={onAskPress}
+                    style={s.askPill}
+                    onPress={() => { void openKuya() }}
                     accessibilityRole="button"
-                    accessibilityLabel={modelStatus === 'ready' ? 'Ask Kuya Baw' : 'Ask Kuya Baw — download AI first'}
+                    accessibilityLabel="Ask Kuya Baw"
                   >
                     <Text style={s.askPillText}>💬 Ask</Text>
                   </Pressable>
@@ -585,7 +568,6 @@ export default function HomeScreen() {
         onClose={() => setShowNotifModal(false)}
       />
 
-      <AskKuyaModal visible={chatVisible} onClose={() => setChatVisible(false)} />
     </SafeAreaView>
   )
 }

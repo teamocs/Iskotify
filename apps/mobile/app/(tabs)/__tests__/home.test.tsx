@@ -28,15 +28,10 @@ jest.mock('@lineiconshq/free-icons', () => ({
   User4Outlined: {},
 }))
 
-jest.mock('../../../hooks/useModelDownload', () => ({
-  useModelDownload: () => ({
-    modelStatus: 'absent',
-    progress: 0,
-    bytesDownloaded: 0,
-    bytesTotal: 0,
-    startDownload: jest.fn(),
-    lastError: null,
-  }),
+const mockOpenKuya = jest.fn()
+
+jest.mock('../../../providers/KuyaChatProvider', () => ({
+  useKuyaChatModal: () => ({ open: mockOpenKuya }),
 }))
 
 // Controlled admissions rows — override per-test via mockAdmissionsRows.value
@@ -57,10 +52,6 @@ jest.mock('../../../hooks/useDb', () => ({
 jest.mock('../../../services/notifications', () => ({
   scheduleNoteReminder: jest.fn().mockResolvedValue(undefined),
   cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
-}))
-
-jest.mock('../../../components/AskKuyaModal', () => ({
-  AskKuyaModal: () => null,
 }))
 
 const mockUseHomeStats = jest.fn()
@@ -137,6 +128,13 @@ describe('HomeScreen', () => {
   it('renders Kuya Baw name (full card always visible)', () => {
     render(<HomeScreen />)
     expect(screen.getByText('Kuya Baw')).toBeTruthy()
+  })
+
+  it('pressing the Ask pill calls openKuya from KuyaChatProvider', () => {
+    mockOpenKuya.mockClear()
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByLabelText('Ask Kuya Baw'))
+    expect(mockOpenKuya).toHaveBeenCalledTimes(1)
   })
 
   it('AI Coach badge is visible immediately (always-expanded card)', () => {
