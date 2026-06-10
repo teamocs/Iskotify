@@ -1,0 +1,50 @@
+# Production Data Layer — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans + superpowers:test-driven-development. Checkbox steps. Mobile JS-only → OTA (NO app.json bump). NativeWind REMOVED — StyleSheet only. Never `{count && <JSX/>}`. Schema rule: NOT NULL migration columns need `.notNull().default()` in schema.ts.
+
+**Spec:** `docs/superpowers/specs/2026-06-10-data-layer-production-design.md`. Repo: apps/mobile (Expo RN, Drizzle/expo-sqlite SYNC driver, Jest: `services` project = services/**/__tests__ real better-sqlite3; `mobile` project = everything else).
+
+**Verified facts:**
+- Every remote catalog table HAS `updated_at` EXCEPT `upcat_passages` (keep full pull, ~23 rows).
+- `services/sync.ts` current state: incremental tables use `.gt('updated_at', since)`; FULL-pull tables to convert: career_courses :244, career_countries :246, career_programs :248, ai_career_impact :250, tertiary_schools :266, university_profiles :268, course_school_rankings :270 (paginated — keep pagination, add cursor), course_school_quality :274, bar_results :276, course_taxonomy_map :278, exam_skill_categories/exam_blueprints/sections/notes :283-288, upcat_cutoffs :235. `SYNC_REV` const exists (:10, =1); cursor write in last tx (:657-694). Six chunked transactions with yields (Wave A).
+- Flashcards pull (:290-300) filters `.eq('status','published')` and does NOT select status → unpublish never propagates. upcat_questions pull (:225-230) also filters eq published. exam_blueprints pull (:285) filters eq published. Local: `examBlueprints.status` column EXISTS and local readers already filter published (services/examBlueprints.ts:22,43). Local `flashcards` table has NO status column (add one). Check upcat_questions local schema for status (it pulls status in the select list :226 — verify column exists locally; the builders' filtering needs verification).
+- `hooks/useHomeStats.ts`: full-scan queries :127-151 (allProgress/allFc/allTopics), pure fns computeStreak/computeTodayAccuracy/computeWeakTopics :46-89 (exported, tested), debounce ref exists (:113-117), useFocusEffect :210.
+- `hooks/usePracticeData.ts`: load :79-200, JSON.parse listing filter :102-121, refresh bypass exists.
+- `hooks/useAnalytics.ts`: computeTopicMastery extracted (Wave A).
+- Indexes missing: user_progress(answered_at), practice_sessions(completed_at), practice_sessions(listing_slug).
+- Sync invoked fire-and-forget from `app/_layout.tsx` ~:171.
+- `hooks/useRecordSession.ts` writes practice_sessions; user_progress written by flashcard answer path (grep `insert(userProgress)` for sites); settings writes in `services/settings.ts` updateSettings; focus add/remove in `hooks/useFocusListings.ts`.
+
+---
+
+## Task 1: `services/queryCache.ts` (TDD, pure TS)
+
+- [ ] 1.1 Failing tests `services/__tests__/queryCache.test.ts` (node project): fresh hit returns cached without calling fetcher; TTL expiry → SWR: stale value returned synchronously-ish while fetcher re-fires once and subscribers notified after; miss fetches+stores; concurrent same-key calls during fetch → fetcher runs once; `invalidate(prefix)` drops matching keys + notifies prefix subscribers; max-entries eviction (set cap small in test via exported `_configure`); `invalidate('')` clears all. Use jest fake timers.
+- [ ] 1.2 Implement: module-level `Map<string, {value, at}>` + in-flight `Map<string, Promise>` + subscriber `Map<prefix, Set<cb>>`. API: `cachedQuery<T>(key, ttlMs, fetcher)`, `invalidate(prefix)`, `subscribe(prefix, cb): () => void`, `_clearForTests()`, `_configure({maxEntries})` (default 200, evict oldest-inserted). SWR: if entry exists and age>ttl → kick background fetcher (guarded by in-flight map), return stale now; on settle, update + notify. Errors in background refresh: keep stale, console.warn.
+- [ ] 1.3 Green → commit `feat(mobile): queryCache — in-memory TTL/SWR cache with prefix invalidation`.
+
+## Task 2: Indexes + SQL aggregation in hot hooks (TDD parity)
+
+- [ ] 2.1 MIGRATIONS + CREATE_SQL (db/client.ts): `CREATE INDEX IF NOT EXISTS user_progress_answered_at_idx ON user_progress (answered_at);`, `CREATE INDEX IF NOT EXISTS practice_sessions_completed_at_idx ON practice_sessions (completed_at);`, `CREATE INDEX IF NOT EXISTS practice_sessions_listing_slug_idx ON practice_sessions (listing_slug);` (follow existing MIGRATIONS string pattern).
+- [ ] 2.2 New `services/homeAggregates.ts` (so it's testable under the real-SQLite services project): `getTodayAccuracy(db, todayStart)`, `getPracticeDayIndices(db)` (distinct day buckets), `getWeakTopicStats(db)` (JOIN flashcards GROUP BY topic_id → {topicId,total,ok}[]), `getTopicCardCounts(db, listingSlug?)` (GROUP BY topic_id, listing filter via `like(flashcards.listingSlugs, '%"'+slug+'"%')` — slugs are [a-z0-9-]). Use drizzle `sql` aggregates.
+- [ ] 2.3 TDD parity test `services/__tests__/homeAggregates.test.ts` (real SQLite harness like syncHeal.test.ts): seed user_progress (~50 rows across days/topics incl. today), flashcards (3 topics, listing_slugs arrays), topics. Oracle = the existing pure JS fns (import computeTodayAccuracy/computeStreak/computeWeakTopics from useHomeStats and replicate old full-scan inputs). Assert SQL paths produce identical todayAccuracy, identical day-index set, identical weak-topic stats, identical per-topic counts (incl. listing-filtered). Red → implement → green.
+- [ ] 2.4 Rewire `useHomeStats`: replace the 3 full-scan selects with the aggregate fns; computeStreak consumes the day-index list (adapt: `computeStreak` already takes rows with answeredAt — add a sibling `computeStreakFromDays(days:number[])` and keep old fn for back-compat/oracle); weakTopics from getWeakTopicStats + topics-name map (small topics select stays). Wrap the whole `load()` body in `cachedQuery('home:stats', 30_000, ...)`; subscribe to `'home:'` to setStats on background refresh; useFocusEffect wraps load in `InteractionManager.runAfterInteractions`.
+- [ ] 2.5 Rewire `usePracticeData`: per-topic counts via getTopicCardCounts (listing filter in SQL — delete the JSON.parse loop); wrap in `cachedQuery('practice:data:'+slug, 30_000, ...)`; subscribe `'practice:'`; refresh() = `invalidate('practice:')` then load (bypass debounce as now); InteractionManager defer.
+- [ ] 2.6 `useAnalytics`: wrap session read in `cachedQuery('analytics:'+slug, 30_000, ...)`; subscribe `'analytics:'`.
+- [ ] 2.7 Invalidation wiring: `useRecordSession` after insert → `invalidate('analytics:'); invalidate('home:'); invalidate('practice:')`. user_progress write sites (grep `insert(userProgress)`) → same. `services/settings.ts` updateSettings → `invalidate('settings:'); invalidate('home:')`. `useFocusListings` add/remove → `invalidate('home:'); invalidate('practice:')`. End of `syncOnLaunch` (after cursor tx) → `invalidate('')`.
+- [ ] 2.8 Full jest + tsc; fix hook-test fallout (mobile-project tests mock db — they may need the aggregate fns mocked; keep `useHomeStats` pure fns exported & untouched signatures where possible). Commit `perf(mobile): SQL aggregates + query cache on hot screens; new hot-path indexes`.
+
+## Task 3: Full incremental mirror + silent sync + unpublish propagation
+
+- [ ] 3.1 `services/sync.ts`: add `.gt('updated_at', since)` (+ `updated_at` in the select where missing) to: career_courses, career_countries, career_programs, ai_career_impact, tertiary_schools, university_profiles, course_school_rankings (inside its fetchAllPaginated query — keep `.order('id').range()`), course_school_quality, bar_results, course_taxonomy_map, exam_skill_categories, exam_blueprints, exam_blueprint_sections, exam_course_notes, upcat_cutoffs. upcat_passages stays full (comment: no updated_at, ~23 rows). NOTE: these tables' local writes are upserts — incremental is safe. exam_blueprints: REMOVE `.eq('status','published')` (local readers filter status — verified) so unpublish propagates.
+- [ ] 3.2 Unpublish propagation, flashcards: add `status: text('status').notNull().default('published')` to flashcards in db/schema.ts + MIGRATIONS ALTER `ADD COLUMN status text NOT NULL DEFAULT 'published'`. sync.ts flashcards pull: remove `.eq('status','published')`, add `status` to select + upsert vals. Local readers filter: `usePracticeData` card counts (Task 2 aggregate adds `WHERE status='published'`), FlashcardExam deck loading query, FTS search source (`services/flashcardRetriever.ts`? grep flashcards selects) — add status filter to each reader that feeds UI/chat. upcat_questions: check local schema has `status` (it's selected in the pull) — if stored, remove remote eq filter and ensure `getQuestionsByCategory`/`buildExam` filter published; if NOT stored locally, add column same pattern. 
+- [ ] 3.3 Bump `SYNC_REV` to 2 (cursor semantics changed + new status columns need backfill) — one silent full re-pull baselines all devices.
+- [ ] 3.4 Silent start: in `app/_layout.tsx`, wrap the fire-and-forget `syncOnLaunch` call in `InteractionManager.runAfterInteractions(() => { void syncOnLaunch(...) })`.
+- [ ] 3.5 Tests: extend `services/__tests__/sync.test.ts` — assert career_courses (representative) query chain now includes `.gt('updated_at', ...)`; assert flashcards select includes status and NO eq-status filter; assert blueprints pull has no eq filter; syncHeal test still green with SYNC_REV=2 (update expected rev). Add a small test: a local flashcard with status='draft' is excluded by the Task-2 count aggregate.
+- [ ] 3.6 Full jest + tsc + react-doctor on changed RN files. Commit `feat(mobile): full incremental catalog mirror, silent deferred sync, unpublish propagation`.
+
+## Task 4: Verify + ship (controller)
+
+- [ ] 4.1 Full `npx jest` + `npx tsc --noEmit`; react-doctor changed files; no new errors.
+- [ ] 4.2 Push + OTA: "Production data layer: query cache, SQL aggregates, incremental mirror, silent sync".
+- [ ] 4.3 On-device checklist: instant tab re-visits; no jank during launch sync; second launch pulls near-zero rows; unpublish a card in admin → gone from device after next launch; Analytics/Home unchanged values (parity).
