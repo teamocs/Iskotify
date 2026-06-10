@@ -862,13 +862,12 @@ describe('C1: buildCourseConnectionContext — db reads cached after first call'
     expect(countAfterFirst).toBeGreaterThanOrEqual(2)
 
     // Second call — chat:course-meta and chat:focus-meta are both cache hits;
-    // only the un-cached conditional focused-listing-details select may run again.
-    // The total new selects on the second call must be strictly fewer than the
-    // first call (the 2 stable table scans are saved).
+    // only the un-cached conditional focused-listing-details select runs again.
     await buildCourseConnectionContext(db, 'tell me about nursing careers')
     const countAfterSecond = fetcherCallCount
 
-    // At least 2 fewer selects on the second call (the cached ones).
-    expect(countAfterSecond - countAfterFirst).toBeLessThan(countAfterFirst)
+    // Exactly 1 select on the second call (the conditional focused-listing
+    // details) — proves BOTH cached table reads were served from cache.
+    expect(countAfterSecond - countAfterFirst).toBe(1)
   })
 })

@@ -46,8 +46,8 @@ export async function resolveDownloadUrl(): Promise<string> {
 const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
 // Extended from 60 s → 300 s: chat sessions often have a pause between messages;
 // releasing at 60 s was re-incurring the full model-load cost mid-conversation.
-// The context is still released immediately on app background / teardown (see
-// releaseContextNow calls in KuyaChatProvider / AppState listener).
+// The context is released when the app backgrounds via releaseContextIfIdle()
+// (AiCoachProvider's AppState listener).
 export const IDLE_RELEASE_MS = 300_000
 
 export function hasEnoughRam(): boolean {
@@ -91,7 +91,7 @@ async function getContext(): Promise<LlamaContext> {
   //
   // ── Speculative / MTP ─────────────────────────────────────────────────────
   // llama.rn 0.12.3 typings expose `speculative?: NativeSpeculativeConfig` with
-  // types 'none' | 'draft-mtp' | 'mtp'. The JSDoc says "MTP on recurrent/hybrid
+  // types 'none' | 'draft-mtp'. The JSDoc says "MTP on recurrent/hybrid
   // models must be enabled here so llama.cpp can allocate recurrent-state rollback
   // slots." Gemma 3 1B is a dense transformer — it has NO MTP heads. Enabling
   // draft-mtp/mtp without a matching second draft model would crash or silently
