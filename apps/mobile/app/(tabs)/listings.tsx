@@ -13,6 +13,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, layout } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { syncOnLaunch } from '../../services/sync'
+import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
 import { getSettings } from '../../services/settings'
 import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
@@ -79,6 +80,7 @@ export default function ExamsScreen() {
   const [profile, setProfile] = useState<StudentProfile>({})
   const [userRegion, setUserRegion] = useState<string>('')
   const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
+  const [blueprintSlugs, setBlueprintSlugs] = useState<Set<string>>(new Set())
   const [segment, setSegment] = useState<Segment>('exam')
   const [query, setQuery] = useState('')
 
@@ -88,7 +90,7 @@ export default function ExamsScreen() {
   const [refreshing, setRefreshing] = useState(false)
 
   const loadListings = useCallback(async () => {
-    const [rows, saved, settings, ccRows] = await Promise.all([
+    const [rows, saved, settings, ccRows, bpSlugs] = await Promise.all([
       db.select({
         id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
         type: listingsTable.type, examDate: listingsTable.examDate, region: listingsTable.region,
@@ -100,6 +102,7 @@ export default function ExamsScreen() {
       db.select({ id: savedListingsTable.id }).from(savedListingsTable),
       getSettings(db),
       db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
+      listPublishedBlueprintSlugs(db),
     ])
     // The local target_courses column stores a JSON array of cluster names (or ["all"]).
     setAll(rows.map(r => ({ ...r, targetCourses: parseStrArray(r.targetCourses as unknown as string) })) as ListingRow[])
@@ -118,6 +121,7 @@ export default function ExamsScreen() {
       if (cl) uClusters.add(cl)
     }
     setUserClusters(uClusters)
+    setBlueprintSlugs(new Set(bpSlugs))
 
     setProfile({
       gradeLevel: settings.gradeLevel ?? undefined,
@@ -246,6 +250,8 @@ export default function ExamsScreen() {
     focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
     forCourseBadge: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
     forCourseTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    mockBadge: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    mockBadgeTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
     eligibleLine: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
     bookmarkBtn: { padding: spacing.sm, flexShrink: 0 },
     bookmarkIcon: { fontSize: 16, opacity: 0.35 },
@@ -264,6 +270,7 @@ export default function ExamsScreen() {
     const tc = l.targetCourses ?? []
     const openToAll = tc.length === 0 || tc.includes('all')
     const forMyCourse = !openToAll && userClusters.size > 0 && tc.some(c => userClusters.has(c))
+    const hasMock = exam && blueprintSlugs.has(l.slug)
     return (
       <Pressable
         style={({ pressed }) => [s.card, { boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
@@ -278,6 +285,7 @@ export default function ExamsScreen() {
             <Text style={s.cardTitle} numberOfLines={1}>{l.title}</Text>
             {p !== null ? <View style={s.focusBadge}><Text style={s.focusBadgeTxt}>#{p} Focus</Text></View> : null}
             {forMyCourse ? <View style={s.forCourseBadge}><Text style={s.forCourseTxt}>✦ For your course</Text></View> : null}
+            {hasMock ? <View style={s.mockBadge}><Text style={s.mockBadgeTxt}>📝 Mock</Text></View> : null}
           </View>
           <View style={s.row2}>
             {exam ? <Text style={s.dateText}>{fmtDate(l.examDate)}</Text> : null}
@@ -299,7 +307,7 @@ export default function ExamsScreen() {
       </Pressable>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, matchStatusMap, getPriority, userClusters, s, t, scholarColor])
+  }, [savedIds, matchStatusMap, getPriority, userClusters, blueprintSlugs, s, t, scholarColor])
 
   const showAiActive = !!query.trim() && aiResults !== null
   const listHeader = (
