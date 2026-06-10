@@ -3,6 +3,12 @@ import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
 import { userSettings, listings, careerCourses, focusListings } from '../db/schema'
 import { searchFlashcards, searchUpcatFacts, searchCareerFacts, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
+import { cachedQuery } from './queryCache'
+
+// TTL for stable table reads that feed context builders.
+// 5 minutes — these tables only change on sync or user focus-edits, both of
+// which call invalidate('chat:') to force a fresh read.
+const CHAT_META_TTL = 300_000
 
 /**
  * One-line student identity for chat prompts. Used as the first line of
@@ -209,17 +215,21 @@ export async function buildListingsContext(
   question: string,
 ): Promise<string | undefined> {
   try {
-    const rows = await db
-      .select({
-        slug: listings.slug,
-        title: listings.title,
-        type: listings.type,
-        examDate: listings.examDate,
-        deadline: listings.deadline,
-        grantAmount: listings.grantAmount,
-        provider: listings.provider,
-      })
-      .from(listings)
+    // Cache the full listings meta read — the OUTPUT filtering is question-dependent
+    // but the raw table scan is stable until sync or a focus-edit fires invalidate('chat:').
+    const rows = await cachedQuery('chat:listings-meta', CHAT_META_TTL, () =>
+      db
+        .select({
+          slug: listings.slug,
+          title: listings.title,
+          type: listings.type,
+          examDate: listings.examDate,
+          deadline: listings.deadline,
+          grantAmount: listings.grantAmount,
+          provider: listings.provider,
+        })
+        .from(listings)
+    )
 
     const questionTokens = new Set(tokenize(question))
 
@@ -273,16 +283,23 @@ export async function buildCourseConnectionContext(
   question: string,
 ): Promise<string | undefined> {
   try {
+    // Cache both stable reads together. careerCourses only changes on content sync;
+    // focusListings changes on add/remove (useFocusListings fires invalidate('chat:')
+    // on those mutations, so stale focus data is immediately evicted).
     const [courseRows, focusRows] = await Promise.all([
-      db.select({
-        courseId: careerCourses.courseId,
-        name: careerCourses.name,
-        cluster: careerCourses.cluster,
-        boardExam: careerCourses.boardExam,
-        boardExamName: careerCourses.boardExamName,
-        demand: careerCourses.demand,
-      }).from(careerCourses),
-      db.select({ listingSlug: focusListings.listingSlug }).from(focusListings),
+      cachedQuery('chat:course-meta', CHAT_META_TTL, () =>
+        db.select({
+          courseId: careerCourses.courseId,
+          name: careerCourses.name,
+          cluster: careerCourses.cluster,
+          boardExam: careerCourses.boardExam,
+          boardExamName: careerCourses.boardExamName,
+          demand: careerCourses.demand,
+        }).from(careerCourses)
+      ),
+      cachedQuery('chat:focus-meta', CHAT_META_TTL, () =>
+        db.select({ listingSlug: focusListings.listingSlug }).from(focusListings)
+      ),
     ])
 
     const questionTokens = new Set(tokenize(question))

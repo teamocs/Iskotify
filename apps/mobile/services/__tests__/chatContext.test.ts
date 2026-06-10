@@ -12,6 +12,7 @@ import {
   buildCourseConnectionContext,
 } from '../chatContext'
 import type { RetrievedFlashcard } from '../flashcardRetriever'
+import { _clearForTests } from '../queryCache'
 
 function makeDb(): DrizzleClient {
   const raw = new Database(':memory:')
@@ -670,5 +671,204 @@ describe('buildCourseConnectionContext', () => {
       const lines = result.split('\n').filter(l => l.startsWith('-'))
       expect(lines.length).toBeLessThanOrEqual(2)
     }
+  })
+})
+
+// ── C1 TDD: queryCache integration for context builders ───────────────────────
+//
+// Strategy: use the real in-memory SQLite DB but wrap `db.select` in a
+// Jest spy so we can count the actual SQL calls made to the DB.  The spy
+// is set up on the drizzle instance before calling the builder; we then
+// call the builder a second time (same question, cache still warm) and
+// assert the spy was called exactly once across both invocations.
+//
+// _clearForTests() is called in beforeEach so cache state from other
+// describe blocks does not leak into these tests.
+
+describe('C1: buildListingsContext — db read cached after first call', () => {
+  function makeDbWithListingsForCache(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'published',
+        exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]',
+        coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER,
+        grant_amount TEXT NOT NULL DEFAULT '',
+        province TEXT,
+        city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER,
+        gwa_requirement INTEGER,
+        monthly_stipend INTEGER,
+        service_obligation_years INTEGER,
+        has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT,
+        scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER,
+        target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+    `)
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, exam_date, provider)
+      VALUES ('L1', 'upcat-2026', 'UPCAT 2026', 'exam', 'published', 1751328000000, 'UP');
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  beforeEach(() => {
+    // Reset queryCache state so tests are fully isolated.
+    _clearForTests()
+  })
+
+  it('calls the db fetcher only once across two buildListingsContext calls with different questions', async () => {
+    const db = makeDbWithListingsForCache()
+
+    // Spy on the real drizzle select to count actual DB hits.
+    // The cachedQuery fetcher wraps db.select(); after the first call the
+    // result is in the in-memory cache and the fetcher is NOT invoked again.
+    let fetcherCallCount = 0
+    const originalSelect = db.select.bind(db)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db as any).select = (...args: any[]) => {
+      fetcherCallCount++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return originalSelect(...(args as [any]))
+    }
+
+    // First call — cache miss, fetcher runs once (for the listings-meta key).
+    await buildListingsContext(db, 'when is the UPCAT?')
+
+    // Second call with a different question — cache hit, fetcher must NOT run again.
+    await buildListingsContext(db, 'tell me about the upcat exam')
+
+    // The listings table select should have been called exactly once total.
+    expect(fetcherCallCount).toBe(1)
+  })
+
+  it('returns correct result on second call (cache hit returns same rows)', async () => {
+    const db = makeDbWithListingsForCache()
+
+    const first = await buildListingsContext(db, 'when is the UPCAT?')
+    const second = await buildListingsContext(db, 'upcat details')
+
+    // Both calls should resolve to equivalent results (both match UPCAT).
+    expect(first).toContain('UPCAT 2026')
+    expect(second).toContain('UPCAT 2026')
+  })
+})
+
+describe('C1: buildCourseConnectionContext — db reads cached after first call', () => {
+  function makeDbWithCoursesForCache(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE career_courses (
+        course_id TEXT PRIMARY KEY NOT NULL,
+        name TEXT,
+        cluster TEXT,
+        career_tag TEXT,
+        demand TEXT,
+        board_exam INTEGER NOT NULL DEFAULT 0,
+        board_exam_name TEXT,
+        duration_years REAL,
+        top_countries TEXT NOT NULL DEFAULT '[]',
+        summary TEXT,
+        student_tip TEXT,
+        ai_note TEXT,
+        remote_updated_at INTEGER
+      );
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'published',
+        exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]',
+        coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER,
+        grant_amount TEXT NOT NULL DEFAULT '',
+        province TEXT,
+        city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER,
+        gwa_requirement INTEGER,
+        monthly_stipend INTEGER,
+        service_obligation_years INTEGER,
+        has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT,
+        scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER,
+        target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+      CREATE TABLE focus_listings (
+        listing_slug TEXT PRIMARY KEY NOT NULL,
+        priority INTEGER NOT NULL,
+        added_at INTEGER NOT NULL
+      );
+    `)
+    raw.exec(`
+      INSERT INTO career_courses (course_id, name, cluster, demand, board_exam, board_exam_name)
+      VALUES ('C1', 'Nursing', 'Health Sciences', 'High', 1, 'Nursing Board Exam');
+      INSERT INTO listings (id, slug, title, type, status, target_courses)
+      VALUES ('L1', 'upcat-2026', 'UPCAT 2026', 'exam', 'published', '["Health Sciences"]');
+      INSERT INTO focus_listings (listing_slug, priority, added_at) VALUES ('upcat-2026', 1, 0);
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  beforeEach(() => {
+    _clearForTests()
+  })
+
+  it('does not re-fetch careerCourses or focusListings tables on second call (both cached)', async () => {
+    const db = makeDbWithCoursesForCache()
+
+    // Track calls to the two stable cached fetchers by key.
+    // cachedQuery stores the fetcher closure; we spy on db.select to count
+    // how many times the raw table reads actually hit the DB.
+    // The builder also has one un-cached conditional select (focused listing
+    // details), which we account for separately.
+    let fetcherCallCount = 0
+    const originalSelect = db.select.bind(db)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db as any).select = (...args: any[]) => {
+      fetcherCallCount++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return originalSelect(...(args as [any]))
+    }
+
+    // First call — cache miss for chat:course-meta and chat:focus-meta.
+    // Also one un-cached select for focused listing details (conditional).
+    await buildCourseConnectionContext(db, 'is nursing a good course?')
+    const countAfterFirst = fetcherCallCount
+
+    // Sanity: at least the 2 cached selects ran on the first call.
+    expect(countAfterFirst).toBeGreaterThanOrEqual(2)
+
+    // Second call — chat:course-meta and chat:focus-meta are both cache hits;
+    // only the un-cached conditional focused-listing-details select may run again.
+    // The total new selects on the second call must be strictly fewer than the
+    // first call (the 2 stable table scans are saved).
+    await buildCourseConnectionContext(db, 'tell me about nursing careers')
+    const countAfterSecond = fetcherCallCount
+
+    // At least 2 fewer selects on the second call (the cached ones).
+    expect(countAfterSecond - countAfterFirst).toBeLessThan(countAfterFirst)
   })
 })

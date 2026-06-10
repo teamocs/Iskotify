@@ -73,6 +73,7 @@ export function useFocusListings() {
       .onConflictDoNothing()
     invalidate('home:')
     invalidate('practice:')
+    invalidate('chat:')
     await load()
     void pushUserData(db).catch(() => { /* best-effort backup */ })
   }
@@ -88,6 +89,7 @@ export function useFocusListings() {
     })
     invalidate('home:')
     invalidate('practice:')
+    invalidate('chat:')
     await load()
     void pushUserData(db).catch(() => { /* best-effort backup */ })
   }

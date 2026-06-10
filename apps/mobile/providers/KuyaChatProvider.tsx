@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
 import { AskKuyaModal } from '../components/AskKuyaModal'
 import { KuyaDownloadSheet } from '../components/KuyaDownloadSheet'
-import { modelExists, hasEnoughRam } from '../services/llm'
+import { modelExists, hasEnoughRam, warmUpLlama } from '../services/llm'
 
 interface KuyaChatValue {
   open: () => void
@@ -22,7 +22,13 @@ export function KuyaChatProvider({ children }: { children: ReactNode }) {
   const [chatVisible, setChatVisible] = useState(false)
   const [sheetVisible, setSheetVisible] = useState(false)
 
-  const openChat = useCallback(() => setChatVisible(true), [])
+  const openChat = useCallback(() => {
+    // Prewarm the model as the modal begins opening so first-send latency is
+    // just KV-cache fill, not full model load.  warmUpLlama is a no-op if the
+    // context is already initialised.
+    warmUpLlama()
+    setChatVisible(true)
+  }, [])
   const closeChat = useCallback(() => setChatVisible(false), [])
 
   const openSheet = useCallback(() => setSheetVisible(true), [])
@@ -31,6 +37,9 @@ export function KuyaChatProvider({ children }: { children: ReactNode }) {
   // Called by KuyaDownloadSheet when the native download task signals 'ready'.
   const onModelReady = useCallback(() => {
     setSheetVisible(false)
+    // Prewarm immediately after download completes — the model file is now on
+    // disk and the user is about to see the chat modal open.
+    warmUpLlama()
     setChatVisible(true)
   }, [])
 

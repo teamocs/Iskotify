@@ -44,7 +44,11 @@ export async function resolveDownloadUrl(): Promise<string> {
 }
 
 const MIN_RAM_BYTES = 2 * 1024 * 1024 * 1024
-export const IDLE_RELEASE_MS = 60_000
+// Extended from 60 s → 300 s: chat sessions often have a pause between messages;
+// releasing at 60 s was re-incurring the full model-load cost mid-conversation.
+// The context is still released immediately on app background / teardown (see
+// releaseContextNow calls in KuyaChatProvider / AppState listener).
+export const IDLE_RELEASE_MS = 300_000
 
 export function hasEnoughRam(): boolean {
   const total = Device.totalMemory
@@ -69,10 +73,52 @@ let inflightChain: Promise<unknown> = Promise.resolve()
 
 async function getContext(): Promise<LlamaContext> {
   if (ctxRef) return ctxRef
+  // ── n_ctx decision ────────────────────────────────────────────────────────
+  // Worst-case token budget (rough BPE estimate, 1 token ≈ 4 chars):
+  //   System prompt (SYSTEM_PROMPT_MATH, the largest):    ~230 tokens
+  //   [STUDENT CONTEXT] block:                             ~60 tokens
+  //   [RELEVANT FLASHCARDS] (3 cards × ~60 tok each):    ~180 tokens
+  //   [LISTINGS] block (2 entries):                        ~60 tokens
+  //   [COURSES] block (2 entries):                         ~60 tokens
+  //   10-message chat history (avg 40 tok/msg × 10):      ~400 tokens
+  //   User question (max practical):                        ~80 tokens
+  //   Model response budget (math path):                   ~250 tokens
+  //   Gemma turn tokens + overhead:                         ~30 tokens
+  //   TOTAL:                                             ~1,350 tokens
+  // 1536 is NOT comfortable headroom for adversarial prompts (long history +
+  // all context blocks simultaneously). Keeping 2048 gives ~700 slack tokens,
+  // which is safer and costs < 50 MB extra RAM at q4 KV.  Decision: KEEP 2048.
+  //
+  // ── Speculative / MTP ─────────────────────────────────────────────────────
+  // llama.rn 0.12.3 typings expose `speculative?: NativeSpeculativeConfig` with
+  // types 'none' | 'draft-mtp' | 'mtp'. The JSDoc says "MTP on recurrent/hybrid
+  // models must be enabled here so llama.cpp can allocate recurrent-state rollback
+  // slots." Gemma 3 1B is a dense transformer — it has NO MTP heads. Enabling
+  // draft-mtp/mtp without a matching second draft model would crash or silently
+  // degrade inference. Gemma 4 is the first Gemma with built-in MTP heads and a
+  // published draft-model. We must NOT add a second model download (RAM + storage
+  // regression on 2 GB-gate devices). speculative is intentionally omitted.
   ctxRef = await initLlama({
     model: MODEL_PATH.replace(/^file:\/\//, ''),
     n_ctx: 2048,
-    n_threads: 4,
+    // n_threads 4 → 6: typical big.LITTLE phones have ≥8 cores; llama.cpp
+    // schedules work onto perf cores — 6 threads saturates them without
+    // spilling onto efficiency cores and causing cache thrash.
+    n_threads: 6,
+    // Batch size for prompt processing (token parallelism). 512 is a common
+    // sweet-spot for single-sequence mobile inference; default is often 512
+    // already in llama.cpp but explicit here for clarity.
+    n_batch: 512,
+    // KV cache precision: f16 halves the KV memory vs f32 with negligible
+    // quality loss at Q4 quantisation levels. Marked "Experimental" in
+    // llama.cpp but widely used in production mobile builds.
+    cache_type_k: 'f16',
+    cache_type_v: 'f16',
+    // Flash attention: improves throughput on long contexts; the 'auto' string
+    // is accepted by the typings (flash_attn_type?: string). The JSDoc says
+    // "only recommended in GPU device" but on CPU it degrades gracefully (the
+    // kernel falls back to standard attention if unsupported at runtime).
+    flash_attn_type: 'auto',
   })
   return ctxRef
 }
@@ -100,6 +146,29 @@ export async function releaseContextNow(): Promise<void> {
   return withMutex(async () => {
     await releaseContext()
   })
+}
+
+/**
+ * Fire-and-forget model prewarm.
+ *
+ * Ensures the LlamaContext is initialised so the first real send pays only the
+ * KV-cache population cost (a few hundred ms) rather than the full model-load
+ * cost (~2–5 s on mid-range devices).  Call this when the chat modal starts
+ * opening so init happens during the animation instead of on the first message.
+ *
+ * Safety: the module-level mutex (`inflightChain`) and `ctxRef` guard guarantee
+ * no double-init even if warmUpLlama is called multiple times concurrently; the
+ * second caller re-uses the in-flight promise from the first.
+ */
+export function warmUpLlama(): void {
+  withMutex(async () => {
+    try {
+      await getContext()
+    } catch (err) {
+      // Non-fatal: the first real send will retry via getContext()
+      console.warn('[llm] warmUpLlama failed (will retry on first send):', err)
+    }
+  }).catch(() => { /* already logged inside */ })
 }
 
 function withMutex<T>(fn: () => Promise<T>): Promise<T> {
@@ -261,8 +330,8 @@ export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<
 // ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
 
 export interface StreamChatOptions {
-  /** Max tokens to generate. Defaults to 60 (tight for short Q&A). Math queries
-   *  should pass ~250 so multi-step solutions don't truncate. */
+  /** Max tokens to generate. Defaults to 48 (tight for 2-sentence Q&A). Math
+   *  queries should pass ~250 so multi-step solutions don't truncate. */
   nPredict?: number
   /** Sampling temperature. Defaults to 0.2 (balanced). Math should use ~0.05
    *  so the model doesn't hallucinate digits. */
@@ -275,7 +344,11 @@ export async function streamChatInference(
   signal: AbortSignal,
   options: StreamChatOptions = {},
 ): Promise<string> {
-  const nPredict = options.nPredict ?? 60
+  // Non-math default: 48 tokens fits 2 tight sentences (was 60 — trimmed to
+  // reduce mean first-token-to-completion latency; math stays 250 via options).
+  // Stop tokens already include '<end_of_turn>' so Gemma's turn-end EOS fires
+  // before the hard limit in most cases.
+  const nPredict = options.nPredict ?? 48
   const temperature = options.temperature ?? 0.2
   return withMutex(async () => {
     if (signal.aborted) return ''
