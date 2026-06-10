@@ -122,4 +122,14 @@ describe('importUpcatCore', () => {
     expect(inserted.questions.find((q: any) => q.question_id === 'M001').status).toBe('published')
     expect(inserted.questions.find((q: any) => q.question_id === 'M002').status).toBe('draft')
   })
+
+  it('maps skill_category from the row, defaulting from subtest when absent', async () => {
+    const { client, inserted } = makeMockClient()
+    await importUpcatCore(client as any, [
+      row({ question_id: 'M1', subtest: 'Mathematics' }),
+      row({ question_id: 'A1', subtest: 'Science', question_text: 'Q?', ...({ skill_category: 'Abstract/Non-Verbal Reasoning' } as any) }),
+    ])
+    expect(inserted.questions.find((q: any) => q.question_id === 'M1').skill_category).toBe('Mathematics')
+    expect(inserted.questions.find((q: any) => q.question_id === 'A1').skill_category).toBe('Abstract/Non-Verbal Reasoning')
+  })
 })

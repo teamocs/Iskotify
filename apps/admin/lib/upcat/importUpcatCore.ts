@@ -8,6 +8,7 @@ export interface RawUpcatRow {
   set_id: string; set_position: string; passage_text: string
   question_text: string; option_a: string; option_b: string; option_c: string; option_d: string
   correct_answer: string; explanation: string; status: string
+  skill_category?: string
 }
 
 export interface ImportUpcatResult { passages: number; questions: number; duplicatesDrafted: number }
@@ -29,6 +30,13 @@ export const VALID_SUBTESTS = [
   'Language Proficiency',
   'Reading Comprehension',
 ] as const
+
+const SUBTEST_CATEGORY: Record<string, string> = {
+  'Mathematics': 'Mathematics',
+  'Science': 'Science',
+  'Language Proficiency': 'English/Language',
+  'Reading Comprehension': 'Reading Comprehension',
+}
 
 export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[]): Promise<ImportUpcatResult> {
   // 0. Validate subtests up-front (clear, all-at-once error) so a typo can't
@@ -74,6 +82,7 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
       cognitive_level: cleanImportedText(r.cognitive_level) || null,
       difficulty: cleanImportedText(r.difficulty) || null,
       curriculum_alignment: cleanImportedText(r.curriculum_alignment) || null,
+      skill_category: cleanImportedText(r.skill_category) || SUBTEST_CATEGORY[cleanImportedText(r.subtest)] || null,
       question_text: cleanImportedText(r.question_text),
       options: [r.option_a, r.option_b, r.option_c, r.option_d].map(o => cleanImportedText(o)),
       correct_index: letterToIndex(r.correct_answer),
