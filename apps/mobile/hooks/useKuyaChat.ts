@@ -13,6 +13,9 @@ import {
   buildCourseConnectionContext,
 } from '../services/chatContext'
 import { chatMessages } from '../db/schema'
+import { getSettings } from '../services/settings'
+import { getGeminiKey } from '../services/geminiKey'
+import { generateGeminiReply } from '../services/geminiClient'
 
 export interface ChatMessage {
   id: string
@@ -42,6 +45,90 @@ function isTagalogHeavy(text: string): boolean {
   return (matches?.length ?? 0) >= 3
 }
 
+// ── Gemini prompt helpers ──────────────────────────────────────────────────────
+// buildChatPrompt returns a full Gemma-format string (with turn tokens). For
+// Gemini's REST API we need a system_instruction + user content separately.
+// We reconstruct the user content block from the same context builders but
+// pass the mode system prompt directly as systemPrompt.
+
+const SYSTEM_PROMPT_PROGRESS =
+  `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
+  `Be supportive but honest — never guarantee exam results, admission, or specific cutoff/UPG scores.\n` +
+  `When unsure or asked about official figures, tell the student to verify at upcat.up.edu.ph.\n` +
+  `You can give honest career guidance — destination countries, salary/visa/PR realities, AI-impact on careers — ` +
+  `but NEVER guarantee jobs, salaries, or PR approval. Always say to verify with DMW/POEA, embassies, and official program sites.\n` +
+  `Always respond in clear English, even if the student asks in Tagalog.\n` +
+  `Answer using the [STUDENT CONTEXT] and any [RELEVANT FLASHCARDS] below. ` +
+  `If the answer isn't in either, say "I don't have that info yet."\n` +
+  `RULES:\n- Maximum 2 sentences. Be direct. No preamble.\n- Address the student in second person (you/your).\n- End with one specific action when relevant.\n` +
+  `SCOPE: You help ONLY with (a) academics — math, science, English, study skills; ` +
+  `(b) this app's data — exams, scholarships, courses, the student's progress. ` +
+  `For ANYTHING else, reply with one friendly sentence redirecting to studying. ` +
+  `NEVER invent exam dates, deadlines, cutoffs, or listings not shown in the context blocks.`
+
+const SYSTEM_PROMPT_TOPIC =
+  `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
+  `Be supportive but honest — never guarantee exam results, admission, or specific cutoff/UPG scores.\n` +
+  `When unsure or asked about official figures, tell the student to verify at upcat.up.edu.ph.\n` +
+  `You can give honest career guidance — destination countries, salary/visa/PR realities, AI-impact on careers — ` +
+  `but NEVER guarantee jobs, salaries, or PR approval. Always say to verify with DMW/POEA, embassies, and official program sites.\n` +
+  `Always respond in clear English, even if the student asks in Tagalog.\n` +
+  `When [RELEVANT FLASHCARDS] are provided, ground your answer in them.\n` +
+  `RULES:\n- Maximum 2 sentences total. Be direct. No preamble.\n- If unsure, say "I'm not sure — check your textbook."\n- Address the student in second person (you/your).\n` +
+  `SCOPE: You help ONLY with (a) academics — math, science, English, study skills; ` +
+  `(b) this app's data — exams, scholarships, courses, the student's progress. ` +
+  `For ANYTHING else, reply with one friendly sentence redirecting to studying. ` +
+  `NEVER invent exam dates, deadlines, cutoffs, or listings not shown in the context blocks.`
+
+const SYSTEM_PROMPT_MATH =
+  `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
+  `Always respond in clear English, even if the student asks in Tagalog.\n` +
+  `ALWAYS solve the problem step-by-step. Never refuse, never say "try it yourself".\n` +
+  `Double-check arithmetic before writing each step.\n` +
+  `FORMAT:\nStep 1: <what you do> → <result>\nStep 2: <what you do> → <result>\nAnswer: <final value>\n` +
+  `Notation: x^2 for squared, sqrt(N) for square root, * for multiply, / for divide.\n` +
+  `Address the student in second person (you/your).`
+
+/**
+ * Build the user-content portion for Gemini (system prompt passed separately).
+ * Mirrors the context block assembly in buildChatPrompt but without Gemma turn tokens.
+ */
+function buildGeminiUserContent(
+  mode: 'progress' | 'topic',
+  question: string,
+  dataCtx: string | undefined,
+  retrieved: string | undefined,
+  listingsCtx: string | undefined,
+  courseCtx: string | undefined,
+  history: Array<{ role: 'user' | 'assistant'; text: string }>,
+): string {
+  const sanitize = (s: string) =>
+    s.replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '').replace(/<(start|end)_of_turn>/g, '')
+
+  const isMath = isMathQuestion(question)
+  const safeQuestion = sanitize(question)
+  const sections: string[] = ['[INSTRUCTION] Respond in clear English only.']
+
+  if (mode === 'progress' && !isMath) {
+    const ctx = dataCtx && dataCtx.length > 0 ? dataCtx : '(no stats available yet)'
+    sections.push(`[STUDENT CONTEXT]\n${ctx}`)
+  }
+  if (listingsCtx) sections.push(listingsCtx)
+  if (courseCtx) sections.push(courseCtx)
+  if (retrieved && retrieved.length > 0) sections.push(sanitize(retrieved))
+
+  // Prepend recent history as plain text
+  let historyBlock = ''
+  if (history.length > 0) {
+    historyBlock = history.map(m =>
+      `${m.role === 'user' ? 'Student' : 'Kuya Baw'}: ${sanitize(m.text)}`
+    ).join('\n') + '\n\n'
+  }
+
+  sections.push(`[QUESTION]\n${safeQuestion}`)
+  return historyBlock + sections.join('\n\n')
+}
+
 export function useKuyaChat(): UseKuyaChat {
   const db = useDb()
   const stats = useHomeStats()
@@ -63,13 +150,23 @@ export function useKuyaChat(): UseKuyaChat {
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
-  // Check model availability + load chat history on mount
+  // Check model availability + load chat history on mount.
+  // isModelReady = true when local model exists OR gemini is configured.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     isMountedRef.current = true
-    void modelExists().then(exists => {
-      if (isMountedRef.current) setIsModelReady(exists)
+
+    void Promise.all([
+      modelExists(),
+      getSettings(dbRef.current),
+      getGeminiKey(),
+    ]).then(([exists, settings, geminiKey]) => {
+      if (isMountedRef.current) {
+        const geminiReady = settings.aiProvider === 'gemini' && geminiKey !== null
+        setIsModelReady(exists || geminiReady)
+      }
     })
+
     void dbRef.current.select().from(chatMessages).orderBy(chatMessages.createdAt).then(rows => {
       if (!isMountedRef.current) return
       setMessages(rows.map(r => ({
@@ -162,17 +259,77 @@ export function useKuyaChat(): UseKuyaChat {
 
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
+        // Track whether we're in Gemini mode for the catch block's error mapping.
+        // Must be declared outside try so the catch block can read it safely.
+        let isGeminiMode = false
         try {
           // Run all context builders in parallel so first-token latency is
           // bounded by whichever is slowest, not their sum.
-          const [dataCtx, retrieved, listingsCtx, courseCtx] = await Promise.all([
+          // Also read provider settings + key in the same parallel batch.
+          const [dataCtx, retrieved, listingsCtx, courseCtx, settings, geminiKey] = await Promise.all([
             mode === 'progress'
               ? buildProgressContext(dbRef.current, stats)
               : Promise.resolve(undefined),
             buildRetrievedFlashcards(dbRef.current, trimmed, 3),
             buildListingsContext(dbRef.current, trimmed),
             buildCourseConnectionContext(dbRef.current, trimmed),
+            getSettings(dbRef.current),
+            getGeminiKey(),
           ])
+          isGeminiMode = settings.aiProvider === 'gemini' && geminiKey !== null
+
+          // ── Gemini cloud path ───────────────────────────────────────────────
+          if (settings.aiProvider === 'gemini' && geminiKey !== null) {
+            if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
+            if (!isMountedRef.current) return
+
+            const isMath = isMathQuestion(trimmed)
+            const systemPrompt = isMath
+              ? SYSTEM_PROMPT_MATH
+              : mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC
+
+            const userContent = buildGeminiUserContent(
+              mode,
+              trimmed,
+              dataCtx,
+              retrieved ?? undefined,
+              listingsCtx ?? undefined,
+              courseCtx ?? undefined,
+              historyForPrompt,
+            )
+
+            const maxOutputTokens = isMath ? 400 : 200
+
+            const reply = await generateGeminiReply(
+              geminiKey,
+              systemPrompt,
+              userContent,
+              { maxOutputTokens, temperature: isMath ? 0.05 : 0.2 },
+            )
+
+            if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
+            if (!isMountedRef.current) return
+
+            const displayText = reply.trim().length === 0
+              ? "I couldn't process that. Try rephrasing your question."
+              : isTagalogHeavy(reply)
+                ? "Let me try that again — could you re-ask your question?"
+                : reply.trim()
+
+            setMessages(prev => prev.map(m =>
+              m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m
+            ))
+            setIsStreaming(false)
+
+            // Persist to DB — fire-and-forget
+            void dbRef.current.transaction(async tx => {
+              await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
+              await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
+            }).catch(() => {})
+            return
+          }
+
+          // ── Local model path ────────────────────────────────────────────────
           const prompt = buildChatPrompt(
             mode,
             trimmed,
@@ -225,10 +382,15 @@ export function useKuyaChat(): UseKuyaChat {
         } catch (err) {
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
-          console.warn('[useKuyaChat] streamChatInference failed:', err)
+          console.warn('[useKuyaChat] inference failed:', err instanceof Error ? err.message : 'unknown error')
+          // For Gemini errors, err.message is already a student-friendly mapped message.
+          // For local inference errors, always show the generic friendly message.
+          const friendlyError = isGeminiMode && err instanceof Error
+            ? err.message
+            : "Kuya Baw can't answer right now. Try again in a moment."
           setMessages(prev => prev.map(m =>
             m.id === assistantId
-              ? { ...m, isStreaming: false, error: "Kuya Baw can't answer right now. Try again in a moment." }
+              ? { ...m, isStreaming: false, error: friendlyError }
               : m
           ))
           setIsStreaming(false)

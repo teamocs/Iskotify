@@ -2,6 +2,7 @@
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
 import { View, Text, Image, Modal, Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
 import { useModelDownload } from '../hooks/useModelDownload'
 import { MODEL_SIZE_LABEL } from '../services/llm'
@@ -137,6 +138,19 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
       fontSize: typo.sm,
       color: t.textSecondary,
     },
+    btnGemini: {
+      borderRadius: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(128,0,0,0.25)',
+      backgroundColor: t.accentSurface,
+    },
+    btnGeminiText: {
+      fontFamily: 'Lexend_600SemiBold',
+      fontSize: typo.sm,
+      color: t.accentText,
+    },
   })
 
   return (
@@ -163,7 +177,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
 
           {isUnsupported ? (
             <Text style={s.body}>
-              {`This phone doesn't have enough memory for Kuya's on-device brain (needs about 4 GB RAM). You'll be able to use a free Gemini key instead — coming in this update.`}
+              {`This phone can't run Kuya's on-device brain — use a free Gemini key instead.`}
             </Text>
           ) : (
             <Text style={s.body}>
@@ -189,7 +203,21 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
           ) : null}
 
           <View style={s.btnRow}>
-            {isUnsupported ? null : (
+            {isUnsupported ? (
+              <Pressable
+                style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
+                onPress={() => {
+                  onClose()
+                  router.push('/settings/gemini-key')
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Use your own Gemini key"
+              >
+                <Text style={s.btnPrimaryText}>
+                  Use a free Gemini key instead
+                </Text>
+              </Pressable>
+            ) : (
               <Pressable
                 style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
                 onPress={isDownloading ? undefined : startDownload}
@@ -199,6 +227,22 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
               >
                 <Text style={s.btnPrimaryText}>
                   {isDownloading ? 'Downloading…' : hasError ? 'Retry' : 'Download'}
+                </Text>
+              </Pressable>
+            )}
+
+            {isUnsupported ? null : (
+              <Pressable
+                style={({ pressed }) => [s.btnGemini, pressed && { opacity: 0.7 }]}
+                onPress={() => {
+                  onClose()
+                  router.push('/settings/gemini-key')
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Use your own Gemini key instead"
+              >
+                <Text style={s.btnGeminiText}>
+                  Use your own Gemini key instead (free)
                 </Text>
               </Pressable>
             )}

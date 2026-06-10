@@ -49,6 +49,17 @@ jest.mock('../../services/chatContext', () => ({
   buildCourseConnectionContext: jest.fn().mockResolvedValue(undefined),
 }))
 
+// Default: local provider, no gemini key → local inference path
+jest.mock('../../services/settings', () => ({
+  getSettings: jest.fn().mockResolvedValue({ aiProvider: 'local' }),
+}))
+jest.mock('../../services/geminiKey', () => ({
+  getGeminiKey: jest.fn().mockResolvedValue(null),
+}))
+jest.mock('../../services/geminiClient', () => ({
+  generateGeminiReply: jest.fn().mockResolvedValue('Gemini reply'),
+}))
+
 import { useKuyaChat } from '../useKuyaChat'
 import { streamChatInference, modelExists } from '../../services/llm'
 

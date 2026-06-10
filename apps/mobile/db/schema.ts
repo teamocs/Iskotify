@@ -100,6 +100,8 @@ export const userSettings = sqliteTable('user_settings', {
   // Monotonic schema version for the sync cursor. When SYNC_REV in sync.ts is
   // bumped, devices with a lower stored value do a full re-pull on next launch.
   syncRev: integer('sync_rev').notNull().default(0),
+  // AI chat provider preference: 'local' = on-device Gemma 4 E2B, 'gemini' = user's BYOK Gemini key.
+  aiProvider: text('ai_provider').notNull().default('local'),
 })
 
 export const userProgress = sqliteTable('user_progress', {

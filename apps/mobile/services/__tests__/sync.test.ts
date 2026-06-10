@@ -195,7 +195,8 @@ function makeTestDb(): DrizzleClient {
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
-      sync_rev INTEGER NOT NULL DEFAULT 0
+      sync_rev INTEGER NOT NULL DEFAULT 0,
+      ai_provider TEXT NOT NULL DEFAULT 'local'
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -574,7 +575,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
-      sync_rev INTEGER NOT NULL DEFAULT 0
+      sync_rev INTEGER NOT NULL DEFAULT 0,
+      ai_provider TEXT NOT NULL DEFAULT 'local'
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

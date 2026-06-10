@@ -20,6 +20,7 @@ import { spacing, radius } from '../theme/tokens'
 import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { Card } from '../components/ui/Card'
 import { SectionHeader } from '../components/ui/SectionHeader'
+import { getSettings } from '../services/settings'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
@@ -62,6 +63,7 @@ export default function SettingsScreen() {
   const { theme: t, typo, themePref, setTheme } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
+  const [aiProvider, setAiProvider] = useState<'local' | 'gemini'>('local')
 
   useEffect(() => {
     async function load() {
@@ -70,6 +72,8 @@ export default function SettingsScreen() {
       if (!row) return
       setProfileName(row.fullName || 'Student')
       setProfileEmail(row.email ?? '')
+      const s = await getSettings(db)
+      setAiProvider(s.aiProvider)
     }
     void load()
   }, [db])
@@ -170,6 +174,17 @@ export default function SettingsScreen() {
             <View style={s.divider} />
             <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
               onPress={() => router.push('/privacy')} />
+          </Card>
+
+          <SectionHeader title="AI Chat" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <SettingsRow
+              icon={SparkOutlined}
+              iconBg="rgba(74,222,128,0.12)"
+              iconColor="#4ade80"
+              label={aiProvider === 'gemini' ? 'Kuya Baw — Gemini (your key)' : 'Kuya Baw — On-device'}
+              onPress={() => router.push('/settings/gemini-key')}
+            />
           </Card>
 
           <SectionHeader title="Session" />

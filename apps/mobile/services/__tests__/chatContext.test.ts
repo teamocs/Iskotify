@@ -61,7 +61,8 @@ function makeDb(): DrizzleClient {
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
-      sync_rev INTEGER NOT NULL DEFAULT 0
+      sync_rev INTEGER NOT NULL DEFAULT 0,
+      ai_provider TEXT NOT NULL DEFAULT 'local'
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient

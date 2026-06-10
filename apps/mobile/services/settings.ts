@@ -31,6 +31,8 @@ export interface UserSettingsData {
   targetExams: string
   targetCourses: string
   schoolRegion: string
+  /** AI chat provider: 'local' = on-device Gemma 4; 'gemini' = user's BYOK Gemini key. */
+  aiProvider: 'local' | 'gemini'
 }
 
 const DEFAULTS: UserSettingsData = {
@@ -59,6 +61,7 @@ const DEFAULTS: UserSettingsData = {
   targetExams: '[]',
   targetCourses: '[]',
   schoolRegion: '',
+  aiProvider: 'local',
 }
 
 /** Read the singleton user_settings row (id = 1). Returns defaults when no row exists. */
@@ -98,6 +101,7 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     targetExams: row.targetExams ?? '[]',
     targetCourses: row.targetCourses ?? '[]',
     schoolRegion: row.schoolRegion ?? '',
+    aiProvider: (row.aiProvider === 'gemini' ? 'gemini' : 'local') as 'local' | 'gemini',
   }
 }
 
@@ -133,6 +137,7 @@ export async function updateSettings(
   if (patch.targetExams !== undefined) set.targetExams = patch.targetExams
   if (patch.targetCourses !== undefined) set.targetCourses = patch.targetCourses
   if (patch.schoolRegion !== undefined) set.schoolRegion = patch.schoolRegion
+  if (patch.aiProvider !== undefined) set.aiProvider = patch.aiProvider
 
   await db
     .insert(userSettings)

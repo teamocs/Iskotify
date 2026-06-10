@@ -35,7 +35,8 @@ function makeDb(): DrizzleClient {
       target_exams TEXT NOT NULL DEFAULT '[]',
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
-      sync_rev INTEGER NOT NULL DEFAULT 0
+      sync_rev INTEGER NOT NULL DEFAULT 0,
+      ai_provider TEXT NOT NULL DEFAULT 'local'
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -192,5 +193,26 @@ describe('updateSettings', () => {
     expect(s.hsGwaG8).toBeNull()
     expect(s.schoolType).toBeNull()
     expect(s.targetCampus).toBeNull()
+  })
+
+  it('defaults aiProvider to "local"', async () => {
+    const db = makeDb()
+    const s = await getSettings(db)
+    expect(s.aiProvider).toBe('local')
+  })
+
+  it('round-trips aiProvider field to "gemini"', async () => {
+    const db = makeDb()
+    await updateSettings(db, { aiProvider: 'gemini' })
+    const s = await getSettings(db)
+    expect(s.aiProvider).toBe('gemini')
+  })
+
+  it('can switch aiProvider back to "local"', async () => {
+    const db = makeDb()
+    await updateSettings(db, { aiProvider: 'gemini' })
+    await updateSettings(db, { aiProvider: 'local' })
+    const s = await getSettings(db)
+    expect(s.aiProvider).toBe('local')
   })
 })

@@ -548,6 +548,11 @@ export const MIGRATIONS = [
   // Devices get a full re-pull via SYNC_REV=2 so all existing rows are backfilled
   // to 'published' by the DEFAULT and then correct status values are synced down.
   `ALTER TABLE flashcards ADD COLUMN status TEXT NOT NULL DEFAULT 'published'`,
+
+  // ── Task B: Gemini BYOK — AI provider preference ───────────────────────────
+  // 'local' = on-device Gemma 4 E2B; 'gemini' = user's own API key via SecureStore.
+  // NOT NULL + DEFAULT prevents Drizzle from inserting NULL and silently throwing.
+  `ALTER TABLE user_settings ADD COLUMN ai_provider TEXT NOT NULL DEFAULT 'local'`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
