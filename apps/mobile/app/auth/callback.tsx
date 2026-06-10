@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect } from 'react'
-import { View, ActivityIndicator } from 'react-native'
+import { Platform, View, ActivityIndicator } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
 import { pullUserData, pushUserData } from '../../services/sync'
@@ -9,6 +9,7 @@ import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { eq } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
+import { webEntryTarget } from '../../utils/webEntryTarget'
 
 // Must be at module level — signals openAuthSessionAsync in landing.tsx to close
 // the browser and return the redirect URL.
@@ -26,7 +27,35 @@ export default function AuthCallback() {
     async function finish() {
       try {
         if (!code) {
-          // No code in URL — go back to landing
+          // No code in URL.
+          // On web: supabase.auth.onAuthStateChange in _layout.tsx will handle
+          // the session if detectSessionInUrl fires, but since we set it to false
+          // we must exchange manually. If no code, the session may already be set
+          // (e.g. a password-reset link that supabase exchanged via the hash).
+          // Try getSession; if none, fall back to sign-in.
+          if (Platform.OS === 'web') {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session) {
+              // Session exists (e.g. from a hash-based flow) — route normally.
+              // onAuthStateChange in _layout will also fire; routing here is a safety net.
+              try { await pullUserData(db) } catch { /* non-fatal */ }
+              const [rows, focusRows] = await Promise.all([
+                db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+                db.select().from(focusListings).limit(1),
+              ])
+              const s = rows[0]
+              const hasFocus = hasOnboardingFocus({
+                selectedListingSlug: s?.selectedListingSlug,
+                focusCount: focusRows.length,
+                targetExams: s?.targetExams,
+              })
+              router.replace(webEntryTarget(true, s?.fullName, hasFocus))
+              return
+            }
+            router.replace('/auth/sign-in')
+            return
+          }
+          // Native: go back to landing
           router.replace('/landing')
           return
         }
@@ -99,12 +128,14 @@ export default function AuthCallback() {
         router.replace('/onboarding')  // new account or incomplete onboarding
       } catch (e) {
         console.error('[auth/callback] error:', e)
-        router.replace('/landing')
+        // On web, send to sign-in rather than landing (which doesn't exist on web).
+        router.replace(Platform.OS === 'web' ? '/auth/sign-in' : '/landing')
       }
     }
 
     void finish()
-  }, [code])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, db])
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>

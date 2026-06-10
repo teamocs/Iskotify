@@ -357,6 +357,10 @@ export default function ProfileScreen() {
     }
   }
 
+  // On web, sign-out routes to /auth/sign-in (the web login screen).
+  // On native, it routes to /landing (the native welcome/Google sign-in screen).
+  const postSignOutRoute = Platform.OS === 'web' ? '/auth/sign-in' : '/landing'
+
   function handleSignOut() {
     Alert.alert(
       'Sign Out?',
@@ -372,7 +376,7 @@ export default function ProfileScreen() {
             } catch (err) {
               console.warn('[profile] signOut failed:', err)
             }
-            router.replace('/landing')
+            router.replace(postSignOutRoute)
           },
         },
       ],
@@ -403,7 +407,7 @@ export default function ProfileScreen() {
             } catch (err) {
               console.warn('[profile] reset failed:', err)
             }
-            router.replace('/landing')
+            router.replace(postSignOutRoute)
           },
         },
       ],

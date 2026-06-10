@@ -22,11 +22,14 @@ import { useDb } from '../hooks/useDb'
 import { AiCoachProvider } from '../providers/AiCoachProvider'
 import { KuyaChatProvider } from '../providers/KuyaChatProvider'
 import { syncOnLaunch } from '../services/sync'
+import { pullUserData } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
 import { notes as notesTable, userSettings, focusListings as focusListingsTable } from '../db/schema'
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
+import { webEntryTarget } from '../utils/webEntryTarget'
+import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 
 // KeyboardProvider is native-only (react-native-keyboard-controller).
@@ -125,6 +128,80 @@ function AppInit({ onReady }: { onReady: () => void }) {
   const { isDark } = useTheme()
 
   const initialize = useCallback(async () => {
+    // ── Web: auth-first entry gate ─────────────────────────────────────────
+    // On web, session is the source of truth for routing. We check it first,
+    // before the local DB, so an unauthenticated visitor always lands on the
+    // sign-in screen. Native keeps its original local-DB-first flow below.
+    if (Platform.OS === 'web') {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+
+        if (!session) {
+          // No session → sign-in screen
+          router.replace('/auth/sign-in')
+          onReady()
+          return
+        }
+
+        // Session exists — pull latest user data from Supabase (non-fatal)
+        try {
+          await pullUserData(db)
+        } catch (e) {
+          console.warn('[layout] web pullUserData (non-fatal):', e)
+        }
+
+        // Route based on local DB state (populated by pullUserData above)
+        const [rows, focusRows] = await Promise.all([
+          db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+          db.select().from(focusListingsTable).limit(1),
+        ])
+        const settings = rows[0]
+        const hasFocus = hasOnboardingFocus({
+          selectedListingSlug: settings?.selectedListingSlug,
+          focusCount: focusRows.length,
+          targetExams: settings?.targetExams,
+        })
+        const target = webEntryTarget(true, settings?.fullName, hasFocus)
+        if (target !== '/(tabs)') {
+          router.replace(target)
+        }
+        // else: returning user — Stack shows tabs automatically
+      } catch (e) {
+        console.error('[layout] web init error:', e)
+        router.replace('/auth/sign-in')
+      } finally {
+        onReady()
+      }
+
+      // Subscribe to auth state changes on web so sign-in/sign-out re-routes.
+      // This subscription is long-lived for the app's lifetime — no cleanup
+      // needed (supabase-js handles it; the app will re-mount after signOut).
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            try { await pullUserData(db) } catch { /* non-fatal */ }
+            const [rows, focusRows] = await Promise.all([
+              db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+              db.select().from(focusListingsTable).limit(1),
+            ])
+            const settings = rows[0]
+            const hasFocus = hasOnboardingFocus({
+              selectedListingSlug: settings?.selectedListingSlug,
+              focusCount: focusRows.length,
+              targetExams: settings?.targetExams,
+            })
+            const target = webEntryTarget(true, settings?.fullName, hasFocus)
+            router.replace(target)
+          } else if (event === 'SIGNED_OUT') {
+            router.replace('/auth/sign-in')
+          }
+        }
+      )
+      // Subscription cleanup when component unmounts (e.g. during HMR)
+      return () => subscription.unsubscribe()
+    }
+
+    // ── Native: original local-DB-first routing ────────────────────────────
     // Proactively pull + apply any pending OTA update so users actually receive
     // fixes on this launch, instead of only after a second manual relaunch. Bounded
     // to ~5s so a slow network can't block startup; reloadAsync restarts the app.
@@ -206,7 +283,10 @@ function AppInit({ onReady }: { onReady: () => void }) {
   }, [db, onReady])
 
   useEffect(() => {
-    void initialize()
+    // initialize() may return a cleanup fn on web (supabase subscription).
+    let cleanup: (() => void) | undefined
+    initialize().then(fn => { cleanup = fn }).catch(() => { /* errors logged inside */ })
+    return () => cleanup?.()
   }, [initialize])
 
   return (
