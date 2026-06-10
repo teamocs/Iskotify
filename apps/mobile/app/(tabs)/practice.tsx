@@ -3,7 +3,7 @@ import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
   StyleSheet, View, Text, Pressable,
-  Modal, TextInput, Alert, ScrollView, FlatList,
+  Modal, TextInput, Alert, FlatList,
   RefreshControl,
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
