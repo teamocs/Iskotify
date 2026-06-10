@@ -70,7 +70,18 @@ export default function CourseSchoolsScreen() {
   const [aiRow, setAiRow]         = useState<AiRow | null>(null)
   const [loading, setLoading]     = useState(true)
 
+  // Guard: if navigated to without a code param (e.g. router.push('/schools/course')
+  // before the picker index screen existed), redirect to the picker so the user can
+  // choose a course rather than seeing an empty rankings list.
+  // useEffect is used instead of an early return so all hooks stay unconditional.
   useEffect(() => {
+    if (!code) {
+      router.replace('/schools/course' as never)
+    }
+  }, [code])
+
+  useEffect(() => {
+    if (!code) return
     async function load() {
       const [taxRows, rankRows] = await Promise.all([
         db.select({
@@ -142,6 +153,10 @@ export default function CourseSchoolsScreen() {
     disclaimerTxt: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xl, fontStyle: 'italic' },
   }), [t, typo])
+
+  // ── No-code (redirecting) ──────────────────────────────────────────────────
+
+  if (!code) return null
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
