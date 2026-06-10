@@ -795,7 +795,7 @@ export default function HomeScreen() {
           {/* UPCAT 2027 countdown banner */}
           {upcatRow != null && upcatDaysLeft > 0 ? (
             <Pressable
-              onPress={() => router.push('/practice/upcat')}
+              onPress={() => router.push('/practice/exam/upcat')}
               accessibilityRole="button"
               accessibilityLabel={`UPCAT countdown: ${upcatDaysLeft} days left`}
               testID="upcat-countdown-banner"
@@ -925,7 +925,7 @@ export default function HomeScreen() {
                       } else if (item.entryType === 'admission') {
                         const slug = (item as any).schoolSlug
                         if (slug === 'upcat' || item.title.toUpperCase().includes('UPCAT')) {
-                          router.push('/practice/upcat')
+                          router.push('/practice/exam/upcat')
                         } else {
                           router.push('/(tabs)/updates')
                         }
