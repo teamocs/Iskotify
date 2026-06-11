@@ -21,6 +21,7 @@ import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
 import { AiCoachProvider } from '../providers/AiCoachProvider'
 import { KuyaChatProvider } from '../providers/KuyaChatProvider'
+import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
 import { runEnhancement } from '../hooks/useAiEnhancement'
@@ -306,14 +307,18 @@ function AppInit({ onReady }: { onReady: () => void }) {
     }
   }, [initialize])
 
+  const stack = (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
+    </Stack>
+  )
+
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AiCoachProvider>
         <KuyaChatProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
-          </Stack>
+          {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
         </KuyaChatProvider>
       </AiCoachProvider>
     </>
