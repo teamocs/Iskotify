@@ -72,6 +72,10 @@ describe('CoursePickerScreen', () => {
     routerMock.push.mockClear()
     routerMock.back.mockClear()
     routerMock.replace.mockClear()
+    // The screen now loads via useCourseTabOptions → cachedQuery; clear the
+    // module-level cache so each test's db mock is actually consulted.
+    const { _clearForTests } = require('../../../../services/queryCache')
+    _clearForTests()
   })
 
   it('shows screen title after data loads', async () => {

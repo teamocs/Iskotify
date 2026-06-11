@@ -201,7 +201,13 @@ export default function ListsScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
-    try { await syncOnLaunch(db); await loadListings() } finally { setRefreshing(false) }
+    try {
+      await syncOnLaunch(db)
+      await loadListings()
+      // Sync invalidated the destinations cache; drop the loaded flag so the
+      // focus effect / next tab visit re-pulls fresh destination data.
+      setDestLoaded(false)
+    } finally { setRefreshing(false) }
   }, [db, loadListings])
 
   // ── Derived data — Universities + Scholarships ────────────────────────────
