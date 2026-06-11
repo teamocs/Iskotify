@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
-import ExamsScreen from '../listings'
+import ListsScreen from '../listings'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -49,6 +49,21 @@ jest.mock('../../../hooks/useFocusListings', () => ({
   }),
 }))
 
+// Mock the shared courses hook so we can control its output in tests
+jest.mock('../../../hooks/useCourseTabOptions', () => ({
+  useCourseTabOptions: jest.fn(() => ({
+    targetOptions: [],
+    allOptions: [],
+    loading: false,
+    dbEmpty: false,
+  })),
+}))
+
+// Mock queryCache to return empty arrays for destination queries
+jest.mock('../../../services/queryCache', () => ({
+  cachedQuery: jest.fn().mockResolvedValue([[], []]),
+}))
+
 const makeDb = (rows: any[] = []) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
@@ -61,85 +76,130 @@ const makeDb = (rows: any[] = []) => ({
   insert: jest.fn(() => ({ values: jest.fn(() => ({ onConflictDoNothing: jest.fn().mockResolvedValue(undefined) })) })),
 })
 
-const SEARCH_PLACEHOLDER = "Search or ask, e.g. 'free nursing scholarships near me'"
+const SEARCH_PLACEHOLDER_UNI = "Search or ask, e.g. 'free nursing scholarships near me'"
 
-describe('ExamsScreen', () => {
+describe('ListsScreen', () => {
   beforeEach(() => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
+    jest.clearAllMocks()
+    const { useDb: useDb2 } = require('../../../hooks/useDb')
+    useDb2.mockReturnValue(makeDb())
+    const { useCourseTabOptions } = require('../../../hooks/useCourseTabOptions')
+    useCourseTabOptions.mockReturnValue({ targetOptions: [], allOptions: [], loading: false, dbEmpty: false })
+    const { cachedQuery } = require('../../../services/queryCache')
+    cachedQuery.mockResolvedValue([[], []])
   })
 
-  it('renders the Exams title and subtitle', () => {
-    render(<ExamsScreen />)
-    expect(screen.getByText('Exams')).toBeTruthy()
-    expect(screen.getByText('College entrance exams & scholarships')).toBeTruthy()
+  // ── Renames ────────────────────────────────────────────────────────────────
+
+  it('renders the Lists title and updated subtitle', () => {
+    render(<ListsScreen />)
+    expect(screen.getByText('Lists')).toBeTruthy()
+    expect(screen.getByText('Universities, scholarships, courses & career destinations')).toBeTruthy()
   })
 
-  it('renders exactly the two tabs', () => {
-    render(<ExamsScreen />)
-    expect(screen.getByText('College Entrance Exams')).toBeTruthy()
+  it('does NOT render the old "Exams" title', () => {
+    render(<ListsScreen />)
+    // The title should be "Lists" not "Exams"
+    expect(screen.queryByText('College entrance exams & scholarships')).toBeNull()
+  })
+
+  // ── 4-tab navigation ───────────────────────────────────────────────────────
+
+  it('renders exactly 4 tabs: Universities, Scholarships, Courses, Destinations', () => {
+    render(<ListsScreen />)
+    expect(screen.getByText('Universities')).toBeTruthy()
     expect(screen.getByText('Scholarships')).toBeTruthy()
+    expect(screen.getByText('Courses')).toBeTruthy()
+    expect(screen.getByText('Destinations')).toBeTruthy()
   })
 
-  it('renders the smart search input', () => {
-    render(<ExamsScreen />)
-    expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER)).toBeTruthy()
+  it('Universities tab is active by default (has accessibilityState selected)', () => {
+    render(<ListsScreen />)
+    const tabs = screen.getAllByRole('tab')
+    const uniTab = tabs.find(t => t.props.accessibilityLabel === undefined &&
+      t.props.accessibilityState?.selected === true)
+    // The first tab (Universities) should be selected
+    expect(tabs[0]?.props.accessibilityState?.selected).toBe(true)
+    expect(tabs[1]?.props.accessibilityState?.selected).toBe(false)
+    expect(tabs[2]?.props.accessibilityState?.selected).toBe(false)
+    expect(tabs[3]?.props.accessibilityState?.selected).toBe(false)
   })
 
-  it('shows the empty state when there are no exams', async () => {
-    render(<ExamsScreen />)
+  it('switching to Scholarships tab changes active state', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Scholarships'))
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[0]?.props.accessibilityState?.selected).toBe(false)
+    expect(tabs[1]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  it('switching to Courses tab changes active state', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Courses'))
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[2]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  it('switching to Destinations tab changes active state', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Destinations'))
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[3]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  it('does NOT render old "College Entrance Exams" segment label', () => {
+    render(<ListsScreen />)
+    expect(screen.queryByText('College Entrance Exams')).toBeNull()
+  })
+
+  // ── Universities tab (existing behavior) ──────────────────────────────────
+
+  it('renders the smart search input on Universities tab', () => {
+    render(<ListsScreen />)
+    expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER_UNI)).toBeTruthy()
+  })
+
+  it('shows the empty state when there are no exams (Universities tab)', async () => {
+    render(<ListsScreen />)
     await waitFor(() => {
       expect(screen.getByText('No exams yet.')).toBeTruthy()
     })
   })
 
-  it('switches to the Scholarships tab', async () => {
-    render(<ExamsScreen />)
+  it('switches to the Scholarships tab and shows no scholarships empty state', async () => {
+    render(<ListsScreen />)
     fireEvent.press(screen.getByText('Scholarships'))
     await waitFor(() => {
       expect(screen.getByText('No scholarships yet.')).toBeTruthy()
     })
   })
 
-  it('renders a listing row when data is present', async () => {
+  it('renders a listing row when data is present on Universities tab', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([
       { id: '1', slug: 'upcat', title: 'UPCAT 2025', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
     ]))
-    render(<ExamsScreen />)
+    render(<ListsScreen />)
     await waitFor(() => {
       expect(screen.getByText('UPCAT 2025')).toBeTruthy()
     })
   })
 
-  // Wave 2a badge rules: type badge removed; ≤2 badges per row
-  it('does not render a type badge on exam rows (segment tab shows type)', async () => {
+  it('does not render a type badge on exam rows (tab communicates type)', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([
       { id: '1', slug: 'upcat', title: 'UPCAT 2025', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
     ]))
-    render(<ExamsScreen />)
+    render(<ListsScreen />)
     await waitFor(() => {
       expect(screen.getByText('UPCAT 2025')).toBeTruthy()
     })
-    // The segment label "College Entrance Exams" is the tab; "Exam" type badge must NOT appear as a separate element
     expect(screen.queryByText('Exam')).toBeNull()
   })
 
-  it('shows listing row when data is present (Mock badge integration tested on-device)', async () => {
-    // The listPublishedBlueprintSlugs service is separate from the DB mock;
-    // Mock badge presence is verified on-device. Unit test confirms row renders.
-    const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb([
-      { id: '1', slug: 'upcat', title: 'UPCAT 2025', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
-    ]))
-    render(<ExamsScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('UPCAT 2025')).toBeTruthy()
-    })
-  })
-
-  it('does not show Verified badge or course chip on exam list rows', async () => {
+  it('does not show Verified badge or course chip on scholarship list rows', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([
       {
@@ -148,24 +208,129 @@ describe('ExamsScreen', () => {
         targetCourses: JSON.stringify(['STEM']),
       },
     ]))
-    render(<ExamsScreen />)
+    render(<ListsScreen />)
     fireEvent.press(screen.getByText('Scholarships'))
     await waitFor(() => {
       expect(screen.getByText('DOST-SEI Scholarship')).toBeTruthy()
     })
-    // Verified badge must NOT appear on the list row (belongs on detail screen only)
     expect(screen.queryByText('✓ Verified')).toBeNull()
-    // Course-specific chip (e.g. "For your course") must NOT appear on the list row
     expect(screen.queryByText('✦ For your course')).toBeNull()
   })
 
-  it('rows have ≤2 badge elements (mock + no focus when mock present)', async () => {
-    // This is a structural/contract test — the renderCard logic enforces:
-    // hasMock → show Mock badge, hide Focus badge (keeping total ≤2)
-    // No mock → Focus badge (if in focus) is badge #1
-    // Verified, course chips are excluded from rows entirely
-    render(<ExamsScreen />)
-    // Renders without error = contract is upheld in the component logic
+  // ── uniLink removed ────────────────────────────────────────────────────────
+
+  it('does NOT render the old uniLink row "Find top universities by course"', () => {
+    render(<ListsScreen />)
+    expect(screen.queryByText('🏫 Find top universities by course')).toBeNull()
+  })
+
+  // ── Courses tab ────────────────────────────────────────────────────────────
+
+  it('renders course rows when useCourseTabOptions provides data', async () => {
+    const { useCourseTabOptions } = require('../../../hooks/useCourseTabOptions')
+    useCourseTabOptions.mockReturnValue({
+      targetOptions: [{ courseTab: 'nursing', label: 'Nursing' }],
+      allOptions: [
+        { courseTab: 'nursing', label: 'Nursing' },
+        { courseTab: 'engineering', label: 'Engineering' },
+      ],
+      loading: false,
+      dbEmpty: false,
+    })
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Courses'))
+    await waitFor(() => {
+      expect(screen.getByText('All courses')).toBeTruthy()
+      expect(screen.getByText('Engineering')).toBeTruthy()
+    })
+  })
+
+  it('renders target courses section when user has target courses', async () => {
+    const { useCourseTabOptions } = require('../../../hooks/useCourseTabOptions')
+    useCourseTabOptions.mockReturnValue({
+      targetOptions: [{ courseTab: 'nursing', label: 'Nursing' }],
+      allOptions: [{ courseTab: 'nursing', label: 'Nursing' }],
+      loading: false,
+      dbEmpty: false,
+    })
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Courses'))
+    await waitFor(() => {
+      expect(screen.getByText('★ Your target courses')).toBeTruthy()
+    })
+  })
+
+  it('tapping a course row pushes /schools/course/[courseTab]', async () => {
+    const { router } = require('expo-router')
+    const { useCourseTabOptions } = require('../../../hooks/useCourseTabOptions')
+    useCourseTabOptions.mockReturnValue({
+      targetOptions: [],
+      allOptions: [{ courseTab: 'nursing', label: 'Nursing' }],
+      loading: false,
+      dbEmpty: false,
+    })
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Courses'))
+    await waitFor(() => {
+      expect(screen.getByText('Nursing')).toBeTruthy()
+    })
+    fireEvent.press(screen.getByText('Nursing'))
+    expect(router.push).toHaveBeenCalledWith('/schools/course/nursing')
+  })
+
+  // ── Destinations tab ───────────────────────────────────────────────────────
+
+  it('renders country rows on Destinations tab', async () => {
+    const { cachedQuery } = require('../../../services/queryCache')
+    cachedQuery.mockResolvedValue([
+      [{ code: 'australia', name: 'Australia', region: 'Oceania' }],
+      [{ courseId: 'nursing', country: 'Australia (Skilled)' }],
+    ])
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Destinations'))
+    await waitFor(() => {
+      expect(screen.getByText('Australia')).toBeTruthy()
+    })
+  })
+
+  it('tapping a destination row pushes /career/country/[code]', async () => {
+    const { router } = require('expo-router')
+    const { cachedQuery } = require('../../../services/queryCache')
+    cachedQuery.mockResolvedValue([
+      [{ code: 'australia', name: 'Australia', region: 'Oceania' }],
+      [{ courseId: 'nursing', country: 'Australia (Skilled)' }],
+    ])
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Destinations'))
+    await waitFor(() => {
+      expect(screen.getByText('Australia')).toBeTruthy()
+    })
+    fireEvent.press(screen.getByText('Australia'))
+    expect(router.push).toHaveBeenCalledWith('/career/country/australia')
+  })
+
+  it('destination subtitle shows courseCount when non-zero', async () => {
+    const { cachedQuery } = require('../../../services/queryCache')
+    cachedQuery.mockResolvedValue([
+      [{ code: 'australia', name: 'Australia', region: 'Oceania' }],
+      [
+        { courseId: 'nursing', country: 'Australia (Skilled)' },
+        { courseId: 'engineering', country: 'Australia' },
+      ],
+    ])
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Destinations'))
+    await waitFor(() => {
+      expect(screen.getByText('Australia')).toBeTruthy()
+    })
+    // Subtitle should mention courses in demand
+    expect(screen.getByText(/courses in demand/i)).toBeTruthy()
+  })
+
+  // ── Badge rules (Universities tab — ≤2 per row) ───────────────────────────
+
+  it('rows have ≤2 badge elements contract upheld', async () => {
+    render(<ListsScreen />)
     await waitFor(() => {
       expect(screen.getByText('No exams yet.')).toBeTruthy()
     })

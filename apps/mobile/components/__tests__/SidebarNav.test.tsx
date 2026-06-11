@@ -36,7 +36,7 @@ describe('SidebarNav', () => {
     const { getByText } = render(<SidebarNav />)
     expect(getByText('Home')).toBeTruthy()
     expect(getByText('Review')).toBeTruthy()
-    expect(getByText('Exams')).toBeTruthy()
+    expect(getByText('Lists')).toBeTruthy()
     expect(getByText('Updates')).toBeTruthy()
   })
 

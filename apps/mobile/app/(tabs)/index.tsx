@@ -489,8 +489,8 @@ export default function HomeScreen() {
           ) : (
             <InfoBanner
               icon={<Text style={{ fontSize: 16 }}>🎯</Text>}
-              message="Add an exam or scholarship to your focus from the Exams tab"
-              actionLabel="Exams"
+              message="Add an exam or scholarship to your focus from the Lists tab"
+              actionLabel="Lists"
               onAction={() => router.push('/(tabs)/listings')}
               tone="neutral"
             />

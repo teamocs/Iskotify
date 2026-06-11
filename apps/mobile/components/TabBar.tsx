@@ -18,7 +18,7 @@ import { useKuyaChatModal } from '../providers/KuyaChatProvider'
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
   index:     { label: 'Home',    icon: Home2Outlined },
   practice:  { label: 'Review',  icon: Bolt2Outlined },
-  listings:  { label: 'Exams',   icon: GraduationCap1Outlined },
+  listings:  { label: 'Lists',   icon: GraduationCap1Outlined },
   updates:   { label: 'Updates', icon: Bell1Outlined },
 }
 

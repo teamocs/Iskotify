@@ -34,7 +34,7 @@ export const SCOPE_BLOCK =
   `reply with exactly one friendly sentence redirecting to studying, e.g. ` +
   `'Usapang aral muna tayo — ask me about your review or your target exams! 📚'. ` +
   `NEVER invent exam dates, deadlines, cutoffs, or listings not shown in the context blocks; ` +
-  `if not in context, say you don't have that info and point to the Exams tab.`
+  `if not in context, say you don't have that info and point to the Lists tab.`
 
 /**
  * GROUNDING_RULE — instructs Kuya Baw to answer only from supplied context
@@ -45,7 +45,7 @@ export const GROUNDING_RULE =
   `GROUNDING: For questions about exams, scholarships, schools, deadlines, or the ` +
   `student's own progress: answer ONLY from the context blocks provided. ` +
   `If the information isn't there, say you don't have it and point the student to ` +
-  `the right tab (Exams, Review, or Home). ` +
+  `the right tab (Lists, Review, or Home). ` +
   `Never invent dates, fees, cutoffs, or requirements.`
 
 /**
@@ -62,7 +62,7 @@ export const ANTI_INJECTION_RULE =
  */
 export const URL_RULE =
   `URL RULE: Only mention a website if its URL appears in the context blocks. ` +
-  `If the student needs an official site that isn't shown there, tell them to open that exam's page in the Exams tab. ` +
+  `If the student needs an official site that isn't shown there, tell them to open that exam's page in the Lists tab. ` +
   `Never construct or guess URLs. ` +
   `Official figures change yearly — students should double-check on the school's official site.`
 

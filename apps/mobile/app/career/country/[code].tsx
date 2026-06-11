@@ -264,7 +264,7 @@ export default function CareerCountryScreen() {
                 <Pressable
                   style={({ pressed }) => [s.destLink, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
-                  onPress={() => router.push(`/career/${dest.courseId}` as never)}
+                  onPress={() => router.push(`/career/${dest.courseId}?country=${code}` as never)}
                 >
                   <Text style={s.destLinkTxt}>View course details →</Text>
                 </Pressable>

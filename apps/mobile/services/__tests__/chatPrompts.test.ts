@@ -458,17 +458,17 @@ describe('parseChatChunk', () => {
 describe('Prompt v2 — SCOPE_BLOCK present in all three system prompts', () => {
   it('SYSTEM_PROMPT_PROGRESS contains SCOPE_BLOCK text', () => {
     expect(SYSTEM_PROMPT_PROGRESS).toContain('Usapang aral muna tayo')
-    expect(SYSTEM_PROMPT_PROGRESS).toContain('Exams tab')
+    expect(SYSTEM_PROMPT_PROGRESS).toContain('Lists tab')
   })
 
   it('SYSTEM_PROMPT_TOPIC contains SCOPE_BLOCK text', () => {
     expect(SYSTEM_PROMPT_TOPIC).toContain('Usapang aral muna tayo')
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Lists tab')
   })
 
   it('SYSTEM_PROMPT_MATH contains SCOPE_BLOCK text', () => {
     expect(SYSTEM_PROMPT_MATH).toContain('Usapang aral muna tayo')
-    expect(SYSTEM_PROMPT_MATH).toContain('Exams tab')
+    expect(SYSTEM_PROMPT_MATH).toContain('Lists tab')
   })
 })
 
@@ -617,8 +617,8 @@ describe('Task A.2 — URL_RULE in CORE_RULES; no hardcoded upcat.up.edu.ph', ()
     expect(SYSTEM_PROMPT_MATH).not.toContain('verify at upcat.up.edu.ph')
   })
 
-  it('URL rule instructs model to redirect to Exams tab when URL not in context', () => {
-    expect(CORE_RULES).toContain("tell them to open that exam's page in the Exams tab")
+  it('URL rule instructs model to redirect to Lists tab when URL not in context', () => {
+    expect(CORE_RULES).toContain("tell them to open that exam's page in the Lists tab")
   })
 
   it('generic verify reminder is still present (unbranded — school official site)', () => {

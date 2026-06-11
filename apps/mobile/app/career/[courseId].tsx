@@ -111,10 +111,14 @@ interface DestinationCardProps {
   dest: DestinationRow
   fmtSalary: (d: DestinationRow) => string
   styles: ReturnType<typeof makeStyles>
+  /** When set, this card starts expanded if countryCodeFromName(dest.country) matches. */
+  highlightCountryCode?: string
 }
 
-function DestinationCard({ dest, fmtSalary, styles: s }: DestinationCardProps) {
-  const [detailsOpen, setDetailsOpen] = useState(false)
+function DestinationCard({ dest, fmtSalary, styles: s, highlightCountryCode }: DestinationCardProps) {
+  const isHighlighted = !!highlightCountryCode && !!dest.country &&
+    countryCodeFromName(dest.country) === highlightCountryCode
+  const [detailsOpen, setDetailsOpen] = useState(isHighlighted)
   const specializations = safeParseArray(dest.specializations)
   const countrySlug = dest.country ? countryCodeFromName(dest.country) : null
   const hasDetails = !!(
@@ -222,7 +226,7 @@ function DestinationCard({ dest, fmtSalary, styles: s }: DestinationCardProps) {
 // ---------------------------------------------------------------------------
 
 export default function CourseCareerDetailScreen() {
-  const { courseId } = useLocalSearchParams<{ courseId: string }>()
+  const { courseId, country: countryParam } = useLocalSearchParams<{ courseId: string; country?: string }>()
   const db = useDb()
   const { theme: t, typo } = useTheme()
 
@@ -418,6 +422,7 @@ export default function CourseCareerDetailScreen() {
                   dest={dest}
                   fmtSalary={fmtSalary}
                   styles={s}
+                  highlightCountryCode={countryParam}
                 />
               ))}
             </View>

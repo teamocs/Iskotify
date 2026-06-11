@@ -534,8 +534,8 @@ describe('useKuyaChat — Gemini provider path', () => {
     const [, systemPromptArg] = mockGenerateGeminiReply.mock.calls[0]!
     // Canonical topic prompt contains the SCOPE_BLOCK redirect example
     expect(systemPromptArg).toContain('Usapang aral muna tayo')
-    // And the Exams-tab pointer from SCOPE_BLOCK
-    expect(systemPromptArg).toContain('Exams tab')
+    // And the Lists-tab pointer from SCOPE_BLOCK
+    expect(systemPromptArg).toContain('Lists tab')
   })
 
   // ── Task A: Gemini budget assertions (non-math 256, math 512) ─────────────
