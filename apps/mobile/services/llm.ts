@@ -104,21 +104,19 @@ let inflightChain: Promise<unknown> = Promise.resolve()
 async function getContext(): Promise<LlamaContext> {
   if (ctxRef) return ctxRef
   // ── n_ctx decision ────────────────────────────────────────────────────────
-  // Worst-case token budget (rough BPE estimate, 1 token ≈ 4 chars):
-  //   System prompt (SYSTEM_PROMPT_MATH, the largest):    ~230 tokens
-  //   [STUDENT CONTEXT] block:                             ~60 tokens
-  //   [RELEVANT FLASHCARDS] (3 cards × ~60 tok each):    ~180 tokens
-  //   [LISTINGS] block (2 entries):                        ~60 tokens
-  //   [COURSES] block (2 entries):                         ~60 tokens
-  //   10-message chat history (avg 40 tok/msg × 10):      ~400 tokens
-  //   User question (max practical):                        ~80 tokens
-  //   Model response budget (math path):                   ~250 tokens
-  //   Gemma turn tokens + overhead:                         ~30 tokens
-  //   TOTAL:                                             ~1,350 tokens
-  // 1536 is NOT comfortable headroom for adversarial prompts (long history +
-  // all context blocks simultaneously). Keeping 2048 gives ~700 slack tokens,
-  // which is safer and costs < 50 MB extra RAM at q4 KV.  Decision: KEEP 2048.
-  // Gemma 4 E2B supports 128K ctx natively, but 2048 is kept for RAM budget.
+  // Worst-case token budget with PROMPTS V2 (rough BPE estimate, 1 tok ≈ 4 chars):
+  //   System prompt v2 (MATH, the largest: CORE_RULES+addenda): ~554 tokens
+  //   RAG blocks (ragPipeline hard cap):                        ≤700 tokens
+  //   10-message chat history (avg 40 tok/msg × 10):            ~400 tokens
+  //   User question (max practical):                             ~80 tokens
+  //   Model response budget (math path nPredict):               ~300 tokens
+  //   Gemma turn tokens + overhead:                              ~30 tokens
+  //   ABSOLUTE WORST CASE:                                    ~2,064 tokens
+  // That adversarial maximum brushes n_ctx 2048 (llama.cpp truncates output at
+  // the boundary — degrades gracefully, no crash). The REALISTIC case is
+  // ~1,100–1,300 tokens (math questions rarely match listings/courses blocks,
+  // history is usually short). Raising n_ctx costs KV RAM on 2 GB-gate devices,
+  // so 2048 stays. If prompts/budgets grow again, recompute this table first.
   //
   // ── Speculative / MTP ─────────────────────────────────────────────────────
   // Gemma 3 has no MTP heads — speculative decoding is not applicable.

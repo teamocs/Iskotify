@@ -139,7 +139,10 @@ export async function buildRagContext(
   for (const block of ranked) {
     const blockChars = block.content.length
     const sep = included.length > 0 ? 2 : 0 // '\n\n' between blocks
-    if (estimateTokens(totalChars + sep + blockChars + '') <= TOTAL_TOKEN_BUDGET) {
+    // Token estimate of the RUNNING CHARACTER TOTAL (chars/4), not of a
+    // stringified number — a previous `+ ''` coercion here silently defeated
+    // the whole budget check (estimateTokens("1302") === 1).
+    if (Math.ceil((totalChars + sep + blockChars) / 4) <= TOTAL_TOKEN_BUDGET) {
       included.push(block)
       totalChars += sep + blockChars
     }
