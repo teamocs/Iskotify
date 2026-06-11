@@ -262,7 +262,7 @@ export function useKuyaChat(): UseKuyaChat {
               historyForPrompt,
             )
 
-            const maxOutputTokens = isMath ? 400 : 200
+            const maxOutputTokens = isMath ? 512 : 256
 
             const reply = await generateGeminiReply(
               geminiKey,

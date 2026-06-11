@@ -513,4 +513,31 @@ describe('useKuyaChat — Gemini provider path', () => {
     // And the Exams-tab pointer from SCOPE_BLOCK
     expect(systemPromptArg).toContain('Exams tab')
   })
+
+  // ── Task A: Gemini budget assertions (non-math 256, math 512) ─────────────
+  it('passes maxOutputTokens: 256 for non-math Gemini questions', async () => {
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('What is photosynthesis?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
+    const opts = mockGenerateGeminiReply.mock.calls[0]![3] as { maxOutputTokens: number }
+    expect(opts.maxOutputTokens).toBe(256)
+  })
+
+  it('passes maxOutputTokens: 512 for math Gemini questions', async () => {
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('Solve 2x + 6 = 14 step by step')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
+    const opts = mockGenerateGeminiReply.mock.calls[0]![3] as { maxOutputTokens: number }
+    expect(opts.maxOutputTokens).toBe(512)
+  })
 })
