@@ -34,6 +34,9 @@ jest.mock('../useHomeStats', () => ({
     importantDayIndices: [],
     practiceDayIndices: [],
     focusedListings: [],
+    noteReminders: [],
+    listingAccuracy: {},
+    refresh: jest.fn().mockResolvedValue(undefined),
   }),
 }))
 

@@ -101,6 +101,10 @@ export function useKuyaChat(): UseKuyaChat {
   // Stable ref to messages so send doesn't recreate on every token flush
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  // Stable ref to stats — kept current via useEffect so send() always reads the
+  // latest stats without triggering re-creation of the send callback.
+  const statsRef = useRef(stats)
+  statsRef.current = stats
 
   // Check model availability + load chat history on mount.
   // isModelReady = true when local model exists OR gemini is configured.
@@ -135,6 +139,11 @@ export function useKuyaChat(): UseKuyaChat {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
     }
   }, [])
+
+  // Keep statsRef current whenever stats object changes (including after refresh()).
+  useEffect(() => {
+    statsRef.current = stats
+  }, [stats])
 
   // AppState-aware abort
   useEffect(() => {
@@ -218,9 +227,17 @@ export function useKuyaChat(): UseKuyaChat {
         // Must be declared outside try so the catch block can read it safely.
         let isGeminiMode = false
         try {
+          // ── Stats race fix: if progress mode but stats.listing is not loaded yet,
+          // await refresh() once so the context block has real data.
+          if (effectiveMode === 'progress' && statsRef.current.listing === null) {
+            await statsRef.current.refresh()
+            // statsRef.current is now updated via the useEffect([stats]) mirror.
+            // If listing is still null after refresh it genuinely has none — proceed.
+          }
+
           // ── Stage 1: RAG pipeline + settings/key in parallel ────────────
           const [ragResult, settings, geminiKey] = await Promise.all([
-            buildRagContext(dbRef.current, trimmed, effectiveMode, stats),
+            buildRagContext(dbRef.current, trimmed, effectiveMode, statsRef.current),
             getSettings(dbRef.current),
             getGeminiKey(),
           ])
@@ -352,7 +369,7 @@ export function useKuyaChat(): UseKuyaChat {
         }
       })()
     })
-  }, [isStreaming, stats, scheduleFlush])
+  }, [isStreaming, scheduleFlush])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()

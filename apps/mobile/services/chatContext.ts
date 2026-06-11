@@ -219,7 +219,7 @@ export async function buildListingsContext(
   try {
     // Cache the full listings meta read — the OUTPUT filtering is question-dependent
     // but the raw table scan is stable until sync or a focus-edit fires invalidate('chat:').
-    const rows = await cachedQuery('chat:listings-meta', CHAT_META_TTL, () =>
+    const rows = await cachedQuery('chat:listings-meta-v2', CHAT_META_TTL, () =>
       db
         .select({
           slug: listings.slug,
@@ -229,6 +229,7 @@ export async function buildListingsContext(
           deadline: listings.deadline,
           grantAmount: listings.grantAmount,
           provider: listings.provider,
+          externalUrl: listings.externalUrl,
         })
         .from(listings)
     )
@@ -259,6 +260,9 @@ export async function buildListingsContext(
       if (deadlineStr) parts.push(`deadline ${deadlineStr}`)
       const extra = row.grantAmount || row.provider
       if (extra) parts.push(truncate(extra, 40))
+      // Append official URL AFTER all truncated fields — URLs must not be truncated mid-way.
+      const url = row.externalUrl?.trim()
+      if (url) parts.push(`official site: ${url}`)
       return `- ${parts.join('; ')}`
     })
 

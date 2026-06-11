@@ -556,6 +556,83 @@ describe('buildListingsContext', () => {
   })
 })
 
+// ── Task A.1 TDD: buildListingsContext — externalUrl in context block ─────────
+
+describe('buildListingsContext — externalUrl (Task A.1)', () => {
+  function makeDbWithUrlListing(): DrizzleClient {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'published',
+        exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]',
+        coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER,
+        grant_amount TEXT NOT NULL DEFAULT '',
+        province TEXT,
+        city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER,
+        gwa_requirement INTEGER,
+        monthly_stipend INTEGER,
+        service_obligation_years INTEGER,
+        has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT,
+        scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER,
+        target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+    `)
+    // Listing WITH external_url (BUCET)
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, exam_date, external_url)
+      VALUES ('L1', 'bucet-2026', 'BUCET 2026', 'exam', 'published', 1751328000000, 'https://bicol-u.edu.ph/admissions');
+    `)
+    // Listing WITHOUT external_url
+    raw.exec(`
+      INSERT INTO listings (id, slug, title, type, status, exam_date, external_url)
+      VALUES ('L2', 'acet-2026', 'ACET 2026', 'exam', 'published', 1751328000000, '');
+    `)
+    return drizzle(raw, { schema }) as unknown as DrizzleClient
+  }
+
+  beforeEach(() => {
+    _clearForTests()
+  })
+
+  it('includes "official site: <url>" fragment when listing has external_url', async () => {
+    const db = makeDbWithUrlListing()
+    const result = await buildListingsContext(db, 'when is the BUCET?')
+    expect(result).toBeDefined()
+    expect(result).toContain('official site: https://bicol-u.edu.ph/admissions')
+  })
+
+  it('does NOT include "official site" fragment when external_url is empty', async () => {
+    const db = makeDbWithUrlListing()
+    const result = await buildListingsContext(db, 'when is the ACET?')
+    expect(result).toBeDefined()
+    expect(result).not.toContain('official site')
+  })
+
+  it('URL is appended whole (not truncated) even after other field truncations', async () => {
+    const db = makeDbWithUrlListing()
+    const result = await buildListingsContext(db, 'when is the BUCET?')
+    expect(result).toBeDefined()
+    // Full URL must appear in the output, not partial
+    expect(result).toContain('https://bicol-u.edu.ph/admissions')
+    expect(result).not.toContain('https://bicol-u.edu.ph/admissions'.slice(0, -1) + '…')
+  })
+})
+
 // ── Task 3 TDD: buildCourseConnectionContext ──────────────────────────────────
 
 describe('buildCourseConnectionContext', () => {
