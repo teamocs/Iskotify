@@ -65,15 +65,16 @@ function formToPayload(form: Row, config: DataTableConfig, isNew: boolean): Row 
     } else if (col.type === 'number') {
       payload[col.name] = val === '' || val == null ? null : Number(val)
     } else if (col.type === 'json') {
-      // Parsed JSON or null
+      // Re-validate JSON here regardless of live jsonErrors state
       if (val === '' || val == null) {
         payload[col.name] = null
       } else {
-        try {
-          payload[col.name] = JSON.parse(val as string)
-        } catch {
-          // Let validation catch this
-          payload[col.name] = val
+        const trimmed = (val as string).trim()
+        if (!trimmed) {
+          payload[col.name] = null
+        } else {
+          // Throws on invalid JSON — caller (handleSave) must catch this
+          payload[col.name] = JSON.parse(trimmed)
         }
       }
     } else {
@@ -95,13 +96,12 @@ interface FieldProps {
   onChange: (name: string, value: unknown) => void
   jsonError: string
   onJsonError: (name: string, err: string) => void
-  idEditable?: boolean
 }
 
 const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
 const labelCls = "block text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1"
 
-function Field({ col, value, onChange, jsonError, onJsonError, idEditable }: FieldProps) {
+function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
   if (col.type === 'boolean') {
     return (
       <div className="flex items-center gap-2">
@@ -162,7 +162,6 @@ function Field({ col, value, onChange, jsonError, onJsonError, idEditable }: Fie
           value={value as string}
           onChange={(e) => onChange(col.name, e.target.value)}
           className={inputCls}
-          disabled={!idEditable && false}
         />
       </div>
     )
@@ -177,7 +176,6 @@ function Field({ col, value, onChange, jsonError, onJsonError, idEditable }: Fie
         value={value as string}
         onChange={(e) => onChange(col.name, e.target.value)}
         className={inputCls}
-        readOnly={col.name === 'course_id' && !idEditable}
       />
     </div>
   )
@@ -227,14 +225,21 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
         return
       }
     }
-    // Validate no JSON errors
+    // Validate no JSON errors (live map check)
     const hasJsonErr = Object.values(jsonErrors).some(e => !!e)
     if (hasJsonErr) {
       setError('Fix JSON errors before saving.')
       return
     }
 
-    const payload = formToPayload(form, config, isNew)
+    // Re-validate JSON fields inside formToPayload — catch any stale/missed errors
+    let payload: Row
+    try {
+      payload = formToPayload(form, config, isNew)
+    } catch {
+      setError('One or more JSON fields contain invalid JSON. Please fix before saving.')
+      return
+    }
     setSaving(true)
     try {
       let res: Response

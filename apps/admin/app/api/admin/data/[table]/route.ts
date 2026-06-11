@@ -59,10 +59,13 @@ export async function GET(
     .from(config.table)
     .select('*', { count: 'exact', head: false })
 
-  // Apply ilike OR across searchColumns when a search term is provided
-  if (search && config.searchColumns.length > 0) {
+  // Sanitize search: strip structural chars used in Supabase .or() DSL
+  const safe = search.replace(/[(),.*:\\%]/g, ' ').trim()
+
+  // Apply ilike OR across searchColumns when a sanitized search term is provided
+  if (safe && config.searchColumns.length > 0) {
     const orParts = config.searchColumns
-      .map(col => `${col}.ilike.%${search}%`)
+      .map(col => `${col}.ilike.%${safe}%`)
       .join(',')
     query = query.or(orParts)
   }

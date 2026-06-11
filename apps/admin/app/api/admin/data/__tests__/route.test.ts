@@ -179,6 +179,77 @@ describe('GET /api/admin/data/[table]', () => {
     expect(res.status).toBe(200)
   })
 
+  it('sanitizes injection chars before building .or() — structural chars stripped', async () => {
+    // Capture the or() argument so we can assert sanitization
+    let capturedOrArg: string | undefined
+    const localFrom = vi.fn((table: string) => {
+      if (table === 'profiles') return makeChain('profiles')
+      return {
+        select(_cols: string, _opts?: unknown) {
+          return {
+            or(filter: string) { capturedOrArg = filter; return this },
+            order(_col: string) { return this },
+            range(from: number, to: number) {
+              return Promise.resolve({ data: [], count: 0, error: null })
+            },
+          }
+        },
+      }
+    })
+    // Temporarily override the module mock for this test
+    const { createServerClient } = await import('@iskotify/utils')
+    const origImpl = (createServerClient as ReturnType<typeof vi.fn>).getMockImplementation()
+    ;(createServerClient as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({ from: localFrom }))
+
+    adminUser()
+    const { GET } = await import('../[table]/route')
+    // Malicious search: contains structural .or() DSL chars
+    const malicious = encodeURIComponent('%,verified.eq.true,(')
+    const res = await GET(makeGetReq('upcat_facts', `?search=${malicious}`), makeContext('upcat_facts'))
+    expect(res.status).toBe(200)
+
+    // The .or() argument IS built — but the user's injected chars must be stripped
+    // from inside the ilike values. Extract what's between %...% delimiters.
+    if (capturedOrArg !== undefined) {
+      // Each part looks like: col.ilike.%<sanitized>%
+      // Extract the content inside %...% and assert no structural chars remain
+      const ilikeParts = capturedOrArg.match(/%([^%]*)%/g) ?? []
+      for (const part of ilikeParts) {
+        // strip the surrounding % markers
+        const inner = part.slice(1, -1)
+        expect(inner).not.toMatch(/[%,()]/)
+      }
+    }
+  })
+
+  it('skips .or() entirely when search is empty after sanitization', async () => {
+    let orCalled = false
+    const localFrom = vi.fn((table: string) => {
+      if (table === 'profiles') return makeChain('profiles')
+      return {
+        select(_cols: string, _opts?: unknown) {
+          return {
+            or(_filter: string) { orCalled = true; return this },
+            order(_col: string) { return this },
+            range(from: number, to: number) {
+              return Promise.resolve({ data: [], count: 0, error: null })
+            },
+          }
+        },
+      }
+    })
+    const { createServerClient } = await import('@iskotify/utils')
+    ;(createServerClient as ReturnType<typeof vi.fn>).mockImplementationOnce(() => ({ from: localFrom }))
+
+    adminUser()
+    const { GET } = await import('../[table]/route')
+    // Search that becomes empty after stripping structural chars
+    const onlyStructural = encodeURIComponent('%,()')
+    const res = await GET(makeGetReq('upcat_facts', `?search=${onlyStructural}`), makeContext('upcat_facts'))
+    expect(res.status).toBe(200)
+    expect(orCalled).toBe(false)
+  })
+
   it('supports page param for pagination', async () => {
     adminUser()
     mockRange.mockResolvedValueOnce({ data: [], count: 200, error: null })

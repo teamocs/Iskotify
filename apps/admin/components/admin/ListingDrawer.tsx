@@ -102,7 +102,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
     coverage: listing.coverage ?? '',
     deadline: listing.deadline ?? '',
     exam_date: listing.exam_date ?? '',
-    results_date: epochToDateStr((listing as any).results_date),
+    results_date: listing.results_date ?? '',
     region: listing.region ?? '',
     status: listing.status,
     grant_amount: listing.grant_amount?.toString() ?? '',

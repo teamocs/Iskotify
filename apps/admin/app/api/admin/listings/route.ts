@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
 
 const REQUIRED = ['type', 'title', 'slug', 'provider', 'status', 'region'] as const
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 const fetchListings = unstable_cache(
   async () => {
@@ -20,6 +31,8 @@ const fetchListings = unstable_cache(
 )
 
 export async function GET() {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
   try {
     const data = await fetchListings()
     return NextResponse.json(data)
@@ -28,8 +41,10 @@ export async function GET() {
   }
 }
 
-// Edit a listing's course-field tags (admin-gated via middleware). Sets source='manual'.
+// Edit a listing's course-field tags. Sets source='manual'.
 export async function PATCH(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
   try {
     const body = await req.json()
     const id = body?.id as string | undefined
@@ -53,6 +68,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
   try {
     const body = await req.json()
     for (const field of REQUIRED) {
