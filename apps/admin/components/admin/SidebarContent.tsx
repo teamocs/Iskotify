@@ -36,6 +36,24 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
       { href: '/admin/ai-config', icon: '🤖', label: 'AI Chat Config' },
     ],
   },
+  {
+    section: 'DATA MANAGER',
+    items: [
+      { href: '/admin/data/career_courses', icon: '📚', label: 'Career Courses' },
+      { href: '/admin/data/career_facts', icon: '💡', label: 'Career Facts' },
+      { href: '/admin/data/ai_career_impact', icon: '🤖', label: 'AI Career Impact' },
+      { href: '/admin/data/career_destinations', icon: '✈️', label: 'Career Destinations' },
+      { href: '/admin/data/career_countries', icon: '🌏', label: 'Career Countries' },
+      { href: '/admin/data/career_programs', icon: '🎓', label: 'Career Programs' },
+      { href: '/admin/data/tertiary_schools', icon: '🏫', label: 'Tertiary Schools' },
+      { href: '/admin/data/university_profiles', icon: '🏛️', label: 'University Profiles' },
+      { href: '/admin/data/course_school_rankings', icon: '🏆', label: 'Course Rankings' },
+      { href: '/admin/data/course_school_quality', icon: '⭐', label: 'Course Quality' },
+      { href: '/admin/data/bar_results', icon: '⚖️', label: 'Bar Results' },
+      { href: '/admin/data/upcat_cutoffs', icon: '📊', label: 'UPCAT Cutoffs' },
+      { href: '/admin/data/upcat_facts', icon: '❓', label: 'UPCAT Facts' },
+    ],
+  },
 ]
 
 interface Props {
