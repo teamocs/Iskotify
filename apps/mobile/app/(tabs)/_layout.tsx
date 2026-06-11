@@ -22,7 +22,7 @@ export default function TabLayout() {
             screenOptions={{ headerShown: false, animation: 'none' }}
           >
             <Tabs.Screen name="index"    options={{ title: 'Home' }} />
-            <Tabs.Screen name="practice" options={{ title: 'Review' }} />
+            <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
             <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
             <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
             <Tabs.Screen name="analytics" options={{ href: null }} />
@@ -41,7 +41,7 @@ export default function TabLayout() {
         screenOptions={{ headerShown: false, animation: 'shift' }}
       >
         <Tabs.Screen name="index"    options={{ title: 'Home' }} />
-        <Tabs.Screen name="practice" options={{ title: 'Review' }} />
+        <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
         <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
         <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
         <Tabs.Screen name="analytics" options={{ href: null }} />

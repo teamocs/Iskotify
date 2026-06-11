@@ -35,7 +35,7 @@ describe('SidebarNav', () => {
   it('renders all primary nav items', () => {
     const { getByText } = render(<SidebarNav />)
     expect(getByText('Home')).toBeTruthy()
-    expect(getByText('Review')).toBeTruthy()
+    expect(getByText('Exams')).toBeTruthy()
     expect(getByText('Lists')).toBeTruthy()
     expect(getByText('Updates')).toBeTruthy()
   })
@@ -66,12 +66,12 @@ describe('SidebarNav', () => {
     expect(homeBtn?.props.accessibilityState?.selected).toBe(true)
   })
 
-  it('does not mark Review as active when pathname is "/"', () => {
+  it('does not mark Exams as active when pathname is "/"', () => {
     const { usePathname } = require('expo-router')
     ;(usePathname as jest.Mock).mockReturnValue('/')
     const { getAllByRole } = render(<SidebarNav />)
     const buttons = getAllByRole('button')
-    const reviewBtn = buttons.find(b => b.props.accessibilityLabel === 'Review')
-    expect(reviewBtn?.props.accessibilityState?.selected).toBe(false)
+    const examsBtn = buttons.find(b => b.props.accessibilityLabel === 'Exams')
+    expect(examsBtn?.props.accessibilityState?.selected).toBe(false)
   })
 })

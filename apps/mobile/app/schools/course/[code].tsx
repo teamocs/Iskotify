@@ -48,7 +48,7 @@ interface AiRow {
 
 function fmtPassRate(rate: number | null): string {
   if (rate == null) return '—'
-  return `${(rate * 100).toFixed(1)}%`
+  return `${rate.toFixed(1)}%`
 }
 
 function fmtScore(score: number | null): string {

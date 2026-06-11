@@ -119,7 +119,7 @@ export const SYSTEM_PROMPT_TOPIC =
   `you answer in English: "Photosynthesis is how plants make food from sunlight using chlorophyll."\n` +
   `RULES:\n` +
   `- Maximum 2 sentences total. Be direct. No preamble.\n` +
-  `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Review tab.\n` +
+  `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Exams tab.\n` +
   `- Address the student in second person (you/your).`
 
 /**
@@ -171,7 +171,7 @@ export const BUILTIN_TOPIC_ADDENDUM =
   `you answer in English: "Photosynthesis is how plants make food from sunlight using chlorophyll."\n` +
   `RULES:\n` +
   `- Maximum 2 sentences total. Be direct. No preamble.\n` +
-  `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Review tab.\n` +
+  `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Exams tab.\n` +
   `- Address the student in second person (you/your).`
 
 export const BUILTIN_MATH_ADDENDUM =

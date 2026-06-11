@@ -15,7 +15,6 @@ import { useDb } from '../../hooks/useDb'
 import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
 import { cachedQuery, subscribe } from '../../services/queryCache'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
-import { useHomeStats } from '../../hooks/useHomeStats'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, typography } from '../../theme/tokens'
@@ -361,7 +360,6 @@ function makeStyles(
       root: { flex: 1, backgroundColor: t.bg },
       header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
       title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-      subtitle: { fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.xs, fontFamily: 'Lexend_400Regular' },
       // AI Study Feedback
       aiFeedbackCard: { gap: spacing.xs / 2 },
       aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
@@ -437,8 +435,7 @@ function makeStyles(
 }
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, totalCards, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
-  const { listing } = useHomeStats()
+  const { subjects, topicRows, recommendedTopics, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
 
@@ -587,8 +584,7 @@ export default function PracticeScreen() {
     <SafeAreaView style={s.root}>
       {/* (1) Header + stats */}
       <View style={s.header}>
-        <Text style={s.title}>Practice</Text>
-        <Text style={s.subtitle}>{listing?.title ?? '—'} · {totalCards} cards synced</Text>
+        <Text style={s.title}>Exams</Text>
 
         {/* Stats row — split statistics card (design system §3) */}
         <View style={{ marginTop: spacing.md }}>

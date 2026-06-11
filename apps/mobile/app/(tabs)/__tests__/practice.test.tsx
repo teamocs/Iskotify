@@ -100,20 +100,9 @@ describe('PracticeScreen', () => {
     mockFocusListings.splice(0, mockFocusListings.length)
   })
 
-  it('renders the Practice title', () => {
+  it('renders the Exams title', () => {
     render(<PracticeScreen />)
-    expect(screen.getByText('Practice')).toBeTruthy()
-  })
-
-  it('renders subtitle with total card count', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText(/0 cards synced/)).toBeTruthy()
-  })
-
-  it('shows listing title in subtitle when listing is set', () => {
-    mockUseHomeStats.mockReturnValue({ listing: { title: 'UPCAT 2025' } })
-    render(<PracticeScreen />)
-    expect(screen.getByText(/UPCAT 2025/)).toBeTruthy()
+    expect(screen.getByText('Exams')).toBeTruthy()
   })
 
   it('renders topic cards when topics are present', () => {

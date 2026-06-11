@@ -1581,7 +1581,7 @@ describe('syncOnLaunch Epic C university write (real SQLite)', () => {
       region: 'NCR',
       province: null,
       wilson_score: 0.9543,
-      raw_pass_rate: 0.97,
+      raw_pass_rate: 97.4,
       total_examinees: 200,
       total_passers: 194,
       years_with_data: '2020,2021,2022',
@@ -1606,7 +1606,7 @@ describe('syncOnLaunch Epic C university write (real SQLite)', () => {
     expect(rRow).toBeTruthy()
     expect(rRow.course_tab).toBe('nursing')
     expect(rRow.wilson_score).toBeCloseTo(0.9543)
-    expect(rRow.raw_pass_rate).toBeCloseTo(0.97)
+    expect(rRow.raw_pass_rate).toBeCloseTo(97.4)
     expect(rRow.total_examinees).toBe(200)
     expect(rRow.remote_updated_at).toBe(new Date('2026-06-01T00:00:00Z').getTime())
   })

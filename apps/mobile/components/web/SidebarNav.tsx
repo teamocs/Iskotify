@@ -40,7 +40,7 @@ interface NavEntry {
 
 const NAV_ITEMS: NavEntry[] = [
   { label: 'Home',    icon: Home2Outlined,           route: '/',          activePrefix: '/(tabs)/index' },
-  { label: 'Review',  icon: Bolt2Outlined,            route: '/practice',  activePrefix: '/practice' },
+  { label: 'Exams',   icon: Bolt2Outlined,            route: '/practice',  activePrefix: '/practice' },
   { label: 'Lists',   icon: GraduationCap1Outlined,   route: '/listings',  activePrefix: '/listings' },
   { label: 'Updates', icon: Bell1Outlined,             route: '/updates',   activePrefix: '/updates' },
 ]

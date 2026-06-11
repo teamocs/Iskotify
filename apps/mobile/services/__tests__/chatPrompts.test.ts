@@ -513,12 +513,12 @@ describe('Prompt v2 — mode-specific addenda intact', () => {
     expect(SYSTEM_PROMPT_PROGRESS).toContain('one specific action')
   })
 
-  it('SYSTEM_PROMPT_TOPIC: 2-sentence cap, softer fallback (Review tab, not textbook)', () => {
+  it('SYSTEM_PROMPT_TOPIC: 2-sentence cap, softer fallback (Exams tab, not textbook)', () => {
     expect(SYSTEM_PROMPT_TOPIC).toContain('Maximum 2 sentences total')
     // Old eager-refusal line replaced with softer guidance
     expect(SYSTEM_PROMPT_TOPIC).not.toContain("I'm not sure — check your textbook")
     expect(SYSTEM_PROMPT_TOPIC).toContain('context blocks answer the question')
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Review tab')
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
   })
 
   it('SYSTEM_PROMPT_MATH: never-refuse + step format + lifted 2-sentence cap', () => {
@@ -637,7 +637,7 @@ describe('Task A.4 — SYSTEM_PROMPT_TOPIC addendum softened', () => {
     expect(SYSTEM_PROMPT_TOPIC).toContain('context blocks answer the question')
   })
 
-  it('topic addendum suggests Review tab when genuinely unsure', () => {
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Review tab')
+  it('topic addendum suggests Exams tab when genuinely unsure', () => {
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
   })
 })
