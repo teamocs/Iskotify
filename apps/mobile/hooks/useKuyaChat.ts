@@ -8,12 +8,7 @@ import {
   buildChatPrompt, parseChatChunk, isMathQuestion, detectChatMode,
   SYSTEM_PROMPT_PROGRESS, SYSTEM_PROMPT_TOPIC, SYSTEM_PROMPT_MATH,
 } from '../services/chatPrompts'
-import {
-  buildProgressContext,
-  buildRetrievedFlashcards,
-  buildListingsContext,
-  buildCourseConnectionContext,
-} from '../services/chatContext'
+import { buildRagContext } from '../services/ragPipeline'
 import { chatMessages } from '../db/schema'
 import { getSettings } from '../services/settings'
 import { getGeminiKey } from '../services/geminiKey'
@@ -47,7 +42,7 @@ function isTagalogHeavy(text: string): boolean {
   return (matches?.length ?? 0) >= 3
 }
 
-// ── Gemini prompt helpers ──────────────────────────────────────────────────────
+// ── Gemini prompt helper ───────────────────────────────────────────────────────
 // buildChatPrompt returns a full Gemma-format string (with turn tokens). For
 // Gemini's REST API we need a system_instruction + user content separately.
 // SYSTEM_PROMPT_PROGRESS / _TOPIC / _MATH are imported from chatPrompts.ts so
@@ -55,31 +50,24 @@ function isTagalogHeavy(text: string): boolean {
 
 /**
  * Build the user-content portion for Gemini (system prompt passed separately).
- * Mirrors the context block assembly in buildChatPrompt but without Gemma turn tokens.
+ * Consumes the assembled `ragBlocks` string from buildRagContext instead of
+ * the four individual ctx params that existed pre-Task-C.
+ * History is prepended as plain text (no Gemma turn tokens).
  */
 function buildGeminiUserContent(
-  mode: 'progress' | 'topic',
   question: string,
-  dataCtx: string | undefined,
-  retrieved: string | undefined,
-  listingsCtx: string | undefined,
-  courseCtx: string | undefined,
+  ragBlocks: string,
   history: Array<{ role: 'user' | 'assistant'; text: string }>,
 ): string {
   const sanitize = (s: string) =>
     s.replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '').replace(/<(start|end)_of_turn>/g, '')
 
-  const isMath = isMathQuestion(question)
   const safeQuestion = sanitize(question)
   const sections: string[] = ['[INSTRUCTION] Respond in clear English only.']
 
-  if (mode === 'progress' && !isMath) {
-    const ctx = dataCtx && dataCtx.length > 0 ? dataCtx : '(no stats available yet)'
-    sections.push(`[STUDENT CONTEXT]\n${ctx}`)
+  if (ragBlocks && ragBlocks.length > 0) {
+    sections.push(sanitize(ragBlocks))
   }
-  if (listingsCtx) sections.push(listingsCtx)
-  if (courseCtx) sections.push(courseCtx)
-  if (retrieved && retrieved.length > 0) sections.push(sanitize(retrieved))
 
   // Prepend recent history as plain text
   let historyBlock = ''
@@ -220,6 +208,9 @@ export function useKuyaChat(): UseKuyaChat {
 
     // Auto-detect mode from the question itself — no UI picker required.
     const mode = detectChatMode(trimmed)
+    const isMath = isMathQuestion(trimmed)
+    // effectiveMode for the RAG pipeline: math gets its own retrieval priority
+    const effectiveMode = isMath ? 'math' : mode
 
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
@@ -227,38 +218,31 @@ export function useKuyaChat(): UseKuyaChat {
         // Must be declared outside try so the catch block can read it safely.
         let isGeminiMode = false
         try {
-          // Run all context builders in parallel so first-token latency is
-          // bounded by whichever is slowest, not their sum.
-          // Also read provider settings + key in the same parallel batch.
-          const [dataCtx, retrieved, listingsCtx, courseCtx, settings, geminiKey] = await Promise.all([
-            mode === 'progress'
-              ? buildProgressContext(dbRef.current, stats)
-              : Promise.resolve(undefined),
-            buildRetrievedFlashcards(dbRef.current, trimmed, 3),
-            buildListingsContext(dbRef.current, trimmed),
-            buildCourseConnectionContext(dbRef.current, trimmed),
+          // ── Stage 1: RAG pipeline + settings/key in parallel ────────────
+          const [ragResult, settings, geminiKey] = await Promise.all([
+            buildRagContext(dbRef.current, trimmed, effectiveMode, stats),
             getSettings(dbRef.current),
             getGeminiKey(),
           ])
+          const { blocks, sources } = ragResult
+
+          // Dev debug: log which sources contributed to the context
+          if (__DEV__) console.log('[rag]', sources.join(','))
+
           isGeminiMode = settings.aiProvider === 'gemini' && geminiKey !== null
 
-          // ── Gemini cloud path ───────────────────────────────────────────────
+          // ── Gemini cloud path ─────────────────────────────────────────────
           if (settings.aiProvider === 'gemini' && geminiKey !== null) {
             if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
             if (!isMountedRef.current) return
 
-            const isMath = isMathQuestion(trimmed)
             const systemPrompt = isMath
               ? SYSTEM_PROMPT_MATH
               : mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC
 
             const userContent = buildGeminiUserContent(
-              mode,
               trimmed,
-              dataCtx,
-              retrieved ?? undefined,
-              listingsCtx ?? undefined,
-              courseCtx ?? undefined,
+              blocks,
               historyForPrompt,
             )
 
@@ -293,20 +277,22 @@ export function useKuyaChat(): UseKuyaChat {
             return
           }
 
-          // ── Local model path ────────────────────────────────────────────────
+          // ── Local model path ──────────────────────────────────────────────
+          // Pass ragBlocks (8th param) so buildChatPrompt uses the new pipeline path
           const prompt = buildChatPrompt(
             mode,
             trimmed,
-            dataCtx,
+            undefined,       // dataContext — handled by pipeline
             historyForPrompt,
-            retrieved ?? undefined,
-            listingsCtx ?? undefined,
-            courseCtx ?? undefined,
+            undefined,       // retrieved — handled by pipeline
+            undefined,       // listingsCtx — handled by pipeline
+            undefined,       // courseCtx — handled by pipeline
+            blocks,          // ragBlocks from the pipeline
           )
 
           // Math questions need a bigger budget (multi-step solutions exceed 96 tokens)
           // and tighter sampling (less hallucinated arithmetic).
-          const samplerOptions = isMathQuestion(trimmed)
+          const samplerOptions = isMath
             ? { nPredict: 300, temperature: 0.05 }
             : undefined
 
