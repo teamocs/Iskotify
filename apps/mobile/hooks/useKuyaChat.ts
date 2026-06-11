@@ -304,10 +304,10 @@ export function useKuyaChat(): UseKuyaChat {
             courseCtx ?? undefined,
           )
 
-          // Math questions need a bigger budget (multi-step solutions exceed 60 tokens)
+          // Math questions need a bigger budget (multi-step solutions exceed 96 tokens)
           // and tighter sampling (less hallucinated arithmetic).
           const samplerOptions = isMathQuestion(trimmed)
-            ? { nPredict: 250, temperature: 0.05 }
+            ? { nPredict: 300, temperature: 0.05 }
             : undefined
 
           await streamChatInference(prompt, (tokenText) => {
@@ -346,12 +346,17 @@ export function useKuyaChat(): UseKuyaChat {
         } catch (err) {
           if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
           if (!isMountedRef.current) return
-          console.warn('[useKuyaChat] inference failed:', err instanceof Error ? err.message : 'unknown error')
           // For Gemini errors, err.message is already a student-friendly mapped message.
-          // For local inference errors, always show the generic friendly message.
+          // For local inference errors (model init/inference failed), show a clear message
+          // directing the user to switch to Gemini in Settings.
+          if (!isGeminiMode) {
+            console.error('[kuya] local inference failed:', err)
+          } else {
+            console.warn('[useKuyaChat] gemini inference failed:', err instanceof Error ? err.message : 'unknown error')
+          }
           const friendlyError = isGeminiMode && err instanceof Error
             ? err.message
-            : "Kuya Baw can't answer right now. Try again in a moment."
+            : "Kuya Baw's brain couldn't start on this phone. You can switch to a free Gemini key in Settings → AI Chat."
           setMessages(prev => prev.map(m =>
             m.id === assistantId
               ? { ...m, isStreaming: false, error: friendlyError }

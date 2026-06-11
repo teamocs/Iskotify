@@ -204,7 +204,7 @@ describe('useKuyaChat', () => {
     expect(assistantMsg?.isStreaming).toBe(false)
   })
 
-  it('shows the inline error message (English) when streamChatInference throws', async () => {
+  it('shows the init-failure message directing to Settings when local streamChatInference throws', async () => {
     mockStream.mockRejectedValue(new Error('native crash'))
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
@@ -213,7 +213,9 @@ describe('useKuyaChat', () => {
       await new Promise(r => setTimeout(r, 200))
     })
     const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
-    expect(assistantMsg?.error).toBe("Kuya Baw can't answer right now. Try again in a moment.")
+    expect(assistantMsg?.error).toBe(
+      "Kuya Baw's brain couldn't start on this phone. You can switch to a free Gemini key in Settings → AI Chat."
+    )
     expect(assistantMsg?.isStreaming).toBe(false)
     expect(result.current.isStreaming).toBe(false)
   })
@@ -330,7 +332,7 @@ describe('useKuyaChat', () => {
     expect(result.current.messages).toHaveLength(0)
   })
 
-  it('passes higher nPredict + lower temperature to streamChatInference for math queries', async () => {
+  it('passes higher nPredict (300) + lower temperature to streamChatInference for math queries', async () => {
     mockStream.mockImplementation(async () => 'Step 1: ...')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
@@ -342,7 +344,7 @@ describe('useKuyaChat', () => {
       expect.any(String),
       expect.any(Function),
       expect.any(Object),
-      expect.objectContaining({ nPredict: 250, temperature: 0.05 }),
+      expect.objectContaining({ nPredict: 300, temperature: 0.05 }),
     )
   })
 

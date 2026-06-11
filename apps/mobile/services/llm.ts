@@ -5,24 +5,21 @@ import { parseCoachPhrase } from './coachPrompts'
 
 export { parseCoachPhrase }
 
-// Gemma 4 E2B Q4_K_M from bartowski's GGUF repo (public, ungated).
-// Verified 2026-06-11: HEAD → 302 → 200 unauthenticated; Content-Length 3,462,678,272 bytes.
-// ggml-org only has Q8_0 (too large); unsloth Q4_K_M is 3.1 GB but uses a smaller imatrix;
-// bartowski Q4_K_M at ~3.4 GB is preferred quality for 4 GB-class devices.
-const MODEL_FILENAME = 'google_gemma-4-E2B-it-Q4_K_M.gguf'
-// Old Gemma 3 1B file — used only for cleanup; never downloaded again.
-const OLD_MODEL_FILENAME = 'google_gemma-3-1b-it-Q4_K_M.gguf'
+// Gemma 3 1B Q8_0 from bartowski's GGUF repo (public, ungated).
+// Verified 2026-06-11: HEAD → 302 → 200 unauthenticated; Content-Length 1,069,306,624 bytes.
+// This repo served the original Q4_K_M for weeks — proven ungated.
+// Q8_0 at ~1.07 GB loads on every 2 GB-class phone; quality carried by the RAG layer.
+export const MODEL_FILENAME = 'google_gemma-3-1b-it-Q8_0.gguf'
 const MODEL_DIR = `${FileSystem.documentDirectory}models/`
 export const MODEL_PATH = `${MODEL_DIR}${MODEL_FILENAME}`
-const OLD_MODEL_PATH = `${MODEL_DIR}${OLD_MODEL_FILENAME}`
 
 export const MODEL_DOWNLOAD_URL =
-  'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
+  'https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q8_0.gguf'
 
 /** Exact byte count from a verified unauthenticated HEAD request (2026-06-11). */
-export const MODEL_SIZE_BYTES = 3_462_678_272
+export const MODEL_SIZE_BYTES = 1_069_306_624
 /** Human-readable size label shown in UI copy. */
-export const MODEL_SIZE_LABEL = '~3.4 GB'
+export const MODEL_SIZE_LABEL = '~1.1 GB'
 
 /**
  * Resolve the final CDN/S3 URL for the model by following HuggingFace's
@@ -50,10 +47,10 @@ export async function resolveDownloadUrl(): Promise<string> {
   return MODEL_DOWNLOAD_URL
 }
 
-// Gemma 4 E2B Q4_K_M requires ~4 GB-class devices.
-// We gate at 3.6 GB because OEMs routinely under-report totalMemory (system
-// reservation, firmware, etc.) — a "4 GB" phone typically reports ~3.7–3.9 GB.
-const MIN_RAM_BYTES = 3.6e9
+// Gemma 3 1B Q8_0 requires a 2 GB-class device.
+// We gate at 1.8 GB because OEMs routinely under-report totalMemory (system
+// reservation, firmware, etc.) — a "2 GB" phone typically reports ~1.8–1.9 GB.
+const MIN_RAM_BYTES = 1.8e9
 // Extended from 60 s → 300 s: chat sessions often have a pause between messages;
 // releasing at 60 s was re-incurring the full model-load cost mid-conversation.
 // The context is released when the app backgrounds via releaseContextIfIdle()
@@ -63,23 +60,35 @@ export const IDLE_RELEASE_MS = 300_000
 export function hasEnoughRam(): boolean {
   const total = Device.totalMemory
   if (total === null) return false
-  // Gate: ≥ 3.6 GB counts as a 4 GB-class device (OEM under-reporting margin).
+  // Gate: ≥ 1.8 GB counts as a 2 GB-class device (OEM under-reporting margin).
   return total >= MIN_RAM_BYTES
 }
 
-export async function modelExists(): Promise<boolean> {
-  const [newInfo, oldInfo] = await Promise.all([
-    FileSystem.getInfoAsync(MODEL_PATH),
-    FileSystem.getInfoAsync(OLD_MODEL_PATH),
-  ])
-  // One-time cleanup: if the old Gemma 3 file is still present, delete it
-  // (frees ~750 MB). Fire-and-forget — don't block the existence check.
-  if (oldInfo.exists) {
-    FileSystem.deleteAsync(OLD_MODEL_PATH, { idempotent: true }).catch(err =>
-      console.warn('[llm] old-model cleanup failed:', err)
-    )
+/** Delete every *.gguf in MODEL_DIR that is not the current MODEL_FILENAME.
+ *  Fire-and-forget, idempotent. Covers the old Q4_K_M Gemma 3 (~750 MB) and
+ *  the Gemma 4 E2B (~3.4 GB) that was briefly shipped and wasted 3 GB on phones. */
+async function cleanupStaleModels(): Promise<void> {
+  try {
+    const files = await FileSystem.readDirectoryAsync(MODEL_DIR)
+    for (const name of files) {
+      if (name.endsWith('.gguf') && name !== MODEL_FILENAME) {
+        const stalePath = `${MODEL_DIR}${name}`
+        FileSystem.deleteAsync(stalePath, { idempotent: true }).catch(err =>
+          console.warn('[llm] stale-model cleanup failed:', stalePath, err)
+        )
+      }
+    }
+  } catch {
+    // Directory may not exist yet — not an error
   }
-  return newInfo.exists
+}
+
+export async function modelExists(): Promise<boolean> {
+  const info = await FileSystem.getInfoAsync(MODEL_PATH)
+  // Generalized cleanup: delete every non-current *.gguf in the models dir.
+  // Covers the old Q4_K_M AND the 3.4 GB Gemma 4 E2B — fire-and-forget.
+  void cleanupStaleModels()
+  return info.exists
 }
 
 export async function ensureModelDirectory(): Promise<void> {
@@ -112,15 +121,15 @@ async function getContext(): Promise<LlamaContext> {
   // Gemma 4 E2B supports 128K ctx natively, but 2048 is kept for RAM budget.
   //
   // ── Speculative / MTP ─────────────────────────────────────────────────────
-  // Gemma 4 E2B has built-in MTP heads; llama.rn 0.12.4 'mtp' is an alias for
-  // 'draft-mtp' and requires NO second draft model. MTP must be declared at
-  // context creation so llama.cpp allocates recurrent-state rollback slots.
-  // Fallback path: if init with 'mtp' fails (e.g. older native binary),
-  // retry once without speculative so chat degrades gracefully instead of bricking.
+  // Gemma 3 has no MTP heads — speculative decoding is not applicable.
+  // Gemma 4 MTP is also unusable via llama.cpp: drafter conversion is
+  // unsupported (gh#23727) and its 3.2 GB E2B exceeded Android app-process
+  // memory on 4 GB phones — that combination broke chat in 1.6.0.
+  // Revisit when llama.rn ships usable MTP + smaller Gemma 4 GGUFs.
   const initParams = {
     model: MODEL_PATH.replace(/^file:\/\//, ''),
     n_ctx: 2048,
-    // n_threads 4 → 6: typical big.LITTLE phones have ≥8 cores; llama.cpp
+    // n_threads 6: typical big.LITTLE phones have ≥8 cores; llama.cpp
     // schedules work onto perf cores — 6 threads saturates them without
     // spilling onto efficiency cores and causing cache thrash.
     n_threads: 6,
@@ -128,26 +137,17 @@ async function getContext(): Promise<LlamaContext> {
     // sweet-spot for single-sequence mobile inference.
     n_batch: 512,
     // KV cache precision: f16 halves the KV memory vs f32 with negligible
-    // quality loss at Q4 quantisation levels. Marked "Experimental" in
+    // quality loss at Q8 quantisation levels. Marked "Experimental" in
     // llama.cpp but widely used in production mobile builds.
     cache_type_k: 'f16' as const,
     cache_type_v: 'f16' as const,
     // Flash attention: improves throughput on long contexts; the 'auto' string
-    // is accepted by the typings (flash_attn_type?: string). The JSDoc says
-    // "only recommended in GPU device" but on CPU it degrades gracefully (the
-    // kernel falls back to standard attention if unsupported at runtime).
-    // llama.rn 0.12.4 narrowed flash_attn_type to 'auto' | 'on' | 'off'.
+    // is accepted by the typings. The JSDoc says "only recommended in GPU
+    // device" but on CPU it degrades gracefully (the kernel falls back to
+    // standard attention if unsupported at runtime).
     flash_attn_type: 'auto' as const,
-    // MTP speculative decoding — Gemma 4 E2B built-in heads; no draft model needed.
-    speculative: 'mtp' as const,
   }
-  try {
-    ctxRef = await initLlama(initParams)
-  } catch (err) {
-    console.warn('[llm] MTP init failed — retrying without speculative:', err)
-    const { speculative: _omit, ...paramsWithoutSpeculative } = initParams
-    ctxRef = await initLlama(paramsWithoutSpeculative)
-  }
+  ctxRef = await initLlama(initParams)
   return ctxRef
 }
 
@@ -358,8 +358,8 @@ export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<
 // ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
 
 export interface StreamChatOptions {
-  /** Max tokens to generate. Defaults to 48 (tight for 2-sentence Q&A). Math
-   *  queries should pass ~250 so multi-step solutions don't truncate. */
+  /** Max tokens to generate. Defaults to 96 (fits 2 clear sentences for Gemma 3 1B).
+   *  Math queries should pass ~300 so multi-step solutions don't truncate. */
   nPredict?: number
   /** Sampling temperature. Defaults to 0.2 (balanced). Math should use ~0.05
    *  so the model doesn't hallucinate digits. */
@@ -372,11 +372,11 @@ export async function streamChatInference(
   signal: AbortSignal,
   options: StreamChatOptions = {},
 ): Promise<string> {
-  // Non-math default: 48 tokens fits 2 tight sentences (was 60 — trimmed to
-  // reduce mean first-token-to-completion latency; math stays 250 via options).
+  // Non-math default: 96 tokens fits 2 clear sentences for Gemma 3 1B Q8_0
+  // (1B is fast; less truncation than the previous 48-token cap).
   // Stop tokens already include '<end_of_turn>' so Gemma's turn-end EOS fires
   // before the hard limit in most cases.
-  const nPredict = options.nPredict ?? 48
+  const nPredict = options.nPredict ?? 96
   const temperature = options.temperature ?? 0.2
   return withMutex(async () => {
     if (signal.aborted) return ''

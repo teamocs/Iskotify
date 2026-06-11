@@ -8,6 +8,7 @@ jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: '/mock/',
   getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
   deleteAsync: jest.fn().mockResolvedValue(undefined),
+  readDirectoryAsync: jest.fn().mockResolvedValue([]),
 }))
 jest.mock('expo-device', () => ({ totalMemory: 4 * 1024 * 1024 * 1024 }))
 
@@ -192,42 +193,54 @@ describe('inference mutex', () => {
   })
 })
 
-describe('Gemma 4 E2B model constants', () => {
-  it('MODEL_DOWNLOAD_URL points to bartowski gemma-4-E2B Q4_K_M', () => {
+describe('Gemma 3 1B Q8_0 model constants', () => {
+  it('MODEL_DOWNLOAD_URL points to bartowski gemma-3-1b Q8_0', () => {
     const { MODEL_DOWNLOAD_URL } = require('../llm')
     expect(MODEL_DOWNLOAD_URL).toContain('bartowski')
-    expect(MODEL_DOWNLOAD_URL).toContain('gemma-4-E2B-it')
-    expect(MODEL_DOWNLOAD_URL).toContain('Q4_K_M')
-    expect(MODEL_DOWNLOAD_URL).toContain('google_gemma-4-E2B-it-Q4_K_M.gguf')
+    expect(MODEL_DOWNLOAD_URL).toContain('gemma-3-1b-it-GGUF')
+    expect(MODEL_DOWNLOAD_URL).toContain('Q8_0')
+    expect(MODEL_DOWNLOAD_URL).toContain('google_gemma-3-1b-it-Q8_0.gguf')
   })
 
-  it('MODEL_SIZE_BYTES is the verified byte count (3,462,678,272)', () => {
+  it('MODEL_SIZE_BYTES is the verified byte count (1,069,306,624)', () => {
     const { MODEL_SIZE_BYTES } = require('../llm')
-    expect(MODEL_SIZE_BYTES).toBe(3_462_678_272)
+    expect(MODEL_SIZE_BYTES).toBe(1_069_306_624)
   })
 
-  it('MODEL_SIZE_LABEL is "~3.4 GB"', () => {
+  it('MODEL_SIZE_LABEL is "~1.1 GB"', () => {
     const { MODEL_SIZE_LABEL } = require('../llm')
-    expect(MODEL_SIZE_LABEL).toBe('~3.4 GB')
+    expect(MODEL_SIZE_LABEL).toBe('~1.1 GB')
   })
 
-  it('MODEL_PATH uses the new Gemma 4 filename', () => {
+  it('MODEL_PATH uses the Gemma 3 1B Q8_0 filename', () => {
     const { MODEL_PATH } = require('../llm')
-    expect(MODEL_PATH).toContain('google_gemma-4-E2B-it-Q4_K_M.gguf')
-    expect(MODEL_PATH).not.toContain('gemma-3')
+    expect(MODEL_PATH).toContain('google_gemma-3-1b-it-Q8_0.gguf')
+    expect(MODEL_PATH).not.toContain('gemma-4')
+  })
+
+  it('MODEL_FILENAME is exported and matches the Q8_0 file', () => {
+    const { MODEL_FILENAME } = require('../llm')
+    expect(MODEL_FILENAME).toBe('google_gemma-3-1b-it-Q8_0.gguf')
   })
 })
 
-describe('hasEnoughRam — 4 GB gate', () => {
+describe('hasEnoughRam — 2 GB gate (1.8e9 threshold)', () => {
   it('returns true when device reports 4 GB (4 * 1024^3)', () => {
     // Default mock: 4 GB — set by the top-level jest.mock('expo-device')
     const { hasEnoughRam } = require('../llm')
     expect(hasEnoughRam()).toBe(true)
   })
 
-  it('returns false when device reports 2 GB (below 3.6 GB threshold)', () => {
+  it('returns true when device reports 2 GB (above 1.8e9 threshold)', () => {
     jest.resetModules()
     jest.mock('expo-device', () => ({ totalMemory: 2 * 1024 * 1024 * 1024 }))
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(true)
+  })
+
+  it('returns false when device reports 1 GB (below 1.8e9 threshold)', () => {
+    jest.resetModules()
+    jest.mock('expo-device', () => ({ totalMemory: 1 * 1024 * 1024 * 1024 }))
     const { hasEnoughRam } = require('../llm')
     expect(hasEnoughRam()).toBe(false)
   })
@@ -239,21 +252,28 @@ describe('hasEnoughRam — 4 GB gate', () => {
     expect(hasEnoughRam()).toBe(false)
   })
 
-  it('returns true for 3.6 GB exactly (boundary)', () => {
+  it('returns true for 1.8e9 exactly (boundary)', () => {
     jest.resetModules()
-    jest.mock('expo-device', () => ({ totalMemory: 3.6e9 }))
+    jest.mock('expo-device', () => ({ totalMemory: 1.8e9 }))
     const { hasEnoughRam } = require('../llm')
     expect(hasEnoughRam()).toBe(true)
   })
+
+  it('returns false for 1.79e9 (just below boundary)', () => {
+    jest.resetModules()
+    jest.mock('expo-device', () => ({ totalMemory: 1.79e9 }))
+    const { hasEnoughRam } = require('../llm')
+    expect(hasEnoughRam()).toBe(false)
+  })
 })
 
-describe('getContext — MTP speculative init + fallback', () => {
+describe('getContext — single init (no MTP, no fallback)', () => {
   beforeEach(() => {
     jest.resetModules()
     jest.clearAllMocks()
   })
 
-  it('passes speculative: "mtp" to initLlama on first attempt', async () => {
+  it('passes correct params to initLlama with NO speculative field', async () => {
     const mockCtx = {
       completion: jest.fn().mockResolvedValue({ text: 'ok' }),
       release: jest.fn().mockResolvedValue(undefined),
@@ -266,7 +286,8 @@ describe('getContext — MTP speculative init + fallback', () => {
 
     expect(llama.initLlama).toHaveBeenCalledTimes(1)
     const callArgs = llama.initLlama.mock.calls[0]![0]
-    expect(callArgs.speculative).toBe('mtp')
+    // Gemma 3 has no MTP heads — speculative must NOT be set
+    expect(callArgs.speculative).toBeUndefined()
     expect(callArgs.n_batch).toBe(512)
     expect(callArgs.n_threads).toBe(6)
     expect(callArgs.n_ctx).toBe(2048)
@@ -275,36 +296,14 @@ describe('getContext — MTP speculative init + fallback', () => {
     expect(callArgs.flash_attn_type).toBe('auto')
   })
 
-  it('retries without speculative when MTP init fails, then succeeds', async () => {
-    const mockCtx = {
-      completion: jest.fn().mockResolvedValue({ text: 'Tara mag-review tayo!' }),
-      release: jest.fn().mockResolvedValue(undefined),
-    }
+  it('propagates init error directly (no fallback retry)', async () => {
     const llama = require('llama.rn')
-    // First call (with MTP) fails; second call (without) succeeds
-    llama.initLlama
-      .mockRejectedValueOnce(new Error('MTP not supported'))
-      .mockResolvedValueOnce(mockCtx)
-
-    const { runCoachInference } = require('../llm')
-    // runCoachInference resolves (no throw) — fallback path succeeded
-    await expect(runCoachInference('hello')).resolves.not.toThrow()
-
-    expect(llama.initLlama).toHaveBeenCalledTimes(2)
-    // First attempt had speculative
-    expect(llama.initLlama.mock.calls[0]![0].speculative).toBe('mtp')
-    // Second attempt (fallback) has NO speculative key
-    expect(llama.initLlama.mock.calls[1]![0].speculative).toBeUndefined()
-  })
-
-  it('propagates error if both MTP and fallback init fail', async () => {
-    const llama = require('llama.rn')
-    llama.initLlama
-      .mockRejectedValueOnce(new Error('MTP not supported'))
-      .mockRejectedValueOnce(new Error('init failed'))
+    llama.initLlama.mockRejectedValueOnce(new Error('init failed'))
 
     const { runCoachInference } = require('../llm')
     await expect(runCoachInference('hello')).rejects.toThrow('init failed')
+    // Only one init attempt — no retry
+    expect(llama.initLlama).toHaveBeenCalledTimes(1)
   })
 
   it('n_predict for runInference is 400 (unchanged)', async () => {
@@ -320,53 +319,89 @@ describe('getContext — MTP speculative init + fallback', () => {
   })
 })
 
-describe('modelExists — old model cleanup', () => {
+describe('modelExists — generalized stale-model cleanup', () => {
   beforeEach(() => {
     jest.resetModules()
     jest.clearAllMocks()
   })
 
-  it('returns true when new model exists, deletes old model if present', async () => {
+  it('returns true when current model exists', async () => {
     const fs = require('expo-file-system/legacy')
-    // New model exists; old model also exists
-    fs.getInfoAsync
-      .mockResolvedValueOnce({ exists: true })  // MODEL_PATH
-      .mockResolvedValueOnce({ exists: true })  // OLD_MODEL_PATH
-    fs.deleteAsync.mockResolvedValue(undefined)
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: true })
+    fs.readDirectoryAsync.mockResolvedValueOnce([])
 
     const { modelExists } = require('../llm')
     const result = await modelExists()
-
     expect(result).toBe(true)
-    expect(fs.deleteAsync).toHaveBeenCalledTimes(1)
-    expect(fs.deleteAsync.mock.calls[0]![0]).toContain('gemma-3')
   })
 
-  it('returns false when new model absent; still deletes old model if present', async () => {
+  it('returns false when current model absent', async () => {
     const fs = require('expo-file-system/legacy')
-    fs.getInfoAsync
-      .mockResolvedValueOnce({ exists: false }) // MODEL_PATH
-      .mockResolvedValueOnce({ exists: true })  // OLD_MODEL_PATH
-    fs.deleteAsync.mockResolvedValue(undefined)
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: false })
+    fs.readDirectoryAsync.mockResolvedValueOnce([])
 
     const { modelExists } = require('../llm')
     const result = await modelExists()
-
     expect(result).toBe(false)
-    expect(fs.deleteAsync).toHaveBeenCalledTimes(1)
   })
 
-  it('does NOT call deleteAsync when old model is absent', async () => {
+  it('deletes multiple stale gguf files and keeps current', async () => {
     const fs = require('expo-file-system/legacy')
-    fs.getInfoAsync
-      .mockResolvedValueOnce({ exists: true })  // MODEL_PATH
-      .mockResolvedValueOnce({ exists: false }) // OLD_MODEL_PATH
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: true })
+    // Seed: two old files + the current one
+    fs.readDirectoryAsync.mockResolvedValueOnce([
+      'google_gemma-3-1b-it-Q4_K_M.gguf',  // old Q4
+      'google_gemma-4-E2B-it-Q4_K_M.gguf', // old E2B (3.4 GB)
+      'google_gemma-3-1b-it-Q8_0.gguf',    // current — must NOT be deleted
+    ])
+    fs.deleteAsync.mockResolvedValue(undefined)
 
     const { modelExists } = require('../llm')
-    const result = await modelExists()
+    await modelExists()
+    // Allow fire-and-forget microtasks to settle
+    await new Promise(r => setTimeout(r, 0))
 
-    expect(result).toBe(true)
+    const deletedPaths: string[] = fs.deleteAsync.mock.calls.map((c: [string]) => c[0])
+    // The two stale files should be deleted
+    expect(deletedPaths.some(p => p.includes('Q4_K_M') && p.includes('gemma-3'))).toBe(true)
+    expect(deletedPaths.some(p => p.includes('gemma-4-E2B'))).toBe(true)
+    // The current file must NOT be deleted
+    expect(deletedPaths.every(p => !p.includes('Q8_0'))).toBe(true)
+    expect(fs.deleteAsync).toHaveBeenCalledTimes(2)
+  })
+
+  it('does NOT call deleteAsync when only the current model exists in dir', async () => {
+    const fs = require('expo-file-system/legacy')
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: true })
+    fs.readDirectoryAsync.mockResolvedValueOnce(['google_gemma-3-1b-it-Q8_0.gguf'])
+
+    const { modelExists } = require('../llm')
+    await modelExists()
+    await new Promise(r => setTimeout(r, 0))
+
     expect(fs.deleteAsync).not.toHaveBeenCalled()
+  })
+
+  it('does NOT call deleteAsync when dir is empty', async () => {
+    const fs = require('expo-file-system/legacy')
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: false })
+    fs.readDirectoryAsync.mockResolvedValueOnce([])
+
+    const { modelExists } = require('../llm')
+    await modelExists()
+    await new Promise(r => setTimeout(r, 0))
+
+    expect(fs.deleteAsync).not.toHaveBeenCalled()
+  })
+
+  it('ignores readDirectoryAsync errors gracefully', async () => {
+    const fs = require('expo-file-system/legacy')
+    fs.getInfoAsync.mockResolvedValueOnce({ exists: false })
+    fs.readDirectoryAsync.mockRejectedValueOnce(new Error('dir not found'))
+
+    const { modelExists } = require('../llm')
+    // Must not throw
+    await expect(modelExists()).resolves.toBe(false)
   })
 })
 
@@ -425,7 +460,7 @@ describe('streamChatInference', () => {
     expect(collected).toEqual(['first', 'second'])
   })
 
-  it('passes top_k: 40 and n_predict: 48 to completion (no top_p)', async () => {
+  it('passes top_k: 40 and n_predict: 96 to completion (no top_p)', async () => {
     const completion = jest.fn().mockResolvedValue({ text: 'ok' })
     const llama = require('llama.rn')
     llama.initLlama.mockResolvedValue({
@@ -438,13 +473,13 @@ describe('streamChatInference', () => {
     await streamChatInference('p', () => {}, controller.signal)
 
     const config = completion.mock.calls[0]![0]
-    // Default nPredict trimmed from 60 → 48 (C4: fits 2-sentence Q&A cap tighter)
-    expect(config.n_predict).toBe(48)
+    // Default nPredict 48 → 96 (Gemma 3 1B is fast; less truncation)
+    expect(config.n_predict).toBe(96)
     expect(config.top_k).toBe(40)
     expect(config.temperature).toBe(0.2)
     expect(config.penalty_repeat).toBe(1.1)
     expect(config.top_p).toBeUndefined()
-    // NEW: verify Gemma stop tokens
+    // Verify Gemma stop tokens
     expect(config.stop).toContain('<end_of_turn>')
     expect(config.stop).toContain('<eos>')
     expect(config.stop).not.toContain('<|im_end|>')

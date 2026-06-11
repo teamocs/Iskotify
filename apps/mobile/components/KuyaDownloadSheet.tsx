@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
 import { useModelDownload } from '../hooks/useModelDownload'
-import { MODEL_SIZE_LABEL } from '../services/llm'
+import { MODEL_SIZE_LABEL, MODEL_SIZE_BYTES } from '../services/llm'
 
 const MB = 1024 * 1024
 
@@ -35,7 +35,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
 
   const percent = Math.round(progress * 100)
   const mbDownloaded = (bytesDownloaded / MB).toFixed(0)
-  const mbTotal = bytesTotal > 0 ? (bytesTotal / MB).toFixed(0) : '~3303'
+  const mbTotal = bytesTotal > 0 ? (bytesTotal / MB).toFixed(0) : String(Math.round(MODEL_SIZE_BYTES / 1e6))
 
   const isDownloading = modelStatus === 'downloading'
   const isUnsupported = modelStatus === 'unsupported'
