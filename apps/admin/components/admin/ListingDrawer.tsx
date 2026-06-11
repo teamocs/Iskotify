@@ -11,7 +11,7 @@ interface Props {
 
 const EMPTY = {
   type: 'scholarship', title: '', slug: '', provider: '', description: '',
-  coverage: '', deadline: '', exam_date: '', region: '', status: 'active',
+  coverage: '', deadline: '', exam_date: '', results_date: '', region: '', status: 'active',
   grant_amount: '',
   external_url: '',
   // Scholarship typed fields
@@ -24,10 +24,75 @@ const EMPTY = {
   monthly_stipend: '',
   service_obligation_years: '',
   has_entrance_exam: false,
-  application_window: ''
+  application_window: '',
+  // Scholarship meta JSONB fields
+  meta_huc_excluded: false,
+  meta_target_year_levels: '',
+  meta_other_benefits: '',
+  meta_raw_json: '',
+  meta_raw_error: '',
+  meta_show_raw: false,
+  meta_open: false,
+}
+
+function nullableNumber(val: string): number | null {
+  if (val === '' || val === null || val === undefined) return null
+  const n = Number(val)
+  return isNaN(n) ? null : n
+}
+
+function epochToDateStr(ms: number | null | undefined): string {
+  if (!ms) return ''
+  try { return new Date(ms).toISOString().slice(0, 10) } catch { return '' }
+}
+
+function parseMetaFields(metaJson: unknown): {
+  huc_excluded: boolean
+  target_year_levels: string
+  other_benefits: string
+} {
+  let meta: Record<string, unknown> = {}
+  if (typeof metaJson === 'string') {
+    try { meta = JSON.parse(metaJson) } catch { /* ignore */ }
+  } else if (metaJson && typeof metaJson === 'object') {
+    meta = metaJson as Record<string, unknown>
+  }
+  return {
+    huc_excluded: !!meta.huc_excluded,
+    target_year_levels: Array.isArray(meta.target_year_levels)
+      ? (meta.target_year_levels as unknown[]).flatMap(v => { const s = String(v).trim(); return s ? [s] : [] }).join(', ')
+      : '',
+    other_benefits: Array.isArray(meta.other_benefits)
+      ? (meta.other_benefits as unknown[]).flatMap(v => { const s = String(v).trim(); return s ? [s] : [] }).join(', ')
+      : '',
+  }
+}
+
+function buildMetaPayload(
+  hucExcluded: boolean,
+  targetYearLevelsRaw: string,
+  otherBenefitsRaw: string,
+  showRaw: boolean,
+  rawJson: string,
+): { meta: Record<string, unknown> | null; error: string } {
+  let base: Record<string, unknown> = {}
+  if (showRaw && rawJson.trim()) {
+    try { base = JSON.parse(rawJson) }
+    catch { return { meta: null, error: 'Invalid JSON — fix or clear the Advanced JSON field.' } }
+  }
+  const target_year_levels = targetYearLevelsRaw.split(',').flatMap(s => { const t = s.trim(); return t ? [t] : [] })
+  const other_benefits = otherBenefitsRaw.split(',').flatMap(s => { const t = s.trim(); return t ? [t] : [] })
+  return {
+    meta: { ...base, huc_excluded: hucExcluded, target_year_levels, other_benefits },
+    error: '',
+  }
 }
 
 export function ListingDrawer({ listing, onClose }: Props) {
+  const parsedMeta = listing?.scholarship_meta != null
+    ? parseMetaFields(listing.scholarship_meta)
+    : { huc_excluded: false, target_year_levels: '', other_benefits: '' }
+
   const [form, setForm] = useState(listing ? {
     type: listing.type,
     title: listing.title,
@@ -37,6 +102,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
     coverage: listing.coverage ?? '',
     deadline: listing.deadline ?? '',
     exam_date: listing.exam_date ?? '',
+    results_date: epochToDateStr((listing as any).results_date),
     region: listing.region ?? '',
     status: listing.status,
     grant_amount: listing.grant_amount?.toString() ?? '',
@@ -51,7 +117,15 @@ export function ListingDrawer({ listing, onClose }: Props) {
     monthly_stipend: listing.monthly_stipend?.toString() ?? '',
     service_obligation_years: listing.service_obligation_years?.toString() ?? '',
     has_entrance_exam: listing.has_entrance_exam ?? false,
-    application_window: listing.application_window ?? ''
+    application_window: listing.application_window ?? '',
+    // Scholarship meta
+    meta_huc_excluded: parsedMeta.huc_excluded,
+    meta_target_year_levels: parsedMeta.target_year_levels,
+    meta_other_benefits: parsedMeta.other_benefits,
+    meta_raw_json: '',
+    meta_raw_error: '',
+    meta_show_raw: false,
+    meta_open: false,
   } : EMPTY)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -67,21 +141,34 @@ export function ListingDrawer({ listing, onClose }: Props) {
       setForm(f => ({ ...f, [field]: e.target.checked }))
   }
 
-  function nullableNumber(val: string): number | null {
-    if (val === '' || val === null || val === undefined) return null
-    const n = Number(val)
-    return isNaN(n) ? null : n
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+
+    // Validate scholarship meta raw JSON if shown
+    let scholarship_meta: Record<string, unknown> | null = null
+    if (form.type === 'scholarship') {
+      const result = buildMetaPayload(
+        form.meta_huc_excluded as boolean,
+        form.meta_target_year_levels as string,
+        form.meta_other_benefits as string,
+        form.meta_show_raw as boolean,
+        form.meta_raw_json as string,
+      )
+      if (result.error) {
+        setForm(f => ({ ...f, meta_raw_error: result.error }))
+        return
+      }
+      scholarship_meta = result.meta
+    }
+
     setSaving(true)
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...form,
       grant_amount: nullableNumber(form.grant_amount as string),
       deadline: form.deadline || null,
       exam_date: form.exam_date || null,
+      results_date: form.results_date || null,
       // Scholarship typed fields
       province: form.province || null,
       city: form.city || null,
@@ -92,8 +179,21 @@ export function ListingDrawer({ listing, onClose }: Props) {
       monthly_stipend: nullableNumber(form.monthly_stipend as string),
       service_obligation_years: nullableNumber(form.service_obligation_years as string),
       has_entrance_exam: form.has_entrance_exam,
-      application_window: form.application_window || null
+      application_window: form.application_window || null,
     }
+    // Attach scholarship_meta only for scholarships
+    if (form.type === 'scholarship' && scholarship_meta !== null) {
+      payload.scholarship_meta = scholarship_meta
+    }
+    // Strip internal UI-only fields
+    delete payload.meta_huc_excluded
+    delete payload.meta_target_year_levels
+    delete payload.meta_other_benefits
+    delete payload.meta_raw_json
+    delete payload.meta_raw_error
+    delete payload.meta_show_raw
+    delete payload.meta_open
+
     const url = listing ? `/api/admin/listings/${listing.id}` : '/api/admin/listings'
     const method = listing ? 'PATCH' : 'POST'
     const res = await fetch(url, {
@@ -118,7 +218,12 @@ export function ListingDrawer({ listing, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="flex-1 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      <button
+        type="button"
+        aria-label="Close drawer"
+        className="flex-1 bg-black/20 backdrop-blur-sm border-0 p-0 cursor-default"
+        onClick={onClose}
+      />
       <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
           <h2 className="font-heading font-bold text-lg text-[#1d1d1f]">
@@ -152,6 +257,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
             ['external_url', 'External URL', 'url'],
             ['deadline', 'Deadline', 'date'],
             ['exam_date', 'Exam Date', 'date'],
+            ['results_date', 'Results Date', 'date'],
             ['grant_amount', 'Grant Amount (₱)', 'number']
           ] as [string, string, string][]).map(([field, label, type]) => (
             <div key={field}>
@@ -238,6 +344,90 @@ export function ListingDrawer({ listing, onClose }: Props) {
               </div>
             </div>
           </div>
+
+          {/* Scholarship Meta — only for scholarships */}
+          {form.type === 'scholarship' && (
+            <div className={sectionCls}>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, meta_open: !(f.meta_open as boolean) }))}
+                className="w-full flex items-center justify-between pb-2 border-b border-black/[0.06] mb-3"
+              >
+                <p className={sectionTitleCls.replace('mb-3', '').replace('border-b border-black/[0.06] pb-2', '').trim()}>
+                  Scholarship Meta
+                </p>
+                <span className="text-[#aeaeb2] text-xs">{form.meta_open ? '▲ collapse' : '▼ expand'}</span>
+              </button>
+              {form.meta_open && (
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.meta_huc_excluded as boolean}
+                      onChange={setCheck('meta_huc_excluded')}
+                      className="w-4 h-4 rounded accent-[#800000]"
+                    />
+                    <span className="text-sm text-[#1d1d1f]">HUC Excluded</span>
+                    <span className="text-[10px] text-[#aeaeb2]">(highly urbanized cities ineligible)</span>
+                  </label>
+                  <div>
+                    <label className={labelCls}>Target Year Levels (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={form.meta_target_year_levels as string}
+                      onChange={set('meta_target_year_levels')}
+                      className={inputCls}
+                      placeholder="e.g. Grade 12, Freshman"
+                    />
+                    <p className="text-[10px] text-[#aeaeb2] mt-1">Stored as an array. E.g. Grade 12, Freshman</p>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Other Benefits (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={form.meta_other_benefits as string}
+                      onChange={set('meta_other_benefits')}
+                      className={inputCls}
+                      placeholder="e.g. Free uniform, Monthly stipend"
+                    />
+                    <p className="text-[10px] text-[#aeaeb2] mt-1">Stored as an array.</p>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        meta_show_raw: !(f.meta_show_raw as boolean),
+                        meta_raw_error: '',
+                      }))}
+                      className="text-[11px] text-[#800000] underline"
+                    >
+                      {form.meta_show_raw ? 'Hide Advanced JSON' : 'Advanced JSON'}
+                    </button>
+                    {form.meta_show_raw && (
+                      <div className="mt-2">
+                        <label className={labelCls}>Raw JSON (structured fields above take precedence on save)</label>
+                        <textarea
+                          value={form.meta_raw_json as string}
+                          onChange={(e) => {
+                            setForm(f => ({ ...f, meta_raw_json: e.target.value, meta_raw_error: '' }))
+                            try { JSON.parse(e.target.value || '{}') }
+                            catch { setForm(f => ({ ...f, meta_raw_error: 'Invalid JSON' })) }
+                          }}
+                          rows={4}
+                          className={inputCls + ' font-mono text-xs'}
+                          placeholder='{"huc_excluded": false, "target_year_levels": [], "other_benefits": []}'
+                        />
+                        {(form.meta_raw_error as string) && (
+                          <p className="text-xs text-red-600 mt-1">{form.meta_raw_error as string}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>}
         </form>

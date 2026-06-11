@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
       monthly_stipend: body.monthly_stipend ?? null,
       service_obligation_years: body.service_obligation_years ?? null,
       has_entrance_exam: body.has_entrance_exam ?? false,
-      application_window: body.application_window ?? null
+      application_window: body.application_window ?? null,
+      scholarship_meta: body.scholarship_meta ?? {}
     })
     if (error) {
       console.error('[admin/listings POST] supabase error:', error)

@@ -14,6 +14,10 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     ],
   },
   {
+    section: 'UPDATES',
+    items: [{ href: '/admin/updates', icon: '📣', label: 'Admissions Updates' }],
+  },
+  {
     section: 'SYNC',
     items: [{ href: '/admin/sync', icon: '📄', label: 'Sync Logs' }],
   },
