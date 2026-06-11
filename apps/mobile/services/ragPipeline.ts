@@ -14,6 +14,7 @@
 
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
+import type { AiChatConfig } from './aiConfig'
 import {
   buildProgressContext,
   buildRetrievedFlashcards,
@@ -28,8 +29,8 @@ export interface RagResult {
   sources: string[]
 }
 
-const TOTAL_TOKEN_BUDGET = 700
-const PER_BLOCK_CHAR_CAP = 280
+const BUILTIN_TOTAL_TOKEN_BUDGET = 700
+const BUILTIN_PER_BLOCK_CHAR_CAP = 280
 
 /**
  * Estimate tokens from a string: ceil(chars / 4). Pure, unit-tested.
@@ -80,19 +81,31 @@ function hasContent(s: string | null | undefined): s is string {
  *   topic (default): flashcards > listings > courses > progress
  *
  * "listing intent" = listings block came back non-empty.
+ *
+ * @param cfg - Optional remote AI config. When provided:
+ *   - ragTotalTokenBudget / ragPerBlockCharCap override the builtin caps when > 0.
+ *   - ragBlocksEnabled.{name}=false skips that builder entirely.
  */
 export async function buildRagContext(
   db: DrizzleClient,
   question: string,
   mode: RagMode,
   stats: HomeStats,
+  cfg?: AiChatConfig,
 ): Promise<RagResult> {
-  // ── Stage 1: retrieve in parallel ────────────────────────────────────────
+  // Resolve effective budget caps from cfg (if provided and > 0) or builtins.
+  const TOTAL_TOKEN_BUDGET = cfg?.ragTotalTokenBudget ?? BUILTIN_TOTAL_TOKEN_BUDGET
+  const PER_BLOCK_CHAR_CAP = cfg?.ragPerBlockCharCap ?? BUILTIN_PER_BLOCK_CHAR_CAP
+
+  // Resolve which blocks are enabled (default all true when cfg absent)
+  const blocksEnabled = cfg?.ragBlocksEnabled ?? { flashcards: true, listings: true, courses: true, progress: true }
+
+  // ── Stage 1: retrieve in parallel (skip disabled blocks) ─────────────────
   const [progressRaw, flashcardsRaw, listingsRaw, coursesRaw] = await Promise.all([
-    buildProgressContext(db, stats),
-    buildRetrievedFlashcards(db, question, 3),
-    buildListingsContext(db, question),
-    buildCourseConnectionContext(db, question),
+    blocksEnabled.progress  ? buildProgressContext(db, stats)           : Promise.resolve(''),
+    blocksEnabled.flashcards ? buildRetrievedFlashcards(db, question, 3) : Promise.resolve(''),
+    blocksEnabled.listings  ? buildListingsContext(db, question)         : Promise.resolve(''),
+    blocksEnabled.courses   ? buildCourseConnectionContext(db, question) : Promise.resolve(''),
   ])
 
   // ── Stage 2: collect named blocks ────────────────────────────────────────

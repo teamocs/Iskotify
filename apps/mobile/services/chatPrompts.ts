@@ -6,9 +6,15 @@
  *
  * Exported:
  *   SYSTEM_PROMPT_PROGRESS, SYSTEM_PROMPT_TOPIC, SYSTEM_PROMPT_MATH
- *   SCOPE_BLOCK, CORE_RULES (for tests/telemetry)
+ *   SCOPE_BLOCK, GROUNDING_RULE, ANTI_INJECTION_RULE, URL_RULE, CORE_RULES (for tests/telemetry)
+ *   BUILTIN_PROGRESS_ADDENDUM, BUILTIN_TOPIC_ADDENDUM, BUILTIN_MATH_ADDENDUM (for admin defaults)
+ *   composeSystemPrompt — assembles override-or-builtin per piece (remote AI config)
  *   buildChatPrompt, parseChatChunk, detectChatMode, isMathQuestion
  *   ChatMode
+ *
+ * KEEP IN SYNC: apps/admin/lib/aiConfigDefaults.ts copies the builtin strings as
+ * reference text so admins can see the defaults in the admin UI. Update both when
+ * any builtin text changes.
  */
 
 export type ChatMode = 'progress' | 'topic'
@@ -142,6 +148,107 @@ export const SYSTEM_PROMPT_MATH =
   `Notation: x^2 for squared, sqrt(N) for square root, * for multiply, / for divide.\n` +
   `Address the student in second person (you/your).`
 
+// ── Exported builtin addenda (for admin defaults reference) ──────────────────
+// These are the per-mode addendum strings appended AFTER CORE_RULES in each
+// system prompt. Exported so apps/admin/lib/aiConfigDefaults.ts can show the
+// admin the current builtin text as placeholder/reference.
+// KEEP IN SYNC with aiConfigDefaults.ts when changing these strings.
+
+export const BUILTIN_PROGRESS_ADDENDUM =
+  `Answer using the [STUDENT CONTEXT] and any [RELEVANT FLASHCARDS] below. ` +
+  `If the answer isn't in either, say "I don't have that info yet."\n` +
+  `Example — student asks "Anong dapat kong i-focus today?" → ` +
+  `you answer in English: "Focus on Algebra today — it's your weakest at 32%."\n` +
+  `RULES:\n` +
+  `- Maximum 2 sentences. Be direct. No preamble.\n` +
+  `- Address the student in second person (you/your).\n` +
+  `- End with one specific action when relevant.`
+
+export const BUILTIN_TOPIC_ADDENDUM =
+  `When [RELEVANT FLASHCARDS] are provided, ground your answer in them — ` +
+  `they're from the student's own deck and reflect what they're studying.\n` +
+  `Example — student asks "Anong photosynthesis?" → ` +
+  `you answer in English: "Photosynthesis is how plants make food from sunlight using chlorophyll."\n` +
+  `RULES:\n` +
+  `- Maximum 2 sentences total. Be direct. No preamble.\n` +
+  `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Review tab.\n` +
+  `- Address the student in second person (you/your).`
+
+export const BUILTIN_MATH_ADDENDUM =
+  `ALWAYS solve the problem step-by-step. Never refuse, never say "try it yourself".\n` +
+  `Double-check arithmetic before writing each step.\n` +
+  `If [RELEVANT FLASHCARDS] show a similar worked problem, follow that method.\n` +
+  `\n` +
+  `FORMAT (one item per line):\n` +
+  `Step 1: <what you do> → <result>\n` +
+  `Step 2: <what you do> → <result>\n` +
+  `Answer: <final value>\n` +
+  `\n` +
+  `Example:\n` +
+  `Question: Solve 2x + 6 = 14\n` +
+  `Step 1: Subtract 6 from both sides → 2x = 8\n` +
+  `Step 2: Divide both sides by 2 → x = 4\n` +
+  `Answer: x = 4\n` +
+  `\n` +
+  `Notation: x^2 for squared, sqrt(N) for square root, * for multiply, / for divide.\n` +
+  `Address the student in second person (you/your).`
+
+// ── Remote AI config composition ─────────────────────────────────────────────
+
+import type { AiChatConfig } from './aiConfig'
+
+/**
+ * Compose the full system prompt for a given mode, substituting remote overrides
+ * where non-empty and falling back to builtins otherwise.
+ *
+ * Override semantics (mirrors getAiConfig):
+ *   - coreRulesOverride: replaces CORE_RULES when non-empty
+ *   - scopeBlockOverride / groundingRuleOverride / antiInjectionOverride:
+ *     replace the corresponding block WITHIN CORE_RULES composition
+ *     (only applied when coreRulesOverride is NOT set — if admin has provided a
+ *     full core_rules_override, individual piece overrides are ignored for core)
+ *   - progress/topic/mathAddendumOverride: replaces the per-mode addendum
+ *
+ * Safety note: all four guardrail pieces (SCOPE, GROUNDING, ANTI_INJECTION, URL_RULE)
+ * are part of CORE_RULES. Admins can override them; this is intentional — they are
+ * trusted operators. The admin UI warns about the risk.
+ */
+export function composeSystemPrompt(mode: 'progress' | 'topic' | 'math', cfg?: AiChatConfig): string {
+  // ── Core rules block ───────────────────────────────────────────────────────
+  let coreBlock: string
+  if (cfg?.coreRulesOverride) {
+    // Full override: replace entire CORE_RULES
+    coreBlock = cfg.coreRulesOverride
+  } else {
+    // Compose from individual pieces (each can be independently overridden)
+    const scopeBlock       = cfg?.scopeBlockOverride       ?? SCOPE_BLOCK
+    const groundingRule    = cfg?.groundingRuleOverride    ?? GROUNDING_RULE
+    const antiInjection    = cfg?.antiInjectionOverride    ?? ANTI_INJECTION_RULE
+    coreBlock =
+      `You are Kuya Baw, a warm, encouraging Filipino study kuya for UPCAT and college-prep students.\n` +
+      `Be supportive but honest — never guarantee exam results, admission, or specific cutoff/UPG scores.\n` +
+      `You can give honest career guidance — destination countries, salary/visa/PR realities, AI-impact on careers — ` +
+      `but NEVER guarantee jobs, salaries, or PR approval. Always say to verify with DMW/POEA, embassies, and official program sites.\n` +
+      `Always respond in clear English, even if the student asks in Tagalog.\n` +
+      URL_RULE + `\n` +
+      scopeBlock + `\n` +
+      groundingRule + `\n` +
+      antiInjection
+  }
+
+  // ── Per-mode addendum ──────────────────────────────────────────────────────
+  let addendum: string
+  if (mode === 'progress') {
+    addendum = cfg?.progressAddendumOverride ?? BUILTIN_PROGRESS_ADDENDUM
+  } else if (mode === 'math') {
+    addendum = cfg?.mathAddendumOverride ?? BUILTIN_MATH_ADDENDUM
+  } else {
+    addendum = cfg?.topicAddendumOverride ?? BUILTIN_TOPIC_ADDENDUM
+  }
+
+  return coreBlock + `\n` + addendum
+}
+
 // ── Math / mode detection ────────────────────────────────────────────────────
 
 const STRONG_MATH_KEYWORDS =
@@ -239,6 +346,7 @@ export function buildChatPrompt(
   listingsCtx?: string,
   courseCtx?: string,
   ragBlocks?: string,
+  systemPromptOverride?: string,
 ): string {
   const sanitize = (s: string) =>
     s.replace(/<(start|end)_of_turn>\s*(?:user|model)\b[\s\S]*$/gi, '').replace(/<(start|end)_of_turn>/g, '')
@@ -246,9 +354,12 @@ export function buildChatPrompt(
   const safeQuestion = sanitize(question)
   const isMath = isMathQuestion(question)
 
-  const systemPrompt = isMath
-    ? SYSTEM_PROMPT_MATH
-    : mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC
+  // Use the override system prompt (from composeSystemPrompt with remote cfg) when provided,
+  // otherwise fall back to the standard builtin system prompts.
+  const systemPrompt = systemPromptOverride
+    ?? (isMath
+      ? SYSTEM_PROMPT_MATH
+      : mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC)
   const instruction = `[INSTRUCTION] Respond in clear English only.`
 
   const sections: string[] = [systemPrompt, instruction]

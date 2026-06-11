@@ -26,6 +26,7 @@ import {
   courseSchoolQuality, barResults, courseTaxonomyMap,
   admissionsUpdates,
   examSkillCategories, examBlueprints, examBlueprintSections, examCourseNotes,
+  aiChatConfig,
 } from '../db/schema'
 import { supabase } from './supabase'
 
@@ -300,7 +301,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // NOTE: .eq('status','published') removed from blueprints so unpublish propagates.
     // Local readers (examBlueprints.ts getExamBlueprint / listPublishedBlueprintSlugs)
     // already filter status='published' in JS — verified in examBlueprints.ts:22,43.
-    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes] = await Promise.all([
+    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes, aiChatConfigRes] = await Promise.all([
       supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at')
@@ -308,6 +309,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at')
+        .gt('updated_at', since),
+      // AI chat config — single row (id=1). incremental: only pull when updated_at changed.
+      supabase.from('ai_chat_config')
+        .select('id,core_rules_override,scope_block_override,grounding_rule_override,anti_injection_override,progress_addendum_override,topic_addendum_override,math_addendum_override,rag_total_token_budget,rag_per_block_char_cap,rag_blocks_enabled,updated_at')
         .gt('updated_at', since),
     ])
 
@@ -701,6 +706,26 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
         }
         tx.insert(examCourseNotes).values(vals).onConflictDoUpdate({ target: examCourseNotes.id, set: vals }).run()
+      }
+
+      // ── AI Chat Config (single row, id=1) ───────────────────────────────────
+      for (const row of (aiChatConfigRes.data ?? [])) {
+        const vals = {
+          id: 1,
+          coreRulesOverride:        row.core_rules_override ?? '',
+          scopeBlockOverride:       row.scope_block_override ?? '',
+          groundingRuleOverride:    row.grounding_rule_override ?? '',
+          antiInjectionOverride:    row.anti_injection_override ?? '',
+          progressAddendumOverride: row.progress_addendum_override ?? '',
+          topicAddendumOverride:    row.topic_addendum_override ?? '',
+          mathAddendumOverride:     row.math_addendum_override ?? '',
+          ragTotalTokenBudget:      row.rag_total_token_budget ?? 700,
+          ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
+          // jsonb → store as JSON string on SQLite
+          ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
+          remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
+        }
+        tx.insert(aiChatConfig).values(vals).onConflictDoUpdate({ target: aiChatConfig.id, set: vals }).run()
       }
 
       const syncedAt = Date.now()

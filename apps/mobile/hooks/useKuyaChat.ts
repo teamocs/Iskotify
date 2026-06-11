@@ -6,9 +6,11 @@ import { streamChatInference, modelExists } from '../services/llm'
 import { scheduleWebPersist } from '../db/webPersist'
 import {
   buildChatPrompt, parseChatChunk, isMathQuestion, detectChatMode,
-  SYSTEM_PROMPT_PROGRESS, SYSTEM_PROMPT_TOPIC, SYSTEM_PROMPT_MATH,
+  composeSystemPrompt,
 } from '../services/chatPrompts'
 import { buildRagContext } from '../services/ragPipeline'
+import { getAiConfig } from '../services/aiConfig'
+import type { AiChatConfig } from '../services/aiConfig'
 import { chatMessages } from '../db/schema'
 import { getSettings } from '../services/settings'
 import { getGeminiKey } from '../services/geminiKey'
@@ -235,16 +237,31 @@ export function useKuyaChat(): UseKuyaChat {
             // If listing is still null after refresh it genuinely has none — proceed.
           }
 
-          // ── Stage 1: RAG pipeline + settings/key in parallel ────────────
-          const [ragResult, settings, geminiKey] = await Promise.all([
-            buildRagContext(dbRef.current, trimmed, effectiveMode, statsRef.current),
+          // ── Stage 1: aiConfig + settings/key in parallel (RAG after cfg resolves) ──
+          // aiConfig is cached (300s TTL) so this is near-instant after first sync.
+          // aiConfig failure is non-fatal — undefined → all builtins used.
+          const [aiCfg, settings, geminiKey] = await Promise.all([
+            getAiConfig(dbRef.current).catch((): AiChatConfig | undefined => undefined),
             getSettings(dbRef.current),
             getGeminiKey(),
           ])
-          const { blocks, sources } = ragResult
 
-          // Dev debug: log which sources contributed to the context
-          if (__DEV__) console.log('[rag]', sources.join(','))
+          // ── Stage 2: RAG pipeline with resolved cfg ────────────────────────
+          // cfg enables block-disabling and budget overrides in the pipeline.
+          const { blocks, sources } = await buildRagContext(
+            dbRef.current, trimmed, effectiveMode, statsRef.current, aiCfg,
+          )
+
+          // Dev debug: log which sources contributed to the context + active overrides
+          if (__DEV__) {
+            console.log('[rag]', sources.join(','))
+            const activeOverrides = aiCfg
+              ? Object.entries(aiCfg)
+                  .filter(([k, v]) => k.endsWith('Override') && v !== undefined)
+                  .map(([k]) => k)
+              : []
+            if (activeOverrides.length > 0) console.log('[ai-config] overrides:', activeOverrides.join(', '))
+          }
 
           isGeminiMode = settings.aiProvider === 'gemini' && geminiKey !== null
 
@@ -253,9 +270,8 @@ export function useKuyaChat(): UseKuyaChat {
             if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
             if (!isMountedRef.current) return
 
-            const systemPrompt = isMath
-              ? SYSTEM_PROMPT_MATH
-              : mode === 'progress' ? SYSTEM_PROMPT_PROGRESS : SYSTEM_PROMPT_TOPIC
+            const geminiMode = isMath ? 'math' : mode
+            const systemPrompt = composeSystemPrompt(geminiMode, aiCfg)
 
             const userContent = buildGeminiUserContent(
               trimmed,
@@ -295,7 +311,13 @@ export function useKuyaChat(): UseKuyaChat {
           }
 
           // ── Local model path ──────────────────────────────────────────────
-          // Pass ragBlocks (8th param) so buildChatPrompt uses the new pipeline path
+          // buildChatPromptWithSystem wraps the Gemma-format assembler with a
+          // custom system prompt from composeSystemPrompt (which applies remote overrides).
+          const localMode = isMath ? 'math' : mode
+          const localSystemPrompt = composeSystemPrompt(localMode, aiCfg)
+          // buildChatPrompt uses the system prompt baked into its mode constants.
+          // We supply the composed system prompt as part of the ragBlocks so it
+          // leads all context (9th param path). Instead, use the overrideSystemPrompt param.
           const prompt = buildChatPrompt(
             mode,
             trimmed,
@@ -305,6 +327,7 @@ export function useKuyaChat(): UseKuyaChat {
             undefined,       // listingsCtx — handled by pipeline
             undefined,       // courseCtx — handled by pipeline
             blocks,          // ragBlocks from the pipeline
+            localSystemPrompt, // override system prompt (9th param, new)
           )
 
           // Math questions need a bigger budget (multi-step solutions exceed 96 tokens)

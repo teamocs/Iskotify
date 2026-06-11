@@ -553,6 +553,24 @@ export const MIGRATIONS = [
   // 'local' = on-device Gemma 4 E2B; 'gemini' = user's own API key via SecureStore.
   // NOT NULL + DEFAULT prevents Drizzle from inserting NULL and silently throwing.
   `ALTER TABLE user_settings ADD COLUMN ai_provider TEXT NOT NULL DEFAULT 'local'`,
+
+  // ── Task B (Epic B): AI Chat Config — remote-controlled Kuya Baw settings ──
+  // Single-row table (id=1) mirroring Supabase ai_chat_config.
+  // NOT NULL + DEFAULT on every column prevents silent NULL insert failures.
+  `CREATE TABLE IF NOT EXISTS ai_chat_config (
+    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    core_rules_override TEXT NOT NULL DEFAULT '',
+    scope_block_override TEXT NOT NULL DEFAULT '',
+    grounding_rule_override TEXT NOT NULL DEFAULT '',
+    anti_injection_override TEXT NOT NULL DEFAULT '',
+    progress_addendum_override TEXT NOT NULL DEFAULT '',
+    topic_addendum_override TEXT NOT NULL DEFAULT '',
+    math_addendum_override TEXT NOT NULL DEFAULT '',
+    rag_total_token_budget INTEGER NOT NULL DEFAULT 700,
+    rag_per_block_char_cap INTEGER NOT NULL DEFAULT 280,
+    rag_blocks_enabled TEXT NOT NULL DEFAULT '{}',
+    remote_updated_at INTEGER
+  )`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

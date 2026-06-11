@@ -70,6 +70,13 @@ jest.mock('../../services/geminiClient', () => ({
   generateGeminiReply: jest.fn().mockResolvedValue('Gemini reply'),
 }))
 
+// aiConfig — returns all-defaults (no overrides) so existing tests are unaffected.
+jest.mock('../../services/aiConfig', () => ({
+  getAiConfig: jest.fn().mockResolvedValue({
+    ragBlocksEnabled: { flashcards: true, listings: true, courses: true, progress: true },
+  }),
+}))
+
 import { useKuyaChat } from '../useKuyaChat'
 import { streamChatInference, modelExists } from '../../services/llm'
 import { getSettings } from '../../services/settings'
