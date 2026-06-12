@@ -26,6 +26,10 @@ export function QuestionNavigator({ total, currentIdx, answeredIdxs, onJump }: P
   }, [currentIdx, viewportWidth])
 
   const s = useMemo(() => StyleSheet.create({
+    // ScrollView's base style is flexGrow: 1 — without this override the
+    // navigator stretches vertically in the runners' fixed-zone column,
+    // opening a large gap between the number row and the content below it.
+    scroll: { flexGrow: 0 },
     row: { paddingHorizontal: 12, paddingVertical: 8, gap: 6, flexDirection: 'row' },
     cell: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2 },
     cellAnswered: { backgroundColor: t.accentSurface, borderColor: t.accent },
@@ -38,6 +42,7 @@ export function QuestionNavigator({ total, currentIdx, answeredIdxs, onJump }: P
     <ScrollView
       ref={scrollRef}
       horizontal
+      style={s.scroll}
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={s.row}
       onLayout={e => setViewportWidth(e.nativeEvent.layout.width)}
