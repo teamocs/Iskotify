@@ -189,6 +189,46 @@ describe('HomeScreen', () => {
     expect(screen.getByText('My Focus')).toBeTruthy()
   })
 
+  it('renders the My Focus subheadline', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Readiness and streaks for your target exams')).toBeTruthy()
+  })
+
+  it('renders the Upcoming Dates subheadline', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Deadlines and exam dates on your radar')).toBeTruthy()
+  })
+
+  it('renders the Explore section header with its subheadline', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Explore')).toBeTruthy()
+    expect(screen.getByText('Search or browse university exams, scholarships & in-demand courses')).toBeTruthy()
+  })
+
+  it('renders all four explore quick-link cards', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Universities')).toBeTruthy()
+    expect(screen.getByText('Scholarships')).toBeTruthy()
+    expect(screen.getByText('Courses')).toBeTruthy()
+    expect(screen.getByText('Destinations')).toBeTruthy()
+  })
+
+  it('pressing the Universities explore card deep-links to the Universities tab', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByText('Universities'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=universities')
+  })
+
+  it('pressing the Destinations explore card deep-links to the Destinations tab', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByText('Destinations'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=destinations')
+  })
+
   it('renders focus card title + Readiness + streak when focusedListings mocked', () => {
     const futureDate = Date.now() + 10 * 86_400_000
     mockUseHomeStats.mockReturnValue({

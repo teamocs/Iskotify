@@ -55,6 +55,14 @@ function msToDays(ms: number): number {
   return Math.ceil((ms - Date.now()) / 86_400_000)
 }
 
+// Explore quick-links — each deep-links into one of the Lists screen's 4 tabs.
+const EXPLORE_LINKS = [
+  { emoji: '🎓', label: 'Universities', tab: 'universities' },
+  { emoji: '🏅', label: 'Scholarships', tab: 'scholarships' },
+  { emoji: '📈', label: 'Courses', tab: 'courses' },
+  { emoji: '🌏', label: 'Destinations', tab: 'destinations' },
+] as const
+
 const NOTIF_TYPES = [
   { icon: '📚', title: 'Daily Practice Reminder', sub: 'Every day at 9:00 AM' },
   { icon: '🎯', title: 'Weekly Weak Areas Nudge', sub: 'Every Sunday at 10:00 AM' },
@@ -352,6 +360,25 @@ export default function HomeScreen() {
     focusDaysLeft: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs / 2 },
     focusMiniStats: { flexDirection: 'row', gap: spacing.md },
     focusMiniStat: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    // Explore quick-links grid (2×2)
+    exploreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    exploreCard: {
+      flexBasis: '48%',
+      flexGrow: 1,
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.md,
+      borderCurve: 'continuous',
+      paddingVertical: 12,
+      paddingHorizontal: spacing.md,
+    },
+    exploreEmoji: { fontSize: 16 },
+    exploreLabel: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
 
   return (
@@ -469,7 +496,7 @@ export default function HomeScreen() {
 
           {/* (4) My Focus — one card per focusedListings entry */}
           <View style={s.section}>
-            <SectionHeader title="My Focus" />
+            <SectionHeader title="My Focus" subtitle="Readiness and streaks for your target exams" />
           </View>
           {focusedListings.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
@@ -519,10 +546,33 @@ export default function HomeScreen() {
             />
           )}
 
-          {/* (5) Upcoming Dates — top 3 + See all — LAST section */}
+          {/* (5) Explore — discovery quick-links into the Lists screen's tabs */}
+          <View style={s.section}>
+            <SectionHeader
+              title="Explore"
+              subtitle="Search or browse university exams, scholarships & in-demand courses"
+            />
+          </View>
+          <View style={s.exploreGrid}>
+            {EXPLORE_LINKS.map(({ emoji, label, tab }) => (
+              <Pressable
+                key={tab}
+                style={({ pressed }) => [s.exploreCard, pressed && { opacity: 0.75 }]}
+                onPress={() => router.push(`/(tabs)/listings?tab=${tab}`)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <Text style={s.exploreEmoji} maxFontSizeMultiplier={1.4}>{emoji}</Text>
+                <Text style={s.exploreLabel} maxFontSizeMultiplier={1.4}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* (6) Upcoming Dates — top 3 + See all — LAST section */}
           <View style={s.section}>
             <SectionHeader
               title="Upcoming Dates"
+              subtitle="Deadlines and exam dates on your radar"
               actionLabel={
                 upcomingDates.length > TOP_N
                   ? (upcomingExpanded ? 'Show less' : `See all (${upcomingDates.length})`)

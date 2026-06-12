@@ -16,9 +16,13 @@ jest.mock('@lineiconshq/free-icons', () => ({
   SparkOutlined: {},
 }))
 
+// Controlled ?tab= deep-link param — override per-test via mockTabParam.value
+const mockTabParam: { value?: string } = { value: undefined }
+
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
+  useLocalSearchParams: jest.fn(() => ({ tab: mockTabParam.value })),
 }))
 
 jest.mock('../../../services/sync', () => ({
@@ -80,6 +84,7 @@ const SEARCH_PLACEHOLDER_UNI = "Search or ask, e.g. 'free nursing scholarships n
 
 describe('ListsScreen', () => {
   beforeEach(() => {
+    mockTabParam.value = undefined
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     jest.clearAllMocks()
@@ -325,6 +330,30 @@ describe('ListsScreen', () => {
     })
     // Subtitle should mention courses in demand
     expect(screen.getByText(/courses in demand/i)).toBeTruthy()
+  })
+
+  // ── ?tab= deep-link param ──────────────────────────────────────────────────
+
+  it('opens with the Courses tab active when tab param is "courses"', () => {
+    mockTabParam.value = 'courses'
+    render(<ListsScreen />)
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[2]?.props.accessibilityState?.selected).toBe(true)
+    expect(tabs[0]?.props.accessibilityState?.selected).toBe(false)
+  })
+
+  it('opens with the Destinations tab active when tab param is "destinations"', () => {
+    mockTabParam.value = 'destinations'
+    render(<ListsScreen />)
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[3]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  it('ignores an invalid tab param and stays on Universities', () => {
+    mockTabParam.value = 'bogus'
+    render(<ListsScreen />)
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs[0]?.props.accessibilityState?.selected).toBe(true)
   })
 
   // ── Badge rules (Universities tab — ≤2 per row) ───────────────────────────

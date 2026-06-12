@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicator, RefreshControl, ScrollView } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { router, useFocusEffect } from 'expo-router'
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, SparkOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
@@ -87,6 +87,13 @@ const TAB_LABELS: { key: Tab; label: string }[] = [
   { key: 'destinations', label: 'Destinations' },
 ]
 
+const VALID_TABS: readonly string[] = TAB_LABELS.map(t => t.key)
+
+/** Validate a ?tab= deep-link param into a Tab, or null when absent/invalid. */
+function parseTabParam(v: unknown): Tab | null {
+  return typeof v === 'string' && VALID_TABS.includes(v) ? (v as Tab) : null
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ListsScreen() {
@@ -109,6 +116,18 @@ export default function ListsScreen() {
   // ── Navigation + search state ─────────────────────────────────────────────
   const [tab, setTab] = useState<Tab>('universities')
   const [query, setQuery] = useState('')
+
+  // ?tab= deep-link (e.g. Home's Explore quick-links). Keyed on the param ONLY:
+  // it re-applies when a new push changes the param, but never overrides the
+  // user's manual tab switches afterwards (those don't re-run this effect).
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>()
+  useEffect(() => {
+    const parsed = parseTabParam(tabParam)
+    if (!parsed) return
+    setTab(prev => (prev === parsed ? prev : parsed))
+    setQuery('')
+    setAiResults(null)
+  }, [tabParam])
 
   // Hybrid search: keyword (instant) is the base; AI (on submit) reorders if available.
   const [aiResults, setAiResults] = useState<ListingRow[] | null>(null)
