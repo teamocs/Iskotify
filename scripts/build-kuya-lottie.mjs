@@ -2,15 +2,20 @@
 // sequence animation of the Kuya Baw hero mascot, generated from
 // apps/mobile/assets/images/kuya_baw_animated_for_hero_section.mp4.
 //
-// The source video has a flat #3E7E4A green screen; frames are chroma-keyed
-// to TRANSPARENT (not green) so the hero band behind it can be the app's
-// maroon accent. Each frame is palette-quantized PNG8+alpha (~10 KB) and
-// embedded as a base64 asset; one image layer per frame with ip/op windows
-// produces the sequence.
+// The source video has a flat #3E7E4A green screen; frames are keyed to
+// TRANSPARENT (not green) so the hero band behind it can be the app's maroon
+// accent. IMPORTANT: plain colorkey/chromakey partially erases the mascot's
+// dark fur (it carries green light-spill, landing near the key color), which
+// tinted the mascot maroon on the band. The key below is LUMA-GATED instead:
+// a pixel is removed only when green dominates R and B AND it is bright
+// enough to be background — dark fur is never touched. The mask is feathered
+// (gblur on alpha) for clean edges. Each frame is palette-quantized
+// PNG8+alpha (~10 KB) and embedded as a base64 asset; one image layer per
+// frame with ip/op windows produces the sequence.
 //
 // Reproduce:
 //   1. ffmpeg -i apps/mobile/assets/images/kuya_baw_animated_for_hero_section.mp4 \
-//        -vf "fps=12,colorkey=0x3E7E4A:0.18:0.08,despill=type=green,crop=792:672:64:32,scale=320:-2" \
+//        -vf "fps=12,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*not(gt(g(X,Y),r(X,Y)+22)*gt(g(X,Y),b(X,Y)+18)*gt(0.299*r(X,Y)+0.587*g(X,Y)+0.114*b(X,Y),65))',despill=type=green,split[c][d];[c]alphaextract,gblur=sigma=0.7[am];[d][am]alphamerge,crop=792:672:64:32,scale=320:-2" \
 //        <framesDir>/f%03d.png
 //   2. npm i sharp (anywhere; pass via NODE_PATH if not local)
 //   3. node scripts/build-kuya-lottie.mjs <framesDir>
