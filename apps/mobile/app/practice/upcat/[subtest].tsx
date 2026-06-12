@@ -266,7 +266,7 @@ export default function UpcatExam() {
 
       {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
           without scrolling, while very long options scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
         <View style={s.opts}>
           {q.options.map((o, oi) => (
             <Pressable
