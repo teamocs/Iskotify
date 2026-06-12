@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-// RN Image is fine for tiny bundled assets; adding expo-image is a native module that would break OTA delivery.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { StyleSheet, View, Text, Modal, Switch, Platform, Image, Pressable, RefreshControl } from 'react-native'
+import { StyleSheet, View, Text, Modal, Switch, Platform, Pressable, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineiconshq/free-icons'
+// logo.svg has no viewBox attribute (2048×2048 canvas) — pass viewBox explicitly at the call site so it scales.
+import Logo from '../../assets/images/logo.svg'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { Card } from '../../components/ui/Card'
+import { KuyaHeroAnimation } from '../../components/KuyaHeroAnimation'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
 import { InfoBanner } from '../../components/ui/InfoBanner'
@@ -30,9 +30,21 @@ function phHour(): number {
 
 function timeGreeting(): string {
   const h = phHour()
-  if (h < 12) return 'Good morning ☀️'
-  if (h < 18) return 'Good afternoon 🌤'
-  return 'Good evening 🌙'
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+// Hoisted: building an Intl formatter is slow — do it once per JS load.
+const HEADER_DATE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
+// Hero mascot display size (kuya-baw-hero.json is 320×272; 149 ≈ 175 × 272/320).
+// The speech bubble's left offset derives from MASCOT_W — keep them in sync.
+const MASCOT_W = 175
+const MASCOT_H = 149
+
+function headerDate(): string {
+  return HEADER_DATE_FORMAT.format(new Date()).toUpperCase()
 }
 
 function formatShortDate(ms: number): string {
@@ -270,33 +282,43 @@ export default function HomeScreen() {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
     root:  { flex: 1, backgroundColor: t.bg },
-    greetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: spacing.lg, paddingBottom: spacing.lg },
-    greetTime: { fontSize: typo.sm, color: t.textTertiary, marginBottom: spacing.xs / 2, fontFamily: 'Lexend_400Regular' },
-    greetName: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.5, fontFamily: 'Outfit_700Bold' },
-    iconBtn: { width: 44, height: 44, backgroundColor: t.surface2, borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
+    // Header row: logo tile (left) + action tiles (right), all the same treatment
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.lg, paddingBottom: spacing.lg },
+    iconBtn: { width: 46, height: 46, backgroundColor: t.surface2, borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
     headerBtns: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-    kuyaCard: { borderColor: 'rgba(128,0,0,0.35)', marginBottom: spacing.md },
-    kuyaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
-    kuyaAvatarLg: { width: 80, height: 80, borderRadius: radius.md, borderCurve: 'continuous', overflow: 'hidden', flexShrink: 0 },
-    kuyaNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    logoClip: { width: 28, height: 28, borderRadius: 8, borderCurve: 'continuous', overflow: 'hidden' },
+    // Date + greeting block
+    dateLine: { fontSize: typo.xs, letterSpacing: 1.2, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
+    greeting: { fontSize: 28, color: t.textPrimary, fontFamily: 'Outfit_400Regular', letterSpacing: -0.3 },
+    greetingName: { fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    // Hero band: full-bleed maroon stripe (absolute bottom layer) with the
+    // mascot overhanging its top edge and the speech bubble layered on top.
+    // Fixed wrapper height = no layout shift as kuyaMsg rotates.
+    heroWrap: { height: 150, marginTop: spacing.lg, marginBottom: spacing.md, marginHorizontal: -spacing.lg },
+    heroBand: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, backgroundColor: 'rgba(128,0,0,0.92)' },
+    heroMascot: { position: 'absolute', left: spacing.md, bottom: 0, width: MASCOT_W, height: MASCOT_H },
+    heroBubble: {
+      position: 'absolute',
+      left: MASCOT_W + spacing.md,
+      right: spacing.lg,
+      top: spacing.xs,
+      bottom: spacing.sm,
+      // t.bg (opaque) — a translucent surface over the maroon band turns
+      // muddy red in dark mode; an opaque card matches the reference look.
+      backgroundColor: t.bg,
+      borderRadius: radius.xl,
+      borderCurve: 'continuous',
+      borderWidth: 1,
+      borderColor: t.border,
+      boxShadow: t.shadowSm,
+      padding: spacing.md,
+    },
+    kuyaNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
     kuyaName: { fontSize: typo.md, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
     kuyaBadge: { marginLeft: 'auto', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2 },
     kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    askPill: {
-      marginLeft: spacing.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: radius.pill,
-      backgroundColor: t.surface2,
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    askPillText: {
-      fontFamily: 'Lexend_500Medium',
-      fontSize: typo.xs,
-      color: t.textSecondary,
-    },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 19, fontFamily: 'Lexend_400Regular' },
+    askHint: { marginTop: 'auto', alignSelf: 'flex-end', fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl },
     quickIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
@@ -348,17 +370,19 @@ export default function HomeScreen() {
         }
       >
 
-        {/* (1) Greeting row */}
-        <View style={s.greetRow}>
-          <View>
-            <Text style={s.greetTime}>{timeGreeting()}</Text>
-            <Text style={s.greetName}>{fullName.split(' ')[0] || 'Student'}</Text>
+        {/* (1) Header row: logo tile + action tiles */}
+        <View style={s.headerRow}>
+          <View style={s.iconBtn}>
+            <View style={s.logoClip}>
+              <Logo width={28} height={28} viewBox="0 0 2048 2048" />
+            </View>
           </View>
           <View style={s.headerBtns}>
             <Pressable
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => setShowNotifModal(true)}
               accessibilityRole="button"
+              accessibilityLabel="Notifications"
               hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <Lineicons
@@ -369,14 +393,6 @@ export default function HomeScreen() {
             </Pressable>
             <Pressable
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push('/settings')}
-              accessibilityRole="button"
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Lineicons icon={Gear1Outlined} size={20} color={t.textSecondary} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => router.push('/(tabs)/profile')}
               accessibilityRole="button"
               accessibilityLabel="Profile"
@@ -384,45 +400,52 @@ export default function HomeScreen() {
             >
               <Lineicons icon={User4Outlined} size={20} color={t.textSecondary} />
             </Pressable>
+            <Pressable
+              style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Lineicons icon={Gear1Outlined} size={20} color={t.textSecondary} />
+            </Pressable>
           </View>
         </View>
 
+        {/* (1b) Date + greeting */}
+        <Text style={s.dateLine} maxFontSizeMultiplier={1.4}>{headerDate()}</Text>
+        <Text style={s.greeting} maxFontSizeMultiplier={1.2}>
+          {timeGreeting()}, <Text style={s.greetingName}>{fullName.split(' ')[0] || 'Student'}</Text>!
+        </Text>
+
         <View>
 
-          {/* (2) Kuya Baw FULL card — always expanded */}
-          <Card elevated style={s.kuyaCard}>
-            <View style={s.kuyaRow}>
-              <Pressable
-                style={s.kuyaAvatarLg}
-                onPress={onKuyaTap}
-                hitSlop={12}
-                android_ripple={{ color: 'rgba(255,255,255,0.15)', borderless: true, radius: 50 }}
-                accessibilityRole="button"
-                accessibilityLabel="Tap Kuya Baw for a new tip"
-              >
-                <Image
-                  source={require('../../assets/images/kuya-baw-mascot.png')}
-                  style={{ width: 80, height: 80 }}
-                  resizeMode="contain"
-                />
-              </Pressable>
-              <View style={{ flex: 1 }}>
-                <View style={s.kuyaNameRow}>
-                  <Text style={s.kuyaName}>Kuya Baw</Text>
-                  <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText}>AI Coach</Text></View>
-                  <Pressable
-                    style={s.askPill}
-                    onPress={() => { void openKuya() }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Ask Kuya Baw"
-                  >
-                    <Text style={s.askPillText}>💬 Ask</Text>
-                  </Pressable>
-                </View>
-                <Text style={s.kuyaText}>"{kuyaMsg}"</Text>
+          {/* (2) Hero band — full-bleed maroon stripe, animated Kuya Baw overhanging it */}
+          <View style={s.heroWrap}>
+            <View style={s.heroBand} />
+            <Pressable
+              style={s.heroMascot}
+              onPress={onKuyaTap}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Tap Kuya Baw for a new tip"
+            >
+              <KuyaHeroAnimation width={MASCOT_W} height={MASCOT_H} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [s.heroBubble, pressed && { opacity: 0.85 }]}
+              onPress={() => { void openKuya() }}
+              accessibilityRole="button"
+              accessibilityLabel="Ask Kuya Baw"
+            >
+              <View style={s.kuyaNameRow}>
+                <Text style={s.kuyaName} maxFontSizeMultiplier={1.4}>Kuya Baw</Text>
+                <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText} maxFontSizeMultiplier={1.4}>AI Coach</Text></View>
               </View>
-            </View>
-          </Card>
+              <Text style={s.kuyaText} numberOfLines={3} maxFontSizeMultiplier={1.4}>{kuyaMsg}</Text>
+              <Text style={s.askHint} maxFontSizeMultiplier={1.4}>Ask Kuya Baw ›</Text>
+            </Pressable>
+          </View>
 
           {/* (3) Quick Practice CTA */}
           {quickTopicId ? (

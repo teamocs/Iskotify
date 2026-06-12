@@ -93,13 +93,15 @@ jest.mock('../../../providers/AiCoachProvider', () => {
   }
 })
 
+const mockOnKuyaTap = jest.fn()
+
 jest.mock('../../../hooks/useAiCoach', () => {
   const { useHomeStats } = require('../../../hooks/useHomeStats')
   const { pickTemplate } = require('../../../services/coachTemplates')
   return {
     useAiCoach: () => {
       const stats = useHomeStats()
-      return { phrase: pickTemplate(stats, 0), onTap: jest.fn() }
+      return { phrase: pickTemplate(stats, 0), onTap: mockOnKuyaTap }
     },
   }
 })
@@ -125,19 +127,45 @@ describe('HomeScreen', () => {
     mockUseHomeStats.mockReturnValue(emptyStats)
   })
 
-  it('renders Kuya Baw name (full card always visible)', () => {
+  it('renders the uppercase date line', () => {
+    render(<HomeScreen />)
+    const expected = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      .format(new Date())
+      .toUpperCase()
+    expect(screen.getByText(expected)).toBeTruthy()
+  })
+
+  it('renders the greeting with the first name in a nested bold Text', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText(/Good (morning|afternoon|evening), /)).toBeTruthy()
+    expect(screen.getByText('Student')).toBeTruthy()
+  })
+
+  it('renders Kuya Baw name in the hero speech bubble', () => {
     render(<HomeScreen />)
     expect(screen.getByText('Kuya Baw')).toBeTruthy()
   })
 
-  it('pressing the Ask pill calls openKuya from KuyaChatProvider', () => {
+  it('renders the Ask Kuya Baw hint inside the bubble', () => {
+    render(<HomeScreen />)
+    expect(screen.getByText('Ask Kuya Baw ›')).toBeTruthy()
+  })
+
+  it('pressing the speech bubble calls openKuya from KuyaChatProvider', () => {
     mockOpenKuya.mockClear()
     render(<HomeScreen />)
     fireEvent.press(screen.getByLabelText('Ask Kuya Baw'))
     expect(mockOpenKuya).toHaveBeenCalledTimes(1)
   })
 
-  it('AI Coach badge is visible immediately (always-expanded card)', () => {
+  it('pressing the mascot calls onKuyaTap (new tip)', () => {
+    mockOnKuyaTap.mockClear()
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByLabelText('Tap Kuya Baw for a new tip'))
+    expect(mockOnKuyaTap).toHaveBeenCalledTimes(1)
+  })
+
+  it('AI Coach badge is visible in the hero bubble', () => {
     render(<HomeScreen />)
     expect(screen.getByText('AI Coach')).toBeTruthy()
   })
@@ -290,10 +318,19 @@ describe('HomeScreen', () => {
     expect(screen.queryByText('STREAK')).toBeNull()
   })
 
-  it('settings button navigates to /settings when pressed', () => {
+  it('settings tile navigates to /settings when pressed', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
     render(<HomeScreen />)
-    expect(router.push).not.toHaveBeenCalled()
+    fireEvent.press(screen.getByLabelText('Settings'))
+    expect(router.push).toHaveBeenCalledWith('/settings')
+  })
+
+  it('profile tile navigates to the profile tab when pressed', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByLabelText('Profile'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/profile')
   })
 })
