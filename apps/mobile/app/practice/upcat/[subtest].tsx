@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -9,6 +9,8 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
+import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
+import { submitQuestionReport } from '../../../services/questionReports'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -34,6 +36,9 @@ export default function UpcatExam() {
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
+  // Question-report state: which indexes were reported + which index the modal is open for.
+  const [reported, setReported] = useState<Record<number, boolean>>({})
+  const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
   // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
   // an absolute timestamp so the clock stays accurate even if the interval drifts.
@@ -42,6 +47,14 @@ export default function UpcatExam() {
   const [remaining, setRemaining] = useState(0)
   const submittedRef = useRef(false)
   const submitRef = useRef<() => void>(() => {})
+  // Question pane (middle scroll zone) — reset to top whenever the question changes
+  // so scroll offset never carries over between questions.
+  const qPaneRef = useRef<ScrollView>(null)
+  const { height: winH } = useWindowDimensions()
+
+  useEffect(() => {
+    qPaneRef.current?.scrollTo({ y: 0, animated: false })
+  }, [idx])
 
   function parseOptions(raw: string | null | undefined): string[] {
     try {
@@ -228,11 +241,32 @@ export default function UpcatExam() {
         onJump={setIdx}
       />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      {/* Middle pane: passage + question text scroll; options live in their own fixed
+          zone below so they never jump as question/passage length changes. */}
+      <ScrollView
+        ref={qPaneRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: spacing.lg }}
+        showsVerticalScrollIndicator={false}
+      >
         {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
         <View style={s.qCard}>
           <Text style={s.qText}>{q.questionText}</Text>
+          <View style={s.reportRow}>
+            {reported[idx] ? (
+              <Text style={s.reportedTxt} maxFontSizeMultiplier={1.4}>Reported ✓</Text>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
+                <Text style={s.reportBtn} maxFontSizeMultiplier={1.4}>⚐ Report</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
+      </ScrollView>
+
+      {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
+          without scrolling, while very long options scroll inside this zone. */}
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55 }} showsVerticalScrollIndicator={false}>
         <View style={s.opts}>
           {q.options.map((o, oi) => (
             <Pressable
@@ -275,6 +309,27 @@ export default function UpcatExam() {
           <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
         </Pressable>
       </View>
+
+      <ReportQuestionModal
+        visible={reportIdx !== null}
+        onClose={() => setReportIdx(null)}
+        onSubmit={(reason) => {
+          const qi = reportIdx
+          if (qi == null) return
+          const rq = questions[qi]
+          if (rq) {
+            // UPCAT practice questions come from upcat_questions; offline-first, never throws.
+            void submitQuestionReport(db, {
+              questionId: rq.questionId,
+              sourceTable: 'upcat_questions',
+              questionText: rq.questionText,
+              reason,
+            })
+            setReported(r => ({ ...r, [qi]: true }))
+          }
+          setReportIdx(null)
+        }}
+      />
     </SafeAreaView>
   )
 }
@@ -343,6 +398,9 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       lineHeight: 24,
       fontFamily: 'Outfit_600SemiBold',
     },
+    reportRow: { marginTop: 10, alignItems: 'flex-end' },
+    reportBtn: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    reportedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_400Regular' },
     opts: { gap: 9, paddingHorizontal: 14 },
     opt: {
       flexDirection: 'row',
@@ -380,10 +438,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       lineHeight: 19,
     },
     footer: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
       flexDirection: 'row',
       gap: spacing.sm,
       padding: 14,

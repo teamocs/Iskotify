@@ -37,6 +37,12 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     ],
   },
   {
+    section: 'MODERATION',
+    items: [
+      { href: '/admin/reports', icon: '🚩', label: 'Reported Questions' },
+    ],
+  },
+  {
     section: 'DATA MANAGER',
     items: [
       { href: '/admin/data/career_courses', icon: '📚', label: 'Career Courses' },
@@ -128,6 +134,7 @@ export function SidebarContent({ userEmail, onItemClick }: Props) {
             <p className="text-[9px] text-white/35">Super Admin</p>
           </div>
           <button
+            type="button"
             onClick={handleSignOut}
             className="text-white/30 hover:text-white/70 text-xs transition-colors"
             title="Sign out"

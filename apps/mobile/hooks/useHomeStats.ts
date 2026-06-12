@@ -53,6 +53,16 @@ export interface HomeStats {
 
 // ── Pure functions (exported for unit tests) ─────────────────────────────────
 
+/**
+ * localDayOffsetMs — milliseconds to ADD to an epoch timestamp so that
+ * floor((ts + offset) / 86400000) buckets it into the device's LOCAL calendar
+ * day instead of the UTC day. PH (UTC+8) → +8h. Read at call time per
+ * computation — PH has no DST, so one read per refresh is fine.
+ */
+export function localDayOffsetMs(): number {
+  return -new Date().getTimezoneOffset() * 60_000
+}
+
 export function computeStreak(rows: Array<{ answeredAt: number }>): number {
   if (rows.length === 0) return 0
   const days = new Set(rows.map(r => Math.floor(r.answeredAt / 86_400_000)))
@@ -60,13 +70,18 @@ export function computeStreak(rows: Array<{ answeredAt: number }>): number {
 }
 
 /**
- * computeStreakFromDays — streak from a list of day-bucket indices (floor(ms/86400000)).
- * Sibling of computeStreak that works on pre-computed day indices (from SQL aggregate).
+ * computeStreakFromDays — streak from a list of day-bucket indices
+ * (floor((ms + offsetMs) / 86400000)). Sibling of computeStreak that works on
+ * pre-computed day indices (from SQL aggregate).
+ *
+ * `offsetMs` MUST match the offset used to bucket `days` (pass the same
+ * localDayOffsetMs() to both getPracticeDayIndices and here) so "today" is
+ * computed in the same calendar. Defaults to 0 (UTC) for backward compat.
  */
-export function computeStreakFromDays(days: number[]): number {
+export function computeStreakFromDays(days: number[], offsetMs = 0): number {
   if (days.length === 0) return 0
   const daySet = new Set(days)
-  const today = Math.floor(Date.now() / 86_400_000)
+  const today = Math.floor((Date.now() + offsetMs) / 86_400_000)
   let d = daySet.has(today) ? today : today - 1
   let streak = 0
   while (daySet.has(d)) { streak++; d-- }
@@ -146,6 +161,9 @@ export function useHomeStats(): HomeStats {
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
 
+        // Local-day bucketing offset — read at call time (never cached across days)
+        const offsetMs = localDayOffsetMs()
+
         const [
           listingRows,
           todayAccRow,
@@ -159,7 +177,7 @@ export function useHomeStats(): HomeStats {
         ] = await Promise.all([
           db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
           getTodayAccuracy(db, todayStart.getTime()),
-          getPracticeDayIndices(db),
+          getPracticeDayIndices(db, offsetMs),
           getWeakTopicStats(db),
           db.select({ id: topics.id, name: topics.name }).from(topics),
           db.select({ id: topics.id }).from(topics).orderBy(topics.id).limit(1),
@@ -189,7 +207,7 @@ export function useHomeStats(): HomeStats {
           ? null
           : Math.round((todayAccRow.correct / todayAccRow.total) * 100)
 
-        const streakDays = computeStreakFromDays(dayIndices)
+        const streakDays = computeStreakFromDays(dayIndices, offsetMs)
 
         // Build slug → rounded % map (only include entries with total > 0)
         const listingAccuracy: Record<string, number> = {}

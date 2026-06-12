@@ -571,6 +571,13 @@ export const MIGRATIONS = [
     rag_blocks_enabled TEXT NOT NULL DEFAULT '{}',
     remote_updated_at INTEGER
   )`,
+
+  // ── Question reports: offline-first upload queue ───────────────────────────
+  // question_feedback rows now snapshot the question + remember their Supabase
+  // source table; synced=0 rows are retried on launch (pushPendingReports).
+  `ALTER TABLE question_feedback ADD COLUMN source_table TEXT NOT NULL DEFAULT 'flashcards'`,
+  `ALTER TABLE question_feedback ADD COLUMN question_text TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE question_feedback ADD COLUMN synced INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

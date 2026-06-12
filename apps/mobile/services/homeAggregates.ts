@@ -10,6 +10,7 @@
  */
 
 import { sql, and, gte, like, eq, ne } from 'drizzle-orm'
+import { union } from 'drizzle-orm/sqlite-core'
 import { userProgress, flashcards, topics, practiceSessions } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
 
@@ -69,21 +70,38 @@ export async function getTodayAccuracy(
 }
 
 /**
- * getPracticeDayIndices — distinct day bucket indices (floor(answeredAt / 86400000))
- * for every row in user_progress.
+ * getPracticeDayIndices — distinct day bucket indices for every study activity:
+ * the SQL UNION of user_progress.answeredAt (flashcard reviews, also cloud sync)
+ * and practice_sessions.completedAt (locally recorded sessions). Completing a
+ * practice session writes ONLY practice_sessions, so both tables must count.
  *
- * Returns an array of unique day indices (epoch-day integers).
+ * `offsetMs` is applied inside the bucket math — pass localDayOffsetMs() so a
+ * timestamp buckets into the user's LOCAL calendar day instead of the UTC day:
+ *   dayIndex = cast((ts + offsetMs) / 86400000 as integer)
+ * Defaults to 0 (UTC days) for backward compatibility.
+ *
+ * Returns an array of unique day indices (epoch-day integers — UNION dedupes).
  * Used by computeStreakFromDays and for the calendar heatmap.
  */
-export async function getPracticeDayIndices(db: DrizzleClient): Promise<number[]> {
+export async function getPracticeDayIndices(
+  db: DrizzleClient,
+  offsetMs = 0,
+): Promise<number[]> {
   const DAY_MS = 86_400_000
-  const rows = await db
+  const progressDays = db
     .select({
-      dayIndex: sql<number>`cast(${userProgress.answeredAt} / ${DAY_MS} as integer)`.as('day_index'),
+      dayIndex: sql<number>`cast((${userProgress.answeredAt} + ${offsetMs}) / ${DAY_MS} as integer)`.as('day_index'),
     })
     .from(userProgress)
-    .groupBy(sql`cast(${userProgress.answeredAt} / ${DAY_MS} as integer)`)
+    .groupBy(sql`cast((${userProgress.answeredAt} + ${offsetMs}) / ${DAY_MS} as integer)`)
+  const sessionDays = db
+    .select({
+      dayIndex: sql<number>`cast((${practiceSessions.completedAt} + ${offsetMs}) / ${DAY_MS} as integer)`.as('day_index'),
+    })
+    .from(practiceSessions)
+    .groupBy(sql`cast((${practiceSessions.completedAt} + ${offsetMs}) / ${DAY_MS} as integer)`)
 
+  const rows = await union(progressDays, sessionDays)
   return rows.map(r => Number(r.dayIndex))
 }
 

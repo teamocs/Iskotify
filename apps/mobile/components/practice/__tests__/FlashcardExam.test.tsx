@@ -10,6 +10,10 @@ jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
 
+jest.mock('../../../services/questionReports', () => ({
+  submitQuestionReport: jest.fn().mockResolvedValue(undefined),
+}))
+
 jest.mock('../../../hooks/useRecordSession', () => ({
   useRecordSession: jest.fn(),
 }))
@@ -31,9 +35,7 @@ jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as any)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const mockInsert = jest.fn().mockReturnValue({
-  values: jest.fn().mockResolvedValue(undefined),
-})
+const mockDb = { __mock: 'db' }
 
 const mockRecordSession = jest.fn().mockResolvedValue(undefined)
 
@@ -41,12 +43,13 @@ beforeEach(() => {
   jest.clearAllMocks()
 
   const { useDb } = require('../../../hooks/useDb')
-  ;(useDb as jest.Mock).mockReturnValue({
-    insert: mockInsert,
-  })
+  ;(useDb as jest.Mock).mockReturnValue(mockDb)
 
   const { useRecordSession } = require('../../../hooks/useRecordSession')
   ;(useRecordSession as jest.Mock).mockReturnValue({ recordSession: mockRecordSession })
+
+  const { submitQuestionReport } = require('../../../services/questionReports')
+  ;(submitQuestionReport as jest.Mock).mockResolvedValue(undefined)
 })
 
 const QUESTIONS: QuizQuestion[] = [
@@ -186,5 +189,49 @@ describe('FlashcardExam', () => {
   it('renders "No questions available" when questions array is empty', () => {
     render(<FlashcardExam {...DEFAULT_PROPS} questions={[]} />)
     expect(screen.getByText('No questions available')).toBeTruthy()
+  })
+
+  it('6. ⚐ Report opens the reason modal; submitting reports with reason + snapshot and shows "Reported ✓"', async () => {
+    const { submitQuestionReport } = require('../../../services/questionReports')
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    // Open the report modal from Q1
+    fireEvent.press(screen.getByText('⚐ Report'))
+    expect(screen.getByText('Report this question')).toBeTruthy()
+
+    // No report submitted yet
+    expect(submitQuestionReport).not.toHaveBeenCalled()
+
+    // Pick a preset reason and submit
+    fireEvent.press(screen.getByText('Wrong answer'))
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(submitQuestionReport).toHaveBeenCalledTimes(1)
+    expect(submitQuestionReport).toHaveBeenCalledWith(mockDb, {
+      questionId: 'q1',
+      sourceTable: 'flashcards',
+      questionText: 'What is 2 + 2?',
+      reason: 'Wrong answer',
+    })
+
+    // The reported state replaces the report button for this question
+    expect(screen.getByText('Reported ✓')).toBeTruthy()
+    expect(screen.queryByText('⚐ Report')).toBeNull()
+  })
+
+  it('7. cancelling the report modal does not submit and keeps the report button', async () => {
+    const { submitQuestionReport } = require('../../../services/questionReports')
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('⚐ Report'))
+    await act(async () => {
+      fireEvent.press(screen.getByText('Cancel'))
+    })
+
+    expect(submitQuestionReport).not.toHaveBeenCalled()
+    expect(screen.getByText('⚐ Report')).toBeTruthy()
+    expect(screen.queryByText('Reported ✓')).toBeNull()
   })
 })

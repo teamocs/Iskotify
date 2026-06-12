@@ -287,6 +287,57 @@ describe('getPracticeDayIndices — parity with computeStreak oracle', () => {
   })
 })
 
+// ── Union: getPracticeDayIndices must also count practice_sessions days ──────
+// Bug repro: completing a practice session writes ONLY practice_sessions
+// (useRecordSession); user_progress is written only by cloud sync. The Home
+// streak must count BOTH tables.
+
+describe('getPracticeDayIndices — union of user_progress and practice_sessions', () => {
+  const HOUR = 3_600_000
+  const todayIdx = today / DAY
+
+  function insertSession(completedAt: number) {
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES (?, ?, ?, ?)'
+    ).run('upcat', 5, 10, completedAt)
+  }
+
+  it('includes days that exist ONLY in practice_sessions (bug repro: local sessions never moved the streak)', async () => {
+    raw.exec('DELETE FROM user_progress')
+    insertSession(today + 100)        // today
+    insertSession(today - DAY + 200)  // yesterday
+
+    const days = await getPracticeDayIndices(db)
+    expect(new Set(days)).toEqual(new Set([todayIdx, todayIdx - 1]))
+  })
+
+  it('dedupes a day present in both tables (UNION, not UNION ALL)', async () => {
+    raw.exec('DELETE FROM user_progress')
+    raw.prepare('INSERT INTO user_progress (flashcard_id, correct, answered_at) VALUES (?, ?, ?)')
+       .run('fc1', 1, today + 100)    // today via user_progress
+    insertSession(today + 500)        // today via practice_sessions too
+    insertSession(today - DAY + 100)  // yesterday via practice_sessions only
+
+    const days = await getPracticeDayIndices(db)
+    expect(days.slice().sort()).toEqual([todayIdx - 1, todayIdx].sort())
+    expect(days).toHaveLength(2)
+  })
+
+  it('applies offsetMs inside the bucket math: 22:00 UTC with +8h offset lands on the NEXT day index', async () => {
+    raw.exec('DELETE FROM user_progress')
+    const baseDay = 20_000
+    const ts = baseDay * DAY + 22 * HOUR // 22:00 UTC = 06:00 next day in UTC+8
+    raw.prepare('INSERT INTO user_progress (flashcard_id, correct, answered_at) VALUES (?, ?, ?)')
+       .run('fc1', 1, ts)
+    insertSession(ts)
+
+    const phOffset = 8 * HOUR
+    expect(await getPracticeDayIndices(db, phOffset)).toEqual([baseDay + 1])
+    // default offset 0 keeps UTC bucketing (backward compatible)
+    expect(await getPracticeDayIndices(db)).toEqual([baseDay])
+  })
+})
+
 // ── Parity: getWeakTopicStats vs oracle computeWeakTopics ────────────────────
 
 describe('getWeakTopicStats — parity with computeWeakTopics oracle', () => {

@@ -8,11 +8,11 @@ vi.mock('@/lib/gemini/generateDistractors', () => ({
 
 const mockLimit = vi.fn()
 const mockIsNull = vi.fn(() => ({ limit: mockLimit }))
-const mockSelect = vi.fn(() => ({ is: mockIsNull }))
+const mockSelect = vi.fn((_cols?: string) => ({ is: mockIsNull }))
 const mockEq = vi.fn(() => ({ select: mockSelect }))
 const mockUpdate = vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ error: null }) }))
 const mockCountIsNull = vi.fn(() => Promise.resolve({ count: 0, error: null }))
-const mockCountSelect = vi.fn(() => ({ is: mockCountIsNull }))
+const mockCountSelect = vi.fn((_cols?: string, _opts?: unknown) => ({ is: mockCountIsNull }))
 
 const mockFrom = vi.fn((_table: string) => ({
   select: (cols: string, opts?: { count?: string; head?: boolean }) => {

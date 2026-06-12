@@ -14,6 +14,46 @@ vi.mock('@/lib/gemini/generateDistractors', () => ({
   generateDistractorsForCard: mockGenerateDistractors,
 }))
 
+// ── Auth client mock ──────────────────────────────────────────────────────────
+const mockGetUser = vi.fn()
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: vi.fn(async () => ({
+    auth: { getUser: mockGetUser },
+  })),
+}))
+
+// ── Supabase mock (for profile lookup only) ───────────────────────────────────
+const mockProfileSingle = vi.fn()
+vi.mock('@iskotify/utils', () => ({
+  createServerClient: vi.fn(() => ({
+    from: vi.fn((table: string) => {
+      if (table === 'profiles') {
+        return {
+          select: () => ({
+            eq: () => ({ single: mockProfileSingle }),
+          }),
+        }
+      }
+      return {}
+    }),
+  })),
+}))
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+function adminUser() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+  mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+}
+
+function noUser() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: null } })
+}
+
+function nonAdmin() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'u2' } } })
+  mockProfileSingle.mockResolvedValueOnce({ data: { role: 'viewer' }, error: null })
+}
+
 function makeReq(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/flashcards/generate', {
     method: 'POST',
@@ -30,14 +70,36 @@ async function importRoute() {
 beforeEach(() => {
   vi.resetModules()
   vi.stubEnv('GEMINI_API_KEY', 'fake-gemini-key')
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fake-anon-key')
+  mockGetUser.mockReset()
+  mockProfileSingle.mockReset()
   mockGenerateContent.mockReset()
   mockGenerateDistractors.mockReset()
   mockGenerateDistractors.mockResolvedValue(null)  // default: distractor gen returns null (no enrichment)
 })
 
 describe('POST /api/flashcards/generate', () => {
+  it('returns 401 when unauthenticated', async () => {
+    noUser()
+    const { POST } = await importRoute()
+    const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra' }))
+    expect(res.status).toBe(401)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when signed-in non-admin', async () => {
+    nonAdmin()
+    const { POST } = await importRoute()
+    const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra' }))
+    expect(res.status).toBe(403)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('returns 503 when GEMINI_API_KEY is missing', async () => {
     vi.stubEnv('GEMINI_API_KEY', '')
+    adminUser()
     const { POST } = await importRoute()
     const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra' }))
     expect(res.status).toBe(503)
@@ -46,24 +108,28 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('returns 400 when subject_name is missing', async () => {
+    adminUser()
     const { POST } = await importRoute()
     const res = await POST(makeReq({ topic_name: 'Algebra' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when topic_name is missing', async () => {
+    adminUser()
     const { POST } = await importRoute()
     const res = await POST(makeReq({ subject_name: 'Math' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when subject_name is empty/whitespace', async () => {
+    adminUser()
     const { POST } = await importRoute()
     const res = await POST(makeReq({ subject_name: '   ', topic_name: 'Algebra' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 200 with cards on a valid Gemini response', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: {
         text: () => JSON.stringify({
@@ -84,6 +150,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('strips markdown fences and trailing prose from Gemini output', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: {
         text: () => '```json\n' + JSON.stringify({
@@ -99,6 +166,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('returns 502 when Gemini returns unparseable text', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => 'sorry I cannot do that' },
     })
@@ -108,6 +176,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('returns 502 when Gemini returns empty cards array', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => JSON.stringify({ cards: [] }) },
     })
@@ -117,6 +186,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('drops cards with missing question or answer', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: {
         text: () => JSON.stringify({
@@ -137,6 +207,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('clamps count to [1, 25] before passing to the prompt', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
     })
@@ -148,6 +219,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('uses the default count (10) when count is missing', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
     })
@@ -158,6 +230,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('injects listing slugs into the prompt for style targeting when provided', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
     })
@@ -174,6 +247,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('falls back to a generic exam-style line when no listing slugs are provided', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
     })
@@ -184,6 +258,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('returns 500 when Gemini throws unexpectedly', async () => {
+    adminUser()
     mockGenerateContent.mockRejectedValueOnce(new Error('network down'))
     const { POST } = await importRoute()
     const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra' }))
@@ -191,6 +266,7 @@ describe('POST /api/flashcards/generate', () => {
   })
 
   it('drops generated cards whose stems duplicate existing_questions (case-insensitive)', async () => {
+    adminUser()
     mockGenerateContent.mockResolvedValueOnce({
       response: {
         text: () => JSON.stringify({

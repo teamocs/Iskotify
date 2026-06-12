@@ -1,45 +1,73 @@
-import { computeStreak, computeWeeklyData, computeTopicMastery } from '../useAnalytics'
+import { renderHook, waitFor } from '@testing-library/react-native'
+import { computeWeeklyData, computeTopicMastery, useAnalytics } from '../useAnalytics'
+import { practiceSessions } from '../../db/schema'
 
-describe('computeStreak', () => {
-  it('returns 0 for no sessions', () => {
-    expect(computeStreak([])).toBe(0)
+// ── Hook-level mocks (streak wiring test) ─────────────────────────────────────
+
+jest.mock('expo-router', () => ({
+  useFocusEffect: (cb: () => void) => {
+    const React = require('react')
+    React.useEffect(cb, [cb])
+  },
+}))
+
+jest.mock('../../services/queryCache', () => ({
+  cachedQuery: (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher(),
+  subscribe: () => () => {},
+}))
+
+const mockGetPracticeDayIndices = jest.fn<Promise<number[]>, unknown[]>()
+jest.mock('../../services/homeAggregates', () => ({
+  getPracticeDayIndices: (...args: unknown[]) => mockGetPracticeDayIndices(...args),
+}))
+
+// Minimal drizzle stand-in: db.select(...).from(table) resolves to seeded rows.
+let mockSessionRows: any[] = []
+const mockDb = {
+  select: (_cols?: unknown) => ({
+    from: (tbl: unknown) =>
+      Promise.resolve(tbl === practiceSessions ? mockSessionRows : []),
+  }),
+}
+jest.mock('../useDb', () => ({ useDb: () => mockDb }))
+
+// The old session-only computeStreak was removed: streak now comes from
+// getPracticeDayIndices (UNION of user_progress + practice_sessions) +
+// computeStreakFromDays — same source as the Home streak.
+describe('useAnalytics streak — shared union day-indices source', () => {
+  beforeEach(() => {
+    mockGetPracticeDayIndices.mockReset()
+    mockSessionRows = []
   })
 
-  it('returns 1 for a session today only', () => {
-    expect(computeStreak([{ completedAt: Date.now() }])).toBe(1)
+  it('counts a user_progress-only day (flashcard reviews) toward the streak', async () => {
+    const offset = -new Date().getTimezoneOffset() * 60_000
+    const todayIdx = Math.floor((Date.now() + offset) / 86_400_000)
+    // Union helper reports today (session) AND yesterday (flashcard-review-only day
+    // that exists only in user_progress) — sessions table alone only covers today.
+    mockGetPracticeDayIndices.mockResolvedValue([todayIdx, todayIdx - 1])
+    mockSessionRows = [{
+      id: 1, listingSlug: 'upcat', topicId: 't1', deckId: '', subtest: null,
+      score: 8, total: 10, durationSecs: 60, completedAt: Date.now(),
+    }]
+
+    const { result } = renderHook(() => useAnalytics('overall'))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(result.current.streak).toBe(2)
+    expect(mockGetPracticeDayIndices).toHaveBeenCalledWith(expect.anything(), offset)
   })
 
-  it('counts 3 consecutive days', () => {
-    const day = 86_400_000
-    const now = Date.now()
-    const sessions = [
-      { completedAt: now },
-      { completedAt: now - day },
-      { completedAt: now - 2 * day },
-    ]
-    expect(computeStreak(sessions)).toBe(3)
-  })
+  it('per-listing dashboards show the same global streak (intended)', async () => {
+    const offset = -new Date().getTimezoneOffset() * 60_000
+    const todayIdx = Math.floor((Date.now() + offset) / 86_400_000)
+    mockGetPracticeDayIndices.mockResolvedValue([todayIdx])
+    mockSessionRows = [] // no sessions for this listing at all
 
-  it('breaks at a gap', () => {
-    const day = 86_400_000
-    const now = Date.now()
-    const sessions = [
-      { completedAt: now },
-      { completedAt: now - 3 * day },
-    ]
-    expect(computeStreak(sessions)).toBe(1)
-  })
+    const { result } = renderHook(() => useAnalytics('some-other-listing'))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-  it('returns 0 when only yesterday has a session', () => {
-    // Pin Date.now() to a fixed noon UTC to avoid midnight boundary flakiness
-    const now = new Date('2024-06-15T12:00:00.000Z').getTime()
-    jest.spyOn(Date, 'now').mockReturnValue(now)
-    const yesterdayNoon = now - 86_400_000
-    try {
-      expect(computeStreak([{ completedAt: yesterdayNoon }])).toBe(0)
-    } finally {
-      jest.restoreAllMocks()
-    }
+    expect(result.current.streak).toBe(1)
   })
 })
 

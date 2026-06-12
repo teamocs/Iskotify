@@ -29,6 +29,7 @@ import {
   aiChatConfig,
 } from '../db/schema'
 import { supabase } from './supabase'
+import { pushPendingReports } from './questionReports'
 
 // Supabase caps a single SELECT at 1000 rows. For tables that exceed that
 // (flashcards, upcat_questions, course_school_rankings) we page with .range()
@@ -743,6 +744,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // Also push user data backup if signed in
     await pushUserData(db)
+
+    // Retry queued question reports (best-effort, fire-and-forget — never
+    // blocks launch; pushPendingReports swallows its own errors).
+    void pushPendingReports(db)
   } catch (err) {
     console.error('[sync] error:', err)
   }

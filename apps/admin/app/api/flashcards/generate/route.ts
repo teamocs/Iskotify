@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
+import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
 
 // Distractor generation can take 15-30s for max 25 cards (5 sequential batches of 4 × ~3s/Gemini call).
 // Override Vercel's default 10s timeout. Requires Pro plan (Hobby plan caps at 60s anyway).
 export const maxDuration = 60
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 const MIN_COUNT = 1
 const MAX_COUNT = 25
@@ -90,6 +102,9 @@ function extractJson(raw: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const gate = await requireAdmin()
+    if (gate.error) return gate.error
+
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 503 })
     }

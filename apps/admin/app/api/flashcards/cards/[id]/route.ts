@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireAdmin()
+    if (gate.error) return gate.error
+    const { supabase } = gate
+
     const { id } = await params
     const body = await req.json()
-    const supabase = createServerClient()
 
     // Whitelist: only card content fields may be updated via this endpoint
     const { question, answer, explanation } = body as {
@@ -56,8 +70,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await requireAdmin()
+    if (gate.error) return gate.error
+    const { supabase } = gate
+
     const { id } = await params
-    const supabase = createServerClient()
 
     const { error } = await supabase
       .from('flashcards')

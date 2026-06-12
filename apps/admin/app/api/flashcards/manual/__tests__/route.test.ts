@@ -15,9 +15,9 @@ vi.mock('@/lib/supabase', () => ({
 
 // ── Chainable Supabase mock ───────────────────────────────────────────────────
 const mockProfileSingle = vi.fn()
-const mockSingle = vi.fn()
-const mockSelectSingle = vi.fn(() => ({ single: mockSingle }))
-const mockInsert = vi.fn(() => ({ select: mockSelectSingle }))
+const mockSubjectSingle = vi.fn()
+const mockTopicSingle = vi.fn()
+const mockInsertCardSelect = vi.fn()
 
 function makeChain(table: string): any {
   if (table === 'profiles') {
@@ -31,14 +31,44 @@ function makeChain(table: string): any {
       },
     }
   }
-  // flashcard_topics
-  return { insert: mockInsert }
+  if (table === 'flashcard_subjects') {
+    return {
+      upsert(_data: unknown, _opts?: unknown) {
+        return { select: () => ({ single: mockSubjectSingle }) }
+      },
+    }
+  }
+  if (table === 'flashcard_topics') {
+    return {
+      insert(_data: unknown) {
+        return { select: () => ({ single: mockTopicSingle }) }
+      },
+    }
+  }
+  // flashcards
+  return {
+    insert(_data: unknown) {
+      return { select: mockInsertCardSelect }
+    },
+    update(_data: unknown) {
+      return {
+        eq(_col: string, _val: unknown) {
+          return Promise.resolve({ error: null })
+        },
+      }
+    },
+  }
 }
 
 const mockFrom = vi.fn((table: string) => makeChain(table))
 
 vi.mock('@iskotify/utils', () => ({
   createServerClient: vi.fn(() => ({ from: mockFrom })),
+}))
+
+// Stub distractor generation — fire-and-forget should not make real calls
+vi.mock('@/lib/gemini/generateDistractors', () => ({
+  generateDistractorsForCard: vi.fn().mockResolvedValue(null),
 }))
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -60,92 +90,88 @@ function resetAll() {
   vi.resetModules()
   mockGetUser.mockReset()
   mockProfileSingle.mockReset()
-  mockSingle.mockClear()
-  mockInsert.mockClear()
-  mockSelectSingle.mockClear()
+  mockSubjectSingle.mockReset()
+  mockTopicSingle.mockReset()
+  mockInsertCardSelect.mockReset()
   mockFrom.mockClear()
 }
 
-function makeReq(body: object) {
-  return new NextRequest('http://localhost/api/flashcards/topics', {
+function makeReq(body: unknown) {
+  return new NextRequest('http://localhost/api/flashcards/manual', {
     method: 'POST',
-    body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
 }
 
-// ── POST /api/flashcards/topics ───────────────────────────────────────────────
+const validBody = {
+  subject_name: 'Science',
+  topic_name: 'Physics',
+  listing_slugs: ['dost-sei'],
+  cards: [{ question: 'Q?', answer: 'A', explanation: '' }],
+}
 
-describe('POST /api/flashcards/topics', () => {
+// ── POST /api/flashcards/manual ───────────────────────────────────────────────
+
+describe('POST /api/flashcards/manual', () => {
   beforeEach(() => resetAll())
 
   it('returns 401 when unauthenticated', async () => {
     noUser()
     const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1', name: 'Algebra' }))
+    const res = await POST(makeReq(validBody))
     expect(res.status).toBe(401)
-    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockSubjectSingle).not.toHaveBeenCalled()
   })
 
   it('returns 403 when signed-in non-admin', async () => {
     nonAdmin()
     const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1', name: 'Algebra' }))
+    const res = await POST(makeReq(validBody))
     expect(res.status).toBe(403)
-    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockSubjectSingle).not.toHaveBeenCalled()
   })
 
-  it('returns 400 when subject_id is missing', async () => {
+  it('returns 400 when required fields are missing', async () => {
     adminUser()
     const { POST } = await import('../route')
-    const res = await POST(makeReq({ name: 'Algebra' }))
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/subject_id/i)
-  })
-
-  it('returns 400 when name is missing', async () => {
-    adminUser()
-    const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1' }))
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/name/i)
-  })
-
-  it('returns 400 when name is blank whitespace', async () => {
-    adminUser()
-    const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1', name: '   ' }))
+    const res = await POST(makeReq({ subject_name: 'Science' }))
     expect(res.status).toBe(400)
   })
 
-  it('inserts topic and returns { id }', async () => {
+  it('returns 400 when listing_slugs is empty', async () => {
     adminUser()
-    mockSingle.mockResolvedValueOnce({ data: { id: 'topic-new' }, error: null })
     const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1', name: 'Algebra Basics' }))
+    const res = await POST(makeReq({ ...validBody, listing_slugs: [] }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when cards array is empty', async () => {
+    adminUser()
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ ...validBody, cards: [] }))
+    expect(res.status).toBe(400)
+  })
+
+  it('allows admin to create subject, topic, and cards; returns { ok, topic_id }', async () => {
+    adminUser()
+    mockSubjectSingle.mockResolvedValueOnce({ data: { id: 'subj-1' }, error: null })
+    mockTopicSingle.mockResolvedValueOnce({ data: { id: 'topic-1' }, error: null })
+    mockInsertCardSelect.mockResolvedValueOnce({ data: [], error: null })
+
+    const { POST } = await import('../route')
+    const res = await POST(makeReq(validBody))
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.id).toBe('topic-new')
-    expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ subject_id: 'sub-1', name: 'Algebra Basics', status: 'published' })
-    )
+    expect(body.ok).toBe(true)
+    expect(body.topic_id).toBe('topic-1')
   })
 
-  it('uses provided status when valid', async () => {
+  it('returns 500 when subject upsert fails', async () => {
     adminUser()
-    mockSingle.mockResolvedValueOnce({ data: { id: 'topic-draft' }, error: null })
+    mockSubjectSingle.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } })
     const { POST } = await import('../route')
-    await POST(makeReq({ subject_id: 'sub-1', name: 'Draft Topic', status: 'draft' }))
-    expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'draft' })
-    )
-  })
-
-  it('returns 500 when Supabase insert fails', async () => {
-    adminUser()
-    mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } })
-    const { POST } = await import('../route')
-    const res = await POST(makeReq({ subject_id: 'sub-1', name: 'Algebra' }))
+    const res = await POST(makeReq(validBody))
     expect(res.status).toBe(500)
   })
 })

@@ -4,6 +4,8 @@ import { useDb } from './useDb'
 import { practiceSessions, topics, savedDecks } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
 import { cachedQuery, subscribe } from '../services/queryCache'
+import { getPracticeDayIndices } from '../services/homeAggregates'
+import { computeStreakFromDays, localDayOffsetMs } from './useHomeStats'
 
 export interface WeeklyBar {
   dayLabel: string
@@ -97,16 +99,11 @@ export function computeTopicMastery(
     .slice(0, 5)
 }
 
-export function computeStreak(sessions: { completedAt: number }[]): number {
-  if (sessions.length === 0) return 0
-  const dayMs = 86_400_000
-  const days = new Set(sessions.map(s => Math.floor(s.completedAt / dayMs)))
-  const todayDay = Math.floor(Date.now() / dayMs)
-  let streak = 0
-  let cursor = todayDay
-  while (days.has(cursor)) { streak++; cursor-- }
-  return streak
-}
+// NOTE: the old session-only computeStreak was removed. The streak shown here is
+// the GLOBAL daily study streak — getPracticeDayIndices (UNION of user_progress
+// flashcard reviews + practice_sessions) + computeStreakFromDays, the exact same
+// pair the Home screen uses, so the Exams-tab stats row, AnalyticsDashboard and
+// Home always agree. Per-listing dashboards intentionally show this global streak.
 
 export function computeWeeklyData(
   sessions: { completedAt: number; score: number; total: number }[]
@@ -141,10 +138,13 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     loadingRef.current = true
     try {
       const fetcher = async () => {
-        const [allSessions, topicRows, deckRows] = await Promise.all([
+        // Local-day bucketing offset — read at call time (never cached across days)
+        const offsetMs = localDayOffsetMs()
+        const [allSessions, topicRows, deckRows, dayIndices] = await Promise.all([
           db.select().from(practiceSessions),
           db.select({ id: topics.id, name: topics.name, subjectId: topics.subjectId }).from(topics),
           db.select({ id: savedDecks.id, name: savedDecks.name }).from(savedDecks),
+          getPracticeDayIndices(db, offsetMs),
         ])
 
         const filtered = slug === 'overall'
@@ -157,7 +157,8 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           ? Math.round(withScore.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / withScore.length)
           : null
 
-        const streak = computeStreak(filtered)
+        // Global daily study streak — same union source + math as the Home streak
+        const streak = computeStreakFromDays(dayIndices, offsetMs)
         const weeklyData = computeWeeklyData(filtered)
 
         const topicNameMap = new Map(topicRows.map(t => [t.id, t.name]))

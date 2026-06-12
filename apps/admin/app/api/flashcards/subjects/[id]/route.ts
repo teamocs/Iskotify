@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const { supabase } = gate
+
   const { id } = await params
-  const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcard_subjects')
     .select('id, name, listing_slugs')
@@ -22,6 +36,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const { supabase } = gate
+
   const { id } = await params
   const body = await req.json().catch(() => ({}))
   const { name, listing_slugs } = body
@@ -33,7 +51,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'listing_slugs must be an array of strings' }, { status: 400 })
   }
 
-  const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcard_subjects')
     .update({ name: name.trim(), listing_slugs })
@@ -57,8 +74,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const { supabase } = gate
+
   const { id } = await params
-  const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcard_subjects')
     .delete()

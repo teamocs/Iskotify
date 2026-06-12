@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 function buildFetcher(id: string, topic_id: string, page: number, limit: number) {
   const offset = (page - 1) * limit
@@ -29,6 +40,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+
   const { id } = await params
   const url = req.nextUrl
   const topic_id = url.searchParams.get('topic_id')

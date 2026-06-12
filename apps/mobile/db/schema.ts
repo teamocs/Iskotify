@@ -247,6 +247,12 @@ export const questionFeedback = sqliteTable('question_feedback', {
   cardId: text('card_id').notNull(),
   reason: text('reason').notNull().default(''),
   createdAt: integer('created_at').notNull(),
+  // Offline-first report queue: which Supabase table the question came from,
+  // a snapshot of the question text, and whether the row reached question_reports.
+  // NOT NULL + DEFAULT must match the migrations (silent-NULL-insert rule).
+  sourceTable: text('source_table').notNull().default('flashcards'),
+  questionText: text('question_text').notNull().default(''),
+  synced: integer('synced').notNull().default(0),
 })
 
 export const upcatCutoffs = sqliteTable('upcat_cutoffs', {

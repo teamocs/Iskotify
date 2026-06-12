@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
+import { createAuthClient } from '@/lib/supabase'
+
+async function requireAdmin() {
+  const auth = await createAuthClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const supabase = createServerClient()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  return { supabase }
+}
 
 export async function GET(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const { supabase } = gate
+
   const topicId = req.nextUrl.searchParams.get('topic_id')
   if (!topicId) return NextResponse.json({ error: 'topic_id required' }, { status: 400 })
 
-  const supabase = createServerClient()
   const { data, error } = await supabase
     .from('flashcards')
     .select('id, question, answer, explanation, options, correct_answer_index, ai_options, ai_correct_index, ai_explanation, ai_enhanced_at')
@@ -22,6 +36,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const gate = await requireAdmin()
+    if (gate.error) return gate.error
+    const { supabase } = gate
+
     const body = await req.json()
 
     // Batch path: body has `cards` array (used by GenerateMoreModal for AI-generated cards with distractors).
@@ -49,7 +67,6 @@ export async function POST(req: NextRequest) {
             ? new Date().toISOString()
             : null,
       }))
-      const supabase = createServerClient()
       const { error } = await supabase.from('flashcards').insert(rows)
       if (error) {
         console.error('[cards/POST batch] insert error:', error)
@@ -76,8 +93,6 @@ export async function POST(req: NextRequest) {
     if (status && status !== 'published' && status !== 'draft') {
       return NextResponse.json({ error: 'status must be "published" or "draft"' }, { status: 400 })
     }
-
-    const supabase = createServerClient()
 
     // Dedup guard: don't let a manual add create a duplicate PUBLISHED card. We compare
     // question AND answer (not question alone) — many valid cards share a generic stem

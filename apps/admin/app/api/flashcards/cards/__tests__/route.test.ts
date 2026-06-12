@@ -8,6 +8,18 @@ vi.mock('next/cache', () => ({
 
 vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
+vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fake-anon-key')
+
+// ── Auth client mock ──────────────────────────────────────────────────────────
+const mockGetUser = vi.fn()
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: vi.fn(async () => ({
+    auth: { getUser: mockGetUser },
+  })),
+}))
+
+// ── Chainable Supabase mock ───────────────────────────────────────────────────
+const mockProfileSingle = vi.fn()
 
 // Flexible select chain supporting both:
 //   dedup guard:  .select().eq().eq().limit()   (awaited — returns dedupResult)
@@ -31,25 +43,138 @@ const mockInsertSingle = vi.fn()
 const mockInsertSelect = vi.fn(() => ({ single: mockInsertSingle }))
 const mockInsert = vi.fn(() => ({ select: mockInsertSelect }))
 
+function makeChain(table: string): any {
+  if (table === 'profiles') {
+    return {
+      select(_c: string) {
+        return {
+          eq(_col: string, _val: unknown) {
+            return { single: mockProfileSingle }
+          },
+        }
+      },
+    }
+  }
+  // flashcards table
+  return {
+    select: mockSiblingSelect,
+    insert: mockInsert,
+  }
+}
+
+const mockFrom = vi.fn((table: string) => makeChain(table))
+
 vi.mock('@iskotify/utils', () => ({
-  createServerClient: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: mockSiblingSelect,
-      insert: mockInsert,
-    })),
-  })),
+  createServerClient: vi.fn(() => ({ from: mockFrom })),
 }))
 
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+function adminUser() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+  mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+}
+
+function noUser() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: null } })
+}
+
+function nonAdmin() {
+  mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'u2' } } })
+  mockProfileSingle.mockResolvedValueOnce({ data: { role: 'viewer' }, error: null })
+}
+
+function resetAll() {
+  vi.resetModules()
+  mockGetUser.mockReset()
+  mockProfileSingle.mockReset()
+  mockSiblingSingle.mockClear()
+  mockInsert.mockClear()
+  mockInsertSingle.mockClear()
+  dedupResult.value = { data: [], error: null }
+  mockFrom.mockClear()
+}
+
+function makeReq(body: object) {
+  return new NextRequest('http://localhost/api/flashcards/cards', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function makeGetReq(topicId?: string) {
+  const url = topicId
+    ? `http://localhost/api/flashcards/cards?topic_id=${topicId}`
+    : 'http://localhost/api/flashcards/cards'
+  return new NextRequest(url, { method: 'GET' })
+}
+
+// ── GET /api/flashcards/cards ─────────────────────────────────────────────────
+
+describe('GET /api/flashcards/cards', () => {
+  beforeEach(() => resetAll())
+
+  it('returns 401 when unauthenticated', async () => {
+    noUser()
+    const { GET } = await import('../route')
+    const res = await GET(makeGetReq('topic-1'))
+    expect(res.status).toBe(401)
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when signed-in non-admin', async () => {
+    nonAdmin()
+    const { GET } = await import('../route')
+    const res = await GET(makeGetReq('topic-1'))
+    expect(res.status).toBe(403)
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when topic_id is missing', async () => {
+    adminUser()
+    // select chain will be called for the query — just make it not crash
+    const { GET } = await import('../route')
+    const res = await GET(makeGetReq())
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/topic_id/i)
+  })
+
+  it('allows admin to fetch cards and returns 200', async () => {
+    adminUser()
+    // GET uses select().eq().order() — mockSiblingSelect chain
+    // The chain will hit .select().eq().order() — final awaited result
+    const mockOrder = vi.fn().mockResolvedValueOnce({ data: [{ id: 'c1', question: 'Q?' }], error: null })
+    const eqFn = vi.fn(() => ({ order: mockOrder }))
+    mockSiblingSelect.mockReturnValueOnce({ eq: eqFn })
+    const { GET } = await import('../route')
+    const res = await GET(makeGetReq('topic-1'))
+    expect(res.status).toBe(200)
+  })
+})
+
+// ── POST /api/flashcards/cards ────────────────────────────────────────────────
+
 describe('POST /api/flashcards/cards', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    mockSiblingSingle.mockClear()
-    mockInsert.mockClear()
-    mockInsertSingle.mockClear()
-    dedupResult.value = { data: [], error: null }  // no duplicates by default
+  beforeEach(() => resetAll())
+
+  it('returns 401 when unauthenticated', async () => {
+    noUser()
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', question: 'Q?', answer: 'A' }))
+    expect(res.status).toBe(401)
+    expect(mockInsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when signed-in non-admin', async () => {
+    nonAdmin()
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', question: 'Q?', answer: 'A' }))
+    expect(res.status).toBe(403)
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 
   it('returns 409 when a published card with the same question + answer already exists', async () => {
+    adminUser()
     dedupResult.value = { data: [{ id: 'existing', answer: '4' }], error: null }
     const { POST } = await import('../route')
     const res = await POST(makeReq({ topic_id: 'topic-1', question: 'What is 2+2?', answer: '4', listing_slugs: ['upcat'] }))
@@ -58,6 +183,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('allows a same-question card when the answer differs (not a duplicate)', async () => {
+    adminUser()
     dedupResult.value = { data: [{ id: 'existing', answer: 'receive' }], error: null }
     mockInsertSingle.mockResolvedValueOnce({ data: { id: 'card-new' }, error: null })
     const { POST } = await import('../route')
@@ -66,15 +192,8 @@ describe('POST /api/flashcards/cards', () => {
     expect(mockInsert).toHaveBeenCalled()
   })
 
-  function makeReq(body: object) {
-    return new NextRequest('http://localhost/api/flashcards/cards', {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
   it('returns 400 when topic_id is missing', async () => {
+    adminUser()
     const { POST } = await import('../route')
     const res = await POST(makeReq({ question: 'Q', answer: 'A' }))
     expect(res.status).toBe(400)
@@ -82,6 +201,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('returns 400 when question is missing', async () => {
+    adminUser()
     const { POST } = await import('../route')
     const res = await POST(makeReq({ topic_id: 'topic-1', answer: 'A' }))
     expect(res.status).toBe(400)
@@ -89,6 +209,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('returns 400 when answer is missing', async () => {
+    adminUser()
     const { POST } = await import('../route')
     const res = await POST(makeReq({ topic_id: 'topic-1', question: 'Q' }))
     expect(res.status).toBe(400)
@@ -96,6 +217,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('inserts card with provided listing_slugs and returns { id }', async () => {
+    adminUser()
     mockInsertSingle.mockResolvedValueOnce({ data: { id: 'card-new' }, error: null })
     const { POST } = await import('../route')
     const res = await POST(makeReq({
@@ -112,6 +234,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('inherits listing_slugs from sibling card when not provided', async () => {
+    adminUser()
     mockSiblingSingle.mockResolvedValueOnce({ data: { listing_slugs: ['dost-2026'] }, error: null })
     mockInsertSingle.mockResolvedValueOnce({ data: { id: 'card-new' }, error: null })
     const { POST } = await import('../route')
@@ -123,6 +246,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('falls back to [] when no listing_slugs and no sibling cards exist', async () => {
+    adminUser()
     mockSiblingSingle.mockResolvedValueOnce({ data: null, error: { message: 'No rows' } })
     mockInsertSingle.mockResolvedValueOnce({ data: { id: 'card-new' }, error: null })
     const { POST } = await import('../route')
@@ -134,6 +258,7 @@ describe('POST /api/flashcards/cards', () => {
   })
 
   it('returns 500 when insert fails', async () => {
+    adminUser()
     mockSiblingSingle.mockResolvedValueOnce({ data: null, error: { message: 'No rows' } })
     mockInsertSingle.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } })
     const { POST } = await import('../route')
@@ -150,12 +275,24 @@ describe('POST /api/flashcards/cards — batch path', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    mockGetUser.mockReset()
+    mockProfileSingle.mockReset()
     mockBatchInsert.mockReset()
+    vi.doMock('@/lib/supabase', () => ({
+      createAuthClient: vi.fn(async () => ({ auth: { getUser: mockGetUser } })),
+    }))
     vi.doMock('@iskotify/utils', () => ({
       createServerClient: vi.fn(() => ({
-        from: vi.fn(() => ({
-          insert: mockBatchInsert,
-        })),
+        from: vi.fn((table: string) => {
+          if (table === 'profiles') {
+            return {
+              select: () => ({
+                eq: () => ({ single: mockProfileSingle }),
+              }),
+            }
+          }
+          return { insert: mockBatchInsert }
+        }),
       })),
     }))
   })
@@ -168,7 +305,24 @@ describe('POST /api/flashcards/cards — batch path', () => {
     })
   }
 
+  it('returns 401 when unauthenticated (batch path)', async () => {
+    noUser()
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', cards: [{ question: 'Q', answer: 'A', explanation: '' }] }))
+    expect(res.status).toBe(401)
+    expect(mockBatchInsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 when signed-in non-admin (batch path)', async () => {
+    nonAdmin()
+    const { POST } = await import('../route')
+    const res = await POST(makeReq({ topic_id: 'topic-1', cards: [{ question: 'Q', answer: 'A', explanation: '' }] }))
+    expect(res.status).toBe(403)
+    expect(mockBatchInsert).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when batch body is missing topic_id', async () => {
+    adminUser()
     const { POST } = await import('../route')
     const res = await POST(makeReq({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }))
     expect(res.status).toBe(400)
@@ -176,6 +330,7 @@ describe('POST /api/flashcards/cards — batch path', () => {
   })
 
   it('inserts all cards with ai_* fields mapped to snake_case and returns { inserted: N }', async () => {
+    adminUser()
     mockBatchInsert.mockResolvedValueOnce({ error: null })
 
     const { POST } = await import('../route')
@@ -228,6 +383,7 @@ describe('POST /api/flashcards/cards — batch path', () => {
   })
 
   it('returns 500 when batch insert fails', async () => {
+    adminUser()
     mockBatchInsert.mockResolvedValueOnce({ error: { message: 'DB batch error' } })
     const { POST } = await import('../route')
     const res = await POST(makeReq({

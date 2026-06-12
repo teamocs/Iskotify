@@ -8,6 +8,13 @@ jest.mock('../supabase', () => ({
   },
 }))
 
+// Question-report retry is fire-and-forget from syncOnLaunch; mock it so these
+// tests only assert the wiring, not the upload behaviour (covered in
+// questionReports.test.ts).
+jest.mock('../questionReports', () => ({
+  pushPendingReports: jest.fn().mockResolvedValue(undefined),
+}))
+
 jest.mock('drizzle-orm', () => ({
   // Spread real implementations so sql, and, like, gte, eq, inArray etc. work
   // in homeAggregates and other service modules called from this test file.
@@ -155,6 +162,21 @@ describe('syncOnLaunch', () => {
     // 6 sequential transactions: listings, subjects+topics+flashcards, upcat,
     // career, university, blueprints+cursor
     expect(db.transaction).toHaveBeenCalledTimes(6)
+  })
+
+  it('fires pushPendingReports after the main sync (queued question-report retry)', async () => {
+    const { pushPendingReports } = require('../questionReports')
+    const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 0 }, [])
+    await syncOnLaunch(db as any)
+    expect(pushPendingReports).toHaveBeenCalledTimes(1)
+    expect(pushPendingReports).toHaveBeenCalledWith(db)
+  })
+
+  it('does NOT fire pushPendingReports when sync exits early (no listing selected)', async () => {
+    const { pushPendingReports } = require('../questionReports')
+    const db = makeDb({ id: 1, selectedListingSlug: '', lastSyncedAt: 0 }, [])
+    await syncOnLaunch(db as any)
+    expect(pushPendingReports).not.toHaveBeenCalled()
   })
 })
 

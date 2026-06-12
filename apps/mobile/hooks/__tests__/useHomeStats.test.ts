@@ -1,6 +1,7 @@
-import { computeStreak, computeTodayAccuracy, computeWeakTopics } from '../useHomeStats'
+import { computeStreak, computeStreakFromDays, computeTodayAccuracy, computeWeakTopics, localDayOffsetMs } from '../useHomeStats'
 
 const DAY = 86_400_000
+const HOUR = 3_600_000
 
 describe('computeStreak', () => {
   it('returns 0 with no progress', () => {
@@ -34,6 +35,35 @@ describe('computeStreak', () => {
       { answeredAt: today - DAY },
       { answeredAt: today - 2 * DAY },
     ])).toBe(2)
+  })
+})
+
+describe('computeStreakFromDays — offsetMs local-day bucketing', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  it('counts a streak using local "today" when offsetMs is provided (early-morning PH case)', () => {
+    // 2024-06-15T17:00:00Z = 01:00 on June 16 in UTC+8 (PH).
+    // UTC "today" is still June 15, but local today is June 16.
+    const now = new Date('2024-06-15T17:00:00.000Z').getTime()
+    jest.spyOn(Date, 'now').mockReturnValue(now)
+    const phOffset = 8 * HOUR
+    const localToday = Math.floor((now + phOffset) / DAY) // June 16 local-day index
+
+    expect(computeStreakFromDays([localToday], phOffset)).toBe(1)
+    expect(computeStreakFromDays([localToday, localToday - 1, localToday - 2], phOffset)).toBe(3)
+  })
+
+  it('defaults to offset 0 — backward compatible with UTC day buckets', () => {
+    const now = new Date('2024-06-15T12:00:00.000Z').getTime()
+    jest.spyOn(Date, 'now').mockReturnValue(now)
+    const utcToday = Math.floor(now / DAY)
+    expect(computeStreakFromDays([utcToday, utcToday - 1])).toBe(2)
+  })
+})
+
+describe('localDayOffsetMs', () => {
+  it('returns the negated device timezone offset in milliseconds', () => {
+    expect(localDayOffsetMs()).toBe(-new Date().getTimezoneOffset() * 60_000)
   })
 })
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
@@ -9,6 +9,9 @@ import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, es
 import type { ExamQuestion } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
+import { SectionGrid } from '../../../components/practice/SectionGrid'
+import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
+import { submitQuestionReport } from '../../../services/questionReports'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -129,6 +132,9 @@ export default function BlueprintExam() {
   const [questions, setQuestions] = useState<FlatQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
+  // Question-report state: which indexes were reported + which index the modal is open for.
+  const [reported, setReported] = useState<Record<number, boolean>>({})
+  const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
 
   // Countdown timer. endTime is an absolute timestamp so the clock stays accurate even
@@ -145,6 +151,14 @@ export default function BlueprintExam() {
   const [floorIdx, setFloorIdx] = useState(0)
   const submittedRef = useRef(false)
   const submitRef = useRef<() => void>(() => {})
+  // Question pane (middle scroll zone) — reset to top whenever the question changes
+  // so scroll offset never carries over between questions.
+  const qPaneRef = useRef<ScrollView>(null)
+  const { height: winH } = useWindowDimensions()
+
+  useEffect(() => {
+    qPaneRef.current?.scrollTo({ y: 0, animated: false })
+  }, [idx])
 
   const bounds = useMemo(() => (built ? computeBounds(built) : []), [built])
   const sectionBlocked = !!blueprint?.sectionBlocked && bounds.length > 0
@@ -495,34 +509,47 @@ export default function BlueprintExam() {
 
       <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (i >= floorIdx) setIdx(i) }} />
 
-      {bounds.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
-          {sectionChips.map(chip => (
-            <Pressable
-              key={chip.name}
-              style={[s.sChip, chip.active && s.sChipOn, chip.disabled && s.sChipDisabled]}
-              disabled={chip.disabled}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: chip.disabled }}
-              onPress={() => { if (!chip.disabled) setIdx(Math.max(chip.start, floorIdx)) }}
-            >
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={[s.sChipTxt, chip.active && s.sChipTxtOn]}>{chip.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
+      <SectionGrid sections={sectionChips} onJump={start => setIdx(Math.max(start, floorIdx))} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
-        <View style={s.subjectBar}>
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={s.subjectBarText}>
+      {/* Subject/topic bar lives in the fixed header zone with a fixed min height so it
+          never mounts/unmounts (and never shifts layout) between questions. */}
+      <View style={s.subjectBar}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={s.subjectBarText}>
+          {fq.q.mainSubject || fq.sectionName ? (
             <Text style={s.subjectBold}>{fq.q.mainSubject ? fq.q.mainSubject : fq.sectionName}</Text>
-            {fq.q.topic ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
-          </Text>
-        </View>
+          ) : (
+            <Text style={s.subjectBold}>{''}</Text>
+          )}
+          {fq.q.topic ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
+        </Text>
+      </View>
+
+      {/* Middle pane: passage + question text scroll; options live in their own fixed
+          zone below so they never jump as question/passage length changes. */}
+      <ScrollView
+        ref={qPaneRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: spacing.lg }}
+        showsVerticalScrollIndicator={false}
+      >
+        {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
         <View style={s.qCard}>
           <Text style={s.qText}>{q.questionText}</Text>
+          <View style={s.reportRow}>
+            {reported[idx] ? (
+              <Text style={s.reportedTxt} maxFontSizeMultiplier={1.4}>Reported ✓</Text>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
+                <Text style={s.reportBtn} maxFontSizeMultiplier={1.4}>⚐ Report</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
+      </ScrollView>
+
+      {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
+          without scrolling, while very long options scroll inside this zone. */}
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55 }} showsVerticalScrollIndicator={false}>
         <View style={s.opts}>
           {q.options.map((o, oi) => (
             <Pressable
@@ -565,6 +592,27 @@ export default function BlueprintExam() {
           <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
         </Pressable>
       </View>
+
+      <ReportQuestionModal
+        visible={reportIdx !== null}
+        onClose={() => setReportIdx(null)}
+        onSubmit={(reason) => {
+          const qi = reportIdx
+          if (qi == null) return
+          const rq = questions[qi]?.q
+          if (rq) {
+            // Blueprint questions come from upcat_questions; offline-first, never throws.
+            void submitQuestionReport(db, {
+              questionId: rq.questionId,
+              sourceTable: 'upcat_questions',
+              questionText: rq.questionText,
+              reason,
+            })
+            setReported(r => ({ ...r, [qi]: true }))
+          }
+          setReportIdx(null)
+        }}
+      />
     </SafeAreaView>
   )
 }
@@ -615,15 +663,8 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     courseCluster: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
     courseNoteTxt: { fontSize: typo.xs, color: t.textSecondary, marginTop: 2, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    // B2: section chip row
-    chipRow: { paddingHorizontal: 14, flexDirection: 'row', gap: spacing.sm, alignItems: 'center', paddingVertical: spacing.xs, marginBottom: spacing.xs },
-    sChip: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1 },
-    sChipOn: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
-    sChipDisabled: { opacity: 0.4 },
-    sChipTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    sChipTxtOn: { color: '#fff' },
-    // B1: subject/topic bar
-    subjectBar: { paddingHorizontal: 14, marginBottom: spacing.xs },
+    // B1: subject/topic bar — fixed min height so the header zone never shifts
+    subjectBar: { paddingHorizontal: 14, marginBottom: spacing.xs, minHeight: 22, justifyContent: 'center' },
     subjectBarText: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
     subjectBold: { color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm },
     subjectTopic: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm },
@@ -632,6 +673,9 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       padding: 18, marginHorizontal: 14, marginBottom: spacing.md,
     },
     qText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold' },
+    reportRow: { marginTop: 10, alignItems: 'flex-end' },
+    reportBtn: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    reportedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_400Regular' },
     opts: { gap: 9, paddingHorizontal: 14 },
     opt: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: t.surface, borderWidth: 1.5,
@@ -643,7 +687,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     optLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
     optTxt: { flex: 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
     footer: {
-      position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', gap: spacing.sm, padding: 14,
+      flexDirection: 'row', gap: spacing.sm, padding: 14,
       backgroundColor: t.bg, borderTopWidth: 1, borderColor: t.border,
     },
     footBtnGhost: {

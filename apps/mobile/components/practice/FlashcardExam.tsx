@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useDb } from '../../hooks/useDb'
-import { questionFeedback } from '../../db/schema'
+import { submitQuestionReport } from '../../services/questionReports'
+import { ReportQuestionModal } from './ReportQuestionModal'
 import { useRecordSession } from '../../hooks/useRecordSession'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { useTheme } from '../../theme/ThemeContext'
@@ -32,6 +33,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [reported, setReported] = useState<Record<number, boolean>>({})
+  // Which question index the report modal is open for (null = closed).
+  const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
@@ -66,14 +69,19 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   }
 
   // ── Report a question ──────────────────────────────────────────────────────
-  async function reportQuestion(qi: number) {
-    const q = questions[qi]!
-    await db.insert(questionFeedback).values({
-      cardId: q.id ?? String(qi),
-      reason: 'reported',
-      createdAt: Date.now(),
+  function submitReport(reason: string) {
+    const qi = reportIdx
+    if (qi == null) return
+    const rq = questions[qi]!
+    // Offline-first: local queue write + best-effort upload (never throws to UI).
+    void submitQuestionReport(db, {
+      questionId: rq.id ?? String(qi),
+      sourceTable: 'flashcards',
+      questionText: rq.stem,
+      reason,
     })
     setReported(r => ({ ...r, [qi]: true }))
+    setReportIdx(null)
   }
 
   // ── Results screen ─────────────────────────────────────────────────────────
@@ -185,7 +193,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
             {reported[idx] ? (
               <Text style={s.reportedTxt}>Reported ✓</Text>
             ) : (
-              <Pressable onPress={() => void reportQuestion(idx)} hitSlop={8}>
+              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
                 <Text style={s.reportBtn}>⚐ Report</Text>
               </Pressable>
             )}
@@ -230,6 +238,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
         </Pressable>
       </View>
+
+      <ReportQuestionModal
+        visible={reportIdx !== null}
+        onClose={() => setReportIdx(null)}
+        onSubmit={submitReport}
+      />
     </SafeAreaView>
   )
 }

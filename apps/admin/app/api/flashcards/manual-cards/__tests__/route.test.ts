@@ -8,6 +8,13 @@ vi.mock('next/cache', () => ({
 
 vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
+vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fake-anon-key')
+
+// Auth client mock — all requests in this file are implicitly admin
+const mockGetUser = vi.fn().mockResolvedValue({ data: { user: { id: 'admin-1' } } })
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: vi.fn(async () => ({ auth: { getUser: mockGetUser } })),
+}))
 
 const mockSingle = vi.fn()
 const mockSelectSingle = vi.fn(() => ({ single: mockSingle }))
@@ -22,6 +29,16 @@ const mockUpdateEq = vi.fn(() => ({ eq: mockEqFlat }))
 vi.mock('@iskotify/utils', () => ({
   createServerClient: vi.fn(() => ({
     from: vi.fn((table: string) => {
+      if (table === 'profiles') {
+        // requireAdmin() profile lookup — always returns admin role
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: { role: 'admin' }, error: null }),
+            }),
+          }),
+        }
+      }
       if (table === 'flashcard_subjects') return { upsert: mockUpsert }
       if (table === 'flashcard_topics')   return { insert: mockInsertSelect }
       if (table === 'flashcards')         return { insert: mockInsertCard, update: mockUpdateEq, delete: () => ({ eq: mockEqFlat }) }
