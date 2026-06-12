@@ -61,6 +61,11 @@ jest.mock('../../../hooks/useDb', () => ({
   useDb: () => ({}),
 }))
 
+const mockOpenKuya = jest.fn()
+jest.mock('../../../providers/KuyaChatProvider', () => ({
+  useKuyaChatModal: () => ({ open: mockOpenKuya }),
+}))
+
 // Mock listPublishedBlueprints — tests override this via mockListPublishedBlueprints
 const mockListPublishedBlueprints = jest.fn().mockResolvedValue([])
 jest.mock('../../../services/examBlueprints', () => ({
@@ -93,6 +98,7 @@ describe('PracticeScreen', () => {
 
   beforeEach(() => {
     mockListPublishedBlueprints.mockClear()
+    mockOpenKuya.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockUseHomeStats.mockReturnValue({ listing: null })
     mockListPublishedBlueprints.mockResolvedValue([])
@@ -160,9 +166,20 @@ describe('PracticeScreen', () => {
     render(<PracticeScreen />)
     const collapsed = screen.getByTestId('study-tools-collapsed')
     fireEvent.press(collapsed)
-    expect(screen.getByText('UPCAT Mock Exam')).toBeTruthy()
+    // New cards present
     expect(screen.getByText('GWA Calculator')).toBeTruthy()
-    expect(screen.getByText('Career Paths')).toBeTruthy()
+    expect(screen.getByText('Notes')).toBeTruthy()
+    expect(screen.getByText('AI Chat')).toBeTruthy()
+    // Removed cards absent
+    expect(screen.queryByText('UPCAT Mock Exam')).toBeNull()
+    expect(screen.queryByText('Career Paths')).toBeNull()
+  })
+
+  it('AI Chat card in Study Tools calls openKuya on press', () => {
+    render(<PracticeScreen />)
+    fireEvent.press(screen.getByTestId('study-tools-collapsed'))
+    fireEvent.press(screen.getByText('AI Chat'))
+    expect(mockOpenKuya).toHaveBeenCalledTimes(1)
   })
 
   it('Saved Decks section header always shown (create deck reachable)', () => {

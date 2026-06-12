@@ -26,6 +26,7 @@ import { ListCard } from '../../components/ui/ListCard'
 import { Badge } from '../../components/ui/Badge'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
+import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 
 // Maps a topic strength to a design-system Badge tone.
 const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
@@ -452,6 +453,8 @@ export default function PracticeScreen() {
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
+  const { open: openKuya } = useKuyaChatModal()
+
   const { theme: t, typo } = useTheme()
   // Web-only adaptive grids: native tablets (iPad etc.) keep the phone 2-col
   // layout — the native app's rendering must not change with viewport width.
@@ -783,13 +786,6 @@ export default function PracticeScreen() {
               </View>
               <View style={{ gap: spacing.sm }}>
                 <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>🎓</Text>}
-                  iconBg="rgba(128,0,0,0.18)"
-                  title="UPCAT Mock Exam"
-                  subtitle="Authored questions · timed mock by subtest"
-                  onPress={() => router.push('/practice/upcat')}
-                />
-                <ListCard
                   icon={<Text style={{ fontSize: 15 }}>🧮</Text>}
                   iconBg="rgba(245,158,11,0.14)"
                   title="GWA Calculator"
@@ -797,11 +793,18 @@ export default function PracticeScreen() {
                   onPress={() => router.push('/estimator/gwa')}
                 />
                 <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>🌍</Text>}
-                  iconBg="rgba(245,158,11,0.14)"
-                  title="Career Paths"
-                  subtitle="Where can your course take you? · AI-Safe-Score"
-                  onPress={() => router.push('/career')}
+                  icon={<Text style={{ fontSize: 15 }}>📝</Text>}
+                  iconBg="rgba(128,0,0,0.18)"
+                  title="Notes"
+                  subtitle="Your study notes & reminders"
+                  onPress={() => router.push('/notes')}
+                />
+                <ListCard
+                  icon={<Text style={{ fontSize: 15 }}>💬</Text>}
+                  iconBg="rgba(34,197,94,0.14)"
+                  title="AI Chat"
+                  subtitle="Ask Kuya Baw anything about exams & courses"
+                  onPress={() => { void openKuya() }}
                 />
               </View>
             </View>
@@ -817,7 +820,7 @@ export default function PracticeScreen() {
               <Text style={s.collapsedIcon}>🛠️</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.collapsedLabel}>Study Tools</Text>
-                <Text style={s.collapsedSub}>UPCAT Mock · GWA Calculator · Career Paths</Text>
+                <Text style={s.collapsedSub}>GWA Calculator · Notes · AI Chat</Text>
               </View>
               <Text style={s.collapsedChevron}>›</Text>
             </Pressable>

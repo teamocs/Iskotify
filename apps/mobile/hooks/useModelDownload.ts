@@ -35,10 +35,10 @@ function ensureNativeConfigured(): void {
       notificationsGrouping: {
         enabled: false,
         texts: {
-          downloadTitle: 'Iskotify · AI Reviewer Engine',
+          downloadTitle: 'Iskotify · AI Features + Kuya Baw',
           downloadStarting: 'Preparing download…',
           downloadProgress: 'Downloading… {progress}%',
-          downloadFinished: 'AI Reviewer ready',
+          downloadFinished: 'AI Features and Kuya Baw ready',
           downloadPaused: 'Paused',
         },
       },
@@ -95,8 +95,8 @@ function attachHandlers(
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'AI Reviewer is ready!',
-          body: 'Your flashcards are now being enhanced in the background.',
+          title: 'AI Features and Kuya Baw are ready!',
+          body: 'Your app now has AI features — open AI Chat and talk with Kuya Baw anytime.',
         },
         trigger: null,
       })
