@@ -58,16 +58,19 @@ export function ChatBubble({ message }: Props) {
     },
   }), [t, typo])
 
-  const [showSlowHint, setShowSlowHint] = useState(false)
+  // Slow-response hint: shown only after 8s of an empty streaming bubble.
+  // Display is gated by `streamingEmpty` at render time so state is never synced
+  // to a prop on change; the timer-fired flag resets on cleanup when the spell ends.
+  const streamingEmpty = message.isStreaming && message.text.length === 0
+  const [slowFired, setSlowFired] = useState(false)
 
   useEffect(() => {
-    if (!message.isStreaming || message.text.length > 0) {
-      setShowSlowHint(false)
-      return
-    }
-    const t = setTimeout(() => setShowSlowHint(true), 8000)
-    return () => clearTimeout(t)
-  }, [message.isStreaming, message.text])
+    if (!streamingEmpty) return
+    const id = setTimeout(() => setSlowFired(true), 8000)
+    return () => { clearTimeout(id); setSlowFired(false) }
+  }, [streamingEmpty])
+
+  const showSlowHint = streamingEmpty && slowFired
 
   const timeStr = new Date(message.timestamp).toLocaleTimeString('en-PH', {
     hour: '2-digit',
@@ -85,7 +88,7 @@ export function ChatBubble({ message }: Props) {
           accessibilityRole="text"
           accessibilityLiveRegion={message.isStreaming ? 'polite' : 'none'}
         >
-          {message.isStreaming && message.text.length === 0 ? (
+          {streamingEmpty ? (
             showSlowHint ? (
               <Text style={s.slowHint}>Kuya Baw is thinking...</Text>
             ) : (

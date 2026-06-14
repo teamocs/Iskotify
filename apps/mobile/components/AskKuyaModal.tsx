@@ -448,7 +448,7 @@ function makeStyles(t: Theme, typo: Typography) {
       paddingVertical: spacing.sm,
       borderRadius: radius.pill,
       alignSelf: 'flex-start',
-      minHeight: 36,
+      minHeight: 44,
       justifyContent: 'center',
     },
     suggestChipText: {

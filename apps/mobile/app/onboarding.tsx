@@ -556,7 +556,7 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
           <View style={gateStyle.container}>
             <Image
-              source={require('../assets/images/kuya-baw-mascot.png')}
+              source={require('../assets/images/kuya-baw-logo.png')}
               style={gateStyle.mascot}
               resizeMode="contain"
             />

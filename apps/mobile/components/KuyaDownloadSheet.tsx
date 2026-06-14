@@ -168,7 +168,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
           <View style={s.handle} />
 
           <Image
-            source={require('../assets/images/kuya-baw-mascot.png')}
+            source={require('../assets/images/kuya-baw-logo.png')}
             style={s.mascot}
             resizeMode="contain"
           />

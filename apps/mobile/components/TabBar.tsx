@@ -93,14 +93,14 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       <View style={styles.centerSlot}>
         <Pressable
           onPress={openKuya}
-          style={({ pressed }) => [styles.fab, { borderColor: t.tabBar }, pressed && { opacity: 0.88 }]}
+          style={({ pressed }) => [styles.fab, { backgroundColor: t.surface2, borderColor: t.border }, pressed && { opacity: 0.88 }]}
           accessibilityRole="button"
           accessibilityLabel="Ask Kuya Baw"
         >
           <Image
             source={require('../assets/images/kuya-baw-logo.png')}
             style={styles.fabImg}
-            resizeMode="contain"
+            resizeMode="cover"
           />
         </Pressable>
       </View>
@@ -143,17 +143,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
+  // Mascot avatar treatment matching the chat screen: the logo fills a clean
+  // circle (cover) on a surface ring; marginTop + shadow raise it above the bar.
   fab: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(128,0,0,0.95)',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    // Raise the circle so it pops above the bar's top edge (per the new layout).
     marginTop: -22,
-    borderWidth: 4,
+    borderWidth: 1,
     boxShadow: '0px 4px 8px rgba(0,0,0,0.28)',
   },
-  fabImg: { width: 42, height: 42 },
+  fabImg: { width: 56, height: 56 },
 })
