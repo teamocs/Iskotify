@@ -98,7 +98,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           accessibilityLabel="Ask Kuya Baw"
         >
           <Image
-            source={require('../assets/images/kuya-baw-mascot.png')}
+            source={require('../assets/images/kuya-baw-logo.png')}
             style={styles.fabImg}
             resizeMode="contain"
           />

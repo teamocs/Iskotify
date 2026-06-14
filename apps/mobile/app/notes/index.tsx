@@ -63,7 +63,7 @@ function NoteCard({
           borderCurve: 'continuous',
           padding: spacing.md,
           borderWidth: selected ? 2 : 1,
-          borderColor: selected ? '#800000' : (note.color ? 'rgba(0,0,0,0.1)' : t.border),
+          borderColor: selected ? t.accent : (note.color ? 'rgba(0,0,0,0.1)' : t.border),
           flex: 1,
           boxShadow: t.shadowSm,
           opacity: pressed ? 0.85 : 1,

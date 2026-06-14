@@ -160,10 +160,10 @@ function FocusListItem({
         {/* Priority badge */}
         <View style={{
           width: 28, height: 28, borderRadius: radius.pill,
-          backgroundColor: 'rgba(128,0,0,0.82)',
+          backgroundColor: t.accentStrong,
           alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <Text style={{ fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' }}>
+          <Text style={{ fontSize: typo.sm, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' }}>
             #{item.priority}
           </Text>
         </View>
@@ -230,20 +230,20 @@ export default function ProfileScreen() {
     title:         { fontSize: typography.h2, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
     subtitle:      { fontSize: typography.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
     avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    avatar:        { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    avatar:        { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     name:          { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 3 },
     schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
     school:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    gradeChip:     { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
-    gradeText:     { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    gradeChip:     { backgroundColor: t.accentStrong, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
+    gradeText:     { fontSize: typo.xs, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
     listingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
     listingTitle:  { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
     googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: t.divider },
     googleBadge:   { backgroundColor: t.textPrimary, borderRadius: radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
     googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
     googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    signedInBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
-    signedInText:  { fontSize: typo.xs, fontWeight: '600', color: '#16a34a', fontFamily: 'Lexend_600SemiBold' },
+    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
+    signedInText:  { fontSize: typo.xs, fontWeight: '600', color: t.success, fontFamily: 'Lexend_600SemiBold' },
     secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },
     analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -453,7 +453,7 @@ export default function ProfileScreen() {
         <Card elevated>
           <View style={s.avatarRow}>
             <View style={s.avatar}>
-              <Lineicons icon={User4Outlined} size={22} color="#fff" />
+              <Lineicons icon={User4Outlined} size={22} color={t.textInverse} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.name} numberOfLines={1}>{profile.fullName}</Text>
@@ -551,7 +551,7 @@ export default function ProfileScreen() {
 
         {/* Action cards */}
         <ListCard
-          icon={<Lineicons icon={Upload1Outlined} size={16} color="#16a34a" style={{ transform: [{ rotate: '180deg' }] }} />}
+          icon={<Lineicons icon={Upload1Outlined} size={16} color={t.success} style={{ transform: [{ rotate: '180deg' }] }} />}
           iconBg="rgba(34,197,94,0.12)"
           title="Export Data"
           subtitle="Save your preferences as a JSON file"
@@ -572,10 +572,10 @@ export default function ProfileScreen() {
           onPress={handleSignOut}
         />
         <ListCard
-          icon={<Text style={{ fontSize: typo.base, color: '#dc2626' }}>⚠</Text>}
+          icon={<Text style={{ fontSize: typo.base, color: t.danger }}>⚠</Text>}
           iconBg="rgba(239,68,68,0.10)"
           title="Reset App Data"
-          titleColor="#dc2626"
+          titleColor={t.danger}
           subtitle="Permanently delete all local data on this device"
           onPress={handleResetAppData}
         />

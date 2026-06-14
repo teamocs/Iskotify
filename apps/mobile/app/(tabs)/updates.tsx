@@ -438,6 +438,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontWeight: '600',
+    fontFamily: 'Outfit_600SemiBold',
   },
   row: {
     flexDirection: 'row',
@@ -446,17 +447,21 @@ const styles = StyleSheet.create({
   },
   schoolName: {
     fontWeight: '500',
+    fontFamily: 'Lexend_500Medium',
     flexShrink: 1,
   },
   dateText: {
     fontWeight: '400',
+    fontFamily: 'Lexend_400Regular',
   },
   daysLabel: {
     fontWeight: '600',
+    fontFamily: 'Lexend_600SemiBold',
     marginLeft: 'auto',
   },
   bodyPreview: {
     fontWeight: '400',
+    fontFamily: 'Lexend_400Regular',
   },
   pressableCard: {
     borderRadius: radius.xl,
@@ -471,9 +476,11 @@ const styles = StyleSheet.create({
   bullet: {
     fontSize: 12,
     lineHeight: 18,
+    fontFamily: 'Lexend_400Regular',
   },
   bulletText: {
     flex: 1,
     lineHeight: 18,
+    fontFamily: 'Lexend_400Regular',
   },
 })

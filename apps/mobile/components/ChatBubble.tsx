@@ -41,11 +41,11 @@ export function ChatBubble({ message }: Props) {
       fontSize: typo.sm,
       lineHeight: 20,
     },
-    textUser: { color: '#fff' },
+    textUser: { color: t.textInverse },
     textAssistant: { color: t.textPrimary },
     cursor: { color: t.textSecondary },
     error: {
-      color: '#ef4444',
+      color: t.danger,
       marginTop: 4,
       fontSize: typo.xs,
       fontFamily: 'Lexend_400Regular',

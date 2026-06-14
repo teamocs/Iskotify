@@ -12,7 +12,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, type Theme } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,18 +77,20 @@ function safeParseArray(raw: string): string[] {
 
 type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'VERY LOW' | null
 
-function confidenceBadgeStyle(level: ConfidenceLevel): { bg: string; border: string; text: string; label: string } {
+// Theme-aware so LOW/VERY LOW/Unverified text stays legible in BOTH themes
+// (the old white-on-white neutral was invisible on the light palette).
+function confidenceBadgeStyle(level: ConfidenceLevel, t: Theme): { bg: string; border: string; text: string; label: string } {
   switch ((level ?? '').toUpperCase()) {
     case 'HIGH':
-      return { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.30)', text: '#4ade80', label: 'HIGH confidence' }
+      return { bg: t.successSurface, border: t.success, text: t.success, label: 'HIGH confidence' }
     case 'MEDIUM':
-      return { bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.30)', text: '#fbbf24', label: 'MEDIUM confidence' }
+      return { bg: t.warningSurface, border: t.warning, text: t.warning, label: 'MEDIUM confidence' }
     case 'LOW':
-      return { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.14)', text: 'rgba(255,255,255,0.38)', label: 'LOW confidence' }
+      return { bg: t.surfaceSubtle, border: t.border, text: t.textTertiary, label: 'LOW confidence' }
     case 'VERY LOW':
-      return { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.14)', text: 'rgba(255,255,255,0.38)', label: 'VERY LOW confidence' }
+      return { bg: t.surfaceSubtle, border: t.border, text: t.textTertiary, label: 'VERY LOW confidence' }
     default:
-      return { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.10)', text: 'rgba(255,255,255,0.30)', label: 'Unverified' }
+      return { bg: t.surfaceSubtle, border: t.border, text: t.textTertiary, label: 'Unverified' }
   }
 }
 
@@ -169,7 +171,7 @@ export default function SchoolProfileScreen() {
     linkArrow:     { fontSize: typo.sm, color: t.textTertiary },
     // Disclaimer
     disclaimer:    { marginTop: spacing.lg, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.md },
-    disclaimerTxt: { fontSize: typo.sm, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 19 },
+    disclaimerTxt: { fontSize: typo.sm, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
     // Empty/error
     empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
   }), [t, typo])
@@ -215,7 +217,7 @@ export default function SchoolProfileScreen() {
   // ── Derived values ───────────────────────────────────────────────────────────
 
   const confidence = (profile?.dataConfidence?.toUpperCase() ?? null) as ConfidenceLevel
-  const confBadge  = confidenceBadgeStyle(confidence)
+  const confBadge  = confidenceBadgeStyle(confidence, t)
   const showDisclaimer = shouldShowDisclaimer(confidence)
 
   const locationParts = [school.city, school.province, school.region].filter(Boolean)

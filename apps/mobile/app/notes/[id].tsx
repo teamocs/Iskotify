@@ -220,7 +220,7 @@ export default function NoteEditorScreen() {
     labelRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle, gap: 12 },
     labelName: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
     checkCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5 },
-    checkCircleOn: { backgroundColor: '#800000', borderColor: '#800000', alignItems: 'center', justifyContent: 'center' },
+    checkCircleOn: { backgroundColor: t.accent, borderColor: t.accent, alignItems: 'center', justifyContent: 'center' },
     checkCircleOff: { borderColor: t.textTertiary },
     // Reminder picker
     reminderOpt: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle, gap: 14 },

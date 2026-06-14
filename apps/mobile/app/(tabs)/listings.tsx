@@ -99,7 +99,7 @@ function parseTabParam(v: unknown): Tab | null {
 export default function ListsScreen() {
   const db = useDb()
   const { getPriority } = useFocusListings()
-  const { theme: t, typo, isDark } = useTheme()
+  const { theme: t, typo } = useTheme()
   const insets = useSafeAreaInsets()
 
   // ── Listings state (Universities + Scholarships tabs) ─────────────────────
@@ -332,7 +332,7 @@ export default function ListsScreen() {
 
   // ── Styles ────────────────────────────────────────────────────────────────
 
-  const scholarColor = isDark ? '#4ade80' : '#16a34a'
+  const scholarColor = t.success
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
     header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
@@ -341,9 +341,9 @@ export default function ListsScreen() {
     // 4-tab navigation bar
     tabBar: { flexDirection: 'row', marginHorizontal: spacing.lg, marginBottom: spacing.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.xs, gap: spacing.xs },
     tabItem: { flex: 1, minHeight: 44, paddingVertical: spacing.sm, borderRadius: radius.pill, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-    tabItemOn: { backgroundColor: 'rgba(128,0,0,0.82)' },
+    tabItemOn: { backgroundColor: t.accentStrong },
     tabTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    tabTxtOn: { color: '#fff' },
+    tabTxtOn: { color: t.textInverse },
     searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginHorizontal: spacing.lg, marginBottom: spacing.sm, minHeight: 48 },
     searchInput: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', padding: 0 },
     clearBtn: { padding: spacing.xs },
@@ -367,7 +367,7 @@ export default function ListsScreen() {
     },
     rowIcon: { width: 32, height: 32, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
     examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)' },
-    scholarIcon: { backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
+    scholarIcon: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)' },
     rowBody: { flex: 1, minWidth: 0, gap: 3 },
     rowTitle: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'nowrap' },
@@ -375,8 +375,8 @@ export default function ListsScreen() {
     metaSep: { fontSize: typo.xs, color: t.textTertiary, opacity: 0.5 },
     mockBadge: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
     mockBadgeTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    focusBadge: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
-    focusBadgeTxt: { fontSize: typo.xs, color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    focusBadge: { backgroundColor: t.accentStrong, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    focusBadgeTxt: { fontSize: typo.xs, color: t.textInverse, fontFamily: 'Lexend_600SemiBold' },
     empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxxl },
     sectionWrap: { marginTop: spacing.sm, marginBottom: spacing.xs },
     // Courses + Destinations tab content

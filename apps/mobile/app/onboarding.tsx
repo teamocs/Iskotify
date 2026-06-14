@@ -206,11 +206,11 @@ export default function OnboardingScreen() {
     resultPct: { fontSize: typo.display, fontWeight: '700', color: t.accentText, letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
     resultTitle: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm, textAlign: 'center' },
     resultSub: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20, marginBottom: spacing.xxl },
-    resultCounts: { flexDirection: 'row', gap: 40, marginBottom: spacing.xxxl },
+    resultCounts: { flexDirection: 'row', gap: spacing.xxxl, marginBottom: spacing.xxxl },
     resultCount: { alignItems: 'center' },
     resultNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     resultLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-    primaryBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: 15, paddingHorizontal: 40, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
+    primaryBtn: { backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.xxl, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
     primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
   }), [t, typo])
 

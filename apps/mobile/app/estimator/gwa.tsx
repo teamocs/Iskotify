@@ -86,7 +86,7 @@ export default function GwaCalculatorScreen() {
           <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1 }}>
             Your GWA
           </Text>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: 40, color: t.textPrimary, marginTop: spacing.xs }}>
+          <Text maxFontSizeMultiplier={1.4} style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h1, color: t.textPrimary, marginTop: spacing.xs }}>
             {gwa != null ? gwa.toFixed(4) : '—'}
           </Text>
           <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
@@ -94,7 +94,7 @@ export default function GwaCalculatorScreen() {
           </Text>
           {honor != null ? (
             <View style={{
-              marginTop: spacing.md, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: '#831626',
+              marginTop: spacing.md, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)',
               borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.xs + 2,
             }}>
               <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.accentText }}>🎓 {honor}</Text>

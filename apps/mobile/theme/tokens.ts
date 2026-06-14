@@ -15,6 +15,15 @@ export const darkTheme = {
   accent:        '#800000',
   accentText:    '#fca5a5',
   accentSurface: 'rgba(128,0,0,0.22)',
+  accentStrong:  'rgba(128,0,0,0.82)',     // opaque maroon for filled pills, badges, active tabs
+  textInverse:   '#ffffff',                // text/icons on the maroon accent (maroon is dark in both themes)
+  // Semantic status colors — theme-tuned so greens/reds stay legible in dark mode.
+  success:       '#4ade80',
+  successSurface:'rgba(74,222,128,0.16)',
+  danger:        '#f87171',
+  dangerSurface: 'rgba(248,113,113,0.16)',
+  warning:       '#fbbf24',
+  warningSurface:'rgba(251,191,36,0.16)',
   tabBar:        'rgba(26,26,46,0.92)',
   divider:       'rgba(255,255,255,0.20)',
   surfaceSubtle: 'rgba(255,255,255,0.05)',
@@ -34,6 +43,15 @@ export const lightTheme = {
   accent:        '#800000',
   accentText:    '#9b1c1c',
   accentSurface: 'rgba(128,0,0,0.10)',
+  accentStrong:  'rgba(128,0,0,0.82)',     // opaque maroon for filled pills, badges, active tabs
+  textInverse:   '#ffffff',                // text/icons on the maroon accent
+  // Semantic status colors — darker on the light palette so they meet contrast on white.
+  success:       '#16a34a',
+  successSurface:'rgba(22,163,74,0.10)',
+  danger:        '#dc2626',
+  dangerSurface: 'rgba(220,38,38,0.10)',
+  warning:       '#b45309',
+  warningSurface:'rgba(180,83,9,0.10)',
   tabBar:        'rgba(253,244,244,0.92)',
   divider:       'rgba(128,0,0,0.14)',
   surfaceSubtle: 'rgba(128,0,0,0.05)',

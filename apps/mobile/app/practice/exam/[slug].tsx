@@ -56,6 +56,7 @@ interface ReviewAccordionProps {
 }
 
 function ReviewAccordion({ reviewSections, questions, answers, styles: s }: ReviewAccordionProps) {
+  const { theme: t } = useTheme()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   function toggle(name: string) {
@@ -98,8 +99,8 @@ function ReviewAccordion({ reviewSections, questions, answers, styles: s }: Revi
                           key={oi}
                           style={[
                             s.reviewOpt,
-                            oi === q.correctIndex && { color: '#16a34a', fontWeight: '700' },
-                            oi === sel && oi !== q.correctIndex ? { color: '#dc2626' } : null,
+                            oi === q.correctIndex && { color: t.success, fontWeight: '700' },
+                            oi === sel && oi !== q.correctIndex ? { color: t.danger } : null,
                           ]}
                         >
                           {LETTERS[oi]}. {o}
@@ -397,7 +398,7 @@ export default function BlueprintExam() {
       <SafeAreaView style={s.root}>
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? '#16a34a' : t.accentText }]}>{pct}%</Text>
+            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
             <Text style={s.scoreSub}>{correct}/{total} correct</Text>
             {blueprint.hasGuessingPenalty ? (
@@ -559,7 +560,7 @@ export default function BlueprintExam() {
               onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
             >
               <View style={[s.optLetter, sel === oi && s.optLetterOn]}>
-                <Text style={[s.optLetterTxt, sel === oi && { color: '#fff' }]}>{LETTERS[oi]}</Text>
+                <Text style={[s.optLetterTxt, sel === oi && { color: t.textInverse }]}>{LETTERS[oi]}</Text>
               </View>
               <Text style={s.optTxt}>{o}</Text>
             </Pressable>
@@ -628,9 +629,9 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     topTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     counter: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     timerPill: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
-    timerPillLow: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.35)' },
+    timerPillLow: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.35)' },
     timerTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold', fontVariant: ['tabular-nums'] },
-    timerTxtLow: { color: '#dc2626' },
+    timerTxtLow: { color: t.danger },
     metaCard: {
       backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
       padding: 18, marginBottom: spacing.md, alignItems: 'center',
@@ -643,10 +644,10 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     noteTxt: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 20, fontFamily: 'Lexend_400Regular' },
     warnCard: {
-      backgroundColor: 'rgba(239,68,68,0.07)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
+      backgroundColor: t.dangerSurface, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
       borderRadius: 14, borderCurve: 'continuous', padding: 14, marginBottom: spacing.md,
     },
-    warnTitle: { fontSize: typo.sm, fontWeight: '700', color: '#dc2626', fontFamily: 'Outfit_700Bold', marginBottom: 4 },
+    warnTitle: { fontSize: typo.sm, fontWeight: '700', color: t.danger, fontFamily: 'Outfit_700Bold', marginBottom: 4 },
     warnTxt: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 20, fontFamily: 'Lexend_400Regular' },
     structRow: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -675,7 +676,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     qText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 24, fontFamily: 'Outfit_600SemiBold' },
     reportRow: { marginTop: 10, alignItems: 'flex-end' },
     reportBtn: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    reportedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_400Regular' },
+    reportedTxt: { fontSize: typo.xs, color: t.success, fontFamily: 'Lexend_400Regular' },
     opts: { gap: 9, paddingHorizontal: 14 },
     opt: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: t.surface, borderWidth: 1.5,
@@ -700,7 +701,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       backgroundColor: 'rgba(128,0,0,0.85)', alignItems: 'center',
     },
     footDisabled: { opacity: 0.4 },
-    footPrimaryTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    footPrimaryTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
     bandCard: {
       backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
       padding: 18, marginBottom: spacing.md, alignItems: 'center',
@@ -711,14 +712,14 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     bandDisclaimer: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 6, fontStyle: 'italic' },
     cutoffRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
     verdictPill: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1 },
-    verdictOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.30)' },
-    verdictOff: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)' },
+    verdictOn: { backgroundColor: t.successSurface, borderColor: 'rgba(34,197,94,0.30)' },
+    verdictOff: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.25)' },
     verdictTxt: { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
-    verdictTxtOn: { color: '#16a34a' },
-    verdictTxtOff: { color: '#dc2626' },
+    verdictTxtOn: { color: t.success },
+    verdictTxtOff: { color: t.danger },
     scoreCard: { borderRadius: 24, borderCurve: 'continuous', padding: 22, marginBottom: 18, borderWidth: 1, alignItems: 'center' },
-    pass: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
-    fail: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.20)' },
+    pass: { backgroundColor: t.successSurface, borderColor: 'rgba(34,197,94,0.25)' },
+    fail: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.20)' },
     scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     scoreVerdict: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     scoreSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
@@ -748,14 +749,14 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     reviewSectionChevron: { fontSize: 12, color: t.textTertiary, marginLeft: 8 },
     reviewSectionBody: { paddingHorizontal: 10, paddingBottom: 10 },
     reviewCard: { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, padding: 14, marginBottom: 10 },
-    reviewOk: { backgroundColor: 'rgba(34,197,94,0.06)', borderColor: 'rgba(34,197,94,0.18)' },
-    reviewBad: { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.18)' },
+    reviewOk: { backgroundColor: t.successSurface, borderColor: 'rgba(34,197,94,0.18)' },
+    reviewBad: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.18)' },
     reviewQ: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, marginBottom: 8, fontFamily: 'Outfit_600SemiBold' },
     reviewOpt: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 20, fontFamily: 'Lexend_400Regular' },
     reviewExp: { fontSize: typo.xs, color: t.textTertiary, marginTop: 8, lineHeight: 17, fontFamily: 'Lexend_400Regular' },
     footnote: { fontSize: typo.xs, color: t.textTertiary, marginTop: 10, marginBottom: 4, lineHeight: 17, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
     primaryBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 16, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center', marginTop: spacing.sm },
-    primaryBtnTxt: { color: '#fff', fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
+    primaryBtnTxt: { color: t.textInverse, fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
     ghostBtn: { paddingVertical: 12, alignItems: 'center' },
     ghostTxt: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular' },
   })

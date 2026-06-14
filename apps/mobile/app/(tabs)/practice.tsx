@@ -35,20 +35,28 @@ const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warnin
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
-const STRENGTH_COLOR_STATIC: Record<Strength, { bg: string; border: string; text: string; iconBg: string; iconColor: string }> = {
-  New:    { bg: 'rgba(128,0,0,0.10)',    border: 'rgba(128,0,0,0.25)',    text: '',        iconBg: 'rgba(128,0,0,0.10)',    iconColor: '' },
-  Weak:   { bg: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.22)',  text: '#f87171', iconBg: 'rgba(239,68,68,0.10)',  iconColor: '#f87171' },
-  Review: { bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.22)', text: '#fbbf24', iconBg: 'rgba(245,158,11,0.08)', iconColor: '#fbbf24' },
-  Strong: { bg: 'rgba(34,197,94,0.10)',  border: 'rgba(34,197,94,0.22)',  text: '#4ade80', iconBg: 'rgba(34,197,94,0.08)',  iconColor: '#4ade80' },
+// Static borders only (no border tokens exist); surfaces/text are resolved from
+// theme tokens in useStrengthColor so greens/reds/ambers stay legible in dark mode.
+const STRENGTH_BORDER_STATIC: Record<Strength, string> = {
+  New:    'rgba(128,0,0,0.25)',
+  Weak:   'rgba(239,68,68,0.22)',
+  Review: 'rgba(245,158,11,0.22)',
+  Strong: 'rgba(34,197,94,0.22)',
 }
 
 function useStrengthColor(strength: Strength) {
   const { theme: t } = useTheme()
-  const base = STRENGTH_COLOR_STATIC[strength]
-  if (strength === 'New') {
-    return { ...base, text: t.accentText, iconColor: t.accentText }
+  const border = STRENGTH_BORDER_STATIC[strength]
+  switch (strength) {
+    case 'New':
+      return { bg: t.accentSurface, border, text: t.accentText, iconBg: t.accentSurface, iconColor: t.accentText }
+    case 'Weak':
+      return { bg: t.dangerSurface, border, text: t.danger, iconBg: t.dangerSurface, iconColor: t.danger }
+    case 'Review':
+      return { bg: t.warningSurface, border, text: t.warning, iconBg: t.warningSurface, iconColor: t.warning }
+    case 'Strong':
+      return { bg: t.successSurface, border, text: t.success, iconBg: t.successSurface, iconColor: t.success }
   }
-  return base
 }
 
 function lastPracticedLabel(ts: number | null): string {
@@ -173,6 +181,7 @@ function CreateDeckModal({
   onCreate: (name: string, topicIds: string[]) => Promise<void>
   m: MStyles
 }) {
+  const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
   const [name, setName] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -233,7 +242,7 @@ function CreateDeckModal({
                 value={name}
                 onChangeText={setName}
                 placeholder="e.g. UPCAT Science Finals"
-                placeholderTextColor="rgba(255,255,255,0.28)"
+                placeholderTextColor={t.textTertiary}
                 autoFocus
                 returnKeyType="next"
                 onSubmitEditing={() => { if (name.trim()) setStep(2) }}
@@ -292,14 +301,14 @@ function FocusCard({ row, isActive, accuracy, onPress, onReview }: {
   const { theme: t, typo } = useTheme()
   const fc = useMemo(() => StyleSheet.create({
     card: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
-    cardActive: { backgroundColor: t.accentSurface, borderColor: '#831626', borderWidth: 2 },
+    cardActive: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)', borderWidth: 2 },
     badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.xs, fontFamily: 'Lexend_600SemiBold' },
     name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm - 2 },
     scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs / 2 },
     score: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.textTertiary },
     actionsCol: { marginTop: spacing.xs, gap: spacing.xs },
-    reviewBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-    reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fff', fontFamily: 'Lexend_600SemiBold' },
+    reviewBtn: { backgroundColor: t.accentStrong, borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+    reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textInverse, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
   return (
     <Pressable
@@ -389,8 +398,8 @@ function makeStyles(
       secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
       secTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
       secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
-      addBtn: { width: 28, height: 28, backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-      addBtnTxt: { color: '#fff', fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
+      addBtn: { width: 28, height: 28, backgroundColor: t.accentStrong, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+      addBtnTxt: { color: t.textInverse, fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
       list: { gap: spacing.xl },
       empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
     }),
@@ -416,16 +425,16 @@ function makeStyles(
       closeBtn: { color: t.textTertiary, fontSize: typo.base, padding: spacing.xs },
       label: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm - 2, fontFamily: 'Lexend_600SemiBold' },
       input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.lg - 2, paddingVertical: spacing.md - 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.lg - 2 },
-      btn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.md, borderCurve: 'continuous', minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, alignItems: 'center' },
+      btn: { backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous', minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, alignItems: 'center' },
       btnFlex: { flex: 1 },
       btnDisabled: { opacity: 0.4 },
-      btnTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+      btnTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
       topicList: { maxHeight: 280, marginBottom: spacing.lg - 2 },
       topicRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
       topicRowOn: { backgroundColor: t.accentSurface, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 2 },
       checkbox: { width: 22, height: 22, borderRadius: radius.sm - 4, borderCurve: 'continuous', borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
       checkboxOn: { backgroundColor: t.accent, borderColor: t.accent },
-      checkmark: { color: '#fff', fontSize: typo.xs, fontWeight: '700' },
+      checkmark: { color: t.textInverse, fontSize: typo.xs, fontWeight: '700' },
       topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
       topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
       footerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },

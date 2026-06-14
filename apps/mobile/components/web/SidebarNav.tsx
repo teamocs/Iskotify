@@ -168,7 +168,7 @@ export function SidebarNav() {
         }}
       >
         <Image
-          source={require('../../assets/images/kuya-baw-mascot.png')}
+          source={require('../../assets/images/kuya-baw-logo.png')}
           style={styles.kuyaImg}
           resizeMode="contain"
           accessibilityLabel="Kuya Baw mascot"

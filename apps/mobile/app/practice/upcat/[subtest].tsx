@@ -153,7 +153,7 @@ export default function UpcatExam() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? '#16a34a' : t.accentText }]}>{pct}%</Text>
+            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
             <Text style={s.scoreSub}>
               {res.overall.correct}/{res.overall.total} correct
@@ -184,8 +184,8 @@ export default function UpcatExam() {
                     key={oi}
                     style={[
                       s.reviewOpt,
-                      oi === q.correctIndex && { color: '#16a34a', fontWeight: '700' },
-                      oi === sel && oi !== q.correctIndex && { color: '#dc2626' },
+                      oi === q.correctIndex && { color: t.success, fontWeight: '700' },
+                      oi === sel && oi !== q.correctIndex && { color: t.danger },
                     ]}
                   >
                     {LETTERS[oi]}. {o}
@@ -276,7 +276,7 @@ export default function UpcatExam() {
               onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
             >
               <View style={[s.optLetter, sel === oi && s.optLetterOn]}>
-                <Text style={[s.optLetterTxt, sel === oi && { color: '#fff' }]}>{LETTERS[oi]}</Text>
+                <Text style={[s.optLetterTxt, sel === oi && { color: t.textInverse }]}>{LETTERS[oi]}</Text>
               </View>
               <Text style={s.optTxt}>{o}</Text>
             </Pressable>
@@ -372,7 +372,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingHorizontal: 10,
       paddingVertical: 3,
     },
-    timerPillLow: { backgroundColor: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.35)' },
+    timerPillLow: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.35)' },
     timerTxt: {
       fontSize: typo.xs,
       fontWeight: '700',
@@ -380,7 +380,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontFamily: 'Outfit_700Bold',
       fontVariant: ['tabular-nums'],
     },
-    timerTxtLow: { color: '#dc2626' },
+    timerTxtLow: { color: t.danger },
     qCard: {
       backgroundColor: t.surface,
       borderWidth: 1,
@@ -400,7 +400,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     reportRow: { marginTop: 10, alignItems: 'flex-end' },
     reportBtn: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    reportedTxt: { fontSize: typo.xs, color: '#16a34a', fontFamily: 'Lexend_400Regular' },
+    reportedTxt: { fontSize: typo.xs, color: t.success, fontFamily: 'Lexend_400Regular' },
     opts: { gap: 9, paddingHorizontal: 14 },
     opt: {
       flexDirection: 'row',
@@ -471,7 +471,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     footPrimaryTxt: {
       fontSize: typo.md,
       fontWeight: '700',
-      color: '#fff',
+      color: t.textInverse,
       fontFamily: 'Outfit_700Bold',
     },
     scoreCard: {
@@ -483,11 +483,11 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       alignItems: 'center',
     },
     pass: {
-      backgroundColor: 'rgba(34,197,94,0.08)',
+      backgroundColor: t.successSurface,
       borderColor: 'rgba(34,197,94,0.25)',
     },
     fail: {
-      backgroundColor: 'rgba(239,68,68,0.07)',
+      backgroundColor: t.dangerSurface,
       borderColor: 'rgba(239,68,68,0.20)',
     },
     scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
@@ -568,7 +568,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       marginTop: spacing.sm,
     },
     primaryBtnTxt: {
-      color: '#fff',
+      color: t.textInverse,
       fontWeight: '700',
       fontSize: typo.md,
       fontFamily: 'Outfit_700Bold',
