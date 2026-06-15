@@ -40,6 +40,8 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     section: 'MODERATION',
     items: [
       { href: '/admin/reports', icon: '🚩', label: 'Reported Questions' },
+      { href: '/admin/app-reports', icon: '🐞', label: 'Bug Reports' },
+      { href: '/admin/feedback', icon: '💬', label: 'Feedback' },
     ],
   },
   {
