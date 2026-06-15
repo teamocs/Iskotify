@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import {
-  StyleSheet, View, Text, Pressable, ActivityIndicator,
+  StyleSheet, View, Text, Pressable, ActivityIndicator, FlatList,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -12,10 +12,10 @@ import {
   aiCareerImpact as aiImpactTable,
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius } from '../../../theme/tokens'
-import { ScreenScroll } from '../../../components/ui/ScreenScroll'
+import { spacing, radius, type Theme, type Typography } from '../../../theme/tokens'
 import { Card } from '../../../components/ui/Card'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { cachedQuery } from '../../../services/queryCache'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +42,22 @@ interface AiRow {
   aiSafetyLabel: string | null
 }
 
+interface CourseData {
+  taxonomy: TaxonomyRow | null
+  rankings: RankingRow[]
+  ai: AiRow | null
+}
+
+// First page size + how many more rows reveal each time the list nears its end.
+// The whole course is read once from local SQLite (fast, indexed on course_tab),
+// but rows are RENDERED progressively so a 300-school course (e.g. Accountancy)
+// never mounts hundreds of Cards at once.
+const PAGE_SIZE = 20
+
+// Cached for 5 min so re-opening the same course is instant (no re-query/re-sort).
+// Content sync invalidates 'course:rankings:' alongside the other chat/meta keys.
+const RANKINGS_TTL = 300_000
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -56,79 +72,16 @@ function fmtScore(score: number | null): string {
   return score.toFixed(3)
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
+function byRank(a: RankingRow, b: RankingRow): number {
+  if (a.rank == null) return 1
+  if (b.rank == null) return -1
+  return a.rank - b.rank
+}
 
-export default function CourseSchoolsScreen() {
-  const { code } = useLocalSearchParams<{ code: string }>()
-  const db = useDb()
-  const { theme: t, typo } = useTheme()
+type Styles = ReturnType<typeof makeStyles>
 
-  const [rankings, setRankings]   = useState<RankingRow[]>([])
-  const [taxonomy, setTaxonomy]   = useState<TaxonomyRow | null>(null)
-  const [aiRow, setAiRow]         = useState<AiRow | null>(null)
-  const [loading, setLoading]     = useState(true)
-
-  // Guard: if navigated to without a code param (e.g. router.push('/schools/course')
-  // before the picker index screen existed), redirect to the picker so the user can
-  // choose a course rather than seeing an empty rankings list.
-  // useEffect is used instead of an early return so all hooks stay unconditional.
-  useEffect(() => {
-    if (!code) {
-      router.replace('/schools/course' as never)
-    }
-  }, [code])
-
-  useEffect(() => {
-    if (!code) return
-    async function load() {
-      const [taxRows, rankRows] = await Promise.all([
-        db.select({
-          courseTab: taxonomyTable.courseTab,
-          careerCourseId: taxonomyTable.careerCourseId,
-          label: taxonomyTable.label,
-        }).from(taxonomyTable).where(eq(taxonomyTable.courseTab, code)).limit(1),
-
-        db.select({
-          id: rankingsTable.id,
-          rank: rankingsTable.rank,
-          schoolName: rankingsTable.schoolName,
-          region: rankingsTable.region,
-          wilsonScore: rankingsTable.wilsonScore,
-          rawPassRate: rankingsTable.rawPassRate,
-          totalExaminees: rankingsTable.totalExaminees,
-        }).from(rankingsTable).where(eq(rankingsTable.courseTab, code)),
-      ])
-
-      const tax = (taxRows[0] ?? null) as TaxonomyRow | null
-      setTaxonomy(tax)
-
-      // Sort by rank ascending (nulls last)
-      const sorted = (rankRows as RankingRow[]).slice().sort((a, b) => {
-        if (a.rank == null) return 1
-        if (b.rank == null) return -1
-        return a.rank - b.rank
-      })
-      setRankings(sorted)
-
-      // Load AI impact if we have a careerCourseId
-      if (tax?.careerCourseId) {
-        const aiRows = await db.select({
-          aiSafetyScore: aiImpactTable.aiSafetyScore,
-          aiSafetyLabel: aiImpactTable.aiSafetyLabel,
-        }).from(aiImpactTable).where(eq(aiImpactTable.courseId, tax.careerCourseId)).limit(1)
-        setAiRow((aiRows[0] ?? null) as AiRow | null)
-      }
-
-      setLoading(false)
-    }
-    void load()
-  }, [db, code])
-
-  const courseLabel = taxonomy?.label ?? code
-
-  const s = useMemo(() => StyleSheet.create({
+function makeStyles(t: Theme, typo: Typography) {
+  return StyleSheet.create({
     root:        { flex: 1, backgroundColor: t.bg },
     topBar:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
     backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
@@ -140,6 +93,7 @@ export default function CourseSchoolsScreen() {
     aiChipTxt:   { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
     careerLink:  { marginTop: spacing.md, minHeight: 44, justifyContent: 'center' },
     careerLinkTxt: { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
+    sectionWrap: { marginTop: spacing.lg, marginBottom: spacing.xs },
     rankCard:    { padding: spacing.md },
     rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
     rankBadge:   { width: 28, height: 28, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', flexShrink: 0 },
@@ -149,10 +103,202 @@ export default function CourseSchoolsScreen() {
     metaChip:    { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2 },
     metaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     highlight:   { color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    disclaimer:  { backgroundColor: t.warningSurface, borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, padding: spacing.md },
+    loadMore:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md },
+    loadMoreTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    disclaimer:  { marginTop: spacing.lg, backgroundColor: t.warningSurface, borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, padding: spacing.md },
     disclaimerTxt: { fontSize: typo.xs, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
     empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xl, fontStyle: 'italic' },
-  }), [t, typo])
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Memoized list item — keeps each row from re-rendering as the page grows.
+// ---------------------------------------------------------------------------
+
+const RankCard = memo(function RankCard({ row, s }: { row: RankingRow; s: Styles }) {
+  return (
+    <Card style={s.rankCard}>
+      <View style={s.rankHeader}>
+        <View style={s.rankBadge}>
+          <Text style={s.rankNum} maxFontSizeMultiplier={1.4}>#{row.rank ?? '—'}</Text>
+        </View>
+        <Text style={s.schoolName} numberOfLines={2} maxFontSizeMultiplier={1.4}>{row.schoolName}</Text>
+      </View>
+      <View style={s.metaRow}>
+        {row.region ? (
+          <View style={s.metaChip}>
+            <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>📍 {row.region}</Text>
+          </View>
+        ) : null}
+        <View style={s.metaChip}>
+          <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>
+            Pass rate: <Text style={s.highlight}>{fmtPassRate(row.rawPassRate)}</Text>
+          </Text>
+        </View>
+        <View style={s.metaChip}>
+          <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>
+            Wilson: <Text style={s.highlight}>{fmtScore(row.wilsonScore)}</Text>
+          </Text>
+        </View>
+        {row.totalExaminees != null ? (
+          <View style={s.metaChip}>
+            <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>{row.totalExaminees.toLocaleString()} examinees</Text>
+          </View>
+        ) : null}
+      </View>
+    </Card>
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
+
+export default function CourseSchoolsScreen() {
+  const { code } = useLocalSearchParams<{ code: string }>()
+  const db = useDb()
+  const { theme: t, typo } = useTheme()
+  const insets = useSafeAreaInsets()
+
+  const [data, setData] = useState<CourseData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+  // Guard: if navigated to without a code param, redirect to the picker so the
+  // user can choose a course rather than seeing an empty rankings list.
+  // useEffect keeps all hooks unconditional.
+  useEffect(() => {
+    if (!code) router.replace('/schools/course' as never)
+  }, [code])
+
+  useEffect(() => {
+    if (!code) return
+    let alive = true
+    setLoading(true)
+    setVisibleCount(PAGE_SIZE)
+    void (async () => {
+      // One cached read per course: the full ranking list comes from local
+      // SQLite (indexed on course_tab) and is reused on re-entry within the TTL.
+      const result = await cachedQuery<CourseData>(`course:rankings:${code}`, RANKINGS_TTL, async () => {
+        const [taxRows, rankRows] = await Promise.all([
+          db.select({
+            courseTab: taxonomyTable.courseTab,
+            careerCourseId: taxonomyTable.careerCourseId,
+            label: taxonomyTable.label,
+          }).from(taxonomyTable).where(eq(taxonomyTable.courseTab, code)).limit(1),
+
+          db.select({
+            id: rankingsTable.id,
+            rank: rankingsTable.rank,
+            schoolName: rankingsTable.schoolName,
+            region: rankingsTable.region,
+            wilsonScore: rankingsTable.wilsonScore,
+            rawPassRate: rankingsTable.rawPassRate,
+            totalExaminees: rankingsTable.totalExaminees,
+          }).from(rankingsTable).where(eq(rankingsTable.courseTab, code)),
+        ])
+
+        const tax = (taxRows[0] ?? null) as TaxonomyRow | null
+        const sorted = (rankRows as RankingRow[]).slice().sort(byRank)
+
+        let ai: AiRow | null = null
+        if (tax?.careerCourseId) {
+          const aiRows = await db.select({
+            aiSafetyScore: aiImpactTable.aiSafetyScore,
+            aiSafetyLabel: aiImpactTable.aiSafetyLabel,
+          }).from(aiImpactTable).where(eq(aiImpactTable.courseId, tax.careerCourseId)).limit(1)
+          ai = (aiRows[0] ?? null) as AiRow | null
+        }
+
+        return { taxonomy: tax, rankings: sorted, ai }
+      })
+      if (!alive) return
+      setData(result)
+      setLoading(false)
+    })()
+    return () => { alive = false }
+  }, [db, code])
+
+  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+
+  const rankings = data?.rankings ?? []
+  const taxonomy = data?.taxonomy ?? null
+  const aiRow = data?.ai ?? null
+  const courseLabel = taxonomy?.label ?? code
+  const total = rankings.length
+
+  const visible = useMemo(() => rankings.slice(0, visibleCount), [rankings, visibleCount])
+
+  const loadMore = useCallback(() => {
+    setVisibleCount(c => (c < total ? Math.min(total, c + PAGE_SIZE) : c))
+  }, [total])
+
+  const onEndReached = useCallback((info?: { distanceFromEnd: number }) => {
+    // Ignore the spurious mount-time fire (distanceFromEnd <= 0, content not yet
+    // laid out) so the next page reveals only once the user scrolls near the end.
+    if (info && info.distanceFromEnd <= 0) return
+    loadMore()
+  }, [loadMore])
+
+  const renderItem = useCallback(
+    ({ item }: { item: RankingRow }) => <RankCard row={item} s={s} />,
+    [s],
+  )
+  const keyExtractor = useCallback((item: RankingRow) => item.id, [])
+
+  const header = useMemo(() => (
+    <View>
+      <Card elevated>
+        <Text style={s.heroTitle} maxFontSizeMultiplier={1.4}>{courseLabel}</Text>
+        <Text style={s.heroSub} maxFontSizeMultiplier={1.4}>PRC board exam school rankings by Wilson-adjusted pass rate</Text>
+
+        {aiRow?.aiSafetyScore != null ? (
+          <View style={s.aiChip}>
+            <Text style={s.aiChipTxt} maxFontSizeMultiplier={1.4}>
+              🤖 AI-Safe-Score {aiRow.aiSafetyScore}/5
+              {aiRow.aiSafetyLabel ? ` · ${aiRow.aiSafetyLabel}` : ''}
+            </Text>
+          </View>
+        ) : null}
+
+        {taxonomy?.careerCourseId ? (
+          <Pressable
+            style={({ pressed }) => [s.careerLink, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/career/${taxonomy.careerCourseId}` as never)}
+            accessibilityRole="link"
+          >
+            <Text style={s.careerLinkTxt} maxFontSizeMultiplier={1.4}>View career paths →</Text>
+          </Pressable>
+        ) : null}
+      </Card>
+
+      <View style={s.sectionWrap}>
+        <SectionHeader title="School Rankings" subtitle={total > 0 ? `${total} schools ranked` : undefined} />
+      </View>
+    </View>
+  ), [s, courseLabel, aiRow, taxonomy, total])
+
+  const footer = useMemo(() => (
+    <View>
+      {visibleCount < total ? (
+        <Pressable
+          testID="load-more"
+          onPress={loadMore}
+          style={({ pressed }) => [s.loadMore, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
+          <Text style={s.loadMoreTxt} maxFontSizeMultiplier={1.4}>
+            Show more · {visibleCount} of {total}
+          </Text>
+        </Pressable>
+      ) : null}
+      <View style={s.disclaimer}>
+        <Text style={s.disclaimerTxt} maxFontSizeMultiplier={1.4}>
+          ⚠ Rankings use historical PRC pass-rate data — verify on official PRC releases.
+        </Text>
+      </View>
+    </View>
+  ), [s, loadMore, visibleCount, total])
 
   // ── No-code (redirecting) ──────────────────────────────────────────────────
 
@@ -189,86 +335,28 @@ export default function CourseSchoolsScreen() {
         >
           <Text style={s.backArrow}>‹</Text>
         </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>Top Schools · {courseLabel}</Text>
+        <Text style={s.topTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>Top Schools · {courseLabel}</Text>
       </View>
 
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.sm }}>
-
-        {/* ── Hero ── */}
-        <Card elevated>
-          <Text style={s.heroTitle}>{courseLabel}</Text>
-          <Text style={s.heroSub}>PRC board exam school rankings by Wilson-adjusted pass rate</Text>
-
-          {/* AI-Safe-Score chip */}
-          {aiRow?.aiSafetyScore != null ? (
-            <View style={s.aiChip}>
-              <Text style={s.aiChipTxt}>
-                🤖 AI-Safe-Score {aiRow.aiSafetyScore}/5
-                {aiRow.aiSafetyLabel ? ` · ${aiRow.aiSafetyLabel}` : ''}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Career path cross-link */}
-          {taxonomy?.careerCourseId ? (
-            <Pressable
-              style={({ pressed }) => [s.careerLink, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push(`/career/${taxonomy.careerCourseId}` as never)}
-              accessibilityRole="link"
-            >
-              <Text style={s.careerLinkTxt}>View career paths →</Text>
-            </Pressable>
-          ) : null}
-        </Card>
-
-        {/* ── PRC Rankings ── */}
-        <View style={{ gap: spacing.sm }}>
-          <SectionHeader title="School Rankings" />
-
-          {rankings.length > 0 ? rankings.map(row => (
-            <Card key={row.id} style={s.rankCard}>
-              <View style={s.rankHeader}>
-                <View style={s.rankBadge}>
-                  <Text style={s.rankNum}>#{row.rank ?? '—'}</Text>
-                </View>
-                <Text style={s.schoolName} numberOfLines={2}>{row.schoolName}</Text>
-              </View>
-              <View style={s.metaRow}>
-                {row.region ? (
-                  <View style={s.metaChip}>
-                    <Text style={s.metaTxt}>📍 {row.region}</Text>
-                  </View>
-                ) : null}
-                <View style={s.metaChip}>
-                  <Text style={s.metaTxt}>
-                    Pass rate: <Text style={s.highlight}>{fmtPassRate(row.rawPassRate)}</Text>
-                  </Text>
-                </View>
-                <View style={s.metaChip}>
-                  <Text style={s.metaTxt}>
-                    Wilson: <Text style={s.highlight}>{fmtScore(row.wilsonScore)}</Text>
-                  </Text>
-                </View>
-                {row.totalExaminees != null ? (
-                  <View style={s.metaChip}>
-                    <Text style={s.metaTxt}>{row.totalExaminees.toLocaleString()} examinees</Text>
-                  </View>
-                ) : null}
-              </View>
-            </Card>
-          )) : (
-            <Text style={s.empty}>No ranking data available for this course yet.</Text>
-          )}
-        </View>
-
-        {/* ── Disclaimer ── */}
-        <View style={s.disclaimer}>
-          <Text style={s.disclaimerTxt}>
-            ⚠ Rankings use historical PRC pass-rate data — verify on official PRC releases.
-          </Text>
-        </View>
-
-      </ScreenScroll>
+      <FlatList
+        testID="rankings-list"
+        data={visible}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListFooterComponent={footer}
+        ListEmptyComponent={
+          <Text style={s.empty}>No ranking data available for this course yet.</Text>
+        }
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.6}
+        initialNumToRender={PAGE_SIZE}
+        maxToRenderPerBatch={PAGE_SIZE}
+        windowSize={11}
+        removeClippedSubviews
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: insets.bottom + spacing.xl }}
+      />
     </SafeAreaView>
   )
 }

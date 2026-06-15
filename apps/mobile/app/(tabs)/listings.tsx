@@ -20,7 +20,7 @@ import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scho
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { MatchPill } from '../../components/scholarships/MatchPill'
 import { InfoBanner } from '../../components/ui/InfoBanner'
-import { searchListings, type SearchableListing } from '../../utils/listingSearch'
+import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
 import { aiSearchListings } from '../../services/listingSearch'
 import { canonicalizeRegion } from '../../utils/region'
 import { cachedQuery } from '../../services/queryCache'
@@ -38,6 +38,7 @@ interface ListingRow extends SearchableListing {
   title: string
   type: string
   examDate: number | null
+  deadline: number | null
   region: string
   provider: string
   province: string | null
@@ -60,6 +61,12 @@ function fmtDate(ts: number | null): string {
 
 function parseStrArray(s: string | null | undefined): string[] {
   try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v.map(String) : [] } catch { return [] }
+}
+
+/** Trim a query for display inside a results header so long inputs don't overflow. */
+function truncateQuery(q: string, max = 32): string {
+  const t = q.trim()
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t
 }
 
 function toMatchInput(l: ListingRow): MatchInput {
@@ -143,7 +150,7 @@ export default function ListsScreen() {
     const [rows, settings, ccRows, bpSlugs] = await Promise.all([
       db.select({
         id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
-        type: listingsTable.type, examDate: listingsTable.examDate, region: listingsTable.region,
+        type: listingsTable.type, examDate: listingsTable.examDate, deadline: listingsTable.deadline, region: listingsTable.region,
         provider: listingsTable.provider, province: listingsTable.province, city: listingsTable.city, scope: listingsTable.scope,
         isVerified: listingsTable.isVerified, incomeCeiling: listingsTable.incomeCeiling,
         gwaRequirement: listingsTable.gwaRequirement, serviceObligationYears: listingsTable.serviceObligationYears,
@@ -265,7 +272,15 @@ export default function ListsScreen() {
   // What the listing FlatList shows: AI results (if a submit produced them) else keyword results;
   // when there's no query, the full set minus the pinned recommendations.
   const listingData = useMemo(() => {
-    if (query.trim()) return aiResults ?? keywordResults
+    if (query.trim()) {
+      // Apply the profile-first / tab-aware display order to whichever tier produced
+      // the rows (AI reorder OR instant keyword), so personalization holds either way.
+      // The pure ranker keeps incoming (relevance) order as its stable final tiebreak.
+      const base = aiResults ?? keywordResults
+      return rankForDisplay(base, {
+        tab, query, profile, clusters: userClusters, region: userRegion, now: Date.now(),
+      })
+    }
     const base = [...typeListings].sort((a, b) => {
       if (tab === 'universities') {
         if (!a.examDate) return 1
@@ -279,7 +294,7 @@ export default function ListsScreen() {
       return a.title.localeCompare(b.title)
     })
     return base.filter(l => !recommendedIds.has(l.id))
-  }, [query, aiResults, keywordResults, typeListings, tab, matchStatusMap, recommendedIds])
+  }, [query, aiResults, keywordResults, typeListings, tab, matchStatusMap, recommendedIds, profile, userClusters, userRegion])
 
   const runAiSearch = useCallback(async () => {
     const q = query.trim()
@@ -463,6 +478,36 @@ export default function ListsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, recommended, userRegion, s, renderCard])
 
+  // When a query is active, a results header sits above the matches summarising
+  // them (universities/scholarships only). Empty query → the regional header above.
+  const resultsHeader = useMemo(() => {
+    const q = query.trim()
+    if (!q || (tab !== 'universities' && tab !== 'scholarships')) return null
+    if (listingData.length === 0) return null // empty state owns the screen instead
+
+    if (tab === 'universities') {
+      return (
+        <View style={s.sectionWrap}>
+          <SectionHeader title={`Top universities matching "${truncateQuery(q)}"`} />
+        </View>
+      )
+    }
+    // scholarships — show a match count when the profile is usable for eligibility
+    const profileUsable = !scholarshipProfileIncomplete({
+      gwa: profile.gwa ?? null, province: profile.province ?? null, incomeBracket: profile.incomeBracket ?? null,
+    })
+    const eligibleCount = profileUsable
+      ? listingData.reduce((n, l) => (matchStatusMap.get(l.id) === 'eligible' ? n + 1 : n), 0)
+      : 0
+    const subtitle = profileUsable ? `You match ${eligibleCount} of ${listingData.length}` : undefined
+    return (
+      <View style={s.sectionWrap}>
+        <SectionHeader title={`Top scholarships matching "${truncateQuery(q)}"`} subtitle={subtitle} />
+      </View>
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, query, listingData, matchStatusMap, profile, s])
+
   const scholarshipBanner = tab === 'scholarships' && !query.trim() && scholarshipProfileIncomplete({
     gwa: profile.gwa ?? null, province: profile.province ?? null, incomeBracket: profile.incomeBracket ?? null,
   }) ? (
@@ -521,8 +566,8 @@ export default function ListsScreen() {
               if (tab === 'universities' || tab === 'scholarships') void runAiSearch()
             }}
             placeholder={
-              tab === 'universities' ? "Search or ask, e.g. 'free nursing scholarships near me'"
-              : tab === 'scholarships' ? "Search or ask, e.g. 'free nursing scholarships near me'"
+              tab === 'universities' ? "Search universities & entrance exams, e.g. 'UP nursing' or 'engineering in NCR'"
+              : tab === 'scholarships' ? "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
               : tab === 'courses' ? 'Filter courses'
               : 'Filter destinations'
             }
@@ -562,7 +607,7 @@ export default function ListsScreen() {
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={!query.trim() ? listingsListHeader : null}
+            ListHeaderComponent={query.trim() ? resultsHeader : listingsListHeader}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} colors={[t.accent]} progressBackgroundColor={t.surface} />
             }

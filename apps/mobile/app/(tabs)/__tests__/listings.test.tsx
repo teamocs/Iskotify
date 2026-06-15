@@ -80,7 +80,8 @@ const makeDb = (rows: any[] = []) => ({
   insert: jest.fn(() => ({ values: jest.fn(() => ({ onConflictDoNothing: jest.fn().mockResolvedValue(undefined) })) })),
 })
 
-const SEARCH_PLACEHOLDER_UNI = "Search or ask, e.g. 'free nursing scholarships near me'"
+const SEARCH_PLACEHOLDER_UNI = "Search universities & entrance exams, e.g. 'UP nursing' or 'engineering in NCR'"
+const SEARCH_PLACEHOLDER_SCHOLAR = "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
 
 describe('ListsScreen', () => {
   beforeEach(() => {
@@ -94,6 +95,10 @@ describe('ListsScreen', () => {
     useCourseTabOptions.mockReturnValue({ targetOptions: [], allOptions: [], loading: false, dbEmpty: false })
     const { cachedQuery } = require('../../../services/queryCache')
     cachedQuery.mockResolvedValue([[], []])
+    // Re-establish the default empty profile (clearAllMocks wipes call data, not
+    // implementations, so a per-test mockResolvedValue would otherwise leak forward).
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockResolvedValue({})
   })
 
   // ── Renames ────────────────────────────────────────────────────────────────
@@ -164,6 +169,23 @@ describe('ListsScreen', () => {
   it('renders the smart search input on Universities tab', () => {
     render(<ListsScreen />)
     expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER_UNI)).toBeTruthy()
+  })
+
+  // ── Distinct per-tab placeholders ─────────────────────────────────────────
+
+  it('shows a scholarship-specific placeholder on the Scholarships tab', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Scholarships'))
+    expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER_SCHOLAR)).toBeTruthy()
+  })
+
+  it('uses DIFFERENT placeholders for Universities and Scholarships', () => {
+    expect(SEARCH_PLACEHOLDER_UNI).not.toBe(SEARCH_PLACEHOLDER_SCHOLAR)
+    render(<ListsScreen />)
+    // Universities placeholder present by default
+    expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER_UNI)).toBeTruthy()
+    // ...and the scholarship one is NOT shown while on Universities
+    expect(screen.queryByPlaceholderText(SEARCH_PLACEHOLDER_SCHOLAR)).toBeNull()
   })
 
   it('shows the empty state when there are no exams (Universities tab)', async () => {
@@ -354,6 +376,58 @@ describe('ListsScreen', () => {
     render(<ListsScreen />)
     const tabs = screen.getAllByRole('tab')
     expect(tabs[0]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  // ── Results header indicator (query active) ───────────────────────────────
+
+  it('shows a "Top universities matching" header when a universities search is submitted', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([
+      { id: '1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
+    ]))
+    render(<ListsScreen />)
+    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    const input = screen.getByPlaceholderText(SEARCH_PLACEHOLDER_UNI)
+    fireEvent.changeText(input, 'UP')
+    fireEvent(input, 'submitEditing')
+    await waitFor(() => {
+      expect(screen.getByText(/Top universities matching/i)).toBeTruthy()
+    })
+  })
+
+  it('does NOT show a results header when there is no query', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([
+      { id: '1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
+    ]))
+    render(<ListsScreen />)
+    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    expect(screen.queryByText(/Top universities matching/i)).toBeNull()
+  })
+
+  it('shows a scholarships results header with the match count when the profile is usable', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockResolvedValue({
+      gwa: 95, province: 'Albay', incomeBracket: '<=100k',
+    })
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([
+      // eligible: within ceiling + meets gwa
+      { id: 's1', slug: 'open', title: 'Open Grant', type: 'scholarship', examDate: null, region: 'National', provider: 'X', incomeCeiling: 100000, gwaRequirement: 90, targetCourses: JSON.stringify(['all']) },
+      // ineligible: fails gwa outright
+      { id: 's2', slug: 'honors', title: 'Honors Grant', type: 'scholarship', examDate: null, region: 'National', provider: 'Y', incomeCeiling: null, gwaRequirement: 99, targetCourses: JSON.stringify(['all']) },
+    ]))
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Scholarships'))
+    await waitFor(() => expect(screen.getByText('Open Grant')).toBeTruthy())
+    const input = screen.getByPlaceholderText(SEARCH_PLACEHOLDER_SCHOLAR)
+    fireEvent.changeText(input, 'grant')
+    fireEvent(input, 'submitEditing')
+    await waitFor(() => {
+      expect(screen.getByText(/Top scholarships matching/i)).toBeTruthy()
+    })
+    // 1 of the 2 grants is eligible for this profile
+    expect(screen.getByText(/You match 1 of 2/i)).toBeTruthy()
   })
 
   // ── Badge rules (Universities tab — ≤2 per row) ───────────────────────────

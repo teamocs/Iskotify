@@ -4,6 +4,7 @@
 // unavailable. Pure + dependency-light so it is easy to unit-test.
 
 import { canonicalizeRegion } from './region'
+import { matchScholarship, type MatchInput, type MatchStatus, type StudentProfile } from './scholarshipMatch'
 
 export interface SearchableListing {
   id: string
@@ -131,6 +132,129 @@ export function searchListings(
     .filter(x => (anyPositive ? x.score > 0 : true))
     .sort((a, b) => b.score - a.score)
     .map(x => x.l)
+}
+
+// ── Profile-first display ranking ──────────────────────────────────────────────
+// Applied by the screen to the FINAL displayed array (AI-ranked OR keyword) so the
+// same personalization holds regardless of which search tier produced the rows.
+// PURE + deterministic: the caller injects `now` (the screen passes Date.now()); the
+// incoming array order is treated as the relevance signal and is the final, stable
+// tiebreaker — so an AI's semantic order is preserved within equal personalization
+// buckets.
+
+/** A listing carrying the optional fields the display ranker reads. Everything is
+ *  optional so existing scoreListing/searchListings callers stay source-compatible. */
+export interface RankableListing extends SearchableListing {
+  examDate?: number | null
+  deadline?: number | null
+  targetCourses?: string[] | null
+  city?: string | null
+  scope?: string | null
+  gwaRequirement?: number | null
+  serviceObligationYears?: number | null
+  scholarshipMeta?: string | null
+}
+
+export interface RankForDisplayOpts {
+  tab: string // 'universities' | 'scholarships' (others returned unchanged)
+  query?: string
+  profile?: StudentProfile
+  clusters?: Set<string> | null
+  region?: string | null
+  /** Clock for date-proximity ordering. Deterministic by default; the screen passes Date.now(). */
+  now?: number
+}
+
+const ELIGIBILITY_RANK: Record<MatchStatus, number> = { eligible: 0, maybe: 1, unknown: 2, ineligible: 3 }
+
+/** True when the listing targets one of the student's course clusters (or is open to all). */
+function matchesClusters(targetCourses: string[] | null | undefined, clusters: Set<string> | null | undefined): boolean {
+  const tc = targetCourses ?? []
+  if (tc.some(c => c.toLowerCase() === 'all')) return true
+  if (!clusters || clusters.size === 0) return false
+  return tc.some(c => clusters.has(c))
+}
+
+/** A sortable key for date proximity: soonest *future* date first (smallest key),
+ *  then later future dates, then past/none last. Lower = earlier in the list. */
+function dateProximityKey(ts: number | null | undefined, now: number): number {
+  if (ts == null) return Number.POSITIVE_INFINITY // none → last
+  if (ts >= now) return ts - now                  // future → ascending by how soon
+  return Number.MAX_VALUE                          // past → after every future date, before none (Infinity)
+}
+
+function toMatchInput(l: RankableListing): MatchInput {
+  let meta: Record<string, unknown> = {}
+  try { meta = JSON.parse(l.scholarshipMeta || '{}') } catch { /* ignore */ }
+  return {
+    scope: (l.scope as MatchInput['scope']) || 'national',
+    isVerified: !!l.isVerified,
+    incomeCeiling: l.incomeCeiling ?? null,
+    gwaRequirement: l.gwaRequirement ?? null,
+    serviceObligationYears: l.serviceObligationYears ?? null,
+    province: l.province ?? null,
+    city: l.city ?? null,
+    targetYearLevels: [],
+    hucExcluded: !!meta.huc_excluded,
+  }
+}
+
+/**
+ * Produce the final display order for the Universities / Scholarships tabs.
+ * Returns a new array (input is never mutated). Non uni/scholarship tabs are
+ * returned unchanged. Comparison is a stable sort whose absolute final tiebreaker
+ * is the incoming index, so the relevance order already encoded by the AI/keyword
+ * layer is respected within equal buckets.
+ */
+export function rankForDisplay<T extends RankableListing>(rows: T[], opts: RankForDisplayOpts): T[] {
+  const { tab, profile, clusters, region, now = 0 } = opts
+  if (tab !== 'universities' && tab !== 'scholarships') return rows
+
+  // Decorate with the precomputed keys + original index (stable tiebreak).
+  const decorated = rows.map((l, index) => {
+    const courseMatch = matchesClusters(l.targetCourses, clusters) ? 0 : 1
+    if (tab === 'scholarships') {
+      const status = matchScholarship(toMatchInput(l), profile ?? {}).status
+      return {
+        l, index,
+        eligibility: ELIGIBILITY_RANK[status],
+        courseMatch,
+        dateKey: dateProximityKey(l.deadline, now),
+      }
+    }
+    // universities
+    const uReg = canonicalizeRegion(region ?? '').toLowerCase()
+    const lReg = canonicalizeRegion(l.region ?? '').toLowerCase()
+    const regionMatch = uReg && lReg && uReg === lReg ? 0 : 1
+    const verified = l.isVerified ? 0 : 1
+    return {
+      l, index,
+      eligibility: 0, // unused for universities
+      courseMatch,
+      regionMatch,
+      dateKey: dateProximityKey(l.examDate, now),
+      verified,
+    }
+  })
+
+  decorated.sort((a, b) => {
+    if (tab === 'scholarships') {
+      if (a.eligibility !== b.eligibility) return a.eligibility - b.eligibility
+      if (a.courseMatch !== b.courseMatch) return a.courseMatch - b.courseMatch
+      if (a.dateKey !== b.dateKey) return a.dateKey - b.dateKey
+      return a.index - b.index
+    }
+    // universities
+    const au = a as typeof a & { regionMatch: number; verified: number }
+    const bu = b as typeof b & { regionMatch: number; verified: number }
+    if (au.courseMatch !== bu.courseMatch) return au.courseMatch - bu.courseMatch
+    if (au.regionMatch !== bu.regionMatch) return au.regionMatch - bu.regionMatch
+    if (au.dateKey !== bu.dateKey) return au.dateKey - bu.dateKey
+    if (au.verified !== bu.verified) return au.verified - bu.verified
+    return au.index - bu.index
+  })
+
+  return decorated.map(d => d.l)
 }
 
 /** Reorder a listing array to match an ordered list of ids (from an AI ranker). */
