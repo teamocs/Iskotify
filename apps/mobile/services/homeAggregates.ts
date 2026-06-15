@@ -9,7 +9,7 @@
  * real-SQLite services Jest project.
  */
 
-import { sql, and, gte, like, eq, ne } from 'drizzle-orm'
+import { sql, and, gte, like, eq, ne, isNotNull } from 'drizzle-orm'
 import { union } from 'drizzle-orm/sqlite-core'
 import { userProgress, flashcards, topics, practiceSessions } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
@@ -44,6 +44,11 @@ export interface ListingAccuracyRow {
 
 export interface TopicBestSessionRow {
   topicId: string
+  bestPct: number
+}
+
+export interface SubjectBestSessionRow {
+  subject: string
   bestPct: number
 }
 
@@ -247,6 +252,47 @@ export async function getTopicBestSessionPercentages(
 
   return rows.map(r => ({
     topicId: r.topicId,
+    bestPct: Number(r.bestPct ?? 0),
+  }))
+}
+
+/**
+ * getSubjectSessionPercentages — per-SUBJECT BEST (highest attained) result %.
+ *
+ * SELECT subtest, MAX(round(score * 100.0 / total)) AS bestPct
+ * FROM practice_sessions
+ * WHERE subtest IS NOT NULL AND subtest != '' AND total > 0
+ * GROUP BY subtest
+ *
+ * Mock sessions (blueprint section in app/practice/exam/[slug].tsx and UPCAT
+ * subtest in app/practice/upcat/[subtest].tsx) write topic_id='' and tag the
+ * row's `subtest` with the SECTION/SUBTEST name. Because the flashcard SUBJECTS
+ * were projected from UPCAT subtests, that `subtest` value EQUALS the subject
+ * NAME (e.g. "Reading Comprehension", "Mathematics"). So this aggregate is the
+ * subject-level mock readiness, keyed by subject name.
+ *
+ * Topic-review sessions write a NULL subtest and are excluded here (they're
+ * covered by getTopicBestSessionPercentages). Rows with total=0 are excluded
+ * (division-by-zero guard). Returns rounded integer percentages.
+ */
+export async function getSubjectSessionPercentages(
+  db: DrizzleClient,
+): Promise<SubjectBestSessionRow[]> {
+  const rows = await db
+    .select({
+      subject: practiceSessions.subtest,
+      bestPct: sql<number>`max(round(${practiceSessions.score} * 100.0 / ${practiceSessions.total}))`.as('best_pct'),
+    })
+    .from(practiceSessions)
+    .where(and(
+      isNotNull(practiceSessions.subtest),
+      ne(practiceSessions.subtest, ''),
+      sql`${practiceSessions.total} > 0`,
+    ))
+    .groupBy(practiceSessions.subtest)
+
+  return rows.map(r => ({
+    subject: String(r.subject ?? ''),
     bestPct: Number(r.bestPct ?? 0),
   }))
 }

@@ -18,10 +18,13 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../../../hooks/useDb', () => ({ useDb: jest.fn() }))
 
-// The per-topic best-session aggregate is unit-tested in services/__tests__;
-// here we control its output so the screen's compose + sort can be asserted.
+// The session aggregates are unit-tested in services/__tests__; here we control
+// their output so the screen's compose + sort can be asserted. The screen now
+// also loads getSubjectSessionPercentages (subject-level mock bests) so a subject
+// practiced only via a mock still shows its readiness per topic.
 jest.mock('../../../services/homeAggregates', () => ({
   getTopicBestSessionPercentages: jest.fn(),
+  getSubjectSessionPercentages: jest.fn(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -51,9 +54,13 @@ const TOPICS = [
   { id: 't3', name: 'Trigonometry' },
 ]
 
-function setBest(map: Array<{ topicId: string; bestPct: number }>) {
-  const { getTopicBestSessionPercentages } = require('../../../services/homeAggregates')
+function setBest(
+  map: Array<{ topicId: string; bestPct: number }>,
+  subjectMap: Array<{ subject: string; bestPct: number }> = [],
+) {
+  const { getTopicBestSessionPercentages, getSubjectSessionPercentages } = require('../../../services/homeAggregates')
   getTopicBestSessionPercentages.mockResolvedValue(map)
+  getSubjectSessionPercentages.mockResolvedValue(subjectMap)
 }
 
 describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
@@ -150,5 +157,50 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     setBest([])
     render(<SubjectDetailsScreen />)
     await waitFor(() => expect(screen.getByText('No topics in this subject yet.')).toBeTruthy())
+  })
+
+  // ── REGRESSION: subject practiced ONLY via a mock (subtest session) ──────────
+  // The mock writes topic_id='' + subtest='Mathematics' (== subject name), so
+  // there are NO per-topic rows. Every topic in the subject must still show the
+  // subject-level mock readiness (NOT "No sessions yet").
+  it('a subject practiced ONLY via mock shows the mock % on every topic (not "No sessions")', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+    // No per-topic bests; only a subject-level mock best keyed by the subject name.
+    setBest([], [{ subject: 'Mathematics', bestPct: 65 }])
+    render(<SubjectDetailsScreen />)
+    await waitFor(() => expect(screen.getAllByText('65%').length).toBe(3), { timeout: 5000 })
+    // No topic should fall back to the "No sessions yet" placeholder.
+    expect(screen.queryAllByText('No sessions yet').length).toBe(0)
+    expect(screen.queryAllByText('—').length).toBe(0)
+  })
+
+  it('a per-topic review beats the subject-level mock for that topic', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+    // t1 review (90) beats the subject mock (50); t2, t3 lifted to the mock (50).
+    setBest([{ topicId: 't1', bestPct: 90 }], [{ subject: 'Mathematics', bestPct: 50 }])
+    render(<SubjectDetailsScreen />)
+    await waitFor(() => expect(screen.getByText('90%')).toBeTruthy(), { timeout: 5000 })
+    // t2 and t3 show the mock-lifted 50%
+    expect(screen.getAllByText('50%').length).toBe(2)
+  })
+
+  it('sorts by combined readiness (review-or-mock), lowest first', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+    // The subject mock (50) lifts EVERY topic; an individual review can exceed it.
+    // t1 review=90 (beats mock); t2 review=40 → max(40,50)=50; t3 no review → 50.
+    // readiness: t1=90, t2=50, t3=50 → lowest-first order: t2, t3 (tie, alpha), t1.
+    setBest(
+      [{ topicId: 't1', bestPct: 90 }, { topicId: 't2', bestPct: 40 }],
+      [{ subject: 'Mathematics', bestPct: 50 }],
+    )
+    render(<SubjectDetailsScreen />)
+    await waitFor(() => expect(screen.getByText('90%')).toBeTruthy(), { timeout: 5000 })
+    // t2 and t3 are both lifted to the mock 50%
+    expect(screen.getAllByText('50%').length).toBe(2)
+    const names = screen.getAllByTestId('topic-name').map(n => n.props.children)
+    expect(names).toEqual(['Geometry', 'Trigonometry', 'Algebra'])
   })
 })

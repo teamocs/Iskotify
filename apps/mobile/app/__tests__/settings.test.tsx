@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react-native'
+import { render, screen, fireEvent } from '@testing-library/react-native'
 import SettingsScreen from '../settings'
 
 jest.mock('expo-router', () => ({
@@ -22,6 +22,8 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Shield2Outlined: {},
   ExitOutlined: {},
   Brush2Outlined: {},
+  Bug1Outlined: {},
+  Comment1Outlined: {},
 }))
 
 jest.mock('expo-constants', () => ({
@@ -63,6 +65,22 @@ describe('SettingsScreen', () => {
   it('renders Session section with Exit App', () => {
     render(<SettingsScreen />)
     expect(screen.getByText('Exit App')).toBeTruthy()
+  })
+
+  it('renders Feedback section with Report a Bug and Leave Feedback rows', () => {
+    render(<SettingsScreen />)
+    expect(screen.getByText('Feedback')).toBeTruthy()
+    expect(screen.getByText('Report a Bug')).toBeTruthy()
+    expect(screen.getByText('Leave Feedback')).toBeTruthy()
+  })
+
+  it('navigates to the bug report and feedback sub-screens', () => {
+    const { router } = require('expo-router')
+    render(<SettingsScreen />)
+    fireEvent.press(screen.getByText('Report a Bug'))
+    expect(router.push).toHaveBeenCalledWith('/settings/report-bug')
+    fireEvent.press(screen.getByText('Leave Feedback'))
+    expect(router.push).toHaveBeenCalledWith('/settings/leave-feedback')
   })
 
   it('renders Appearance section with theme picker', () => {

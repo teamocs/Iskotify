@@ -206,9 +206,9 @@ describe('useSchoolSearch', () => {
     act(() => { jest.advanceTimersByTime(500) })
 
     await waitFor(() => expect(result.current.results).toHaveLength(3))
-    expect(result.current.results[0].name).toBe('San Beda College')
-    expect(result.current.results[1].name).toBe('San Beda University Mendiola')
-    expect(result.current.results[2].name).toBe('University of San Beda')
+    expect(result.current.results[0]!.name).toBe('San Beda College')
+    expect(result.current.results[1]!.name).toBe('San Beda University Mendiola')
+    expect(result.current.results[2]!.name).toBe('University of San Beda')
   })
 
   it('issues a fuzzy multi-word ILIKE pattern for queries with spaces', async () => {

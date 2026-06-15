@@ -12,6 +12,8 @@ import {
   Shield2Outlined,
   ExitOutlined,
   Brush2Outlined,
+  Bug1Outlined,
+  Comment1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
@@ -185,6 +187,15 @@ export default function SettingsScreen() {
               label={aiProvider === 'gemini' ? 'Kuya Baw — Gemini (your key)' : 'Kuya Baw — On-device'}
               onPress={() => router.push('/settings/gemini-key')}
             />
+          </Card>
+
+          <SectionHeader title="Feedback" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <SettingsRow icon={Bug1Outlined} iconBg="rgba(248,113,113,0.12)" iconColor="#f87171" label="Report a Bug"
+              onPress={() => router.push('/settings/report-bug')} />
+            <View style={s.divider} />
+            <SettingsRow icon={Comment1Outlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Leave Feedback"
+              onPress={() => router.push('/settings/leave-feedback')} />
           </Card>
 
           <SectionHeader title="Session" />

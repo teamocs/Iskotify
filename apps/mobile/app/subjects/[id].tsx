@@ -10,7 +10,8 @@ import { subjects as subjectsTable, topics as topicsTable } from '../../db/schem
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, type Theme, type Typography } from '../../theme/tokens'
 import { cachedQuery } from '../../services/queryCache'
-import { getTopicBestSessionPercentages } from '../../services/homeAggregates'
+import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
+import { topicReadiness } from '../../utils/subjectReadiness'
 import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import { subjectColor } from '../../utils/subjectColors'
 
@@ -168,23 +169,34 @@ export default function SubjectDetailsScreen() {
     setLoading(true)
     void (async () => {
       const result = await cachedQuery<SubjectData>(`subject:topics:${id}`, SUBJECT_TTL, async () => {
-        const [subjectRows, topicRows] = await Promise.all([
+        // Per-topic review bests + subject-level mock bests both feed readiness,
+        // so a subject practiced only via a mock (subtest == subject name) still
+        // shows its readiness on every topic. All fetched together (independent).
+        const [subjectRows, topicRows, topicBestRows, subjectBestRows] = await Promise.all([
           db.select({ id: subjectsTable.id, name: subjectsTable.name })
             .from(subjectsTable).where(eq(subjectsTable.id, id)).limit(1),
           db.select({ id: topicsTable.id, name: topicsTable.name })
             .from(topicsTable)
             .where(and(eq(topicsTable.subjectId, id), eq(topicsTable.status, 'published'))),
+          getTopicBestSessionPercentages(db),
+          getSubjectSessionPercentages(db),
         ])
 
-        // Per-topic best result %, keyed for O(1) lookup while composing rows.
-        const bestRows = await getTopicBestSessionPercentages(db)
-        const bestMap = new Map(bestRows.map(r => [r.topicId, r.bestPct]))
+        const topicBestMap = new Map(topicBestRows.map(r => [r.topicId, r.bestPct]))
+        const subjectBestMap = new Map(subjectBestRows.map(r => [r.subject, r.bestPct]))
 
         const subjectName = (subjectRows[0]?.name as string | undefined) ?? 'Subject'
+        // subtest (mock) sessions are keyed by the subject NAME.
+        const subjectBest = subjectBestMap.get(subjectName) ?? null
+
         const rows: TopicRow[] = (topicRows as Array<{ id: string; name: string }>).map(tp => ({
           id: tp.id,
           name: tp.name,
-          bestPct: bestMap.has(tp.id) ? (bestMap.get(tp.id) as number) : null,
+          // readiness = max(this topic's review best, the subject mock best).
+          bestPct: topicReadiness({
+            topicBest: topicBestMap.get(tp.id) ?? null,
+            subjectBest,
+          }),
         }))
         rows.sort(byReadiness)
 

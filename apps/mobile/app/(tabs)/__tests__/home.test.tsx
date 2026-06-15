@@ -54,6 +54,18 @@ jest.mock('../../../services/notifications', () => ({
   cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
 }))
 
+// The Subjects-to-improve grid is now SESSION-based (consistent with Subject
+// Details): Home reads per-topic best + subject-level mock best from the
+// aggregates. Control them per-test; default to "no sessions" so the flashcard
+// accuracy fallback still drives the older grid tests.
+const mockTopicBest = { value: [] as Array<{ topicId: string; bestPct: number }> }
+const mockSubjectBest = { value: [] as Array<{ subject: string; bestPct: number }> }
+
+jest.mock('../../../services/homeAggregates', () => ({
+  getTopicBestSessionPercentages: jest.fn(() => Promise.resolve(mockTopicBest.value)),
+  getSubjectSessionPercentages: jest.fn(() => Promise.resolve(mockSubjectBest.value)),
+}))
+
 const mockUseHomeStats = jest.fn()
 
 jest.mock('../../../hooks/useHomeStats', () => ({
@@ -144,6 +156,12 @@ describe('HomeScreen', () => {
   beforeEach(() => {
     mockUseHomeStats.mockReturnValue(emptyStats)
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockTopicBest.value = []
+    mockSubjectBest.value = []
+    // The session-readiness cache is module-level — reset it so each test sees
+    // its own mocked aggregate values (not a previous test's cached maps).
+    const { _clearForTests } = require('../../../services/queryCache')
+    _clearForTests()
   })
 
   it('renders the uppercase date line', () => {
@@ -540,5 +558,46 @@ describe('HomeScreen', () => {
     // No subject names, no Subjects-to-improve header content beyond the prompt.
     expect(screen.queryByText('Math')).toBeNull()
     expect(screen.queryByText(/50%/)).toBeNull()
+  })
+
+  // ── REGRESSION: mock-practiced subject in the grid (session-based) ───────────
+  // A subject practiced ONLY through a mock (subtest session) has flashcard
+  // accuracy = null on every topic, but a subject-level mock best keyed by the
+  // subject NAME. The grid must show the mock % (was 0% when grid read only
+  // flashcard user_progress accuracy — RED before this fix).
+  it('shows a mock-practiced subject\'s real % in the grid (Reading Comprehension via mock)', async () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's-rc', name: 'Reading Comprehension' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Main Idea', subjectId: 's-rc' }, accuracy: null },
+        { topic: { id: 't2', name: 'Inference', subjectId: 's-rc' }, accuracy: null },
+      ],
+    })
+    // No per-topic review bests; only a subject-level mock best (subtest == name).
+    mockTopicBest.value = []
+    mockSubjectBest.value = [{ subject: 'Reading Comprehension', bestPct: 68 }]
+
+    render(<HomeScreen />)
+    // Mock lifts both topics → average 68% (NOT 0%).
+    expect(await screen.findByText('68%')).toBeTruthy()
+    expect(screen.queryByText('0%')).toBeNull()
+  })
+
+  it('a per-topic review best raises the grid % above the subject mock', async () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's-math', name: 'Math' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: null },
+        { topic: { id: 't2', name: 'Geometry', subjectId: 's-math' }, accuracy: null },
+      ],
+    })
+    mockTopicBest.value = [{ topicId: 't1', bestPct: 90 }] // review beats mock
+    mockSubjectBest.value = [{ subject: 'Math', bestPct: 50 }]
+
+    render(<HomeScreen />)
+    // t1 = max(90,50)=90 ; t2 = max(null,50)=50 → (90+50)/2 = 70
+    expect(await screen.findByText('70%')).toBeTruthy()
   })
 })

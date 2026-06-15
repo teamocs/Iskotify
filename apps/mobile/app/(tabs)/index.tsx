@@ -23,6 +23,8 @@ import { useAiCoach } from '../../hooks/useAiCoach'
 import { useTheme } from '../../theme/ThemeContext'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 import { useDb } from '../../hooks/useDb'
+import { cachedQuery, invalidate } from '../../services/queryCache'
+import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
 import { upcomingEvents } from '../../utils/admissionsFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
@@ -209,6 +211,39 @@ export default function HomeScreen() {
     return () => { cancelled = true }
   }, [db])
 
+  // ── Session readiness maps (SESSION-based "Subjects to improve" %) ───────────
+  // Per-topic review bests + subject-level mock bests (subtest == subject name).
+  // Cached so re-rendering the Home screen is cheap; refreshed alongside refresh().
+  const [sessionReadiness, setSessionReadiness] = useState<{
+    perTopicBest: Map<string, number>
+    subjectBest: Map<string, number>
+  }>(() => ({ perTopicBest: new Map(), subjectBest: new Map() }))
+  // Bumped by onRefresh (after invalidating the cache) to force a fresh re-fetch.
+  const [sessionReloadKey, setSessionReloadKey] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await cachedQuery('home:sessionReadiness', 30_000, async () => {
+          const [topicBest, subjectBest] = await Promise.all([
+            getTopicBestSessionPercentages(db),
+            getSubjectSessionPercentages(db),
+          ])
+          return { topicBest, subjectBest }
+        })
+        if (!cancelled) {
+          setSessionReadiness({
+            perTopicBest: new Map(data.topicBest.map(r => [r.topicId, r.bestPct])),
+            subjectBest: new Map(data.subjectBest.map(r => [r.subject, r.bestPct])),
+          })
+        }
+      } catch (e) {
+        console.warn('[home/sessionReadiness] load failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [db, sessionReloadKey])
+
   // Admissions events folded into Upcoming Dates (urgent/important/info with future eventDate)
   const futureAdmissionEvents = useMemo(() => {
     return upcomingEvents(admissionItems).filter(
@@ -219,6 +254,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
+    // Drop the cached session-readiness and re-trigger its effect for fresh maps.
+    invalidate('home:sessionReadiness')
+    setSessionReloadKey(k => k + 1)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
@@ -236,9 +274,13 @@ export default function HomeScreen() {
   }, [focusedListings, scheduleNotifs])
 
   // Per-subject mastery (lowest first) for the "Subjects to improve" grid.
+  // SESSION-based + consistent with Subject Details: each subject's % is the
+  // average of its topics' readiness (max of per-topic review best and the
+  // subject-level mock best), falling back to flashcard accuracy only when a
+  // subject has no session data at all.
   const improveSubjects = useMemo(
-    () => subjectsToImprove(topicRows, subjects),
-    [topicRows, subjects],
+    () => subjectsToImprove(topicRows, subjects, sessionReadiness.perTopicBest, sessionReadiness.subjectBest),
+    [topicRows, subjects, sessionReadiness],
   )
 
   const now = Date.now()

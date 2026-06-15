@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Modal, View, Text, Pressable, TextInput, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
@@ -26,13 +26,15 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
   const [details, setDetails] = useState('')
 
-  // Reset prior selection/details whenever the sheet is reopened.
-  useEffect(() => {
+  // Reset prior selection/details whenever the sheet is reopened (render-phase prev-prop pattern).
+  const [prevVisible, setPrevVisible] = useState(visible)
+  if (visible !== prevVisible) {
+    setPrevVisible(visible)
     if (visible) {
       setSelected(null)
       setDetails('')
     }
-  }, [visible])
+  }
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 

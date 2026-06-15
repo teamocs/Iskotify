@@ -24,6 +24,7 @@ import {
   getTopicCardCounts,
   getListingAccuracy,
   getTopicBestSessionPercentages,
+  getSubjectSessionPercentages,
 } from '../homeAggregates'
 
 // ── Inlined oracle functions (mirrors useHomeStats pure fns) ──────────────────
@@ -123,7 +124,8 @@ function makeDb(): { raw: InstanceType<typeof Database>; db: DrizzleClient } {
       score INTEGER NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
-      completed_at INTEGER NOT NULL
+      completed_at INTEGER NOT NULL,
+      subtest TEXT
     );
   `)
   const db = drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -560,5 +562,85 @@ describe('getTopicBestSessionPercentages — best (highest) % per topic', () => 
     expect(map.get('t1')).toBe(90)
     expect(map.get('t2')).toBe(80)
     expect(map.get('t3')).toBe(50)
+  })
+})
+
+// ── getSubjectSessionPercentages — highest attained % per SUBJECT (subtest) ───
+// Mock sessions (blueprint section + UPCAT subtest) write topic_id='' and tag the
+// session's `subtest` with the SECTION/SUBTEST name, which equals the flashcard
+// SUBJECT name (subjects were projected from UPCAT subtests). This aggregate
+// surfaces those mock sessions per subject so readiness reflects mocks too.
+
+describe('getSubjectSessionPercentages — best (highest) % per subject (subtest)', () => {
+  function insertSubtestSession(subtest: string | null, score: number, total: number) {
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, completed_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run('', '', subtest, score, total, Date.now())
+  }
+
+  it('returns MAX rounded percentage across multiple sessions for one subject', async () => {
+    insertSubtestSession('Reading Comprehension', 3, 10)  // 30%
+    insertSubtestSession('Reading Comprehension', 7, 10)  // 70% ← best
+    insertSubtestSession('Reading Comprehension', 5, 10)  // 50%
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(map.get('Reading Comprehension')).toBe(70)
+  })
+
+  it('rounds the percentage to an integer', async () => {
+    insertSubtestSession('Mathematics', 2, 3)  // 66.66.. → 67
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(map.get('Mathematics')).toBe(67)
+  })
+
+  it('ignores rows with a NULL subtest (topic-review sessions)', async () => {
+    insertSubtestSession(null, 9, 10)                   // NULL subtest → excluded
+    insertSubtestSession('Science', 4, 10)              // real subject
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(rows).toHaveLength(1)
+    expect(map.get('Science')).toBe(40)
+  })
+
+  it("ignores rows with an empty-string subtest ('')", async () => {
+    insertSubtestSession('', 9, 10)                     // '' subtest → excluded
+    insertSubtestSession('Language Proficiency', 6, 10) // real subject
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(map.get('')).toBeUndefined()
+    expect(map.get('Language Proficiency')).toBe(60)
+  })
+
+  it('excludes sessions with total=0 (division-by-zero guard)', async () => {
+    insertSubtestSession('Mathematics', 0, 0)           // total=0 → excluded
+    const rows = await getSubjectSessionPercentages(db)
+    expect(rows.find(r => r.subject === 'Mathematics')).toBeUndefined()
+  })
+
+  it('a subject whose ONLY non-zero session is kept; the total=0 row does not zero it', async () => {
+    insertSubtestSession('Science', 5, 10)              // 50% — qualifying
+    insertSubtestSession('Science', 0, 0)              // excluded; must not zero out
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(map.get('Science')).toBe(50)
+  })
+
+  it('returns empty array when there are no practice_sessions', async () => {
+    const rows = await getSubjectSessionPercentages(db)
+    expect(rows).toEqual([])
+  })
+
+  it('returns one row per subject across many subjects', async () => {
+    insertSubtestSession('Mathematics', 9, 10)          // 90
+    insertSubtestSession('Science', 3, 10)              // 30
+    insertSubtestSession('Science', 8, 10)              // 80 ← best for Science
+    insertSubtestSession('Reading Comprehension', 5, 10) // 50
+    const rows = await getSubjectSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
+    expect(rows).toHaveLength(3)
+    expect(map.get('Mathematics')).toBe(90)
+    expect(map.get('Science')).toBe(80)
+    expect(map.get('Reading Comprehension')).toBe(50)
   })
 })

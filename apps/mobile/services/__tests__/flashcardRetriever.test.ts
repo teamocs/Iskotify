@@ -118,8 +118,8 @@ describe('searchFlashcards (FTS5 integration)', () => {
     ])
     const results = await searchFlashcards(db, 'photosynthesis')
     expect(results).toHaveLength(1)
-    expect(results[0].flashcardId).toBe('f1')
-    expect(results[0].question).toContain('photosynthesis')
+    expect(results[0]!.flashcardId).toBe('f1')
+    expect(results[0]!.question).toContain('photosynthesis')
   })
 
   it('ranks more-relevant flashcards higher (BM25)', async () => {
@@ -130,7 +130,7 @@ describe('searchFlashcards (FTS5 integration)', () => {
     ])
     const results = await searchFlashcards(db, 'noli me tangere', 5)
     expect(results.length).toBeGreaterThan(0)
-    expect(results[0].flashcardId).toBe('f2')
+    expect(results[0]!.flashcardId).toBe('f2')
   })
 
   it('respects the limit parameter', async () => {
@@ -152,7 +152,7 @@ describe('searchFlashcards (FTS5 integration)', () => {
     ])
     const results = await searchFlashcards(db, 'photosynthesis')
     expect(results).toHaveLength(1)
-    expect(results[0].flashcardId).toBe('f1')
+    expect(results[0]!.flashcardId).toBe('f1')
   })
 
   it('returns the full RetrievedFlashcard shape', async () => {
@@ -168,7 +168,7 @@ describe('searchFlashcards (FTS5 integration)', () => {
       answer: 'answer text',
       explanation: 'explanation text',
     }))
-    expect(typeof r.score).toBe('number')
+    expect(typeof r!.score).toBe('number')
   })
 
   it('does not throw and returns [] when the FTS table is missing', async () => {
