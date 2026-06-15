@@ -60,12 +60,6 @@ jest.mock('../../../hooks/useHomeStats', () => ({
   useHomeStats: () => mockUseHomeStats(),
 }))
 
-const mockUsePracticeData = jest.fn()
-
-jest.mock('../../../hooks/usePracticeData', () => ({
-  usePracticeData: () => mockUsePracticeData(),
-}))
-
 jest.mock('../../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
 }))
@@ -128,20 +122,9 @@ const emptyStats = {
   refresh: jest.fn().mockResolvedValue(undefined),
 }
 
-const emptyPractice = {
-  subjects: [],
-  topicRows: [],
-  recommendedTopics: [],
-  totalCards: 0,
-  cardCountByTopic: {},
-  topicIdsByListingSlug: {},
-  refresh: jest.fn().mockResolvedValue(undefined),
-}
-
 describe('HomeScreen', () => {
   beforeEach(() => {
     mockUseHomeStats.mockReturnValue(emptyStats)
-    mockUsePracticeData.mockReturnValue(emptyPractice)
   })
 
   it('renders the uppercase date line', () => {
@@ -206,9 +189,9 @@ describe('HomeScreen', () => {
     expect(screen.getByText('My Focus')).toBeTruthy()
   })
 
-  it('renders the My Focus subheadline', () => {
+  it('renders the My Focus subheadline (no longer mentions streaks)', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('Readiness and streaks for your target exams')).toBeTruthy()
+    expect(screen.getByText('Your readiness for each target exam')).toBeTruthy()
   })
 
   it('renders the Upcoming Dates subheadline', () => {
@@ -246,7 +229,7 @@ describe('HomeScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=destinations')
   })
 
-  it('renders focus card title + Readiness + streak when focusedListings mocked', () => {
+  it('renders focus card title + readiness % when focusedListings mocked', () => {
     const futureDate = Date.now() + 10 * 86_400_000
     mockUseHomeStats.mockReturnValue({
       ...emptyStats,
@@ -259,8 +242,35 @@ describe('HomeScreen', () => {
     render(<HomeScreen />)
     // Title appears in both focus card and Upcoming Dates — getAllByText
     expect(screen.getAllByText('UPCAT 2026').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText(/Readiness 72%/)).toBeTruthy()
-    expect(screen.getByText(/3-day streak/)).toBeTruthy()
+    expect(screen.getByText('72%')).toBeTruthy()
+  })
+
+  it('focus card does NOT render any streak text (streak removed)', () => {
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: { 'upcat-2026': 72 },
+      streakDays: 3,
+    })
+    render(<HomeScreen />)
+    expect(screen.queryByText(/streak/i)).toBeNull()
+    expect(screen.queryByText(/🔥/)).toBeNull()
+  })
+
+  it('focus card shows "—" for readiness when the listing has no accuracy yet', () => {
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: {}, // not practiced → no fill, em-dash
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText('—')).toBeTruthy()
   })
 
   it('pressing a focus card navigates to /listings/:slug', () => {
@@ -391,112 +401,17 @@ describe('HomeScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/(tabs)/profile')
   })
 
-  // ── Your Progress analytics section ───────────────────────────────────────
-
-  it('renders the Your Progress section header with its subtitle', () => {
-    mockUseHomeStats.mockReturnValue({ ...emptyStats, weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 40 }] })
-    render(<HomeScreen />)
-    expect(screen.getByText('Your Progress')).toBeTruthy()
-    expect(screen.getByText('Readiness, subjects & weak areas')).toBeTruthy()
-  })
-
-  it('Readiness card shows the focused exam %', () => {
+  it('Your Progress analytics section is NOT present (removed)', () => {
     mockUseHomeStats.mockReturnValue({
       ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: Date.now() + 10 * 86_400_000, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 68 },
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('READINESS')).toBeTruthy()
-    expect(screen.getByText('68%')).toBeTruthy()
-  })
-
-  it('Readiness card subtitle shows the focused exam title', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: Date.now() + 10 * 86_400_000, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 68 },
-    })
-    render(<HomeScreen />)
-    // Title appears in My Focus, Upcoming Dates AND the readiness card subtitle
-    expect(screen.getAllByText('UPCAT 2026').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('Weak areas card shows the count and the worst topic + %', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      weakTopics: [
-        { topicId: 't1', topicName: 'Algebra', accuracy: 30 },
-        { topicId: 't2', topicName: 'Geometry', accuracy: 45 },
-      ],
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('WEAK AREAS')).toBeTruthy()
-    expect(screen.getByText('2')).toBeTruthy()
-    expect(screen.getByText(/Algebra · 30%/)).toBeTruthy()
-  })
-
-  it('Weak areas card shows the looking-good empty state when none', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      // give a progress signal via subjects so we are NOT in the all-empty state
+      weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 40 }],
       listingAccuracy: { 'upcat-2026': 80 },
     })
     render(<HomeScreen />)
-    expect(screen.getByText('WEAK AREAS')).toBeTruthy()
-    expect(screen.getByText('Looking good!')).toBeTruthy()
-  })
-
-  it('By subject card lists subject names with their mastery %', () => {
-    mockUseHomeStats.mockReturnValue({ ...emptyStats, listingAccuracy: { 'upcat-2026': 80 } })
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPractice,
-      subjects: [
-        { id: 'math', name: 'Mathematics' },
-        { id: 'sci', name: 'Science' },
-      ],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 'math' }, cardCount: 5, lastPracticedAt: null, accuracy: 40, strength: 'Weak' },
-        { topic: { id: 't2', name: 'Geometry', subjectId: 'math' }, cardCount: 5, lastPracticedAt: null, accuracy: 80, strength: 'Strong' },
-        { topic: { id: 't3', name: 'Biology', subjectId: 'sci' }, cardCount: 5, lastPracticedAt: null, accuracy: 90, strength: 'Strong' },
-      ],
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('By subject')).toBeTruthy()
-    expect(screen.getByText('Mathematics')).toBeTruthy()
-    expect(screen.getByText('60%')).toBeTruthy() // (40 + 80) / 2
-    expect(screen.getByText('Science')).toBeTruthy()
-  })
-
-  it('falls back to the overall average accuracy for readiness when no focus', () => {
-    mockUseHomeStats.mockReturnValue({ ...emptyStats })
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPractice,
-      subjects: [{ id: 'math', name: 'Mathematics' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 'math' }, cardCount: 5, lastPracticedAt: null, accuracy: 40, strength: 'Weak' },
-        { topic: { id: 't2', name: 'Geometry', subjectId: 'math' }, cardCount: 5, lastPracticedAt: null, accuracy: 60, strength: 'Review' },
-      ],
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('READINESS')).toBeTruthy()
-    // 50% appears both as the readiness value (overall avg of 40+60) and the
-    // single Mathematics subject mastery — assert at least one + the unique label.
-    expect(screen.getAllByText('50%').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Overall')).toBeTruthy()
-  })
-
-  it('shows the friendly empty-state prompt and NO grid values when there is no practice signal', () => {
-    render(<HomeScreen />) // all-empty stats + all-empty practice from beforeEach
-    expect(screen.getByText('Your Progress')).toBeTruthy()
-    expect(screen.getByText(/Start practicing to see your readiness/)).toBeTruthy()
-    // The grid eyebrow labels must NOT render in the empty state
+    expect(screen.queryByText('Your Progress')).toBeNull()
     expect(screen.queryByText('READINESS')).toBeNull()
     expect(screen.queryByText('WEAK AREAS')).toBeNull()
     expect(screen.queryByText('By subject')).toBeNull()
+    expect(screen.queryByText(/Start practicing to see your readiness/)).toBeNull()
   })
 })
