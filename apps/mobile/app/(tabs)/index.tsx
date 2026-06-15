@@ -13,6 +13,8 @@ import { ListCard } from '../../components/ui/ListCard'
 import { InfoBanner } from '../../components/ui/InfoBanner'
 import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
+import { usePracticeData } from '../../hooks/usePracticeData'
+import { subjectMastery } from '../../utils/homeProgress'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
 import { useTheme } from '../../theme/ThemeContext'
@@ -172,6 +174,7 @@ function NotificationModal({
 
 export default function HomeScreen() {
   const { streakDays, weakTopics, firstTopicId, fullName, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
+  const { subjects, topicRows } = usePracticeData()
   const db = useDb()
 
   // ── Admissions feed ─────────────────────────────────────────────────────────
@@ -286,6 +289,46 @@ export default function HomeScreen() {
   const TOP_N = 3
   const visibleUpcomingDates = upcomingExpanded ? upcomingDates : upcomingDates.slice(0, TOP_N)
 
+  // ── Your Progress analytics (readiness + weak areas + by-subject) ───────────
+  // Derived once per data change. subjectMastery is a pure helper (TDD'd).
+  const progress = useMemo(() => {
+    const masteries = subjectMastery(topicRows, subjects)
+    // Overall avg accuracy = mean of subject masteries (lighter than adding useAnalytics).
+    const overallAccuracy = masteries.length > 0
+      ? Math.round(masteries.reduce((sum, m) => sum + m.pct, 0) / masteries.length)
+      : null
+
+    // Readiness = primary focused exam's % → else overall avg → else null.
+    const focused = focusedListings[0] ?? null
+    const focusedAccuracy = focused ? listingAccuracy[focused.slug] : undefined
+    let readinessPct: number | null
+    let readinessLabel: string
+    if (focusedAccuracy != null) {
+      readinessPct = focusedAccuracy
+      readinessLabel = focused!.title
+    } else if (overallAccuracy != null) {
+      readinessPct = overallAccuracy
+      readinessLabel = 'Overall'
+    } else {
+      readinessPct = null
+      readinessLabel = 'Not started'
+    }
+
+    // Empty / first-run: no weak topics AND no graded subject AND no listing accuracy.
+    const hasSignal =
+      weakTopics.length > 0 ||
+      masteries.length > 0 ||
+      Object.keys(listingAccuracy).length > 0
+
+    return {
+      hasSignal,
+      readinessPct,
+      readinessLabel,
+      topSubjects: masteries.slice(0, 3), // lowest-mastery first (most useful)
+      worstWeak: weakTopics[0] ?? null,
+    }
+  }, [topicRows, subjects, focusedListings, listingAccuracy, weakTopics])
+
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -379,7 +422,57 @@ export default function HomeScreen() {
     },
     exploreEmoji: { fontSize: 16 },
     exploreLabel: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    // Your Progress — responsive grid of stat cards (same surface/border as exploreCard)
+    progressGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    progressCard: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.xl,
+      borderCurve: 'continuous',
+      boxShadow: t.shadowSm,
+      padding: spacing.md,
+    },
+    progressCardHalf: { flexBasis: '48%', flexGrow: 1 },
+    progressCardFull: { flexBasis: '100%' },
+    progressEyebrow: { fontSize: typo.xs, letterSpacing: 1, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
+    progressValue: { fontSize: typo.h2, color: t.textPrimary, fontFamily: 'Outfit_700Bold', letterSpacing: -0.5 },
+    progressSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs / 2 },
+    // By-subject in-card header + rows + mastery bar
+    progressCardHeader: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.sm },
+    subjectRow: { marginBottom: spacing.sm },
+    subjectRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+    subjectName: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
+    subjectPct: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Outfit_600SemiBold', marginLeft: spacing.sm },
+    masteryTrack: { height: 6, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: t.surfaceSubtle, overflow: 'hidden' },
+    masteryFill: { height: 6, borderRadius: radius.sm, borderCurve: 'continuous' },
+    // Empty / first-run single friendly card
+    progressEmptyCard: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.xl,
+      borderCurve: 'continuous',
+      boxShadow: t.shadowSm,
+      padding: spacing.md,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    progressEmptyText: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
   }), [t, typo])
+
+  // Level → semantic color for readiness / mastery values (≥75 success, ≥50 warning, else accent).
+  const levelColor = useCallback((pct: number): string => {
+    if (pct >= 75) return t.success
+    if (pct >= 50) return t.warning
+    return t.accentText
+  }, [t])
+  // Mastery bar fill uses success/warning/danger (danger for the weakest band).
+  const masteryColor = useCallback((pct: number): string => {
+    if (pct >= 75) return t.success
+    if (pct >= 50) return t.warning
+    return t.danger
+  }, [t])
 
   return (
     <SafeAreaView style={s.root}>
@@ -473,6 +566,74 @@ export default function HomeScreen() {
               <Text style={s.askHint} maxFontSizeMultiplier={1.4}>Ask Kuya Baw ›</Text>
             </Pressable>
           </View>
+
+          {/* (2b) Your Progress — readiness + weak areas + analytics by subject */}
+          <View style={s.section}>
+            <SectionHeader title="Your Progress" subtitle="Readiness, subjects & weak areas" />
+          </View>
+          {progress.hasSignal ? (
+            <View style={s.progressGrid}>
+              {/* Readiness */}
+              <View style={[s.progressCard, s.progressCardHalf]}>
+                <Text style={s.progressEyebrow} maxFontSizeMultiplier={1.4}>READINESS</Text>
+                <Text
+                  style={[s.progressValue, progress.readinessPct != null ? { color: levelColor(progress.readinessPct) } : null]}
+                  maxFontSizeMultiplier={1.4}
+                >
+                  {progress.readinessPct != null ? `${progress.readinessPct}%` : '—'}
+                </Text>
+                <Text style={s.progressSub} numberOfLines={1} maxFontSizeMultiplier={1.4}>{progress.readinessLabel}</Text>
+              </View>
+
+              {/* Weak areas */}
+              <View style={[s.progressCard, s.progressCardHalf]}>
+                <Text style={s.progressEyebrow} maxFontSizeMultiplier={1.4}>WEAK AREAS</Text>
+                <Text
+                  style={[s.progressValue, { color: progress.worstWeak ? t.danger : t.success }]}
+                  maxFontSizeMultiplier={1.4}
+                >
+                  {weakTopics.length}
+                </Text>
+                {progress.worstWeak ? (
+                  <Text style={s.progressSub} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                    {`${progress.worstWeak.topicName} · ${progress.worstWeak.accuracy}%`}
+                  </Text>
+                ) : (
+                  <Text style={[s.progressSub, { color: t.success }]} maxFontSizeMultiplier={1.4}>Looking good!</Text>
+                )}
+              </View>
+
+              {/* By subject */}
+              {progress.topSubjects.length > 0 ? (
+                <View style={[s.progressCard, s.progressCardFull]}>
+                  <Text style={s.progressCardHeader} maxFontSizeMultiplier={1.4}>By subject</Text>
+                  {progress.topSubjects.map(sub => (
+                    <View key={sub.name} style={s.subjectRow}>
+                      <View style={s.subjectRowTop}>
+                        <Text style={s.subjectName} numberOfLines={1} maxFontSizeMultiplier={1.4}>{sub.name}</Text>
+                        <Text style={s.subjectPct} maxFontSizeMultiplier={1.4}>{`${sub.pct}%`}</Text>
+                      </View>
+                      <View style={s.masteryTrack}>
+                        <View style={[s.masteryFill, { width: `${sub.pct}%`, backgroundColor: masteryColor(sub.pct) }]} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.progressEmptyCard, pressed && quickTopicId ? { opacity: 0.75 } : null]}
+              onPress={quickTopicId ? () => router.push(`/practice/${quickTopicId}`) : undefined}
+              disabled={!quickTopicId}
+              accessibilityRole={quickTopicId ? 'button' : undefined}
+              accessibilityLabel={quickTopicId ? 'Start practicing' : undefined}
+            >
+              <Text style={s.progressEmptyText} maxFontSizeMultiplier={1.4}>
+                Start practicing to see your readiness, subjects & weak areas
+              </Text>
+            </Pressable>
+          )}
 
           {/* (3) Quick Practice CTA */}
           {quickTopicId ? (
