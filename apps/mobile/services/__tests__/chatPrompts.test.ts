@@ -232,11 +232,13 @@ describe('buildChatPrompt', () => {
 
     it('[UPCAT FACTS] is a sibling top-level section, not nested inside [RELEVANT FLASHCARDS]', () => {
       // Simulate what buildRetrievedFlashcards emits when only facts match (no flashcards).
-      const factsOnly = '[UPCAT FACTS]\n- What is the UPG? → The University Predicted Grade (as of 2025; verify at upcat.up.edu.ph)'
+      // C1: no hardcoded upcat.up.edu.ph suffix — only the year note remains.
+      const factsOnly = '[UPCAT FACTS]\n- What is the UPG? → The University Predicted Grade (as of 2025)'
       const prompt = buildChatPrompt('topic', 'UPG question', undefined, undefined, factsOnly)
       // [UPCAT FACTS] must appear as a top-level section
       expect(prompt).toContain('[UPCAT FACTS]')
-      expect(prompt).toContain('verify at upcat.up.edu.ph')
+      expect(prompt).toContain('as of 2025')
+      expect(prompt).not.toContain('upcat.up.edu.ph')
       // No stray empty [RELEVANT FLASHCARDS] header should appear beyond the one in the system prompt
       const countOccurrences = (s: string, needle: string) => s.split(needle).length - 1
       expect(countOccurrences(prompt, '[RELEVANT FLASHCARDS]')).toBe(1) // only in system prompt
@@ -639,5 +641,30 @@ describe('Task A.4 — SYSTEM_PROMPT_TOPIC addendum softened', () => {
 
   it('topic addendum suggests Exams tab when genuinely unsure', () => {
     expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
+  })
+})
+
+// ── C5 TDD: grounding mentions school rankings / PRC / career-abroad blocks ────
+
+describe('C5 — GROUNDING covers school rankings, PRC pass rates, career/abroad', () => {
+  it('GROUNDING_RULE names school rankings, PRC pass rates, and career/abroad as block-only', () => {
+    expect(GROUNDING_RULE).toContain('School rankings')
+    expect(GROUNDING_RULE).toContain('PRC board pass rates')
+    expect(GROUNDING_RULE).toMatch(/career\/abroad/i)
+    expect(GROUNDING_RULE).toContain('[TOP SCHOOLS]')
+    expect(GROUNDING_RULE).toContain('[CAREER DESTINATIONS]')
+  })
+
+  it('all three system prompts carry the new grounding coverage line', () => {
+    for (const prompt of [SYSTEM_PROMPT_PROGRESS, SYSTEM_PROMPT_TOPIC, SYSTEM_PROMPT_MATH]) {
+      expect(prompt).toContain('School rankings')
+      expect(prompt).toContain('PRC board pass rates')
+    }
+  })
+
+  it('existing grounding + URL guarantees still hold (no regression)', () => {
+    expect(CORE_RULES).toContain('answer ONLY from the context blocks provided')
+    expect(CORE_RULES).toContain('Only mention a website if its URL appears in the context blocks')
+    expect(CORE_RULES).not.toContain('upcat.up.edu.ph')
   })
 })

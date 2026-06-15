@@ -59,4 +59,23 @@ describe('ChatBubble', () => {
     const assistant = render(<ChatBubble message={msg({ role: 'assistant', text: 'hi' })} />)
     expect(assistant.getByText(/^Kuya Baw ·/)).toBeTruthy()
   })
+
+  // ── Mascot avatar tests (RED → GREEN) ─────────────────────────────────────
+
+  it('assistant message renders the Kuya Baw mascot avatar', () => {
+    const { getByTestId } = render(<ChatBubble message={msg({ role: 'assistant', text: 'Hello' })} />)
+    expect(getByTestId('kuya-avatar')).toBeTruthy()
+  })
+
+  it('user message does NOT render the Kuya Baw mascot avatar', () => {
+    const { queryByTestId } = render(<ChatBubble message={msg({ role: 'user', text: 'Hi' })} />)
+    expect(queryByTestId('kuya-avatar')).toBeNull()
+  })
+
+  it('streaming/thinking assistant bubble renders the Kuya Baw mascot avatar', () => {
+    const { getByTestId } = render(
+      <ChatBubble message={msg({ role: 'assistant', text: '', isStreaming: true })} />,
+    )
+    expect(getByTestId('kuya-avatar')).toBeTruthy()
+  })
 })

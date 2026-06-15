@@ -60,6 +60,125 @@ export function extractSearchTokens(query: string): string[] {
     .slice(0, 8)
 }
 
+// ── Course-keyed retrievers: Top Schools (PRC) & Career Destinations ──────────
+//
+// Both operate on already-fetched, cached rows (the table reads are stable and
+// cached in chatContext via cachedQuery). Matching is web-safe: pure in-memory
+// token overlap between the question and a course label (no FTS, no LIKE on the
+// hot path). This mirrors buildCourseConnectionContext's tokenize-and-match
+// style but is reusable from two builders.
+
+/** Minimal row shape for a school-ranking entry (subset of courseSchoolRankings). */
+export interface SchoolRankingRow {
+  courseTab: string
+  courseName: string | null
+  rank: number | null
+  schoolName: string
+  region: string | null
+  rawPassRate: number | null
+  totalExaminees: number | null
+  totalPassers: number | null
+}
+
+/** Minimal row shape for a career destination (subset of careerDestinations). */
+export interface CareerDestinationRow {
+  courseId: string | null
+  country: string | null
+  salaryMin: number | null
+  salaryMax: number | null
+  salaryLocal: string | null
+  salaryType: string | null
+  visaPathway: string | null
+  prPathway: string | null
+  licensingExam: string | null
+  saturationWarning: string | null
+}
+
+/**
+ * Pick the single best-matching course label from `labels` (e.g. the distinct
+ * courseName/courseTab values present in rankings, or careerCourses.name) by
+ * counting how many of the label's own tokens (≥3 chars) appear in the question.
+ *
+ * Returns the label with the highest token-overlap count, or null when nothing
+ * overlaps. Ties resolve to the first label seen (stable for deterministic output).
+ *
+ * Web-safe: pure string work, no SQL.
+ */
+export function matchCourseLabel(question: string, labels: string[]): string | null {
+  const qTokens = new Set(extractSearchTokens(question))
+  if (qTokens.size === 0) return null
+  let best: string | null = null
+  let bestScore = 0
+  for (const label of labels) {
+    if (!label) continue
+    const labelTokens = label.toLowerCase().match(/[a-z]{3,}/g) ?? []
+    let score = 0
+    for (const t of labelTokens) if (qTokens.has(t)) score++
+    if (score > bestScore) {
+      bestScore = score
+      best = label
+    }
+  }
+  return bestScore > 0 ? best : null
+}
+
+/**
+ * Given all (cached) school-ranking rows and the user's question, find the
+ * matched course (by token overlap vs the rows' courseName/courseTab) and return
+ * that course's top-N schools by rank (ascending). Returns [] when no course
+ * matches. Web-safe (pure in-memory).
+ */
+export function searchTopSchools(
+  rows: SchoolRankingRow[],
+  question: string,
+  limit = 5,
+): { course: string; schools: SchoolRankingRow[] } | null {
+  if (rows.length === 0) return null
+  // Distinct course labels present in the data (prefer courseName, fall back to tab).
+  const labels = Array.from(
+    new Set(rows.map(r => (r.courseName ?? r.courseTab)).filter((s): s is string => !!s)),
+  )
+  const matched = matchCourseLabel(question, labels)
+  if (!matched) return null
+  const matchedLower = matched.toLowerCase()
+  const schools = rows
+    .filter(r => (r.courseName ?? r.courseTab ?? '').toLowerCase() === matchedLower)
+    .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999))
+    .slice(0, limit)
+  if (schools.length === 0) return null
+  return { course: matched, schools }
+}
+
+/**
+ * Given all (cached) career-destination rows, a courseId→name map, and the
+ * user's question, find the matched course (by token overlap vs the course
+ * names) and return that course's top-N destinations. Returns null when no
+ * course matches or the matched course has no destinations. Web-safe.
+ */
+export function searchCareerDestinations(
+  rows: CareerDestinationRow[],
+  courseNamesById: Map<string, string>,
+  question: string,
+  limit = 3,
+): { course: string; destinations: CareerDestinationRow[] } | null {
+  if (rows.length === 0) return null
+  const labels = Array.from(new Set(Array.from(courseNamesById.values()).filter(Boolean)))
+  const matched = matchCourseLabel(question, labels)
+  if (!matched) return null
+  // courseIds whose name equals the matched label (case-insensitive).
+  const matchedLower = matched.toLowerCase()
+  const matchedIds = new Set(
+    Array.from(courseNamesById.entries())
+      .filter(([, name]) => name.toLowerCase() === matchedLower)
+      .map(([id]) => id),
+  )
+  const destinations = rows
+    .filter(r => r.courseId != null && matchedIds.has(r.courseId))
+    .slice(0, limit)
+  if (destinations.length === 0) return null
+  return { course: matched, destinations }
+}
+
 // ── LIKE-based fallback search (used on web where FTS5 is unavailable) ─────
 
 /**

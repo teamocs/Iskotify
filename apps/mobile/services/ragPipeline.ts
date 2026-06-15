@@ -20,6 +20,8 @@ import {
   buildRetrievedFlashcards,
   buildListingsContext,
   buildCourseConnectionContext,
+  buildTopSchoolsContext,
+  buildCareerDestinationsContext,
 } from './chatContext'
 
 export type RagMode = 'progress' | 'topic' | 'math'
@@ -75,16 +77,17 @@ function hasContent(s: string | null | undefined): s is string {
  * after all four promises settle.
  *
  * Priority orders per mode (highest → lowest):
- *   math:            flashcards > listings > courses > progress
- *   progress:        progress > flashcards > listings > courses
- *   topic (listing): listings > courses > flashcards > progress
- *   topic (default): flashcards > listings > courses > progress
+ *   math:            flashcards > listings > courses > schools > destinations > progress
+ *   progress:        progress > flashcards > listings > courses > schools > destinations
+ *   topic (listing): listings > courses > schools > destinations > flashcards > progress
+ *   topic (default): flashcards > listings > courses > schools > destinations > progress
  *
  * "listing intent" = listings block came back non-empty.
  *
  * @param cfg - Optional remote AI config. When provided:
  *   - ragTotalTokenBudget / ragPerBlockCharCap override the builtin caps when > 0.
- *   - ragBlocksEnabled.{name}=false skips that builder entirely.
+ *   - ragBlocksEnabled.{name}=false skips that builder entirely. schools/destinations
+ *     default to enabled (absent key = enabled) since they post-date the cfg type.
  */
 export async function buildRagContext(
   db: DrizzleClient,
@@ -97,15 +100,30 @@ export async function buildRagContext(
   const TOTAL_TOKEN_BUDGET = cfg?.ragTotalTokenBudget ?? BUILTIN_TOTAL_TOKEN_BUDGET
   const PER_BLOCK_CHAR_CAP = cfg?.ragPerBlockCharCap ?? BUILTIN_PER_BLOCK_CHAR_CAP
 
-  // Resolve which blocks are enabled (default all true when cfg absent)
-  const blocksEnabled = cfg?.ragBlocksEnabled ?? { flashcards: true, listings: true, courses: true, progress: true }
+  // Resolve which blocks are enabled (default all true when cfg absent).
+  // schools/destinations were added after aiConfig's strict type was frozen, so
+  // they're read defensively (absent key = enabled), mirroring the "absent =
+  // enabled" semantics the other flags already use.
+  const cfgBlocks = cfg?.ragBlocksEnabled as
+    | (Record<string, boolean | undefined>)
+    | undefined
+  const blocksEnabled = {
+    flashcards:   cfgBlocks?.flashcards   !== false,
+    listings:     cfgBlocks?.listings     !== false,
+    courses:      cfgBlocks?.courses      !== false,
+    progress:     cfgBlocks?.progress     !== false,
+    schools:      cfgBlocks?.schools      !== false,
+    destinations: cfgBlocks?.destinations !== false,
+  }
 
   // ── Stage 1: retrieve in parallel (skip disabled blocks) ─────────────────
-  const [progressRaw, flashcardsRaw, listingsRaw, coursesRaw] = await Promise.all([
-    blocksEnabled.progress  ? buildProgressContext(db, stats)           : Promise.resolve(''),
-    blocksEnabled.flashcards ? buildRetrievedFlashcards(db, question, 3) : Promise.resolve(''),
-    blocksEnabled.listings  ? buildListingsContext(db, question)         : Promise.resolve(''),
-    blocksEnabled.courses   ? buildCourseConnectionContext(db, question) : Promise.resolve(''),
+  const [progressRaw, flashcardsRaw, listingsRaw, coursesRaw, schoolsRaw, destinationsRaw] = await Promise.all([
+    blocksEnabled.progress     ? buildProgressContext(db, stats)              : Promise.resolve(''),
+    blocksEnabled.flashcards   ? buildRetrievedFlashcards(db, question, 3)    : Promise.resolve(''),
+    blocksEnabled.listings     ? buildListingsContext(db, question)           : Promise.resolve(''),
+    blocksEnabled.courses      ? buildCourseConnectionContext(db, question)   : Promise.resolve(''),
+    blocksEnabled.schools      ? buildTopSchoolsContext(db, question)         : Promise.resolve(''),
+    blocksEnabled.destinations ? buildCareerDestinationsContext(db, question) : Promise.resolve(''),
   ])
 
   // ── Stage 2: collect named blocks ────────────────────────────────────────
@@ -115,6 +133,8 @@ export async function buildRagContext(
   if (hasContent(flashcardsRaw)) named.push({ name: 'flashcards', content: flashcardsRaw })
   if (hasContent(listingsRaw)) named.push({ name: 'listings', content: listingsRaw })
   if (hasContent(coursesRaw)) named.push({ name: 'courses', content: coursesRaw })
+  if (hasContent(schoolsRaw)) named.push({ name: 'schools', content: schoolsRaw })
+  if (hasContent(destinationsRaw)) named.push({ name: 'destinations', content: destinationsRaw })
 
   if (named.length === 0) return { blocks: '', sources: [] }
 
@@ -127,14 +147,19 @@ export async function buildRagContext(
   // ── Stage 4: rank by mode priority ───────────────────────────────────────
   const listingIntentTopic = mode === 'topic' && hasContent(listingsRaw)
 
+  // schools + destinations sit after listings/courses but above progress for
+  // listing-intent and default topic modes (data-grounded answers to "top
+  // schools" / "jobs abroad" questions). In math/progress modes they rank just
+  // above progress's tail so they can still surface but never crowd out the
+  // mode's primary block.
   const priority: string[] =
     mode === 'math'
-      ? ['flashcards', 'listings', 'courses', 'progress']
+      ? ['flashcards', 'listings', 'courses', 'schools', 'destinations', 'progress']
       : mode === 'progress'
-        ? ['progress', 'flashcards', 'listings', 'courses']
+        ? ['progress', 'flashcards', 'listings', 'courses', 'schools', 'destinations']
         : listingIntentTopic
-          ? ['listings', 'courses', 'flashcards', 'progress']
-          : ['flashcards', 'listings', 'courses', 'progress'] // default topic
+          ? ['listings', 'courses', 'schools', 'destinations', 'flashcards', 'progress']
+          : ['flashcards', 'listings', 'courses', 'schools', 'destinations', 'progress'] // default topic
 
   // Sort trimmed blocks by priority (lower index = higher priority)
   const ranked = [...trimmed].sort((a, b) => {

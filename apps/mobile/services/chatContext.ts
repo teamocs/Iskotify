@@ -1,8 +1,8 @@
 import { eq, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
-import { userSettings, listings, careerCourses, focusListings } from '../db/schema'
-import { searchFlashcardsAuto, searchUpcatFactsAuto, searchCareerFactsAuto, searchAiImpactByQuestion, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
+import { userSettings, listings, careerCourses, focusListings, courseSchoolRankings, careerDestinations } from '../db/schema'
+import { searchFlashcardsAuto, searchUpcatFactsAuto, searchCareerFactsAuto, searchAiImpactByQuestion, searchTopSchools, searchCareerDestinations, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
 import { cachedQuery } from './queryCache'
 
 // TTL for stable table reads that feed context builders.
@@ -105,9 +105,11 @@ export function formatRetrievedFlashcards(cards: RetrievedFlashcard[]): string |
 export function formatUpcatFacts(facts: RetrievedUpcatFact[]): string | null {
   if (facts.length === 0) return null
   const lines = facts.map(f => {
-    const suffix = f.validYear != null
-      ? ` (as of ${f.validYear}; verify at upcat.up.edu.ph)`
-      : ' (verify at upcat.up.edu.ph)'
+    // Year-only note when present; NO hardcoded URL. A spurious "verify at
+    // upcat.up.edu.ph" suffix used to be injected here — it primed the model to
+    // invent more URLs. The URL_RULE in chatPrompts.ts handles verification copy
+    // generically; the only DB-sourced URLs are listings.external_url.
+    const suffix = f.validYear != null ? ` (as of ${f.validYear})` : ''
     return `- ${f.question} → ${f.answer}${suffix}`
   })
   return `[UPCAT FACTS]\n${lines.join('\n')}`
@@ -357,6 +359,142 @@ export async function buildCourseConnectionContext(
     })
 
     return `[COURSES]\n${lines.join('\n')}`
+  } catch {
+    return undefined
+  }
+}
+
+// ── Top Schools (PRC pass rates) + Career Destinations builders (C2 / C3) ──────
+
+/**
+ * Build a compact [TOP SCHOOLS] context block for the course that the question
+ * mentions, sourced from course_school_rankings (PRC board pass rates). Returns
+ * undefined when no course matches.
+ *
+ * Format:
+ *   [TOP SCHOOLS]
+ *   - <course> board pass rates (PRC): 1. <school> (<region>) <pass%>; 2. …
+ *
+ * Web-safe: the stable table read is cached; question→course matching and the
+ * top-N-by-rank selection happen in-memory (searchTopSchools). At most 5 schools.
+ */
+export async function buildTopSchoolsContext(
+  db: DrizzleClient,
+  question: string,
+): Promise<string | undefined> {
+  try {
+    const rows = await cachedQuery('chat:school-rankings', CHAT_META_TTL, () =>
+      db
+        .select({
+          courseTab: courseSchoolRankings.courseTab,
+          courseName: courseSchoolRankings.courseName,
+          rank: courseSchoolRankings.rank,
+          schoolName: courseSchoolRankings.schoolName,
+          region: courseSchoolRankings.region,
+          rawPassRate: courseSchoolRankings.rawPassRate,
+          totalExaminees: courseSchoolRankings.totalExaminees,
+          totalPassers: courseSchoolRankings.totalPassers,
+        })
+        .from(courseSchoolRankings)
+    )
+
+    const matched = searchTopSchools(rows, question, 5)
+    if (!matched) return undefined
+
+    const items = matched.schools.map((s, i) => {
+      const region = s.region ? ` (${truncate(s.region, 24)})` : ''
+      const pass = s.rawPassRate != null ? ` ${s.rawPassRate}%` : ''
+      const counts =
+        s.totalPassers != null && s.totalExaminees != null
+          ? ` [${s.totalPassers}/${s.totalExaminees}]`
+          : ''
+      return `${i + 1}. ${truncate(s.schoolName, 48)}${region}${pass}${counts}`
+    })
+
+    const course = truncate(matched.course, 40)
+    return `[TOP SCHOOLS]\n- ${course} board pass rates (PRC): ${items.join('; ')}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Build a compact [CAREER DESTINATIONS] context block for the course that the
+ * question mentions, sourced from career_destinations. Returns undefined when
+ * no course matches.
+ *
+ * Format:
+ *   [CAREER DESTINATIONS]
+ *   - <course> abroad: <Country> — <salary>; visa: <…>; PR: <…>; license: <…>[; ⚠ <saturationWarning>]
+ *
+ * Web-safe: careerCourses + careerDestinations reads are cached; matching and
+ * top-N selection happen in-memory (searchCareerDestinations). At most 3 rows.
+ */
+export async function buildCareerDestinationsContext(
+  db: DrizzleClient,
+  question: string,
+): Promise<string | undefined> {
+  try {
+    const [destRows, courseRows] = await Promise.all([
+      cachedQuery('chat:career-destinations', CHAT_META_TTL, () =>
+        db
+          .select({
+            courseId: careerDestinations.courseId,
+            country: careerDestinations.country,
+            salaryMin: careerDestinations.salaryMin,
+            salaryMax: careerDestinations.salaryMax,
+            salaryLocal: careerDestinations.salaryLocal,
+            salaryType: careerDestinations.salaryType,
+            visaPathway: careerDestinations.visaPathway,
+            prPathway: careerDestinations.prPathway,
+            licensingExam: careerDestinations.licensingExam,
+            saturationWarning: careerDestinations.saturationWarning,
+          })
+          .from(careerDestinations)
+      ),
+      cachedQuery('chat:course-meta', CHAT_META_TTL, () =>
+        db.select({
+          courseId: careerCourses.courseId,
+          name: careerCourses.name,
+          cluster: careerCourses.cluster,
+          boardExam: careerCourses.boardExam,
+          boardExamName: careerCourses.boardExamName,
+          demand: careerCourses.demand,
+        }).from(careerCourses)
+      ),
+    ])
+
+    const courseNamesById = new Map<string, string>()
+    for (const c of courseRows) {
+      if (c.courseId && c.name) courseNamesById.set(c.courseId, c.name)
+    }
+
+    const matched = searchCareerDestinations(destRows, courseNamesById, question, 3)
+    if (!matched) return undefined
+
+    const lines = matched.destinations.map(d => {
+      const parts: string[] = []
+      const country = d.country ? truncate(d.country, 32) : 'Abroad'
+      // Salary: "<min>–<max> <local>/<type>" — omit pieces that are null.
+      let salary = ''
+      if (d.salaryMin != null && d.salaryMax != null) salary = `${d.salaryMin}–${d.salaryMax}`
+      else if (d.salaryMin != null) salary = `${d.salaryMin}+`
+      else if (d.salaryMax != null) salary = `up to ${d.salaryMax}`
+      if (salary && d.salaryLocal) salary += ` ${d.salaryLocal}`
+      if (salary && d.salaryType) salary += `/${d.salaryType}`
+      parts.push(salary ? `${country} — ${salary}` : country)
+      if (d.visaPathway) parts.push(`visa: ${truncate(d.visaPathway, 40)}`)
+      if (d.prPathway) parts.push(`PR: ${truncate(d.prPathway, 40)}`)
+      if (d.licensingExam) parts.push(`license: ${truncate(d.licensingExam, 30)}`)
+      let line = `- ${parts.join('; ')}`
+      if (d.saturationWarning) line += `; ⚠ ${truncate(d.saturationWarning, 40)}`
+      return line
+    })
+
+    const course = truncate(matched.course, 40)
+    // Course intro is a plain (non-bullet) line so each '-' line below is exactly
+    // one destination — keeps the block easy to parse and budget.
+    return `[CAREER DESTINATIONS]\n${course} abroad:\n${lines.join('\n')}`
   } catch {
     return undefined
   }

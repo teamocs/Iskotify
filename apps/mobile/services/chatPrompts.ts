@@ -46,7 +46,10 @@ export const GROUNDING_RULE =
   `student's own progress: answer ONLY from the context blocks provided. ` +
   `If the information isn't there, say you don't have it and point the student to ` +
   `the right tab (Lists, Review, or Home). ` +
-  `Never invent dates, fees, cutoffs, or requirements.`
+  `Never invent dates, fees, cutoffs, or requirements. ` +
+  `School rankings, PRC board pass rates, and career/abroad info (salary, visa, PR) ` +
+  `come ONLY from the [TOP SCHOOLS] and [CAREER DESTINATIONS] blocks — if those blocks ` +
+  `are absent, say you don't have that data instead of guessing.`
 
 /**
  * ANTI_INJECTION_RULE — prevents prompt-injection attacks where malicious content

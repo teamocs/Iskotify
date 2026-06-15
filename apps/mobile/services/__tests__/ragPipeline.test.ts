@@ -11,12 +11,16 @@ const mockBuildProgressContext = jest.fn()
 const mockBuildRetrievedFlashcards = jest.fn()
 const mockBuildListingsContext = jest.fn()
 const mockBuildCourseConnectionContext = jest.fn()
+const mockBuildTopSchoolsContext = jest.fn()
+const mockBuildCareerDestinationsContext = jest.fn()
 
 jest.mock('../chatContext', () => ({
   buildProgressContext: (...args: unknown[]) => mockBuildProgressContext(...args),
   buildRetrievedFlashcards: (...args: unknown[]) => mockBuildRetrievedFlashcards(...args),
   buildListingsContext: (...args: unknown[]) => mockBuildListingsContext(...args),
   buildCourseConnectionContext: (...args: unknown[]) => mockBuildCourseConnectionContext(...args),
+  buildTopSchoolsContext: (...args: unknown[]) => mockBuildTopSchoolsContext(...args),
+  buildCareerDestinationsContext: (...args: unknown[]) => mockBuildCareerDestinationsContext(...args),
 }))
 
 import { estimateTokens, buildRagContext } from '../ragPipeline'
@@ -437,5 +441,94 @@ describe('buildRagContext — parallel builder calls', () => {
     expect(mockBuildListingsContext).toHaveBeenCalledWith(testDb, 'what is photosynthesis?')
     expect(mockBuildCourseConnectionContext).toHaveBeenCalledWith(testDb, 'what is photosynthesis?')
     expect(mockBuildProgressContext).toHaveBeenCalledWith(testDb, testStats)
+  })
+})
+
+// ── C4 TDD: schools + destinations blocks wired into the pipeline ─────────────
+
+describe('buildRagContext — TOP SCHOOLS & CAREER DESTINATIONS blocks (C4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockBuildProgressContext.mockResolvedValue('')
+    mockBuildRetrievedFlashcards.mockResolvedValue(null)
+    mockBuildListingsContext.mockResolvedValue(undefined)
+    mockBuildCourseConnectionContext.mockResolvedValue(undefined)
+    mockBuildTopSchoolsContext.mockResolvedValue(
+      '[TOP SCHOOLS]\n- Nursing board pass rates (PRC): 1. Cavite State University (Region IV-A) 99.7%'
+    )
+    mockBuildCareerDestinationsContext.mockResolvedValue(
+      '[CAREER DESTINATIONS]\nNursing abroad:\n- United States — 75000–120000 USD/annual; visa: EB-3'
+    )
+  })
+
+  it('calls the two new builders with db + question', async () => {
+    const testDb = { test: true } as never
+    await buildRagContext(testDb, 'top schools for nursing', 'topic', fakeStats)
+    expect(mockBuildTopSchoolsContext).toHaveBeenCalledWith(testDb, 'top schools for nursing')
+    expect(mockBuildCareerDestinationsContext).toHaveBeenCalledWith(testDb, 'top schools for nursing')
+  })
+
+  it('includes [TOP SCHOOLS] and [CAREER DESTINATIONS] when they match (blocks enabled by default)', async () => {
+    const result = await buildRagContext(fakeDb, 'top schools for nursing and jobs abroad', 'topic', fakeStats)
+    expect(result.blocks).toContain('[TOP SCHOOLS]')
+    expect(result.blocks).toContain('[CAREER DESTINATIONS]')
+    expect(result.sources).toContain('schools')
+    expect(result.sources).toContain('destinations')
+  })
+
+  it('respects ragBlocksEnabled.schools=false / destinations=false (skips both)', async () => {
+    const cfg = {
+      ragBlocksEnabled: {
+        flashcards: true, listings: true, courses: true, progress: true,
+        schools: false, destinations: false,
+      },
+    } as never
+    const result = await buildRagContext(fakeDb, 'top schools for nursing', 'topic', fakeStats, cfg)
+    expect(mockBuildTopSchoolsContext).not.toHaveBeenCalled()
+    expect(mockBuildCareerDestinationsContext).not.toHaveBeenCalled()
+    expect(result.blocks).not.toContain('[TOP SCHOOLS]')
+    expect(result.blocks).not.toContain('[CAREER DESTINATIONS]')
+    expect(result.sources).not.toContain('schools')
+    expect(result.sources).not.toContain('destinations')
+  })
+
+  it('schools + destinations appear after listings and courses in listing-intent topic mode', async () => {
+    mockBuildListingsContext.mockResolvedValue('[LISTINGS]\n- UPCAT 2026 (exam)')
+    mockBuildCourseConnectionContext.mockResolvedValue('[COURSES]\n- Nursing (cluster: Health Sciences)')
+    const result = await buildRagContext(fakeDb, 'nursing UPCAT schools abroad', 'topic', fakeStats)
+    const listIdx = result.blocks.indexOf('[LISTINGS]')
+    const courseIdx = result.blocks.indexOf('[COURSES]')
+    const schoolIdx = result.blocks.indexOf('[TOP SCHOOLS]')
+    const destIdx = result.blocks.indexOf('[CAREER DESTINATIONS]')
+    expect(listIdx).toBeGreaterThanOrEqual(0)
+    expect(courseIdx).toBeGreaterThan(listIdx)
+    expect(schoolIdx).toBeGreaterThan(courseIdx)
+    expect(destIdx).toBeGreaterThan(schoolIdx)
+  })
+
+  it('schools + destinations rank above progress (drop progress first under a tiny budget)', async () => {
+    // progress present but lowest priority; tiny budget keeps only the top blocks.
+    mockBuildProgressContext.mockResolvedValue('[STUDENT CONTEXT]\nStudent: Juan.')
+    // Tiny budget: only ~1 block of ~20 tokens fits. schools (higher priority than
+    // progress) must survive; progress must be dropped.
+    const cfg = { ragTotalTokenBudget: 25, ragBlocksEnabled: {
+      flashcards: true, listings: true, courses: true, progress: true,
+      schools: true, destinations: true,
+    } } as never
+    const result = await buildRagContext(fakeDb, 'nursing schools abroad', 'topic', fakeStats, cfg)
+    expect(result.sources).toContain('schools')
+    expect(result.sources).not.toContain('progress')
+  })
+
+  it('a tiny budget drops the lowest-priority NEW block (destinations) before schools', async () => {
+    // Budget large enough for schools but not both schools+destinations.
+    // schools block ≈ 24 tokens; destinations ≈ 21 tokens. Budget 30 → only schools.
+    const cfg = { ragTotalTokenBudget: 30, ragBlocksEnabled: {
+      flashcards: true, listings: true, courses: true, progress: true,
+      schools: true, destinations: true,
+    } } as never
+    const result = await buildRagContext(fakeDb, 'nursing schools abroad', 'topic', fakeStats, cfg)
+    expect(result.sources).toContain('schools')
+    expect(result.sources).not.toContain('destinations')
   })
 })

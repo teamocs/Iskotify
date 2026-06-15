@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+import { Image } from 'react-native'
 import { useTheme } from '../theme/ThemeContext'
+import { radius } from '../theme/tokens'
 import type { ChatMessage } from '../hooks/useKuyaChat'
 import { TypingDots } from './TypingDots'
+
+const KUYA_AVATAR = require('../assets/images/kuya-baw-logo.png')
 
 interface Props {
   message: ChatMessage
@@ -16,7 +21,7 @@ export function ChatBubble({ message }: Props) {
     container: { marginVertical: 6 },
     labelRow: { paddingHorizontal: 4, marginBottom: 2 },
     labelRowUser: { alignItems: 'flex-end' },
-    labelRowAssistant: { alignItems: 'flex-start' },
+    labelRowAssistant: { alignItems: 'flex-start', paddingLeft: 40 },
     label: {
       fontFamily: 'Lexend_500Medium',
       fontSize: 11,
@@ -24,7 +29,20 @@ export function ChatBubble({ message }: Props) {
     },
     row: { flexDirection: 'row' },
     rowUser: { justifyContent: 'flex-end' },
-    rowAssistant: { justifyContent: 'flex-start' },
+    rowAssistant: { justifyContent: 'flex-start', alignItems: 'flex-start', gap: 8 },
+    // 32×32 circular ring for the per-message avatar
+    avatarRing: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.pill,
+      backgroundColor: t.surface2,
+      borderWidth: 1,
+      borderColor: t.border,
+      overflow: 'hidden',
+      // flex-shrink: 0 keeps it from collapsing when bubble text wraps
+      flexShrink: 0,
+    },
+    avatarImg: { width: 32, height: 32 },
     bubble: { maxWidth: '82%', padding: 12, borderRadius: 14 },
     bubbleUser: {
       backgroundColor: t.accent,
@@ -83,6 +101,11 @@ export function ChatBubble({ message }: Props) {
         <Text style={s.label}>{isUser ? `you · ${timeStr}` : `Kuya Baw · ${timeStr}`}</Text>
       </View>
       <View style={[s.row, isUser ? s.rowUser : s.rowAssistant]}>
+        {isUser ? null : (
+          <View style={s.avatarRing} testID="kuya-avatar" accessibilityLabel="Kuya Baw">
+            <Image source={KUYA_AVATAR} style={s.avatarImg} resizeMode="cover" />
+          </View>
+        )}
         <View
           style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}
           accessibilityRole="text"
@@ -100,7 +123,7 @@ export function ChatBubble({ message }: Props) {
               {message.isStreaming && <Text style={s.cursor}>▍</Text>}
             </Text>
           )}
-          {message.error && <Text style={s.error}>{message.error}</Text>}
+          {message.error !== undefined ? <Text style={s.error}>{message.error}</Text> : null}
         </View>
       </View>
     </View>

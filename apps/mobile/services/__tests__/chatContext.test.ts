@@ -7,10 +7,14 @@ import {
   buildProgressContext,
   loadStudentIdentity,
   formatRetrievedFlashcards,
+  formatUpcatFacts,
   buildRetrievedFlashcards,
   buildListingsContext,
   buildCourseConnectionContext,
+  buildTopSchoolsContext,
+  buildCareerDestinationsContext,
 } from '../chatContext'
+import type { RetrievedUpcatFact } from '../flashcardRetriever'
 import type { RetrievedFlashcard } from '../flashcardRetriever'
 import { _clearForTests } from '../queryCache'
 
@@ -234,6 +238,45 @@ describe('buildRetrievedFlashcards', () => {
   })
 })
 
+// ── C1 TDD: formatUpcatFacts must NOT inject a hardcoded URL ──────────────────
+
+describe('C1: formatUpcatFacts — no spurious upcat.up.edu.ph URL', () => {
+  const factWithYear: RetrievedUpcatFact = {
+    topic: 'UPG',
+    question: 'What is the UPG?',
+    answer: 'The University Predicted Grade combines UPCAT + grades.',
+    source: 'official',
+    validYear: 2025,
+  }
+  const factNoYear: RetrievedUpcatFact = {
+    topic: 'UPG',
+    question: 'What is the UPG?',
+    answer: 'The University Predicted Grade combines UPCAT + grades.',
+    source: null,
+    validYear: null,
+  }
+
+  it('does NOT include upcat.up.edu.ph or any http URL, but keeps fact + year', () => {
+    const out = formatUpcatFacts([factWithYear])!
+    expect(out).toContain('[UPCAT FACTS]')
+    expect(out).toContain('What is the UPG?')
+    expect(out).toContain('The University Predicted Grade combines UPCAT + grades.')
+    expect(out).toContain('as of 2025')
+    expect(out).not.toContain('upcat.up.edu.ph')
+    expect(out).not.toContain('http')
+    expect(out).not.toContain('verify at')
+  })
+
+  it('emits no year/URL suffix at all when validYear is null', () => {
+    const out = formatUpcatFacts([factNoYear])!
+    expect(out).toContain('The University Predicted Grade combines UPCAT + grades.')
+    expect(out).not.toContain('as of')
+    expect(out).not.toContain('upcat.up.edu.ph')
+    expect(out).not.toContain('http')
+    expect(out).not.toContain('verify at')
+  })
+})
+
 describe('buildUpcatFactsBlock', () => {
   function makeDbWithUpcatFacts(): DrizzleClient {
     const raw = new Database(':memory:')
@@ -294,12 +337,13 @@ describe('buildUpcatFactsBlock', () => {
     return drizzle(raw, { schema }) as unknown as DrizzleClient
   }
 
-  it('returns a top-level [UPCAT FACTS] block with answer and verify link when facts match', async () => {
+  it('returns a top-level [UPCAT FACTS] block with answer (no hardcoded URL) when facts match', async () => {
     const db = makeDbWithUpcatFacts()
     const result = await buildRetrievedFlashcards(db, 'how does the UPG work')
     expect(result).toContain('[UPCAT FACTS]')
     expect(result).toContain('The University Predicted Grade combines UPCAT + grades.')
-    expect(result).toContain('verify at upcat.up.edu.ph')
+    // C1: spurious upcat.up.edu.ph suffix removed — no URL injected into context.
+    expect(result).not.toContain('upcat.up.edu.ph')
   })
 
   it('includes valid_year in the fact line when present', async () => {
@@ -1101,5 +1145,247 @@ describe('C1: buildCourseConnectionContext — db reads cached after first call'
     // Exactly 1 select on the second call (the conditional focused-listing
     // details) — proves BOTH cached table reads were served from cache.
     expect(countAfterSecond - countAfterFirst).toBe(1)
+  })
+})
+
+// ── C2 TDD: buildTopSchoolsContext (course_school_rankings / PRC pass rates) ───
+//
+// Fixtures mirror the real schema for course_school_rankings + career_courses
+// (see db/schema.ts: courseSchoolRankings, careerCourses).
+
+function makeDbWithSchoolRankings(): DrizzleClient {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE career_courses (
+      course_id TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      cluster TEXT,
+      career_tag TEXT,
+      demand TEXT,
+      board_exam INTEGER NOT NULL DEFAULT 0,
+      board_exam_name TEXT,
+      duration_years REAL,
+      top_countries TEXT NOT NULL DEFAULT '[]',
+      summary TEXT,
+      student_tip TEXT,
+      ai_note TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE course_school_rankings (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_tab TEXT NOT NULL,
+      course_name TEXT,
+      rank INTEGER,
+      school_name TEXT NOT NULL,
+      region TEXT,
+      province TEXT,
+      wilson_score REAL,
+      raw_pass_rate REAL,
+      total_examinees INTEGER,
+      total_passers INTEGER,
+      years_with_data TEXT,
+      exam_periods INTEGER,
+      tertiary_school_id TEXT,
+      remote_updated_at INTEGER
+    );
+  `)
+  raw.exec(`
+    INSERT INTO career_courses (course_id, name, cluster, demand, board_exam, board_exam_name)
+    VALUES ('C1', 'Nursing', 'Health Sciences', 'High', 1, 'Nursing Licensure Exam');
+
+    INSERT INTO course_school_rankings
+      (id, course_tab, course_name, rank, school_name, region, province, raw_pass_rate, total_examinees, total_passers)
+    VALUES
+      ('R1', 'Nursing', 'Nursing', 1, 'Cavite State University', 'Region IV-A', 'Cavite', 99.7, 362, 361),
+      ('R2', 'Nursing', 'Nursing', 2, 'University of Santo Tomas', 'NCR', 'Manila', 98.2, 500, 491),
+      ('R3', 'Nursing', 'Nursing', 3, 'Cebu Normal University', 'Region VII', 'Cebu', 97.5, 300, 292),
+      ('R4', 'Nursing', 'Nursing', 4, 'Silliman University', 'Region VII', 'Negros Oriental', 96.0, 200, 192),
+      ('R5', 'Nursing', 'Nursing', 5, 'Xavier University', 'Region X', 'Misamis Oriental', 95.0, 150, 142),
+      ('R6', 'Nursing', 'Nursing', 6, 'Saint Louis University', 'CAR', 'Benguet', 94.0, 250, 235);
+  `)
+  return drizzle(raw, { schema }) as unknown as DrizzleClient
+}
+
+describe('buildTopSchoolsContext', () => {
+  beforeEach(() => { _clearForTests() })
+
+  it('returns a [TOP SCHOOLS] block with ranked schools + pass rates for "top schools for nursing"', async () => {
+    const db = makeDbWithSchoolRankings()
+    const result = await buildTopSchoolsContext(db, 'what are the top schools for nursing?')
+    expect(result).toBeDefined()
+    expect(result).toContain('[TOP SCHOOLS]')
+    expect(result).toContain('Nursing')
+    expect(result).toContain('Cavite State University')
+    expect(result).toContain('Region IV-A')
+    expect(result).toContain('99.7')
+  })
+
+  it('orders schools by rank (rank 1 before rank 2)', async () => {
+    const db = makeDbWithSchoolRankings()
+    const result = await buildTopSchoolsContext(db, 'best nursing schools by board pass rate')
+    expect(result).toBeDefined()
+    const idx1 = result!.indexOf('Cavite State University')
+    const idx2 = result!.indexOf('University of Santo Tomas')
+    expect(idx1).toBeGreaterThanOrEqual(0)
+    expect(idx2).toBeGreaterThan(idx1)
+  })
+
+  it('limits to at most 5 schools', async () => {
+    const db = makeDbWithSchoolRankings()
+    const result = await buildTopSchoolsContext(db, 'top nursing schools')
+    expect(result).toBeDefined()
+    // 6 ranked rows seeded, but at most 5 should appear (rank 6 excluded)
+    expect(result).not.toContain('Saint Louis University')
+  })
+
+  it('returns undefined when no course matches the question', async () => {
+    const db = makeDbWithSchoolRankings()
+    const result = await buildTopSchoolsContext(db, 'what is photosynthesis?')
+    expect(result).toBeUndefined()
+  })
+
+  it('caches the school-rankings table read across calls (one fetch)', async () => {
+    const db = makeDbWithSchoolRankings()
+    let fetcherCallCount = 0
+    const originalSelect = db.select.bind(db)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db as any).select = (...args: any[]) => {
+      fetcherCallCount++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return originalSelect(...(args as [any]))
+    }
+    await buildTopSchoolsContext(db, 'top schools for nursing')
+    await buildTopSchoolsContext(db, 'best nursing schools')
+    expect(fetcherCallCount).toBe(1)
+  })
+})
+
+// ── C3 TDD: buildCareerDestinationsContext (career_destinations) ───────────────
+//
+// Fixtures mirror the real schema for career_destinations + career_courses
+// (see db/schema.ts: careerDestinations, careerCourses).
+
+function makeDbWithCareerDestinations(): DrizzleClient {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE career_courses (
+      course_id TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      cluster TEXT,
+      career_tag TEXT,
+      demand TEXT,
+      board_exam INTEGER NOT NULL DEFAULT 0,
+      board_exam_name TEXT,
+      duration_years REAL,
+      top_countries TEXT NOT NULL DEFAULT '[]',
+      summary TEXT,
+      student_tip TEXT,
+      ai_note TEXT,
+      remote_updated_at INTEGER
+    );
+    CREATE TABLE career_destinations (
+      id TEXT PRIMARY KEY NOT NULL,
+      course_id TEXT,
+      country TEXT,
+      demand_rating TEXT,
+      salary_min REAL,
+      salary_max REAL,
+      salary_local TEXT,
+      salary_type TEXT,
+      visa_pathway TEXT,
+      pr_pathway TEXT,
+      credential TEXT,
+      licensing_exam TEXT,
+      language_required TEXT,
+      timeline_months INTEGER,
+      program_name TEXT,
+      specializations TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      saturation_warning TEXT,
+      source TEXT,
+      remote_updated_at INTEGER
+    );
+  `)
+  raw.exec(`
+    INSERT INTO career_courses (course_id, name, cluster, demand)
+    VALUES ('C1', 'Nursing', 'Health Sciences', 'High');
+
+    INSERT INTO career_destinations
+      (id, course_id, country, demand_rating, salary_min, salary_max, salary_local, salary_type,
+       visa_pathway, pr_pathway, licensing_exam, saturation_warning)
+    VALUES
+      ('D1', 'C1', 'United States', 'Very High', 75000, 120000, 'USD', 'annual',
+       'EB-3 employment visa', 'Green Card via employer', 'NCLEX-RN', NULL),
+      ('D2', 'C1', 'United Kingdom', 'High', 28000, 40000, 'GBP', 'annual',
+       'Health and Care Worker visa', 'ILR after 5 years', 'OSCE / NMC', NULL),
+      ('D3', 'C1', 'Germany', 'High', 36000, 50000, 'EUR', 'annual',
+       'EU Blue Card', 'PR after 33 months', 'Anerkennung', 'German B2 required'),
+      ('D4', 'C1', 'Canada', 'High', 60000, 90000, 'CAD', 'annual',
+       'Express Entry', 'PR via Express Entry', 'NCLEX-RN', NULL);
+  `)
+  return drizzle(raw, { schema }) as unknown as DrizzleClient
+}
+
+describe('buildCareerDestinationsContext', () => {
+  beforeEach(() => { _clearForTests() })
+
+  it('returns a [CAREER DESTINATIONS] block with country, salary, visa for "nursing jobs abroad"', async () => {
+    const db = makeDbWithCareerDestinations()
+    const result = await buildCareerDestinationsContext(db, 'where can a nursing grad work abroad?')
+    expect(result).toBeDefined()
+    expect(result).toContain('[CAREER DESTINATIONS]')
+    expect(result).toContain('Nursing')
+    expect(result).toContain('United States')
+    expect(result).toContain('75000')
+    expect(result).toContain('120000')
+    expect(result).toContain('EB-3 employment visa')
+  })
+
+  it('includes PR pathway and licensing exam when present', async () => {
+    const db = makeDbWithCareerDestinations()
+    const result = await buildCareerDestinationsContext(db, 'nursing jobs abroad')
+    expect(result).toBeDefined()
+    expect(result).toContain('NCLEX-RN')
+    expect(result).toContain('Green Card via employer')
+  })
+
+  it('includes a saturation warning marker when the row has one', async () => {
+    const db = makeDbWithCareerDestinations()
+    const result = await buildCareerDestinationsContext(db, 'nursing abroad germany')
+    expect(result).toBeDefined()
+    expect(result).toContain('German B2 required')
+  })
+
+  it('limits to at most 3 destinations', async () => {
+    const db = makeDbWithCareerDestinations()
+    const result = await buildCareerDestinationsContext(db, 'nursing jobs abroad')
+    expect(result).toBeDefined()
+    const lines = result!.split('\n').filter(l => l.trim().startsWith('-'))
+    expect(lines.length).toBeLessThanOrEqual(3)
+  })
+
+  it('returns undefined when no course matches the question', async () => {
+    const db = makeDbWithCareerDestinations()
+    const result = await buildCareerDestinationsContext(db, 'what is photosynthesis?')
+    expect(result).toBeUndefined()
+  })
+
+  it('caches both table reads (destinations + courses) — no re-fetch on second call', async () => {
+    const db = makeDbWithCareerDestinations()
+    let fetcherCallCount = 0
+    const originalSelect = db.select.bind(db)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db as any).select = (...args: any[]) => {
+      fetcherCallCount++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return originalSelect(...(args as [any]))
+    }
+    // First call reads two cached tables (career_destinations + career_courses).
+    await buildCareerDestinationsContext(db, 'nursing jobs abroad')
+    const afterFirst = fetcherCallCount
+    expect(afterFirst).toBe(2)
+    // Second call: both keys are cache hits → zero additional selects.
+    await buildCareerDestinationsContext(db, 'where can nurses work overseas')
+    expect(fetcherCallCount - afterFirst).toBe(0)
   })
 })
