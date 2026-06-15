@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Modal, Switch, Platform, Pressable, RefreshCont
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Gear1Outlined, Bolt2Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineiconshq/free-icons'
+import { Gear1Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineiconshq/free-icons'
 // logo.svg has no viewBox attribute (2048×2048 canvas) — pass viewBox explicitly at the call site so it scales.
 import Logo from '../../assets/images/logo.svg'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -13,8 +13,11 @@ import { ListCard } from '../../components/ui/ListCard'
 import { InfoBanner } from '../../components/ui/InfoBanner'
 import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
+import { usePracticeData } from '../../hooks/usePracticeData'
 import { readinessTone } from '../../utils/readinessTone'
 import type { ReadinessTone } from '../../utils/readinessTone'
+import { subjectsToImprove } from '../../utils/subjectsToImprove'
+import { subjectColor } from '../../utils/subjectColors'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
 import { useTheme } from '../../theme/ThemeContext'
@@ -173,7 +176,8 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { weakTopics, firstTopicId, fullName, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
+  const { fullName, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
+  const { subjects, topicRows } = usePracticeData()
   const db = useDb()
 
   // ── Admissions feed ─────────────────────────────────────────────────────────
@@ -231,7 +235,11 @@ export default function HomeScreen() {
     }
   }, [focusedListings, scheduleNotifs])
 
-  const quickTopicId = weakTopics[0]?.topicId ?? firstTopicId
+  // Per-subject mastery (lowest first) for the "Subjects to improve" grid.
+  const improveSubjects = useMemo(
+    () => subjectsToImprove(topicRows, subjects),
+    [topicRows, subjects],
+  )
 
   const now = Date.now()
 
@@ -328,11 +336,6 @@ export default function HomeScreen() {
     kuyaBadgeText: { fontSize: typo.xs, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     kuyaText: { fontSize: typo.sm, color: t.textPrimary, lineHeight: 19, fontFamily: 'Lexend_400Regular' },
     askHint: { marginTop: 'auto', alignSelf: 'flex-end', fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    quickBtn: { backgroundColor: 'rgba(128,0,0,0.82)', borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl },
-    quickIcon: { width: 36, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-    quickTitle: { fontSize: typo.sm, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-    quickSub: { fontSize: typo.xs, color: 'rgba(255,255,255,0.78)', marginTop: spacing.xs / 4, fontFamily: 'Lexend_400Regular' },
-    chevron: { color: t.textTertiary, fontSize: 22 },
     section: { marginTop: spacing.xl },
     empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     // Focus card — the card itself is a horizontal readiness progress bar.
@@ -379,6 +382,49 @@ export default function HomeScreen() {
     },
     exploreEmoji: { fontSize: 16 },
     exploreLabel: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    // "Add more targets" ghost card under the My Focus list — dashed border
+    // signals an additive action distinct from the solid focus cards.
+    addTargetCard: {
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: t.border,
+      borderRadius: radius.xl,
+      borderCurve: 'continuous',
+      paddingVertical: 12,
+      paddingHorizontal: spacing.md,
+    },
+    addTargetText: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    // "Subjects to improve" grid — 3-col cards with a vertical readiness fill.
+    subjectGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    subjectCard: {
+      position: 'relative',
+      overflow: 'hidden',
+      flexBasis: '31%',
+      flexGrow: 1,
+      height: 104,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      padding: spacing.sm,
+      justifyContent: 'space-between',
+    },
+    subjectCardPressed: { opacity: 0.75 },
+    // Vertical readiness fill anchored to the BOTTOM, height = mastery %.
+    subjectFill: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+    // Content stacks above the fill (zIndex). Text stays token-colored so it
+    // keeps ≥4.5:1 contrast over the low-alpha subject hue in both themes.
+    subjectContent: { position: 'relative', zIndex: 1, flex: 1, justifyContent: 'space-between' },
+    subjectDot: { width: 10, height: 10, borderRadius: 5 },
+    subjectName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    subjectPct: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', letterSpacing: -0.3 },
+    subjectPrompt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
 
   // Readiness tone → token mapping for the My Focus progress bars.
@@ -487,25 +533,27 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* (3) Quick Practice CTA */}
-          {quickTopicId ? (
-            <Pressable
-              style={({ pressed }) => [s.quickBtn, pressed && { opacity: 0.85 }]}
-              onPress={() => router.push(`/practice/${quickTopicId}`)}
-              accessibilityRole="button"
-            >
-              <View style={s.quickIcon}>
-                <Lineicons icon={Bolt2Outlined} size={15} color="#fff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.quickTitle}>Quick Practice</Text>
-                <Text style={s.quickSub}>
-                  {weakTopics[0]?.topicName ?? 'Start a topic'} · recommended
-                </Text>
-              </View>
-              <Text style={s.chevron}>›</Text>
-            </Pressable>
-          ) : null}
+          {/* (3) Explore — discovery quick-links into the Lists screen's tabs */}
+          <View style={s.section}>
+            <SectionHeader
+              title="Explore"
+              subtitle="Search or browse university exams, scholarships & in-demand courses"
+            />
+          </View>
+          <View style={s.exploreGrid}>
+            {EXPLORE_LINKS.map(({ emoji, label, tab }) => (
+              <Pressable
+                key={tab}
+                style={({ pressed }) => [s.exploreCard, pressed && { opacity: 0.75 }]}
+                onPress={() => router.push(`/(tabs)/listings?tab=${tab}`)}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+              >
+                <Text style={s.exploreEmoji} maxFontSizeMultiplier={1.4}>{emoji}</Text>
+                <Text style={s.exploreLabel} maxFontSizeMultiplier={1.4}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
 
           {/* (4) My Focus — one card per focusedListings entry */}
           <View style={s.section}>
@@ -552,6 +600,15 @@ export default function HomeScreen() {
                   </Pressable>
                 )
               })}
+              {/* Add-more-targets ghost card — additive action distinct from focus cards */}
+              <Pressable
+                style={({ pressed }) => [s.addTargetCard, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/(tabs)/listings')}
+                accessibilityRole="button"
+                accessibilityLabel="Add exam or scholarship"
+              >
+                <Text style={s.addTargetText} maxFontSizeMultiplier={1.4}>＋ Add exam or scholarship</Text>
+              </Pressable>
             </View>
           ) : (
             <InfoBanner
@@ -563,27 +620,43 @@ export default function HomeScreen() {
             />
           )}
 
-          {/* (5) Explore — discovery quick-links into the Lists screen's tabs */}
+          {/* (5) Subjects to improve — per-subject mastery grid, lowest first */}
           <View style={s.section}>
             <SectionHeader
-              title="Explore"
-              subtitle="Search or browse university exams, scholarships & in-demand courses"
+              title="Subjects to improve"
+              subtitle="Tap a subject to see your topic readiness"
             />
           </View>
-          <View style={s.exploreGrid}>
-            {EXPLORE_LINKS.map(({ emoji, label, tab }) => (
-              <Pressable
-                key={tab}
-                style={({ pressed }) => [s.exploreCard, pressed && { opacity: 0.75 }]}
-                onPress={() => router.push(`/(tabs)/listings?tab=${tab}`)}
-                accessibilityRole="button"
-                accessibilityLabel={label}
-              >
-                <Text style={s.exploreEmoji} maxFontSizeMultiplier={1.4}>{emoji}</Text>
-                <Text style={s.exploreLabel} maxFontSizeMultiplier={1.4}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
+          {improveSubjects.length > 0 ? (
+            <View style={s.subjectGrid}>
+              {improveSubjects.map(subject => {
+                const { fill, accent } = subjectColor(subject.id)
+                // Clamp the vertical fill height to 0–100% of the card.
+                const fillPct = Math.max(0, Math.min(100, subject.pct))
+                return (
+                  <Pressable
+                    key={subject.id}
+                    style={({ pressed }) => [s.subjectCard, pressed && s.subjectCardPressed]}
+                    onPress={() => router.push(`/subjects/${subject.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={subject.name}
+                  >
+                    {/* Vertical readiness fill — absolute, anchored to bottom, under content */}
+                    <View style={[s.subjectFill, { height: `${fillPct}%`, backgroundColor: fill }]} />
+                    <View style={s.subjectContent}>
+                      <View style={[s.subjectDot, { backgroundColor: accent }]} />
+                      <Text style={s.subjectName} numberOfLines={2} maxFontSizeMultiplier={1.4}>{subject.name}</Text>
+                      <Text style={s.subjectPct} maxFontSizeMultiplier={1.4}>{subject.pct}%</Text>
+                    </View>
+                  </Pressable>
+                )
+              })}
+            </View>
+          ) : (
+            <Text style={s.subjectPrompt} maxFontSizeMultiplier={1.4}>
+              Practice to see your subjects here
+            </Text>
+          )}
 
           {/* (6) Upcoming Dates — top 3 + See all — LAST section */}
           <View style={s.section}>

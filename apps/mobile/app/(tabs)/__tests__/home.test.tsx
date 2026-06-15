@@ -60,6 +60,24 @@ jest.mock('../../../hooks/useHomeStats', () => ({
   useHomeStats: () => mockUseHomeStats(),
 }))
 
+// Mirror the useHomeStats global-mock pattern for usePracticeData (the
+// "Subjects to improve" grid data source). Override per-test via mockReturnValue.
+const mockUsePracticeData = jest.fn()
+
+jest.mock('../../../hooks/usePracticeData', () => ({
+  usePracticeData: () => mockUsePracticeData(),
+}))
+
+const emptyPracticeData = {
+  subjects: [] as Array<{ id: string; name: string }>,
+  topicRows: [] as any[],
+  recommendedTopics: [],
+  totalCards: 0,
+  cardCountByTopic: {},
+  topicIdsByListingSlug: {},
+  refresh: jest.fn().mockResolvedValue(undefined),
+}
+
 jest.mock('../../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
 }))
@@ -125,6 +143,7 @@ const emptyStats = {
 describe('HomeScreen', () => {
   beforeEach(() => {
     mockUseHomeStats.mockReturnValue(emptyStats)
+    mockUsePracticeData.mockReturnValue(emptyPracticeData)
   })
 
   it('renders the uppercase date line', () => {
@@ -175,13 +194,14 @@ describe('HomeScreen', () => {
     expect(screen.queryByTestId('kuya-coach-collapsed')).toBeNull()
   })
 
-  it('shows Quick Practice button when a topic is available', () => {
+  it('does NOT render the Quick Practice CTA (removed)', () => {
     mockUseHomeStats.mockReturnValue({
       ...emptyStats,
       firstTopicId: 'topic-1',
+      weakTopics: [{ topicId: 'topic-1', topicName: 'Algebra', accuracy: 40 }],
     })
     render(<HomeScreen />)
-    expect(screen.getByText('Quick Practice')).toBeTruthy()
+    expect(screen.queryByText('Quick Practice')).toBeNull()
   })
 
   it('renders My Focus section header', () => {
@@ -413,5 +433,112 @@ describe('HomeScreen', () => {
     expect(screen.queryByText('WEAK AREAS')).toBeNull()
     expect(screen.queryByText('By subject')).toBeNull()
     expect(screen.queryByText(/Start practicing to see your readiness/)).toBeNull()
+  })
+
+  // ── Section order: Explore renders ABOVE My Focus ────────────────────────────
+  it('renders the Explore section before the My Focus section', () => {
+    render(<HomeScreen />)
+    // Both section headers must be present.
+    expect(screen.getByText('Explore')).toBeTruthy()
+    expect(screen.getByText('My Focus')).toBeTruthy()
+    // Collect rendered text strings in document order (recurse children only,
+    // avoiding the circular refreshControl prop that breaks JSON.stringify).
+    const texts: string[] = []
+    const walk = (node: any): void => {
+      if (node == null) return
+      if (typeof node === 'string') { texts.push(node); return }
+      if (Array.isArray(node)) { node.forEach(walk); return }
+      if (node.children) walk(node.children)
+    }
+    walk(screen.toJSON())
+    const exploreIdx = texts.indexOf('Explore')
+    const myFocusIdx = texts.indexOf('My Focus')
+    expect(exploreIdx).toBeGreaterThanOrEqual(0)
+    expect(myFocusIdx).toBeGreaterThanOrEqual(0)
+    expect(exploreIdx).toBeLessThan(myFocusIdx)
+  })
+
+  // ── My Focus: "add more targets" affordance ──────────────────────────────────
+  it('renders an "Add exam or scholarship" target card when there are focused listings', () => {
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: { 'upcat-2026': 72 },
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText(/Add exam or scholarship/)).toBeTruthy()
+  })
+
+  it('pressing the add-target card navigates to the Lists tab', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    const futureDate = Date.now() + 10 * 86_400_000
+    mockUseHomeStats.mockReturnValue({
+      ...emptyStats,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
+      ],
+      listingAccuracy: { 'upcat-2026': 72 },
+    })
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByLabelText('Add exam or scholarship'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
+  })
+
+  it('does NOT render the add-target card when there are no focused listings', () => {
+    render(<HomeScreen />)
+    expect(screen.queryByText(/Add exam or scholarship/)).toBeNull()
+  })
+
+  // ── Subjects to improve grid ─────────────────────────────────────────────────
+  it('renders the Subjects to improve section header when subjects exist', () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's-math', name: 'Math' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
+      ],
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText('Subjects to improve')).toBeTruthy()
+  })
+
+  it('renders a subject card with its name and mastery %', () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's-math', name: 'Math' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
+        { topic: { id: 't2', name: 'Geometry', subjectId: 's-math' }, accuracy: 60 },
+      ],
+    })
+    render(<HomeScreen />)
+    expect(screen.getByText('Math')).toBeTruthy()
+    expect(screen.getByText('50%')).toBeTruthy() // (40 + 60) / 2
+  })
+
+  it('pressing a subject card navigates to /subjects/:id', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's-math', name: 'Math' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
+      ],
+    })
+    render(<HomeScreen />)
+    fireEvent.press(screen.getByLabelText('Math'))
+    expect(router.push).toHaveBeenCalledWith('/subjects/s-math')
+  })
+
+  it('renders no subject cards when usePracticeData has no subjects with topics', () => {
+    render(<HomeScreen />)
+    // No subject names, no Subjects-to-improve header content beyond the prompt.
+    expect(screen.queryByText('Math')).toBeNull()
+    expect(screen.queryByText(/50%/)).toBeNull()
   })
 })

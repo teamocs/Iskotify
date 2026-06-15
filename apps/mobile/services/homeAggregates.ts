@@ -42,6 +42,11 @@ export interface ListingAccuracyRow {
   total: number
 }
 
+export interface TopicBestSessionRow {
+  topicId: string
+  bestPct: number
+}
+
 // ── Aggregate functions ────────────────────────────────────────────────────────
 
 /**
@@ -205,5 +210,43 @@ export async function getListingAccuracy(
     listingSlug: r.listingSlug,
     ok: Number(r.ok ?? 0),
     total: Number(r.total ?? 0),
+  }))
+}
+
+/**
+ * getTopicBestSessionPercentages — per-topic BEST (highest attained) result %.
+ *
+ * SELECT topic_id, MAX(round(score * 100.0 / total)) AS bestPct
+ * FROM practice_sessions
+ * WHERE topic_id != '' AND total > 0
+ * GROUP BY topic_id
+ *
+ * Powers the Subject Details readiness bars: each topic's readiness is the highest
+ * percentage the user has ever scored across their topic-review sessions on it.
+ *
+ * Full-mock UPCAT sessions (Epic A) write topic_id='' + a subtest tag, so the
+ * topic_id != '' filter correctly excludes them — per-topic best comes only from
+ * individual topic-review sessions. Rows with total=0 are excluded (division-by-zero
+ * guard), so a topic whose only session is empty is absent rather than shown as 0%.
+ * Returns rounded integer percentages.
+ */
+export async function getTopicBestSessionPercentages(
+  db: DrizzleClient,
+): Promise<TopicBestSessionRow[]> {
+  const rows = await db
+    .select({
+      topicId: practiceSessions.topicId,
+      bestPct: sql<number>`max(round(${practiceSessions.score} * 100.0 / ${practiceSessions.total}))`.as('best_pct'),
+    })
+    .from(practiceSessions)
+    .where(and(
+      ne(practiceSessions.topicId, ''),
+      sql`${practiceSessions.total} > 0`,
+    ))
+    .groupBy(practiceSessions.topicId)
+
+  return rows.map(r => ({
+    topicId: r.topicId,
+    bestPct: Number(r.bestPct ?? 0),
   }))
 }

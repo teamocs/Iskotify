@@ -23,6 +23,7 @@ import {
   getWeakTopicStats,
   getTopicCardCounts,
   getListingAccuracy,
+  getTopicBestSessionPercentages,
 } from '../homeAggregates'
 
 // ── Inlined oracle functions (mirrors useHomeStats pure fns) ──────────────────
@@ -480,5 +481,84 @@ describe('getListingAccuracy — per-listing accuracy from practice_sessions', (
     raw.exec('DELETE FROM practice_sessions')
     const rows = await getListingAccuracy(db)
     expect(rows).toHaveLength(0)
+  })
+})
+
+// ── getTopicBestSessionPercentages — highest attained % per topic ─────────────
+// Powers the Subject Details readiness bars: per topic, MAX(round(score*100/total))
+// across that user's topic-review practice_sessions. Full-mock UPCAT sessions
+// write topic_id='' (+ subtest) so they're excluded — readiness is per-topic only.
+
+describe('getTopicBestSessionPercentages — best (highest) % per topic', () => {
+  function insertTopicSession(topicId: string, score: number, total: number) {
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, score, total, completed_at) VALUES (?, ?, ?, ?, ?)'
+    ).run('', topicId, score, total, Date.now())
+  }
+
+  it('returns MAX rounded percentage across multiple sessions for one topic', async () => {
+    insertTopicSession('t1', 3, 10)   // 30%
+    insertTopicSession('t1', 7, 10)   // 70% ← best
+    insertTopicSession('t1', 5, 10)   // 50%
+    const rows = await getTopicBestSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
+    expect(map.get('t1')).toBe(70)
+  })
+
+  it('rounds the percentage to an integer', async () => {
+    insertTopicSession('t2', 2, 3)    // 66.66.. → 67
+    const rows = await getTopicBestSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
+    expect(map.get('t2')).toBe(67)
+  })
+
+  it("excludes sessions with topic_id='' (full-mock UPCAT subtest sessions)", async () => {
+    insertTopicSession('', 9, 10)     // empty topic_id → excluded
+    insertTopicSession('t3', 4, 10)   // real topic
+    const rows = await getTopicBestSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
+    expect(map.get('')).toBeUndefined()
+    expect(map.get('t3')).toBe(40)
+  })
+
+  it('excludes sessions with total=0 (division-by-zero guard)', async () => {
+    insertTopicSession('t4', 0, 0)    // total=0 → excluded entirely
+    const rows = await getTopicBestSessionPercentages(db)
+    expect(rows.find(r => r.topicId === 't4')).toBeUndefined()
+  })
+
+  it('a topic whose ONLY session has total=0 is absent from the result', async () => {
+    insertTopicSession('t5', 5, 10)   // 50% — qualifying
+    insertTopicSession('t5', 0, 0)    // excluded; must not zero out t5's best
+    const rows = await getTopicBestSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
+    expect(map.get('t5')).toBe(50)
+  })
+
+  it('topics with no sessions are absent from the result', async () => {
+    insertTopicSession('t1', 6, 10)
+    const rows = await getTopicBestSessionPercentages(db)
+    const ids = new Set(rows.map(r => r.topicId))
+    expect(ids.has('t1')).toBe(true)
+    expect(ids.has('t2')).toBe(false)
+    expect(ids.has('t3')).toBe(false)
+  })
+
+  it('returns empty array when there are no practice_sessions', async () => {
+    const rows = await getTopicBestSessionPercentages(db)
+    expect(rows).toEqual([])
+  })
+
+  it('returns one row per topic across many topics', async () => {
+    insertTopicSession('t1', 9, 10)   // 90
+    insertTopicSession('t2', 3, 10)   // 30
+    insertTopicSession('t2', 8, 10)   // 80 ← best for t2
+    insertTopicSession('t3', 5, 10)   // 50
+    const rows = await getTopicBestSessionPercentages(db)
+    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
+    expect(rows).toHaveLength(3)
+    expect(map.get('t1')).toBe(90)
+    expect(map.get('t2')).toBe(80)
+    expect(map.get('t3')).toBe(50)
   })
 })
