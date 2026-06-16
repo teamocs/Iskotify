@@ -174,6 +174,16 @@ function AppInit({ onReady }: { onReady: () => void }) {
         onReady()
       }
 
+      // ── Web: pull the catalog (listings/flashcards/subjects/topics/upcat/
+      // career/university) the SAME way native does. Without this the web init
+      // branch only ran pullUserData (per-user backup) and every catalog-backed
+      // screen rendered empty. Web has no InteractionManager guarantees, so we
+      // fire it AFTER onReady() (non-blocking) — syncOnLaunch invalidates the
+      // queryCache, so screens re-render once the data lands. Fire-and-forget.
+      void syncOnLaunch(db)
+        .then(() => { void runEnhancement(db) })
+        .catch(e => console.warn('[layout] web bg sync:', e))
+
       // Subscribe to auth state changes on web so sign-in/sign-out re-routes.
       // This subscription is long-lived for the app's lifetime — no cleanup
       // needed (supabase-js handles it; the app will re-mount after signOut).
@@ -181,6 +191,10 @@ function AppInit({ onReady }: { onReady: () => void }) {
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
             try { await pullUserData(db) } catch { /* non-fatal */ }
+            // Fresh sign-in on web: pull the catalog too (non-blocking).
+            void syncOnLaunch(db)
+              .then(() => { void runEnhancement(db) })
+              .catch(e => console.warn('[layout] web signed-in sync:', e))
             const [rows, focusRows] = await Promise.all([
               db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
               db.select().from(focusListingsTable).limit(1),

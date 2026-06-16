@@ -42,6 +42,10 @@ jest.mock('../../../services/supabase', () => ({
   },
 }))
 
+jest.mock('../../../services/webReset', () => ({
+  clearWebData: jest.fn().mockResolvedValue(undefined),
+}))
+
 const makeTx = () => ({
   delete: jest.fn(() => ({ run: jest.fn() })),
 })
@@ -272,5 +276,91 @@ describe('ProfileScreen — interactions', () => {
     const { supabase } = require('../../../services/supabase')
     await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
     alertSpy.mockRestore()
+  })
+})
+
+// ── WEB platform behavior ──────────────────────────────────────────────────────
+// react-native-web's Alert.alert is a no-op, so sign-out + reset must use
+// window.confirm() and call clearWebData() (the IndexedDB/localStorage wipe).
+// These tests flip Platform.OS to 'web' and stub window.confirm.
+describe('ProfileScreen — WEB sign-out & reset', () => {
+  const { Platform } = require('react-native')
+  let originalOS: string
+
+  beforeAll(() => {
+    originalOS = Platform.OS
+    Platform.OS = 'web'
+  })
+
+  afterAll(() => {
+    Platform.OS = originalOS
+  })
+
+  beforeEach(() => {
+    // Clear call history between tests (mockResolvedValue impls survive
+    // clearAllMocks), then re-establish the per-test db + window.confirm.
+    jest.clearAllMocks()
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({
+      fullName: 'Maria Santos',
+      school: 'UPLB',
+      gradeLevel: 11,
+      googleId: 'google-uid-123',
+      email: 'maria@gmail.com',
+      selectedListingSlug: '',
+    }))
+    ;(global as any).window = { confirm: jest.fn(() => true) }
+  })
+
+  afterEach(() => {
+    delete (global as any).window
+  })
+
+  it('Sign Out uses window.confirm (NOT Alert) and signs out on confirm', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert')
+    const { getByText } = render(<ProfileScreen />)
+    await waitFor(() => expect(getByText('Sign Out')).toBeTruthy())
+    fireEvent.press(getByText('Sign Out'))
+    expect((global as any).window.confirm).toHaveBeenCalled()
+    expect(alertSpy).not.toHaveBeenCalled()
+    const { supabase } = require('../../../services/supabase')
+    await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
+    const { router } = require('expo-router')
+    expect(router.replace).toHaveBeenCalledWith('/auth/sign-in')
+    alertSpy.mockRestore()
+  })
+
+  it('Sign Out does NOT sign out when window.confirm returns false', async () => {
+    ;(global as any).window.confirm = jest.fn(() => false)
+    const { getByText } = render(<ProfileScreen />)
+    await waitFor(() => expect(getByText('Sign Out')).toBeTruthy())
+    fireEvent.press(getByText('Sign Out'))
+    expect((global as any).window.confirm).toHaveBeenCalled()
+    const { supabase } = require('../../../services/supabase')
+    expect(supabase.auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('renders the web reset row labeled "Clear data & sign out"', async () => {
+    const { getByText } = render(<ProfileScreen />)
+    await waitFor(() => expect(getByText('Clear data & sign out')).toBeTruthy())
+  })
+
+  it('Reset row uses window.confirm and calls clearWebData() on confirm', async () => {
+    const { clearWebData } = require('../../../services/webReset')
+    const { getByText } = render(<ProfileScreen />)
+    await waitFor(() => expect(getByText('Clear data & sign out')).toBeTruthy())
+    fireEvent.press(getByText('Clear data & sign out'))
+    expect((global as any).window.confirm).toHaveBeenCalled()
+    await waitFor(() => expect(clearWebData).toHaveBeenCalled())
+  })
+
+  it('Reset row does NOT call clearWebData() when window.confirm returns false', async () => {
+    ;(global as any).window.confirm = jest.fn(() => false)
+    const { clearWebData } = require('../../../services/webReset')
+    const { getByText } = render(<ProfileScreen />)
+    await waitFor(() => expect(getByText('Clear data & sign out')).toBeTruthy())
+    fireEvent.press(getByText('Clear data & sign out'))
+    expect((global as any).window.confirm).toHaveBeenCalled()
+    expect(clearWebData).not.toHaveBeenCalled()
   })
 })

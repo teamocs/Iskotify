@@ -26,6 +26,7 @@ import { useFocusListings, type FocusListing } from '../../hooks/useFocusListing
 import { exportUserData, importUserData } from '../../services/export'
 import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
+import { clearWebData } from '../../services/webReset'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
@@ -371,56 +372,83 @@ export default function ProfileScreen() {
   // auth flow — no duplicated OAuth code. Same route map as sign-out.
   const signInRoute = postSignOutRoute
 
+  // Confirm helper — react-native-web's Alert.alert is a NO-OP (buttons never
+  // render, onPress never fires), so destructive actions silently did nothing on
+  // web. On web we use the synchronous window.confirm(); on native we keep the
+  // existing two-button Alert.alert flow. The destructive action runs only after
+  // a TRUE confirm on BOTH platforms. (Native behavior unchanged.)
+  function confirmDestructive(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+    if (Platform.OS === 'web') {
+      // typeof guard so this can never throw if window is unavailable.
+      const ok = typeof window !== 'undefined' ? window.confirm(`${title}\n\n${message}`) : false
+      if (ok) onConfirm()
+      return
+    }
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+    ])
+  }
+
   function handleSignOut() {
-    Alert.alert(
+    confirmDestructive(
       'Sign Out?',
       'Your local progress stays on this device. Your cloud backup is safe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supabase.auth.signOut()
-            } catch (err) {
-              console.warn('[profile] signOut failed:', err)
-            }
-            router.replace(postSignOutRoute)
-          },
-        },
-      ],
+      'Sign Out',
+      async () => {
+        try {
+          await supabase.auth.signOut()
+        } catch (err) {
+          console.warn('[profile] signOut failed:', err)
+        }
+        router.replace(postSignOutRoute)
+      },
     )
   }
 
+  // Web reset is a FULL wipe: clearing Drizzle tables alone doesn't reset a web
+  // user because the sql.js DB is persisted in IndexedDB and the Supabase session
+  // lives in localStorage. On web, clearWebData() deletes IndexedDB('iskotify') +
+  // sb-* localStorage keys, signs out, and hard-reloads to /auth/sign-in.
+  // Native keeps the original db.transaction wipe + signOut + route.
+  const resetTitle = Platform.OS === 'web' ? 'Clear data & start over?' : 'Reset App Data?'
+  const resetMessage = Platform.OS === 'web'
+    ? 'This will permanently delete ALL local data in this browser (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.'
+    : 'This will permanently delete ALL local data on this device (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.'
+
   function handleResetAppData() {
-    Alert.alert(
-      'Reset App Data?',
-      'This will permanently delete ALL local data on this device (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset Everything',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await db.transaction((tx) => {
-                tx.delete(userProgress).run()
-                tx.delete(practiceSessions).run()
-                tx.delete(focusListings).run()
-                tx.delete(savedDecks).run()
-                tx.delete(userSettings).run()
-                tx.delete(userRequirements).run()
-                tx.delete(coachPhrases).run()
-              })
-              await supabase.auth.signOut()
-            } catch (err) {
-              console.warn('[profile] reset failed:', err)
-            }
-            router.replace(postSignOutRoute)
-          },
-        },
-      ],
+    confirmDestructive(
+      resetTitle,
+      resetMessage,
+      Platform.OS === 'web' ? 'Clear & start over' : 'Reset Everything',
+      async () => {
+        if (Platform.OS === 'web') {
+          // Full web wipe (IndexedDB + localStorage + signOut + hard reload).
+          // clearWebData() performs window.location.replace itself, so no
+          // router.replace here.
+          try {
+            await clearWebData()
+          } catch (err) {
+            console.warn('[profile] web reset failed:', err)
+          }
+          return
+        }
+        try {
+          await db.transaction((tx) => {
+            tx.delete(userProgress).run()
+            tx.delete(practiceSessions).run()
+            tx.delete(focusListings).run()
+            tx.delete(savedDecks).run()
+            tx.delete(userSettings).run()
+            tx.delete(userRequirements).run()
+            tx.delete(coachPhrases).run()
+          })
+          await supabase.auth.signOut()
+        } catch (err) {
+          console.warn('[profile] reset failed:', err)
+        }
+        router.replace(postSignOutRoute)
+      },
     )
   }
 
@@ -619,9 +647,11 @@ export default function ProfileScreen() {
         <ListCard
           icon={<Text style={{ fontSize: typo.base, color: t.danger }}>⚠</Text>}
           iconBg="rgba(239,68,68,0.10)"
-          title="Reset App Data"
+          title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
           titleColor={t.danger}
-          subtitle="Permanently delete all local data on this device"
+          subtitle={Platform.OS === 'web'
+            ? 'Permanently delete all local data in this browser and start over'
+            : 'Permanently delete all local data on this device'}
           onPress={handleResetAppData}
         />
       </ScreenScroll>

@@ -14,7 +14,7 @@ interface Props {
 export function KuyaHeroAnimation({ width = 175, height = 149 }: Props) {
   return (
     <Image
-      source={require('../assets/images/kuya-baw-mascot.png')}
+      source={require('../assets/images/kuya-baw-wave.png')}
       style={{ width, height }}
       resizeMode="contain"
     />
