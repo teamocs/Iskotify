@@ -120,12 +120,13 @@ describe('Testimonials', () => {
     expect(html).not.toContain('Ana Reyes')
   })
 
-  it('has App Store review CTA', () => {
-    expect(html).toContain('Leave a review on App Store')
+  it('has a feedback CTA', () => {
+    expect(html).toContain('Share your feedback')
   })
 
-  it('has Google Play review CTA', () => {
-    expect(html).toContain('Rate on Google Play')
+  it('no longer shows App Store / Google Play review CTAs', () => {
+    expect(html).not.toContain('App Store')
+    expect(html).not.toContain('Google Play')
   })
 })
 

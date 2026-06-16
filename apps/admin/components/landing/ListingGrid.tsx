@@ -21,7 +21,7 @@ export function ListingGrid({ listings, limit }: Props) {
   if (listings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <Image src="/kuya-baw-mascot.svg" alt="Kuya Baw" width={64} height={64} className="opacity-40 mb-4" />
+        <Image src="/kuya-baw-waving.png" alt="Kuya Baw" width={64} height={64} className="opacity-40 mb-4" />
         <p className="font-heading font-bold text-lg text-[#1d1d1f]">No listings yet</p>
         <p className="text-sm text-[#6e6e73] mt-1">Check back soon — new opportunities are added weekly.</p>
       </div>
