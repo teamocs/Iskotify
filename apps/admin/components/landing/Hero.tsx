@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { ANDROID_APP_URL, WEB_APP_URL } from '../../lib/links'
+import { WEB_APP_URL } from '../../lib/links'
 
 export function Hero() {
   return (
@@ -22,10 +22,8 @@ export function Hero() {
           {/* Primary CTAs — start the free Android trial, or open the web app */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start mb-7">
             <a
-              href={ANDROID_APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Start your free Iskotify trial on Android"
+              href="#early-access"
+              aria-label="Request early access to the free Iskotify Android app"
               className="inline-flex items-center justify-center gap-2 bg-[#800000] text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-[#a00000] transition-colors shadow-sm"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

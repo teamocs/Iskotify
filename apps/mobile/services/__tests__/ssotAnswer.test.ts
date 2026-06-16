@@ -247,6 +247,11 @@ describe('answerFromData', () => {
       expect(out).toContain('DOST-SEI Merit Scholarship')
       // The raw [LISTINGS] tag is stripped from the user-facing message.
       expect(out).not.toContain('[LISTINGS]')
+      // Each listing item renders as its own "- " bullet line, with the intro
+      // ("From your Lists:") on its own line above the bullets.
+      const lines = (out as string).split('\n')
+      expect(lines[0]).toBe('From your Lists:')
+      expect(lines.some(l => l.startsWith('- '))).toBe(true)
     })
 
     it('returns null when no listing matches (caller shows not-found)', async () => {
@@ -297,6 +302,10 @@ describe('answerFromData', () => {
       expect(out).toContain('99.7')
       expect(out).toContain('figures change yearly')
       expect(out).not.toContain('[TOP SCHOOLS]')
+      // Intro on its own line; the ranking renders as a "- " bullet line.
+      const lines = (out as string).split('\n')
+      expect(lines[0]).toBe('Top schools by PRC board pass rate:')
+      expect(lines.some(l => l.startsWith('- '))).toBe(true)
     })
 
     it('returns null when no course matches', async () => {
@@ -320,6 +329,32 @@ describe('answerFromData', () => {
       expect(out).toContain('UPCAT 2026')
       expect(out).toContain('5-day streak')
       expect(out).toContain('Algebra (32%)')
+    })
+
+    it('renders multiple weak topics as a "- " bullet list under a "Weak topics:" header', async () => {
+      const db = makeDb()
+      // STATS_BASE has two weak topics (Algebra, Biology) → bulleted.
+      const out = await answerFromData(db, 'how am I doing?', 'profile', STATS_BASE)
+      expect(out).not.toBeNull()
+      const text = out as string
+      // Header on its own line, each weak topic on its own "- " line.
+      expect(text).toContain('Weak topics:\n- Algebra (32%)')
+      expect(text).toContain('- Biology (45%)')
+      // The comma-joined inline form must NOT survive.
+      expect(text).not.toContain('Algebra (32%), Biology (45%)')
+    })
+
+    it('keeps a single weak topic inline (no one-item bullet list)', async () => {
+      const db = makeDb()
+      const oneWeak: HomeStats = {
+        ...STATS_BASE,
+        weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 32 }],
+      }
+      const out = await answerFromData(db, 'how am I doing?', 'profile', oneWeak)
+      expect(out).not.toBeNull()
+      const text = out as string
+      expect(text).toContain('Weak topics: Algebra (32%).')
+      expect(text).not.toContain('Weak topics:\n- Algebra')
     })
   })
 })

@@ -187,6 +187,31 @@ function stripTag(block: string): string {
 }
 
 /**
+ * Turn the "Weak topics: Algebra (32%), Biology (45%)." line emitted by
+ * buildProgressContext into a clean bullet list when it lists multiple topics:
+ *
+ *   Weak topics:
+ *   - Algebra (32%)
+ *   - Biology (45%)
+ *
+ * A single weak topic is left inline (no need for a one-item list). All other
+ * lines (Student / Exam) are returned unchanged. Pure presentation — no DB.
+ */
+function bulletizeWeakTopics(body: string): string {
+  return body.replace(
+    /^Weak topics:\s*(.+?)\.?$/im,
+    (_full, list: string) => {
+      const items = list
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+      if (items.length <= 1) return `Weak topics: ${items.join(', ')}.`
+      return `Weak topics:\n${items.map(i => `- ${i}`).join('\n')}`
+    },
+  )
+}
+
+/**
  * answerFromData — convert the matched intent into a friendly, user-facing
  * message sourced ONLY from the synced local DB via the chatContext builders.
  *
@@ -203,9 +228,11 @@ export async function answerFromData(
   switch (intent) {
     case 'profile': {
       // buildProgressContext is already human-readable (Student / Exam / Weak
-      // topics lines). Return as-is with a short, warm lead.
+      // topics lines). Present the "Weak topics: a (x%), b (y%)" line as a
+      // short bullet list so multiple weak topics read as a list, then return
+      // with a short, warm lead.
       const ctx = await buildProgressContext(db, stats)
-      const body = ctx.trim()
+      const body = bulletizeWeakTopics(ctx.trim())
       if (!body) return null
       return `Here's your progress snapshot:\n${body}`
     }
@@ -216,8 +243,8 @@ export async function answerFromData(
       const body = stripTag(block)
       if (!body) return null
       return (
-        `Top schools by PRC board pass rate:\n${body}` +
-        ` (figures change yearly — verify on the school's site)`
+        `Top schools by PRC board pass rate:\n${body}\n` +
+        `(figures change yearly — verify on the school's site)`
       )
     }
 
@@ -227,8 +254,8 @@ export async function answerFromData(
       const body = stripTag(block)
       if (!body) return null
       return (
-        `Where this course can take you abroad:\n${body}` +
-        ` (verify with DMW/POEA & official sources)`
+        `Where this course can take you abroad:\n${body}\n` +
+        `(verify with DMW/POEA & official sources)`
       )
     }
 

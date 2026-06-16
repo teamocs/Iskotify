@@ -121,7 +121,7 @@ export const SYSTEM_PROMPT_TOPIC =
   `Example — student asks "Anong photosynthesis?" → ` +
   `you answer in English: "Photosynthesis is how plants make food from sunlight using chlorophyll."\n` +
   `RULES:\n` +
-  `- Maximum 2 sentences total. Be direct. No preamble.\n` +
+  `- Answer in 1–2 short sentences MAX. Lead with the direct answer; no preamble, no filler, no "great question". Define/explain plainly.\n` +
   `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Exams tab.\n` +
   `- Address the student in second person (you/your).`
 
@@ -135,6 +135,7 @@ export const SYSTEM_PROMPT_MATH =
   CORE_RULES + `\n` +
   `ALWAYS solve the problem step-by-step. Never refuse, never say "try it yourself".\n` +
   `Double-check arithmetic before writing each step.\n` +
+  `Keep each step to one short line; no commentary beyond the steps and final Answer.\n` +
   `If [RELEVANT FLASHCARDS] show a similar worked problem, follow that method.\n` +
   `\n` +
   `FORMAT (one item per line):\n` +
@@ -173,13 +174,14 @@ export const BUILTIN_TOPIC_ADDENDUM =
   `Example — student asks "Anong photosynthesis?" → ` +
   `you answer in English: "Photosynthesis is how plants make food from sunlight using chlorophyll."\n` +
   `RULES:\n` +
-  `- Maximum 2 sentences total. Be direct. No preamble.\n` +
+  `- Answer in 1–2 short sentences MAX. Lead with the direct answer; no preamble, no filler, no "great question". Define/explain plainly.\n` +
   `- If the context blocks answer the question, use them. If you genuinely don't know and the context doesn't help, say so briefly and suggest checking the Exams tab.\n` +
   `- Address the student in second person (you/your).`
 
 export const BUILTIN_MATH_ADDENDUM =
   `ALWAYS solve the problem step-by-step. Never refuse, never say "try it yourself".\n` +
   `Double-check arithmetic before writing each step.\n` +
+  `Keep each step to one short line; no commentary beyond the steps and final Answer.\n` +
   `If [RELEVANT FLASHCARDS] show a similar worked problem, follow that method.\n` +
   `\n` +
   `FORMAT (one item per line):\n` +

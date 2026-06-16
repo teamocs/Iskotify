@@ -82,7 +82,8 @@ describe('buildChatPrompt', () => {
     const progress = buildChatPrompt('progress', 'q', 'ctx')
     const topic = buildChatPrompt('topic', 'q')
     expect(progress).toContain('No preamble')
-    expect(topic).toContain('No preamble')
+    // Topic addendum tightened: "no preamble, no filler" (lowercase).
+    expect(topic).toContain('no preamble')
   })
 
   it('progress prompt enforces max 2 sentences', () => {
@@ -90,9 +91,9 @@ describe('buildChatPrompt', () => {
     expect(prompt).toContain('Maximum 2 sentences')
   })
 
-  it('topic prompt enforces max 2 sentences total', () => {
+  it('topic prompt caps the answer at 1–2 short sentences', () => {
     const prompt = buildChatPrompt('topic', 'q')
-    expect(prompt).toContain('Maximum 2 sentences total')
+    expect(prompt).toContain('Answer in 1–2 short sentences MAX')
   })
 
   it('user turn includes the English-only [INSTRUCTION] block (both modes)', () => {
@@ -515,8 +516,10 @@ describe('Prompt v2 — mode-specific addenda intact', () => {
     expect(SYSTEM_PROMPT_PROGRESS).toContain('one specific action')
   })
 
-  it('SYSTEM_PROMPT_TOPIC: 2-sentence cap, softer fallback (Exams tab, not textbook)', () => {
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Maximum 2 sentences total')
+  it('SYSTEM_PROMPT_TOPIC: very-concise cap, softer fallback (Exams tab, not textbook)', () => {
+    // Tightened directive: 1–2 short sentences, lead with the direct answer.
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Answer in 1–2 short sentences MAX')
+    expect(SYSTEM_PROMPT_TOPIC).toContain('no preamble, no filler')
     // Old eager-refusal line replaced with softer guidance
     expect(SYSTEM_PROMPT_TOPIC).not.toContain("I'm not sure — check your textbook")
     expect(SYSTEM_PROMPT_TOPIC).toContain('context blocks answer the question')

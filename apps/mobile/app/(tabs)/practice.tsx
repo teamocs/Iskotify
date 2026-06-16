@@ -731,7 +731,73 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
-        {/* (2) Subject readiness — per-subject readiness grid (lowest first) */}
+        {/* (2) Search — full-width bar opening the search modal (top, under header) */}
+        <View>
+          <Pressable
+            style={({ pressed }) => [s.searchBar, pressed && { opacity: 0.8 }]}
+            onPress={() => setSearchVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Search subjects, topics, or mock exams"
+          >
+            <Text maxFontSizeMultiplier={1.4}>🔍</Text>
+            <Text style={s.searchBarTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              Search subjects, topics, or mock exams
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* (3) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
+        <View>
+          {aiFeedbackExpanded ? (
+            <Card elevated style={s.aiFeedbackCard}>
+              <View style={s.aiFeedbackHeader}>
+                <Text style={s.aiFeedbackIcon}>📊</Text>
+                <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
+                <Pressable
+                  onPress={() => setAiFeedbackExpanded(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Collapse AI Study Feedback"
+                  style={{ marginLeft: 'auto' }}
+                >
+                  <Text style={{ fontSize: 18, color: t.textTertiary }}>‹</Text>
+                </Pressable>
+              </View>
+              {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
+                <>
+                  <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
+                  {weakSubjectsFeedback.map((item) => (
+                    <Text key={item.label} style={s.aiFeedbackItem}>
+                      · {item.label} ({item.accuracy}%)
+                    </Text>
+                  ))}
+                </>
+              ) : (
+                <Text style={s.aiFeedbackEmpty}>
+                  Take a few quizzes to unlock your personalized study tips.
+                </Text>
+              )}
+            </Card>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
+              onPress={() => setAiFeedbackExpanded(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Expand AI Study Feedback"
+              accessibilityState={{ expanded: false }}
+              testID="ai-feedback-collapsed"
+            >
+              <Text style={s.collapsedIcon}>📊</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.collapsedLabel}>AI Study Feedback</Text>
+                <Text style={s.collapsedSub} numberOfLines={1}>{aiFeedbackSummary}</Text>
+              </View>
+              <Text style={s.collapsedChevron}>›</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* (4) Subject readiness — per-subject readiness grid (lowest first) */}
         <View>
           <SectionHeader
             title="Subject readiness"
@@ -773,22 +839,7 @@ export default function PracticeScreen() {
           )}
         </View>
 
-        {/* (3) Search — full-width bar opening the search modal */}
-        <View>
-          <Pressable
-            style={({ pressed }) => [s.searchBar, pressed && { opacity: 0.8 }]}
-            onPress={() => setSearchVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Search subjects, topics, or mock exams"
-          >
-            <Text maxFontSizeMultiplier={1.4}>🔍</Text>
-            <Text style={s.searchBarTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-              Search subjects, topics, or mock exams
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* (4) My Focus — per-target mock-exam readiness grid */}
+        {/* (5) My Focus — per-target mock-exam readiness grid */}
         <View>
           <SectionHeader title="My Focus" subtitle="Your mock-exam readiness per target" />
           {focusListingsList.length > 0 ? (
@@ -846,7 +897,7 @@ export default function PracticeScreen() {
           )}
         </View>
 
-        {/* (5) Recommended 2-col grid — "what next" */}
+        {/* (6) Recommended 2-col grid — "what next" */}
         {activeRecommended.length > 0 ? (
           <View>
             <View style={s.secRow}>
@@ -863,7 +914,7 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* (6) Mock Exams section */}
+        {/* (7) Mock Exams section */}
         {blueprints.length > 0 ? (
           <View>
             <SectionHeader
@@ -895,7 +946,7 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* (7) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
+        {/* (8) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
         <View>
           <View style={s.secRow}>
             <Text style={s.secTitle}>Saved Decks</Text>
@@ -923,57 +974,6 @@ export default function PracticeScreen() {
           ) : null}
         </View>
 
-        {/* (8) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
-        <View>
-          {aiFeedbackExpanded ? (
-            <Card elevated style={s.aiFeedbackCard}>
-              <View style={s.aiFeedbackHeader}>
-                <Text style={s.aiFeedbackIcon}>📊</Text>
-                <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
-                <Pressable
-                  onPress={() => setAiFeedbackExpanded(false)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Collapse AI Study Feedback"
-                  style={{ marginLeft: 'auto' }}
-                >
-                  <Text style={{ fontSize: 18, color: t.textTertiary }}>‹</Text>
-                </Pressable>
-              </View>
-              {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
-                <>
-                  <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
-                  {weakSubjectsFeedback.map((item) => (
-                    <Text key={item.label} style={s.aiFeedbackItem}>
-                      · {item.label} ({item.accuracy}%)
-                    </Text>
-                  ))}
-                </>
-              ) : (
-                <Text style={s.aiFeedbackEmpty}>
-                  Take a few quizzes to unlock your personalized study tips.
-                </Text>
-              )}
-            </Card>
-          ) : (
-            <Pressable
-              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
-              onPress={() => setAiFeedbackExpanded(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Expand AI Study Feedback"
-              accessibilityState={{ expanded: false }}
-              testID="ai-feedback-collapsed"
-            >
-              <Text style={s.collapsedIcon}>📊</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.collapsedLabel}>AI Study Feedback</Text>
-                <Text style={s.collapsedSub} numberOfLines={1}>{aiFeedbackSummary}</Text>
-              </View>
-              <Text style={s.collapsedChevron}>›</Text>
-            </Pressable>
-          )}
-        </View>
-
         {/* (9) Study tools — collapsed "Study tools" row expanding inline to links */}
         <View>
           {studyToolsExpanded ? (
@@ -990,6 +990,13 @@ export default function PracticeScreen() {
                 </Pressable>
               </View>
               <View style={{ gap: spacing.sm }}>
+                <ListCard
+                  icon={<Text style={{ fontSize: 15 }}>✅</Text>}
+                  iconBg="rgba(34,197,94,0.14)"
+                  title="Requirements"
+                  subtitle="Track requirements for your focus exams & scholarships"
+                  onPress={() => router.push('/requirements')}
+                />
                 <ListCard
                   icon={<Text style={{ fontSize: 15 }}>📝</Text>}
                   iconBg="rgba(128,0,0,0.18)"
@@ -1018,7 +1025,7 @@ export default function PracticeScreen() {
               <Text style={s.collapsedIcon}>🛠️</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.collapsedLabel}>Study Tools</Text>
-                <Text style={s.collapsedSub}>Notes · AI Chat</Text>
+                <Text style={s.collapsedSub}>Requirements · Notes · AI Chat</Text>
               </View>
               <Text style={s.collapsedChevron}>›</Text>
             </Pressable>

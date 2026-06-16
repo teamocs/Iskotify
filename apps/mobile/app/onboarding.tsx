@@ -528,16 +528,17 @@ export default function OnboardingScreen() {
     }
   }
 
-  // Auto-navigate when sync finishes while the gate is showing
+  // Auto-navigate when sync finishes while the gate is showing.
+  // Onboarding completion routes to the welcome tour, which then forwards to tabs.
   useEffect(() => {
     if (gateVisible && syncStatus === 'done') {
-      if (aliveRef.current) router.replace('/(tabs)')
+      if (aliveRef.current) router.replace('/welcome')
     }
   }, [gateVisible, syncStatus])
 
   function finishOnboarding() {
     if (syncStatus === 'done' || syncStatus === 'idle') {
-      router.replace('/(tabs)')
+      router.replace('/welcome')
     } else {
       setGateVisible(true)
     }

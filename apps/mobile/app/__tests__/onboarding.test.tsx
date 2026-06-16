@@ -322,13 +322,13 @@ describe('OnboardingScreen — Readiness gate', () => {
     expect(screen.getByText('Hang tight, almost there! 🎒')).toBeTruthy()
     expect(router.replace).not.toHaveBeenCalled()
 
-    // Now resolve sync — should trigger auto-navigation
+    // Now resolve sync — should trigger auto-navigation to the welcome tour
     await act(async () => {
       resolveSync()
       await Promise.resolve()
     })
 
-    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+    expect(router.replace).toHaveBeenCalledWith('/welcome')
   })
 
   it('sync error shows error copy; Try again re-fires syncOnLaunch; Continue anyway routes', async () => {
@@ -410,8 +410,8 @@ describe('OnboardingScreen — Readiness gate', () => {
       fireEvent.press(screen.getByText('Skip'))
     })
 
-    // Should have navigated immediately — waitFor handles microtask flushing
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'))
+    // Should have navigated immediately to the welcome tour — waitFor flushes microtasks
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/welcome'))
     expect(screen.queryByText('Hang tight, almost there! 🎒')).toBeNull()
   })
 })

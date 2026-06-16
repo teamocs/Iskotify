@@ -45,6 +45,13 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     ],
   },
   {
+    section: 'USERS',
+    items: [
+      { href: '/admin/early-access', icon: '✉️', label: 'Early Access' },
+      { href: '/admin/users', icon: '👤', label: 'Users' },
+    ],
+  },
+  {
     section: 'DATA MANAGER',
     items: [
       { href: '/admin/data/career_courses', icon: '📚', label: 'Career Courses' },

@@ -30,6 +30,7 @@ import { notes as notesTable, userSettings, focusListings as focusListingsTable 
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
+import { isEarlyAccessExpired } from '../utils/earlyAccess'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 
@@ -135,6 +136,16 @@ function AppInit({ onReady }: { onReady: () => void }) {
     // sign-in screen. Native keeps its original local-DB-first flow below.
     if (Platform.OS === 'web') {
       try {
+        // Early-access expiry gate (web) — applies regardless of session, before
+        // any normal web routing. The check is synchronous and session-independent,
+        // so it runs ahead of the session fetch to keep the expired path fast.
+        // Dormant until the cutoff (see utils/earlyAccess.ts).
+        if (isEarlyAccessExpired()) {
+          router.replace('/expired')
+          onReady()
+          return
+        }
+
         const { data: { session } } = await supabase.auth.getSession()
 
         if (!session) {
@@ -236,6 +247,14 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
     // Navigate based on local DB — instant, no network required
     try {
+      // Early-access expiry gate — blocks the app once the trial build expires.
+      // Dormant until the cutoff (see utils/earlyAccess.ts); when tripped it
+      // routes to the standalone /expired screen and skips all normal routing.
+      if (isEarlyAccessExpired()) {
+        router.replace('/expired')
+        onReady()
+        return
+      }
       const [rows, focusRows] = await Promise.all([
         db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
         db.select().from(focusListingsTable).limit(1),

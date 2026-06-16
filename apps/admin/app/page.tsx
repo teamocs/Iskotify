@@ -6,6 +6,7 @@ import { HowItWorks } from '@/components/landing/HowItWorks'
 import { ListingGrid } from '@/components/landing/ListingGrid'
 import { Testimonials } from '@/components/landing/Testimonials'
 import { FAQ } from '@/components/landing/FAQ'
+import { EarlyAccessForm } from '@/components/landing/EarlyAccessForm'
 import { FooterCTA } from '@/components/landing/FooterCTA'
 import type { Listing } from '@iskotify/utils'
 
@@ -48,6 +49,20 @@ export default async function HomePage() {
       </section>
       <Testimonials />
       <FAQ />
+      <section id="early-access" className="bg-[#f5f5f7] py-20 px-6 scroll-mt-20">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Android Early Access</p>
+            <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+              Get early access
+            </h2>
+            <p className="text-[#6e6e73] font-body text-base mt-3">
+              Sign up and we&apos;ll email you the Iskotify Android app to install — free, no subscription.
+            </p>
+          </div>
+          <EarlyAccessForm />
+        </div>
+      </section>
       <FooterCTA />
     </div>
   )

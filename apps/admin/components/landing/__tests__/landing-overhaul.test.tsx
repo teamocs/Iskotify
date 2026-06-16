@@ -18,6 +18,7 @@ import { Testimonials } from '../Testimonials'
 import { FAQ } from '../FAQ'
 import { FooterCTA } from '../FooterCTA'
 import { KuyaBawCTA } from '../KuyaBawCTA'
+import { EarlyAccessForm } from '../EarlyAccessForm'
 
 // The web app URL the landing buttons fall back to when no env var is set
 // (see lib/links.ts). Vitest runs with NEXT_PUBLIC_* unset, so this is what
@@ -71,6 +72,10 @@ describe('Hero', () => {
   it('has a "Try on Web" button pointing at the web app', () => {
     expect(html).toContain('Try on Web')
     expect(html).toContain(WEB_APP_URL)
+  })
+
+  it('points the Android "Start for free" CTA at the early-access form', () => {
+    expect(html).toContain('href="#early-access"')
   })
 
   it('no longer shows App Store / Google Play download badges', () => {
@@ -193,9 +198,34 @@ describe('FooterCTA', () => {
     expect(html).toContain('Start free trial')
   })
 
+  it('points the Android free-trial CTA at the early-access form', () => {
+    expect(html).toContain('href="#early-access"')
+  })
+
   it('has a "Try on Web" button pointing at the web app', () => {
     expect(html).toContain('Try on Web')
     expect(html).toContain(WEB_APP_URL)
+  })
+})
+
+// ─── EarlyAccessForm ────────────────────────────────────────────────────────
+describe('EarlyAccessForm', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(EarlyAccessForm)) })
+
+  it('renders the "Request early access" submit button', () => {
+    expect(html).toContain('Request early access')
+  })
+
+  it('has labeled name and email inputs', () => {
+    expect(html).toContain('for="ea-full-name"')
+    expect(html).toContain('for="ea-email"')
+    expect(html).toContain('type="email"')
+  })
+
+  it('explains the free early-access offer and the Aug 2, 2026 cutoff', () => {
+    expect(html).toContain('free early access')
+    expect(html).toContain('August 2, 2026')
   })
 })
 
