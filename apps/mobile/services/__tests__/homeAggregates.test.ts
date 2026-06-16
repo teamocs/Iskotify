@@ -25,6 +25,7 @@ import {
   getListingAccuracy,
   getTopicBestSessionPercentages,
   getSubjectSessionPercentages,
+  getListingMockBest,
 } from '../homeAggregates'
 
 // ── Inlined oracle functions (mirrors useHomeStats pure fns) ──────────────────
@@ -642,5 +643,120 @@ describe('getSubjectSessionPercentages — best (highest) % per subject (subtest
     expect(map.get('Mathematics')).toBe(90)
     expect(map.get('Science')).toBe(80)
     expect(map.get('Reading Comprehension')).toBe(50)
+  })
+})
+
+// ── getListingMockBest — best overall MOCK-exam attempt % per listing ─────────
+// A mock attempt writes ONE practice_sessions row per SECTION (topic_id='',
+// non-empty subtest). All section rows of one attempt share the attempt start,
+// reconstructable as completed_at - duration_secs*1000 (bucketed to the second).
+// The metric: per attempt, overall % = round(sum(score)*100/sum(total)) across
+// its sections; per listing, bestPct = MAX over its attempts.
+
+describe('getListingMockBest — best overall mock attempt % per listing', () => {
+  // Insert ALL section rows of ONE attempt. They share `attemptStart` (a whole-
+  // second epoch ms) and complete a few ms apart, exactly like submit()'s write
+  // loop: completed_at = attemptStart + durationMs + spread,
+  // duration_secs = round((completed_at - attemptStart)/1000). Because durationMs
+  // is a whole second and the spread is <1s, the reconstructed attemptKey buckets
+  // to the same second for every section of the attempt.
+  function insertMockAttempt(
+    listingSlug: string,
+    attemptStart: number,
+    durationMs: number,
+    sections: Array<{ subtest: string; score: number; total: number }>,
+  ) {
+    sections.forEach((sec, i) => {
+      const completedAt = attemptStart + durationMs + i * 3 // few-ms write spread
+      const durationSecs = Math.round((completedAt - attemptStart) / 1000)
+      raw.prepare(
+        'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(listingSlug, '', sec.subtest, sec.score, sec.total, durationSecs, completedAt)
+    })
+  }
+
+  // Whole-second attempt starts so attemptKey bucketing is deterministic.
+  const T0 = Math.floor(Date.now() / 1000) * 1000
+
+  it('returns the MAX attempt % across a listing\'s mock attempts (not the average, not a single best section)', async () => {
+    // Attempt A: 3/10 + 2/10 → 5/20 = 25%? no — overall = round(5*100/20)=25; use 50% below
+    // Attempt A overall = 50%: sections 6/10 + 4/10 → 10/20 = 50%
+    insertMockAttempt('upcat', T0, 1_800_000, [
+      { subtest: 'Mathematics', score: 6, total: 10 },
+      { subtest: 'Science', score: 4, total: 10 },
+    ])
+    // Attempt B overall = 80%: sections 9/10 + 7/10 → 16/20 = 80%
+    insertMockAttempt('upcat', T0 + 5_000, 1_700_000, [
+      { subtest: 'Mathematics', score: 9, total: 10 },
+      { subtest: 'Science', score: 7, total: 10 },
+    ])
+
+    const rows = await getListingMockBest(db)
+    const map = new Map(rows.map(r => [r.listingSlug, r.bestPct]))
+    // MAX(50, 80) = 80 — not the average (65) and not a single best section (90)
+    expect(map.get('upcat')).toBe(80)
+  })
+
+  it('computes per-attempt overall % ACROSS sections (8/10 + 2/10 → 50%, not 80% from the best section)', async () => {
+    insertMockAttempt('dost-sei', T0, 1_500_000, [
+      { subtest: 'Mathematics', score: 8, total: 10 }, // best single section = 80%
+      { subtest: 'Science', score: 2, total: 10 },     // worst single section = 20%
+    ])
+    const rows = await getListingMockBest(db)
+    const map = new Map(rows.map(r => [r.listingSlug, r.bestPct]))
+    // overall = round((8+2)*100/(10+10)) = 50, NOT 80 from the best section
+    expect(map.get('dost-sei')).toBe(50)
+  })
+
+  it("excludes topic-review rows (topic_id != '' / NULL subtest)", async () => {
+    // A real mock attempt for 'upcat'
+    insertMockAttempt('upcat', T0, 1_200_000, [
+      { subtest: 'Mathematics', score: 7, total: 10 },
+      { subtest: 'Science', score: 7, total: 10 },
+    ])
+    // Topic-review row: topic_id != '', NULL subtest, same listing — must NOT count
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run('upcat', 't1', null, 10, 10, 30, Date.now())
+    // Another topic-review row with a non-empty subtest but a real topic_id — excluded by topic_id filter
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run('upcat', 't2', 'Mathematics', 10, 10, 30, Date.now())
+
+    const rows = await getListingMockBest(db)
+    const map = new Map(rows.map(r => [r.listingSlug, r.bestPct]))
+    // Only the mock attempt counts: round((7+7)*100/20) = 70 (the 100% topic rows are excluded)
+    expect(map.get('upcat')).toBe(70)
+  })
+
+  it('excludes rows with total=0 and empty listing_slug; a listing with no mock rows is absent', async () => {
+    // Valid mock attempt for 'upcat'
+    insertMockAttempt('upcat', T0, 1_000_000, [
+      { subtest: 'Mathematics', score: 5, total: 10 },
+      { subtest: 'Science', score: 5, total: 10 },
+    ])
+    // total=0 mock-shaped row (division-by-zero guard) — excluded
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run('upcat', '', 'Reading Comprehension', 0, 0, 30, Date.now())
+    // empty listing_slug mock-shaped row — excluded
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run('', '', 'Mathematics', 9, 10, 30, Date.now())
+
+    const rows = await getListingMockBest(db)
+    const map = new Map(rows.map(r => [r.listingSlug, r.bestPct]))
+    // upcat: round((5+5)*100/20) = 50 — the total=0 row didn't change it
+    expect(map.get('upcat')).toBe(50)
+    // empty-slug listing absent
+    expect(map.get('')).toBeUndefined()
+    // 'dost-sei' has no mock rows at all → absent from the result
+    expect(map.get('dost-sei')).toBeUndefined()
+    expect(rows.find(r => r.listingSlug === 'dost-sei')).toBeUndefined()
+  })
+
+  it('returns empty array when there are no practice_sessions', async () => {
+    const rows = await getListingMockBest(db)
+    expect(rows).toEqual([])
   })
 })

@@ -13,14 +13,9 @@ jest.mock('react-native-safe-area-context', () => ({
 }))
 
 const mockUsePracticeData = jest.fn()
-const mockUseHomeStats = jest.fn()
 
 jest.mock('../../../hooks/usePracticeData', () => ({
   usePracticeData: () => mockUsePracticeData(),
-}))
-
-jest.mock('../../../hooks/useHomeStats', () => ({
-  useHomeStats: () => mockUseHomeStats(),
 }))
 
 const mockFocusListings: any[] = []
@@ -56,9 +51,21 @@ jest.mock('../../../hooks/useAnalytics', () => ({
   }),
 }))
 
-// Mock useDb so the screen does not require a real DrizzleProvider
-jest.mock('../../../hooks/useDb', () => ({
-  useDb: () => ({}),
+// Mock useDb so the screen does not require a real DrizzleProvider.
+// IMPORTANT: return a STABLE singleton — the screen's readiness effects depend on
+// `db`, so a fresh object every render would change the effect's deps each render
+// and spin a re-render loop (state set to a new Map each pass never bails out).
+jest.mock('../../../hooks/useDb', () => {
+  const db = {}
+  return { useDb: () => db }
+})
+
+// Mock the SQL aggregates so the readiness effects don't hit a real DB. cachedQuery
+// (mocked below) calls the fetcher directly, which calls these.
+jest.mock('../../../services/homeAggregates', () => ({
+  getTopicBestSessionPercentages: jest.fn().mockResolvedValue([]),
+  getSubjectSessionPercentages: jest.fn().mockResolvedValue([]),
+  getListingMockBest: jest.fn().mockResolvedValue([]),
 }))
 
 const mockOpenKuya = jest.fn()
@@ -80,6 +87,8 @@ jest.mock('../../../services/queryCache', () => ({
   subscribe: jest.fn(() => jest.fn()),
 }))
 
+const { router } = require('expo-router')
+
 const emptyPracticeData = {
   subjects: [],
   topicRows: [],
@@ -99,8 +108,8 @@ describe('PracticeScreen', () => {
   beforeEach(() => {
     mockListPublishedBlueprints.mockClear()
     mockOpenKuya.mockClear()
+    router.push.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
-    mockUseHomeStats.mockReturnValue({ listing: null })
     mockListPublishedBlueprints.mockResolvedValue([])
     // Reset shared focus listings array
     mockFocusListings.splice(0, mockFocusListings.length)
@@ -111,33 +120,95 @@ describe('PracticeScreen', () => {
     expect(screen.getByText('Exams')).toBeTruthy()
   })
 
-  it('renders topic cards when topics are present', () => {
+  it('renders the Subject readiness section header', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('Subject readiness')).toBeTruthy()
+  })
+
+  it('renders the subject-readiness empty state when no subjects', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText(/Practice to see your subject readiness/)).toBeTruthy()
+  })
+
+  it('renders a subject-readiness card when subjects/topics are present', async () => {
     mockUsePracticeData.mockReturnValue({
       ...emptyPracticeData,
+      subjects: [{ id: 's1', name: 'Algebra' }],
       topicRows: [
-        {
-          topic: { id: 't1', name: 'Algebra' },
-          strength: 'Weak' as const,
-          cardCount: 12,
-          lastPracticedAt: null,
-        },
+        { topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak' as const, cardCount: 12, lastPracticedAt: null, accuracy: null },
       ],
     })
     render(<PracticeScreen />)
+    await act(async () => {})
     expect(screen.getByText('Algebra')).toBeTruthy()
-    expect(screen.getByText(/12 cards/)).toBeTruthy()
   })
 
-  it('renders stats header row', () => {
+  it('does not render the removed stats header row', () => {
     render(<PracticeScreen />)
-    expect(screen.getByText('Accuracy')).toBeTruthy()
-    expect(screen.getByText('Streak')).toBeTruthy()
-    expect(screen.getByText('Exams taken')).toBeTruthy()
+    expect(screen.queryByText('Accuracy')).toBeNull()
+    expect(screen.queryByText('Streak')).toBeNull()
+    expect(screen.queryByText('Exams taken')).toBeNull()
   })
 
-  it('renders Subjects section header (promoted)', () => {
+  it('does not render the removed Subjects accordion section', () => {
     render(<PracticeScreen />)
-    expect(screen.getByText('Subjects')).toBeTruthy()
+    expect(screen.queryByText('Subjects')).toBeNull()
+  })
+
+  it('renders the search bar', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('Search subjects, topics, or mock exams')).toBeTruthy()
+  })
+
+  it('opens the search modal and shows seeded subject / topic / mock results', async () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's1', name: 'Algebra' }],
+      topicRows: [
+        { topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak' as const, cardCount: 12, lastPracticedAt: null, accuracy: null },
+      ],
+    })
+    mockListPublishedBlueprints.mockResolvedValue([
+      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
+    ])
+    render(<PracticeScreen />)
+    await act(async () => {})
+
+    // Open modal via the search bar
+    fireEvent.press(screen.getByText('Search subjects, topics, or mock exams'))
+
+    // Empty-query prompt is shown
+    expect(screen.getByText(/Type to search/)).toBeTruthy()
+
+    // Find the TextInput (placeholder) and type a query that matches a subject.
+    // "Algebra" also appears as a Subject readiness card behind the modal, so the
+    // search result makes it appear an ADDITIONAL time (≥2 total).
+    const input = screen.getByPlaceholderText('Search subjects, topics, or mock exams')
+    fireEvent.changeText(input, 'algebra')
+    expect(screen.getAllByText('Algebra').length).toBeGreaterThanOrEqual(2)
+
+    // A topic query — "Linear Equations" is only a search result (no topic cards
+    // in this layout), so it appears exactly once.
+    fireEvent.changeText(input, 'linear')
+    expect(screen.getByText('Linear Equations')).toBeTruthy()
+
+    // A mock-exam query — result row label is "UPCAT · UPCAT".
+    fireEvent.changeText(input, 'upcat')
+    expect(screen.getByText('UPCAT · UPCAT')).toBeTruthy()
+  })
+
+  it('tapping a search result navigates and closes the modal', async () => {
+    mockUsePracticeData.mockReturnValue({
+      ...emptyPracticeData,
+      subjects: [{ id: 's1', name: 'Algebra' }],
+    })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    fireEvent.press(screen.getByText('Search subjects, topics, or mock exams'))
+    const input = screen.getByPlaceholderText('Search subjects, topics, or mock exams')
+    fireEvent.changeText(input, 'algebra')
+    fireEvent.press(screen.getByText('Algebra'))
+    expect(router.push).toHaveBeenCalledWith('/subjects/s1')
   })
 
   it('AI Study Feedback is collapsed by default — shows collapsed row', () => {
@@ -162,17 +233,15 @@ describe('PracticeScreen', () => {
     expect(screen.getByText('Study Tools')).toBeTruthy()
   })
 
-  it('Study Tools expands to show 3 links on press', () => {
+  it('Study Tools expands to Notes + AI Chat — GWA Calculator removed', () => {
     render(<PracticeScreen />)
     const collapsed = screen.getByTestId('study-tools-collapsed')
     fireEvent.press(collapsed)
-    // New cards present
-    expect(screen.getByText('GWA Calculator')).toBeTruthy()
+    // Kept cards present
     expect(screen.getByText('Notes')).toBeTruthy()
     expect(screen.getByText('AI Chat')).toBeTruthy()
-    // Removed cards absent
-    expect(screen.queryByText('UPCAT Mock Exam')).toBeNull()
-    expect(screen.queryByText('Career Paths')).toBeNull()
+    // Removed card absent
+    expect(screen.queryByText('GWA Calculator')).toBeNull()
   })
 
   it('AI Chat card in Study Tools calls openKuya on press', () => {
@@ -200,11 +269,13 @@ describe('PracticeScreen', () => {
     expect(screen.queryByText('Weak Topics Only')).toBeNull()
   })
 
-  it('Recommended section renders at most 4 items (sliced from 5)', async () => {
+  it('Recommended section renders at most 4 items (grid slices to 4)', async () => {
     // 5 focus topics — all Strong; sorted by strength they stay in array order,
-    // so StrongFive (5th) must be sliced off. We give each a unique suffix.
+    // so StrongFive (5th) must be sliced off by the recommended grid's slice(0,4).
+    // The Subjects accordion is gone, so StrongFive must not appear at all.
     mockUsePracticeData.mockReturnValue({
       ...emptyPracticeData,
+      subjects: [{ id: 's1', name: 'Science' }],
       topicRows: [
         { topic: { id: 't1', name: 'StrongOne', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 5, lastPracticedAt: null, accuracy: null },
         { topic: { id: 't2', name: 'StrongTwo', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 3, lastPracticedAt: null, accuracy: null },
@@ -219,20 +290,12 @@ describe('PracticeScreen', () => {
     })
     render(<PracticeScreen />)
     await act(async () => {})
-    // The recommended grid slices to 4. activeRecommended keeps slice(0,5), but render slices to 4.
-    // All 5 have equal strength, so array order is preserved; 5th item StrongFive should not appear
-    // in the recommended grid section (it may still appear in the subjects accordion — that's OK).
-    // We count occurrences of StrongFive: any in the Recommended section would be bad.
-    // The Recommended section shows cards with the topic name + "N cards".
-    // The accordion also shows it — so we check how many "Recommended" section cards there are (≤4).
-    const allStrongFive = screen.queryAllByText('StrongFive')
-    // In the Recommended grid, card shows topic name + "X cards" (RecommendedCard).
-    // Accordion rows show topic name too (TopicCard). The grid cards also appear in accordion.
-    // What we can assert: the count of "StrongOne" etc. cards = total appearances.
-    // Simpler: assert that of the 5 topics, at most 4 appear in a "X cards" (RecommendedCard) context.
-    // The safest assertion: the recommended grid was supposed to slice(0,4) meaning StrongFive
-    // should only appear once (in accordion) not twice (accordion + recommended).
-    expect(allStrongFive.length).toBeLessThanOrEqual(1)
+    // The recommended grid slices to 4. All 5 share equal strength, so array order
+    // is preserved; StrongFive (5th) is sliced off and — with no accordion — should
+    // not appear anywhere on the screen.
+    expect(screen.queryByText('StrongFive')).toBeNull()
+    // The first four DO render in the Recommended grid.
+    expect(screen.getByText('StrongOne')).toBeTruthy()
   })
 
   it('Mock Exams section header and See all renders when blueprints exist', async () => {
@@ -271,29 +334,33 @@ describe('PracticeScreen', () => {
     expect(screen.queryByText('EXTRA')).toBeNull()
   })
 
-  it('Mock exam button never renders on focus cards (regardless of blueprint match)', async () => {
-    mockListPublishedBlueprints.mockResolvedValue([
-      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
-    ])
-    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
-      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
-      { slug: 'acet', priority: 2, addedAt: 0, title: 'ACET 2025', type: 'exam' },
-    )
+  it('My Focus empty banner navigates to the Lists tab', () => {
     render(<PracticeScreen />)
-    await act(async () => {})
-    // Mock exam button must not appear anywhere on focus cards
-    expect(screen.queryByText('Mock exam')).toBeNull()
+    // No focus listings → empty banner with a "Lists" action
+    fireEvent.press(screen.getByText('Lists'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
   })
 
-  it('Review button renders on every focus card without tapping', async () => {
-    // 2 focus listings — both should show Review without any tap
+  it('My Focus card navigates to the start chooser (no inline Review button)', async () => {
     ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
       { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
-      { slug: 'acet', priority: 2, addedAt: 0, title: 'ACET 2025', type: 'exam' },
     )
     render(<PracticeScreen />)
     await act(async () => {})
-    const reviewBtns = screen.getAllByText('Review')
-    expect(reviewBtns.length).toBe(2)
+    // The inline Review button is gone.
+    expect(screen.queryByText('Review')).toBeNull()
+    // Tapping the card navigates to the new start chooser.
+    fireEvent.press(screen.getByText('UPCAT 2025'))
+    expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
+  })
+
+  it('My Focus "Add exam or scholarship" ghost card navigates to the Lists tab', async () => {
+    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
+      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
+    )
+    render(<PracticeScreen />)
+    await act(async () => {})
+    fireEvent.press(screen.getByText('＋ Add exam or scholarship'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
   })
 })

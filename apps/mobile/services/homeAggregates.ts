@@ -52,6 +52,11 @@ export interface SubjectBestSessionRow {
   bestPct: number
 }
 
+export interface ListingMockBestRow {
+  listingSlug: string
+  bestPct: number
+}
+
 // ── Aggregate functions ────────────────────────────────────────────────────────
 
 /**
@@ -293,6 +298,68 @@ export async function getSubjectSessionPercentages(
 
   return rows.map(r => ({
     subject: String(r.subject ?? ''),
+    bestPct: Number(r.bestPct ?? 0),
+  }))
+}
+
+/**
+ * getListingMockBest — per-listing BEST overall MOCK-exam attempt %.
+ *
+ * A single mock-exam attempt (app/practice/exam/[slug].tsx submit() via
+ * useRecordSession) writes ONE practice_sessions row per SECTION, each with
+ * topic_id='' (the mock sentinel), a non-empty `subtest` (the section name),
+ * and that section's raw score/total. Every section row of one attempt shares
+ * the same attempt start time, reconstructable as
+ *   completed_at - duration_secs*1000
+ * bucketed to the second (cast(.../1000 as integer)) to absorb the few-ms
+ * spread across the write loop.
+ *
+ * Two-level aggregation:
+ *   inner  — SELECT listing_slug, <attemptKey>, round(sum(score)*100.0/sum(total))
+ *            FROM practice_sessions
+ *            WHERE topic_id='' AND subtest IS NOT NULL AND subtest!=''
+ *                  AND total > 0 AND listing_slug != ''
+ *            GROUP BY listing_slug, attemptKey        -- one row per ATTEMPT
+ *   outer  — SELECT listing_slug, MAX(attemptPct) FROM (inner) GROUP BY listing_slug
+ *
+ * So the overall % is summed ACROSS sections per attempt (not the best single
+ * section), and bestPct is the MAX over a listing's attempts (not the average).
+ * Rows with total=0 or an empty listing_slug are excluded; a listing with no
+ * mock rows is absent from the result. Returns rounded integer percentages.
+ */
+export async function getListingMockBest(
+  db: DrizzleClient,
+): Promise<ListingMockBestRow[]> {
+  const attempts = db
+    .select({
+      listingSlug: practiceSessions.listingSlug,
+      attemptKey: sql<number>`cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer)`.as('attempt_key'),
+      attemptPct: sql<number>`round(sum(${practiceSessions.score}) * 100.0 / sum(${practiceSessions.total}))`.as('attempt_pct'),
+    })
+    .from(practiceSessions)
+    .where(and(
+      eq(practiceSessions.topicId, ''),
+      isNotNull(practiceSessions.subtest),
+      ne(practiceSessions.subtest, ''),
+      sql`${practiceSessions.total} > 0`,
+      ne(practiceSessions.listingSlug, ''),
+    ))
+    .groupBy(
+      practiceSessions.listingSlug,
+      sql`cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer)`,
+    )
+    .as('attempts')
+
+  const rows = await db
+    .select({
+      listingSlug: attempts.listingSlug,
+      bestPct: sql<number>`max(${attempts.attemptPct})`.as('best_pct'),
+    })
+    .from(attempts)
+    .groupBy(attempts.listingSlug)
+
+  return rows.map(r => ({
+    listingSlug: r.listingSlug,
     bestPct: Number(r.bestPct ?? 0),
   }))
 }

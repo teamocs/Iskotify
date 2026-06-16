@@ -1,6 +1,4 @@
 import { useState, useCallback, useMemo, memo, useEffect } from 'react'
-import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
-import { SubjectAccordion } from '../../components/SubjectAccordion'
 import {
   StyleSheet, View, Text, Pressable,
   Modal, TextInput, Alert, FlatList,
@@ -10,28 +8,31 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
-import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
+import { useFocusListings } from '../../hooks/useFocusListings'
 import { useDb } from '../../hooks/useDb'
 import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
-import { cachedQuery, subscribe } from '../../services/queryCache'
+import { cachedQuery, invalidate, subscribe } from '../../services/queryCache'
+import {
+  getTopicBestSessionPercentages,
+  getSubjectSessionPercentages,
+  getListingMockBest,
+} from '../../services/homeAggregates'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
+import { readinessTone } from '../../utils/readinessTone'
+import type { ReadinessTone } from '../../utils/readinessTone'
+import { subjectsToImprove } from '../../utils/subjectsToImprove'
+import { subjectColor } from '../../utils/subjectColors'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, typography } from '../../theme/tokens'
+import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { SplitStatCard } from '../../components/ui/SplitStatCard'
+import { InfoBanner } from '../../components/ui/InfoBanner'
 import { ListCard } from '../../components/ui/ListCard'
-import { Badge } from '../../components/ui/Badge'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
-
-// Maps a topic strength to a design-system Badge tone.
-const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
-  New: 'accent', Weak: 'danger', Review: 'warning', Strong: 'success',
-}
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -59,15 +60,6 @@ function useStrengthColor(strength: Strength) {
   }
 }
 
-function lastPracticedLabel(ts: number | null): string {
-  if (!ts) return 'Never'
-  const diff = Date.now() - ts
-  const days = Math.floor(diff / 86_400_000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  return `${days}d ago`
-}
-
 // ── Recommended card (2-col grid) ────────────────────────────────────────────
 
 type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; grid: object; cardWrap: object }
@@ -86,24 +78,6 @@ function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
       <Text style={rc.name} numberOfLines={2}>{row.topic.name}</Text>
       <Text style={rc.sub}>{row.cardCount} cards</Text>
     </Pressable>
-  )
-}
-
-// ── Topic card ────────────────────────────────────────────────────────────────
-
-function TopicCard({ row }: { row: TopicRow }) {
-  const c = useStrengthColor(row.strength)
-  return (
-    <View style={{ marginBottom: spacing.sm }}>
-      <ListCard
-        icon={<Text style={{ color: c.iconColor, fontSize: 15 }}>📖</Text>}
-        iconBg={c.iconBg}
-        title={row.topic.name}
-        subtitle={`${row.cardCount} cards · ${lastPracticedLabel(row.lastPracticedAt)}`}
-        trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
-        onPress={() => router.push(`/practice/${row.topic.id}`)}
-      />
-    </View>
   )
 }
 
@@ -140,7 +114,7 @@ function DeckCard({
 
 // ── Create Deck Modal ─────────────────────────────────────────────────────────
 
-type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object }
+type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object; searchBar: object; searchBarTxt: object; resultRow: object; resultType: object; resultName: object; resultEmpty: object }
 
 // Memoized row for the deck-topic FlatList — keeps renderItem cheap so a row only
 // re-renders when its own selected state changes.
@@ -289,71 +263,122 @@ function CreateDeckModal({
   )
 }
 
-// ── Focus card ────────────────────────────────────────────────────────────────
+// ── Search Modal (subjects · topics · mock exams) ─────────────────────────────
 
-function FocusCard({ row, isActive, accuracy, onPress, onReview }: {
-  row: FocusListing
-  isActive: boolean
-  accuracy: number | null
-  onPress: () => void
-  onReview: () => void
+type SearchResult = { key: string; type: string; name: string; onPress: () => void }
+
+function SearchModal({
+  visible,
+  subjects,
+  topicRows,
+  blueprints,
+  onClose,
+  m,
+}: {
+  visible: boolean
+  subjects: Array<{ id: string; name: string }>
+  topicRows: TopicRow[]
+  blueprints: PublishedBlueprint[]
+  onClose: () => void
+  m: MStyles
 }) {
-  const { theme: t, typo } = useTheme()
-  const fc = useMemo(() => StyleSheet.create({
-    card: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
-    cardActive: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)', borderWidth: 2 },
-    badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.xs, fontFamily: 'Lexend_600SemiBold' },
-    name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 16, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm - 2 },
-    scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xs / 2 },
-    score: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.textTertiary },
-    actionsCol: { marginTop: spacing.xs, gap: spacing.xs },
-    reviewBtn: { backgroundColor: t.accentStrong, borderRadius: radius.sm - 4, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 1, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-    reviewBtnTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textInverse, fontFamily: 'Lexend_600SemiBold' },
-  }), [t, typo])
-  return (
+  const { theme: t } = useTheme()
+  const insets = useSafeAreaInsets()
+  const [query, setQuery] = useState('')
+
+  function handleClose() { setQuery(''); onClose() }
+
+  // Flatten all searchable entries once per data change.
+  const allEntries = useMemo<SearchResult[]>(() => {
+    const entries: SearchResult[] = []
+    for (const s of subjects) {
+      entries.push({ key: `subject:${s.id}`, type: 'Subject', name: s.name, onPress: () => router.push(`/subjects/${s.id}`) })
+    }
+    for (const row of topicRows) {
+      entries.push({ key: `topic:${row.topic.id}`, type: 'Topic', name: row.topic.name, onPress: () => router.push(`/practice/${row.topic.id}`) })
+    }
+    for (const bp of blueprints) {
+      entries.push({ key: `mock:${bp.slug}`, type: 'Mock exam', name: `${bp.acronym} · ${bp.name}`, onPress: () => router.push(`/practice/exam/${bp.slug}`) })
+    }
+    return entries
+  }, [subjects, topicRows, blueprints])
+
+  const results = useMemo<SearchResult[]>(() => {
+    const q = query.trim().toLowerCase()
+    if (q === '') return []
+    return allEntries.filter(e => e.name.toLowerCase().includes(q)).slice(0, 30)
+  }, [query, allEntries])
+
+  const handleResultPress = useCallback((result: SearchResult) => {
+    setQuery('')
+    onClose()
+    result.onPress()
+  }, [onClose])
+
+  const renderResult = useCallback(({ item }: { item: SearchResult }) => (
     <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [fc.card, isActive && fc.cardActive, pressed && { opacity: 0.8 }]}
+      style={({ pressed }) => [m.resultRow, pressed && { opacity: 0.7 }]}
+      onPress={() => handleResultPress(item)}
       accessibilityRole="button"
+      accessibilityLabel={`${item.type}: ${item.name}`}
     >
-      <Text style={fc.badge}>#{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}</Text>
-      <Text style={fc.name} numberOfLines={2}>{row.title}</Text>
-      <View style={fc.scoreRow}>
-        <Text style={fc.score}>{accuracy != null ? `${accuracy}%` : '—'}</Text>
-      </View>
-      <View style={fc.actionsCol}>
-        <Pressable
-          style={({ pressed }) => [fc.reviewBtn, pressed && { opacity: 0.8 }]}
-          onPress={onReview}
-          accessibilityRole="button"
-          accessibilityLabel="Review"
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-        >
-          <Text style={fc.reviewBtnTxt} maxFontSizeMultiplier={1.4}>Review</Text>
-        </Pressable>
+      <View style={{ flex: 1 }}>
+        <Text style={m.resultName} numberOfLines={1} maxFontSizeMultiplier={1.4}>{item.name}</Text>
+        <Text style={m.resultType} maxFontSizeMultiplier={1.4}>{item.type}</Text>
       </View>
     </Pressable>
+  ), [m, handleResultPress])
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <View style={m.overlay}>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close search"
+        />
+        <KeyboardAvoidingView behavior="padding" style={{ width: '100%' }}>
+          <View style={[m.sheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
+            <View style={m.headerRow}>
+              <Text style={m.title}>Search</Text>
+              <Pressable onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close" style={({ pressed }) => pressed && { opacity: 0.7 }}>
+                <Text style={m.closeBtn}>✕</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={m.input}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search subjects, topics, or mock exams"
+              placeholderTextColor={t.textTertiary}
+              autoFocus
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {query.trim() === '' ? (
+              <Text style={m.resultEmpty} maxFontSizeMultiplier={1.4}>
+                Type to search your subjects, topics, and mock exams
+              </Text>
+            ) : results.length > 0 ? (
+              <FlatList
+                style={m.topicList}
+                data={results}
+                keyExtractor={(item) => item.key}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                renderItem={renderResult}
+              />
+            ) : (
+              <Text style={m.resultEmpty} maxFontSizeMultiplier={1.4}>
+                No matches found
+              </Text>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   )
-}
-
-// ── Per-focus analytics wrapper (calls hook per slug) ─────────────────────────
-// React rules require hooks at top level, so we call useAnalytics for up to
-// 5 focus slugs and map results by index.
-
-const MAX_FOCUS = 5
-
-function useFocusAnalyticsMap(slugs: string[]): Map<string, number | null> {
-  const a0 = useAnalytics(slugs[0] ?? '')
-  const a1 = useAnalytics(slugs[1] ?? '')
-  const a2 = useAnalytics(slugs[2] ?? '')
-  const a3 = useAnalytics(slugs[3] ?? '')
-  const a4 = useAnalytics(slugs[4] ?? '')
-  const all = [a0, a1, a2, a3, a4]
-  const map = new Map<string, number | null>()
-  slugs.slice(0, MAX_FOCUS).forEach((slug, i) => {
-    map.set(slug, all[i]?.avgAccuracy ?? null)
-  })
-  return map
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -402,6 +427,20 @@ function makeStyles(
       addBtnTxt: { color: t.textInverse, fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
       list: { gap: spacing.xl },
       empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
+      // Search bar (opens the search modal)
+      searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: t.surface,
+        borderWidth: 1,
+        borderColor: t.border,
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm + 2,
+      },
+      searchBarTxt: { flex: 1, fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
     rc: StyleSheet.create({
       grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -417,6 +456,46 @@ function makeStyles(
       mockCardName: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs },
       mockCardMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     }),
+    // Readiness card (subject readiness + My Focus) — horizontal progress fill
+    // clipped to the rounded corners, content above via zIndex.
+    rd: StyleSheet.create({
+      card: {
+        position: 'relative',
+        overflow: 'hidden',
+        flex: 1,
+        backgroundColor: t.surface,
+        borderWidth: 1,
+        borderColor: t.border,
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        boxShadow: t.shadowSm,
+        padding: spacing.md,
+        minHeight: 84,
+        justifyContent: 'space-between',
+      },
+      fill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
+      content: { position: 'relative', zIndex: 1, flex: 1, justifyContent: 'space-between' },
+      topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm - 2 },
+      dot: { width: 10, height: 10, borderRadius: 5 },
+      badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
+      name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 17, fontFamily: 'Outfit_700Bold', marginTop: spacing.xs / 2 },
+      pct: { fontSize: typo.lg, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -0.3, marginTop: spacing.xs / 2 },
+      // dashed ghost "+ Add" card spanning the grid item width
+      addCard: {
+        minHeight: 84,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: t.border,
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        padding: spacing.md,
+      },
+      addTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', textAlign: 'center' },
+    }),
     m: StyleSheet.create({
       overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
       sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, borderCurve: 'continuous', padding: spacing.xl, paddingBottom: spacing.xxxl, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
@@ -429,7 +508,7 @@ function makeStyles(
       btnFlex: { flex: 1 },
       btnDisabled: { opacity: 0.4 },
       btnTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-      topicList: { maxHeight: 280, marginBottom: spacing.lg - 2 },
+      topicList: { maxHeight: 320, marginBottom: spacing.lg - 2 },
       topicRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
       topicRowOn: { backgroundColor: t.accentSurface, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 2 },
       checkbox: { width: 22, height: 22, borderRadius: radius.sm - 4, borderCurve: 'continuous', borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -440,25 +519,90 @@ function makeStyles(
       footerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
       backBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
       backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+      // Search result row
+      searchBar: {},
+      searchBarTxt: {},
+      resultRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle, minHeight: 48 },
+      resultName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+      resultType: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 },
+      resultEmpty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', paddingVertical: spacing.xl },
     }),
   }
 }
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, recommendedTopics, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
+  const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
+  const [searchVisible, setSearchVisible] = useState(false)
 
   // Progressive-disclosure state
   const [aiFeedbackExpanded, setAiFeedbackExpanded] = useState(false)
   const [studyToolsExpanded, setStudyToolsExpanded] = useState(false)
 
-  // Overall analytics (stats header)
+  // Overall analytics — still feeds AI Study Feedback (weakest subjects).
   const overallAnalytics = useAnalytics('overall')
+
+  const db = useDb()
+
+  // ── Readiness maps (SESSION-based, mirrors Home) ─────────────────────────────
+  // Bumped by onRefresh (after invalidating the cache) to force fresh re-fetches.
+  const [reloadKey, setReloadKey] = useState(0)
+
+  // Subject readiness: per-topic review bests + subject-level mock bests.
+  const [sessionReadiness, setSessionReadiness] = useState<{
+    perTopicBest: Map<string, number>
+    subjectBest: Map<string, number>
+  }>(() => ({ perTopicBest: new Map(), subjectBest: new Map() }))
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const [topicBest, subjectBest] = await cachedQuery(
+          'practice:sessionReadiness',
+          30_000,
+          () => Promise.all([
+            getTopicBestSessionPercentages(db),
+            getSubjectSessionPercentages(db),
+          ]),
+        )
+        if (!cancelled) {
+          setSessionReadiness({
+            perTopicBest: new Map(topicBest.map(r => [r.topicId, r.bestPct])),
+            subjectBest: new Map(subjectBest.map(r => [r.subject, r.bestPct])),
+          })
+        }
+      } catch (e) {
+        console.warn('[practice/sessionReadiness] load failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [db, reloadKey])
+
+  // My Focus readiness: per-listing best overall MOCK-exam attempt %.
+  const [mockBestBySlug, setMockBestBySlug] = useState<Map<string, number>>(() => new Map())
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const rows = await cachedQuery('practice:mockReadiness', 30_000, () => getListingMockBest(db))
+        if (!cancelled) {
+          setMockBestBySlug(new Map(rows.map(r => [r.listingSlug, r.bestPct])))
+        }
+      } catch (e) {
+        console.warn('[practice/mockReadiness] load failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [db, reloadKey])
 
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
+    // Drop the cached readiness maps and re-trigger their effects for fresh data.
+    invalidate('practice:sessionReadiness')
+    invalidate('practice:mockReadiness')
+    setReloadKey(k => k + 1)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
@@ -483,11 +627,9 @@ export default function PracticeScreen() {
     />
   ), [refreshing, onRefresh, t.accent, t.surface])
 
-  const { s, rc, m } = useMemo(() => makeStyles(t, typo, bp), [t, typo, bp])
+  const { s, rc, rd, m } = useMemo(() => makeStyles(t, typo, bp), [t, typo, bp])
 
-  const db = useDb()
   const { focusListings: focusListingsList } = useFocusListings()
-  const [activeFocusSlug, setActiveFocusSlug] = useState<string>('')
 
   // Published blueprints — fetched on mount and re-pulled whenever the cache
   // key is invalidated (e.g. after a sync that fires invalidate('practice:')).
@@ -504,9 +646,8 @@ export default function PracticeScreen() {
     return () => { cancelled = true; unsub() }
   }, [db])
 
-  // Per-focus accuracy map — hooks called unconditionally at top level
+  // Focus slugs drive the blueprint ordering (focus-first).
   const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
-  const focusAccuracyMap = useFocusAnalyticsMap(focusSlugs)
 
   // Blueprints ordered by focus-first, then displayOrder
   const orderedBlueprints = useMemo(
@@ -514,10 +655,9 @@ export default function PracticeScreen() {
     [blueprints, focusSlugs]
   )
 
-  // Default to the first focus listing until the user taps another. Derived during
-  // render (not via an effect) so there's no extra render or stale-state hop; an
-  // explicit user pick wins because the non-empty stored slug short-circuits the ||.
-  const effectiveFocusSlug = activeFocusSlug || focusListingsList[0]?.slug || ''
+  // Recommended is driven by the FIRST focus listing (cards no longer set an
+  // active slug — they navigate to the new chooser instead).
+  const effectiveFocusSlug = focusListingsList[0]?.slug || ''
 
   const activeTopicIds = useMemo(
     () => new Set(topicIdsByListingSlug[effectiveFocusSlug] ?? []),
@@ -545,37 +685,24 @@ export default function PracticeScreen() {
     [cardCountByTopic]
   )
 
-  const topicRowById = useMemo(
-    () => new Map(topicRows.map(r => [r.topic.id, r])),
-    [topicRows]
+  // Per-subject readiness (lowest first) for the Subject readiness grid —
+  // SESSION-based, consistent with Home + Subject Details.
+  const subjectReadiness = useMemo(
+    () => subjectsToImprove(topicRows, subjects, sessionReadiness.perTopicBest, sessionReadiness.subjectBest),
+    [topicRows, subjects, sessionReadiness],
   )
 
-  const subjectGroups = useMemo(() => {
-    function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
-      const practiced = items.filter(i => i.accuracy != null) as Array<{ accuracy: number }>
-      if (practiced.length === 0) return 0
-      return Math.round(practiced.reduce((s, i) => s + i.accuracy, 0) / practiced.length)
+  // Readiness tone → token mapping for the progress bars (mirrors Home).
+  // fill = subtle surface tint (text stays ≥4.5:1 over it); pct = solid level color.
+  // 'none' (not practiced): no fill, em-dash in tertiary text.
+  const toneTokens = useCallback((tone: ReadinessTone): { fill: string | null; pct: string } => {
+    switch (tone) {
+      case 'strong': return { fill: t.successSurface, pct: t.success }
+      case 'fair':   return { fill: t.warningSurface, pct: t.warning }
+      case 'weak':   return { fill: t.dangerSurface,  pct: t.danger }
+      default:       return { fill: null,             pct: t.textTertiary }
     }
-    return groupTopicsBySubject(
-      {
-        topics: topicRows.map(r => ({
-          id: r.topic.id,
-          name: r.topic.name,
-          subjectId: r.topic.subjectId,
-          accuracy: r.accuracy,
-        })),
-        subjects,
-        focusListingSlugs: focusListingsList.map(l => l.slug),
-        topicIdsByListingSlug,
-      },
-      (t) => topicRowById.get(t.id)!,
-      (rows, raws) => {
-        const allNew = raws.every(r => r.accuracy == null)
-        return allNew ? `${rows.length} topics · New` : `${rows.length} topics · ${avgAccuracy(raws)}% avg`
-      },
-      'accuracy-asc',
-    )
-  }, [topicRows, topicRowById, subjects, focusListingsList, topicIdsByListingSlug])
+  }, [t])
 
   // AI feedback: weakest subjects from overall topicMastery (bottom by accuracy)
   const weakSubjectsFeedback = useMemo(() => {
@@ -594,20 +721,9 @@ export default function PracticeScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      {/* (1) Header + stats */}
+      {/* (1) Header */}
       <View style={s.header}>
         <Text style={s.title}>Exams</Text>
-
-        {/* Stats row — split statistics card (design system §3) */}
-        <View style={{ marginTop: spacing.md }}>
-          <SplitStatCard
-            columns={[
-              { value: overallAnalytics.avgAccuracy != null ? `${overallAnalytics.avgAccuracy}%` : '—', label: 'Accuracy' },
-              { value: `${overallAnalytics.streak} 🔥`, label: 'Streak' },
-              { value: String(overallAnalytics.sessionCount), label: 'Exams taken' },
-            ]}
-          />
-        </View>
       </View>
 
       <ScreenScroll
@@ -615,27 +731,122 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
-        {/* (2) My Focus 2-col grid */}
-        {focusListingsList.length > 0 ? (
-          <View>
-            <SectionHeader title="My Focus" />
+        {/* (2) Subject readiness — per-subject readiness grid (lowest first) */}
+        <View>
+          <SectionHeader
+            title="Subject readiness"
+            subtitle="Tap a subject to see your topic readiness"
+          />
+          {subjectReadiness.length > 0 ? (
             <View style={rc.grid}>
-              {focusListingsList.map(row => (
-                <View key={row.slug} style={rc.cardWrap}>
-                  <FocusCard
-                    row={row}
-                    isActive={row.slug === effectiveFocusSlug}
-                    accuracy={focusAccuracyMap.get(row.slug) ?? null}
-                    onPress={() => setActiveFocusSlug(row.slug)}
-                    onReview={() => router.push(`/practice/listing/${row.slug}?mode=all`)}
-                  />
-                </View>
-              ))}
+              {subjectReadiness.map(subject => {
+                const tone = readinessTone(subject.pct)
+                const { fill, pct: pctColor } = toneTokens(tone)
+                const fillPct = Math.max(0, Math.min(100, subject.pct))
+                return (
+                  <View key={subject.id} style={rc.cardWrap}>
+                    <Pressable
+                      style={({ pressed }) => [rd.card, pressed && { opacity: 0.8 }]}
+                      onPress={() => router.push(`/subjects/${subject.id}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={subject.name}
+                    >
+                      {fill != null ? (
+                        <View style={[rd.fill, { width: `${fillPct}%`, backgroundColor: fill }]} />
+                      ) : null}
+                      <View style={rd.content}>
+                        <View style={rd.topRow}>
+                          <View style={[rd.dot, { backgroundColor: subjectColor(subject.id).accent }]} />
+                          <Text style={rd.name} numberOfLines={2} maxFontSizeMultiplier={1.4}>{subject.name}</Text>
+                        </View>
+                        <Text style={[rd.pct, { color: pctColor }]} maxFontSizeMultiplier={1.4}>{subject.pct}%</Text>
+                      </View>
+                    </Pressable>
+                  </View>
+                )
+              })}
             </View>
-          </View>
-        ) : null}
+          ) : (
+            <Text style={s.empty} maxFontSizeMultiplier={1.4}>
+              Practice to see your subject readiness here
+            </Text>
+          )}
+        </View>
 
-        {/* (3) Recommended 2-col grid — "what next" */}
+        {/* (3) Search — full-width bar opening the search modal */}
+        <View>
+          <Pressable
+            style={({ pressed }) => [s.searchBar, pressed && { opacity: 0.8 }]}
+            onPress={() => setSearchVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Search subjects, topics, or mock exams"
+          >
+            <Text maxFontSizeMultiplier={1.4}>🔍</Text>
+            <Text style={s.searchBarTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              Search subjects, topics, or mock exams
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* (4) My Focus — per-target mock-exam readiness grid */}
+        <View>
+          <SectionHeader title="My Focus" subtitle="Your mock-exam readiness per target" />
+          {focusListingsList.length > 0 ? (
+            <View style={rc.grid}>
+              {focusListingsList.map(row => {
+                const best = mockBestBySlug.get(row.slug) ?? null
+                const tone = readinessTone(best)
+                const { fill, pct: pctColor } = toneTokens(tone)
+                const fillPct = best != null ? Math.max(0, Math.min(100, best)) : 0
+                const pctLabel = best != null ? `${best}%` : '—'
+                return (
+                  <View key={row.slug} style={rc.cardWrap}>
+                    <Pressable
+                      style={({ pressed }) => [rd.card, pressed && { opacity: 0.8 }]}
+                      onPress={() => router.push(`/practice/start/${row.slug}`)}
+                      accessibilityRole="button"
+                      accessibilityLabel={row.title}
+                    >
+                      {fill != null ? (
+                        <View style={[rd.fill, { width: `${fillPct}%`, backgroundColor: fill }]} />
+                      ) : null}
+                      <View style={rd.content}>
+                        <View style={rd.topRow}>
+                          <Text style={rd.badge} maxFontSizeMultiplier={1.4}>
+                            #{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}
+                          </Text>
+                        </View>
+                        <Text style={rd.name} numberOfLines={2} maxFontSizeMultiplier={1.4}>{row.title}</Text>
+                        <Text style={[rd.pct, { color: pctColor }]} maxFontSizeMultiplier={1.4}>{pctLabel}</Text>
+                      </View>
+                    </Pressable>
+                  </View>
+                )
+              })}
+              {/* Add-more-targets ghost card — additive action distinct from focus cards */}
+              <View style={rc.cardWrap}>
+                <Pressable
+                  style={({ pressed }) => [rd.addCard, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/(tabs)/listings')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add exam or scholarship"
+                >
+                  <Text style={rd.addTxt} maxFontSizeMultiplier={1.4}>＋ Add exam or scholarship</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <InfoBanner
+              icon={<Text style={{ fontSize: 16 }}>🎯</Text>}
+              message="Add an exam or scholarship from the Lists tab"
+              actionLabel="Lists"
+              onAction={() => router.push('/(tabs)/listings')}
+              tone="neutral"
+            />
+          )}
+        </View>
+
+        {/* (5) Recommended 2-col grid — "what next" */}
         {activeRecommended.length > 0 ? (
           <View>
             <View style={s.secRow}>
@@ -652,7 +863,7 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* (4) Mock Exams section */}
+        {/* (6) Mock Exams section */}
         {blueprints.length > 0 ? (
           <View>
             <SectionHeader
@@ -684,22 +895,7 @@ export default function PracticeScreen() {
           </View>
         ) : null}
 
-        {/* (5) Subjects accordion */}
-        <View>
-          <SectionHeader title="Subjects" />
-          <SubjectAccordion
-            groups={subjectGroups}
-            emptyText="No topics yet — they'll appear here after sync"
-            initiallyExpanded="focused"
-            keyExtractor={(t) => t.topic.id}
-            renderRow={(row) => {
-              if (!row) return null  // defensive — shouldn't happen, but no crash if it does
-              return <TopicCard row={row} />
-            }}
-          />
-        </View>
-
-        {/* (6) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
+        {/* (7) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
         <View>
           <View style={s.secRow}>
             <Text style={s.secTitle}>Saved Decks</Text>
@@ -727,7 +923,7 @@ export default function PracticeScreen() {
           ) : null}
         </View>
 
-        {/* (7) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
+        {/* (8) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
         <View>
           {aiFeedbackExpanded ? (
             <Card elevated style={s.aiFeedbackCard}>
@@ -778,7 +974,7 @@ export default function PracticeScreen() {
           )}
         </View>
 
-        {/* (8) Study tools — collapsed "Study tools" row expanding inline to 3 links */}
+        {/* (9) Study tools — collapsed "Study tools" row expanding inline to links */}
         <View>
           {studyToolsExpanded ? (
             <View>
@@ -794,13 +990,6 @@ export default function PracticeScreen() {
                 </Pressable>
               </View>
               <View style={{ gap: spacing.sm }}>
-                <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>🧮</Text>}
-                  iconBg="rgba(245,158,11,0.14)"
-                  title="GWA Calculator"
-                  subtitle="Compute your General Weighted Average · UP scale"
-                  onPress={() => router.push('/estimator/gwa')}
-                />
                 <ListCard
                   icon={<Text style={{ fontSize: 15 }}>📝</Text>}
                   iconBg="rgba(128,0,0,0.18)"
@@ -829,7 +1018,7 @@ export default function PracticeScreen() {
               <Text style={s.collapsedIcon}>🛠️</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.collapsedLabel}>Study Tools</Text>
-                <Text style={s.collapsedSub}>GWA Calculator · Notes · AI Chat</Text>
+                <Text style={s.collapsedSub}>Notes · AI Chat</Text>
               </View>
               <Text style={s.collapsedChevron}>›</Text>
             </Pressable>
@@ -843,6 +1032,15 @@ export default function PracticeScreen() {
         topicRows={topicRows}
         onClose={() => setModalVisible(false)}
         onCreate={createDeck}
+        m={m}
+      />
+
+      <SearchModal
+        visible={searchVisible}
+        subjects={subjects}
+        topicRows={topicRows}
+        blueprints={blueprints}
+        onClose={() => setSearchVisible(false)}
         m={m}
       />
     </SafeAreaView>
