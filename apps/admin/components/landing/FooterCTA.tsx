@@ -18,7 +18,7 @@ export function FooterCTA() {
             {/* Kuya Baw mascot — left */}
             <div className="flex-shrink-0 order-first">
               <Image
-                src="/kuya-baw-mascot.svg"
+                src="/kuya-baw-waving.png"
                 alt="Kuya Baw"
                 width={120}
                 height={120}

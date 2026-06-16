@@ -85,7 +85,7 @@ function KuyaBawChat() {
       <div className="flex items-end gap-2">
         <div className="flex-shrink-0">
           <Image
-            src="/kuya-baw-mascot.svg"
+            src="/kuya-baw-avatar.png"
             alt="Kuya Baw"
             width={36}
             height={36}
