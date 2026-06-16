@@ -32,6 +32,8 @@ After the first deploy, every push to `master` triggers a new production deploym
 
 Set all variables for the **Production** environment. For preview branches, duplicate as needed.
 
+> **Tip:** Once deployed, copy your Vercel production URL and set `NEXT_PUBLIC_WEB_APP_URL=<url>` in the **admin** Vercel project (`apps/admin`) to surface a "Try on Web" button on the admin marketing landing page.
+
 ---
 
 ## 3. Supabase — Auth configuration

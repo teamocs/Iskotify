@@ -18,6 +18,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedDecks, userProgress, practiceSessions,
+  userRequirements,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -68,7 +69,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows] = await Promise.all([
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
@@ -77,6 +78,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     db.select().from(notesTable),
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
+    db.select().from(userRequirements),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -89,6 +91,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     notes: noteRows,
     note_labels: labelRows,
     note_label_assignments: assignRows,
+    user_requirements: reqRows,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -194,6 +197,25 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
 
       const remoteAssigns: typeof noteLabelAssignments.$inferInsert[] = data.note_label_assignments ?? []
       for (const row of remoteAssigns) tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
+
+      // user_requirements (scholarship requirement acquisition). OPTIONAL on pull:
+      // older backups predate this field, so `?? []` keeps them restoring fine.
+      // Wipe+restore when the server has rows (server is source of truth at sign-in);
+      // its own try/catch so a single bad row can't roll back the notes restore above.
+      try {
+        const remoteReqs: typeof userRequirements.$inferInsert[] = data.user_requirements ?? []
+        if (remoteReqs.length > 0) {
+          tx.delete(userRequirements).run()
+          for (const row of remoteReqs) {
+            tx.insert(userRequirements)
+              .values({ listingSlug: row.listingSlug, requirementIndex: row.requirementIndex, acquiredAt: row.acquiredAt })
+              .onConflictDoNothing()
+              .run()
+          }
+        }
+      } catch (e) {
+        console.warn('[sync] user_requirements restore failed (non-fatal):', e)
+      }
     })
   } catch (e) {
     console.warn('[sync] secondary data restore failed (non-fatal):', e)

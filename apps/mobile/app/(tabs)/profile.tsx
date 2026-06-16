@@ -249,6 +249,12 @@ export default function ProfileScreen() {
     analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     analyticsBody:    { marginTop: spacing.md },
     analyticsChevron: { fontSize: typography.sm, color: t.textTertiary, marginLeft: spacing.xs },
+    signInCard:    { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
+    signInBadge:   { width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.textInverse, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    signInBadgeText: { fontSize: typo.xl, fontWeight: '700', color: t.accentStrong, fontFamily: 'Outfit_700Bold' },
+    signInTitle:   { fontSize: typo.base, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
+    signInSubtitle:{ fontSize: typo.sm, color: t.textInverse, opacity: 0.85, fontFamily: 'Lexend_400Regular', marginTop: 2 },
+    signInChevron: { fontSize: 22, color: t.textInverse, opacity: 0.9 },
   }), [t, typo])
 
   const isMountedRef = useRef(true)
@@ -360,6 +366,10 @@ export default function ProfileScreen() {
   // On web, sign-out routes to /auth/sign-in (the web login screen).
   // On native, it routes to /landing (the native welcome/Google sign-in screen).
   const postSignOutRoute = Platform.OS === 'web' ? '/auth/sign-in' : '/landing'
+
+  // Sign-IN entry (for users who skipped auth at startup) reuses the existing
+  // auth flow — no duplicated OAuth code. Same route map as sign-out.
+  const signInRoute = postSignOutRoute
 
   function handleSignOut() {
     Alert.alert(
@@ -485,6 +495,41 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </Card>
+
+        {/* Sign-in entry — only for users who skipped auth at startup (no googleId).
+            Routes to the EXISTING auth flow; no duplicated OAuth code. */}
+        {!profile.googleId ? (
+          <Pressable
+            onPress={() => router.push(signInRoute)}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in with Google to back up your progress"
+            style={({ pressed }) => [
+              {
+                backgroundColor: t.accentStrong,
+                borderRadius: radius.xl,
+                borderCurve: 'continuous',
+                padding: spacing.lg,
+                minHeight: 44,
+              },
+              pressed ? { opacity: 0.85 } : null,
+            ]}
+          >
+            <View style={s.signInCard}>
+              <View style={s.signInBadge}>
+                <Text style={s.signInBadgeText} maxFontSizeMultiplier={1.4}>G</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.signInTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                  Sign in with Google
+                </Text>
+                <Text style={s.signInSubtitle} numberOfLines={2} maxFontSizeMultiplier={1.4}>
+                  Save your data and restore it on any device
+                </Text>
+              </View>
+              <Text style={s.signInChevron} maxFontSizeMultiplier={1.4}>›</Text>
+            </View>
+          </Pressable>
+        ) : null}
 
         {/* My Focus List */}
         <Card elevated>

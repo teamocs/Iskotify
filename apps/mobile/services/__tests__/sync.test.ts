@@ -275,6 +275,12 @@ function makeTestDb(): DrizzleClient {
       label_id TEXT NOT NULL,
       PRIMARY KEY (note_id, label_id)
     );
+    CREATE TABLE user_requirements (
+      listing_slug TEXT NOT NULL,
+      requirement_index INTEGER NOT NULL,
+      acquired_at INTEGER NOT NULL,
+      PRIMARY KEY (listing_slug, requirement_index)
+    );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
 }
@@ -426,6 +432,63 @@ describe('pullUserData', () => {
     expect(s.notificationsEnabled).toBe(false)
     expect(s.theme).toBe('dark')
     expect(s.focusModeEnabled).toBe(false)
+  })
+
+  it('restores user_requirements from remote', async () => {
+    const fromBuilder = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          focus_listings: [],
+          saved_decks: [],
+          user_progress: [],
+          practice_sessions: [],
+          settings: null,
+          user_requirements: [
+            { listingSlug: 'dost-sei', requirementIndex: 0, acquiredAt: 1000 },
+            { listingSlug: 'dost-sei', requirementIndex: 2, acquiredAt: 2000 },
+          ],
+        },
+        error: null,
+      }),
+    }
+    supabase.from.mockReturnValue(fromBuilder)
+    const db = makeTestDb()
+    await pullUserData(db)
+    const reqRows = await db.select().from(schema.userRequirements)
+    expect(reqRows).toHaveLength(2)
+    expect(reqRows.map(r => r.requirementIndex).sort()).toEqual([0, 2])
+    expect(reqRows.find(r => r.requirementIndex === 0)?.listingSlug).toBe('dost-sei')
+    expect(reqRows.find(r => r.requirementIndex === 2)?.acquiredAt).toBe(2000)
+  })
+
+  it('restores fine when an older payload has no user_requirements field', async () => {
+    const fromBuilder = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          // No user_requirements key at all — simulates a backup written before this field existed
+          focus_listings: [{ listingSlug: 'upcat-2026', priority: 1, addedAt: 100 }],
+          saved_decks: [],
+          user_progress: [],
+          practice_sessions: [],
+          settings: null,
+        },
+        error: null,
+      }),
+    }
+    supabase.from.mockReturnValue(fromBuilder)
+    const db = makeTestDb()
+    await pullUserData(db)
+    // Critical sections still restore; user_requirements simply stays empty (no crash)
+    const focusRows = await db.select().from(schema.focusListings)
+    expect(focusRows).toHaveLength(1)
+    const reqRows = await db.select().from(schema.userRequirements)
+    expect(reqRows).toHaveLength(0)
   })
 })
 
@@ -1509,7 +1572,8 @@ describe('pushUserData includes notes', () => {
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userSettings
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // notes
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabels
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // noteLabelAssignments
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabelAssignments
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // userRequirements
     }
 
     const { pushUserData } = require('../sync')
@@ -1520,6 +1584,7 @@ describe('pushUserData includes notes', () => {
     expect(payload).toHaveProperty('notes')
     expect(payload).toHaveProperty('note_labels')
     expect(payload).toHaveProperty('note_label_assignments')
+    expect(payload).toHaveProperty('user_requirements')
   })
 })
 

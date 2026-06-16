@@ -165,6 +165,58 @@ describe('ProfileScreen — with user data', () => {
   })
 })
 
+describe('ProfileScreen — sign-in entry (not signed in)', () => {
+  beforeEach(() => {
+    const { useDb } = require('../../../hooks/useDb')
+    // No googleId → user skipped auth at startup
+    useDb.mockReturnValue(makeDb({
+      fullName: 'Student',
+      school: '—',
+      gradeLevel: null,
+      googleId: '',
+      email: '',
+      selectedListingSlug: '',
+    }))
+  })
+
+  it('shows the "Sign in with Google" backup card when googleId is empty', async () => {
+    render(<ProfileScreen />)
+    await waitFor(() => {
+      expect(screen.getByText('Sign in with Google')).toBeTruthy()
+      expect(screen.getByText('Save your data and restore it on any device')).toBeTruthy()
+    })
+  })
+
+  it('pressing the sign-in card routes to /landing on native', async () => {
+    render(<ProfileScreen />)
+    const { router } = require('expo-router')
+    await waitFor(() => expect(screen.getByText('Sign in with Google')).toBeTruthy())
+    fireEvent.press(screen.getByText('Sign in with Google'))
+    expect(router.push).toHaveBeenCalledWith('/landing')
+  })
+})
+
+describe('ProfileScreen — sign-in entry hidden when signed in', () => {
+  beforeEach(() => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({
+      fullName: 'Maria Santos',
+      school: 'UPLB',
+      gradeLevel: 11,
+      googleId: 'google-uid-123',
+      email: 'maria@gmail.com',
+      selectedListingSlug: '',
+    }))
+  })
+
+  it('does NOT show the sign-in card when googleId is present, and shows Sign Out', async () => {
+    render(<ProfileScreen />)
+    await waitFor(() => expect(screen.getByText('Signed in')).toBeTruthy())
+    expect(screen.queryByText('Sign in with Google')).toBeNull()
+    expect(screen.getByText('Sign Out')).toBeTruthy()
+  })
+})
+
 describe('ProfileScreen — interactions', () => {
   beforeEach(() => {
     const { useDb } = require('../../../hooks/useDb')
