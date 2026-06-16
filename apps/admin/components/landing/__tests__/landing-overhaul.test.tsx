@@ -22,7 +22,7 @@ import { KuyaBawCTA } from '../KuyaBawCTA'
 // The web app URL the landing buttons fall back to when no env var is set
 // (see lib/links.ts). Vitest runs with NEXT_PUBLIC_* unset, so this is what
 // renders into the markup.
-const WEB_APP_URL = 'https://iskotify-app.vercel.app'
+const WEB_APP_URL = 'https://app.iskotify.ph'
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 describe('Nav', () => {

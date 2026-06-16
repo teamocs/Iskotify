@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://iskotify.ph"),
   title: "Iskotify — Scholarships & Exam Prep for Filipino Students",
   description: "Find scholarships, track deadlines, and prepare for your qualifying exams — para sa mga Iskolar ng Bayan. Free on Early Access.",
   openGraph: {

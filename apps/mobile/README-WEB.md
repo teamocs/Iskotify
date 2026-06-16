@@ -41,13 +41,14 @@ Set all variables for the **Production** environment. For preview branches, dupl
 In the Supabase dashboard for your project:
 
 1. Go to **Authentication → URL Configuration**.
-2. Set **Site URL** to your Vercel production domain (e.g. `https://iskotify.vercel.app`).
+2. Set **Site URL** to your production web-app domain (e.g. `https://app.iskotify.ph`).
 3. Under **Redirect URLs**, add:
    ```
-   https://<your-vercel-domain>/auth/callback
+   https://app.iskotify.ph/auth/callback
    ```
-   Replace `<your-vercel-domain>` with your actual domain (e.g. `iskotify.vercel.app`).
-   For preview deployments also add `https://*.vercel.app/auth/callback`.
+   Use your actual production domain. Keep the Vercel default domain too if you
+   still use it (`https://<your-vercel-domain>/auth/callback`), and for preview
+   deployments also add `https://*.vercel.app/auth/callback`.
 
 ---
 
