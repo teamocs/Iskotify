@@ -1,6 +1,7 @@
 import { eq, asc } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
+import { markSyncStart, markSyncDone } from './syncStatus'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -223,6 +224,7 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
 }
 
 export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
+  markSyncStart()
   try {
     const [settingsRows, focusRows] = await Promise.all([
       db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
@@ -791,5 +793,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     void pushPendingReports(db)
   } catch (err) {
     console.error('[sync] error:', err)
+  } finally {
+    markSyncDone()
   }
 }

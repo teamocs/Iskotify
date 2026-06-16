@@ -24,6 +24,8 @@ import { KuyaChatProvider } from '../providers/KuyaChatProvider'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
+import { WebSetupOverlay } from '../components/WebSetupOverlay'
+import { markFirstSyncDone } from '../services/syncStatus'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
 import { notes as notesTable, userSettings, focusListings as focusListingsTable } from '../db/schema'
@@ -74,6 +76,7 @@ export default function RootLayout() {
           <DrizzleProvider>
             <ThemeProvider>
               <AppInit onReady={handleReady} />
+              <WebSetupOverlay />
             </ThemeProvider>
           </DrizzleProvider>
           {(!appReady || !fontsReady) && (
@@ -135,6 +138,10 @@ function AppInit({ onReady }: { onReady: () => void }) {
     // before the local DB, so an unauthenticated visitor always lands on the
     // sign-in screen. Native keeps its original local-DB-first flow below.
     if (Platform.OS === 'web') {
+      // Declared outside try so they're in scope for the freshTabsEntry check below.
+      let webSettings: (typeof userSettings)['$inferSelect'] | undefined
+      let webTarget: string | undefined
+
       try {
         // Early-access expiry gate (web) — applies regardless of session, before
         // any normal web routing. The check is synchronous and session-independent,
@@ -168,12 +175,14 @@ function AppInit({ onReady }: { onReady: () => void }) {
           db.select().from(focusListingsTable).limit(1),
         ])
         const settings = rows[0]
+        webSettings = settings
         const hasFocus = hasOnboardingFocus({
           selectedListingSlug: settings?.selectedListingSlug,
           focusCount: focusRows.length,
           targetExams: settings?.targetExams,
         })
         const target = webEntryTarget(true, settings?.fullName, hasFocus)
+        webTarget = target
         if (target !== '/(tabs)') {
           router.replace(target)
         }
@@ -191,6 +200,14 @@ function AppInit({ onReady }: { onReady: () => void }) {
       // screen rendered empty. Web has no InteractionManager guarantees, so we
       // fire it AFTER onReady() (non-blocking) — syncOnLaunch invalidates the
       // queryCache, so screens re-render once the data lands. Fire-and-forget.
+
+      // Only the "Setting up your data" overlay-eligible case is an authenticated
+      // user landing directly in the tabs with an empty local DB (e.g. a fresh
+      // browser/device). For onboarding-bound new users and returning users who
+      // already have local data, suppress the overlay by pre-marking firstSyncDone.
+      const freshTabsEntry = webTarget === '/(tabs)' && Number(webSettings?.lastSyncedAt ?? 0) === 0
+      if (!freshTabsEntry) markFirstSyncDone()
+
       void syncOnLaunch(db)
         .then(() => { void runEnhancement(db) })
         .catch(e => console.warn('[layout] web bg sync:', e))
@@ -202,10 +219,6 @@ function AppInit({ onReady }: { onReady: () => void }) {
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
             try { await pullUserData(db) } catch { /* non-fatal */ }
-            // Fresh sign-in on web: pull the catalog too (non-blocking).
-            void syncOnLaunch(db)
-              .then(() => { void runEnhancement(db) })
-              .catch(e => console.warn('[layout] web signed-in sync:', e))
             const [rows, focusRows] = await Promise.all([
               db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
               db.select().from(focusListingsTable).limit(1),
@@ -217,6 +230,15 @@ function AppInit({ onReady }: { onReady: () => void }) {
               targetExams: settings?.targetExams,
             })
             const target = webEntryTarget(true, settings?.fullName, hasFocus)
+            // Only the "Setting up your data" overlay-eligible case is an authenticated
+            // user landing directly in the tabs with an empty local DB (e.g. a fresh
+            // browser/device after sign-in). Suppress the overlay for all other routes.
+            const freshTabsEntrySignIn = target === '/(tabs)' && Number(settings?.lastSyncedAt ?? 0) === 0
+            if (!freshTabsEntrySignIn) markFirstSyncDone()
+            // Fresh sign-in on web: pull the catalog too (non-blocking).
+            void syncOnLaunch(db)
+              .then(() => { void runEnhancement(db) })
+              .catch(e => console.warn('[layout] web signed-in sync:', e))
             router.replace(target)
           } else if (event === 'SIGNED_OUT') {
             router.replace('/auth/sign-in')

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicator, RefreshControl, ScrollView } from 'react-native'
+import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicator, RefreshControl, ScrollView, Platform } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
@@ -27,6 +27,9 @@ import { cachedQuery } from '../../services/queryCache'
 import { aggregateDestinationCountries } from '../../utils/destinationCountries'
 import type { CountryWithCount } from '../../utils/destinationCountries'
 import type { CourseTabOption } from '../../utils/courseTabs'
+import { useSyncStatus } from '../../hooks/useSyncStatus'
+import { LoadingState } from '../../components/ui/LoadingState'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +112,11 @@ export default function ListsScreen() {
   const { theme: t, typo } = useTheme()
   const insets = useSafeAreaInsets()
 
+  // ── Sync / loading ────────────────────────────────────────────────────────
+  const sync = useSyncStatus()
+  const [loaded, setLoaded] = useState(false)
+  const showLoading = Platform.OS === 'web' && (!loaded || (sync.isSyncing && !sync.firstSyncDone))
+
   // ── Listings state (Universities + Scholarships tabs) ─────────────────────
   const [all, setAll] = useState<ListingRow[]>([])
   const [profile, setProfile] = useState<StudentProfile>({})
@@ -184,6 +192,7 @@ export default function ListsScreen() {
       province: settings.province ?? undefined,
       city: settings.city ?? undefined,
     })
+    setLoaded(true)
   }, [db])
 
   const loadDestinations = useCallback(async () => {
@@ -527,9 +536,12 @@ export default function ListsScreen() {
     <SafeAreaView style={s.root}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Header */}
-        <View style={s.header}>
-          <Text style={s.title}>Lists</Text>
-          <Text style={s.subtitle}>Universities, scholarships, courses & career destinations</Text>
+        <View style={[s.header, { flexDirection: 'row', alignItems: 'flex-start' }]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.title}>Lists</Text>
+            <Text style={s.subtitle}>Universities, scholarships, courses & career destinations</Text>
+          </View>
+          <WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} />
         </View>
 
         {/* 4-tab navigation bar */}
@@ -612,11 +624,15 @@ export default function ListsScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} colors={[t.accent]} progressBackgroundColor={t.surface} />
             }
             ListEmptyComponent={
-              <Text style={s.empty}>
-                {query.trim()
-                  ? 'No matches found. Try different words.'
-                  : tab === 'universities' ? 'No exams yet.' : 'No scholarships yet.'}
-              </Text>
+              query.trim() ? (
+                <Text style={s.empty}>No matches found. Try different words.</Text>
+              ) : showLoading ? (
+                <LoadingState label="Loading…" />
+              ) : (
+                <Text style={s.empty}>
+                  {tab === 'universities' ? 'No exams yet.' : 'No scholarships yet.'}
+                </Text>
+              )
             }
             renderItem={renderListingItem}
           />

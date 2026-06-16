@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo, useEffect } from 'react'
+import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react'
 import {
   StyleSheet, View, Text, Pressable,
   Modal, TextInput, Alert, FlatList,
@@ -30,9 +30,13 @@ import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { InfoBanner } from '../../components/ui/InfoBanner'
 import { ListCard } from '../../components/ui/ListCard'
+import { LoadingState } from '../../components/ui/LoadingState'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
+import { useSyncStatus } from '../../hooks/useSyncStatus'
+import { syncOnLaunch } from '../../services/sync'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
@@ -531,7 +535,7 @@ function makeStyles(
 }
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh } = usePracticeData()
+  const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh, loaded } = usePracticeData()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const [modalVisible, setModalVisible] = useState(false)
   const [searchVisible, setSearchVisible] = useState(false)
@@ -544,6 +548,13 @@ export default function PracticeScreen() {
   const overallAnalytics = useAnalytics('overall')
 
   const db = useDb()
+
+  // ── Sync / loading (web-only) ─────────────────────────────────────────────
+  const sync = useSyncStatus()
+  // `loaded` comes from usePracticeData — true once its load has run at least
+  // once (success or error), so we can tell an as-yet-unloaded screen from a
+  // genuinely-empty one. (Watching subjects.length can't: it starts [].)
+  const showLoading = Platform.OS === 'web' && (!loaded || (sync.isSyncing && !sync.firstSyncDone))
 
   // ── Readiness maps (SESSION-based, mirrors Home) ─────────────────────────────
   // Bumped by onRefresh (after invalidating the cache) to force fresh re-fetches.
@@ -605,6 +616,24 @@ export default function PracticeScreen() {
     setReloadKey(k => k + 1)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
+
+  // Web-only refresh: full sync then invalidate + re-load, separate from the
+  // native pull-to-refresh onRefresh which does NOT call syncOnLaunch.
+  const webRefresh = useCallback(async () => {
+    if (refreshing || sync.isSyncing) return
+    setRefreshing(true)
+    try {
+      await syncOnLaunch(db)
+      invalidate('practice:sessionReadiness')
+      invalidate('practice:mockReadiness')
+      setReloadKey(k => k + 1)
+      await refresh()
+    } catch (e) {
+      console.warn('[practice] webRefresh error:', e)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [db, refresh, refreshing, sync.isSyncing])
 
   const { open: openKuya } = useKuyaChatModal()
 
@@ -722,8 +751,9 @@ export default function PracticeScreen() {
   return (
     <SafeAreaView style={s.root}>
       {/* (1) Header */}
-      <View style={s.header}>
-        <Text style={s.title}>Exams</Text>
+      <View style={[s.header, { flexDirection: 'row', alignItems: 'center' }]}>
+        <Text style={[s.title, { flex: 1 }]}>Exams</Text>
+        <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
       </View>
 
       <ScreenScroll
@@ -832,6 +862,8 @@ export default function PracticeScreen() {
                 )
               })}
             </View>
+          ) : showLoading ? (
+            <LoadingState label="Loading…" />
           ) : (
             <Text style={s.empty} maxFontSizeMultiplier={1.4}>
               Practice to see your subject readiness here

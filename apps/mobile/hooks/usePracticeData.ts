@@ -25,6 +25,9 @@ export interface PracticeData {
   cardCountByTopic: Record<string, number>
   topicIdsByListingSlug: Record<string, string[]>
   refresh: () => Promise<void>
+  // True once load() has run at least once (success OR error). Lets callers tell
+  // an as-yet-unloaded screen from a genuinely-empty one (web loading vs empty).
+  loaded: boolean
 }
 
 // ── Pure function (exported for unit tests) ──────────────────────────────────
@@ -73,6 +76,7 @@ export function usePracticeData(): PracticeData {
   const [totalCards, setTotalCards] = useState(0)
   const [cardCountByTopic, setCardCountByTopic] = useState<Record<string, number>>({})
   const [topicIdsByListingSlug, setTopicIdsByListingSlug] = useState<Record<string, string[]>>({})
+  const [loaded, setLoaded] = useState(false)
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
   const lastLoadRef = useRef(0)
@@ -193,6 +197,7 @@ export function usePracticeData(): PracticeData {
       console.error('[usePracticeData] load error:', e)
     } finally {
       loadingRef.current = false
+      if (isMountedRef.current) setLoaded(true)
     }
   }, [db])
 
@@ -227,5 +232,6 @@ export function usePracticeData(): PracticeData {
     cardCountByTopic,
     topicIdsByListingSlug,
     refresh,
+    loaded,
   }
 }

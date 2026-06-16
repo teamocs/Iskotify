@@ -34,7 +34,10 @@ import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { spacing, radius, typography } from '../../theme/tokens'
+import { useSyncStatus } from '../../hooks/useSyncStatus'
+import { syncOnLaunch } from '../../services/sync'
 
 interface ProfileData {
   fullName: string
@@ -258,6 +261,9 @@ export default function ProfileScreen() {
     signInChevron: { fontSize: 22, color: t.textInverse, opacity: 0.9 },
   }), [t, typo])
 
+  // ── Sync (web-only refresh) ────────────────────────────────────────────────
+  const sync = useSyncStatus()
+
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
 
@@ -315,6 +321,21 @@ export default function ProfileScreen() {
     setRefreshing(true)
     try { await loadProfile() } finally { setRefreshing(false) }
   }, [loadProfile])
+
+  // Web-only refresh: run a full sync then reload profile data.
+  // Separate from native onRefresh (which does NOT call syncOnLaunch).
+  const webRefresh = useCallback(async () => {
+    if (refreshing || sync.isSyncing) return
+    setRefreshing(true)
+    try {
+      await syncOnLaunch(db)
+      await loadProfile()
+    } catch (e) {
+      console.warn('[profile] webRefresh error:', e)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [db, loadProfile, refreshing, sync.isSyncing])
 
   function handleChangeExam() {
     Alert.alert(
@@ -474,17 +495,20 @@ export default function ProfileScreen() {
             <Text style={s.title}>Profile</Text>
             <Text style={s.subtitle}>Your account, focus list, and data</Text>
           </View>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
-              pressed ? { opacity: 0.7 } : null,
-            ]}
-          >
-            <Lineicons icon={Gear1Outlined} size={16} color={t.textSecondary} />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
+            <Pressable
+              onPress={() => router.push('/settings')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
+                pressed ? { opacity: 0.7 } : null,
+              ]}
+            >
+              <Lineicons icon={Gear1Outlined} size={16} color={t.textSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Identity card */}
