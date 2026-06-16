@@ -1,7 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-
-const webAppUrl = process.env.NEXT_PUBLIC_WEB_APP_URL
+import { WEB_APP_URL } from '../../lib/links'
 
 export function Nav() {
   return (
@@ -19,17 +18,15 @@ export function Nav() {
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
-        {webAppUrl && (
-          <a
-            href={webAppUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Try Iskotify on the web"
-            className="hidden sm:inline-flex items-center border border-[#800000] text-[#800000] rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-[#800000]/[0.06] transition-colors"
-          >
-            Try on Web
-          </a>
-        )}
+        <a
+          href={WEB_APP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Try Iskotify on the web"
+          className="hidden sm:inline-flex items-center border border-[#800000] text-[#800000] rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-[#800000]/[0.06] transition-colors"
+        >
+          Try on Web
+        </a>
         <a
           href="#download"
           className="bg-[#800000] text-white rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-[#a00000] transition-colors"

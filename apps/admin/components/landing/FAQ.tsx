@@ -9,9 +9,9 @@ type FAQItem = {
 
 const faqs: FAQItem[] = [
   {
-    question: 'Is Iskotify free to use?',
+    question: 'How much does Iskotify cost?',
     answer:
-      'Iskotify is available for a one-time payment of ₱129 — no subscription, no hidden fees. Pay once and get lifetime access to all scholarships, exam content, and AI coach features.',
+      'Iskotify is free to use during Early Access — no subscription and no hidden fees. Start now and get full access to scholarships, exam content, and AI coach features while we build toward launch.',
   },
   {
     question: 'Which scholarships are listed?',
@@ -29,9 +29,9 @@ const faqs: FAQItem[] = [
       'Yes. We use industry-standard encryption for all data in transit and at rest. We never sell your personal data to third parties.',
   },
   {
-    question: 'Is it available on iOS and Android?',
+    question: 'How can I get Iskotify?',
     answer:
-      'Yes! Iskotify is fully optimized for iOS 15+ and Android 10+. Available on the App Store and Google Play.',
+      'Iskotify is in Early Access on Android — start a free trial and install it directly. You can also use the full app in any browser with the web version. iOS support is on the way.',
   },
 ]
 

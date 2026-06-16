@@ -12,11 +12,31 @@ vi.mock('next/link', () => ({
     React.createElement('a', { href, className }, children),
 }))
 
+import { Nav } from '../Nav'
 import { Hero } from '../Hero'
 import { Testimonials } from '../Testimonials'
 import { FAQ } from '../FAQ'
 import { FooterCTA } from '../FooterCTA'
 import { KuyaBawCTA } from '../KuyaBawCTA'
+
+// The web app URL the landing buttons fall back to when no env var is set
+// (see lib/links.ts). Vitest runs with NEXT_PUBLIC_* unset, so this is what
+// renders into the markup.
+const WEB_APP_URL = 'https://iskotify-app.vercel.app'
+
+// ─── Nav ──────────────────────────────────────────────────────────────────────
+describe('Nav', () => {
+  let html: string
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Nav)) })
+
+  it('renders a "Try on Web" button', () => {
+    expect(html).toContain('Try on Web')
+  })
+
+  it('links "Try on Web" to the web app', () => {
+    expect(html).toContain(WEB_APP_URL)
+  })
+})
 
 // ─── Hero ───────────────────────────────────────────────────────────────────
 describe('Hero', () => {
@@ -27,12 +47,17 @@ describe('Hero', () => {
     expect(html).not.toContain('rounded-[980px]')
   })
 
-  it('uses properly-sized rounded-xl on download buttons', () => {
+  it('uses properly-sized rounded-xl on CTA buttons', () => {
     expect(html).toContain('rounded-xl')
   })
 
-  it('shows one-time price', () => {
-    expect(html).toContain('₱129')
+  it('shows Early Access pricing (free)', () => {
+    expect(html).toContain('Early access')
+    expect(html).toContain('Start for free')
+  })
+
+  it('no longer shows the old one-time price', () => {
+    expect(html).not.toContain('₱129')
   })
 
   it('shows no-subscription messaging', () => {
@@ -41,6 +66,16 @@ describe('Hero', () => {
 
   it('shows early-adopter call-to-action', () => {
     expect(html).toContain('Be among the first')
+  })
+
+  it('has a "Try on Web" button pointing at the web app', () => {
+    expect(html).toContain('Try on Web')
+    expect(html).toContain(WEB_APP_URL)
+  })
+
+  it('no longer shows App Store / Google Play download badges', () => {
+    expect(html).not.toContain('App Store')
+    expect(html).not.toContain('Google Play')
   })
 
   it('does not show fake rating stat', () => {
@@ -53,6 +88,20 @@ describe('Hero', () => {
 
   it('does not show "Free to Use"', () => {
     expect(html).not.toContain('Free to Use')
+  })
+
+  // Mockup fidelity — the phone mockup must mirror the CURRENT Home dashboard,
+  // not the old one. Guard against regressing to the previous design.
+  it('mockup reflects the current Home sections', () => {
+    expect(html).toContain('My Focus')
+    expect(html).toContain('Subjects to improve')
+    expect(html).toContain('Ask Kuya Baw')
+  })
+
+  it('mockup drops the old dashboard design', () => {
+    expect(html).not.toContain('Quick Practice')
+    expect(html).not.toContain('Weak Areas')
+    expect(html).not.toContain('Days Left')
   })
 })
 
@@ -85,20 +134,26 @@ describe('FAQ', () => {
   let html: string
   beforeAll(() => { html = renderToStaticMarkup(React.createElement(FAQ)) })
 
-  it('shows one-time payment amount', () => {
-    expect(html).toContain('₱129')
+  it('mentions Early Access pricing', () => {
+    expect(html).toContain('Early Access')
   })
 
-  it('mentions one-time payment in pricing answer', () => {
-    expect(html).toContain('one-time payment')
+  it('no longer mentions the old one-time payment price', () => {
+    expect(html).not.toContain('₱129')
+    expect(html).not.toContain('one-time payment')
   })
 
   it('does not say the app is completely free', () => {
     expect(html).not.toContain('completely free')
   })
 
-  it('does not say "for free" in download answer', () => {
+  it('does not dangle a misleading "for free" download claim', () => {
     expect(html).not.toContain('for free')
+  })
+
+  it('no longer points to App Store / Google Play', () => {
+    expect(html).not.toContain('App Store')
+    expect(html).not.toContain('Google Play')
   })
 })
 
@@ -111,20 +166,35 @@ describe('FooterCTA', () => {
     expect(html).not.toContain('rounded-[980px]')
   })
 
-  it('uses rounded-xl on download buttons', () => {
+  it('uses rounded-xl on CTA buttons', () => {
     expect(html).toContain('rounded-xl')
   })
 
-  it('shows ₱129 in tagline', () => {
-    expect(html).toContain('₱129')
+  it('shows the "Start for free on Early access" tagline', () => {
+    expect(html).toContain('Start for free on Early access')
   })
 
-  it('shows lifetime access in tagline', () => {
-    expect(html).toContain('Lifetime access')
+  it('no longer shows the old ₱129 / lifetime tagline', () => {
+    expect(html).not.toContain('₱129')
+    expect(html).not.toContain('Lifetime access')
   })
 
   it('does not say "Free forever"', () => {
     expect(html).not.toContain('Free forever')
+  })
+
+  it('removes App Store / Google Play download badges', () => {
+    expect(html).not.toContain('App Store')
+    expect(html).not.toContain('Google Play')
+  })
+
+  it('offers an Android free-trial CTA', () => {
+    expect(html).toContain('Start free trial')
+  })
+
+  it('has a "Try on Web" button pointing at the web app', () => {
+    expect(html).toContain('Try on Web')
+    expect(html).toContain(WEB_APP_URL)
   })
 })
 
@@ -135,6 +205,14 @@ describe('KuyaBawCTA', () => {
 
   it('does not say "Download Free"', () => {
     expect(html).not.toContain('Download Free')
+  })
+
+  it('no longer says "Download Now"', () => {
+    expect(html).not.toContain('Download Now')
+  })
+
+  it('offers a free-trial CTA', () => {
+    expect(html).toContain('Start free trial')
   })
 
   it('does not use the elongated pill class', () => {
