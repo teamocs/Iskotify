@@ -1,5 +1,7 @@
 import Image from 'next/image'
 
+const webAppUrl = process.env.NEXT_PUBLIC_WEB_APP_URL
+
 export function Hero() {
   return (
     <section className="relative bg-[#f5f5f7] overflow-hidden py-16 md:py-24 px-6">
@@ -51,6 +53,24 @@ export function Hero() {
             <span className="text-[#d2d2d7]">·</span>
             <span className="text-[#6e6e73] text-sm font-body">Be among the first 🎉</span>
           </div>
+
+          {/* "Try on Web" link — only rendered when NEXT_PUBLIC_WEB_APP_URL is set */}
+          {webAppUrl && (
+            <div className="mt-5 flex justify-center md:justify-start">
+              <a
+                href={webAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open the Iskotify web app"
+                className="inline-flex items-center gap-1.5 text-sm text-[#800000] font-medium font-body hover:underline"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                Or try it on the web
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Right column — 3D phone mockup */}
