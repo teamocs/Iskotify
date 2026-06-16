@@ -4,6 +4,9 @@
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @iskotify/mobile...",
   "framework": null,
   "rewrites": [
+    { "source": "/auth/sign-in", "destination": "/auth/sign-in.html" },
+    { "source": "/auth/callback", "destination": "/auth/callback.html" },
+    { "source": "/subjects/:id", "destination": "/subjects/[id].html" },
     { "source": "/career/:courseId", "destination": "/career/[courseId].html" },
     { "source": "/career/country/:code", "destination": "/career/country/[code].html" },
     { "source": "/listings/:slug", "destination": "/listings/[slug].html" },
