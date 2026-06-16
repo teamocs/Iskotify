@@ -62,10 +62,13 @@ jest.mock('../../../hooks/useDb', () => {
 
 // Mock the SQL aggregates so the readiness effects don't hit a real DB. cachedQuery
 // (mocked below) calls the fetcher directly, which calls these.
+// getListingMockBest is a capturable, per-test-seedable mock (the `mock` prefix makes
+// it hoist-safe inside the jest.mock factory) so tests can drive the My Focus % readiness.
+const mockGetListingMockBest = jest.fn()
 jest.mock('../../../services/homeAggregates', () => ({
   getTopicBestSessionPercentages: jest.fn().mockResolvedValue([]),
   getSubjectSessionPercentages: jest.fn().mockResolvedValue([]),
-  getListingMockBest: jest.fn().mockResolvedValue([]),
+  getListingMockBest: (...args: any[]) => mockGetListingMockBest(...args),
 }))
 
 const mockOpenKuya = jest.fn()
@@ -111,6 +114,9 @@ describe('PracticeScreen', () => {
     router.push.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockListPublishedBlueprints.mockResolvedValue([])
+    // Reset the My Focus mock-readiness aggregate (default: nothing practiced)
+    mockGetListingMockBest.mockReset()
+    mockGetListingMockBest.mockResolvedValue([])
     // Reset shared focus listings array
     mockFocusListings.splice(0, mockFocusListings.length)
   })
@@ -352,6 +358,17 @@ describe('PracticeScreen', () => {
     // Tapping the card navigates to the new start chooser.
     fireEvent.press(screen.getByText('UPCAT 2025'))
     expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
+  })
+
+  it('My Focus card shows the mock-exam readiness % from getListingMockBest', async () => {
+    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
+      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' },
+    )
+    mockGetListingMockBest.mockResolvedValue([{ listingSlug: 'upcat', bestPct: 72 }])
+    render(<PracticeScreen />)
+    await act(async () => {})
+    // The readiness % for the seeded focus listing renders on its My Focus card.
+    expect(screen.getByText('72%')).toBeTruthy()
   })
 
   it('My Focus "Add exam or scholarship" ghost card navigates to the Lists tab', async () => {

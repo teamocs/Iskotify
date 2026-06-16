@@ -233,7 +233,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     let slugs = focusRows.map(r => r.listingSlug)
     if (slugs.length === 0 && settings.selectedListingSlug) slugs = [settings.selectedListingSlug]
-    if (slugs.length === 0) return
+    // NOTE: we intentionally do NOT early-return when slugs.length === 0.
+    // Only the per-slug flashcards pull genuinely needs focus slugs; every
+    // catalog table (listings, subjects/topics, upcat, career_*, university/
+    // course/taxonomy, blueprints, admissions, ai_chat_config) is public and
+    // must ALWAYS mirror so a focus-less session (anonymous web visitor, or a
+    // launch that fires before pullUserData restores focus on sign-in) still
+    // populates Courses/Destinations. The flashcards pull below is the only
+    // step gated on slugs.length > 0.
 
     const needsHeal = (settings.syncRev ?? 0) < SYNC_REV
     const since = needsHeal || settings.lastSyncedAt === 0
@@ -339,7 +346,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .gt('updated_at', since),
     ])
 
-    const cardResults = await Promise.all(
+    // Per-slug flashcards pull — the ONLY step that genuinely needs focus slugs.
+    // Skipped entirely for focus-less sessions; the catalog above still synced.
+    const cardResults = slugs.length === 0 ? [] : await Promise.all(
       slugs.map(slug =>
         fetchAllPaginated((from, to) => supabase.from('flashcards')
           .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,updated_at')
@@ -751,11 +760,21 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         tx.insert(aiChatConfig).values(vals).onConflictDoUpdate({ target: aiChatConfig.id, set: vals }).run()
       }
 
+      // Cursor write LAST so an interrupted sync re-pulls next launch.
+      // selectedListingSlug is only (re)written when we actually have a slug —
+      // a focus-less session must not clobber it with undefined/empty.
       const syncedAt = Date.now()
-      tx.insert(userSettings)
-        .values({ id: 1, selectedListingSlug: slugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
-        .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]!, syncRev: SYNC_REV } })
-        .run()
+      if (slugs.length > 0) {
+        tx.insert(userSettings)
+          .values({ id: 1, selectedListingSlug: slugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
+          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]!, syncRev: SYNC_REV } })
+          .run()
+      } else {
+        tx.insert(userSettings)
+          .values({ id: 1, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
+          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, syncRev: SYNC_REV } })
+          .run()
+      }
     })
 
     // Invalidate all query caches so screens reflect fresh synced data

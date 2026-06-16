@@ -143,14 +143,6 @@ describe('UpdatesScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/results-tracker')
   })
 
-  it('renders changelog entry for v1.5.0', async () => {
-    const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb())
-    render(<UpdatesScreen />)
-    expect(screen.getByText('v1.5.0')).toBeTruthy()
-    expect(screen.getByText('UPCAT mock exam + 320-question bank')).toBeTruthy()
-  })
-
   it('renders Upcoming Events section when event rows exist', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([EVENT_ROW]))
@@ -196,11 +188,11 @@ describe('UpdatesScreen', () => {
     })
   })
 
-  it('shows ISKOTIFY UPDATES section header', async () => {
+  it('no longer renders the removed ISKOTIFY UPDATES section', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     render(<UpdatesScreen />)
-    expect(screen.getByText('ISKOTIFY UPDATES')).toBeTruthy()
+    expect(screen.queryByText('ISKOTIFY UPDATES')).toBeNull()
   })
 
   it('CalendarStrip wrapper renders on Updates screen', async () => {

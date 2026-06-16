@@ -31,32 +31,6 @@ import { useHomeStats } from '../../hooks/useHomeStats'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
 
-// ── Changelog ─────────────────────────────────────────────────────────────────
-
-const CHANGELOG: { version: string; date: string; notes: string[] }[] = [
-  {
-    version: '1.5.0',
-    date: '2026-06-07',
-    notes: [
-      'UPCAT mock exam + 320-question bank',
-      'Scholarship directory + eligibility matcher',
-      'Reworked exam flow (no auto-advance, Quick/Full)',
-      'Admission Score Estimator',
-      'AI Career Advisor + AI-Safe-Score',
-      'School & Course Finder',
-      'Admissions News feed',
-    ],
-  },
-  {
-    version: '1.4.0',
-    date: '2026-05-20',
-    notes: [
-      'Google Calendar sync for reminders',
-      'Settings > Google Calendar connect/disconnect',
-    ],
-  },
-]
-
 // ── Severity badge config ──────────────────────────────────────────────────────
 
 type SeverityKey = 'urgent' | 'important' | 'info' | 'no_change'
@@ -175,39 +149,6 @@ function NewsSection({ items }: { items: FeedItem[] }) {
       {selected !== null ? (
         <NewsDetailModal item={selected} onClose={() => setSelected(null)} />
       ) : null}
-    </View>
-  )
-}
-
-// ── Iskotify Updates (Changelog) section ──────────────────────────────────────
-
-function ChangelogSection() {
-  const { theme: t, typo } = useTheme()
-  return (
-    <View style={styles.section}>
-      <SectionHeader title="ISKOTIFY UPDATES" />
-      <View style={styles.cardStack}>
-        {CHANGELOG.map((entry) => (
-          <Card key={entry.version} elevated>
-            <View style={styles.row}>
-              <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
-                v{entry.version}
-              </Text>
-              <Text style={[styles.dateText, { color: t.textTertiary, fontSize: typo.xs }]}>
-                {entry.date}
-              </Text>
-            </View>
-            {entry.notes.map((note) => (
-              <View key={`${entry.version}-${note}`} style={styles.bulletRow}>
-                <Text style={[styles.bullet, { color: t.textSecondary }]}>{'•'}</Text>
-                <Text style={[styles.bulletText, { color: t.textSecondary, fontSize: typo.xs }]}>
-                  {note}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        ))}
-      </View>
     </View>
   )
 }
@@ -379,7 +320,6 @@ export default function UpdatesScreen() {
         <ResultsTrackerCard />
         <UpcomingEventsSection items={items} />
         {items.length > 0 ? <NewsSection items={items} /> : null}
-        <ChangelogSection />
       </ScreenScroll>
 
       <DateActionSheet
@@ -466,21 +406,5 @@ const styles = StyleSheet.create({
   pressableCard: {
     borderRadius: radius.xl,
     borderCurve: 'continuous',
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    alignItems: 'flex-start',
-    marginTop: spacing.xs,
-  },
-  bullet: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'Lexend_400Regular',
-  },
-  bulletText: {
-    flex: 1,
-    lineHeight: 18,
-    fontFamily: 'Lexend_400Regular',
   },
 })

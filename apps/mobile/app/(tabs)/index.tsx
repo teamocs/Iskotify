@@ -26,7 +26,7 @@ import { useDb } from '../../hooks/useDb'
 import { cachedQuery, invalidate } from '../../services/queryCache'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
-import { upcomingEvents } from '../../utils/admissionsFeed'
+import { upcomingEvents, sortBySeverityThenDate, daysUntil } from '../../utils/admissionsFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
 
 function phHour(): number {
@@ -60,6 +60,22 @@ function formatShortDate(ms: number): string {
 
 function msToDays(ms: number): number {
   return Math.ceil((ms - Date.now()) / 86_400_000)
+}
+
+// Severity → leading dot for the Home "News & Events" shortlist rows.
+const SEVERITY_DOT: Record<string, string> = {
+  urgent: '🔴',
+  important: '🟠',
+  info: '🔵',
+  no_change: '🟢',
+}
+
+// "in N days" / "Today" / "Tomorrow" hint from a YYYY-MM-DD event date.
+function eventDaysHint(eventDate: string): string {
+  const d = daysUntil(eventDate)
+  if (d <= 0) return 'Today'
+  if (d === 1) return 'Tomorrow'
+  return `in ${d} days`
 }
 
 // Explore quick-links — each deep-links into one of the Lists screen's 4 tabs.
@@ -249,6 +265,17 @@ export default function HomeScreen() {
     return upcomingEvents(admissionItems).filter(
       item => item.severity === 'urgent' || item.severity === 'important' || item.severity === 'info'
     )
+  }, [admissionItems])
+
+  // "News & Events" shortlist (Home) — up to 2 upcoming events + 3 admissions news.
+  const newsEventsShortlist = useMemo(() => {
+    const events = upcomingEvents(admissionItems).slice(0, 2)
+    // Don't repeat an item as both an event and a news row in this one shortlist.
+    const eventIds = new Set(events.map(e => e.id))
+    const news = sortBySeverityThenDate(admissionItems)
+      .filter(n => !eventIds.has(n.id))
+      .slice(0, 3)
+    return { events, news }
   }, [admissionItems])
 
   const [refreshing, setRefreshing] = useState(false)
@@ -699,6 +726,46 @@ export default function HomeScreen() {
               Practice to see your subjects here
             </Text>
           )}
+
+          {/* (5b) News & Events — short feed preview (full feed lives on Updates) */}
+          {newsEventsShortlist.events.length > 0 || newsEventsShortlist.news.length > 0 ? (
+            <>
+              <View style={s.section}>
+                <SectionHeader
+                  title="News & Events"
+                  subtitle="Latest admission news and upcoming events"
+                  actionLabel="See all"
+                  onAction={() => router.push('/(tabs)/updates')}
+                />
+              </View>
+              <View style={{ gap: spacing.sm }}>
+                {newsEventsShortlist.events.map(item => (
+                  <ListCard
+                    key={`event-${item.id}`}
+                    iconBg={t.surface2}
+                    icon={<Text style={{ fontSize: 16 }}>{item.eventType === 'exam' ? '📝' : '📅'}</Text>}
+                    title={item.title}
+                    subtitle={
+                      item.eventDate != null
+                        ? `${item.eventDate} · ${eventDaysHint(item.eventDate)}`
+                        : undefined
+                    }
+                    onPress={() => router.push('/(tabs)/updates')}
+                  />
+                ))}
+                {newsEventsShortlist.news.map(item => (
+                  <ListCard
+                    key={`news-${item.id}`}
+                    iconBg={t.surface2}
+                    icon={<Text style={{ fontSize: 16 }}>{SEVERITY_DOT[item.severity] ?? '🔵'}</Text>}
+                    title={item.title}
+                    subtitle={item.body}
+                    onPress={() => router.push('/(tabs)/updates')}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
 
           {/* (6) Upcoming Dates — top 3 + See all — LAST section */}
           <View style={s.section}>

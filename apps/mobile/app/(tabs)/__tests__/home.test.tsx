@@ -405,9 +405,11 @@ describe('HomeScreen', () => {
       verified: false,
       remoteUpdatedAt: null,
     }]
-    const { findByText } = render(<HomeScreen />)
-    const item = await findByText('DOST SEI Application Deadline')
-    expect(item).toBeTruthy()
+    const { findAllByText } = render(<HomeScreen />)
+    // The admission event now surfaces both in the "News & Events" shortlist and
+    // (folded) in the Upcoming Dates widget — assert it appears at least once.
+    const items = await findAllByText('DOST SEI Application Deadline')
+    expect(items.length).toBeGreaterThan(0)
     mockAdmissionsRows.value = []
   })
 

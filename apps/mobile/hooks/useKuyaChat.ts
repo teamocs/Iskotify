@@ -15,6 +15,7 @@ import { chatMessages } from '../db/schema'
 import { getSettings } from '../services/settings'
 import { getGeminiKey } from '../services/geminiKey'
 import { generateGeminiReply } from '../services/geminiClient'
+import { classifyDataIntent, answerFromData, ssotNotFoundMessage } from '../services/ssotAnswer'
 
 export interface ChatMessage {
   id: string
@@ -223,12 +224,43 @@ export function useKuyaChat(): UseKuyaChat {
     // effectiveMode for the RAG pipeline: math gets its own retrieval priority
     const effectiveMode = isMath ? 'math' : mode
 
+    // SSoT data-intent classification (rule-based, no AI). Non-null → answer
+    // deterministically from local DB without the LLM; null → reasoning → LLM.
+    const dataIntent = classifyDataIntent(trimmed)
+
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
         // Track whether we're in Gemini mode for the catch block's error mapping.
         // Must be declared outside try so the catch block can read it safely.
         let isGeminiMode = false
         try {
+          // ── SSoT short-circuit (do-not-consume-AI path) ───────────────────
+          // Data-lookup questions (profile/progress, top schools, career
+          // destinations, courses, listings) are answered DETERMINISTICALLY
+          // from the already-synced local DB — no LLM call. Only reasoning
+          // questions (dataIntent === null) fall through to the RAG+LLM path.
+          if (dataIntent) {
+            // profile needs stats — mirror the existing progress stats-race guard.
+            if (dataIntent === 'profile' && statsRef.current.listing === null) {
+              await statsRef.current.refresh()
+            }
+            const answer =
+              (await answerFromData(dbRef.current, trimmed, dataIntent, statsRef.current))
+              ?? ssotNotFoundMessage(dataIntent)
+            if (controller.signal.aborted || assistantIdRef.current !== assistantId || !isMountedRef.current) return
+            setMessages(prev => prev.map(m =>
+              m.id === assistantId ? { ...m, text: answer, isStreaming: false } : m
+            ))
+            setIsStreaming(false)
+            // Persist like the other paths (mode 'progress' for profile, else 'topic').
+            const ssotMode = dataIntent === 'profile' ? 'progress' : 'topic'
+            void dbRef.current.transaction(async tx => {
+              await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode: ssotMode, createdAt: now })
+              await tx.insert(chatMessages).values({ role: 'assistant', text: answer, mode: ssotMode, createdAt: now + 1 })
+            }).then(() => scheduleWebPersist()).catch(() => {})
+            return
+          }
+
           // ── Stats race fix: if progress mode but stats.listing is not loaded yet,
           // await refresh() once so the context block has real data.
           if (effectiveMode === 'progress' && statsRef.current.listing === null) {

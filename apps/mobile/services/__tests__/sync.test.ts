@@ -89,10 +89,24 @@ beforeEach(() => {
 })
 
 describe('syncOnLaunch', () => {
-  it('returns early when both focusListings is empty and selectedListingSlug is empty', async () => {
+  it('still syncs the public catalog when focus listings and selectedListingSlug are empty (only flashcards are slug-gated)', async () => {
+    // Regression: a focus-less session (anonymous web visitor, or a launch
+    // firing before pullUserData restores focus) used to early-return and sync
+    // NOTHING — leaving Courses/Destinations empty on web. The catalog must
+    // always mirror; only the per-slug flashcards pull is skipped.
+    const { supabase } = require('../supabase')
     const db = makeDb({ id: 1, selectedListingSlug: '', lastSyncedAt: 0 }, [])
     await syncOnLaunch(db as any)
-    expect(db.transaction).not.toHaveBeenCalled()
+    // Catalog pulls run regardless of slugs…
+    expect(supabase.from).toHaveBeenCalledWith('listings')
+    expect(supabase.from).toHaveBeenCalledWith('career_countries')
+    expect(supabase.from).toHaveBeenCalledWith('career_destinations')
+    expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
+    // …and the catalog write transactions execute…
+    expect(db.transaction).toHaveBeenCalledTimes(6)
+    // …but the per-slug flashcards pull is skipped (no focus slug to query).
+    const flashcardCalls = supabase.from.mock.calls.filter((c: string[]) => c[0] === 'flashcards')
+    expect(flashcardCalls).toHaveLength(0)
   })
 
   it('returns early when no settings row exists', async () => {
@@ -172,9 +186,12 @@ describe('syncOnLaunch', () => {
     expect(pushPendingReports).toHaveBeenCalledWith(db)
   })
 
-  it('does NOT fire pushPendingReports when sync exits early (no listing selected)', async () => {
+  it('does NOT fire pushPendingReports when sync exits early (no settings row)', async () => {
+    // The only remaining early-return is a missing settings row. A focus-less
+    // session with a settings row now proceeds with the catalog sync (and thus
+    // fires pushPendingReports) — covered by the catalog-sync test above.
     const { pushPendingReports } = require('../questionReports')
-    const db = makeDb({ id: 1, selectedListingSlug: '', lastSyncedAt: 0 }, [])
+    const db = makeDb(null, [])
     await syncOnLaunch(db as any)
     expect(pushPendingReports).not.toHaveBeenCalled()
   })

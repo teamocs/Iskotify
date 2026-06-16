@@ -187,6 +187,57 @@ describe('useKuyaChat', () => {
     expect((userInsert![0] as { mode: string }).mode).toBe('topic')
   })
 
+  // ── SSoT (Source-of-Truth) short-circuit: data questions skip the LLM ─────────
+  it('DATA query (scholarships) answers from local data WITHOUT invoking the LLM', async () => {
+    mockStream.mockImplementation(async () => 'should not be called')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('what scholarships can I get?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    // SSoT path: neither the local model nor Gemini is consulted.
+    expect(mockStream).not.toHaveBeenCalled()
+    expect(mockGenerateGeminiReply).not.toHaveBeenCalled()
+    // buildRagContext is part of the LLM stage — it must NOT run either.
+    expect(mockBuildRagContext).not.toHaveBeenCalled()
+
+    // The assistant still gets a non-empty, finalized answer (deterministic SSoT
+    // message — here the not-found fallback since chatContext builders are mocked
+    // to return undefined).
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg).toBeDefined()
+    expect(assistantMsg!.text.length).toBeGreaterThan(0)
+    expect(assistantMsg!.isStreaming).toBe(false)
+    expect(result.current.isStreaming).toBe(false)
+
+    // Persisted with mode 'topic' (non-profile data intent).
+    const userInsert = mockValues.mock.calls.find(c => (c[0] as { role: string }).role === 'user')
+    expect(userInsert).toBeDefined()
+    expect((userInsert![0] as { mode: string }).mode).toBe('topic')
+  })
+
+  it('REASONING query (photosynthesis) DOES invoke the LLM (not the SSoT path)', async () => {
+    mockStream.mockImplementation(async (_p, onToken) => {
+      onToken('Photosynthesis is how plants make food.')
+      return 'Photosynthesis is how plants make food.'
+    })
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('what is photosynthesis?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+
+    // Reasoning question → LLM path runs (RAG + local inference).
+    expect(mockBuildRagContext).toHaveBeenCalledTimes(1)
+    expect(mockStream).toHaveBeenCalledTimes(1)
+
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Photosynthesis is how plants make food.')
+  })
+
   it('abort can be called safely when nothing is streaming', async () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
@@ -266,7 +317,9 @@ describe('useKuyaChat', () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('How am I doing this week?')
+      // Use a reasoning question so the LLM path runs (SSoT data questions skip
+      // the LLM and never reach the Tagalog sanitization step).
+      result.current.send('explain photosynthesis please')
       await new Promise(r => setTimeout(r, 200))
     })
     const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
@@ -276,18 +329,19 @@ describe('useKuyaChat', () => {
 
   it('Tagalog safety net does NOT trigger for clean English responses', async () => {
     mockStream.mockImplementation(async (_prompt, onToken) => {
-      const englishResponse = 'Focus on Algebra today — it is your weakest topic at 32%.'
+      const englishResponse = 'Photosynthesis is how plants make food from sunlight using chlorophyll.'
       onToken(englishResponse)
       return englishResponse
     })
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('What should I focus on?')
+      // Reasoning question → LLM path (SSoT data questions bypass the LLM).
+      result.current.send('explain photosynthesis please')
       await new Promise(r => setTimeout(r, 200))
     })
     const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
-    expect(assistantMsg?.text).toBe('Focus on Algebra today — it is your weakest topic at 32%.')
+    expect(assistantMsg?.text).toBe('Photosynthesis is how plants make food from sunlight using chlorophyll.')
   })
 
   it('saves user+assistant messages to DB after successful stream', async () => {
@@ -603,7 +657,9 @@ describe('useKuyaChat — RAG pipeline called once per send() (Task C)', () => {
     expect(callArgs[2]).toBe('math')
   })
 
-  it('passes effectiveMode="progress" to buildRagContext for progress questions', async () => {
+  it('progress/profile questions take the SSoT path (no RAG, no LLM)', async () => {
+    // After the SSoT short-circuit, first-person progress questions are answered
+    // deterministically from local data and never reach the RAG pipeline or LLM.
     mockStream.mockImplementation(async () => 'response')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
@@ -611,9 +667,8 @@ describe('useKuyaChat — RAG pipeline called once per send() (Task C)', () => {
       result.current.send('How am I doing this week?')
       await new Promise(r => setTimeout(r, 200))
     })
-    expect(mockBuildRagContext).toHaveBeenCalledTimes(1)
-    const callArgs = mockBuildRagContext.mock.calls[0]!
-    expect(callArgs[2]).toBe('progress')
+    expect(mockBuildRagContext).not.toHaveBeenCalled()
+    expect(mockStream).not.toHaveBeenCalled()
   })
 
   it('passes effectiveMode="topic" to buildRagContext for topic questions', async () => {
@@ -638,7 +693,9 @@ describe('useKuyaChat — RAG pipeline called once per send() (Task C)', () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('when is UPCAT exam today?')
+      // Reasoning question so the LLM path runs; the (mocked) RAG blocks must
+      // still flow into the prompt. (Data questions would take the SSoT path.)
+      result.current.send('explain the photosynthesis process')
       await new Promise(r => setTimeout(r, 200))
     })
     const promptArg = mockStream.mock.calls[0]?.[0] as string
@@ -672,7 +729,8 @@ describe('useKuyaChat — RAG pipeline flows into Gemini path (Task C)', () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('when is UPCAT exam?')
+      // Reasoning question → Gemini LLM path (data questions take SSoT instead).
+      result.current.send('explain how photosynthesis works')
       await new Promise(r => setTimeout(r, 200))
     })
     expect(mockBuildRagContext).toHaveBeenCalledTimes(1)
@@ -687,7 +745,9 @@ describe('useKuyaChat — RAG pipeline flows into Gemini path (Task C)', () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
-      result.current.send('when is DOST scholarship deadline?')
+      // Reasoning question so the Gemini path runs; the (mocked) RAG blocks must
+      // still flow into the user content. (Data questions would take SSoT.)
+      result.current.send('explain the mitochondria function')
       await new Promise(r => setTimeout(r, 200))
     })
     const userContentArg = mockGenerateGeminiReply.mock.calls[0]?.[2] as string
