@@ -162,6 +162,20 @@ function AppInit({ onReady }: { onReady: () => void }) {
           return
         }
 
+        // Approved-account gate (web): only approved/sent registrants (or admins) may
+        // enter. Fail-open on RPC error so a transient failure can't strand a real user.
+        try {
+          const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
+          if (!eaErr && eaStatus !== 'approved' && eaStatus !== 'sent') {
+            router.replace('/early-access-required')
+            onReady()
+            return
+          }
+          if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
+        } catch (e) {
+          console.warn('[layout] early_access gate error (allowing through):', e)
+        }
+
         // Session exists — pull latest user data from Supabase (non-fatal)
         try {
           await pullUserData(db)
@@ -218,6 +232,18 @@ function AppInit({ onReady }: { onReady: () => void }) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
+            // Approved-account gate (web): only approved/sent registrants (or admins) may
+            // enter. Fail-open on RPC error so a transient failure can't strand a real user.
+            try {
+              const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
+              if (!eaErr && eaStatus !== 'approved' && eaStatus !== 'sent') {
+                router.replace('/early-access-required')
+                return
+              }
+              if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
+            } catch (e) {
+              console.warn('[layout] early_access gate error (allowing through):', e)
+            }
             try { await pullUserData(db) } catch { /* non-fatal */ }
             const [rows, focusRows] = await Promise.all([
               db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),

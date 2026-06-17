@@ -1,5 +1,6 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
+import { SendApkButton } from '@/components/admin/SendApkButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,23 +15,62 @@ interface EarlyAccessRegistration {
   created_at: string
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  sent:    'bg-green-100 text-green-800',
-  expired: 'bg-red-100 text-red-800',
+interface ApkStatus {
+  present: boolean
+  name: string
+  size?: number
+  updatedAt?: string
 }
 
-async function getData(): Promise<EarlyAccessRegistration[]> {
+const STATUS_STYLES: Record<string, string> = {
+  pending:  'bg-amber-100 text-amber-800',
+  approved: 'bg-blue-100 text-blue-800',
+  sent:     'bg-green-100 text-green-800',
+  expired:  'bg-red-100 text-red-800',
+}
+
+async function getData(): Promise<{
+  rows: EarlyAccessRegistration[]
+  apk: ApkStatus
+}> {
   const db = createServerClient()
-  const { data } = await db
-    .from('early_access_registrations')
-    .select('id,full_name,email,school,grade_level,platform,status,created_at')
-    .order('created_at', { ascending: false })
-  return (data ?? []) as EarlyAccessRegistration[]
+  const objectKey = process.env.EARLY_ACCESS_APK_OBJECT ?? 'iskotify-early-access.apk'
+
+  const [{ data }, { data: listData }] = await Promise.all([
+    db
+      .from('early_access_registrations')
+      .select('id,full_name,email,school,grade_level,platform,status,created_at')
+      .order('created_at', { ascending: false }),
+    db.storage.from('early-access-apk').list('', { search: objectKey }),
+  ])
+
+  const rows = (data ?? []) as EarlyAccessRegistration[]
+
+  // list() returns an array of FileObject; find an exact name match
+  const match = Array.isArray(listData)
+    ? (listData as Array<{ name: string; metadata?: { size?: number; lastModified?: string } }>)
+        .find((f) => f.name === objectKey)
+    : null
+
+  const apk: ApkStatus = match
+    ? {
+        present: true,
+        name: objectKey,
+        size: match.metadata?.size,
+        updatedAt: match.metadata?.lastModified,
+      }
+    : { present: false, name: objectKey }
+
+  return { rows, apk }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export default async function EarlyAccessPage() {
-  const rows = await getData()
+  const { rows, apk } = await getData()
 
   return (
     <>
@@ -43,12 +83,39 @@ export default async function EarlyAccessPage() {
           </p>
         </div>
 
+        {/* APK status banner */}
+        {apk.present ? (
+          <div className="flex items-center gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
+            <span className="text-green-600 text-base leading-none" aria-hidden="true">&#10003;</span>
+            <p className="text-[13px] text-green-800 font-medium">
+              APK ready: <span className="font-mono">{apk.name}</span>
+              {apk.size != null && (
+                <span className="font-normal text-green-700 ml-2">({formatBytes(apk.size)})</span>
+              )}
+              {apk.updatedAt && (
+                <span className="font-normal text-green-600 ml-2">
+                  &mdash; updated {new Date(apk.updatedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
+                </span>
+              )}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
+            <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
+            <p className="text-[13px] text-amber-800">
+              No APK uploaded yet &mdash; upload{' '}
+              <span className="font-mono font-semibold">{apk.name}</span>
+              {' '}to the <span className="font-semibold">early-access-apk</span> bucket in Supabase Storage before sending emails.
+            </p>
+          </div>
+        )}
+
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="bg-[#fafafa]">
-                  {['Email', 'Name', 'School', 'Grade', 'Status', 'Registered'].map(h => (
+                  {['Email', 'Name', 'School', 'Grade', 'Status', 'Registered', 'Actions'].map(h => (
                     <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
                       {h}
                     </th>
@@ -70,11 +137,16 @@ export default async function EarlyAccessPage() {
                     <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-[#6e6e73] whitespace-nowrap">
                       {new Date(row.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
+                    <td className="px-5 py-3 border-b border-black/[0.04]">
+                      {row.status !== 'expired' && (
+                        <SendApkButton id={row.id} status={row.status} />
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-[#aeaeb2]">
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-[#aeaeb2]">
                       No early-access registrations yet.
                     </td>
                   </tr>
