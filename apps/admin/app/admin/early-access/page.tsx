@@ -1,6 +1,7 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { SendApkButton } from '@/components/admin/SendApkButton'
+import { ApkUploader } from '@/components/admin/ApkUploader'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,6 +110,9 @@ export default async function EarlyAccessPage() {
             </p>
           </div>
         )}
+
+        {/* APK uploader — always visible so admin can replace the APK at any time */}
+        <ApkUploader />
 
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
