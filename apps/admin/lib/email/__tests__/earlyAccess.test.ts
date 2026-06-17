@@ -10,8 +10,7 @@ import { sendEarlyAccessApkEmail } from '../earlyAccess'
 const VALID_ARGS = {
   to: 'student@example.com',
   name: 'Maria Santos',
-  downloadUrl: 'https://storage.example.com/signed/iskotify.apk?token=abc123',
-  expiresHours: 48,
+  downloadUrl: 'https://github.com/iskotify/releases/download/v1.0.0/iskotify-early-access.apk',
 }
 
 function setEnv(apiKey?: string, from?: string) {
@@ -166,6 +165,21 @@ describe('sendEarlyAccessApkEmail — correct request shape', () => {
 
     const result = await sendEarlyAccessApkEmail(VALID_ARGS)
     expect(result.ok).toBe(true)
+  })
+
+  it('does NOT include expiry language in html or text', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+
+    await sendEarlyAccessApkEmail(VALID_ARGS)
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as { html: string; text: string }
+
+    // The link is permanent — no expiry language should appear
+    expect(body.html.toLowerCase()).not.toContain('expire')
+    expect(body.text.toLowerCase()).not.toContain('expire')
+    expect(body.html).not.toContain('48 hours')
+    expect(body.text).not.toContain('48 hours')
   })
 })
 

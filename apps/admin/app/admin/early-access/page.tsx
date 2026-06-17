@@ -1,7 +1,7 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { SendApkButton } from '@/components/admin/SendApkButton'
-import { ApkUploader } from '@/components/admin/ApkUploader'
+import { ApkUrlForm } from '@/components/admin/ApkUrlForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,13 +16,6 @@ interface EarlyAccessRegistration {
   created_at: string
 }
 
-interface ApkStatus {
-  present: boolean
-  name: string
-  size?: number
-  updatedAt?: string
-}
-
 const STATUS_STYLES: Record<string, string> = {
   pending:  'bg-amber-100 text-amber-800',
   approved: 'bg-blue-100 text-blue-800',
@@ -32,46 +25,30 @@ const STATUS_STYLES: Record<string, string> = {
 
 async function getData(): Promise<{
   rows: EarlyAccessRegistration[]
-  apk: ApkStatus
+  apkUrl: string
 }> {
   const db = createServerClient()
-  const objectKey = process.env.EARLY_ACCESS_APK_OBJECT ?? 'iskotify-early-access.apk'
 
-  const [{ data }, { data: listData }] = await Promise.all([
+  const [{ data: regData }, { data: configData }] = await Promise.all([
     db
       .from('early_access_registrations')
       .select('id,full_name,email,school,grade_level,platform,status,created_at')
       .order('created_at', { ascending: false }),
-    db.storage.from('early-access-apk').list('', { search: objectKey }),
+    db
+      .from('app_config')
+      .select('value')
+      .eq('key', 'early_access_apk_url')
+      .maybeSingle(),
   ])
 
-  const rows = (data ?? []) as EarlyAccessRegistration[]
-
-  // list() returns an array of FileObject; find an exact name match
-  const match = Array.isArray(listData)
-    ? (listData as Array<{ name: string; metadata?: { size?: number; lastModified?: string } }>)
-        .find((f) => f.name === objectKey)
-    : null
-
-  const apk: ApkStatus = match
-    ? {
-        present: true,
-        name: objectKey,
-        size: match.metadata?.size,
-        updatedAt: match.metadata?.lastModified,
-      }
-    : { present: false, name: objectKey }
-
-  return { rows, apk }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return {
+    rows: (regData ?? []) as EarlyAccessRegistration[],
+    apkUrl: (configData?.value ?? '') as string,
+  }
 }
 
 export default async function EarlyAccessPage() {
-  const { rows, apk } = await getData()
+  const { rows, apkUrl } = await getData()
 
   return (
     <>
@@ -84,35 +61,41 @@ export default async function EarlyAccessPage() {
           </p>
         </div>
 
-        {/* APK status banner */}
-        {apk.present ? (
-          <div className="flex items-center gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
-            <span className="text-green-600 text-base leading-none" aria-hidden="true">&#10003;</span>
-            <p className="text-[13px] text-green-800 font-medium">
-              APK ready: <span className="font-mono">{apk.name}</span>
-              {apk.size != null && (
-                <span className="font-normal text-green-700 ml-2">({formatBytes(apk.size)})</span>
-              )}
-              {apk.updatedAt && (
-                <span className="font-normal text-green-600 ml-2">
-                  &mdash; updated {new Date(apk.updatedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
-                </span>
-              )}
+        {/* Early-access APK link section */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-[13px] font-semibold text-[#1d1d1f]">Early-access APK link</p>
+            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+              The link below is emailed to registrants when you press &ldquo;Send APK&rdquo;. Host the APK on GitHub Releases or Google Drive and paste the permanent URL here.
             </p>
           </div>
-        ) : (
-          <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
-            <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
-            <p className="text-[13px] text-amber-800">
-              No APK uploaded yet &mdash; upload{' '}
-              <span className="font-mono font-semibold">{apk.name}</span>
-              {' '}to the <span className="font-semibold">early-access-apk</span> bucket in Supabase Storage before sending emails.
-            </p>
-          </div>
-        )}
 
-        {/* APK uploader — always visible so admin can replace the APK at any time */}
-        <ApkUploader />
+          {apkUrl ? (
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
+              <span className="text-green-600 text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
+              <div className="min-w-0">
+                <p className="text-[13px] text-green-800 font-medium">APK link set &mdash; &ldquo;Send APK&rdquo; emails this URL.</p>
+                <a
+                  href={apkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px] text-[#800000] underline break-all"
+                >
+                  {apkUrl}
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
+              <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
+              <p className="text-[13px] text-amber-800">
+                No APK link set yet &mdash; paste the hosted download URL below before sending emails.
+              </p>
+            </div>
+          )}
+
+          <ApkUrlForm currentUrl={apkUrl} />
+        </div>
 
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">

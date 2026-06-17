@@ -6,7 +6,6 @@ export interface SendEarlyAccessApkEmailArgs {
   to: string
   name?: string | null
   downloadUrl: string
-  expiresHours: number
 }
 
 export type SendEarlyAccessApkEmailResult =
@@ -22,9 +21,8 @@ function escapeHtml(s: string): string {
 }
 
 function buildHtml(args: SendEarlyAccessApkEmailArgs): string {
-  const { name, downloadUrl, expiresHours } = args
+  const { name, downloadUrl } = args
   const greeting = name ? `Hi ${escapeHtml(name)},` : 'Hi there,'
-  const expiryNote = `This link expires in <strong>${expiresHours} hours</strong>. If it has expired, simply reply to this email and we will send you a fresh one.`
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -65,8 +63,6 @@ function buildHtml(args: SendEarlyAccessApkEmailArgs): string {
         <a href="${downloadUrl}" class="cta">Download the Android App</a>
       </div>
 
-      <p style="text-align:center;font-size:13px;color:#aeaeb2;">${expiryNote}</p>
-
       <div class="steps">
         <h3>Installation steps</h3>
         <ol>
@@ -88,8 +84,7 @@ function buildHtml(args: SendEarlyAccessApkEmailArgs): string {
       <p>Good luck with your college journey! 🌟<br /><strong>The Iskotify Team</strong></p>
     </div>
     <div class="footer">
-      <p>You received this because you registered for Iskotify Early Access.<br />
-      This link is personal and will expire in ${expiresHours} hours.</p>
+      <p>You received this because you registered for Iskotify Early Access.</p>
     </div>
   </div>
 </body>
@@ -97,7 +92,7 @@ function buildHtml(args: SendEarlyAccessApkEmailArgs): string {
 }
 
 function buildText(args: SendEarlyAccessApkEmailArgs): string {
-  const { name, downloadUrl, expiresHours } = args
+  const { name, downloadUrl } = args
   const greeting = name ? `Hi ${name},` : 'Hi there,'
   return `${greeting}
 
@@ -105,8 +100,6 @@ You're approved for Iskotify Early Access!
 
 Download the Android app here:
 ${downloadUrl}
-
-This link expires in ${expiresHours} hours. If it has expired, reply to this email and we'll send a fresh one.
 
 HOW TO INSTALL
 1. Open the link above on your Android device to download the .apk file.

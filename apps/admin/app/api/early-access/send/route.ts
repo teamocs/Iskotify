@@ -6,8 +6,8 @@ export const runtime = 'nodejs'
 
 // POST /api/early-access/send
 // Body: { id: string }
-// Generates a 48h signed download URL for the APK from Supabase Storage,
-// emails it to the registrant, then marks the row status='sent'.
+// Reads the permanent APK download URL from app_config, emails it to the
+// registrant, then marks the row status='sent'.
 // All Supabase and Resend access is server-side only — no secrets reach the client.
 export async function POST(req: NextRequest) {
   let body: unknown
@@ -33,12 +33,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
   }
 
-  // Load the registration row
-  const { data: row, error: rowError } = await supabase
-    .from('early_access_registrations')
-    .select('id, email, full_name, status, approved_at')
-    .eq('id', id)
-    .maybeSingle()
+  // Load the registration row and the stored APK URL in parallel
+  const [{ data: row, error: rowError }, { data: configData, error: configError }] = await Promise.all([
+    supabase
+      .from('early_access_registrations')
+      .select('id, email, full_name, status, approved_at')
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'early_access_apk_url')
+      .maybeSingle(),
+  ])
 
   if (rowError) {
     console.error('[early-access/send POST] row lookup error:', rowError)
@@ -49,21 +56,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Registration not found' }, { status: 404 })
   }
 
-  // Generate a 48-hour signed download URL from the private bucket
-  const objectKey = process.env.EARLY_ACCESS_APK_OBJECT ?? 'iskotify-early-access.apk'
-  const EXPIRES_SECONDS = 48 * 60 * 60
+  if (configError) {
+    console.error('[early-access/send POST] app_config lookup error:', configError)
+    return NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 })
+  }
 
-  const { data: signedData, error: signError } = await supabase.storage
-    .from('early-access-apk')
-    .createSignedUrl(objectKey, EXPIRES_SECONDS)
+  const downloadUrl = (configData?.value ?? '').trim()
 
-  if (signError || !signedData?.signedUrl) {
-    console.error('[early-access/send POST] createSignedUrl error:', signError)
+  if (!downloadUrl) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: 'No APK uploaded yet. Upload it to the early-access-apk bucket first.',
-      },
+      { ok: false, error: 'No APK link set yet. Add the hosted download URL first.' },
       { status: 400 },
     )
   }
@@ -72,8 +74,7 @@ export async function POST(req: NextRequest) {
   const emailResult = await sendEarlyAccessApkEmail({
     to: row.email as string,
     name: row.full_name as string | null,
-    downloadUrl: signedData.signedUrl,
-    expiresHours: 48,
+    downloadUrl,
   })
 
   if (!emailResult.ok) {
