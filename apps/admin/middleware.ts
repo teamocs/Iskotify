@@ -13,9 +13,22 @@ const OPERATOR_ENDPOINTS = [
   '/api/search/listings',       // mobile-accessible (hybrid exam/scholarship AI search)
 ]
 
+// Public endpoints that need NO admin session — matched EXACTLY (not startsWith),
+// so admin subroutes like /api/early-access/send and /api/early-access/apk-url
+// stay session-gated.
+const PUBLIC_ENDPOINTS = [
+  '/api/early-access',  // landing-page early-access registration POST
+]
+
 export async function middleware(request: NextRequest) {
   // Allow operator endpoints through — they have their own auth.
   if (OPERATOR_ENDPOINTS.some(p => request.nextUrl.pathname.startsWith(p))) {
+    return NextResponse.next({ request })
+  }
+
+  // Public endpoints (exact match) — e.g. the landing early-access registration
+  // form. Admin subroutes under the same prefix are NOT exempted.
+  if (PUBLIC_ENDPOINTS.includes(request.nextUrl.pathname)) {
     return NextResponse.next({ request })
   }
 
