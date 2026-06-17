@@ -33,6 +33,7 @@ import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
 import { isEarlyAccessExpired } from '../utils/earlyAccess'
+import { isEarlyAccessActivated, setEarlyAccessActivated } from '../utils/earlyAccessActivation'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 
@@ -308,6 +309,21 @@ function AppInit({ onReady }: { onReady: () => void }) {
         db.select().from(focusListingsTable).limit(1),
       ])
       const settings = rows[0]
+
+      // Native early-access activation gate (one-time, then fully offline). Established
+      // installs (already have a profile) are grandfathered so this OTA can't disrupt
+      // them; only a truly fresh install (no profile) must activate before it can be used.
+      const activated = await isEarlyAccessActivated()
+      if (!activated) {
+        if (settings?.fullName) {
+          await setEarlyAccessActivated()        // grandfather existing/in-progress user
+        } else {
+          router.replace('/activate')
+          onReady()
+          return
+        }
+      }
+
       if (!settings?.fullName) {
         router.replace('/landing')
       } else if (!hasOnboardingFocus({
