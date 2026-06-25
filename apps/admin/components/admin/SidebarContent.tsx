@@ -52,6 +52,12 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     ],
   },
   {
+    section: 'ANALYTICS',
+    items: [
+      { href: '/admin/analytics', icon: '📊', label: 'Analytics' },
+    ],
+  },
+  {
     section: 'DATA MANAGER',
     items: [
       { href: '/admin/data/career_courses', icon: '📚', label: 'Career Courses' },
