@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo, type ReactElement } from 'react'
 import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, FlatList } from 'react-native'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -98,9 +98,12 @@ interface SchoolsDirectoryProps {
   bottomInset?: number
   /** Optional region to preselect when it exists in the data (canonical form). */
   defaultRegion?: string | null
+  /** Optional element rendered (and scrolled) above the school list — e.g. the
+      pinned "Entrance exams" section on the Lists → Universities tab. */
+  listHeader?: ReactElement | null
 }
 
-export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultRegion = null }: SchoolsDirectoryProps) {
+export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultRegion = null, listHeader = null }: SchoolsDirectoryProps) {
   const db = useDb()
   const { theme: t, typo } = useTheme()
 
@@ -213,8 +216,11 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
     return <ActivityIndicator color={t.accent} style={s.loading} />
   }
 
-  const listHeader = filtered.length > 0
+  const countHeader = filtered.length > 0
     ? <Text style={s.countTxt}>{filtered.length} school{filtered.length !== 1 ? 's' : ''}</Text>
+    : null
+  const fullHeader = (listHeader || countHeader)
+    ? <>{listHeader}{countHeader}</>
     : null
 
   return (
@@ -264,7 +270,7 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        ListHeaderComponent={listHeader}
+        ListHeaderComponent={fullHeader}
         ListEmptyComponent={<Text style={s.empty}>No schools found.</Text>}
       />
     </View>

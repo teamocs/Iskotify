@@ -488,6 +488,30 @@ export default function ListsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, recommended, userRegion, s, renderCard])
 
+  // Universities tab: pin the focusable entrance exams (the slug-backed listings)
+  // ABOVE the schools directory, so users can still add a target exam to Focus
+  // (tap a card → /listings/[slug] → "Add to Focus"). Shown only with no query.
+  const universitiesExamsHeader = useMemo(() => {
+    if (tab !== 'universities' || typeListings.length === 0) return null
+    const exams = [...typeListings].sort((a, b) => {
+      if (!a.examDate) return 1
+      if (!b.examDate) return -1
+      return a.examDate - b.examDate
+    })
+    return (
+      <>
+        <View style={s.sectionWrap}>
+          <SectionHeader title="Entrance exams" subtitle="Tap to add a target exam to your Focus" />
+        </View>
+        {exams.map(l => <View key={`exam-${l.id}`}>{renderCard(l)}</View>)}
+        <View style={s.sectionWrap}>
+          <SectionHeader title="All universities" />
+        </View>
+      </>
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, typeListings, s, renderCard])
+
   // When a query is active, a results header sits above the matches summarising
   // them (universities/scholarships only). Empty query → the regional header above.
   const resultsHeader = useMemo(() => {
@@ -619,6 +643,7 @@ export default function ListsScreen() {
             query={query}
             bottomInset={insets.bottom + layout.tabBarClearance}
             defaultRegion={userRegion ? canonicalizeRegion(userRegion) : null}
+            listHeader={query.trim() ? null : universitiesExamsHeader}
           />
         ) : tab === 'scholarships' ? (
           <FlatList

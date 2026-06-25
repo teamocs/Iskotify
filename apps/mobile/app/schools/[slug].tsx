@@ -9,6 +9,8 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { useFocusListings } from '../../hooks/useFocusListings'
+import { examAcronymToListingSlug } from '../../utils/targetExams'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -125,6 +127,7 @@ export default function SchoolProfileScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
   const { theme: t, typo } = useTheme()
+  const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
 
   const [school, setSchool]   = useState<SchoolDetail | null>(null)
   const [profile, setProfile] = useState<ProfileDetail | null>(null)
@@ -169,6 +172,14 @@ export default function SchoolProfileScreen() {
     linkBtn:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: t.surface, borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, marginBottom: spacing.sm },
     linkTxt:       { flex: 1, fontSize: typo.sm, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
     linkArrow:     { fontSize: typo.sm, color: t.textTertiary },
+    // Focus button (entrance-exam section)
+    focusBtn:      { marginTop: spacing.md, minHeight: 48, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: radius.lg, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+    focusAdd:      { backgroundColor: t.accentStrong },
+    focusAddTxt:   { fontSize: typo.sm, color: t.textInverse, fontFamily: 'Lexend_600SemiBold' },
+    focusOn:       { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accent },
+    focusOnTxt:    { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    examLinkBtn:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: t.surface2, borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1, borderColor: t.divider },
+    examLinkTxt:   { flex: 1, fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     // Disclaimer
     disclaimer:    { marginTop: spacing.lg, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.md },
     disclaimerTxt: { fontSize: typo.sm, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
@@ -238,6 +249,13 @@ export default function SchoolProfileScreen() {
   )
 
   const hasLinks = !!(profile?.websiteUrl || profile?.applicationPortalUrl || profile?.facebookUrl)
+
+  // This school's entrance exam is focusable iff its acronym maps to one of the
+  // slug-backed exam listings (UPCAT, ACET, …). Most regional exams have no
+  // listing/practice content, so no focus button is shown for them.
+  const examSlug = examAcronymToListingSlug(profile?.entranceExamAcronym)
+  const examInFocus = examSlug ? isInFocus(examSlug) : false
+  const examFocusPriority = examSlug ? getPriority(examSlug) : null
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -412,6 +430,29 @@ export default function SchoolProfileScreen() {
                   <Text style={s.rowLabel}>Est. Pass Rate</Text>
                   <Text style={s.rowValue}>{profile.estimatedPassingRate}</Text>
                 </View>
+              ) : null}
+
+              {/* Focusable when the exam maps to a slug-backed listing (UPCAT, ACET, …) */}
+              {examSlug ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [s.focusBtn, examInFocus ? s.focusOn : s.focusAdd, pressed && { opacity: 0.85 }]}
+                    onPress={() => (examInFocus ? removeListing(examSlug) : addListing(examSlug))}
+                    accessibilityRole="button"
+                  >
+                    <Text style={examInFocus ? s.focusOnTxt : s.focusAddTxt} maxFontSizeMultiplier={1.4}>
+                      {examInFocus ? `✓ In Focus #${examFocusPriority} — Tap to remove` : '+ Add this exam to Focus'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [s.examLinkBtn, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push(`/listings/${examSlug}`)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={s.examLinkTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>View exam details & mock practice</Text>
+                    <Text style={s.linkArrow}>›</Text>
+                  </Pressable>
+                </>
               ) : null}
             </Card>
           </View>

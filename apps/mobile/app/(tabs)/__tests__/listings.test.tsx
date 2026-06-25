@@ -218,6 +218,34 @@ describe('ListsScreen', () => {
     })
   })
 
+  it('pins the focusable Entrance exams section above the directory on Universities tab', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP', targetCourses: JSON.stringify([]) }],
+      [{ id: 'upd', name: 'UP Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true }],
+    ))
+    render(<ListsScreen />)
+    await waitFor(() => {
+      expect(screen.getByText('Entrance exams')).toBeTruthy()
+      expect(screen.getByText('UPCAT')).toBeTruthy()      // focusable exam card
+      expect(screen.getByText('All universities')).toBeTruthy()
+      expect(screen.getByText('UP Diliman')).toBeTruthy() // directory below
+    })
+  })
+
+  it('tapping an Entrance-exam card pushes /listings/[slug] (where Add to Focus lives)', async () => {
+    const { router } = require('expo-router')
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP', targetCourses: JSON.stringify([]) }],
+      [],
+    ))
+    render(<ListsScreen />)
+    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    fireEvent.press(screen.getByText('UPCAT'))
+    expect(router.push).toHaveBeenCalledWith('/listings/upcat')
+  })
+
   it('tapping a school card on Universities tab pushes /schools/[id]', async () => {
     const { router } = require('expo-router')
     const { useDb } = require('../../../hooks/useDb')
