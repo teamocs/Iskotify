@@ -30,6 +30,7 @@ import type { CourseTabOption } from '../../utils/courseTabs'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { LoadingState } from '../../components/ui/LoadingState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
+import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -568,17 +569,17 @@ export default function ListsScreen() {
         {/* Search input (all tabs; AI search only on uni/scholarship) */}
         <View style={s.searchRow}>
           <Text style={{ fontSize: typo.sm }}>
-            {(tab === 'universities' || tab === 'scholarships') && aiLoading ? '✨' : '🔍'}
+            {tab === 'scholarships' && aiLoading ? '✨' : '🔍'}
           </Text>
           <TextInput
             style={s.searchInput}
             value={query}
             onChangeText={onChangeQuery}
             onSubmitEditing={() => {
-              if (tab === 'universities' || tab === 'scholarships') void runAiSearch()
+              if (tab === 'scholarships') void runAiSearch()
             }}
             placeholder={
-              tab === 'universities' ? "Search universities & entrance exams, e.g. 'UP nursing' or 'engineering in NCR'"
+              tab === 'universities' ? 'Search universities by name or acronym'
               : tab === 'scholarships' ? "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
               : tab === 'courses' ? 'Filter courses'
               : 'Filter destinations'
@@ -586,7 +587,7 @@ export default function ListsScreen() {
             placeholderTextColor={t.textTertiary}
             returnKeyType="search"
           />
-          {(tab === 'universities' || tab === 'scholarships') && aiLoading ? (
+          {tab === 'scholarships' && aiLoading ? (
             <ActivityIndicator size="small" color={t.accentText} />
           ) : null}
           {query ? (
@@ -600,8 +601,8 @@ export default function ListsScreen() {
           ) : null}
         </View>
 
-        {/* AI hint — only on listing tabs */}
-        {(tab === 'universities' || tab === 'scholarships') && query.trim() ? (
+        {/* AI hint — only on the scholarships tab (universities is an instant directory filter) */}
+        {tab === 'scholarships' && query.trim() ? (
           <Text style={[s.aiHint, showAiActive && s.aiActiveHint]}>
             {showAiActive ? '✨ AI-ranked results' : 'Press search to ask the AI'}
           </Text>
@@ -611,7 +612,15 @@ export default function ListsScreen() {
         {scholarshipBanner}
 
         {/* ── Tab content ── */}
-        {(tab === 'universities' || tab === 'scholarships') ? (
+        {tab === 'universities' ? (
+          /* Universities = the full tertiary-schools directory (727 schools).
+             Entrance-exam practice lives on the Exams tab; school detail at /schools/[id]. */
+          <SchoolsDirectory
+            query={query}
+            bottomInset={insets.bottom + layout.tabBarClearance}
+            defaultRegion={userRegion ? canonicalizeRegion(userRegion) : null}
+          />
+        ) : tab === 'scholarships' ? (
           <FlatList
             data={listingData}
             keyExtractor={item => item.id}
@@ -629,9 +638,7 @@ export default function ListsScreen() {
               ) : showLoading ? (
                 <LoadingState label="Loading…" />
               ) : (
-                <Text style={s.empty}>
-                  {tab === 'universities' ? 'No exams yet.' : 'No scholarships yet.'}
-                </Text>
+                <Text style={s.empty}>No scholarships yet.</Text>
               )
             }
             renderItem={renderListingItem}

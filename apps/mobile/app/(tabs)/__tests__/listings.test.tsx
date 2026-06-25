@@ -68,11 +68,14 @@ jest.mock('../../../services/queryCache', () => ({
   cachedQuery: jest.fn().mockResolvedValue([[], []]),
 }))
 
-const makeDb = (rows: any[] = []) => ({
+// `rows` feed the listings query (scholarships FlatList via .then); `schoolRows`
+// feed the SchoolsDirectory query on the Universities tab (.from().leftJoin()).
+const makeDb = (rows: any[] = [], schoolRows: any[] = []) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
       orderBy: jest.fn().mockResolvedValue([]),
       where: jest.fn(() => ({ limit: jest.fn().mockResolvedValue([]) })),
+      leftJoin: jest.fn(() => Promise.resolve(schoolRows)),
       then: jest.fn((cb: any) => Promise.resolve().then(() => cb(rows))),
     })),
   })),
@@ -80,7 +83,8 @@ const makeDb = (rows: any[] = []) => ({
   insert: jest.fn(() => ({ values: jest.fn(() => ({ onConflictDoNothing: jest.fn().mockResolvedValue(undefined) })) })),
 })
 
-const SEARCH_PLACEHOLDER_UNI = "Search universities & entrance exams, e.g. 'UP nursing' or 'engineering in NCR'"
+// Universities tab is now the tertiary-schools directory (not exam listings).
+const SEARCH_PLACEHOLDER_UNI = 'Search universities by name or acronym'
 const SEARCH_PLACEHOLDER_SCHOLAR = "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
 
 describe('ListsScreen', () => {
@@ -188,10 +192,10 @@ describe('ListsScreen', () => {
     expect(screen.queryByPlaceholderText(SEARCH_PLACEHOLDER_SCHOLAR)).toBeNull()
   })
 
-  it('shows the empty state when there are no exams (Universities tab)', async () => {
+  it('shows the directory empty state when there are no schools (Universities tab)', async () => {
     render(<ListsScreen />)
     await waitFor(() => {
-      expect(screen.getByText('No exams yet.')).toBeTruthy()
+      expect(screen.getByText('No schools found.')).toBeTruthy()
     })
   })
 
@@ -203,27 +207,27 @@ describe('ListsScreen', () => {
     })
   })
 
-  it('renders a listing row when data is present on Universities tab', async () => {
+  it('renders a school card when directory data is present on Universities tab', async () => {
     const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb([
-      { id: '1', slug: 'upcat', title: 'UPCAT 2025', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
+    useDb.mockReturnValue(makeDb([], [
+      { id: 'up-diliman', name: 'University of the Philippines Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true },
     ]))
     render(<ListsScreen />)
     await waitFor(() => {
-      expect(screen.getByText('UPCAT 2025')).toBeTruthy()
+      expect(screen.getByText('University of the Philippines Diliman')).toBeTruthy()
     })
   })
 
-  it('does not render a type badge on exam rows (tab communicates type)', async () => {
+  it('tapping a school card on Universities tab pushes /schools/[id]', async () => {
+    const { router } = require('expo-router')
     const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb([
-      { id: '1', slug: 'upcat', title: 'UPCAT 2025', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
+    useDb.mockReturnValue(makeDb([], [
+      { id: 'up-diliman', name: 'UP Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true },
     ]))
     render(<ListsScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('UPCAT 2025')).toBeTruthy()
-    })
-    expect(screen.queryByText('Exam')).toBeNull()
+    await waitFor(() => expect(screen.getByText('UP Diliman')).toBeTruthy())
+    fireEvent.press(screen.getByText('UP Diliman'))
+    expect(router.push).toHaveBeenCalledWith('/schools/up-diliman')
   })
 
   it('does not show Verified badge or course chip on scholarship list rows', async () => {
@@ -380,28 +384,21 @@ describe('ListsScreen', () => {
 
   // ── Results header indicator (query active) ───────────────────────────────
 
-  it('shows a "Top universities matching" header when a universities search is submitted', async () => {
+  it('filters the directory as you type on the Universities tab (instant, no AI header)', async () => {
     const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb([
-      { id: '1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
+    useDb.mockReturnValue(makeDb([], [
+      { id: 'upd', name: 'UP Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true },
+      { id: 'ust', name: 'University of Santo Tomas', acronym: 'UST', region: 'NCR', province: null, type: 'Private', dataConfidence: 'HIGH', freeTuition: false },
     ]))
     render(<ListsScreen />)
-    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('UP Diliman')).toBeTruthy())
     const input = screen.getByPlaceholderText(SEARCH_PLACEHOLDER_UNI)
-    fireEvent.changeText(input, 'UP')
-    fireEvent(input, 'submitEditing')
+    fireEvent.changeText(input, 'Santo')
     await waitFor(() => {
-      expect(screen.getByText(/Top universities matching/i)).toBeTruthy()
+      expect(screen.queryByText('UP Diliman')).toBeNull()
+      expect(screen.getByText('University of Santo Tomas')).toBeTruthy()
     })
-  })
-
-  it('does NOT show a results header when there is no query', async () => {
-    const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb([
-      { id: '1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP' },
-    ]))
-    render(<ListsScreen />)
-    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    // The directory is an instant filter — no AI "Top universities matching" header.
     expect(screen.queryByText(/Top universities matching/i)).toBeNull()
   })
 
@@ -435,7 +432,7 @@ describe('ListsScreen', () => {
   it('rows have ≤2 badge elements contract upheld', async () => {
     render(<ListsScreen />)
     await waitFor(() => {
-      expect(screen.getByText('No exams yet.')).toBeTruthy()
+      expect(screen.getByText('No schools found.')).toBeTruthy()
     })
   })
 })
