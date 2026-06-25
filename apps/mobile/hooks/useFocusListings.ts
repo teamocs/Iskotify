@@ -6,6 +6,7 @@ import { focusListings, listings } from '../db/schema'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
+import { capture } from '../lib/analytics'
 
 export interface FocusListing {
   slug: string
@@ -72,6 +73,7 @@ export function useFocusListings() {
     await db.insert(focusListings)
       .values({ listingSlug: slug, priority: maxPriority + 1, addedAt: Date.now() })
       .onConflictDoNothing()
+    capture('focus_added', { slug, priority: maxPriority + 1 })
     scheduleWebPersist()
     invalidate('home:')
     invalidate('practice:')
@@ -82,6 +84,7 @@ export function useFocusListings() {
 
   async function removeListing(slug: string) {
     await db.delete(focusListings).where(eq(focusListings.listingSlug, slug))
+    capture('focus_removed', { slug })
     const remaining = focusListingsList.filter(r => r.slug !== slug)
     const normalized = normalizePriorities(remaining)
     await db.transaction(tx => {

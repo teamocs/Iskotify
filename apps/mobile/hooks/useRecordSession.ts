@@ -3,6 +3,7 @@ import { practiceSessions } from '../db/schema'
 import { pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
+import { capture } from '../lib/analytics'
 
 export interface SessionParams {
   listingSlug: string
@@ -45,6 +46,15 @@ export function useRecordSession() {
   async function recordSession(params: SessionParams): Promise<void> {
     const record = buildSessionRecord(params)
     await db.insert(practiceSessions).values(record)
+    capture('practice_session_completed', {
+      listingSlug: record.listingSlug || null,
+      topicId: record.topicId,
+      subtest: record.subtest,
+      score: record.score,
+      total: record.total,
+      pct: record.total > 0 ? Math.round((record.score / record.total) * 100) : 0,
+      durationSecs: record.durationSecs,
+    })
     scheduleWebPersist()
     // Invalidate caches so home/analytics screens reflect the new session
     invalidate('analytics:')

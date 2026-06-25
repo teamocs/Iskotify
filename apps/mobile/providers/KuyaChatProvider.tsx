@@ -6,6 +6,7 @@ import { modelExists, hasEnoughRam, warmUpLlama } from '../services/llm'
 import { getGeminiKey } from '../services/geminiKey'
 import { getSettings } from '../services/settings'
 import { useDb } from '../hooks/useDb'
+import { capture } from '../lib/analytics'
 
 interface KuyaChatValue {
   open: () => void
@@ -61,6 +62,7 @@ export function KuyaChatProvider({ children }: { children: ReactNode }) {
 
   // Tap handler: check provider preference first, then model availability.
   const open = useCallback(async () => {
+    capture('kuya_chat_opened', { platform: Platform.OS })
     // --- Web path: local model is unavailable — only Gemini is supported ---
     if (Platform.OS === 'web') {
       const geminiKey = await getGeminiKey()

@@ -36,6 +36,8 @@ import { isEarlyAccessExpired } from '../utils/earlyAccess'
 import { isEarlyAccessActivated, setEarlyAccessActivated } from '../utils/earlyAccessActivation'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
+import { initAnalytics, identifyUser, resetAnalytics } from '../lib/analytics'
+import { AnalyticsScreenTracker } from '../components/AnalyticsScreenTracker'
 
 // KeyboardProvider is native-only (react-native-keyboard-controller).
 // On web, render children directly — the provider import itself is safe to
@@ -134,6 +136,16 @@ function AppInit({ onReady }: { onReady: () => void }) {
   const { isDark } = useTheme()
 
   const initialize = useCallback(async () => {
+    // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set. Runs on
+    // every platform; identify an existing session so events tie to the user.
+    initAnalytics()
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        const u = data.session?.user
+        if (u) identifyUser(u.id, { email: u.email ?? undefined })
+      })
+      .catch(() => { /* non-fatal */ })
+
     // ── Web: auth-first entry gate ─────────────────────────────────────────
     // On web, session is the source of truth for routing. We check it first,
     // before the local DB, so an unauthenticated visitor always lands on the
@@ -233,6 +245,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
+            if (session.user) identifyUser(session.user.id, { email: session.user.email ?? undefined })
             // Approved-account gate (web): only approved/sent registrants (or admins) may
             // enter. Fail-open on RPC error so a transient failure can't strand a real user.
             try {
@@ -268,6 +281,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
               .catch(e => console.warn('[layout] web signed-in sync:', e))
             router.replace(target)
           } else if (event === 'SIGNED_OUT') {
+            resetAnalytics()
             router.replace('/auth/sign-in')
           }
         }
@@ -413,6 +427,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <AnalyticsScreenTracker />
       <AiCoachProvider>
         <KuyaChatProvider>
           {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}

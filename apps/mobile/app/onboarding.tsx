@@ -10,6 +10,7 @@ import { supabase } from '../services/supabase'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { runEnhancement } from '../hooks/useAiEnhancement'
+import { capture } from '../lib/analytics'
 import {
   userSettings, practiceSessions, focusListings as focusListingsTable, upcatQuestions,
 } from '../db/schema'
@@ -537,6 +538,7 @@ export default function OnboardingScreen() {
   }, [gateVisible, syncStatus])
 
   function finishOnboarding() {
+    capture('onboarding_completed')
     if (syncStatus === 'done' || syncStatus === 'idle') {
       router.replace('/welcome')
     } else {
