@@ -38,7 +38,7 @@ export default async function ListingsPage() {
 
   return (
     <>
-      <Topbar title="All Listings" showSyncButton />
+      <Topbar title="All Listings" showSyncButton exportHref="/api/admin/listings/export" />
       <ListingsView
         listings={listings}
         logs={logs}

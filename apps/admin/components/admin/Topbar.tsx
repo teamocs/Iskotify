@@ -1,14 +1,17 @@
 'use client'
 
 import { SyncNowButton } from './SyncNowButton'
+import { ExportButtons } from './ExportButtons'
 import { useAdminDrawer } from '../../contexts/AdminDrawerContext'
 
 interface Props {
   title: string
   showSyncButton?: boolean
+  /** When set, renders CSV/JSON export links (e.g. "/api/admin/listings/export"). */
+  exportHref?: string
 }
 
-export function Topbar({ title, showSyncButton = false }: Props) {
+export function Topbar({ title, showSyncButton = false, exportHref }: Props) {
   const { openDrawer } = useAdminDrawer()
 
   return (
@@ -25,12 +28,10 @@ export function Topbar({ title, showSyncButton = false }: Props) {
           {title}
         </h1>
       </div>
-      {showSyncButton && (
+      {(showSyncButton || exportHref) && (
         <div className="flex items-center gap-2">
-          <button className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] transition-colors shadow-sm">
-            ⬇ Export CSV
-          </button>
-          <SyncNowButton />
+          {exportHref && <ExportButtons baseHref={exportHref} />}
+          {showSyncButton && <SyncNowButton />}
         </div>
       )}
     </header>

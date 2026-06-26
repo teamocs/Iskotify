@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 import { DATA_TABLE_MAP, ALLOWED_TABLES } from '@/lib/dataTables'
+import { exportRowsResponse } from '@/lib/dataTables/exportResponse'
 
 export const runtime = 'nodejs'
 
@@ -50,6 +51,12 @@ export async function GET(
   }
 
   const url = new URL(_req.url)
+
+  // Export branch: ?export=1&format=csv|json → download all rows.
+  if (url.searchParams.get('export') === '1') {
+    return exportRowsResponse(supabase, config.table, config.idColumn, config, url.searchParams.get('format') === 'json' ? 'json' : 'csv')
+  }
+
   const search = url.searchParams.get('search')?.trim() ?? ''
   const page = Math.max(0, parseInt(url.searchParams.get('page') ?? '0', 10) || 0)
   const from = page * PAGE_SIZE

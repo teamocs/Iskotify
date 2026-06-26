@@ -1,7 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react'
 import type { DataTableConfig, DataTableColumnConfig } from '@/lib/dataTables'
+import { SectionHelp } from './SectionHelp'
+
+interface ImportResultState {
+  ok: boolean
+  message: string
+  errors?: { row: number; message: string }[]
+}
 
 interface Row extends Record<string, unknown> {}
 
@@ -420,6 +427,9 @@ export function DataTableManager({ config }: Props) {
   const [state, setState] = useState<FetchState>({ rows: [], count: 0, loading: true, error: '' })
   const [drawer, setDrawer] = useState<DrawerState>({ open: false, row: null })
   const fetchCountRef = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResultState | null>(null)
 
   const fetchRows = useCallback(async (q: string, p: number) => {
     const id = ++fetchCountRef.current
@@ -475,25 +485,105 @@ export function DataTableManager({ config }: Props) {
     fetchRows(debouncedSearch, page)
   }
 
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/admin/data/${config.table}/import`, { method: 'POST', body: fd })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setImportResult({ ok: false, message: body.error ?? 'Import failed' })
+      } else {
+        const errCount = body.errors?.length ?? 0
+        setImportResult({
+          ok: errCount === 0,
+          message: `Imported ${body.total} row(s): ${body.inserted} new, ${body.updated} updated${errCount ? `, ${errCount} skipped` : ''}.`,
+          errors: body.errors,
+        })
+        fetchRows(debouncedSearch, page)
+      }
+    } catch {
+      setImportResult({ ok: false, message: 'Network error' })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">{config.label}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">{config.label}</h2>
+              <SectionHelp title={config.label} guideAnchor={config.table}>{config.helpText}</SectionHelp>
+            </div>
             <p className="text-[#6e6e73] text-sm mt-0.5">
               {state.loading ? 'Loading…' : `${state.count} row${state.count !== 1 ? 's' : ''}`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openNew}
-            className="px-4 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000]"
-          >
-            + New
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <a
+              href={`/api/admin/data/${config.table}?export=1&format=csv`}
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7]"
+            >
+              ⬇ CSV
+            </a>
+            <a
+              href={`/api/admin/data/${config.table}?export=1&format=json`}
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7]"
+            >
+              ⬇ JSON
+            </a>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] disabled:opacity-50"
+            >
+              {importing ? 'Importing…' : '⬆ Import'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              onChange={handleImportFile}
+              className="hidden"
+              aria-label={`Import ${config.label} from CSV or JSON`}
+            />
+            <button
+              type="button"
+              onClick={openNew}
+              className="px-4 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000]"
+            >
+              + New
+            </button>
+          </div>
         </div>
+
+        {/* Import result */}
+        {importResult && (
+          <div className={`rounded-[10px] px-3 py-2 text-sm ${importResult.ok ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span>{importResult.message}</span>
+              <button type="button" onClick={() => setImportResult(null)} aria-label="Dismiss" className="text-xs opacity-60 hover:opacity-100">✕</button>
+            </div>
+            {importResult.errors && importResult.errors.length > 0 && (
+              <ul className="mt-1 list-disc list-inside text-xs max-h-32 overflow-y-auto">
+                {importResult.errors.slice(0, 20).map((er, i) => (
+                  <li key={i}>Row {er.row}: {er.message}</li>
+                ))}
+                {importResult.errors.length > 20 && <li>+ {importResult.errors.length - 20} more…</li>}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Search */}
         <div>

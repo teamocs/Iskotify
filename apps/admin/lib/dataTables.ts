@@ -16,6 +16,9 @@ export interface DataTableConfig {
   idType: 'text' | 'uuid' | 'int'
   searchColumns: string[]
   columns: DataTableColumnConfig[]
+  /** One-line description of what this table feeds in the mobile app (shown in the
+   *  per-page help pill + the /admin/guide reference). */
+  helpText?: string
 }
 
 export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
@@ -163,9 +166,11 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
     table: 'tertiary_schools',
     label: 'Tertiary Schools',
     idColumn: 'id',
-    idType: 'int',
+    idType: 'text',
     searchColumns: ['name', 'acronym', 'region'],
+    helpText: 'Colleges/universities shown in the app’s Universities directory and school detail pages. id is a stable text slug (e.g. "university-of-the-philippines-diliman").',
     columns: [
+      { name: 'id', label: 'ID (slug)', type: 'text', required: true },
       { name: 'name', label: 'Name', type: 'text', required: true },
       { name: 'acronym', label: 'Acronym', type: 'text' },
       { name: 'region', label: 'Region', type: 'text' },
@@ -183,10 +188,11 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
     table: 'university_profiles',
     label: 'University Profiles',
     idColumn: 'school_id',
-    idType: 'int',
+    idType: 'text',
     searchColumns: ['school_id'],
+    helpText: 'Rich profile (entrance exam, tuition, courses, accreditation) for each tertiary_schools row, shown on school detail pages. school_id must match a tertiary_schools.id.',
     columns: [
-      { name: 'school_id', label: 'School ID', type: 'number', required: true },
+      { name: 'school_id', label: 'School ID (FK → tertiary_schools.id)', type: 'text', required: true },
       { name: 'data_tier', label: 'Data Tier', type: 'text' },
       { name: 'institution_type', label: 'Institution Type', type: 'text' },
       { name: 'year_established', label: 'Year Established', type: 'number' },
@@ -222,9 +228,11 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
     table: 'course_school_rankings',
     label: 'Course School Rankings',
     idColumn: 'id',
-    idType: 'int',
+    idType: 'text',
     searchColumns: ['school_name', 'course_name', 'region'],
+    helpText: 'Per-board-exam school rankings (Wilson score) powering the "top schools by course" lists. id is a stable text key.',
     columns: [
+      { name: 'id', label: 'ID', type: 'text', required: true },
       { name: 'course_tab', label: 'Course Tab', type: 'text' },
       { name: 'course_name', label: 'Course Name', type: 'text' },
       { name: 'rank', label: 'Rank', type: 'number' },
@@ -237,7 +245,7 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
       { name: 'total_passers', label: 'Total Passers', type: 'number' },
       { name: 'years_with_data', label: 'Years With Data', type: 'number' },
       { name: 'exam_periods', label: 'Exam Periods', type: 'text' },
-      { name: 'tertiary_school_id', label: 'Tertiary School ID', type: 'number' },
+      { name: 'tertiary_school_id', label: 'Tertiary School ID', type: 'text' },
     ],
   },
 
@@ -245,9 +253,11 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
     table: 'course_school_quality',
     label: 'Course School Quality',
     idColumn: 'id',
-    idType: 'uuid',
+    idType: 'text',
     searchColumns: ['school_name', 'course_standardized', 'region'],
+    helpText: 'Per-course school quality scores/tiers used to rank non-board programs. id is a stable text key.',
     columns: [
+      { name: 'id', label: 'ID', type: 'text', required: true },
       { name: 'school_name', label: 'School Name', type: 'text', required: true },
       { name: 'region', label: 'Region', type: 'text' },
       { name: 'province', label: 'Province', type: 'text' },
@@ -262,7 +272,7 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
       { name: 'has_prc_board', label: 'Has PRC Board', type: 'boolean' },
       { name: 'qs_subject_rank', label: 'QS Subject Rank', type: 'number' },
       { name: 'data_confidence', label: 'Data Confidence', type: 'text' },
-      { name: 'tertiary_school_id', label: 'Tertiary School ID', type: 'number' },
+      { name: 'tertiary_school_id', label: 'Tertiary School ID', type: 'text' },
     ],
   },
 
@@ -313,6 +323,114 @@ export const DATA_TABLE_CONFIGS: DataTableConfig[] = [
       { name: 'answer', label: 'Answer', type: 'textarea', required: true },
       { name: 'source', label: 'Source', type: 'text' },
       { name: 'valid_year', label: 'Valid Year', type: 'number' },
+    ],
+  },
+
+  // ── Admissions / operations ────────────────────────────────────────────────
+
+  {
+    table: 'admissions_updates',
+    label: 'Admissions Updates',
+    idColumn: 'id',
+    idType: 'text',
+    searchColumns: ['id', 'title', 'school_name'],
+    helpText: 'Time-sensitive admissions news shown in the app’s Updates feed. id is a stable text key. sources is a JSON array of URLs.',
+    columns: [
+      { name: 'id', label: 'ID', type: 'text', required: true },
+      { name: 'report_date', label: 'Report Date (YYYY-MM-DD)', type: 'text' },
+      { name: 'severity', label: 'Severity', type: 'text' },
+      { name: 'school_slug', label: 'School Slug', type: 'text' },
+      { name: 'school_name', label: 'School Name', type: 'text' },
+      { name: 'title', label: 'Title', type: 'text', required: true },
+      { name: 'body', label: 'Body', type: 'textarea', required: true },
+      { name: 'action_required', label: 'Action Required', type: 'text' },
+      { name: 'event_date', label: 'Event Date (YYYY-MM-DD)', type: 'text' },
+      { name: 'event_type', label: 'Event Type', type: 'text' },
+      { name: 'sources', label: 'Sources (JSON array)', type: 'json' },
+      { name: 'verified', label: 'Verified', type: 'boolean' },
+    ],
+  },
+
+  // ── Exam blueprints (sections / notes / skill categories) ──────────────────
+
+  {
+    table: 'exam_skill_categories',
+    label: 'Exam Skill Categories',
+    idColumn: 'name',
+    idType: 'text',
+    searchColumns: ['name'],
+    helpText: 'Skill categories (e.g. Mathematics, Reading Comprehension) that exam_blueprint_sections map to. name is the primary key.',
+    columns: [
+      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'requires_spatial_logic', label: 'Requires Spatial Logic', type: 'boolean' },
+      { name: 'display_order', label: 'Display Order', type: 'number' },
+    ],
+  },
+
+  {
+    table: 'exam_blueprint_sections',
+    label: 'Exam Blueprint Sections',
+    idColumn: 'id',
+    idType: 'text',
+    searchColumns: ['id', 'blueprint_slug', 'name'],
+    helpText: 'Sections of a mock-exam blueprint (item count, time). blueprint_slug must match an exam_blueprints.slug — import blueprints first. Also editable inside the Exam Blueprints editor.',
+    columns: [
+      { name: 'id', label: 'ID', type: 'text', required: true },
+      { name: 'blueprint_slug', label: 'Blueprint Slug (FK)', type: 'text', required: true },
+      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'skill_category', label: 'Skill Category', type: 'text' },
+      { name: 'item_count', label: 'Item Count', type: 'number' },
+      { name: 'time_minutes', label: 'Time (minutes)', type: 'number' },
+      { name: 'requires_spatial_logic', label: 'Requires Spatial Logic', type: 'boolean' },
+      { name: 'display_order', label: 'Display Order', type: 'number' },
+    ],
+  },
+
+  {
+    table: 'exam_course_notes',
+    label: 'Exam Course Notes',
+    idColumn: 'id',
+    idType: 'text',
+    searchColumns: ['id', 'blueprint_slug', 'course_cluster'],
+    helpText: 'Course-specific guidance shown on a mock-exam blueprint. blueprint_slug must match an exam_blueprints.slug.',
+    columns: [
+      { name: 'id', label: 'ID', type: 'text', required: true },
+      { name: 'blueprint_slug', label: 'Blueprint Slug (FK)', type: 'text', required: true },
+      { name: 'course_cluster', label: 'Course Cluster', type: 'text' },
+      { name: 'note', label: 'Note', type: 'textarea' },
+      { name: 'min_percentile', label: 'Min Percentile', type: 'number' },
+      { name: 'display_order', label: 'Display Order', type: 'number' },
+    ],
+  },
+
+  // ── Mappings & passages ────────────────────────────────────────────────────
+
+  {
+    table: 'course_taxonomy_map',
+    label: 'Course Taxonomy Map',
+    idColumn: 'course_tab',
+    idType: 'text',
+    searchColumns: ['course_tab', 'label', 'career_course_id'],
+    helpText: 'Maps a board-exam course tab (e.g. NURSING) to a career_courses row — drives the Courses tab. course_tab is the primary key.',
+    columns: [
+      { name: 'course_tab', label: 'Course Tab', type: 'text', required: true },
+      { name: 'career_course_id', label: 'Career Course ID (FK)', type: 'text' },
+      { name: 'label', label: 'Label', type: 'text' },
+      { name: 'kind', label: 'Kind', type: 'text' },
+    ],
+  },
+
+  {
+    table: 'upcat_passages',
+    label: 'UPCAT Passages',
+    idColumn: 'set_id',
+    idType: 'text',
+    searchColumns: ['set_id', 'subtest'],
+    helpText: 'Reading passages shared by sets of upcat_questions (e.g. Reading Comprehension). set_id is referenced by upcat_questions.set_id. Questions themselves are managed via the UPCAT question-bank importer.',
+    columns: [
+      { name: 'set_id', label: 'Set ID', type: 'text', required: true },
+      { name: 'subtest', label: 'Subtest', type: 'text', required: true },
+      { name: 'passage_text', label: 'Passage Text', type: 'textarea', required: true },
     ],
   },
 ]

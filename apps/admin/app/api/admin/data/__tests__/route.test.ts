@@ -570,3 +570,47 @@ describe('DELETE /api/admin/data/[table]', () => {
     expect(res.status).toBe(500)
   })
 })
+
+// ── GET export branch (?export=1) ─────────────────────────────────────────────
+
+describe('GET /api/admin/data/[table]?export=1', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockGetUser.mockReset()
+    mockSingle.mockReset()
+    mockFrom.mockClear()
+    mockRange.mockReset()
+  })
+
+  it('returns 401 when unauthenticated', async () => {
+    noUser()
+    const { GET } = await import('../[table]/route')
+    const res = await GET(makeGetReq('upcat_facts', '?export=1&format=csv'), makeContext('upcat_facts'))
+    expect(res.status).toBe(401)
+  })
+
+  it('exports CSV with header + rows and a download disposition', async () => {
+    adminUser()
+    mockRange.mockResolvedValueOnce({ data: [{ id: 'uuid-1', topic: 'General', question: 'Q', answer: 'A' }], error: null })
+    const { GET } = await import('../[table]/route')
+    const res = await GET(makeGetReq('upcat_facts', '?export=1&format=csv'), makeContext('upcat_facts'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/csv')
+    expect(res.headers.get('content-disposition')).toContain('attachment')
+    const body = await res.text()
+    expect(body).toContain('topic')
+    expect(body).toContain('General')
+  })
+
+  it('exports JSON as an array', async () => {
+    adminUser()
+    mockRange.mockResolvedValueOnce({ data: [{ id: 'uuid-1', topic: 'General' }], error: null })
+    const { GET } = await import('../[table]/route')
+    const res = await GET(makeGetReq('upcat_facts', '?export=1&format=json'), makeContext('upcat_facts'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    const json = await res.json()
+    expect(Array.isArray(json)).toBe(true)
+    expect(json[0].topic).toBe('General')
+  })
+})

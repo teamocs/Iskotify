@@ -126,7 +126,7 @@ export default function QuestionBankImportPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <Topbar title="Import Question Bank" />
+      <Topbar title="Import Question Bank" exportHref="/api/admin/upcat-questions/export" />
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 max-w-6xl mx-auto space-y-6">
           <div>

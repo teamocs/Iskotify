@@ -61,7 +61,7 @@ export default async function FlashcardsPage() {
 
   return (
     <>
-      <Topbar title="Knowledge Base" />
+      <Topbar title="Knowledge Base" exportHref="/api/admin/flashcards/export" />
       <SubjectsView subjects={subjects} listings={listings} />
     </>
   )
