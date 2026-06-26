@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
+import { subscribe } from '../../../services/queryCache'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
 import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState, type BuiltExam, type ReviewSection } from '../../../utils/examBuilder'
@@ -170,23 +171,34 @@ export default function BlueprintExam() {
     [bounds, idx, floorIdx, sectionBlocked],
   )
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const bp = await getExamBlueprint(db, slug)
-        if (!bp) { setQuestions([]); setBuilt(null); setPhase('empty'); return }
-        const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
-        const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
-        const b = buildBlueprintExam(bp, pools, passages)
-        const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
-        setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
-        setPhase(flat.length ? 'prestart' : 'empty')
-      } catch {
-        // Unexpected failure: show the empty/back screen rather than hang on loading.
-        setPhase('empty')
-      }
-    })()
+  const examLoadedRef = useRef(false)
+
+  const loadExam = useCallback(async () => {
+    try {
+      const bp = await getExamBlueprint(db, slug)
+      if (!bp) { setQuestions([]); setBuilt(null); setPhase('empty'); return }
+      const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
+      const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
+      const b = buildBlueprintExam(bp, pools, passages)
+      const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
+      setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
+      if (flat.length) examLoadedRef.current = true
+      setPhase(flat.length ? 'prestart' : 'empty')
+    } catch {
+      // Unexpected failure: show the empty/back screen rather than hang on loading.
+      setPhase('empty')
+    }
   }, [db, slug])
+
+  useEffect(() => { void loadExam() }, [loadExam])
+
+  // Web: if the screen loaded before the fire-and-forget catalog sync delivered
+  // blueprints/questions, it would be stuck on 'empty'. Re-load when the practice
+  // cache refreshes (post-sync), but only while still empty — never mid-exam.
+  useEffect(() => {
+    const unsub = subscribe('practice:', () => { if (!examLoadedRef.current) void loadExam() })
+    return unsub
+  }, [loadExam])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 

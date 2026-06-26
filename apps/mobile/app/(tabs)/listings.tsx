@@ -23,7 +23,7 @@ import { InfoBanner } from '../../components/ui/InfoBanner'
 import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
 import { aiSearchListings } from '../../services/listingSearch'
 import { canonicalizeRegion } from '../../utils/region'
-import { cachedQuery } from '../../services/queryCache'
+import { cachedQuery, subscribe } from '../../services/queryCache'
 import { aggregateDestinationCountries } from '../../utils/destinationCountries'
 import type { CountryWithCount } from '../../utils/destinationCountries'
 import type { CourseTabOption } from '../../utils/courseTabs'
@@ -197,7 +197,9 @@ export default function ListsScreen() {
   }, [db])
 
   const loadDestinations = useCallback(async () => {
-    if (destLoaded) return
+    // No destLoaded early-return: callers gate the FIRST load (focus effect),
+    // and the cache invalidation subscriber below needs to force a re-fetch
+    // after the web sync lands. cachedQuery dedupes/returns cached within TTL.
     const [countryRows, destRows] = await cachedQuery(
       'lists:destinations-meta',
       300_000,
@@ -234,6 +236,14 @@ export default function ListsScreen() {
       void loadDestinations()
     }
   }, [tab, destLoaded, loadDestinations]))
+
+  // Re-fetch destinations when the catalog cache is invalidated (e.g. after the
+  // web fire-and-forget sync completes), so a tab visited before sync landed
+  // doesn't stay stuck on empty. Mirrors usePracticeData's subscribe() refresh.
+  useEffect(() => {
+    const unsub = subscribe('lists:destinations-meta', () => { void loadDestinations() })
+    return unsub
+  }, [loadDestinations])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)

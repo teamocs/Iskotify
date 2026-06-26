@@ -8,7 +8,7 @@
  * Wraps reads in cachedQuery('lists:courses-meta', 300_000) per the data layer pattern.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { eq } from 'drizzle-orm'
 import { useDb } from './useDb'
 import {
@@ -16,7 +16,7 @@ import {
   courseTaxonomyMap as taxonomyTable,
 } from '../db/schema'
 import { resolveCourseTabs, type CourseTabOption } from '../utils/courseTabs'
-import { cachedQuery } from '../services/queryCache'
+import { cachedQuery, subscribe } from '../services/queryCache'
 
 interface CourseOption {
   id: string
@@ -59,60 +59,68 @@ export function useCourseTabOptions(): CourseTabData {
   const [allOptions, setAllOptions]       = useState<CourseTabOption[]>([])
   const [loading, setLoading]             = useState(true)
   const [dbEmpty, setDbEmpty]             = useState(false)
+  const mountedRef = useRef(true)
 
-  useEffect(() => {
-    let active = true
-    async function load() {
-      try {
-        const [settingsRows, taxRows] = await cachedQuery(
-          'lists:courses-meta',
-          300_000,
-          () =>
-            Promise.all([
-              db.select({ targetCourses: userSettings.targetCourses })
-                .from(userSettings)
-                .where(eq(userSettings.id, 1))
-                .limit(1),
-              db.select({
-                courseTab: taxonomyTable.courseTab,
-                careerCourseId: taxonomyTable.careerCourseId,
-                label: taxonomyTable.label,
-              }).from(taxonomyTable),
-            ]),
-        )
+  const load = useCallback(async () => {
+    try {
+      const [settingsRows, taxRows] = await cachedQuery(
+        'lists:courses-meta',
+        300_000,
+        () =>
+          Promise.all([
+            db.select({ targetCourses: userSettings.targetCourses })
+              .from(userSettings)
+              .where(eq(userSettings.id, 1))
+              .limit(1),
+            db.select({
+              courseTab: taxonomyTable.courseTab,
+              careerCourseId: taxonomyTable.careerCourseId,
+              label: taxonomyTable.label,
+            }).from(taxonomyTable),
+          ]),
+      )
 
-        if (!active) return
+      if (!mountedRef.current) return
 
-        if (taxRows.length === 0) {
-          setDbEmpty(true)
-          return
-        }
-
-        const raw = settingsRows[0]?.targetCourses ?? null
-        const parsed = parseCourses(raw)
-        const resolved = resolveCourseTabs(parsed, taxRows as TaxonomyRow[])
-        setTargetOptions(resolved)
-
-        // Dedupe + sort all taxonomy rows
-        const seen = new Set<string>()
-        const all: CourseTabOption[] = []
-        for (const row of taxRows as TaxonomyRow[]) {
-          if (!seen.has(row.courseTab)) {
-            seen.add(row.courseTab)
-            all.push({ courseTab: row.courseTab, label: row.label ?? row.courseTab })
-          }
-        }
-        all.sort((a, b) => a.label.localeCompare(b.label))
-        setAllOptions(all)
-      } catch (e) {
-        console.warn('[useCourseTabOptions] load:', e)
-      } finally {
-        if (active) setLoading(false)
+      if (taxRows.length === 0) {
+        setDbEmpty(true)
+        return
       }
+      setDbEmpty(false)
+
+      const raw = settingsRows[0]?.targetCourses ?? null
+      const parsed = parseCourses(raw)
+      const resolved = resolveCourseTabs(parsed, taxRows as TaxonomyRow[])
+      setTargetOptions(resolved)
+
+      // Dedupe + sort all taxonomy rows
+      const seen = new Set<string>()
+      const all: CourseTabOption[] = []
+      for (const row of taxRows as TaxonomyRow[]) {
+        if (!seen.has(row.courseTab)) {
+          seen.add(row.courseTab)
+          all.push({ courseTab: row.courseTab, label: row.label ?? row.courseTab })
+        }
+      }
+      all.sort((a, b) => a.label.localeCompare(b.label))
+      setAllOptions(all)
+    } catch (e) {
+      console.warn('[useCourseTabOptions] load:', e)
+    } finally {
+      if (mountedRef.current) setLoading(false)
     }
-    void load()
-    return () => { active = false }
   }, [db])
+
+  // Load on mount, and RE-LOAD when the catalog cache is invalidated (e.g. after
+  // the web fire-and-forget sync completes) — otherwise a fresh web tab that
+  // queried the still-empty DB would cache empty options forever. Mirrors the
+  // subscribe() refresh used by usePracticeData.
+  useEffect(() => {
+    mountedRef.current = true
+    void load()
+    const unsub = subscribe('lists:courses-meta', () => { void load() })
+    return () => { mountedRef.current = false; unsub() }
+  }, [load])
 
   return { targetOptions, allOptions, loading, dbEmpty }
 }

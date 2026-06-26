@@ -66,6 +66,7 @@ jest.mock('../../../hooks/useCourseTabOptions', () => ({
 // Mock queryCache to return empty arrays for destination queries
 jest.mock('../../../services/queryCache', () => ({
   cachedQuery: jest.fn().mockResolvedValue([[], []]),
+  subscribe: jest.fn(() => () => {}),
 }))
 
 // `rows` feed the listings query (scholarships FlatList via .then); `schoolRows`

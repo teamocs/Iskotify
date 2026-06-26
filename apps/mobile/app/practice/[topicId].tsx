@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
+import { subscribe } from '../../services/queryCache'
 import { flashcards as flashcardsTable, topics } from '../../db/schema'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../utils/mcDistractors'
 import { parseAiOptions } from '../../utils/parseAiOptions'
@@ -61,54 +62,64 @@ export default function QuizScreen() {
 
   // ── Data loading ────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    async function load() {
-      const topicRows = await db.select({ name: topics.name }).from(topics).where(eq(topics.id, topicId)).limit(1)
-      setTopicName(topicRows[0]?.name ?? 'Quiz')
+  const loadedRef = useRef(false)
 
-      async function fetchCards() {
-        return db.select({
-          id: flashcardsTable.id,
-          question: flashcardsTable.question,
-          answer: flashcardsTable.answer,
-          explanation: flashcardsTable.explanation,
-          options: flashcardsTable.options,
-          correctAnswerIndex: flashcardsTable.correctAnswerIndex,
-          aiOptions: flashcardsTable.aiOptions,
-          aiCorrectIndex: flashcardsTable.aiCorrectIndex,
-          aiExplanation: flashcardsTable.aiExplanation,
-          aiEnhancedAt: flashcardsTable.aiEnhancedAt,
-        }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId))
-      }
+  const load = useCallback(async () => {
+    const topicRows = await db.select({ name: topics.name }).from(topics).where(eq(topics.id, topicId)).limit(1)
+    setTopicName(topicRows[0]?.name ?? 'Quiz')
 
-      let cardRows = await fetchCards()
-
-      // On-demand LLM enhancement: any card in this session that doesn't yet
-      // have AI-generated MC distractors gets enhanced now.
-      const unenhancedIds = cardRows
-        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
-        .map(r => r.id)
-      if (unenhancedIds.length > 0) {
-        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
-        setPhase('enhancing')
-        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
-        cardRows = await fetchCards()
-      }
-
-      const rawCards: RawCard[] = cardRows.map(row => ({
-        ...row,
-        options: safeParseOptions(row.options),
-        correctAnswerIndex: row.correctAnswerIndex ?? undefined,
-        aiOptions: parseAiOptions(row.aiOptions),
-        aiCorrectIndex: row.aiCorrectIndex ?? null,
-        aiExplanation: row.aiExplanation ?? null,
-      }))
-      const parsed = buildQuizQuestions(shuffle(rawCards))
-      setAllQuestions(parsed)
-      setPhase(parsed.length === 0 ? 'empty' : 'chooser')
+    async function fetchCards() {
+      return db.select({
+        id: flashcardsTable.id,
+        question: flashcardsTable.question,
+        answer: flashcardsTable.answer,
+        explanation: flashcardsTable.explanation,
+        options: flashcardsTable.options,
+        correctAnswerIndex: flashcardsTable.correctAnswerIndex,
+        aiOptions: flashcardsTable.aiOptions,
+        aiCorrectIndex: flashcardsTable.aiCorrectIndex,
+        aiExplanation: flashcardsTable.aiExplanation,
+        aiEnhancedAt: flashcardsTable.aiEnhancedAt,
+      }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId))
     }
-    void load()
+
+    let cardRows = await fetchCards()
+
+    // On-demand LLM enhancement: any card in this session that doesn't yet
+    // have AI-generated MC distractors gets enhanced now.
+    const unenhancedIds = cardRows
+      .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
+      .map(r => r.id)
+    if (unenhancedIds.length > 0) {
+      setEnhanceProgress({ done: 0, total: unenhancedIds.length })
+      setPhase('enhancing')
+      await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
+      cardRows = await fetchCards()
+    }
+
+    const rawCards: RawCard[] = cardRows.map(row => ({
+      ...row,
+      options: safeParseOptions(row.options),
+      correctAnswerIndex: row.correctAnswerIndex ?? undefined,
+      aiOptions: parseAiOptions(row.aiOptions),
+      aiCorrectIndex: row.aiCorrectIndex ?? null,
+      aiExplanation: row.aiExplanation ?? null,
+    }))
+    const parsed = buildQuizQuestions(shuffle(rawCards))
+    setAllQuestions(parsed)
+    if (parsed.length > 0) loadedRef.current = true
+    setPhase(parsed.length === 0 ? 'empty' : 'chooser')
   }, [db, topicId])
+
+  useEffect(() => { void load() }, [load])
+
+  // Web: if this screen loaded before the fire-and-forget catalog sync delivered
+  // cards, it would be stuck on 'empty'. Re-load when the practice cache refreshes
+  // (post-sync) — but only while still empty, so an in-progress quiz is untouched.
+  useEffect(() => {
+    const unsub = subscribe('practice:', () => { if (!loadedRef.current) void load() })
+    return unsub
+  }, [load])
 
   // ── Phase: loading ──────────────────────────────────────────────────────────
 
