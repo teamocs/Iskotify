@@ -200,13 +200,20 @@ export async function openWebDatabase(
     }, 2000)
   }
 
-  // Flush on tab-close / visibility hidden (browser only)
+  // Flush on tab-close / navigation / reload (browser only). visibilitychange
+  // covers tab switches and backgrounding; pagehide additionally covers reloads
+  // and bfcache eviction, which visibilitychange can miss — without it a hard
+  // refresh right after a sync can drop the freshly-synced bytes, forcing a full
+  // re-pull (and a flash of empty screens) on the next load.
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         void persistNow()
       }
     })
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => { void persistNow() })
   }
 
   return { db, persistNow, schedulePersist }
