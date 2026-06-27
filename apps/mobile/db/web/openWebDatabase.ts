@@ -193,6 +193,32 @@ export async function openWebDatabase(
     ftsSupported = false
   }
 
+  // Heal DBs persisted by an older build. A previous version created the *_fts
+  // triggers (CREATE TRIGGER succeeds against a missing FTS table) and the
+  // visibilitychange/pagehide flush saved that DB into IndexedDB. On reopen the
+  // orphaned triggers are already baked in, so skipping CREATE TRIGGER isn't
+  // enough — they must be DROPPED, or the first sync INSERT fires one and aborts
+  // ("no such table: *_fts"). Only runs when FTS5 is unavailable (i.e. web).
+  if (!ftsSupported) {
+    const FTS_CLEANUP = [
+      'DROP TRIGGER IF EXISTS flashcards_fts_ai',
+      'DROP TRIGGER IF EXISTS flashcards_fts_ad',
+      'DROP TRIGGER IF EXISTS flashcards_fts_au',
+      'DROP TRIGGER IF EXISTS upcat_facts_fts_ai',
+      'DROP TRIGGER IF EXISTS upcat_facts_fts_ad',
+      'DROP TRIGGER IF EXISTS upcat_facts_fts_au',
+      'DROP TRIGGER IF EXISTS career_facts_ai',
+      'DROP TRIGGER IF EXISTS career_facts_ad',
+      'DROP TRIGGER IF EXISTS career_facts_au',
+      'DROP TABLE IF EXISTS flashcards_fts',
+      'DROP TABLE IF EXISTS upcat_facts_fts',
+      'DROP TABLE IF EXISTS career_facts_fts',
+    ]
+    for (const sql of FTS_CLEANUP) {
+      try { sqlDb.run(sql) } catch (err) { console.warn('[webDb] FTS cleanup skipped:', sql, err) }
+    }
+  }
+
   const createResult = runStatementsSafe(sqlDb, createStatements, ftsSupported)
 
   // Run MIGRATIONS — each entry is a single statement already

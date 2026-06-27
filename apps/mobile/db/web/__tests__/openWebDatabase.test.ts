@@ -94,6 +94,54 @@ describe('openWebDatabase', () => {
     expect(cards).toHaveLength(1)
   }, 15000)
 
+  it('heals a DB persisted by a buggy build with orphaned FTS triggers (drops them when FTS5 absent)', async () => {
+    // Real-world repro: a previous web build created the flashcards_fts triggers
+    // (CREATE TRIGGER doesn't validate the missing FTS table) and the
+    // visibilitychange/pagehide flush persisted that DB into IndexedDB. On reopen
+    // the orphaned trigger is already baked in — CREATE TRIGGER IF NOT EXISTS is a
+    // no-op, so skipping creation isn't enough; the trigger must be DROPPED.
+    const store = makeMemoryStore()
+
+    // 1. Seed the byte store with a DB that has the flashcards table + an orphaned
+    //    flashcards_fts trigger but NO flashcards_fts table.
+    const SQL = await initSqlJs()
+    const seed = new SQL.Database()
+    seed.run(`CREATE TABLE flashcards (
+      id TEXT PRIMARY KEY NOT NULL, topic_id TEXT NOT NULL, question TEXT NOT NULL,
+      answer TEXT NOT NULL, explanation TEXT NOT NULL, listing_slugs TEXT NOT NULL DEFAULT '[]',
+      remote_updated_at INTEGER, status TEXT NOT NULL DEFAULT 'published'
+    )`)
+    seed.run(`CREATE TRIGGER flashcards_fts_ai AFTER INSERT ON flashcards BEGIN
+      INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
+      VALUES (new.id, new.topic_id, new.question, new.answer, new.explanation);
+    END`)
+    await store.save(seed.export())
+    seed.close()
+
+    // 2. Reopen with FTS5 unavailable — the orphaned trigger must be dropped.
+    const stubbedFactory = async () => {
+      const S = await initSqlJs()
+      const OrigDb = S.Database
+      class PatchedDb extends OrigDb {
+        run(sql: string, params?: unknown) {
+          if (sql.toLowerCase().includes('fts5') || sql.toUpperCase().includes('VIRTUAL TABLE')) {
+            throw new Error('no such module: fts5')
+          }
+          return super.run(sql, params as any)
+        }
+      }
+      S.Database = PatchedDb as typeof S.Database
+      return S
+    }
+
+    const handle = await openWebDatabase(store, stubbedFactory)
+    const s = require('../../schema')
+    await expect(handle.db.insert(s.flashcards).values({
+      id: 'c1', topicId: 't1', question: 'Q', answer: 'A', explanation: 'E',
+      listingSlugs: '[]', options: '[]', status: 'published',
+    })).resolves.toBeDefined()
+  }, 15000)
+
   it('data survives a roundtrip through export/import (reopening from saved bytes)', async () => {
     const store = makeMemoryStore()
 
