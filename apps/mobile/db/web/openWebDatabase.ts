@@ -83,23 +83,37 @@ export function makeMemoryStore(): ByteStore {
 
 // ── FTS-safe SQL runner ─────────────────────────────────────────────────────
 
-const FTS_KEYWORDS = ['fts5', 'fts', 'VIRTUAL TABLE', 'virtual table']
+// Matches FTS5 virtual tables AND every statement that depends on an _fts table:
+// the sync triggers (CREATE TRIGGER … flashcards_fts_*) and the one-time
+// INSERT … SELECT backfills. Critically this includes the triggers/backfills by
+// table name — CREATE TRIGGER does NOT error when its _fts table is missing (the
+// missing table only surfaces when the trigger fires on INSERT), so these must be
+// skipped PROACTIVELY when FTS5 is absent, or the first sync INSERT throws
+// "no such table: <x>_fts" and aborts the whole transaction.
 function isFtsStatement(stmt: string): boolean {
   const upper = stmt.toUpperCase()
-  return upper.includes('FTS5') || upper.includes('VIRTUAL TABLE') || (
-    upper.includes('TRIGGER') && (
-      upper.includes('FLASHCARDS_FTS') ||
-      upper.includes('UPCAT_FACTS_FTS') ||
-      upper.includes('CAREER_FACTS_FTS')
-    )
+  return (
+    upper.includes('FTS5') ||
+    upper.includes('VIRTUAL TABLE') ||
+    upper.includes('FLASHCARDS_FTS') ||
+    upper.includes('UPCAT_FACTS_FTS') ||
+    upper.includes('CAREER_FACTS_FTS')
   )
 }
 
-function runStatementsSafe(sqlDb: SqlJsDatabase, statements: string[]): { ftsAvailable: boolean } {
-  let ftsAvailable = true
+function runStatementsSafe(
+  sqlDb: SqlJsDatabase,
+  statements: string[],
+  ftsSupported: boolean,
+): { ftsAvailable: boolean } {
+  let ftsAvailable = ftsSupported
   for (const stmt of statements) {
     const trimmed = stmt.trim()
     if (!trimmed) continue
+    // FTS5 unavailable → skip every fts-dependent statement (virtual table,
+    // trigger, backfill) BEFORE running it. Skipping only on error is not enough:
+    // CREATE TRIGGER succeeds against a missing _fts table and detonates later.
+    if (!ftsAvailable && isFtsStatement(trimmed)) continue
     try {
       sqlDb.run(trimmed)
     } catch (err) {
@@ -166,12 +180,25 @@ export async function openWebDatabase(
     .filter(Boolean)
     .map(s => s + ';')
 
-  const createResult = runStatementsSafe(sqlDb, createStatements)
+  // Probe FTS5 support up front. The browser sql.js wasm build ships WITHOUT
+  // FTS5; Node's build has it (which is why this bug never showed in tests).
+  // Detecting it here lets runStatementsSafe skip the FTS virtual tables AND their
+  // triggers/backfills proactively — the triggers are the dangerous part: they
+  // create fine against a missing _fts table, then abort the first sync INSERT.
+  let ftsSupported = true
+  try {
+    sqlDb.run('CREATE VIRTUAL TABLE IF NOT EXISTS __isk_fts_probe USING fts5(x)')
+    try { sqlDb.run('DROP TABLE IF EXISTS __isk_fts_probe') } catch { /* ignore */ }
+  } catch {
+    ftsSupported = false
+  }
+
+  const createResult = runStatementsSafe(sqlDb, createStatements, ftsSupported)
 
   // Run MIGRATIONS — each entry is a single statement already
-  const migrationsResult = runStatementsSafe(sqlDb, MIGRATIONS)
+  const migrationsResult = runStatementsSafe(sqlDb, MIGRATIONS, ftsSupported)
 
-  webFtsAvailable = createResult.ftsAvailable && migrationsResult.ftsAvailable
+  webFtsAvailable = ftsSupported && createResult.ftsAvailable && migrationsResult.ftsAvailable
 
   if (!webFtsAvailable) {
     console.warn('[webDb] FTS5 not available — search will use LIKE fallback')

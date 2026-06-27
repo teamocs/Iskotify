@@ -53,6 +53,47 @@ describe('openWebDatabase', () => {
     // but the important thing is it didn't throw)
   }, 15000)
 
+  it('inserts into FTS-triggered tables when FTS5 is unavailable (no "no such table" abort)', async () => {
+    // Repro of the prod web bug: sql.js browser build has no FTS5, so the
+    // CREATE VIRTUAL TABLE flashcards_fts is skipped — BUT the flashcards_fts
+    // triggers still get created (CREATE TRIGGER doesn't validate the missing
+    // table). Then INSERT INTO flashcards fires the trigger → "no such table:
+    // flashcards_fts" → the whole syncOnLaunch transaction aborts → empty app.
+    const store = makeMemoryStore()
+    const stubbedFactory = async () => {
+      const SQL = await initSqlJs()
+      const OrigDb = SQL.Database
+      class PatchedDb extends OrigDb {
+        run(sql: string, params?: unknown) {
+          if (sql.toLowerCase().includes('fts5') || sql.toUpperCase().includes('VIRTUAL TABLE')) {
+            throw new Error('no such module: fts5')
+          }
+          return super.run(sql, params as any)
+        }
+      }
+      SQL.Database = PatchedDb as typeof SQL.Database
+      return SQL
+    }
+
+    const handle = await openWebDatabase(store, stubbedFactory)
+    const s = require('../../schema')
+
+    // Inserts into all three FTS-triggered base tables must succeed.
+    await expect(handle.db.insert(s.flashcards).values({
+      id: 'c1', topicId: 't1', question: 'Q', answer: 'A', explanation: 'E',
+      listingSlugs: '[]', options: '[]', status: 'published',
+    })).resolves.toBeDefined()
+    await expect(handle.db.insert(s.upcatFacts).values({
+      id: 'f1', topic: 'T', question: 'Q', answer: 'A',
+    })).resolves.toBeDefined()
+    await expect(handle.db.insert(s.careerFacts).values({
+      id: 'cf1', courseName: 'Nursing', quickAnswer: 'A',
+    })).resolves.toBeDefined()
+
+    const cards = await handle.db.select().from(s.flashcards)
+    expect(cards).toHaveLength(1)
+  }, 15000)
+
   it('data survives a roundtrip through export/import (reopening from saved bytes)', async () => {
     const store = makeMemoryStore()
 
