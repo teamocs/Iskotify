@@ -16,7 +16,12 @@ export default function TabLayout() {
     return (
       <View style={{ flex: 1, flexDirection: 'row' }}>
         <SidebarNav />
-        <View style={{ flex: 1 }}>
+        {/* Center the content column at a comfortable max-width so screens that
+            render their own FlatList/ScrollView (Lists, Exams) — bypassing
+            ScreenScroll's centering — don't stretch edge-to-edge on wide
+            monitors. 1040 matches ScreenScroll's MAX_WIDTH_LG for consistency. */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ flex: 1, width: '100%', maxWidth: 1040 }}>
           <Tabs
             tabBar={() => null}
             screenOptions={{ headerShown: false, animation: 'none' }}
@@ -28,6 +33,7 @@ export default function TabLayout() {
             <Tabs.Screen name="analytics" options={{ href: null }} />
             <Tabs.Screen name="profile"  options={{ title: 'Profile' }} />
           </Tabs>
+          </View>
         </View>
       </View>
     )
