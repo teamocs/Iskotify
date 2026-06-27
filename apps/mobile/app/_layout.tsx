@@ -32,7 +32,7 @@ import { notes as notesTable, userSettings, focusListings as focusListingsTable 
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
-import { isEarlyAccessExpired } from '../utils/earlyAccess'
+import { isEarlyAccessExpired, EARLY_ACCESS_GATE_ENABLED, shouldBlockForEarlyAccess } from '../utils/earlyAccess'
 import { isEarlyAccessActivated, setEarlyAccessActivated } from '../utils/earlyAccessActivation'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
@@ -175,18 +175,23 @@ function AppInit({ onReady }: { onReady: () => void }) {
           return
         }
 
-        // Approved-account gate (web): only approved/sent registrants (or admins) may
-        // enter. Fail-open on RPC error so a transient failure can't strand a real user.
-        try {
-          const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
-          if (!eaErr && eaStatus !== 'approved' && eaStatus !== 'sent') {
-            router.replace('/early-access-required')
-            onReady()
-            return
+        // Approved-account gate (web) — DORMANT (see utils/earlyAccess.ts). While
+        // disabled, a signed-in user is NEVER bounced to /early-access-required, so a
+        // browser refresh keeps them in the app (the session itself persists via
+        // localStorage in services/supabase.ts). Re-enable by flipping
+        // EARLY_ACCESS_GATE_ENABLED once the approval + APK-email pipeline is live.
+        if (EARLY_ACCESS_GATE_ENABLED) {
+          try {
+            const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
+            if (!eaErr && shouldBlockForEarlyAccess(eaStatus)) {
+              router.replace('/early-access-required')
+              onReady()
+              return
+            }
+            if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
+          } catch (e) {
+            console.warn('[layout] early_access gate error (allowing through):', e)
           }
-          if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
-        } catch (e) {
-          console.warn('[layout] early_access gate error (allowing through):', e)
         }
 
         // Session exists — pull latest user data from Supabase (non-fatal)
@@ -246,17 +251,19 @@ function AppInit({ onReady }: { onReady: () => void }) {
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
             if (session.user) identifyUser(session.user.id, { email: session.user.email ?? undefined })
-            // Approved-account gate (web): only approved/sent registrants (or admins) may
-            // enter. Fail-open on RPC error so a transient failure can't strand a real user.
-            try {
-              const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
-              if (!eaErr && eaStatus !== 'approved' && eaStatus !== 'sent') {
-                router.replace('/early-access-required')
-                return
+            // Approved-account gate (web) — DORMANT (see utils/earlyAccess.ts).
+            // Disabled so signed-in users are never bounced to /early-access-required.
+            if (EARLY_ACCESS_GATE_ENABLED) {
+              try {
+                const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
+                if (!eaErr && shouldBlockForEarlyAccess(eaStatus)) {
+                  router.replace('/early-access-required')
+                  return
+                }
+                if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
+              } catch (e) {
+                console.warn('[layout] early_access gate error (allowing through):', e)
               }
-              if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
-            } catch (e) {
-              console.warn('[layout] early_access gate error (allowing through):', e)
             }
             try { await pullUserData(db) } catch { /* non-fatal */ }
             const [rows, focusRows] = await Promise.all([

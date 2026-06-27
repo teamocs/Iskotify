@@ -1,4 +1,9 @@
-import { EARLY_ACCESS_EXPIRY_MS, isEarlyAccessExpired } from '../earlyAccess'
+import {
+  EARLY_ACCESS_EXPIRY_MS,
+  isEarlyAccessExpired,
+  EARLY_ACCESS_GATE_ENABLED,
+  shouldBlockForEarlyAccess,
+} from '../earlyAccess'
 
 describe('EARLY_ACCESS_EXPIRY_MS', () => {
   it('is 2026-08-02 00:00 UTC', () => {
@@ -18,5 +23,38 @@ describe('isEarlyAccessExpired', () => {
     expect(isEarlyAccessExpired(EARLY_ACCESS_EXPIRY_MS)).toBe(true)       // exact boundary
     expect(isEarlyAccessExpired(Date.UTC(2026, 7, 3))).toBe(true)         // day after
     expect(isEarlyAccessExpired(Date.UTC(2027, 0, 1))).toBe(true)         // next year
+  })
+})
+
+describe('EARLY_ACCESS_GATE_ENABLED', () => {
+  it('is dormant (false) until the approval + APK-email pipeline is live', () => {
+    // While dormant, signed-in users are never bounced to /early-access-required —
+    // fixes signed-in users being kicked to the early-access page on web refresh.
+    expect(EARLY_ACCESS_GATE_ENABLED).toBe(false)
+  })
+})
+
+describe('shouldBlockForEarlyAccess', () => {
+  it('never blocks while the gate is disabled, regardless of status', () => {
+    expect(shouldBlockForEarlyAccess('pending', false)).toBe(false)
+    expect(shouldBlockForEarlyAccess(null, false)).toBe(false)
+    expect(shouldBlockForEarlyAccess(undefined, false)).toBe(false)
+    expect(shouldBlockForEarlyAccess('approved', false)).toBe(false)
+  })
+
+  it('lets approved + sent users through when the gate is enabled', () => {
+    expect(shouldBlockForEarlyAccess('approved', true)).toBe(false)
+    expect(shouldBlockForEarlyAccess('sent', true)).toBe(false)
+  })
+
+  it('blocks non-approved statuses only when the gate is enabled', () => {
+    expect(shouldBlockForEarlyAccess('pending', true)).toBe(true)
+    expect(shouldBlockForEarlyAccess(null, true)).toBe(true)
+    expect(shouldBlockForEarlyAccess(undefined, true)).toBe(true)
+    expect(shouldBlockForEarlyAccess('rejected', true)).toBe(true)
+  })
+
+  it('defaults to the dormant flag (no block) when enabled arg omitted', () => {
+    expect(shouldBlockForEarlyAccess('pending')).toBe(false)
   })
 })
