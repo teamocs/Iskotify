@@ -6,6 +6,7 @@ import {
   Pressable,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useTheme } from '../../theme/ThemeContext'
@@ -298,6 +299,7 @@ export default function UpdatesScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bg }]} edges={['top']}>
+      <WebTopSpacer />
       <View style={styles.header}>
         <Text style={[styles.title, { color: t.textPrimary, fontSize: typo.h2 }]}>Updates</Text>
         <Text style={[styles.subtitle, { color: t.textTertiary, fontSize: typo.sm }]}>

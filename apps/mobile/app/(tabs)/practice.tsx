@@ -6,6 +6,7 @@ import {
 } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -750,6 +751,7 @@ export default function PracticeScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       {/* (1) Header */}
       <View style={[s.header, { flexDirection: 'row', alignItems: 'center' }]}>
         <Text style={[s.title, { flex: 1 }]}>Exams</Text>

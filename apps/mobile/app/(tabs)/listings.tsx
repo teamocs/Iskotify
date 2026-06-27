@@ -30,6 +30,7 @@ import type { CourseTabOption } from '../../utils/courseTabs'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { LoadingState } from '../../components/ui/LoadingState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -569,6 +570,7 @@ export default function ListsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {/* Header */}
         <View style={[s.header, { flexDirection: 'row', alignItems: 'flex-start' }]}>
