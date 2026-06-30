@@ -23,6 +23,7 @@ import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { NOTE_COLORS, parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
 import { notes as notesTable } from '../../db/schema'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 
 const COLOR_KEYS = [null, 'red', 'pink', 'orange', 'yellow', 'teal', 'green', 'cyan', 'blue', 'cerulean', 'purple', 'gray'] as const
 
@@ -236,6 +237,7 @@ export default function NoteEditorScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 

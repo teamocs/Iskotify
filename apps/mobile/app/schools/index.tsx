@@ -5,6 +5,7 @@ import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 
 // ---------------------------------------------------------------------------
 // Schools Directory screen — a thin wrapper around the shared SchoolsDirectory
@@ -29,6 +30,7 @@ export default function SchoolsDirectoryScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       {/* Top bar */}
       <View style={s.topBar}>
         <Pressable

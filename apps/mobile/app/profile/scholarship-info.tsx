@@ -12,6 +12,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
 import { PillButton } from '../../components/ui/PillButton'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 
 const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
   { label: '₱100k or below / yr', value: '<=100k' },
@@ -95,6 +96,7 @@ export default function ScholarshipInfoScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
+      <WebTopSpacer />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
           <Text style={{ fontSize: 26, color: t.textSecondary, lineHeight: 30 }}>‹</Text>

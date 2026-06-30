@@ -13,6 +13,7 @@ import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { SectionGrid } from '../../../components/practice/SectionGrid'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -288,6 +289,7 @@ export default function BlueprintExam() {
   if (phase === 'loading') {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <Text style={s.loading}>Loading exam…</Text>
       </SafeAreaView>
     )
@@ -296,6 +298,7 @@ export default function BlueprintExam() {
   if (phase === 'empty') {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           <Text style={s.emptyTitle}>{blueprint?.name ?? 'Mock Exam'}</Text>
           <Text style={s.emptyBody}>This exam's questions are being authored — check back soon.</Text>
@@ -312,6 +315,7 @@ export default function BlueprintExam() {
     const runnableNames = new Set(built.runnable.map(b => b.section.name))
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
             <Text style={s.back}>‹</Text>
@@ -408,6 +412,7 @@ export default function BlueprintExam() {
 
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
             <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
@@ -490,6 +495,7 @@ export default function BlueprintExam() {
   if (!fq) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <Text style={s.loading}>Loading exam…</Text>
       </SafeAreaView>
     )
@@ -502,6 +508,7 @@ export default function BlueprintExam() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>

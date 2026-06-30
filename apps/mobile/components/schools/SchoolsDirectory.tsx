@@ -172,7 +172,7 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1 },
-    chipScroll:    { paddingLeft: spacing.lg, paddingBottom: spacing.sm, flexGrow: 0 },
+    chipScroll:    { paddingTop: spacing.sm, paddingLeft: spacing.lg, paddingBottom: spacing.sm, flexGrow: 0 },
     chipRow:       { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.lg },
     chip:          { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: t.border, backgroundColor: t.surface, minHeight: 36, justifyContent: 'center' },
     chipActive:    { backgroundColor: t.accentSurface, borderColor: t.accent },

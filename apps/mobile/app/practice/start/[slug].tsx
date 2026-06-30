@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { listings as listingsTable } from '../../../db/schema'
 import { listPublishedBlueprintSlugs } from '../../../services/examBlueprints'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -56,6 +57,7 @@ export default function PracticeStartScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

@@ -7,6 +7,7 @@ import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing, radius } from '../../theme/tokens'
 
 export default function LabelsScreen() {
@@ -66,6 +67,7 @@ export default function LabelsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <Stack.Screen options={{ headerShown: false }} />
       <View style={s.topBar}>
         <Pressable

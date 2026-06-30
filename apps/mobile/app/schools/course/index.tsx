@@ -9,6 +9,7 @@ import { spacing } from '../../../theme/tokens'
 import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
 import { ListCard } from '../../../components/ui/ListCard'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useCourseTabOptions } from '../../../hooks/useCourseTabOptions'
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,7 @@ export default function CoursePickerScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -54,6 +56,7 @@ export default function CoursePickerScreen() {
   if (dbEmpty) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -75,6 +78,7 @@ export default function CoursePickerScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

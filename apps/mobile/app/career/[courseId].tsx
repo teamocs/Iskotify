@@ -20,6 +20,7 @@ import { countryCodeFromName } from '../../utils/careerSlug'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing, radius } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
@@ -288,6 +289,7 @@ export default function CourseCareerDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -307,6 +309,7 @@ export default function CourseCareerDetailScreen() {
   if (!course) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -339,6 +342,7 @@ export default function CourseCareerDetailScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
 
       {/* Top bar */}
       <View style={s.topBar}>

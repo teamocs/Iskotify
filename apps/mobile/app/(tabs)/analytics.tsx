@@ -2,6 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing } from '../../theme/tokens'
 
 /**
@@ -20,6 +21,7 @@ export default function AnalyticsScreen() {
   })
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.header}>
         <Text style={s.title}>Analytics</Text>
         <Text style={s.subtitle}>Your practice progress</Text>

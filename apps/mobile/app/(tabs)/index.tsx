@@ -7,6 +7,7 @@ import { Gear1Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineic
 // logo.svg has no viewBox attribute (2048×2048 canvas) — pass viewBox explicitly at the call site so it scales.
 import Logo from '../../assets/images/logo.svg'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { KuyaHeroAnimation } from '../../components/KuyaHeroAnimation'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
@@ -511,6 +512,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <ScreenScroll
         tabBarInset
         padded

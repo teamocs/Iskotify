@@ -8,6 +8,7 @@ import Constants from 'expo-constants'
 import { useTheme } from '../theme/ThemeContext'
 import { spacing, radius } from '../theme/tokens'
 import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../components/ui/WebTopSpacer'
 import { Card } from '../components/ui/Card'
 import { SectionHeader } from '../components/ui/SectionHeader'
 
@@ -36,6 +37,7 @@ export default function AboutScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.backRow}>
         <Pressable
           style={({ pressed }) => [s.backBtn, pressed ? { opacity: 0.6 } : null]}

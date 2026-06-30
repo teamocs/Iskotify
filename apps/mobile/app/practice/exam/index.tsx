@@ -6,6 +6,7 @@ import { useDb } from '../../../hooks/useDb'
 import { getExamBlueprint, listPublishedBlueprintSlugs, type ExamBlueprint } from '../../../services/examBlueprints'
 import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { ListCard } from '../../../components/ui/ListCard'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing } from '../../../theme/tokens'
 
@@ -29,6 +30,7 @@ export default function ExamPicker() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
+      <WebTopSpacer />
       <ScreenScroll tabBarInset={false}>
         <Text
           style={{

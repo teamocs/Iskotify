@@ -8,6 +8,7 @@ import { eq, and } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { subjects as subjectsTable, topics as topicsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing, radius, type Theme, type Typography } from '../../theme/tokens'
 import { cachedQuery } from '../../services/queryCache'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
@@ -228,6 +229,7 @@ export default function SubjectDetailsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -246,6 +248,7 @@ export default function SubjectDetailsScreen() {
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

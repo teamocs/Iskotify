@@ -12,6 +12,7 @@ import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { Card } from '../../components/ui/Card'
 import { submitFeedback } from '../../services/appFeedback'
 
@@ -73,6 +74,7 @@ export default function LeaveFeedbackScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.backRow}>
         <Pressable
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}

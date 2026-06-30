@@ -8,6 +8,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useNotes, NOTE_COLORS, type Note } from '../../hooks/useNotes'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing, radius } from '../../theme/tokens'
 
 export default function ArchiveScreen() {
@@ -40,6 +41,7 @@ export default function ArchiveScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <Stack.Screen options={{ headerShown: false }} />
       <View style={s.topBar}>
         <Pressable

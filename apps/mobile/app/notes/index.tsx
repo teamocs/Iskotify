@@ -19,6 +19,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { useNotes, NOTE_COLORS, type Note, type NoteType } from '../../hooks/useNotes'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
 
@@ -242,6 +243,7 @@ export default function NotesScreen() {
   return (
     <EdgeSwipeNavigator>
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <Stack.Screen options={{ animation: 'slide_from_left', headerShown: false }} />
 
         <View style={s.header}>

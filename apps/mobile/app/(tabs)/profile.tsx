@@ -31,6 +31,7 @@ import { userSettings, listings, userProgress, practiceSessions, focusListings, 
 import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
@@ -475,6 +476,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
+      <WebTopSpacer />
       <ScreenScroll
         tabBarInset
         padded

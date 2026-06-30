@@ -15,6 +15,7 @@ import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius, type Theme, type Typography } from '../../../theme/tokens'
 import { Card } from '../../../components/ui/Card'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { cachedQuery } from '../../../services/queryCache'
 
 // ---------------------------------------------------------------------------
@@ -309,6 +310,7 @@ export default function CourseSchoolsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -327,6 +329,7 @@ export default function CourseSchoolsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

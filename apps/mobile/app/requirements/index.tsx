@@ -11,6 +11,7 @@ import { spacing, type Theme, type Typography } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { InfoBanner } from '../../components/ui/InfoBanner'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 
 // ---------------------------------------------------------------------------
@@ -148,6 +149,7 @@ export default function RequirementsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

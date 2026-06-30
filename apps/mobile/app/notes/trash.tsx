@@ -8,6 +8,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useNotes, NOTE_COLORS, type Note } from '../../hooks/useNotes'
 import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 
 export default function TrashScreen() {
   const { theme: t, typo } = useTheme()
@@ -51,6 +52,7 @@ export default function TrashScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <Stack.Screen options={{ headerShown: false }} />
       <View style={s.topBar}>
         <Pressable

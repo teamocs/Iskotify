@@ -12,6 +12,7 @@ import { daysUntil } from '../utils/admissionsFeed'
 import { spacing, radius } from '../theme/tokens'
 import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { Card } from '../components/ui/Card'
+import { WebTopSpacer } from '../components/ui/WebTopSpacer'
 
 interface WatchedExam {
   slug: string
@@ -156,6 +157,7 @@ export default function ResultsTrackerScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           style={({ pressed }) => [s.backBtn, pressed && s.pressed]}

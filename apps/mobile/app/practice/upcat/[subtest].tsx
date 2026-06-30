@@ -11,6 +11,7 @@ import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -137,6 +138,7 @@ export default function UpcatExam() {
   if (phase === 'loading') {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <Text style={s.loading}>Loading exam…</Text>
       </SafeAreaView>
     )
@@ -148,6 +150,7 @@ export default function UpcatExam() {
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <ScrollView
           contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
@@ -219,6 +222,7 @@ export default function UpcatExam() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>

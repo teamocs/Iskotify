@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
@@ -368,6 +369,7 @@ export default function GeminiKeyScreen() {
   if (screenState === 'loading') {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color={t.accent} />
         </View>
@@ -377,6 +379,7 @@ export default function GeminiKeyScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.backRow}>
         <Pressable
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}

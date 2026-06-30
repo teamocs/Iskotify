@@ -12,6 +12,7 @@ import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ export default function ListingQuizScreen() {
 
   if (phase === 'loading') {
     return (
-      <SafeAreaView style={s.root}><Text style={s.loadingTxt}>Loading…</Text></SafeAreaView>
+      <SafeAreaView style={s.root}><WebTopSpacer /><Text style={s.loadingTxt}>Loading…</Text></SafeAreaView>
     )
   }
 
@@ -163,6 +164,7 @@ export default function ListingQuizScreen() {
       : 0
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <Text style={s.loadingTxt}>Preparing quiz options…</Text>
         <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
           {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
@@ -177,6 +179,7 @@ export default function ListingQuizScreen() {
   if (phase === 'empty') {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.emptyWrap}>
           <Text style={s.emptyTitle}>{mode === 'weak' ? 'No weak topics yet!' : 'No cards found'}</Text>
           <Text style={s.emptySub}>{mode === 'weak' ? 'Keep practicing to identify weak topics.' : 'No flashcards are tagged to this listing yet.'}</Text>
@@ -213,6 +216,7 @@ export default function ListingQuizScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <ScrollView contentContainerStyle={s.chooserContent} showsVerticalScrollIndicator={false}>
         <View style={s.icon}><Text style={s.iconTxt}>{mode === 'weak' ? '⚠️' : '⚡'}</Text></View>
         <Text style={s.title}>{modeLabel}</Text>

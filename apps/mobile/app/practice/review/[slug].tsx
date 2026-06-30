@@ -10,6 +10,7 @@ import { groupTopicsBySubject } from '../../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../../components/SubjectAccordion'
 import { ListCard } from '../../../components/ui/ListCard'
 import { Badge } from '../../../components/ui/Badge'
+import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing } from '../../../theme/tokens'
 
@@ -111,6 +112,7 @@ export default function PracticeReviewScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable
           onPress={() => router.back()}

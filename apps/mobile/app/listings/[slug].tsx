@@ -4,6 +4,7 @@ import {
   Linking, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
@@ -316,6 +317,7 @@ export default function ListingDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -333,6 +335,7 @@ export default function ListingDetailScreen() {
   if (!listing) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -391,6 +394,7 @@ export default function ListingDetailScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
 
       {/* Top bar */}
       <View style={s.topBar}>

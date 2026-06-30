@@ -7,6 +7,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, statusColors } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
 import { AppButton } from '../../components/ui/AppButton'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { computeGwa, latinHonor, hasDisqualifyingGrade, totalUnits, isValidGrade, isValidUnits, type GwaSubject } from '../../utils/gwa'
 
 interface Row { id: string; grade: string; units: string }
@@ -46,6 +47,7 @@ export default function GwaCalculatorScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <WebTopSpacer />
       {/* Header */}
       <View style={{
         flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.sm,

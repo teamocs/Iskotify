@@ -14,6 +14,7 @@ import { examAcronymToListingSlug } from '../../utils/targetExams'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing, radius, type Theme } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,7 @@ export default function SchoolProfileScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -211,6 +213,7 @@ export default function SchoolProfileScreen() {
   if (!school) {
     return (
       <SafeAreaView style={s.root}>
+        <WebTopSpacer />
         <View style={s.topBar}>
           <Pressable
             onPress={() => router.back()}
@@ -261,6 +264,7 @@ export default function SchoolProfileScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
 
       {/* Top bar */}
       <View style={s.topBar}>

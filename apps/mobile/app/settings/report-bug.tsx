@@ -13,6 +13,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { Card } from '../../components/ui/Card'
 import { submitBugReport } from '../../services/appFeedback'
 
@@ -110,6 +111,7 @@ export default function ReportBugScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      <WebTopSpacer />
       <View style={s.backRow}>
         <Pressable
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
