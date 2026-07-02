@@ -8,6 +8,7 @@ import {
   signUpWithEmail,
   signInWithEmail,
   sendPasswordReset,
+  updatePassword,
   signInWithGoogleWeb,
   signInWithGoogleIdToken,
 } from '../webAuth'
@@ -17,6 +18,7 @@ import {
 const mockSignUp = jest.fn()
 const mockSignInWithPassword = jest.fn()
 const mockResetPasswordForEmail = jest.fn()
+const mockUpdateUser = jest.fn()
 const mockSignInWithOAuth = jest.fn()
 const mockSignInWithIdToken = jest.fn()
 
@@ -26,6 +28,7 @@ jest.mock('../supabase', () => ({
       signUp: (...args: any[]) => mockSignUp(...args),
       signInWithPassword: (...args: any[]) => mockSignInWithPassword(...args),
       resetPasswordForEmail: (...args: any[]) => mockResetPasswordForEmail(...args),
+      updateUser: (...args: any[]) => mockUpdateUser(...args),
       signInWithOAuth: (...args: any[]) => mockSignInWithOAuth(...args),
       signInWithIdToken: (...args: any[]) => mockSignInWithIdToken(...args),
     },
@@ -255,12 +258,14 @@ describe('signInWithEmail', () => {
 // ── sendPasswordReset ────────────────────────────────────────────────────────
 
 describe('sendPasswordReset', () => {
-  it('calls resetPasswordForEmail with correct redirectTo', async () => {
+  it('calls resetPasswordForEmail with a type=recovery marker in redirectTo', async () => {
     mockResetPasswordForEmail.mockResolvedValue({ error: null })
     const result = await sendPasswordReset('user@example.com')
     expect(result.ok).toBe(true)
     expect(mockResetPasswordForEmail).toHaveBeenCalledWith('user@example.com', {
-      redirectTo: 'https://iskotify.app/auth/callback',
+      // Marker lets /auth/callback detect the recovery flow deterministically
+      // (see utils/recoveryUrl.ts) and route to /auth/reset-password.
+      redirectTo: 'https://iskotify.app/auth/callback?type=recovery',
     })
   })
 
@@ -281,6 +286,71 @@ describe('sendPasswordReset', () => {
   it('returns ok:false when supabase throws', async () => {
     mockResetPasswordForEmail.mockRejectedValue(new Error('network'))
     const result = await sendPasswordReset('user@example.com')
+    expect(result.ok).toBe(false)
+  })
+})
+
+// ── updatePassword ────────────────────────────────────────────────────────────
+
+describe('updatePassword', () => {
+  it('calls updateUser with the new password and returns ok:true', async () => {
+    mockUpdateUser.mockResolvedValue({ error: null })
+    const result = await updatePassword('newpassword123')
+    expect(result.ok).toBe(true)
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'newpassword123' })
+  })
+
+  it('maps "same as old password" error to friendly message', async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'New password should be different from the old password.' },
+    })
+    const result = await updatePassword('samepassword1')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('New password must be different from your old password.')
+    }
+  })
+
+  it('maps weak-password error to friendly message', async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'Password should be at least 6 characters' },
+    })
+    const result = await updatePassword('pw')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatch(/too short/i)
+    }
+  })
+
+  it('maps missing-session error to expired-link message', async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'Auth session missing!' },
+    })
+    const result = await updatePassword('newpassword123')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatch(/expired/i)
+    }
+  })
+
+  it('returns friendly fallback for unmapped errors and warns', async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'some_unknown_update_error' },
+    })
+    const result = await updatePassword('newpassword123')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('Something went wrong — please try again.')
+    }
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/unmapped update-password/),
+      'some_unknown_update_error',
+    )
+  })
+
+  it('returns ok:false when supabase throws', async () => {
+    mockUpdateUser.mockRejectedValue(new Error('network'))
+    const result = await updatePassword('newpassword123')
     expect(result.ok).toBe(false)
   })
 })

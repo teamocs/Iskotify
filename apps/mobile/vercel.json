@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/auth/sign-in", "destination": "/auth/sign-in.html" },
     { "source": "/auth/callback", "destination": "/auth/callback.html" },
+    { "source": "/auth/reset-password", "destination": "/auth/reset-password.html" },
     { "source": "/subjects/:id", "destination": "/subjects/[id].html" },
     { "source": "/career/:courseId", "destination": "/career/[courseId].html" },
     { "source": "/career/country/:code", "destination": "/career/country/[code].html" },

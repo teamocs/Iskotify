@@ -14,7 +14,7 @@
  * and must remain unaffected by the native gate.
  */
 import React from 'react'
-import { render, waitFor } from '@testing-library/react-native'
+import { render, waitFor, act } from '@testing-library/react-native'
 import { Platform } from 'react-native'
 
 // ── Expo Router ──────────────────────────────────────────────────────────────
@@ -83,6 +83,9 @@ const mockGetSession = jest.fn()
 const mockGetUser = jest.fn()
 const mockRpc = jest.fn()
 const mockSupabaseFrom = jest.fn()
+// Captures onAuthStateChange callbacks so tests can fire PASSWORD_RECOVERY etc.
+const authStateCallbacks: Array<(event: string) => void> = []
+const mockUnsubscribe = jest.fn()
 
 jest.mock('../../../services/supabase', () => ({
   supabase: {
@@ -90,6 +93,10 @@ jest.mock('../../../services/supabase', () => ({
       exchangeCodeForSession: (code: string) => mockExchangeCode(code),
       getSession: () => mockGetSession(),
       getUser: () => mockGetUser(),
+      onAuthStateChange: (cb: (event: string) => void) => {
+        authStateCallbacks.push(cb)
+        return { data: { subscription: { unsubscribe: mockUnsubscribe } } }
+      },
     },
     rpc: (name: string) => mockRpc(name),
     from: (t: string) => mockSupabaseFrom(t),
@@ -129,6 +136,7 @@ function setupSuccessfulExchange(userId = 'user-abc') {
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 beforeEach(() => {
   jest.clearAllMocks()
+  authStateCallbacks.length = 0
   mockSetActivated.mockResolvedValue(undefined)
   // Default: native platform (Android)
   Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true })
@@ -266,6 +274,99 @@ describe('auth/callback — web platform (gate bypassed)', () => {
     })
     // Gate must NOT have called the RPC
     expect(mockRpc).not.toHaveBeenCalled()
+  })
+})
+
+// ── WEB PLATFORM: password recovery ──────────────────────────────────────────
+
+describe('auth/callback — password recovery (web)', () => {
+  // Save/restore window.location — RN jest env aliases window to global.
+  const hadLocation = Object.prototype.hasOwnProperty.call(window, 'location')
+  const originalLocation = (window as any).location
+
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'web', configurable: true })
+  })
+
+  afterEach(() => {
+    if (hadLocation) {
+      Object.defineProperty(window, 'location', {
+        value: originalLocation, writable: true, configurable: true,
+      })
+    } else {
+      delete (window as any).location
+    }
+  })
+
+  it('recovery URL marker (?type=recovery) → routes to /auth/reset-password, app entry skipped', async () => {
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://app.iskotify.ph/auth/callback?type=recovery&code=test-code-123' },
+      writable: true,
+      configurable: true,
+    })
+    mockExchangeCode.mockResolvedValue({ error: null })
+
+    render(<AuthCallback />)
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/auth/reset-password')
+    })
+    // Must not enter the app or write a profile on the recovery path
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockReplace).not.toHaveBeenCalledWith('/onboarding')
+    expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)')
+  })
+
+  it('PASSWORD_RECOVERY event → routes to /auth/reset-password', async () => {
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://app.iskotify.ph/auth/callback' },  // no marker
+      writable: true,
+      configurable: true,
+    })
+    // No code in URL, no session → normal path would go to sign-in
+    mockUseLocalSearchParams.mockReturnValue({ code: '' })
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+
+    render(<AuthCallback />)
+
+    // The screen subscribes for late PASSWORD_RECOVERY events on mount
+    await waitFor(() => {
+      expect(authStateCallbacks.length).toBeGreaterThan(0)
+    })
+    act(() => {
+      authStateCallbacks.forEach((cb) => cb('PASSWORD_RECOVERY'))
+    })
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/auth/reset-password')
+    })
+  })
+
+  it('non-recovery web sign-in is unaffected (no reset-password routing)', async () => {
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://app.iskotify.ph/auth/callback?code=test-code-123' },
+      writable: true,
+      configurable: true,
+    })
+    mockIsActivated.mockResolvedValue(false)
+    mockExchangeCode.mockResolvedValue({ error: null })
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'web-user', email: 'web@test.com', user_metadata: {} } },
+    })
+    const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null })
+    const mockLimit = jest.fn(() => ({ maybeSingle: mockMaybeSingle }))
+    const mockEq = jest.fn(() => ({ limit: mockLimit }))
+    mockSupabaseFrom.mockReturnValue({ select: jest.fn(() => ({ eq: mockEq })) })
+    mockSelectFrom.mockReturnValue({
+      where: jest.fn(() => ({ limit: jest.fn().mockResolvedValue([]) })),
+      limit: jest.fn().mockResolvedValue([]),
+    })
+
+    render(<AuthCallback />)
+
+    await waitFor(() => {
+      expect(mockInsert).toHaveBeenCalled()
+    })
+    expect(mockReplace).not.toHaveBeenCalledWith('/auth/reset-password')
   })
 })
 

@@ -11,15 +11,64 @@ import { eq } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
 import { webEntryTarget } from '../../utils/webEntryTarget'
 import { isEarlyAccessActivated, setEarlyAccessActivated } from '../../utils/earlyAccessActivation'
+import { isRecoveryUrl } from '../../utils/recoveryUrl'
 
 // Must be at module level — signals openAuthSessionAsync in landing.tsx to close
 // the browser and return the redirect URL.
 WebBrowser.maybeCompleteAuthSession()
 
+// ── Password recovery detection (web) ────────────────────────────────────────
+// A Supabase reset-password email lands on /auth/callback. Two independent
+// signals identify it (belt and braces — neither alone covers every flow):
+//  1. URL marker: sendPasswordReset() redirects to /auth/callback?type=recovery
+//     (Supabase preserves the query and appends its ?code=); older implicit
+//     links carry #...&type=recovery. Checked via isRecoveryUrl().
+//  2. Event: with detectSessionInUrl:true, supabase-js auto-exchanges the
+//     recovery code at client init and emits PASSWORD_RECOVERY. That can fire
+//     before React effects run, so the flag is captured at MODULE level (this
+//     module is evaluated synchronously when the route mounts, ahead of the
+//     async token exchange). Web-only: the event never fires on native here.
+let sawPasswordRecovery = false
+if (Platform.OS === 'web') {
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') sawPasswordRecovery = true
+  })
+}
+
+/** True when this page load is a password-recovery redirect (web only). */
+function isPasswordRecovery(): boolean {
+  if (Platform.OS !== 'web') return false
+  if (sawPasswordRecovery) return true
+  try {
+    return typeof window !== 'undefined' && isRecoveryUrl(window.location.href)
+  } catch {
+    return false
+  }
+}
+
 export default function AuthCallback() {
   const db = useDb()
   const { theme: t } = useTheme()
   const { code } = useLocalSearchParams<{ code?: string }>()
+
+  // ── Password recovery (web): route to the set-new-password form ───────────
+  // Runs independently of the `code` search param: hash-based recovery URLs
+  // (#access_token=...&type=recovery) never hydrate `code`, so the main effect
+  // below would spin forever for them. Also subscribes for a late
+  // PASSWORD_RECOVERY event in case supabase-js finishes the code exchange
+  // after this screen mounts. Purely additive — OAuth and native flows are
+  // untouched (everything is web-gated).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return
+    if (isPasswordRecovery()) {
+      router.replace('/auth/reset-password')
+      return
+    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') router.replace('/auth/reset-password')
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     // code is undefined on first render before params are hydrated
@@ -36,6 +85,13 @@ export default function AuthCallback() {
           // Try getSession; if none, fall back to sign-in.
           if (Platform.OS === 'web') {
             const { data: { session } } = await supabase.auth.getSession()
+            // Password-recovery link (getSession above awaited supabase-js init,
+            // so a PASSWORD_RECOVERY emitted during the auto-exchange has been
+            // captured by now) → set-new-password form, NOT the app.
+            if (isPasswordRecovery()) {
+              router.replace('/auth/reset-password')
+              return
+            }
             if (session) {
               // Session exists (e.g. from a hash-based flow) — route normally.
               // onAuthStateChange in _layout will also fire; routing here is a safety net.
@@ -70,6 +126,17 @@ export default function AuthCallback() {
           // landing.tsx already did the exchange on native.
           const { data: { session } } = await supabase.auth.getSession()
           if (!session) throw error
+        }
+
+        // ── Password recovery (web) ────────────────────────────────────────────
+        // The reset-link redirect carries ?code= like OAuth does, so it reaches
+        // this point too. By now the exchange has completed (either above or via
+        // detectSessionInUrl), so the PASSWORD_RECOVERY flag/URL marker is
+        // reliable → send the user to the set-new-password form instead of the
+        // app. Additive: non-recovery OAuth logins skip this entirely.
+        if (isPasswordRecovery()) {
+          router.replace('/auth/reset-password')
+          return
         }
 
         const { data: { user } } = await supabase.auth.getUser()

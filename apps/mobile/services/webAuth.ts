@@ -118,12 +118,17 @@ export async function signInWithEmail(
 /**
  * Send a password-reset email. The link redirects to /auth/callback on the
  * current origin so the web app can exchange the token.
+ *
+ * The redirect carries an explicit `type=recovery` marker: Supabase preserves
+ * query params on redirectTo (it appends its own ?code=), so callback.tsx can
+ * deterministically detect the recovery flow from the URL (see
+ * utils/recoveryUrl.ts) and route to /auth/reset-password instead of the app.
  */
 export async function sendPasswordReset(email: string): Promise<AuthResult> {
   try {
     const redirectTo =
       typeof window !== 'undefined'
-        ? `${window.location.origin}/auth/callback`
+        ? `${window.location.origin}/auth/callback?type=recovery`
         : undefined
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo,
@@ -131,6 +136,41 @@ export async function sendPasswordReset(email: string): Promise<AuthResult> {
     if (error) {
       console.warn('[webAuth] unmapped password-reset error:', error.message)
       return { ok: false, error: FALLBACK_ERROR }
+    }
+    return { ok: true, data: undefined }
+  } catch (e) {
+    return { ok: false, error: 'Something went wrong. Please try again.' }
+  }
+}
+
+function mapUpdatePasswordError(message: string): string {
+  const m = message.toLowerCase()
+  if (m.includes('different from the old') || m.includes('same password') || m.includes('same_password')) {
+    return 'New password must be different from your old password.'
+  }
+  if (m.includes('password') && (m.includes('weak') || m.includes('short') || m.includes('characters'))) {
+    return 'Your password is too short — use at least 8 characters.'
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Too many attempts — please wait a moment and try again.'
+  }
+  if (m.includes('session missing') || m.includes('session_not_found') || m.includes('not logged in') || m.includes('missing sub claim')) {
+    return 'This reset link has expired — request a new one from the sign-in screen.'
+  }
+  // Unmapped error: log raw message for debugging, return friendly fallback
+  console.warn('[webAuth] unmapped update-password error:', message)
+  return FALLBACK_ERROR
+}
+
+/**
+ * Set a new password for the currently-signed-in user (the recovery link signs
+ * the user in before landing on /auth/reset-password).
+ */
+export async function updatePassword(password: string): Promise<AuthResult> {
+  try {
+    const { error } = await supabase.auth.updateUser({ password })
+    if (error) {
+      return { ok: false, error: mapUpdatePasswordError(error.message) }
     }
     return { ok: true, data: undefined }
   } catch (e) {
