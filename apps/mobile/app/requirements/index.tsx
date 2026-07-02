@@ -5,6 +5,7 @@ import { router } from 'expo-router'
 import { inArray } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { listings as listingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, type Theme, type Typography } from '../../theme/tokens'
@@ -136,7 +137,8 @@ export default function RequirementsScreen() {
 
   // Join focus listings (for title/type/order) with their parsed requirements.
   const sections = useMemo<ListingRequirements[]>(
-    () => focusListingsList.map(f => ({
+    // School-level focus entries have no requirements checklist — exclude them.
+    () => focusListingsList.filter(f => !isSchoolFocusSlug(f.slug)).map(f => ({
       slug: f.slug,
       title: f.title,
       type: f.type,

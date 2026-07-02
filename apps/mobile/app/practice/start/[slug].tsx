@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
-import { listings as listingsTable } from '../../../db/schema'
+import { listings as listingsTable, tertiarySchools } from '../../../db/schema'
 import { listPublishedBlueprintSlugs } from '../../../services/examBlueprints'
+import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../../../utils/focusSlug'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
@@ -21,6 +22,12 @@ export default function PracticeStartScreen() {
 
   const [listingTitle, setListingTitle] = useState('')
   const [mockAvailable, setMockAvailable] = useState(false)
+
+  // A school-level focus ("school:<id>") has no content of its own — its mock +
+  // review resolve to the general entrance practice, but we still show the
+  // school's name as the title.
+  const isSchool = isSchoolFocusSlug(slug)
+  const contentSlug = isSchool ? 'general-cet' : slug
 
   const s = useMemo(() => StyleSheet.create({
     root: { flex: 1, backgroundColor: t.bg },
@@ -44,16 +51,18 @@ export default function PracticeStartScreen() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const [listingRows, slugs] = await Promise.all([
-        db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
+      const [titleRows, slugs] = await Promise.all([
+        isSchool
+          ? db.select({ title: tertiarySchools.name }).from(tertiarySchools).where(eq(tertiarySchools.id, schoolIdFromFocusSlug(slug))).limit(1)
+          : db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
         listPublishedBlueprintSlugs(db),
       ])
       if (!alive) return
-      setListingTitle(listingRows[0]?.title ?? slug)
-      setMockAvailable(slugs.includes(slug))
+      setListingTitle(titleRows[0]?.title ?? slug)
+      setMockAvailable(slugs.includes(contentSlug))
     })()
     return () => { alive = false }
-  }, [db, slug])
+  }, [db, slug, isSchool, contentSlug])
 
   return (
     <SafeAreaView style={s.root}>
@@ -76,7 +85,7 @@ export default function PracticeStartScreen() {
 
         <Pressable
           style={({ pressed }) => [s.choiceCard, pressed && s.choiceCardPressed]}
-          onPress={() => router.push(`/practice/review/${slug}`)}
+          onPress={() => router.push(`/practice/review/${contentSlug}`)}
           accessibilityRole="button"
           accessibilityLabel="Take a Review — study by subject and topic"
         >
@@ -87,7 +96,7 @@ export default function PracticeStartScreen() {
         {mockAvailable ? (
           <Pressable
             style={({ pressed }) => [s.choiceCard, pressed && s.choiceCardPressed]}
-            onPress={() => router.push(`/practice/exam/${slug}`)}
+            onPress={() => router.push(`/practice/exam/${contentSlug}`)}
             accessibilityRole="button"
             accessibilityLabel="Take a Mock Exam — timed, full exam simulation"
           >

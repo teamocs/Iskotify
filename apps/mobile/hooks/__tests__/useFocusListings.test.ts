@@ -1,4 +1,10 @@
-import { normalizePriorities, swapPriority } from '../useFocusListings'
+import {
+  normalizePriorities,
+  swapPriority,
+  schoolFocusSlug,
+  isSchoolFocusSlug,
+  schoolIdFromFocusSlug,
+} from '../useFocusListings'
 
 const make = (overrides: Partial<{ slug: string; priority: number; addedAt: number; title: string; type: string }> = {}) => ({
   slug: 'upcat-2025',
@@ -56,5 +62,29 @@ describe('swapPriority', () => {
   it('is noop when slug not found', () => {
     const result = swapPriority(rows, 'x', 'up')
     expect(result.map(r => r.slug)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('school focus slug helpers', () => {
+  it('builds a namespaced school focus slug', () => {
+    expect(schoolFocusSlug('unc-naga')).toBe('school:unc-naga')
+  })
+
+  it('detects school focus slugs', () => {
+    expect(isSchoolFocusSlug('school:unc-naga')).toBe(true)
+    expect(isSchoolFocusSlug('upcat')).toBe(false)
+    expect(isSchoolFocusSlug('acet')).toBe(false)
+  })
+
+  it('extracts the school id from a focus slug', () => {
+    expect(schoolIdFromFocusSlug('school:unc-naga')).toBe('unc-naga')
+    // ids may themselves contain hyphens/colons after the prefix — only the
+    // first prefix is stripped
+    expect(schoolIdFromFocusSlug('school:abc-123')).toBe('abc-123')
+  })
+
+  it('round-trips id → slug → id', () => {
+    const id = 'some-school-id-42'
+    expect(schoolIdFromFocusSlug(schoolFocusSlug(id))).toBe(id)
   })
 })

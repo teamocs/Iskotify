@@ -10,6 +10,7 @@ import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { schoolFocusSlug } from '../../utils/focusSlug'
 import { examAcronymToListingSlug, isRealExamAcronym } from '../../utils/targetExams'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
@@ -267,6 +268,12 @@ export default function SchoolProfileScreen() {
   const hasRealExam = isRealExamAcronym(profile?.entranceExamAcronym)
   const showGenericPractice = !examSlug && hasRealExam
 
+  // Per-school focus (for schools without a content-backed exam listing): pin the
+  // school itself; its practice resolves to the general entrance mock + review.
+  const schoolFocus = schoolFocusSlug(slug)
+  const schoolInFocus = isInFocus(schoolFocus)
+  const schoolFocusPriority = getPriority(schoolFocus)
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -471,8 +478,17 @@ export default function SchoolProfileScreen() {
               {showGenericPractice ? (
                 <>
                   <Pressable
+                    style={({ pressed }) => [s.focusBtn, schoolInFocus ? s.focusOn : s.focusAdd, pressed && { opacity: 0.85 }]}
+                    onPress={() => (schoolInFocus ? removeListing(schoolFocus) : addListing(schoolFocus))}
+                    accessibilityRole="button"
+                  >
+                    <Text style={schoolInFocus ? s.focusOnTxt : s.focusAddTxt} maxFontSizeMultiplier={1.4}>
+                      {schoolInFocus ? `✓ In Focus #${schoolFocusPriority} — Tap to remove` : '+ Add this school to Focus'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
                     style={({ pressed }) => [s.examLinkBtn, pressed && { opacity: 0.8 }]}
-                    onPress={() => router.push('/practice/start/general-cet')}
+                    onPress={() => router.push(`/practice/start/${schoolFocus}`)}
                     accessibilityRole="button"
                   >
                     <Text style={s.examLinkTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>Practice: general entrance mock &amp; review</Text>

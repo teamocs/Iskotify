@@ -1,8 +1,12 @@
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { eq, asc } from 'drizzle-orm'
+import { eq, asc, inArray } from 'drizzle-orm'
 import { useDb } from './useDb'
-import { focusListings, listings } from '../db/schema'
+import { focusListings, listings, tertiarySchools } from '../db/schema'
+import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
+
+// Re-export the school-focus slug helpers so existing importers keep working.
+export { SCHOOL_FOCUS_PREFIX, schoolFocusSlug, isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
@@ -50,13 +54,31 @@ export function useFocusListings() {
       .from(focusListings)
       .leftJoin(listings, eq(listings.slug, focusListings.listingSlug))
       .orderBy(asc(focusListings.priority))
-    setFocusListingsList(rows.map(r => ({
+    const mapped = rows.map(r => ({
       slug: r.slug,
       priority: r.priority,
       addedAt: r.addedAt,
       title: r.title ?? r.slug,
       type: r.type ?? 'exam',
-    })))
+    }))
+    // School-level focus entries ("school:<id>") have no listings row, so the
+    // leftJoin left them bare — resolve the school name + tag type='school'.
+    const schoolIds = mapped.filter(m => isSchoolFocusSlug(m.slug)).map(m => schoolIdFromFocusSlug(m.slug))
+    if (schoolIds.length > 0) {
+      const schoolRows = await db
+        .select({ id: tertiarySchools.id, name: tertiarySchools.name, acronym: tertiarySchools.acronym })
+        .from(tertiarySchools)
+        .where(inArray(tertiarySchools.id, schoolIds))
+      const byId = new Map(schoolRows.map(sr => [sr.id, sr]))
+      for (const m of mapped) {
+        if (isSchoolFocusSlug(m.slug)) {
+          const sr = byId.get(schoolIdFromFocusSlug(m.slug))
+          m.title = sr?.name ?? sr?.acronym ?? m.title
+          m.type = 'school'
+        }
+      }
+    }
+    setFocusListingsList(mapped)
   }, [db])
 
   const refresh = useCallback(async () => {

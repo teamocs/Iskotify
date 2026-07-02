@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, Pressable } from 'react-native'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { usePracticeData } from '../../hooks/usePracticeData'
 import { useTheme } from '../../theme/ThemeContext'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
@@ -191,7 +192,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
         >
           <Text style={[s.tabTxt, activeSlug === 'overall' && s.tabTxtActive]} maxFontSizeMultiplier={1.4}>Overall</Text>
         </TouchableOpacity>
-        {focusListings.map(fl => (
+        {focusListings.filter(fl => !isSchoolFocusSlug(fl.slug)).map(fl => (
           <TouchableOpacity
             key={fl.slug}
             style={[s.tab, activeSlug === fl.slug && s.tabActive]}
