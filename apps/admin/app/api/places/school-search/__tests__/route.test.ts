@@ -22,6 +22,11 @@ vi.mock('@/lib/places/searchSchools', () => ({
   searchSchools: (...args: any[]) => mockSearchSchools(...args),
 }))
 
+const mockCheckRate = vi.fn()
+vi.mock('@/lib/redis/rateLimiter', () => ({
+  checkAndIncrementRate: (...args: any[]) => mockCheckRate(...args),
+}))
+
 import { GET } from '../route'
 
 function makeReq(url: string): any {
@@ -31,6 +36,9 @@ function makeReq(url: string): any {
 beforeEach(() => {
   mockGet.mockReset(); mockSet.mockReset(); mockIncr.mockReset()
   mockSearchSchools.mockReset()
+  mockCheckRate.mockReset()
+  // Rate limiter allows by default (mirrors the fail-open real implementation)
+  mockCheckRate.mockResolvedValue({ allowed: true, remaining: 30 })
   process.env.GOOGLE_PLACES_SERVER_KEY = 'test-key'
 })
 
@@ -54,6 +62,19 @@ describe('GET /api/places/school-search', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.suggestions[0].name).toBe('Cached U')
+    expect(mockSearchSchools).not.toHaveBeenCalled()
+    // Cache hits must never consume rate-limit budget
+    expect(mockCheckRate).not.toHaveBeenCalled()
+  })
+
+  it('returns 429 on a cache miss when the per-IP rate limit is exceeded', async () => {
+    mockGet.mockResolvedValueOnce(null)
+    mockCheckRate.mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterMs: 12_000 })
+    const res = await GET(makeReq('http://x/api/places/school-search?q=ateneo'))
+    expect(res.status).toBe(429)
+    const body = await res.json()
+    expect(body.error).toMatch(/too many requests/i)
+    // The billed Places call must NOT happen when throttled
     expect(mockSearchSchools).not.toHaveBeenCalled()
   })
 

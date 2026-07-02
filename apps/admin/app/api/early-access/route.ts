@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
+import { checkAndIncrementRate } from '@/lib/redis/rateLimiter'
 
 export const runtime = 'nodejs'
 
@@ -8,14 +9,44 @@ export const runtime = 'nodejs'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_LEN = 200
 
+// Public registration endpoint → throttle per client IP so a flood can't spam
+// service-role inserts. 5/hour is plenty for a human retrying a form.
+const RATE_MAX = 5
+const RATE_WINDOW_SEC = 60 * 60
+
 function clean(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, MAX_LEN) : ''
+}
+
+// First hop of x-forwarded-for is the original client (Vercel/most proxies
+// append, so hop 0 is the caller). Fall back to a shared 'unknown' bucket.
+function clientIp(req: NextRequest): string {
+  const first = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  return first || 'unknown'
 }
 
 // POST /api/early-access — public early-access APK registration.
 // Writes through the service-role client because RLS is enabled with no
 // public policies on early_access_registrations.
 export async function POST(req: NextRequest) {
+  // Rate limit BEFORE any parsing or DB work. checkAndIncrementRate fails open
+  // when Redis is unconfigured/unreachable, so local dev without Redis works.
+  const rate = await checkAndIncrementRate(`early-access:${clientIp(req)}`, {
+    max: RATE_MAX,
+    windowSec: RATE_WINDOW_SEC,
+  })
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { ok: false, error: 'Too many requests — try again later' },
+      {
+        status: 429,
+        headers: rate.retryAfterMs
+          ? { 'Retry-After': String(Math.max(1, Math.ceil(rate.retryAfterMs / 1000))) }
+          : undefined,
+      },
+    )
+  }
+
   let body: unknown
   try {
     body = await req.json()

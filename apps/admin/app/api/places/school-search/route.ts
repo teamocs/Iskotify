@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis/client'
 import { RedisKey } from '@/lib/redis/keys'
+import { checkAndIncrementRate } from '@/lib/redis/rateLimiter'
 import { searchSchools } from '@/lib/places/searchSchools'
 
 export const runtime = 'nodejs'
@@ -10,8 +11,20 @@ const COUNTER_TTL_SEC = 60 * 60 * 24 * 30 // 30 days
 const MIN_QUERY_LEN = 2
 const MAX_QUERY_LEN = 80
 
+// Live Places calls are billed per request — throttle cache misses per client
+// IP so a miss loop can't run up the Google bill. Cache hits are NOT throttled.
+const RATE_MAX = 30
+const RATE_WINDOW_SEC = 60
+
 function normalize(q: string): string {
   return q.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, MAX_QUERY_LEN)
+}
+
+// First hop of x-forwarded-for is the original client (Vercel/most proxies
+// append, so hop 0 is the caller). Fall back to a shared 'unknown' bucket.
+function clientIp(req: NextRequest): string {
+  const first = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  return first || 'unknown'
 }
 
 export async function GET(req: NextRequest) {
@@ -46,7 +59,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Cache miss (or no Redis). Need a server key.
+  // 2. Cache miss (or no Redis) — this request would bill a live Places call,
+  // so rate-limit it per client IP. Cache hits above are never throttled.
+  // checkAndIncrementRate fails open when Redis is unconfigured/unreachable.
+  const rate = await checkAndIncrementRate(`school-search:${clientIp(req)}`, {
+    max: RATE_MAX,
+    windowSec: RATE_WINDOW_SEC,
+  })
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — try again later' },
+      {
+        status: 429,
+        headers: rate.retryAfterMs
+          ? { 'Retry-After': String(Math.max(1, Math.ceil(rate.retryAfterMs / 1000))) }
+          : undefined,
+      },
+    )
+  }
+
+  // 3. Need a server key for the live call.
   if (!apiKey) {
     return NextResponse.json(
       { error: 'GOOGLE_PLACES_SERVER_KEY not configured' },
@@ -64,7 +96,7 @@ export async function GET(req: NextRequest) {
 
   const body = { suggestions }
 
-  // 3. Best-effort cache write + miss counter.
+  // 4. Best-effort cache write + miss counter.
   if (redis) {
     void Promise.resolve(redis.set(key, body, { ex: CACHE_TTL_SEC })).catch(err => {
       console.warn('[places] redis set failed:', err)
