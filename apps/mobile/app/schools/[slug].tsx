@@ -74,14 +74,16 @@ function safeParseArray(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    // Some source rows store MANY courses as ONE comma/semicolon-separated
-    // string (e.g. ["BS Nursing, BS Biology, BS Pharmacy"]) which rendered as a
-    // single giant chip. Split each entry into real items, trim, drop empties,
-    // and de-dupe (case-insensitive) so every course gets its own chip.
+    // Some source rows (courses_offered AND scholarships_offered) store MANY
+    // items as ONE separator-joined string (e.g. ["BS Nursing, BS Biology"] or
+    // ["DOST scholarship; CHED grant"]) which rendered as a single giant chip.
+    // Split each entry on comma / semicolon / newline / pipe, trim, drop
+    // empties, de-dupe (case-insensitive) so every item gets its own chip.
+    // NB: '/' is intentionally NOT a separator ("UniFAST / RA 10931" is one name).
     const seen = new Set<string>()
     const out: string[] = []
     for (const entry of parsed.map(String)) {
-      for (const part of entry.split(/[,;]/)) {
+      for (const part of entry.split(/[,;\n|]+/)) {
         const item = part.trim()
         if (!item) continue
         const key = item.toLowerCase()
