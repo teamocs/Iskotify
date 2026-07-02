@@ -23,14 +23,16 @@ import {
   buildCareerDestinationsContext,
   buildCourseConnectionContext,
   buildListingsContext,
+  buildListingsEnumeration,
+  buildSubjectsContext,
 } from './chatContext'
 
-export type DataIntent = 'profile' | 'schools' | 'destinations' | 'courses' | 'listings'
+export type DataIntent = 'profile' | 'subjects' | 'schools' | 'destinations' | 'courses' | 'listings'
 
 // ── Intent signal sets ────────────────────────────────────────────────────────
 // All matching is case-insensitive (regex `i` flag / lowercased input).
 // Order of evaluation in classifyDataIntent is most-specific-first:
-//   profile → schools → destinations → courses → listings
+//   profile → subjects → schools → destinations → courses → listings
 // so a "best school for nursing" question routes to `schools`, not `courses`.
 
 /**
@@ -50,10 +52,14 @@ const PROFILE_SIGNALS: RegExp[] = [
   /(?<!where\s)\bshould i\s+(focus|study|review|practice|work on|prioriti[sz]e)\b/i,
   // Readiness / pacing phrases about the student
   /\b(on track|behind|catching up|am i ready|am i prepared|how am i doing)\b/i,
-  // English possessive "my" paired with study/progress nouns
-  /\bmy\s+(progress|streak|exam|score|scores|accuracy|weak|strong|focus|study|deck|cards?|listing|topics?|grade|grades|subject|subjects|review|stats|readiness|performance)\b/i,
+  // English possessive "my" paired with study/progress/config nouns. Also covers
+  // app-config nouns (settings/preferences/account/targets/plan) so "what are my
+  // settings / focused exams" surface the student's configured focus.
+  /\bmy\s+(progress|streak|exam|score|scores|accuracy|weak|strong|focus(ed)?|study|deck|cards?|listing|topics?|grade|grades|subject|subjects|review|stats|readiness|performance|settings?|config(uration)?|preferences?|account|targets?|plan)\b/i,
   // "what should i focus / study" (focus/readiness intent without "my")
   /\bwhat\s+(should|do)\s+i\s+(focus|study|review|work on|practice)\b/i,
+  // "what am i / what are my …" — first-person status/config questions
+  /\bwhat\s+(am i|are my)\b/i,
   // Tagalog first-person markers — "ako" (I), "kong/ko" (my), "akin" (mine)
   /\b(ako|kong|akin)\b/i,
   // Tagalog "dapat ko" / "dapat kong" (I should) and "kaya ko" (I can)
@@ -108,6 +114,25 @@ const LISTING_SIGNALS: RegExp[] = [
   // Common PH entrance-exam / scholarship acronyms
   /\b(upcat|acet|dcat|ustet|pupcet|usthet|\bcet\b|dost|ched)\b/i,
 ]
+
+/**
+ * subjects — general "what subjects / topics are there / offered" and "list my
+ * review topics" enumeration questions. Precision-biased: only fires on a
+ * plural subjects/topics noun inside a list/study framing. A guard rejects
+ * grammar uses of the word ("subject of the sentence", "the topic sentence").
+ */
+const SUBJECT_SIGNALS: RegExp[] = [
+  /\b(what|which|list|show|all|the)\b[\s\S]*\b(subjects?|topics?)\b/i,
+  /\b(subjects?|topics?)\s+(offered|available|to review|to study|are there)\b/i,
+  /\bmy\s+(subjects?|topics?)\b/i,
+]
+
+function isSubjectIntent(q: string): boolean {
+  // Grammar guard — "subject of the sentence" / "the topic sentence" are not
+  // data-lookup questions about the student's review subjects.
+  if (/\bsentence\b/i.test(q)) return false
+  return anyMatch(q, SUBJECT_SIGNALS)
+}
 
 /**
  * courses — programs/degrees, demand, board exam, AI-impact. Course/program/
@@ -167,6 +192,7 @@ export function classifyDataIntent(question: string): DataIntent | null {
 
   // Most-specific-first cascade.
   if (anyMatch(q, PROFILE_SIGNALS)) return 'profile'
+  if (isSubjectIntent(q)) return 'subjects'
   if (anyMatch(q, SCHOOL_SIGNALS)) return 'schools'
   if (anyMatch(q, DESTINATION_SIGNALS)) return 'destinations'
   if (isCourseIntent(q)) return 'courses'
@@ -237,6 +263,14 @@ export async function answerFromData(
       return `Here's your progress snapshot:\n${body}`
     }
 
+    case 'subjects': {
+      const block = await buildSubjectsContext(db)
+      if (!block) return null
+      const body = stripTag(block)
+      if (!body) return null
+      return `Here are your review subjects:\n${body}`
+    }
+
     case 'schools': {
       const block = await buildTopSchoolsContext(db, question)
       if (!block) return null
@@ -268,11 +302,18 @@ export async function answerFromData(
     }
 
     case 'listings': {
-      const block = await buildListingsContext(db, question)
-      if (!block) return null
-      const body = stripTag(block)
-      if (!body) return null
-      return `From your Lists:\n${body}`
+      // Specific named match wins (e.g. "when is the UPCAT deadline").
+      const specific = await buildListingsContext(db, question)
+      if (specific) {
+        const body = stripTag(specific)
+        if (body) return `From your Lists:\n${body}`
+      }
+      // No specific record → fall back to enumeration ("what exams can I take").
+      const enumeration = await buildListingsEnumeration(db, question)
+      if (!enumeration) return null
+      const enumBody = stripTag(enumeration)
+      if (!enumBody) return null
+      return `From your Lists:\n${enumBody}`
     }
   }
 }
@@ -286,6 +327,8 @@ export function ssotNotFoundMessage(intent: DataIntent): string {
   switch (intent) {
     case 'profile':
       return "I don't have your progress yet — do a quick practice session and it'll show up here. 📚"
+    case 'subjects':
+      return "I don't have your review subjects synced yet — open the Exams/Review tab and they'll show up. 📚"
     case 'schools':
       return "I don't have school pass-rate data for that course yet — browse the Exams tab and it'll sync here. 📚"
     case 'destinations':

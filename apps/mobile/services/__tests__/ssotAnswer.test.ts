@@ -27,9 +27,36 @@ describe('classifyDataIntent', () => {
       'what are my weak topics',
       'Anong dapat kong i-focus today?',
       'kaya ko ba ito',
+      // config / settings / focus (Task 3)
+      'what are my settings',
+      'what are my focused exams',
+      'show my focused exams',
+      'what is my plan',
+      'what are my preferences',
+      'what am i studying',
     ]
     it.each(cases)('classifies %p as profile', (q) => {
       expect(classifyDataIntent(q)).toBe('profile')
+    })
+  })
+
+  describe('subjects intent (list subjects / review topics)', () => {
+    const cases = [
+      'what subjects are there',
+      'what subjects are offered',
+      'which subjects are available',
+      'which topics are available',
+      'list the review topics',
+      'show me all subjects',
+      'what topics can I study',
+    ]
+    it.each(cases)('classifies %p as subjects', (q) => {
+      expect(classifyDataIntent(q)).toBe('subjects')
+    })
+
+    it('does NOT match grammar uses of "subject"/"topic" (guard on "sentence")', () => {
+      expect(classifyDataIntent('what is the subject of the sentence')).toBeNull()
+      expect(classifyDataIntent('what is the topic sentence')).toBeNull()
     })
   })
 
@@ -254,10 +281,14 @@ describe('answerFromData', () => {
       expect(lines.some(l => l.startsWith('- '))).toBe(true)
     })
 
-    it('returns null when no listing matches (caller shows not-found)', async () => {
+    it('falls back to enumeration (non-null) when no SPECIFIC listing matches but the table is non-empty', async () => {
+      // Previously this returned the not-found message; the SSoT fix now
+      // enumerates the catalog so a general listing question is answered.
       const db = makeDb()
       const out = await answerFromData(db, 'when is the BUCET?', 'listings', STATS_BASE)
-      expect(out).toBeNull()
+      expect(out).not.toBeNull()
+      expect(out).toContain('From your Lists:')
+      expect(out).toContain('DOST-SEI Merit Scholarship')
     })
   })
 
@@ -357,12 +388,89 @@ describe('answerFromData', () => {
       expect(text).not.toContain('Weak topics:\n- Algebra')
     })
   })
+
+  describe('subjects', () => {
+    function makeDb(): DrizzleClient {
+      const raw = new Database(':memory:')
+      raw.exec(`
+        CREATE TABLE subjects (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+        CREATE TABLE topics (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, subject_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'published');
+        INSERT INTO subjects (id, name) VALUES ('SU1', 'Mathematics'), ('SU2', 'Science');
+        INSERT INTO topics (id, name, subject_id) VALUES ('T1', 'Algebra', 'SU1'), ('T2', 'Biology', 'SU2');
+      `)
+      return drizzle(raw, { schema }) as unknown as DrizzleClient
+    }
+
+    it('returns a "Here are your review subjects:" message with per-subject topic counts (no bracket tag)', async () => {
+      const db = makeDb()
+      const out = await answerFromData(db, 'what subjects are there?', 'subjects', STATS_BASE)
+      expect(out).not.toBeNull()
+      expect(out).toContain('Here are your review subjects:')
+      expect(out).toContain('- Mathematics (1 topics)')
+      expect(out).toContain('- Science (1 topics)')
+      expect(out).not.toContain('[SUBJECTS]')
+    })
+
+    it('returns null when no subjects are synced', async () => {
+      const raw = new Database(':memory:')
+      raw.exec(`
+        CREATE TABLE subjects (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+        CREATE TABLE topics (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, subject_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'published');
+      `)
+      const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+      const out = await answerFromData(db, 'what subjects are there?', 'subjects', STATS_BASE)
+      expect(out).toBeNull()
+    })
+  })
+
+  describe('listings (enumeration fallback)', () => {
+    function makeDb(): DrizzleClient {
+      const raw = new Database(':memory:')
+      makeListingsTable(raw)
+      raw.exec(`
+        INSERT INTO listings (id, slug, title, type, status, exam_date) VALUES
+          ('E1', 'upcat-2026', 'UPCAT 2026', 'exam', 'active', 1751328000000),
+          ('E2', 'acet-2026', 'ACET 2026', 'exam', 'active', NULL);
+        INSERT INTO listings (id, slug, title, type, status) VALUES
+          ('S1', 'dost-sei', 'DOST-SEI Scholarship', 'scholarship', 'active');
+      `)
+      return drizzle(raw, { schema }) as unknown as DrizzleClient
+    }
+
+    it('falls back to enumeration for a general "what exams can I take" question (no specific match)', async () => {
+      const db = makeDb()
+      const out = await answerFromData(db, 'what exams can I take?', 'listings', STATS_BASE)
+      expect(out).not.toBeNull()
+      expect(out).toContain('From your Lists:')
+      expect(out).toContain('UPCAT 2026 (exam)')
+      expect(out).toContain('ACET 2026 (exam)')
+      expect(out).not.toContain('(scholarship)')  // exam-side filter
+      expect(out).not.toContain('[LISTINGS]')
+    })
+
+    it('still prefers a specific named match over enumeration', async () => {
+      const db = makeDb()
+      const out = await answerFromData(db, 'when is the UPCAT?', 'listings', STATS_BASE)
+      expect(out).not.toBeNull()
+      expect(out).toContain('UPCAT 2026')
+      // Specific match returns a single listing (not the full ACET enumeration).
+      expect(out).not.toContain('ACET 2026')
+    })
+
+    it('returns null only when the listings table is empty', async () => {
+      const raw = new Database(':memory:')
+      makeListingsTable(raw)
+      const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+      const out = await answerFromData(db, 'what exams can I take?', 'listings', STATS_BASE)
+      expect(out).toBeNull()
+    })
+  })
 })
 
 // ── ssotNotFoundMessage ───────────────────────────────────────────────────────
 
 describe('ssotNotFoundMessage', () => {
-  const intents: DataIntent[] = ['profile', 'schools', 'destinations', 'courses', 'listings']
+  const intents: DataIntent[] = ['profile', 'subjects', 'schools', 'destinations', 'courses', 'listings']
   it.each(intents)('returns a non-empty friendly sentence for %s', (intent) => {
     const msg = ssotNotFoundMessage(intent)
     expect(typeof msg).toBe('string')
@@ -371,5 +479,8 @@ describe('ssotNotFoundMessage', () => {
   it('points listings/courses users to the Lists tab', () => {
     expect(ssotNotFoundMessage('listings')).toContain('Lists tab')
     expect(ssotNotFoundMessage('courses')).toContain('Lists tab')
+  })
+  it('points subjects users to the Exams/Review tab', () => {
+    expect(ssotNotFoundMessage('subjects')).toContain('Review')
   })
 })

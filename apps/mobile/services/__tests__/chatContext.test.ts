@@ -10,6 +10,8 @@ import {
   formatUpcatFacts,
   buildRetrievedFlashcards,
   buildListingsContext,
+  buildListingsEnumeration,
+  buildSubjectsContext,
   buildCourseConnectionContext,
   buildTopSchoolsContext,
   buildCareerDestinationsContext,
@@ -187,6 +189,38 @@ describe('buildProgressContext', () => {
     expect(out).not.toContain('n/a')
     expect(out).not.toContain('Today:')
     expect(out).toContain('5-day streak')  // streak still emitted
+  })
+
+  it('omits the Focused line when focusedListings is empty', async () => {
+    const db = makeDb()
+    const out = await buildProgressContext(db, STATS_BASE)  // focusedListings: []
+    expect(out).not.toContain('Focused:')
+  })
+
+  it('adds a "Focused:" line naming up to 5 configured exams/scholarships', async () => {
+    const db = makeDb()
+    const stats: HomeStats = {
+      ...STATS_BASE,
+      focusedListings: [
+        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: null, deadline: null },
+        { slug: 'acet-2026', priority: 2, title: 'ACET 2026', type: 'exam', examDate: null, deadline: null },
+        { slug: 'dost-sei', priority: 3, title: 'DOST-SEI Scholarship', type: 'scholarship', examDate: null, deadline: null },
+      ],
+    }
+    const out = await buildProgressContext(db, stats)
+    expect(out).toContain('Focused: UPCAT 2026, ACET 2026, DOST-SEI Scholarship')
+  })
+
+  it('caps the Focused line at 5 titles', async () => {
+    const db = makeDb()
+    const many = Array.from({ length: 7 }, (_, i) => ({
+      slug: `s${i}`, priority: i, title: `Exam ${i}`, type: 'exam', examDate: null, deadline: null,
+    }))
+    const stats: HomeStats = { ...STATS_BASE, focusedListings: many }
+    const out = await buildProgressContext(db, stats)
+    expect(out).toContain('Focused: Exam 0, Exam 1, Exam 2, Exam 3, Exam 4')
+    expect(out).not.toContain('Exam 5')
+    expect(out).not.toContain('Exam 6')
   })
 })
 
@@ -1387,5 +1421,249 @@ describe('buildCareerDestinationsContext', () => {
     // Second call: both keys are cache hits → zero additional selects.
     await buildCareerDestinationsContext(db, 'where can nurses work overseas')
     expect(fetcherCallCount - afterFirst).toBe(0)
+  })
+})
+
+// ── buildListingsEnumeration (general "what exams/scholarships can I take") ────
+
+function makeDbWithEnumListings(): DrizzleClient {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE listings (
+      id TEXT PRIMARY KEY NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      exam_date INTEGER,
+      region TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      requirements TEXT NOT NULL DEFAULT '[]',
+      coverage TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT '',
+      external_url TEXT NOT NULL DEFAULT '',
+      deadline INTEGER,
+      grant_amount TEXT NOT NULL DEFAULT '',
+      province TEXT,
+      city TEXT,
+      scope TEXT NOT NULL DEFAULT 'national',
+      is_verified INTEGER NOT NULL DEFAULT 0,
+      income_ceiling INTEGER,
+      gwa_requirement INTEGER,
+      monthly_stipend INTEGER,
+      service_obligation_years INTEGER,
+      has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+      application_window TEXT,
+      scholarship_meta TEXT NOT NULL DEFAULT '{}',
+      results_date INTEGER,
+      target_courses TEXT NOT NULL DEFAULT '[]'
+    );
+  `)
+  raw.exec(`
+    INSERT INTO listings (id, slug, title, type, status, exam_date) VALUES
+      ('E1', 'upcat-2026', 'UPCAT 2026', 'exam', 'active', 1751328000000),
+      ('E2', 'acet-2026', 'ACET 2026', 'exam', 'active', NULL),
+      ('S1', 'dost-sei', 'DOST-SEI Scholarship', 'scholarship', 'active', NULL);
+    INSERT INTO listings (id, slug, title, type, status, deadline) VALUES
+      ('S2', 'chevening', 'Chevening Grant', 'scholarship', 'active', 1748736000000);
+  `)
+  return drizzle(raw, { schema }) as unknown as DrizzleClient
+}
+
+describe('buildListingsEnumeration', () => {
+  beforeEach(() => { _clearForTests() })
+
+  it('returns a [LISTINGS] block listing exams AND scholarships when the type is ambiguous', async () => {
+    const db = makeDbWithEnumListings()
+    const out = await buildListingsEnumeration(db, 'what can I apply for?')
+    expect(out).toBeDefined()
+    expect(out).toContain('[LISTINGS]')
+    expect(out).toContain('UPCAT 2026 (exam)')
+    expect(out).toContain('DOST-SEI Scholarship (scholarship)')
+  })
+
+  it('filters to exams only when the question is exam-side', async () => {
+    const db = makeDbWithEnumListings()
+    const out = await buildListingsEnumeration(db, 'what entrance exams can I take?')
+    expect(out).toBeDefined()
+    expect(out).toContain('UPCAT 2026 (exam)')
+    expect(out).toContain('ACET 2026 (exam)')
+    expect(out).not.toContain('(scholarship)')
+  })
+
+  it('filters to scholarships only when the question is scholarship-side', async () => {
+    const db = makeDbWithEnumListings()
+    const out = await buildListingsEnumeration(db, 'what scholarships are available?')
+    expect(out).toBeDefined()
+    expect(out).toContain('DOST-SEI Scholarship (scholarship)')
+    expect(out).toContain('Chevening Grant (scholarship)')
+    expect(out).not.toContain('(exam)')
+  })
+
+  it('sorts exams before scholarships, then alphabetically by title', async () => {
+    const db = makeDbWithEnumListings()
+    const out = await buildListingsEnumeration(db, 'what can I apply for?')
+    const text = out as string
+    // ACET < UPCAT (alphabetical) among exams; both exams precede scholarships.
+    expect(text.indexOf('ACET 2026')).toBeLessThan(text.indexOf('UPCAT 2026'))
+    expect(text.indexOf('UPCAT 2026')).toBeLessThan(text.indexOf('Chevening Grant'))
+    expect(text.indexOf('Chevening Grant')).toBeLessThan(text.indexOf('DOST-SEI Scholarship'))
+  })
+
+  it('appends exam/deadline dates when present', async () => {
+    const db = makeDbWithEnumListings()
+    const out = await buildListingsEnumeration(db, 'what can I apply for?')
+    const text = out as string
+    expect(text).toContain('exam 2025-07-01')     // UPCAT exam_date
+    expect(text).toContain('deadline 2025-06-01')  // Chevening deadline
+  })
+
+  it('returns undefined only when the listings table is empty', async () => {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+        type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]', coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '', external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER, grant_amount TEXT NOT NULL DEFAULT '', province TEXT, city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national', is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER, gwa_requirement INTEGER, monthly_stipend INTEGER,
+        service_obligation_years INTEGER, has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT, scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER, target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+    `)
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+    const out = await buildListingsEnumeration(db, 'what exams can I take?')
+    expect(out).toBeUndefined()
+  })
+
+  it('caps at 8 rows and appends the "…and more" line when more remain', async () => {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+        type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]', coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '', external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER, grant_amount TEXT NOT NULL DEFAULT '', province TEXT, city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national', is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER, gwa_requirement INTEGER, monthly_stipend INTEGER,
+        service_obligation_years INTEGER, has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT, scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER, target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+    `)
+    for (let i = 0; i < 10; i++) {
+      raw.exec(`INSERT INTO listings (id, slug, title, type) VALUES ('X${i}', 'x-${i}', 'Exam ${i}', 'exam');`)
+    }
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+    const out = await buildListingsEnumeration(db, 'what exams can I take?')
+    const bullets = (out as string).split('\n').filter(l => l.startsWith('- '))
+    expect(bullets.length).toBe(9)  // 8 rows + the "…and more" line
+    expect(out).toContain('…and more — open the Lists tab to browse all.')
+  })
+
+  it('prefers non-closed listings but keeps closed ones if that would leave nothing', async () => {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE listings (
+        id TEXT PRIMARY KEY NOT NULL, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+        type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', exam_date INTEGER,
+        region TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+        requirements TEXT NOT NULL DEFAULT '[]', coverage TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '', external_url TEXT NOT NULL DEFAULT '',
+        deadline INTEGER, grant_amount TEXT NOT NULL DEFAULT '', province TEXT, city TEXT,
+        scope TEXT NOT NULL DEFAULT 'national', is_verified INTEGER NOT NULL DEFAULT 0,
+        income_ceiling INTEGER, gwa_requirement INTEGER, monthly_stipend INTEGER,
+        service_obligation_years INTEGER, has_entrance_exam INTEGER NOT NULL DEFAULT 0,
+        application_window TEXT, scholarship_meta TEXT NOT NULL DEFAULT '{}',
+        results_date INTEGER, target_courses TEXT NOT NULL DEFAULT '[]'
+      );
+      INSERT INTO listings (id, slug, title, type, status) VALUES
+        ('C1', 'closed-exam', 'Closed Exam', 'exam', 'closed');
+    `)
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+    // Only a closed exam exists — table not empty, so we still emit it.
+    const out = await buildListingsEnumeration(db, 'what exams can I take?')
+    expect(out).toBeDefined()
+    expect(out).toContain('Closed Exam (exam)')
+  })
+})
+
+// ── buildSubjectsContext (general "what subjects are there") ───────────────────
+
+function makeDbWithSubjects(): DrizzleClient {
+  const raw = new Database(':memory:')
+  raw.exec(`
+    CREATE TABLE subjects (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE topics (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'published'
+    );
+  `)
+  raw.exec(`
+    INSERT INTO subjects (id, name) VALUES
+      ('SU1', 'Mathematics'),
+      ('SU2', 'Science'),
+      ('SU3', 'Reading Comprehension');
+    INSERT INTO topics (id, name, subject_id) VALUES
+      ('T1', 'Algebra', 'SU1'),
+      ('T2', 'Geometry', 'SU1'),
+      ('T3', 'Biology', 'SU2');
+  `)
+  return drizzle(raw, { schema }) as unknown as DrizzleClient
+}
+
+describe('buildSubjectsContext', () => {
+  beforeEach(() => { _clearForTests() })
+
+  it('returns a [SUBJECTS] block with per-subject topic counts, sorted by name', async () => {
+    const db = makeDbWithSubjects()
+    const out = await buildSubjectsContext(db)
+    expect(out).toBeDefined()
+    const text = out as string
+    expect(text).toContain('[SUBJECTS]')
+    expect(text).toContain('- Mathematics (2 topics)')
+    expect(text).toContain('- Science (1 topics)')
+    expect(text).toContain('- Reading Comprehension (0 topics)')
+    // Alphabetical: Mathematics < Reading Comprehension < Science
+    expect(text.indexOf('Mathematics')).toBeLessThan(text.indexOf('Reading Comprehension'))
+    expect(text.indexOf('Reading Comprehension')).toBeLessThan(text.indexOf('Science'))
+  })
+
+  it('returns undefined when there are no subjects', async () => {
+    const raw = new Database(':memory:')
+    raw.exec(`
+      CREATE TABLE subjects (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+      CREATE TABLE topics (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, subject_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'published');
+    `)
+    const db = drizzle(raw, { schema }) as unknown as DrizzleClient
+    expect(await buildSubjectsContext(db)).toBeUndefined()
+  })
+
+  it('caches the subjects/topics reads across calls (one fetch pair)', async () => {
+    const db = makeDbWithSubjects()
+    let fetcherCallCount = 0
+    const originalSelect = db.select.bind(db)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(db as any).select = (...args: any[]) => {
+      fetcherCallCount++
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return originalSelect(...(args as [any]))
+    }
+    await buildSubjectsContext(db)
+    const afterFirst = fetcherCallCount
+    expect(afterFirst).toBe(2)  // one select for subjects, one for topics
+    await buildSubjectsContext(db)
+    expect(fetcherCallCount - afterFirst).toBe(0)  // both served from cache
   })
 })

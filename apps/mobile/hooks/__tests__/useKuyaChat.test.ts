@@ -51,7 +51,11 @@ jest.mock('../../services/chatContext', () => ({
   buildProgressContext: jest.fn().mockResolvedValue('ctx'),
   buildRetrievedFlashcards: jest.fn().mockResolvedValue(null),
   buildListingsContext: jest.fn().mockResolvedValue(undefined),
+  buildListingsEnumeration: jest.fn().mockResolvedValue(undefined),
+  buildSubjectsContext: jest.fn().mockResolvedValue(undefined),
   buildCourseConnectionContext: jest.fn().mockResolvedValue(undefined),
+  buildTopSchoolsContext: jest.fn().mockResolvedValue(undefined),
+  buildCareerDestinationsContext: jest.fn().mockResolvedValue(undefined),
 }))
 
 // Mock ragPipeline — the hook calls buildRagContext once per send()

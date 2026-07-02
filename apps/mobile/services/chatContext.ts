@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import type { HomeStats } from '../hooks/useHomeStats'
-import { userSettings, listings, careerCourses, focusListings, courseSchoolRankings, careerDestinations } from '../db/schema'
+import { userSettings, listings, careerCourses, focusListings, courseSchoolRankings, careerDestinations, subjects, topics } from '../db/schema'
 import { searchFlashcardsAuto, searchUpcatFactsAuto, searchCareerFactsAuto, searchAiImpactByQuestion, searchTopSchools, searchCareerDestinations, type RetrievedFlashcard, type RetrievedUpcatFact, type RetrievedCareerFact, type RetrievedAiImpact } from './flashcardRetriever'
 import { cachedQuery } from './queryCache'
 
@@ -70,6 +70,15 @@ export async function buildProgressContext(
   const examLine = `${examIntro} ${statsLine}`
 
   const lines: string[] = [identity, examLine]
+  // Surface the student's configured focus (exams/scholarships) so "what are my
+  // focused exams / settings" profile answers name them. Up to 5, comma-joined.
+  if (stats.focusedListings.length > 0) {
+    const focusedTitles = stats.focusedListings
+      .slice(0, 5)
+      .map(f => f.title)
+      .join(', ')
+    lines.push(`Focused: ${focusedTitles}`)
+  }
   if (stats.weakTopics.length > 0) {
     const weakLine = stats.weakTopics
       .slice(0, 3)
@@ -269,6 +278,121 @@ export async function buildListingsContext(
     })
 
     return `[LISTINGS]\n${lines.join('\n')}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Build a [LISTINGS] ENUMERATION block that answers general "what exams /
+ * scholarships can I take" questions — i.e. when no specific named record was
+ * matched by buildListingsContext. Rather than token-overlap, it lists the
+ * catalog, optionally filtered to the intended type (exam vs scholarship).
+ *
+ * Type detection from the question:
+ *   - exam-side keywords → only type='exam'
+ *   - scholarship-side keywords → only type='scholarship'
+ *   - both or neither → include both types
+ *
+ * Prefers status !== 'closed' (falls back to closed rows only if that would
+ * otherwise leave nothing to show). Exams sort before scholarships, then by
+ * title. Emits up to 8 rows; if more remain, a final "…and more" line points to
+ * the Lists tab. Returns undefined ONLY when the listings table is empty.
+ *
+ * Format:
+ *   [LISTINGS]
+ *   - <title> (<type>)[; exam <date>][; deadline <date>]
+ */
+export async function buildListingsEnumeration(
+  db: DrizzleClient,
+  question: string,
+): Promise<string | undefined> {
+  try {
+    const rows = await cachedQuery('chat:listings-enum', CHAT_META_TTL, () =>
+      db
+        .select({
+          slug: listings.slug,
+          title: listings.title,
+          type: listings.type,
+          status: listings.status,
+          examDate: listings.examDate,
+          deadline: listings.deadline,
+        })
+        .from(listings)
+    )
+
+    if (rows.length === 0) return undefined
+
+    const examSide = /\b(exams?|entrance|tests?|admissions?|cet|upcat)\b/i.test(question)
+    const scholarshipSide = /\b(scholarships?|grants?|financial|aid|stipends?|allowances?|iskolar)\b/i.test(question)
+
+    let filtered = rows
+    if (examSide && !scholarshipSide) filtered = rows.filter(r => r.type === 'exam')
+    else if (scholarshipSide && !examSide) filtered = rows.filter(r => r.type === 'scholarship')
+
+    // Prefer non-closed listings, but keep closed ones if excluding them would
+    // leave nothing to show (the table is not empty → we must emit something).
+    const open = filtered.filter(r => r.status !== 'closed')
+    const chosen = open.length > 0 ? open : filtered
+
+    // Exams before scholarships, then alphabetical by title.
+    chosen.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'exam' ? -1 : 1
+      return a.title.localeCompare(b.title)
+    })
+
+    const shown = chosen.slice(0, 8)
+    const lines = shown.map(row => {
+      const parts: string[] = [`${row.title} (${row.type})`]
+      const examDateStr = fmtDate(row.examDate)
+      const deadlineStr = fmtDate(row.deadline)
+      if (examDateStr) parts.push(`exam ${examDateStr}`)
+      if (deadlineStr) parts.push(`deadline ${deadlineStr}`)
+      return `- ${parts.join('; ')}`
+    })
+
+    if (chosen.length > 8) {
+      lines.push('- …and more — open the Lists tab to browse all.')
+    }
+
+    return `[LISTINGS]\n${lines.join('\n')}`
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Build a [SUBJECTS] context block listing the student's review subjects and how
+ * many topics each has. Answers general "what subjects are there / list my
+ * review topics" questions. Returns undefined when no subjects are synced.
+ *
+ * Format:
+ *   [SUBJECTS]
+ *   - <name> (<n> topics)
+ */
+export async function buildSubjectsContext(
+  db: DrizzleClient,
+): Promise<string | undefined> {
+  try {
+    const [subjectRows, topicRows] = await cachedQuery('chat:subjects', CHAT_META_TTL, async () => {
+      const s = await db.select({ id: subjects.id, name: subjects.name }).from(subjects)
+      const t = await db.select({ subjectId: topics.subjectId }).from(topics)
+      return [s, t] as const
+    })
+
+    if (subjectRows.length === 0) return undefined
+
+    const topicCounts = new Map<string, number>()
+    for (const t of topicRows) {
+      topicCounts.set(t.subjectId, (topicCounts.get(t.subjectId) ?? 0) + 1)
+    }
+
+    const lines = subjectRows
+      .map(s => ({ name: s.name, count: topicCounts.get(s.id) ?? 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(s => `- ${s.name} (${s.count} topics)`)
+
+    return `[SUBJECTS]\n${lines.join('\n')}`
   } catch {
     return undefined
   }
