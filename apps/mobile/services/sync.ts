@@ -2,6 +2,7 @@ import { eq, asc } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { markSyncStart, markSyncDone } from './syncStatus'
+import { isSchoolFocusSlug } from '../utils/focusSlug'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -59,7 +60,10 @@ export async function syncPrimaryListing(db: DrizzleClient): Promise<void> {
     .from(focusListings)
     .orderBy(asc(focusListings.priority))
     .limit(1)
-  const slug = rows[0]?.listingSlug ?? ''
+  const raw = rows[0]?.listingSlug ?? ''
+  // selectedListingSlug is consumed app-wide as a CONTENT slug — map a
+  // school-level focus ("school:<id>") to its general-practice content slug.
+  const slug = raw && isSchoolFocusSlug(raw) ? 'general-cet' : raw
   await db.update(userSettings)
     .set({ selectedListingSlug: slug })
     .where(eq(userSettings.id, 1))
@@ -235,6 +239,15 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     let slugs = focusRows.map(r => r.listingSlug)
     if (slugs.length === 0 && settings.selectedListingSlug) slugs = [settings.selectedListingSlug]
+
+    // School-level focus entries ("school:<id>") have no content of their own —
+    // no flashcard is tagged with a school pseudo-slug, and every consumer of
+    // selectedListingSlug (profile title, recommended topics, chat context)
+    // expects a CONTENT slug. Map them to 'general-cet' (the shared general
+    // entrance practice) for both the per-slug flashcards pull and the cursor
+    // write below; otherwise a school-only-focus user syncs ZERO review cards
+    // and their primary slug breaks downstream screens.
+    const contentSlugs = [...new Set(slugs.map(s => (isSchoolFocusSlug(s) ? 'general-cet' : s)))]
     // NOTE: we intentionally do NOT early-return when slugs.length === 0.
     // Only the per-slug flashcards pull genuinely needs focus slugs; every
     // catalog table (listings, subjects/topics, upcat, career_*, university/
@@ -350,8 +363,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // Per-slug flashcards pull — the ONLY step that genuinely needs focus slugs.
     // Skipped entirely for focus-less sessions; the catalog above still synced.
-    const cardResults = slugs.length === 0 ? [] : await Promise.all(
-      slugs.map(slug =>
+    // Uses contentSlugs (school: mapped to general-cet) so school-focus users
+    // actually receive their review deck.
+    const cardResults = contentSlugs.length === 0 ? [] : await Promise.all(
+      contentSlugs.map(slug =>
         fetchAllPaginated((from, to) => supabase.from('flashcards')
           .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,updated_at')
           .contains('listing_slugs', [slug])
@@ -764,12 +779,14 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
       // Cursor write LAST so an interrupted sync re-pulls next launch.
       // selectedListingSlug is only (re)written when we actually have a slug —
-      // a focus-less session must not clobber it with undefined/empty.
+      // a focus-less session must not clobber it with undefined/empty. Uses
+      // contentSlugs so a school-only focus stores 'general-cet' (a real
+      // content slug) instead of the school pseudo-slug.
       const syncedAt = Date.now()
-      if (slugs.length > 0) {
+      if (contentSlugs.length > 0) {
         tx.insert(userSettings)
-          .values({ id: 1, selectedListingSlug: slugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
-          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: slugs[0]!, syncRev: SYNC_REV } })
+          .values({ id: 1, selectedListingSlug: contentSlugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })
+          .onConflictDoUpdate({ target: userSettings.id, set: { lastSyncedAt: syncedAt, selectedListingSlug: contentSlugs[0]!, syncRev: SYNC_REV } })
           .run()
       } else {
         tx.insert(userSettings)

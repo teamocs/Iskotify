@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { eq, asc, gt, and } from 'drizzle-orm'
+import { eq, asc, gt, and, inArray } from 'drizzle-orm'
 import { useFocusEffect } from 'expo-router'
 import { InteractionManager } from 'react-native'
 import { useDb } from './useDb'
-import { userSettings, listings as listingsTable, topics, focusListings, notes as notesTable } from '../db/schema'
+import { userSettings, listings as listingsTable, topics, focusListings, notes as notesTable, tertiarySchools } from '../db/schema'
+import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
 import { resolveTopicLabel } from '../utils/topicLabel'
 import {
   getTodayAccuracy,
@@ -203,6 +204,21 @@ export function useHomeStats(): HomeStats {
           ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
           : null
 
+        // School-level focus entries ("school:<id>") have no listings row, so the
+        // leftJoin leaves title/type null — resolve the school names directly so
+        // Home never renders a raw "school:<uuid>" card.
+        const focusSchoolIds = focusedRows
+          .filter(r => isSchoolFocusSlug(r.slug))
+          .map(r => schoolIdFromFocusSlug(r.slug))
+        const schoolNameById = new Map<string, string>()
+        if (focusSchoolIds.length > 0) {
+          const schoolRows = await db
+            .select({ id: tertiarySchools.id, name: tertiarySchools.name })
+            .from(tertiarySchools)
+            .where(inArray(tertiarySchools.id, focusSchoolIds))
+          for (const s of schoolRows) schoolNameById.set(s.id, s.name)
+        }
+
         const todayAccuracy = todayAccRow.total === 0
           ? null
           : Math.round((todayAccRow.correct / todayAccRow.total) * 100)
@@ -249,8 +265,10 @@ export function useHomeStats(): HomeStats {
           focusedListings: focusedRows.map(r => ({
             slug: r.slug,
             priority: r.priority,
-            title: r.title ?? r.slug,
-            type: r.type ?? 'exam',
+            title: r.title
+              ?? (isSchoolFocusSlug(r.slug) ? schoolNameById.get(schoolIdFromFocusSlug(r.slug)) : undefined)
+              ?? r.slug,
+            type: r.type ?? (isSchoolFocusSlug(r.slug) ? 'school' : 'exam'),
             examDate: r.examDate ?? null,
             deadline: r.deadline ?? null,
           })),

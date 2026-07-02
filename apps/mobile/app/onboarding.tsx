@@ -28,6 +28,7 @@ import {
   recommendCourses, allCourseOptions,
   type ExamOption, type CourseOption, type TaxonomyRow, type CareerCourseRow,
 } from '../utils/targetExams'
+import { schoolFocusSlug, isSchoolFocusSlug } from '../utils/focusSlug'
 import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
 import { canonicalizeRegion } from '../utils/region'
 
@@ -353,13 +354,18 @@ export default function OnboardingScreen() {
     setSaving(true)
     // Pure computations up front (can't throw) so the persist+navigation below is simple.
     const now = Date.now()
+    // Exams that map to a content-backed listing keep their slug; any other
+    // picked school becomes a school-level focus ("school:<id>") so the choice
+    // is never silently dropped — its practice resolves to general-cet.
     const examSlugs = Array.from(new Set(
-      selectedExams.map(e => examAcronymToListingSlug(e.examAcronym)).filter((s): s is string => !!s),
+      selectedExams.map(e => examAcronymToListingSlug(e.examAcronym) ?? schoolFocusSlug(e.schoolId)),
     ))
-    // Focus = chosen scholarships first, then any selected exam that maps to a
-    // content slug (only UPCAT has authored cards today). De-duplicated.
+    // Focus = chosen scholarships first, then the selected exams. De-duplicated.
     const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
-    const primarySlug = focusSlugs[0] ?? ''
+    // selectedListingSlug is consumed app-wide as a CONTENT slug — never store
+    // a school: pseudo-slug; school-only selections fall back to general-cet.
+    const primarySlug = focusSlugs.find(s => !isSchoolFocusSlug(s))
+      ?? (focusSlugs.length > 0 ? 'general-cet' : '')
     const targetExamsJson = JSON.stringify(
       selectedExams.map(e => ({ schoolId: e.schoolId, schoolName: e.schoolName, examAcronym: e.examAcronym })),
     )

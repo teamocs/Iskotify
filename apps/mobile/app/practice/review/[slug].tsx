@@ -11,6 +11,7 @@ import { SubjectAccordion } from '../../../components/SubjectAccordion'
 import { ListCard } from '../../../components/ui/ListCard'
 import { Badge } from '../../../components/ui/Badge'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing } from '../../../theme/tokens'
 
@@ -126,7 +127,10 @@ export default function PracticeReviewScreen() {
       </View>
 
       {examTopicRows.length > 0 ? (
-        <>
+        // ScreenScroll: the accordion can exceed a screenful once subjects are
+        // expanded — without a scroll container the overflow was unreachable.
+        // Also gives this stack screen the web max-width for free.
+        <ScreenScroll tabBarInset={false} padded={false}>
           <Text style={s.subHint} maxFontSizeMultiplier={1.4}>Pick a subject, then a topic to review.</Text>
           <View style={s.body}>
             <SubjectAccordion
@@ -140,7 +144,7 @@ export default function PracticeReviewScreen() {
               }}
             />
           </View>
-        </>
+        </ScreenScroll>
       ) : (
         <View style={s.emptyWrap}>
           <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>No review topics yet</Text>

@@ -16,6 +16,7 @@ import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { usePracticeData } from '../../hooks/usePracticeData'
 import { readinessTone } from '../../utils/readinessTone'
+import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import type { ReadinessTone } from '../../utils/readinessTone'
 import { subjectsToImprove } from '../../utils/subjectsToImprove'
 import { subjectColor } from '../../utils/subjectColors'
@@ -651,7 +652,13 @@ export default function HomeScreen() {
                   <Pressable
                     key={listing.slug}
                     style={({ pressed }) => [s.focusCard, pressed && s.focusCardPressed]}
-                    onPress={() => router.push(`/listings/${listing.slug}`)}
+                    // School-level focus has no /listings page — send it to the
+                    // practice chooser (which resolves school: → general practice).
+                    onPress={() => router.push(
+                      isSchoolFocusSlug(listing.slug)
+                        ? `/practice/start/${listing.slug}`
+                        : `/listings/${listing.slug}`,
+                    )}
                     accessibilityRole="button"
                     accessibilityLabel={listing.title}
                   >
