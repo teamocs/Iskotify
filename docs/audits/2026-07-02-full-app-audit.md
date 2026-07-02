@@ -71,6 +71,22 @@ Service-role key isolation; PostgREST injection surface (sanitized `.or()`, allo
 
 ---
 
+## 2b. Backlog shipped later same day (session 2)
+
+Commits `68b3b54`..`c168ea7` + new features:
+
+- ✅ **Rate limits** on public `early-access` POST (5/hr per IP) and `places/school-search` (30/min per IP, cache-miss only) — Upstash limiter, fail-open (`c168ea7`).
+- ✅ **RLS verified** via `get_advisors` — `user_app_data` already `auth.uid()=user_id` FOR ALL, `schools` INSERT gated to `source in ('manual','places')`. New `listing_date_contributions` table added with insert-own/select-own RLS (advisors clean).
+- ✅ **Sync error surfacing** — `syncStatus.lastError` + `SyncErrorBanner` retry banner in both tab layouts (`7d67a61`).
+- ✅ **Web password reset** — `/auth/reset-password` + recovery detection in callback (`0cf8736`).
+- ✅ **Sync batching** — ~5,300 per-row upserts → ~125 chunked statements (~40×), Tx-split yields (`7d67a61`).
+- ✅ **Desktop max-width** for 13 stack screens + Home/Updates web refresh buttons (`8194043`).
+- ✅ **NEW: Kuya Baw overhaul** — complete, conversational, non-truncated answers on local + Gemini (`68b3b54`).
+- ✅ **NEW: crowd-sourced date corrections** — user-submitted exam/scholarship dates + admin moderation (`ce14515`).
+- ✅ **NEW: course-chip split** — comma/semicolon-joined courses render as separate chips (`a66287a`).
+
+Still open from §2: account deletion (P0 Play blocker), exam-blueprints atomic replace RPC + deletion tombstones, CSV formula-injection neutralization, theme-token color sweep, dead-font subpath imports, `upcat_questions(skill_category,status)` index, SchoolsDirectory/Lists query caching, small a11y sweep.
+
 ## 3. Recommended fix order (backlog)
 
 1. **Account deletion** (Play-Store blocker — before any store submission)
