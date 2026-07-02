@@ -42,6 +42,7 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
       { href: '/admin/reports', icon: '🚩', label: 'Reported Questions' },
       { href: '/admin/app-reports', icon: '🐞', label: 'Bug Reports' },
       { href: '/admin/feedback', icon: '💬', label: 'Feedback' },
+      { href: '/admin/date-contributions', icon: '🗓️', label: 'Date Corrections' },
     ],
   },
   {

@@ -12,6 +12,7 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { listings as listingsTable, resultWatches } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
+import { SuggestDateCorrectionModal } from '../../components/SuggestDateCorrectionModal'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -125,6 +126,7 @@ export default function ListingDetailScreen() {
   const [matchMoreExpanded, setMatchMoreExpanded] = useState(false)
   const [watchingResults, setWatchingResults] = useState(false)
   const [hasBlueprint, setHasBlueprint] = useState(false)
+  const [showDateCorrection, setShowDateCorrection] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
@@ -164,6 +166,8 @@ export default function ListingDetailScreen() {
     dateCard: { backgroundColor: t.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: t.border },
     dateLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
     dateVal: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    suggestCorrectBtn: { alignSelf: 'flex-start', marginTop: spacing.sm, paddingVertical: spacing.xs, minHeight: 36, justifyContent: 'center' },
+    suggestCorrectTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
     bodyText: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
     grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: radius.md, padding: spacing.md },
     grantLabel: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
@@ -544,6 +548,15 @@ export default function ListingDetailScreen() {
                 <Text style={s.bodyText}>Dates to be announced.</Text>
               ) : null}
             </View>
+            <Pressable
+              onPress={() => setShowDateCorrection(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Suggest a correction to these dates"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={({ pressed }) => [s.suggestCorrectBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={s.suggestCorrectTxt} maxFontSizeMultiplier={1.4}>✎ Suggest a correction</Text>
+            </Pressable>
           </Card>
         </View>
 
@@ -767,6 +780,12 @@ export default function ListingDetailScreen() {
         ) : null}
 
       </ScreenScroll>
+
+      <SuggestDateCorrectionModal
+        visible={showDateCorrection}
+        onClose={() => setShowDateCorrection(false)}
+        listingSlug={slug}
+      />
     </SafeAreaView>
   )
 }
