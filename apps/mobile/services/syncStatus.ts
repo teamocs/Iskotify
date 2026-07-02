@@ -12,15 +12,18 @@
 export interface SyncStatus {
   isSyncing: boolean
   firstSyncDone: boolean
+  /** Message from the most recent failed sync, or null. Cleared by markSyncStart(). */
+  lastError: string | null
 }
 
 // ── Module-private state ──────────────────────────────────────────────────────
 
-const INITIAL: SyncStatus = { isSyncing: false, firstSyncDone: false }
+const INITIAL: SyncStatus = { isSyncing: false, firstSyncDone: false, lastError: null }
 
 // Mutable current values — mutated in-place only via setters below.
 let _isSyncing = false
 let _firstSyncDone = false
+let _lastError: string | null = null
 
 // The cached snapshot object. Replaced (new object) only when a field changes.
 let _snapshot: SyncStatus = { ...INITIAL }
@@ -41,10 +44,14 @@ function _notify(): void {
  * cached snapshot. Returns true if a new snapshot was created (state changed).
  */
 function _sync(): boolean {
-  if (_snapshot.isSyncing === _isSyncing && _snapshot.firstSyncDone === _firstSyncDone) {
+  if (
+    _snapshot.isSyncing === _isSyncing &&
+    _snapshot.firstSyncDone === _firstSyncDone &&
+    _snapshot.lastError === _lastError
+  ) {
     return false
   }
-  _snapshot = { isSyncing: _isSyncing, firstSyncDone: _firstSyncDone }
+  _snapshot = { isSyncing: _isSyncing, firstSyncDone: _firstSyncDone, lastError: _lastError }
   return true
 }
 
@@ -71,11 +78,13 @@ export function subscribeSyncStatus(cb: () => void): () => void {
 }
 
 /**
- * Signal that a sync has started.
- * No-op (and no notification) if isSyncing is already true.
+ * Signal that a sync has started. Also clears lastError — a new attempt
+ * supersedes any previous failure.
+ * No-op (and no notification) if isSyncing is already true and no error was pending.
  */
 export function markSyncStart(): void {
   _isSyncing = true
+  _lastError = null
   if (_sync()) {
     _notify()
   }
@@ -107,13 +116,27 @@ export function markFirstSyncDone(): void {
 }
 
 /**
+ * Signal that a sync attempt failed. Sets lastError and notifies listeners.
+ * Does NOT touch isSyncing — sync.ts's finally block (markSyncDone) runs after
+ * the catch, and markSyncDone must preserve the error so UI layers can show it.
+ * No-op (and no notification) if the same message is already set.
+ */
+export function markSyncError(message: string): void {
+  _lastError = message
+  if (_sync()) {
+    _notify()
+  }
+}
+
+/**
  * Reset to initial state. Intended for tests only.
  * Always creates a new snapshot object so identity comparisons in tests work.
  */
 export function resetSyncStatus(): void {
   _isSyncing = false
   _firstSyncDone = false
+  _lastError = null
   // Force a new object regardless of current snapshot identity.
-  _snapshot = { isSyncing: false, firstSyncDone: false }
+  _snapshot = { isSyncing: false, firstSyncDone: false, lastError: null }
   _listeners.clear()
 }

@@ -103,7 +103,7 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('career_destinations')
     expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
     // …and the catalog write transactions execute…
-    expect(db.transaction).toHaveBeenCalledTimes(6)
+    expect(db.transaction).toHaveBeenCalledTimes(7)
     // …but the per-slug flashcards pull is skipped (no focus slug to query).
     const flashcardCalls = supabase.from.mock.calls.filter((c: string[]) => c[0] === 'flashcards')
     expect(flashcardCalls).toHaveLength(0)
@@ -150,9 +150,10 @@ describe('syncOnLaunch', () => {
   it('calls db.transaction when slug is set via fallback', async () => {
     const db = makeDb({ id: 1, selectedListingSlug: 'upcat', lastSyncedAt: 1000, syncRev: 1 }, [])
     await syncOnLaunch(db as any)
-    // 6 sequential transactions: listings, subjects+topics+flashcards, upcat,
-    // career, university, blueprints+cursor
-    expect(db.transaction).toHaveBeenCalledTimes(6)
+    // 7 sequential transactions: listings, subjects+topics+flashcards, upcat,
+    // career, university (schools+profiles), courses (rankings+quality+bar+
+    // taxonomy), blueprints+cursor
+    expect(db.transaction).toHaveBeenCalledTimes(7)
   })
 
   it('does not throw when supabase fails', async () => {
@@ -173,9 +174,10 @@ describe('syncOnLaunch', () => {
     // flashcards should be fetched twice (once per slug)
     const flashcardCalls = supabase.from.mock.calls.filter((c: string[]) => c[0] === 'flashcards')
     expect(flashcardCalls).toHaveLength(2)
-    // 6 sequential transactions: listings, subjects+topics+flashcards, upcat,
-    // career, university, blueprints+cursor
-    expect(db.transaction).toHaveBeenCalledTimes(6)
+    // 7 sequential transactions: listings, subjects+topics+flashcards, upcat,
+    // career, university (schools+profiles), courses (rankings+quality+bar+
+    // taxonomy), blueprints+cursor
+    expect(db.transaction).toHaveBeenCalledTimes(7)
   })
 
   it('fires pushPendingReports after the main sync (queued question-report retry)', async () => {

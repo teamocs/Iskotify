@@ -11,6 +11,7 @@ import {
   markSyncStart,
   markSyncDone,
   markFirstSyncDone,
+  markSyncError,
   resetSyncStatus,
 } from '../syncStatus'
 
@@ -21,10 +22,11 @@ beforeEach(() => {
 // ── 1. Initial state ──────────────────────────────────────────────────────────
 
 describe('getSyncStatus — initial state', () => {
-  it('returns isSyncing=false and firstSyncDone=false on a fresh reset', () => {
+  it('returns isSyncing=false, firstSyncDone=false and lastError=null on a fresh reset', () => {
     const status = getSyncStatus()
     expect(status.isSyncing).toBe(false)
     expect(status.firstSyncDone).toBe(false)
+    expect(status.lastError).toBeNull()
   })
 })
 
@@ -111,6 +113,89 @@ describe('markFirstSyncDone', () => {
   })
 })
 
+// ── 4b. markSyncError / lastError ─────────────────────────────────────────────
+
+describe('markSyncError', () => {
+  it('sets lastError to the given message', () => {
+    markSyncError('network down')
+    expect(getSyncStatus().lastError).toBe('network down')
+  })
+
+  it('does not touch isSyncing or firstSyncDone', () => {
+    markSyncStart()
+    markSyncError('boom')
+    const status = getSyncStatus()
+    expect(status.isSyncing).toBe(true)
+    expect(status.firstSyncDone).toBe(false)
+    expect(status.lastError).toBe('boom')
+  })
+
+  it('produces a new snapshot object and notifies listeners', () => {
+    const before = getSyncStatus()
+    const cb = jest.fn()
+    const unsub = subscribeSyncStatus(cb)
+
+    markSyncError('boom')
+    expect(getSyncStatus()).not.toBe(before)
+    expect(cb).toHaveBeenCalledTimes(1)
+    unsub()
+  })
+
+  it('is a no-op (same object, no notification) when the same message is already set', () => {
+    markSyncError('boom')
+    const snapshot = getSyncStatus()
+    const cb = jest.fn()
+    const unsub = subscribeSyncStatus(cb)
+
+    markSyncError('boom') // same message — must be no-op
+    expect(getSyncStatus()).toBe(snapshot)
+    expect(cb).not.toHaveBeenCalled()
+    unsub()
+  })
+
+  it('replaces a previous error with a new message (new snapshot)', () => {
+    markSyncError('first')
+    const afterFirst = getSyncStatus()
+    markSyncError('second')
+    const afterSecond = getSyncStatus()
+    expect(afterSecond).not.toBe(afterFirst)
+    expect(afterSecond.lastError).toBe('second')
+  })
+
+  it('survives markSyncDone (finally runs after catch — error must persist)', () => {
+    markSyncStart()
+    markSyncError('boom')
+    markSyncDone()
+    const status = getSyncStatus()
+    expect(status.lastError).toBe('boom')
+    expect(status.isSyncing).toBe(false)
+  })
+})
+
+describe('markSyncStart — clears lastError', () => {
+  it('resets lastError to null when a new sync starts', () => {
+    markSyncError('boom')
+    markSyncStart()
+    expect(getSyncStatus().lastError).toBeNull()
+  })
+
+  it('notifies (new snapshot) when already syncing but an error is pending', () => {
+    markSyncStart()
+    markSyncError('boom')
+    const before = getSyncStatus()
+    const cb = jest.fn()
+    const unsub = subscribeSyncStatus(cb)
+
+    markSyncStart() // isSyncing already true, but lastError must be cleared
+    const after = getSyncStatus()
+    expect(after).not.toBe(before)
+    expect(after.lastError).toBeNull()
+    expect(after.isSyncing).toBe(true)
+    expect(cb).toHaveBeenCalledTimes(1)
+    unsub()
+  })
+})
+
 // ── 5. subscribe / unsubscribe ────────────────────────────────────────────────
 
 describe('subscribeSyncStatus', () => {
@@ -173,11 +258,13 @@ describe('subscribeSyncStatus', () => {
 describe('resetSyncStatus', () => {
   it('restores initial state after changes', () => {
     markSyncStart()
+    markSyncError('boom')
     markSyncDone()
     resetSyncStatus()
     const status = getSyncStatus()
     expect(status.isSyncing).toBe(false)
     expect(status.firstSyncDone).toBe(false)
+    expect(status.lastError).toBeNull()
   })
 
   it('produces a fresh snapshot object after reset', () => {

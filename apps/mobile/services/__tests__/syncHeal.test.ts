@@ -25,6 +25,10 @@ jest.mock('../supabase', () => ({
 }))
 
 jest.mock('drizzle-orm', () => ({
+  // Spread real implementations so syncBatch's getTableColumns/sql (and any
+  // other real drizzle helpers reached through sync.ts) keep working — only
+  // eq/asc are stubbed for the mocked settings/focus select chains.
+  ...jest.requireActual('drizzle-orm'),
   eq: jest.fn((col, val) => ({ col, val, __isEq: true })),
   asc: jest.fn(col => col),
 }))

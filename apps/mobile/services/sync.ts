@@ -1,7 +1,7 @@
 import { eq, asc } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
-import { markSyncStart, markSyncDone } from './syncStatus'
+import { markSyncStart, markSyncDone, markSyncError } from './syncStatus'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ import {
 } from '../db/schema'
 import { supabase } from './supabase'
 import { pushPendingReports } from './questionReports'
+import { batchUpsert } from './syncBatch'
 
 // Supabase caps a single SELECT at 1000 rows. For tables that exceed that
 // (flashcards, upcat_questions, course_school_rankings) we page with .range()
@@ -385,10 +386,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // ── Tx 1: listings + admissions_updates ──────────────────────────────────
     // (Cursor write is intentionally LAST so an interrupted sync re-pulls next launch)
     await db.transaction((tx) => {
-      for (const row of (listingsRes.data ?? [])) {
+      batchUpsert(tx, listings, (listingsRes.data ?? []).map((row) => {
         const examDate = row.exam_date ? new Date(row.exam_date).getTime() : null
         const deadline = row.deadline ? new Date(row.deadline).getTime() : null
-        const vals = {
+        return {
           id: row.id, slug: row.slug, title: row.title, type: row.type, status: row.status,
           examDate, region: row.region ?? '', description: row.description ?? '',
           requirements: JSON.stringify(row.requirements ?? []), coverage: row.coverage ?? '',
@@ -408,27 +409,23 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           resultsDate: row.results_date ? new Date(row.results_date).getTime() : null,
           targetCourses: JSON.stringify(row.target_courses ?? []),
         }
-        tx.insert(listings).values(vals).onConflictDoUpdate({ target: listings.id, set: vals }).run()
-      }
+      }), listings.id)
 
-      for (const row of (admissionsUpdatesRes.data ?? [])) {
-        const vals = {
-          id: row.id,
-          reportDate: row.report_date ?? null,
-          severity: row.severity,
-          schoolSlug: row.school_slug ?? null,
-          schoolName: row.school_name ?? null,
-          title: row.title,
-          body: row.body,
-          actionRequired: row.action_required ?? null,
-          eventDate: row.event_date ?? null,
-          eventType: row.event_type ?? null,
-          sources: JSON.stringify(row.sources ?? []),
-          verified: !!row.verified,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(admissionsUpdates).values(vals).onConflictDoUpdate({ target: admissionsUpdates.id, set: vals }).run()
-      }
+      batchUpsert(tx, admissionsUpdates, (admissionsUpdatesRes.data ?? []).map((row) => ({
+        id: row.id,
+        reportDate: row.report_date ?? null,
+        severity: row.severity,
+        schoolSlug: row.school_slug ?? null,
+        schoolName: row.school_name ?? null,
+        title: row.title,
+        body: row.body,
+        actionRequired: row.action_required ?? null,
+        eventDate: row.event_date ?? null,
+        eventType: row.event_type ?? null,
+        sources: JSON.stringify(row.sources ?? []),
+        verified: !!row.verified,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), admissionsUpdates.id)
     })
 
     // Yield JS thread between transactions so the UI stays responsive
@@ -436,18 +433,20 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // ── Tx 2: subjects + topics + flashcards ──────────────────────────────────
     await db.transaction((tx) => {
-      for (const row of (subjectsRes.data ?? [])) {
-        tx.insert(subjects).values({ id: row.id, name: row.name })
-          .onConflictDoUpdate({ target: subjects.id, set: { name: row.name } }).run()
-      }
+      batchUpsert(tx, subjects, (subjectsRes.data ?? []).map((row) => (
+        { id: row.id, name: row.name }
+      )), subjects.id)
 
-      for (const row of (topicsRes.data ?? [])) {
-        tx.insert(topics)
-          .values({ id: row.id, name: row.name, subjectId: row.subject_id, status: row.status })
-          .onConflictDoUpdate({ target: topics.id, set: { name: row.name, subjectId: row.subject_id, status: row.status } })
-          .run()
-      }
+      batchUpsert(tx, topics, (topicsRes.data ?? []).map((row) => (
+        { id: row.id, name: row.name, subjectId: row.subject_id, status: row.status }
+      )), topics.id)
 
+      // Rows in one multi-row .values() batch must share an identical column
+      // set (batchUpsert derives the on-conflict update set from the row keys),
+      // so cards are GROUPED by whether Supabase has ai_* fields and upserted
+      // as two batches. This preserves the per-row semantics exactly.
+      const cardsWithoutAi: (typeof flashcards.$inferInsert)[] = []
+      const cardsWithAi: (typeof flashcards.$inferInsert)[] = []
       for (const row of allCards) {
         const remoteUpdatedAt = new Date(row.updated_at).getTime()
         const baseVals = {
@@ -465,257 +464,221 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         // local Gemma work when Supabase hasn't been enhanced yet (fixes the
         // sync-wipe bug where every re-sync used to null these out).
         const r = row as any
-        const aiVals = r.ai_enhanced_at
-          ? {
-              aiOptions: r.ai_options ? JSON.stringify(r.ai_options) : null,
-              aiCorrectIndex: r.ai_correct_index ?? null,
-              aiExplanation: r.ai_explanation ?? null,
-              aiEnhancedAt: new Date(r.ai_enhanced_at).getTime(),
-            }
-          : {}
-
-        const vals = { ...baseVals, ...aiVals }
-        tx.insert(flashcards).values(vals).onConflictDoUpdate({
-          target: flashcards.id,
-          set: vals,  // ai_* only included when Supabase had them
-        }).run()
+        if (r.ai_enhanced_at) {
+          cardsWithAi.push({
+            ...baseVals,
+            aiOptions: r.ai_options ? JSON.stringify(r.ai_options) : null,
+            aiCorrectIndex: r.ai_correct_index ?? null,
+            aiExplanation: r.ai_explanation ?? null,
+            aiEnhancedAt: new Date(r.ai_enhanced_at).getTime(),
+          })
+        } else {
+          cardsWithoutAi.push(baseVals)
+        }
       }
+      batchUpsert(tx, flashcards, cardsWithoutAi, flashcards.id)  // ai_* untouched on conflict
+      batchUpsert(tx, flashcards, cardsWithAi, flashcards.id)     // ai_* overwritten from Supabase
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
 
     // ── Tx 3: upcat passages / questions / facts / cutoffs ────────────────────
     await db.transaction((tx) => {
-      for (const row of (upcatPassagesRes.data ?? [])) {
-        const vals = { setId: row.set_id, subtest: row.subtest, passageText: row.passage_text }
-        tx.insert(upcatPassages).values(vals).onConflictDoUpdate({ target: upcatPassages.setId, set: vals }).run()
-      }
+      batchUpsert(tx, upcatPassages, (upcatPassagesRes.data ?? []).map((row) => (
+        { setId: row.set_id, subtest: row.subtest, passageText: row.passage_text }
+      )), upcatPassages.setId)
 
-      for (const row of upcatQuestionsRows) {
-        const vals = {
-          questionId: row.question_id, subtest: row.subtest,
-          mainSubject: row.main_subject ?? null, topic: row.topic ?? null, subtopic: row.subtopic ?? null,
-          questionFormat: row.question_format ?? null, cognitiveLevel: row.cognitive_level ?? null,
-          difficulty: row.difficulty ?? null, curriculumAlignment: row.curriculum_alignment ?? null,
-          questionText: row.question_text,
-          options: JSON.stringify(row.options ?? []),
-          correctIndex: row.correct_index, explanation: row.explanation,
-          setId: row.set_id ?? null, setPosition: row.set_position ?? null,
-          hasVisual: !!row.has_visual, status: row.status,
-          skillCategory: row.skill_category ?? null,
-          remoteUpdatedAt: new Date(row.updated_at).getTime(),
-        }
-        tx.insert(upcatQuestions).values(vals).onConflictDoUpdate({ target: upcatQuestions.questionId, set: vals }).run()
-      }
+      batchUpsert(tx, upcatQuestions, upcatQuestionsRows.map((row) => ({
+        questionId: row.question_id, subtest: row.subtest,
+        mainSubject: row.main_subject ?? null, topic: row.topic ?? null, subtopic: row.subtopic ?? null,
+        questionFormat: row.question_format ?? null, cognitiveLevel: row.cognitive_level ?? null,
+        difficulty: row.difficulty ?? null, curriculumAlignment: row.curriculum_alignment ?? null,
+        questionText: row.question_text,
+        options: JSON.stringify(row.options ?? []),
+        correctIndex: row.correct_index, explanation: row.explanation,
+        setId: row.set_id ?? null, setPosition: row.set_position ?? null,
+        hasVisual: !!row.has_visual, status: row.status,
+        skillCategory: row.skill_category ?? null,
+        remoteUpdatedAt: new Date(row.updated_at).getTime(),
+      })), upcatQuestions.questionId)
 
-      for (const row of (upcatFactsRes.data ?? [])) {
-        const vals = {
-          id: row.id, topic: row.topic, question: row.question, answer: row.answer,
-          source: row.source ?? null, validYear: row.valid_year ?? null,
-          remoteUpdatedAt: new Date(row.updated_at).getTime(),
-        }
-        tx.insert(upcatFacts).values(vals).onConflictDoUpdate({ target: upcatFacts.id, set: vals }).run()
-      }
+      batchUpsert(tx, upcatFacts, (upcatFactsRes.data ?? []).map((row) => ({
+        id: row.id, topic: row.topic, question: row.question, answer: row.answer,
+        source: row.source ?? null, validYear: row.valid_year ?? null,
+        remoteUpdatedAt: new Date(row.updated_at).getTime(),
+      })), upcatFacts.id)
 
-      for (const row of (upcatCutoffsRes.data ?? [])) {
-        const vals = {
-          id: row.id, campus: row.campus, program: row.program ?? null,
-          cutoff: row.cutoff, year: row.year ?? null, isEstimate: !!row.is_estimate,
-        }
-        tx.insert(upcatCutoffs).values(vals).onConflictDoUpdate({ target: upcatCutoffs.id, set: vals }).run()
-      }
+      batchUpsert(tx, upcatCutoffs, (upcatCutoffsRes.data ?? []).map((row) => ({
+        id: row.id, campus: row.campus, program: row.program ?? null,
+        cutoff: row.cutoff, year: row.year ?? null, isEstimate: !!row.is_estimate,
+      })), upcatCutoffs.id)
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
 
     // ── Tx 4: career tables ───────────────────────────────────────────────────
     await db.transaction((tx) => {
-      for (const row of (careerCoursesRes.data ?? [])) {
-        const vals = {
-          courseId: row.course_id, name: row.name ?? null, cluster: row.cluster ?? null,
-          careerTag: row.career_tag ?? null, demand: row.demand ?? null,
-          boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
-          durationYears: row.duration_years ?? null,
-          topCountries: JSON.stringify(row.top_countries ?? []),
-          summary: row.summary ?? null, studentTip: row.student_tip ?? null,
-          aiNote: row.ai_note ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(careerCourses).values(vals).onConflictDoUpdate({ target: careerCourses.courseId, set: vals }).run()
-      }
+      batchUpsert(tx, careerCourses, (careerCoursesRes.data ?? []).map((row) => ({
+        courseId: row.course_id, name: row.name ?? null, cluster: row.cluster ?? null,
+        careerTag: row.career_tag ?? null, demand: row.demand ?? null,
+        boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
+        durationYears: row.duration_years ?? null,
+        topCountries: JSON.stringify(row.top_countries ?? []),
+        summary: row.summary ?? null, studentTip: row.student_tip ?? null,
+        aiNote: row.ai_note ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), careerCourses.courseId)
 
-      for (const row of (careerCountriesRes.data ?? [])) {
-        const vals = {
-          code: row.code, name: row.name ?? null, region: row.region ?? null,
-          immigrationSystem: row.immigration_system ?? null, whyDemand: row.why_demand ?? null,
-          languageRequired: row.language_required ?? null, prPathway: row.pr_pathway ?? null,
-          notes: row.notes ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(careerCountries).values(vals).onConflictDoUpdate({ target: careerCountries.code, set: vals }).run()
-      }
+      batchUpsert(tx, careerCountries, (careerCountriesRes.data ?? []).map((row) => ({
+        code: row.code, name: row.name ?? null, region: row.region ?? null,
+        immigrationSystem: row.immigration_system ?? null, whyDemand: row.why_demand ?? null,
+        languageRequired: row.language_required ?? null, prPathway: row.pr_pathway ?? null,
+        notes: row.notes ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), careerCountries.code)
 
-      for (const row of (careerProgramsRes.data ?? [])) {
-        const vals = {
-          id: row.id, name: row.name ?? null, countryRegion: row.country_region ?? null,
-          coursesCovered: JSON.stringify(row.courses_covered ?? []),
-          managingBody: row.managing_body ?? null, slots: row.slots ?? null,
-          requirements: row.requirements ?? null, immigrationOutcome: row.immigration_outcome ?? null,
-          website: row.website ?? null, notes: row.notes ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(careerPrograms).values(vals).onConflictDoUpdate({ target: careerPrograms.id, set: vals }).run()
-      }
+      batchUpsert(tx, careerPrograms, (careerProgramsRes.data ?? []).map((row) => ({
+        id: row.id, name: row.name ?? null, countryRegion: row.country_region ?? null,
+        coursesCovered: JSON.stringify(row.courses_covered ?? []),
+        managingBody: row.managing_body ?? null, slots: row.slots ?? null,
+        requirements: row.requirements ?? null, immigrationOutcome: row.immigration_outcome ?? null,
+        website: row.website ?? null, notes: row.notes ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), careerPrograms.id)
 
-      for (const row of (aiCareerImpactRes.data ?? [])) {
-        const vals = {
-          courseId: row.course_id, courseName: row.course_name ?? null,
-          cluster: row.cluster ?? null,
-          boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
-          automationRiskLow: row.automation_risk_low ?? null,
-          automationRiskHigh: row.automation_risk_high ?? null,
-          aiSafetyScore: row.ai_safety_score ?? null, aiSafetyLabel: row.ai_safety_label ?? null,
-          colorCode: row.color_code ?? null,
-          whatAiTakesOver: JSON.stringify(row.what_ai_takes_over ?? []),
-          whatStaysHuman: JSON.stringify(row.what_stays_human ?? []),
-          newJobsEmerging: JSON.stringify(row.new_jobs_emerging ?? []),
-          skillsToDevelop: JSON.stringify(row.skills_to_develop ?? []),
-          careerOutlook2030: row.career_outlook_2030 ?? null,
-          keyStat: row.key_stat ?? null, keySource: row.key_source ?? null,
-          keyQuote: row.key_quote ?? null, quoteBy: row.quote_by ?? null,
-          phAdvantage: row.ph_advantage ?? null, phNotes: row.ph_notes ?? null,
-          kuyaBawSummary: row.kuya_baw_summary ?? null, lastUpdated: row.last_updated ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(aiCareerImpact).values(vals).onConflictDoUpdate({ target: aiCareerImpact.courseId, set: vals }).run()
-      }
+      batchUpsert(tx, aiCareerImpact, (aiCareerImpactRes.data ?? []).map((row) => ({
+        courseId: row.course_id, courseName: row.course_name ?? null,
+        cluster: row.cluster ?? null,
+        boardExam: !!row.board_exam, boardExamName: row.board_exam_name ?? null,
+        automationRiskLow: row.automation_risk_low ?? null,
+        automationRiskHigh: row.automation_risk_high ?? null,
+        aiSafetyScore: row.ai_safety_score ?? null, aiSafetyLabel: row.ai_safety_label ?? null,
+        colorCode: row.color_code ?? null,
+        whatAiTakesOver: JSON.stringify(row.what_ai_takes_over ?? []),
+        whatStaysHuman: JSON.stringify(row.what_stays_human ?? []),
+        newJobsEmerging: JSON.stringify(row.new_jobs_emerging ?? []),
+        skillsToDevelop: JSON.stringify(row.skills_to_develop ?? []),
+        careerOutlook2030: row.career_outlook_2030 ?? null,
+        keyStat: row.key_stat ?? null, keySource: row.key_source ?? null,
+        keyQuote: row.key_quote ?? null, quoteBy: row.quote_by ?? null,
+        phAdvantage: row.ph_advantage ?? null, phNotes: row.ph_notes ?? null,
+        kuyaBawSummary: row.kuya_baw_summary ?? null, lastUpdated: row.last_updated ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), aiCareerImpact.courseId)
 
-      for (const row of (careerDestinationsRes.data ?? [])) {
-        const vals = {
-          id: row.id, courseId: row.course_id ?? null, country: row.country ?? null,
-          demandRating: row.demand_rating ?? null,
-          salaryMin: row.salary_min ?? null, salaryMax: row.salary_max ?? null,
-          salaryLocal: row.salary_local ?? null, salaryType: row.salary_type ?? null,
-          visaPathway: row.visa_pathway ?? null, prPathway: row.pr_pathway ?? null,
-          credential: row.credential ?? null, licensingExam: row.licensing_exam ?? null,
-          languageRequired: row.language_required ?? null,
-          timelineMonths: row.timeline_months ?? null,
-          programName: row.program_name ?? null,
-          specializations: JSON.stringify(row.specializations ?? []),
-          notes: row.notes ?? null, saturationWarning: row.saturation_warning ?? null,
-          source: row.source ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(careerDestinations).values(vals).onConflictDoUpdate({ target: careerDestinations.id, set: vals }).run()
-      }
+      batchUpsert(tx, careerDestinations, (careerDestinationsRes.data ?? []).map((row) => ({
+        id: row.id, courseId: row.course_id ?? null, country: row.country ?? null,
+        demandRating: row.demand_rating ?? null,
+        salaryMin: row.salary_min ?? null, salaryMax: row.salary_max ?? null,
+        salaryLocal: row.salary_local ?? null, salaryType: row.salary_type ?? null,
+        visaPathway: row.visa_pathway ?? null, prPathway: row.pr_pathway ?? null,
+        credential: row.credential ?? null, licensingExam: row.licensing_exam ?? null,
+        languageRequired: row.language_required ?? null,
+        timelineMonths: row.timeline_months ?? null,
+        programName: row.program_name ?? null,
+        specializations: JSON.stringify(row.specializations ?? []),
+        notes: row.notes ?? null, saturationWarning: row.saturation_warning ?? null,
+        source: row.source ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), careerDestinations.id)
 
-      for (const row of (careerFactsRes.data ?? [])) {
-        const vals = {
-          id: row.id, courseId: row.course_id ?? null, queryType: row.query_type ?? null,
-          courseName: row.course_name ?? null, quickAnswer: row.quick_answer ?? null,
-          keyCaveat: row.key_caveat ?? null, pointTo: row.point_to ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(careerFacts).values(vals).onConflictDoUpdate({ target: careerFacts.id, set: vals }).run()
-      }
+      batchUpsert(tx, careerFacts, (careerFactsRes.data ?? []).map((row) => ({
+        id: row.id, courseId: row.course_id ?? null, queryType: row.query_type ?? null,
+        courseName: row.course_name ?? null, quickAnswer: row.quick_answer ?? null,
+        keyCaveat: row.key_caveat ?? null, pointTo: row.point_to ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), careerFacts.id)
       // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
 
-    // ── Tx 5: university / course tables ──────────────────────────────────────
+    // ── Tx 5a: university tables (schools + profiles) ─────────────────────────
+    // The university mirror is the biggest write of the sync (~727 schools +
+    // ~727 wide profile rows + >1000 rankings). It's split across two
+    // transactions (5a/5b) with a JS-thread yield between them so the UI stays
+    // responsive — drizzle sqlite transaction callbacks are synchronous, so a
+    // yield INSIDE one transaction isn't possible.
     await db.transaction((tx) => {
-      for (const row of (tertiarySchoolsRes.data ?? [])) {
-        const vals = {
-          id: row.id, name: row.name, acronym: row.acronym ?? null,
-          region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
-          type: row.type ?? null,
-          isSuc: !!row.is_suc, isLuc: !!row.is_luc,
-          depedSchoolId: row.deped_school_id ?? null,
-          rankInProvince: row.rank_in_province ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(tertiarySchools).values(vals).onConflictDoUpdate({ target: tertiarySchools.id, set: vals }).run()
-      }
+      batchUpsert(tx, tertiarySchools, (tertiarySchoolsRes.data ?? []).map((row) => ({
+        id: row.id, name: row.name, acronym: row.acronym ?? null,
+        region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
+        type: row.type ?? null,
+        isSuc: !!row.is_suc, isLuc: !!row.is_luc,
+        depedSchoolId: row.deped_school_id ?? null,
+        rankInProvince: row.rank_in_province ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), tertiarySchools.id)
 
-      for (const row of (universityProfilesRes.data ?? [])) {
-        const vals = {
-          schoolId: row.school_id, dataTier: row.data_tier ?? null,
-          institutionType: row.institution_type ?? null, yearEstablished: row.year_established ?? null,
-          knownForCourses: JSON.stringify(row.known_for_courses ?? []),
-          prcTopCourses: JSON.stringify(row.prc_top_courses ?? []),
-          chedCoeCod: row.ched_coe_cod ?? null, accreditation: row.accreditation ?? null,
-          entranceExamName: row.entrance_exam_name ?? null, entranceExamAcronym: row.entrance_exam_acronym ?? null,
-          testingCenterType: row.testing_center_type ?? null,
-          applicationOpen: row.application_open ?? null, applicationClose: row.application_close ?? null,
-          examMonth: row.exam_month ?? null,
-          estimatedPassingRate: row.estimated_passing_rate ?? null, estimatedSlots: row.estimated_slots ?? null,
-          tuitionFeeRange: row.tuition_fee_range ?? null,
-          freeTuition: row.free_tuition != null ? !!row.free_tuition : null,
-          academicCalendar: row.academic_calendar ?? null,
-          coursesOffered: JSON.stringify(row.courses_offered ?? []),
-          scholarshipsOffered: JSON.stringify(row.scholarships_offered ?? []),
-          websiteUrl: row.website_url ?? null, applicationPortalUrl: row.application_portal_url ?? null,
-          facebookUrl: row.facebook_url ?? null,
-          examDifficulty: row.exam_difficulty ?? null,
-          notablePrograms: JSON.stringify(row.notable_programs ?? []),
-          prcStrongBoards: JSON.stringify(row.prc_strong_boards ?? []),
-          notes: row.notes ?? null, dataConfidence: row.data_confidence ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(universityProfiles).values(vals).onConflictDoUpdate({ target: universityProfiles.schoolId, set: vals }).run()
-      }
+      batchUpsert(tx, universityProfiles, (universityProfilesRes.data ?? []).map((row) => ({
+        schoolId: row.school_id, dataTier: row.data_tier ?? null,
+        institutionType: row.institution_type ?? null, yearEstablished: row.year_established ?? null,
+        knownForCourses: JSON.stringify(row.known_for_courses ?? []),
+        prcTopCourses: JSON.stringify(row.prc_top_courses ?? []),
+        chedCoeCod: row.ched_coe_cod ?? null, accreditation: row.accreditation ?? null,
+        entranceExamName: row.entrance_exam_name ?? null, entranceExamAcronym: row.entrance_exam_acronym ?? null,
+        testingCenterType: row.testing_center_type ?? null,
+        applicationOpen: row.application_open ?? null, applicationClose: row.application_close ?? null,
+        examMonth: row.exam_month ?? null,
+        estimatedPassingRate: row.estimated_passing_rate ?? null, estimatedSlots: row.estimated_slots ?? null,
+        tuitionFeeRange: row.tuition_fee_range ?? null,
+        freeTuition: row.free_tuition != null ? !!row.free_tuition : null,
+        academicCalendar: row.academic_calendar ?? null,
+        coursesOffered: JSON.stringify(row.courses_offered ?? []),
+        scholarshipsOffered: JSON.stringify(row.scholarships_offered ?? []),
+        websiteUrl: row.website_url ?? null, applicationPortalUrl: row.application_portal_url ?? null,
+        facebookUrl: row.facebook_url ?? null,
+        examDifficulty: row.exam_difficulty ?? null,
+        notablePrograms: JSON.stringify(row.notable_programs ?? []),
+        prcStrongBoards: JSON.stringify(row.prc_strong_boards ?? []),
+        notes: row.notes ?? null, dataConfidence: row.data_confidence ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), universityProfiles.schoolId)
+    })
 
-      for (const row of courseSchoolRankingsRows) {
-        const vals = {
-          id: row.id, courseTab: row.course_tab, courseName: row.course_name ?? null,
-          rank: row.rank ?? null, schoolName: row.school_name,
-          region: row.region ?? null, province: row.province ?? null,
-          wilsonScore: row.wilson_score ?? null, rawPassRate: row.raw_pass_rate ?? null,
-          totalExaminees: row.total_examinees ?? null, totalPassers: row.total_passers ?? null,
-          yearsWithData: row.years_with_data ?? null, examPeriods: row.exam_periods ?? null,
-          tertiarySchoolId: row.tertiary_school_id ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(courseSchoolRankings).values(vals).onConflictDoUpdate({ target: courseSchoolRankings.id, set: vals }).run()
-      }
+    // Yield JS thread between the two university transactions (see Tx 5a note)
+    await new Promise<void>(r => setTimeout(r, 0))
 
-      for (const row of (courseSchoolQualityRes.data ?? [])) {
-        const vals = {
-          id: row.id, schoolName: row.school_name,
-          region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
-          courseStandardized: row.course_standardized ?? null, courseGroup: row.course_group ?? null,
-          schoolType: row.school_type ?? null, chedCoeCod: row.ched_coe_cod ?? null,
-          qualityScore: row.quality_score ?? null, qualityTier: row.quality_tier ?? null,
-          accreditations: JSON.stringify(row.accreditations ?? []),
-          hasPrcBoard: row.has_prc_board != null ? !!row.has_prc_board : null,
-          qsSubjectRank: row.qs_subject_rank ?? null, dataConfidence: row.data_confidence ?? null,
-          tertiarySchoolId: row.tertiary_school_id ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(courseSchoolQuality).values(vals).onConflictDoUpdate({ target: courseSchoolQuality.id, set: vals }).run()
-      }
+    // ── Tx 5b: course tables (rankings / quality / bar / taxonomy) ────────────
+    await db.transaction((tx) => {
+      batchUpsert(tx, courseSchoolRankings, courseSchoolRankingsRows.map((row) => ({
+        id: row.id, courseTab: row.course_tab, courseName: row.course_name ?? null,
+        rank: row.rank ?? null, schoolName: row.school_name,
+        region: row.region ?? null, province: row.province ?? null,
+        wilsonScore: row.wilson_score ?? null, rawPassRate: row.raw_pass_rate ?? null,
+        totalExaminees: row.total_examinees ?? null, totalPassers: row.total_passers ?? null,
+        yearsWithData: row.years_with_data ?? null, examPeriods: row.exam_periods ?? null,
+        tertiarySchoolId: row.tertiary_school_id ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), courseSchoolRankings.id)
 
-      for (const row of (barResultsRes.data ?? [])) {
-        const vals = {
-          id: row.id, schoolName: row.school_name,
-          region: row.region ?? null, province: row.province ?? null,
-          year: row.year ?? null,
-          passRate: row.pass_rate ?? null, nationalAvg: row.national_avg ?? null,
-          scRank: row.sc_rank ?? null, notes: row.notes ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(barResults).values(vals).onConflictDoUpdate({ target: barResults.id, set: vals }).run()
-      }
+      batchUpsert(tx, courseSchoolQuality, (courseSchoolQualityRes.data ?? []).map((row) => ({
+        id: row.id, schoolName: row.school_name,
+        region: row.region ?? null, province: row.province ?? null, city: row.city ?? null,
+        courseStandardized: row.course_standardized ?? null, courseGroup: row.course_group ?? null,
+        schoolType: row.school_type ?? null, chedCoeCod: row.ched_coe_cod ?? null,
+        qualityScore: row.quality_score ?? null, qualityTier: row.quality_tier ?? null,
+        accreditations: JSON.stringify(row.accreditations ?? []),
+        hasPrcBoard: row.has_prc_board != null ? !!row.has_prc_board : null,
+        qsSubjectRank: row.qs_subject_rank ?? null, dataConfidence: row.data_confidence ?? null,
+        tertiarySchoolId: row.tertiary_school_id ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), courseSchoolQuality.id)
 
-      for (const row of (courseTaxonomyMapRes.data ?? [])) {
-        const vals = {
-          courseTab: row.course_tab, careerCourseId: row.career_course_id ?? null,
-          label: row.label ?? null, kind: row.kind ?? null,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(courseTaxonomyMap).values(vals).onConflictDoUpdate({ target: courseTaxonomyMap.courseTab, set: vals }).run()
-      }
+      batchUpsert(tx, barResults, (barResultsRes.data ?? []).map((row) => ({
+        id: row.id, schoolName: row.school_name,
+        region: row.region ?? null, province: row.province ?? null,
+        year: row.year ?? null,
+        passRate: row.pass_rate ?? null, nationalAvg: row.national_avg ?? null,
+        scRank: row.sc_rank ?? null, notes: row.notes ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), barResults.id)
+
+      batchUpsert(tx, courseTaxonomyMap, (courseTaxonomyMapRes.data ?? []).map((row) => ({
+        courseTab: row.course_tab, careerCourseId: row.career_course_id ?? null,
+        label: row.label ?? null, kind: row.kind ?? null,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), courseTaxonomyMap.courseTab)
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
@@ -724,58 +687,48 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // Cursor (lastSyncedAt + syncRev) is written LAST so an interrupted sync
     // forces a full re-pull on the next launch.
     await db.transaction((tx) => {
-      for (const row of (skillCatRes.data ?? [])) {
-        const vals = { name: row.name, requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0, remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null }
-        tx.insert(examSkillCategories).values(vals).onConflictDoUpdate({ target: examSkillCategories.name, set: vals }).run()
-      }
-      for (const row of (blueprintsRes.data ?? [])) {
-        const vals = {
-          slug: row.slug, name: row.name, acronym: row.acronym ?? '',
-          totalItems: row.total_items ?? 0, totalTimeMinutes: row.total_time_minutes ?? 0,
-          hasGuessingPenalty: !!row.has_guessing_penalty, guessingPenalty: row.guessing_penalty ?? 0.25,
-          sectionBlocked: !!row.section_blocked, scoringNote: row.scoring_note ?? '', mechanicsNote: row.mechanics_note ?? '',
-          status: row.status ?? 'draft', displayOrder: row.display_order ?? 0,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(examBlueprints).values(vals).onConflictDoUpdate({ target: examBlueprints.slug, set: vals }).run()
-      }
-      for (const row of (sectionsRes.data ?? [])) {
-        const vals = {
-          id: row.id, blueprintSlug: row.blueprint_slug, name: row.name, skillCategory: row.skill_category ?? '',
-          itemCount: row.item_count ?? 0, timeMinutes: row.time_minutes ?? null,
-          requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(examBlueprintSections).values(vals).onConflictDoUpdate({ target: examBlueprintSections.id, set: vals }).run()
-      }
-      for (const row of (courseNotesRes.data ?? [])) {
-        const vals = {
-          id: row.id, blueprintSlug: row.blueprint_slug, courseCluster: row.course_cluster ?? 'all',
-          note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
-          remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(examCourseNotes).values(vals).onConflictDoUpdate({ target: examCourseNotes.id, set: vals }).run()
-      }
+      batchUpsert(tx, examSkillCategories, (skillCatRes.data ?? []).map((row) => (
+        { name: row.name, requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0, remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null }
+      )), examSkillCategories.name)
+
+      batchUpsert(tx, examBlueprints, (blueprintsRes.data ?? []).map((row) => ({
+        slug: row.slug, name: row.name, acronym: row.acronym ?? '',
+        totalItems: row.total_items ?? 0, totalTimeMinutes: row.total_time_minutes ?? 0,
+        hasGuessingPenalty: !!row.has_guessing_penalty, guessingPenalty: row.guessing_penalty ?? 0.25,
+        sectionBlocked: !!row.section_blocked, scoringNote: row.scoring_note ?? '', mechanicsNote: row.mechanics_note ?? '',
+        status: row.status ?? 'draft', displayOrder: row.display_order ?? 0,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), examBlueprints.slug)
+
+      batchUpsert(tx, examBlueprintSections, (sectionsRes.data ?? []).map((row) => ({
+        id: row.id, blueprintSlug: row.blueprint_slug, name: row.name, skillCategory: row.skill_category ?? '',
+        itemCount: row.item_count ?? 0, timeMinutes: row.time_minutes ?? null,
+        requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), examBlueprintSections.id)
+
+      batchUpsert(tx, examCourseNotes, (courseNotesRes.data ?? []).map((row) => ({
+        id: row.id, blueprintSlug: row.blueprint_slug, courseCluster: row.course_cluster ?? 'all',
+        note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
+        remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), examCourseNotes.id)
 
       // ── AI Chat Config (single row, id=1) ───────────────────────────────────
-      for (const row of (aiChatConfigRes.data ?? [])) {
-        const vals = {
-          id: 1,
-          coreRulesOverride:        row.core_rules_override ?? '',
-          scopeBlockOverride:       row.scope_block_override ?? '',
-          groundingRuleOverride:    row.grounding_rule_override ?? '',
-          antiInjectionOverride:    row.anti_injection_override ?? '',
-          progressAddendumOverride: row.progress_addendum_override ?? '',
-          topicAddendumOverride:    row.topic_addendum_override ?? '',
-          mathAddendumOverride:     row.math_addendum_override ?? '',
-          ragTotalTokenBudget:      row.rag_total_token_budget ?? 700,
-          ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
-          // jsonb → store as JSON string on SQLite
-          ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
-          remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
-        }
-        tx.insert(aiChatConfig).values(vals).onConflictDoUpdate({ target: aiChatConfig.id, set: vals }).run()
-      }
+      batchUpsert(tx, aiChatConfig, (aiChatConfigRes.data ?? []).map((row) => ({
+        id: 1,
+        coreRulesOverride:        row.core_rules_override ?? '',
+        scopeBlockOverride:       row.scope_block_override ?? '',
+        groundingRuleOverride:    row.grounding_rule_override ?? '',
+        antiInjectionOverride:    row.anti_injection_override ?? '',
+        progressAddendumOverride: row.progress_addendum_override ?? '',
+        topicAddendumOverride:    row.topic_addendum_override ?? '',
+        mathAddendumOverride:     row.math_addendum_override ?? '',
+        ragTotalTokenBudget:      row.rag_total_token_budget ?? 700,
+        ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
+        // jsonb → store as JSON string on SQLite
+        ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
+        remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
+      })), aiChatConfig.id)
 
       // Cursor write LAST so an interrupted sync re-pulls next launch.
       // selectedListingSlug is only (re)written when we actually have a slug —
@@ -810,6 +763,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     void pushPendingReports(db)
   } catch (err) {
     console.error('[sync] error:', err)
+    // Surface the failure to the UI (SyncErrorBanner) so the user sees a retry
+    // affordance instead of silent stale/empty screens.
+    markSyncError(err instanceof Error ? err.message : 'Sync failed')
   } finally {
     markSyncDone()
   }
