@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@iskotify/utils'
+import { requireAdmin } from '@/lib/admin/requireAdmin'
 
 export const runtime = 'nodejs'
 
@@ -7,8 +7,14 @@ export const runtime = 'nodejs'
 // Body: { url: string }
 // Stores (or clears) the hosted APK download URL in app_config so "Send APK"
 // emails use it. An empty string clears the link. Non-empty must be https://.
-// All Supabase access is server-side only — no secrets reach the client.
+// ADMIN-ONLY: middleware only checks a session exists, so this route must
+// enforce the role itself — this URL is emailed to every registrant as "the
+// app to install"; without the gate any signed-in user could poison it.
 export async function POST(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const supabase = gate.supabase
+
   let body: unknown
   try {
     body = await req.json()
@@ -29,14 +35,6 @@ export async function POST(req: NextRequest) {
       { ok: false, error: 'URL must start with https://' },
       { status: 400 },
     )
-  }
-
-  let supabase: ReturnType<typeof createServerClient>
-  try {
-    supabase = createServerClient()
-  } catch (err) {
-    console.error('[apk-url POST] client init failed:', err)
-    return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
   }
 
   const { error } = await supabase

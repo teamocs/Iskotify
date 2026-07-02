@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@iskotify/utils'
+import { requireAdmin } from '@/lib/admin/requireAdmin'
 
 export const runtime = 'nodejs'
 
@@ -7,9 +7,14 @@ export const runtime = 'nodejs'
 // Body: { url: string }
 // Stores (or clears) the PostHog shared-dashboard EMBED URL in app_config so the
 // /admin/analytics page can iframe it. Empty string clears it; non-empty must be
-// https://. Session-gated by middleware (/api/:path*) — admin-only. All Supabase
-// access is server-side (service role); no secrets reach the client.
+// https://. ADMIN-ONLY: middleware only checks a session exists (any signed-in
+// app user passes), so the role must be enforced here — this URL is iframed
+// into the admin console.
 export async function POST(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const supabase = gate.supabase
+
   let body: unknown
   try {
     body = await req.json()
@@ -25,14 +30,6 @@ export async function POST(req: NextRequest) {
   }
   if (url !== '' && !url.startsWith('https://')) {
     return NextResponse.json({ ok: false, error: 'URL must start with https://' }, { status: 400 })
-  }
-
-  let supabase: ReturnType<typeof createServerClient>
-  try {
-    supabase = createServerClient()
-  } catch (err) {
-    console.error('[analytics dashboard-url POST] client init failed:', err)
-    return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
   }
 
   const { error } = await supabase

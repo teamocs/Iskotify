@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@iskotify/utils'
+import { requireAdmin } from '@/lib/admin/requireAdmin'
 import { sendEarlyAccessApkEmail } from '@/lib/email/earlyAccess'
 
 export const runtime = 'nodejs'
@@ -8,8 +8,13 @@ export const runtime = 'nodejs'
 // Body: { id: string }
 // Reads the permanent APK download URL from app_config, emails it to the
 // registrant, then marks the row status='sent'.
-// All Supabase and Resend access is server-side only — no secrets reach the client.
+// ADMIN-ONLY: middleware only checks a session exists, so the role must be
+// enforced here — otherwise any signed-in user could trigger APK emails.
 export async function POST(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const supabase = gate.supabase
+
   let body: unknown
   try {
     body = await req.json()
@@ -25,13 +30,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'id is required' }, { status: 400 })
   }
 
-  let supabase: ReturnType<typeof createServerClient>
-  try {
-    supabase = createServerClient()
-  } catch (err) {
-    console.error('[early-access/send POST] client init failed:', err)
-    return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 })
-  }
 
   // Load the registration row and the stored APK URL in parallel
   const [{ data: row, error: rowError }, { data: configData, error: configError }] = await Promise.all([

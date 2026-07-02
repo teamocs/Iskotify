@@ -2,8 +2,13 @@
 
 import { headers } from 'next/headers'
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export async function triggerSync(): Promise<{ synced?: number; skipped?: number; closed?: number; error?: string }> {
+  // Middleware only checks a session exists — enforce the admin role here so a
+  // non-admin session can't trigger (or spam) full sheet re-syncs.
+  if (!(await isAdminSession())) return { error: 'Unauthorized' }
+
   const secret = process.env.SYNC_SECRET
   if (!secret) return { error: 'SYNC_SECRET not configured' }
 

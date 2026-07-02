@@ -4,6 +4,13 @@ vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
 vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fake-anon-key')
 
+// ---- Auth gate mock (route is admin-only via requireAdmin) ----
+const mockGetUser = vi.fn()
+const mockRoleSingle = vi.fn()
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: vi.fn(async () => ({ auth: { getUser: mockGetUser } })),
+}))
+
 // ---- Supabase query mocks ----
 const mockRegistrationMaybeSingle = vi.fn()
 const mockConfigMaybeSingle = vi.fn()
@@ -11,6 +18,9 @@ const mockUpdate = vi.fn()
 
 // Track which table is being queried so we can return the right mock
 const mockFrom = vi.fn((table: string) => {
+  if (table === 'profiles') {
+    return { select: () => ({ eq: () => ({ single: mockRoleSingle }) }) }
+  }
   if (table === 'early_access_registrations') {
     return {
       select: () => ({
@@ -73,6 +83,27 @@ describe('POST /api/early-access/send', () => {
     mockUpdate.mockReset()
     mockSendEmail.mockReset()
     mockFrom.mockClear()
+    mockGetUser.mockReset()
+    mockRoleSingle.mockReset()
+    // Default: an admin session (individual tests override for 401/403 paths)
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-1' } } })
+    mockRoleSingle.mockResolvedValue({ data: { role: 'admin' }, error: null })
+  })
+
+  it('returns 401 when unauthenticated', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null } })
+    const POST = await importRoute()
+    const res = await POST(makeRequest({ id: 'reg-123' }))
+    expect(res.status).toBe(401)
+    expect(mockSendEmail).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 for a signed-in non-admin', async () => {
+    mockRoleSingle.mockResolvedValueOnce({ data: { role: 'viewer' }, error: null })
+    const POST = await importRoute()
+    const res = await POST(makeRequest({ id: 'reg-123' }))
+    expect(res.status).toBe(403)
+    expect(mockSendEmail).not.toHaveBeenCalled()
   })
 
   it('returns 400 when the APK URL is not set in app_config', async () => {

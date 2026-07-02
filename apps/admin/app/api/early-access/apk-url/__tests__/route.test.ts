@@ -4,14 +4,22 @@ vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://fake.supabase.co')
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'fake-service-key')
 vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'fake-anon-key')
 
-// ---- Supabase upsert mock ----
+// ---- Auth gate mock (route is admin-only via requireAdmin) ----
+const mockGetUser = vi.fn()
+const mockSingle = vi.fn()
+vi.mock('@/lib/supabase', () => ({
+  createAuthClient: vi.fn(async () => ({ auth: { getUser: mockGetUser } })),
+}))
+
+// ---- Supabase service-client mock (profiles gate + app_config upsert) ----
 const mockUpsert = vi.fn()
 
 vi.mock('@iskotify/utils', () => ({
   createServerClient: vi.fn(() => ({
-    from: (_table: string) => ({
-      upsert: mockUpsert,
-    }),
+    from: (table: string) =>
+      table === 'profiles'
+        ? { select: () => ({ eq: () => ({ single: mockSingle }) }) }
+        : { upsert: mockUpsert },
   })),
 }))
 
@@ -29,6 +37,27 @@ describe('POST /api/early-access/apk-url', () => {
   beforeEach(() => {
     vi.resetModules()
     mockUpsert.mockReset()
+    mockGetUser.mockReset()
+    mockSingle.mockReset()
+    // Default: an admin session (individual tests override for 401/403 paths)
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-1' } } })
+    mockSingle.mockResolvedValue({ data: { role: 'admin' }, error: null })
+  })
+
+  it('returns 401 when unauthenticated', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null } })
+    const POST = await importRoute()
+    const res = await POST(makeRequest({ url: 'https://example.com/app.apk' }))
+    expect(res.status).toBe(401)
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 for a signed-in non-admin (the middleware lets any session through)', async () => {
+    mockSingle.mockResolvedValueOnce({ data: { role: 'viewer' }, error: null })
+    const POST = await importRoute()
+    const res = await POST(makeRequest({ url: 'https://evil.example/app.apk' }))
+    expect(res.status).toBe(403)
+    expect(mockUpsert).not.toHaveBeenCalled()
   })
 
   it('returns {ok:true} and upserts when given a valid https:// URL', async () => {
@@ -144,7 +173,7 @@ describe('POST /api/early-access/apk-url', () => {
     expect(json.ok).toBe(false)
   })
 
-  it('returns 500 when the Supabase client init throws', async () => {
+  it('returns 500 when the Supabase client init throws (caught inside the admin gate)', async () => {
     const { createServerClient } = await import('@iskotify/utils')
     vi.mocked(createServerClient).mockImplementationOnce(() => {
       throw new Error('Missing env vars')
@@ -154,7 +183,8 @@ describe('POST /api/early-access/apk-url', () => {
     const res = await POST(makeRequest({ url: 'https://example.com/app.apk' }))
     expect(res.status).toBe(500)
 
-    const json = await res.json() as { ok: boolean }
-    expect(json.ok).toBe(false)
+    const json = await res.json() as { error: string }
+    expect(json.error).toBeTruthy()
+    expect(mockUpsert).not.toHaveBeenCalled()
   })
 })
