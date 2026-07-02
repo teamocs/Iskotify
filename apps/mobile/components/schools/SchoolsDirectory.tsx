@@ -7,6 +7,7 @@ import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } 
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { Card } from '../ui/Card'
+import { useWebContentWidth } from '../ui/webMaxWidth'
 
 // ---------------------------------------------------------------------------
 // Shared tertiary-schools directory: data load + region/type/free-tuition
@@ -106,6 +107,10 @@ interface SchoolsDirectoryProps {
 export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultRegion = null, listHeader = null }: SchoolsDirectoryProps) {
   const db = useDb()
   const { theme: t, typo } = useTheme()
+  // Web-only max-width centering (null on native/sm). Applied to the vertical
+  // list's contentContainerStyle and to the chip rail's OUTER style (never to a
+  // horizontal ScrollView's content container — that would break scrolling).
+  const webWidth = useWebContentWidth()
 
   const [schools, setSchools] = useState<SchoolRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -226,7 +231,7 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
   return (
     <View style={s.root}>
       {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow} style={s.chipScroll}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow} style={[s.chipScroll, webWidth]}>
         <Pressable
           style={({ pressed }) => [s.chip, freeTuitionOnly && s.chipActive, pressed && { opacity: 0.7 }]}
           onPress={() => setFreeTuitionOnly(v => !v)}
@@ -266,7 +271,7 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
         data={filtered}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        contentContainerStyle={s.list}
+        contentContainerStyle={[s.list, webWidth]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"

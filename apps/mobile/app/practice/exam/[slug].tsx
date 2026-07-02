@@ -14,6 +14,7 @@ import { SectionGrid } from '../../../components/practice/SectionGrid'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -158,6 +159,8 @@ export default function BlueprintExam() {
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
   const { height: winH } = useWindowDimensions()
+  // Web-only max-width centering for the vertical scroll zones (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -299,7 +302,7 @@ export default function BlueprintExam() {
     return (
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
-        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
           <Text style={s.emptyTitle}>{blueprint?.name ?? 'Mock Exam'}</Text>
           <Text style={s.emptyBody}>This exam's questions are being authored — check back soon.</Text>
           <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
@@ -322,7 +325,7 @@ export default function BlueprintExam() {
           </Pressable>
           <Text style={s.topTitle} numberOfLines={1}>{blueprint.name}</Text>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
           <View style={s.metaCard}>
             <Text style={s.metaBig}>{blueprint.totalItems} items · {hours}h</Text>
             <Text style={s.metaSub}>{built.totalQuestions} items available now</Text>
@@ -413,7 +416,7 @@ export default function BlueprintExam() {
     return (
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
-        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
             <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
@@ -549,7 +552,7 @@ export default function BlueprintExam() {
       <ScrollView
         ref={qPaneRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: spacing.lg }}
+        contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
         {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
@@ -569,7 +572,7 @@ export default function BlueprintExam() {
 
       {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
           without scrolling, while very long options scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
         <View style={s.opts}>
           {q.options.map((o, oi) => (
             <Pressable

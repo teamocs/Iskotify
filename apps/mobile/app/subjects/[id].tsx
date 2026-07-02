@@ -9,6 +9,7 @@ import { useDb } from '../../hooks/useDb'
 import { subjects as subjectsTable, topics as topicsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 import { spacing, radius, type Theme, type Typography } from '../../theme/tokens'
 import { cachedQuery } from '../../services/queryCache'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
@@ -212,6 +213,8 @@ export default function SubjectDetailsScreen() {
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
   const accent = useMemo(() => subjectColor(id ?? '').accent, [id])
+  // Web-only max-width centering for the topic list (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   const rows = data?.rows ?? []
   const subjectName = data?.subjectName ?? 'Subject'
@@ -280,7 +283,7 @@ export default function SubjectDetailsScreen() {
         windowSize={11}
         removeClippedSubviews
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: insets.bottom + spacing.xl }}
+        contentContainerStyle={[{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: insets.bottom + spacing.xl }, webWidth]}
       />
     </SafeAreaView>
   )

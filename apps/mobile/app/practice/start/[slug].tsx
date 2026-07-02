@@ -8,6 +8,7 @@ import { listings as listingsTable, tertiarySchools } from '../../../db/schema'
 import { listPublishedBlueprintSlugs } from '../../../services/examBlueprints'
 import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../../../utils/focusSlug'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -22,6 +23,8 @@ export default function PracticeStartScreen() {
 
   const [listingTitle, setListingTitle] = useState('')
   const [mockAvailable, setMockAvailable] = useState(false)
+  // Web-only max-width centering for the scroll content (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   // A school-level focus ("school:<id>") has no content of its own — its mock +
   // review resolve to the general entrance practice, but we still show the
@@ -78,7 +81,7 @@ export default function PracticeStartScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.content, webWidth]} showsVerticalScrollIndicator={false}>
         <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
         <Text style={s.title} maxFontSizeMultiplier={1.4}>{listingTitle}</Text>
         <Text style={s.sub} maxFontSizeMultiplier={1.4}>Choose how you want to prepare</Text>

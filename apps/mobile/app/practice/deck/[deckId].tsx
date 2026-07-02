@@ -14,6 +14,7 @@ import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export default function DeckQuizScreen() {
   const { deckId, listingSlug } = useLocalSearchParams<{ deckId: string; listingSlug?: string }>()
   const db = useDb()
   const { theme: t, typo } = useTheme()
+  // Web-only max-width centering for the chooser scroll content (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   const [deckName, setDeckName] = useState('')
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
@@ -188,7 +191,7 @@ export default function DeckQuizScreen() {
   return (
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
-      <ScrollView contentContainerStyle={s.chooserContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.chooserContent, webWidth]} showsVerticalScrollIndicator={false}>
         <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
         <Text style={s.title}>{deckName}</Text>
         <Text style={s.sub}>{allQuestions.length} cards available</Text>

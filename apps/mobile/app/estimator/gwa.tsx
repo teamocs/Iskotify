@@ -8,6 +8,7 @@ import { spacing, radius, statusColors } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
 import { AppButton } from '../../components/ui/AppButton'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 import { computeGwa, latinHonor, hasDisqualifyingGrade, totalUnits, isValidGrade, isValidUnits, type GwaSubject } from '../../utils/gwa'
 
 interface Row { id: string; grade: string; units: string }
@@ -20,6 +21,8 @@ function newRow(): Row {
 
 export default function GwaCalculatorScreen() {
   const { theme: t, typo } = useTheme()
+  // Web-only max-width centering for the form scroll content (null on native/sm).
+  const webWidth = useWebContentWidth()
   const [rows, setRows] = useState<Row[]>(() => [newRow(), newRow(), newRow()])
 
   const parsed: GwaSubject[] = useMemo(
@@ -73,7 +76,7 @@ export default function GwaCalculatorScreen() {
       </View>
 
       <KeyboardAwareScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxxl + spacing.lg }}
+        contentContainerStyle={[{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxxl + spacing.lg }, webWidth]}
         keyboardShouldPersistTaps="handled"
         style={{ flex: 1 }}
         bottomOffset={20}

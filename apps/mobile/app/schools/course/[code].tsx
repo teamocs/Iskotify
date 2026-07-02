@@ -16,6 +16,7 @@ import { spacing, radius, type Theme, type Typography } from '../../../theme/tok
 import { Card } from '../../../components/ui/Card'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { cachedQuery } from '../../../services/queryCache'
 
 // ---------------------------------------------------------------------------
@@ -221,6 +222,8 @@ export default function CourseSchoolsScreen() {
   }, [db, code])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  // Web-only max-width centering for the rankings list (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   const rankings = data?.rankings ?? []
   const taxonomy = data?.taxonomy ?? null
@@ -358,7 +361,7 @@ export default function CourseSchoolsScreen() {
         windowSize={11}
         removeClippedSubviews
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: insets.bottom + spacing.xl }}
+        contentContainerStyle={[{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: insets.bottom + spacing.xl }, webWidth]}
       />
     </SafeAreaView>
   )

@@ -8,6 +8,7 @@ import { Gear1Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineic
 import Logo from '../../assets/images/logo.svg'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { KuyaHeroAnimation } from '../../components/KuyaHeroAnimation'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
@@ -25,7 +26,9 @@ import { useAiCoach } from '../../hooks/useAiCoach'
 import { useTheme } from '../../theme/ThemeContext'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 import { useDb } from '../../hooks/useDb'
+import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { cachedQuery, invalidate } from '../../services/queryCache'
+import { syncOnLaunch } from '../../services/sync'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
 import { upcomingEvents, sortBySeverityThenDate, daysUntil } from '../../utils/admissionsFeed'
@@ -289,6 +292,25 @@ export default function HomeScreen() {
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
 
+  // Web-only refresh: full sync then invalidate + re-load, separate from the
+  // native pull-to-refresh onRefresh which does NOT call syncOnLaunch.
+  // (Mirrors the Exams tab's webRefresh — RefreshControl is dead on web.)
+  const sync = useSyncStatus()
+  const webRefresh = useCallback(async () => {
+    if (refreshing || sync.isSyncing) return
+    setRefreshing(true)
+    try {
+      await syncOnLaunch(db)
+      invalidate('home:sessionReadiness')
+      setSessionReloadKey(k => k + 1)
+      await refresh()
+    } catch (e) {
+      console.warn('[home] webRefresh error:', e)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [db, refresh, refreshing, sync.isSyncing])
+
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
   const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
@@ -536,6 +558,7 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={s.headerBtns}>
+            <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
             <Pressable
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => setShowNotifModal(true)}

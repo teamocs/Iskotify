@@ -13,6 +13,7 @@ import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export default function ListingQuizScreen() {
   const { slug, mode } = useLocalSearchParams<{ slug: string; mode?: string }>()
   const db = useDb()
   const { theme: t, typo } = useTheme()
+  // Web-only max-width centering for the chooser scroll content (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   const [listingTitle, setListingTitle] = useState('')
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
@@ -217,7 +220,7 @@ export default function ListingQuizScreen() {
   return (
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
-      <ScrollView contentContainerStyle={s.chooserContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.chooserContent, webWidth]} showsVerticalScrollIndicator={false}>
         <View style={s.icon}><Text style={s.iconTxt}>{mode === 'weak' ? '⚠️' : '⚡'}</Text></View>
         <Text style={s.title}>{modeLabel}</Text>
         <Text style={s.sub}>{listingTitle}</Text>

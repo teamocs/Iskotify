@@ -20,6 +20,7 @@ import {
 } from '../../utils/admissionsFeed'
 import { NewsDetailModal } from '../../components/updates/NewsDetailModal'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Badge } from '../../components/ui/Badge'
@@ -30,6 +31,7 @@ import { MonthSheet } from '../../components/calendar/MonthSheet'
 import { spacing, radius } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
+import { syncOnLaunch } from '../../services/sync'
 import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
 
 // ── Severity badge config ──────────────────────────────────────────────────────
@@ -261,50 +263,61 @@ export default function UpdatesScreen() {
 
   // ── Admissions feed ───────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const rows = await db.select().from(admissionsUpdates)
-        if (cancelled) return
-        const mapped: FeedItem[] = rows.map((r) => {
-          let sources: { label?: string; url: string }[] = []
-          try {
-            const parsed = JSON.parse(r.sources ?? '[]')
-            sources = Array.isArray(parsed) ? parsed : []
-          } catch {
-            sources = []
-          }
-          return {
-            id: r.id,
-            reportDate: r.reportDate ?? '',
-            severity: r.severity,
-            title: r.title,
-            body: r.body,
-            eventDate: r.eventDate ?? null,
-            eventType: r.eventType ?? null,
-            schoolName: r.schoolName ?? null,
-            actionRequired: r.actionRequired ?? null,
-            sources,
-          }
-        })
-        setItems(mapped)
-      } catch {
-        // table not yet migrated — show empty state gracefully
-      }
+  const loadFeed = useCallback(async () => {
+    try {
+      const rows = await db.select().from(admissionsUpdates)
+      const mapped: FeedItem[] = rows.map((r) => {
+        let sources: { label?: string; url: string }[] = []
+        try {
+          const parsed = JSON.parse(r.sources ?? '[]')
+          sources = Array.isArray(parsed) ? parsed : []
+        } catch {
+          sources = []
+        }
+        return {
+          id: r.id,
+          reportDate: r.reportDate ?? '',
+          severity: r.severity,
+          title: r.title,
+          body: r.body,
+          eventDate: r.eventDate ?? null,
+          eventType: r.eventType ?? null,
+          schoolName: r.schoolName ?? null,
+          actionRequired: r.actionRequired ?? null,
+          sources,
+        }
+      })
+      setItems(mapped)
+    } catch {
+      // table not yet migrated — show empty state gracefully
     }
-    void load()
-    return () => { cancelled = true }
   }, [db])
+
+  useEffect(() => { void loadFeed() }, [loadFeed])
+
+  // Web refresh: full sync then reload the feed + cached home stats (calendar).
+  // Mirrors the Lists tab's onRefresh shape — RefreshControl is dead on web.
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await syncOnLaunch(db)
+      // Feed + cached home stats are independent — reload them in parallel.
+      await Promise.all([loadFeed(), refresh()])
+    } finally { setRefreshing(false) }
+  }, [db, loadFeed, refresh])
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: t.bg }]} edges={['top']}>
       <WebTopSpacer />
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: t.textPrimary, fontSize: typo.h2 }]}>Updates</Text>
-        <Text style={[styles.subtitle, { color: t.textTertiary, fontSize: typo.sm }]}>
-          Events, news &amp; app updates
-        </Text>
+      <View style={[styles.header, { flexDirection: 'row', alignItems: 'flex-start' }]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.title, { color: t.textPrimary, fontSize: typo.h2 }]}>Updates</Text>
+          <Text style={[styles.subtitle, { color: t.textTertiary, fontSize: typo.sm }]}>
+            Events, news &amp; app updates
+          </Text>
+        </View>
+        <WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} />
       </View>
 
       <ScreenScroll tabBarInset padded contentContainerStyle={styles.content}>

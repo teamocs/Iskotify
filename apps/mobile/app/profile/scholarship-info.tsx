@@ -13,6 +13,7 @@ import { spacing, radius } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
 import { PillButton } from '../../components/ui/PillButton'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 
 const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
   { label: '₱100k or below / yr', value: '<=100k' },
@@ -26,6 +27,8 @@ const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
 export default function ScholarshipInfoScreen() {
   const db = useDb()
   const { theme: t, typo } = useTheme()
+  // Web-only max-width centering for the form scroll content (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
   const [incomePreferNotToSay, setIncomePreferNotToSay] = useState(false)
@@ -107,7 +110,7 @@ export default function ScholarshipInfoScreen() {
       </View>
 
       <KeyboardAwareScrollView
-        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.md }}
+        contentContainerStyle={[{ padding: spacing.lg, paddingBottom: 48, gap: spacing.md }, webWidth]}
         keyboardShouldPersistTaps="handled"
         bottomOffset={20}
       >

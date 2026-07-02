@@ -12,6 +12,7 @@ import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
@@ -52,6 +53,8 @@ export default function UpcatExam() {
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
   const { height: winH } = useWindowDimensions()
+  // Web-only max-width centering for the vertical scroll zones (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -152,7 +155,7 @@ export default function UpcatExam() {
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
         <ScrollView
-          contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
+          contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
@@ -250,7 +253,7 @@ export default function UpcatExam() {
       <ScrollView
         ref={qPaneRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: spacing.lg }}
+        contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
         {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
@@ -270,7 +273,7 @@ export default function UpcatExam() {
 
       {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
           without scrolling, while very long options scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
         <View style={s.opts}>
           {q.options.map((o, oi) => (
             <Pressable

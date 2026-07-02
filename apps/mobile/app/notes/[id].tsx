@@ -24,6 +24,7 @@ import { NOTE_COLORS, parseChecklistItems, type NoteColor, type NoteType, type C
 import { notes as notesTable } from '../../db/schema'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 
 const COLOR_KEYS = [null, 'red', 'pink', 'orange', 'yellow', 'teal', 'green', 'cyan', 'blue', 'cerulean', 'purple', 'gray'] as const
 
@@ -73,6 +74,8 @@ export default function NoteEditorScreen() {
   const [loaded, setLoaded] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reminderOpts = useMemo(() => getReminderOptions(), [])
+  // Web-only max-width centering for the editor body (null on native/sm).
+  const webWidth = useWebContentWidth()
 
   // Load note on mount
   useEffect(() => {
@@ -264,7 +267,7 @@ export default function NoteEditorScreen() {
           </TouchableOpacity>
         )}
 
-        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={webWidth ?? undefined} keyboardShouldPersistTaps="handled">
           {type === 'text' ? (
             <TextInput
               style={s.contentInput}

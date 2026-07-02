@@ -20,6 +20,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 import { useNotes, NOTE_COLORS, type Note, type NoteType } from '../../hooks/useNotes'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
 
@@ -127,6 +128,8 @@ function NoteCard({
 export default function NotesScreen() {
   const { theme: t, typo } = useTheme()
   const insets = useSafeAreaInsets()
+  // Web-only max-width centering for the notes grid (null on native/sm).
+  const webWidth = useWebContentWidth()
   const { notes, createNote, archiveNote, deleteNote, updateNote } = useNotes('active')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -279,7 +282,7 @@ export default function NotesScreen() {
           />
         </View>
 
-        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[s.content, webWidth]} showsVerticalScrollIndicator={false}>
           {filtered.length === 0 ? (
             <View style={s.empty}>
               <Text style={s.emptyTxt}>
