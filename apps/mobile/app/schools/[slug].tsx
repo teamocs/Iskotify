@@ -73,7 +73,24 @@ interface ProfileDetail {
 function safeParseArray(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.map(String) : []
+    if (!Array.isArray(parsed)) return []
+    // Some source rows store MANY courses as ONE comma/semicolon-separated
+    // string (e.g. ["BS Nursing, BS Biology, BS Pharmacy"]) which rendered as a
+    // single giant chip. Split each entry into real items, trim, drop empties,
+    // and de-dupe (case-insensitive) so every course gets its own chip.
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const entry of parsed.map(String)) {
+      for (const part of entry.split(/[,;]/)) {
+        const item = part.trim()
+        if (!item) continue
+        const key = item.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(item)
+      }
+    }
+    return out
   } catch {
     return []
   }
