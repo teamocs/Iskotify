@@ -10,7 +10,7 @@ import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { useFocusListings } from '../../hooks/useFocusListings'
-import { examAcronymToListingSlug } from '../../utils/targetExams'
+import { examAcronymToListingSlug, isRealExamAcronym } from '../../utils/targetExams'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -181,6 +181,7 @@ export default function SchoolProfileScreen() {
     focusOnTxt:    { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     examLinkBtn:   { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: t.surface2, borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1, borderColor: t.divider },
     examLinkTxt:   { flex: 1, fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    genericNote:   { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.sm, lineHeight: 17 },
     // Disclaimer
     disclaimer:    { marginTop: spacing.lg, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.md },
     disclaimerTxt: { fontSize: typo.sm, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
@@ -259,6 +260,12 @@ export default function SchoolProfileScreen() {
   const examSlug = examAcronymToListingSlug(profile?.entranceExamAcronym)
   const examInFocus = examSlug ? isInFocus(examSlug) : false
   const examFocusPriority = examSlug ? getPriority(examSlug) : null
+
+  // Schools whose exam isn't individually modeled still get general entrance
+  // practice (shared question pool + full review deck) so every school with a
+  // real entrance exam is practiceable, not just the content-backed ones.
+  const hasRealExam = isRealExamAcronym(profile?.entranceExamAcronym)
+  const showGenericPractice = !examSlug && hasRealExam
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -456,6 +463,24 @@ export default function SchoolProfileScreen() {
                     <Text style={s.examLinkTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>View exam details & mock practice</Text>
                     <Text style={s.linkArrow}>›</Text>
                   </Pressable>
+                </>
+              ) : null}
+
+              {/* Fallback: schools whose exam isn't individually modeled still get
+                  general entrance practice (shared pool mock + full review deck). */}
+              {showGenericPractice ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [s.examLinkBtn, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push('/practice/start/general-cet')}
+                    accessibilityRole="button"
+                  >
+                    <Text style={s.examLinkTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>Practice: general entrance mock &amp; review</Text>
+                    <Text style={s.linkArrow}>›</Text>
+                  </Pressable>
+                  <Text style={s.genericNote} maxFontSizeMultiplier={1.4}>
+                    This school&apos;s exam isn&apos;t individually modeled yet — general practice covers the core subjects (English, Math, Science, Reading).
+                  </Text>
                 </>
               ) : null}
             </Card>

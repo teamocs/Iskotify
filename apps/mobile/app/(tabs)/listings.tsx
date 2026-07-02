@@ -262,7 +262,9 @@ export default function ListsScreen() {
   // Map tab to listing type (only for uni/scholarship tabs)
   const listingType = tab === 'universities' ? 'exam' : 'scholarship'
   const typeListings = useMemo(
-    () => all.filter(l => l.type === listingType),
+    // Exclude the general-practice fallback exam — it's reachable from any school's
+    // detail page, not a headline entrance exam in the Universities list.
+    () => all.filter(l => l.type === listingType && l.slug !== 'general-cet'),
     [all, listingType],
   )
 
