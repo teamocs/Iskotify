@@ -512,11 +512,13 @@ export default function ListsScreen() {
     return (
       <>
         <View style={s.sectionWrap}>
-          <SectionHeader title="Entrance exams" subtitle="Tap to add a target exam to your Focus" />
+          <SectionHeader title="Entrance exams" subtitle="Add a target exam to your Focus — each has mock tests & review" />
         </View>
-        {exams.map(l => <View key={`exam-${l.id}`}>{renderCard(l)}</View>)}
+        <View style={{ gap: spacing.xs }}>
+          {exams.map(l => <View key={`exam-${l.id}`}>{renderCard(l)}</View>)}
+        </View>
         <View style={s.sectionWrap}>
-          <SectionHeader title="All universities" />
+          <SectionHeader title="All universities" subtitle="Browse schools — open one to practice its entrance exam" />
         </View>
       </>
     )
