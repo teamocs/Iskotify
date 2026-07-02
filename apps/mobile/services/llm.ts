@@ -126,7 +126,12 @@ async function getContext(): Promise<LlamaContext> {
   // Revisit when llama.rn ships usable MTP + smaller Gemma 4 GGUFs.
   const initParams = {
     model: MODEL_PATH.replace(/^file:\/\//, ''),
-    n_ctx: 2048,
+    // Raised 2048 → 3072 so complete, conversational answers (nPredict up to ~448
+    // for math, 320 general) have headroom above the prompt+RAG+history input.
+    // Worst-case input ~1,830 tok + 448 output = ~2,278 < 3072; typical ~1,620.
+    // KV cache at f16 for a 1B model is small, so the extra 1024 ctx is cheap even
+    // on the 1.8 GB-gate devices.
+    n_ctx: 3072,
     // n_threads 6: typical big.LITTLE phones have ≥8 cores; llama.cpp
     // schedules work onto perf cores — 6 threads saturates them without
     // spilling onto efficiency cores and causing cache thrash.
@@ -356,8 +361,10 @@ export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<
 // ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
 
 export interface StreamChatOptions {
-  /** Max tokens to generate. Defaults to 96 (fits 2 clear sentences for Gemma 3 1B).
-   *  Math queries should pass ~300 so multi-step solutions don't truncate. */
+  /** Max tokens to generate. Defaults to 320 so conversational answers finish
+   *  instead of getting cut off mid-sentence (the old 96 ≈ 2 sentences was the
+   *  main cause of truncated replies). Math queries pass ~448 for long
+   *  multi-step solutions. n_ctx (3072) has headroom for both. */
   nPredict?: number
   /** Sampling temperature. Defaults to 0.2 (balanced). Math should use ~0.05
    *  so the model doesn't hallucinate digits. */

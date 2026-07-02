@@ -407,7 +407,7 @@ describe('useKuyaChat', () => {
     expect(result.current.messages).toHaveLength(0)
   })
 
-  it('passes higher nPredict (300) + lower temperature to streamChatInference for math queries', async () => {
+  it('passes higher nPredict (448) + lower temperature to streamChatInference for math queries', async () => {
     mockStream.mockImplementation(async () => 'Step 1: ...')
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
@@ -419,7 +419,7 @@ describe('useKuyaChat', () => {
       expect.any(String),
       expect.any(Function),
       expect.any(Object),
-      expect.objectContaining({ nPredict: 300, temperature: 0.05 }),
+      expect.objectContaining({ nPredict: 448, temperature: 0.05 }),
     )
   })
 
@@ -592,8 +592,9 @@ describe('useKuyaChat — Gemini provider path', () => {
     expect(systemPromptArg).toContain('Lists tab')
   })
 
-  // ── Task A: Gemini budget assertions (non-math 256, math 512) ─────────────
-  it('passes maxOutputTokens: 256 for non-math Gemini questions', async () => {
+  // ── Gemini budget assertions (non-math 768, math 1024) — raised so answers
+  //    finish instead of getting cut off. ─────────────────────────────────────
+  it('passes maxOutputTokens: 768 for non-math Gemini questions', async () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
@@ -603,10 +604,10 @@ describe('useKuyaChat — Gemini provider path', () => {
 
     expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
     const opts = mockGenerateGeminiReply.mock.calls[0]![3] as { maxOutputTokens: number }
-    expect(opts.maxOutputTokens).toBe(256)
+    expect(opts.maxOutputTokens).toBe(768)
   })
 
-  it('passes maxOutputTokens: 512 for math Gemini questions', async () => {
+  it('passes maxOutputTokens: 1024 for math Gemini questions', async () => {
     const { result } = renderHook(() => useKuyaChat())
     await act(async () => {})
     await act(async () => {
@@ -616,7 +617,7 @@ describe('useKuyaChat — Gemini provider path', () => {
 
     expect(mockGenerateGeminiReply).toHaveBeenCalledTimes(1)
     const opts = mockGenerateGeminiReply.mock.calls[0]![3] as { maxOutputTokens: number }
-    expect(opts.maxOutputTokens).toBe(512)
+    expect(opts.maxOutputTokens).toBe(1024)
   })
 })
 

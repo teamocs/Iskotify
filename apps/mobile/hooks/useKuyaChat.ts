@@ -311,7 +311,10 @@ export function useKuyaChat(): UseKuyaChat {
               historyForPrompt,
             )
 
-            const maxOutputTokens = isMath ? 512 : 256
+            // Generous budgets so answers finish instead of getting cut off.
+            // Gemini's own key → cost is the user's; the doubled-budget retry in
+            // geminiClient still backstops a genuine overflow.
+            const maxOutputTokens = isMath ? 1024 : 768
 
             const reply = await generateGeminiReply(
               geminiKey,
@@ -364,8 +367,11 @@ export function useKuyaChat(): UseKuyaChat {
 
           // Math questions need a bigger budget (multi-step solutions exceed 96 tokens)
           // and tighter sampling (less hallucinated arithmetic).
+          // Math needs the biggest budget (long step-by-step) with tight sampling.
+          // Non-math uses the raised 320-token default from streamChatInference so
+          // conversational answers don't get cut off mid-sentence.
           const samplerOptions = isMath
-            ? { nPredict: 300, temperature: 0.05 }
+            ? { nPredict: 448, temperature: 0.05 }
             : undefined
 
           await streamChatInference(prompt, (tokenText) => {

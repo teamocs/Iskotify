@@ -78,22 +78,23 @@ describe('buildChatPrompt', () => {
     expect(() => buildChatPrompt('progress', '', 'ctx')).not.toThrow()
   })
 
-  it('both system prompts include the conciseness directive', () => {
+  it('both system prompts include the completeness directive', () => {
     const progress = buildChatPrompt('progress', 'q', 'ctx')
     const topic = buildChatPrompt('topic', 'q')
-    expect(progress).toContain('No preamble')
-    // Topic addendum tightened: "no preamble, no filler" (lowercase).
-    expect(topic).toContain('no preamble')
+    // v3: complete, conversational answers (no hard sentence cap) — the shared
+    // COMPLETENESS_RULE in CORE_RULES requires finishing the thought.
+    expect(progress).toContain('finish your thought')
+    expect(topic).toContain('finish your thought')
   })
 
-  it('progress prompt enforces max 2 sentences', () => {
+  it('progress prompt asks for a short, warm answer', () => {
     const prompt = buildChatPrompt('progress', 'q', 'ctx')
-    expect(prompt).toContain('Maximum 2 sentences')
+    expect(prompt).toContain('2–4 sentences')
   })
 
-  it('topic prompt caps the answer at 1–2 short sentences', () => {
+  it('topic prompt asks for a complete, conversational answer', () => {
     const prompt = buildChatPrompt('topic', 'q')
-    expect(prompt).toContain('Answer in 1–2 short sentences MAX')
+    expect(prompt).toContain('2–5 sentences')
   })
 
   it('user turn includes the English-only [INSTRUCTION] block (both modes)', () => {
@@ -510,20 +511,20 @@ describe('Prompt v2 — ANTI_INJECTION_RULE present in all three system prompts'
 })
 
 describe('Prompt v2 — mode-specific addenda intact', () => {
-  it('SYSTEM_PROMPT_PROGRESS: 2-sentence cap, second person, one action', () => {
-    expect(SYSTEM_PROMPT_PROGRESS).toContain('Maximum 2 sentences')
+  it('SYSTEM_PROMPT_PROGRESS: warm short answer, second person, one action', () => {
+    expect(SYSTEM_PROMPT_PROGRESS).toContain('2–4 sentences')
     expect(SYSTEM_PROMPT_PROGRESS).toContain('second person')
-    expect(SYSTEM_PROMPT_PROGRESS).toContain('one specific action')
+    expect(SYSTEM_PROMPT_PROGRESS).toContain('one specific')
   })
 
-  it('SYSTEM_PROMPT_TOPIC: very-concise cap, softer fallback (Exams tab, not textbook)', () => {
-    // Tightened directive: 1–2 short sentences, lead with the direct answer.
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Answer in 1–2 short sentences MAX')
-    expect(SYSTEM_PROMPT_TOPIC).toContain('no preamble, no filler')
+  it('SYSTEM_PROMPT_TOPIC: complete conversational answer, softer fallback (Exams/Review, not textbook)', () => {
+    // v3: complete, conversational answers — lead with the answer, then explain.
+    expect(SYSTEM_PROMPT_TOPIC).toContain('2–5 sentences')
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Skip empty filler')
     // Old eager-refusal line replaced with softer guidance
     expect(SYSTEM_PROMPT_TOPIC).not.toContain("I'm not sure — check your textbook")
     expect(SYSTEM_PROMPT_TOPIC).toContain('context blocks answer the question')
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams or Review tab')
   })
 
   it('SYSTEM_PROMPT_MATH: never-refuse + step format + lifted 2-sentence cap', () => {
@@ -642,8 +643,8 @@ describe('Task A.4 — SYSTEM_PROMPT_TOPIC addendum softened', () => {
     expect(SYSTEM_PROMPT_TOPIC).toContain('context blocks answer the question')
   })
 
-  it('topic addendum suggests Exams tab when genuinely unsure', () => {
-    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams tab')
+  it('topic addendum suggests the Exams or Review tab when genuinely unsure', () => {
+    expect(SYSTEM_PROMPT_TOPIC).toContain('Exams or Review tab')
   })
 })
 

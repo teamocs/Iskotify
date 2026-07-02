@@ -290,7 +290,7 @@ describe('getContext — single init (no MTP, no fallback)', () => {
     expect(callArgs.speculative).toBeUndefined()
     expect(callArgs.n_batch).toBe(512)
     expect(callArgs.n_threads).toBe(6)
-    expect(callArgs.n_ctx).toBe(2048)
+    expect(callArgs.n_ctx).toBe(3072)
     expect(callArgs.cache_type_k).toBe('f16')
     expect(callArgs.cache_type_v).toBe('f16')
     expect(callArgs.flash_attn_type).toBe('auto')
