@@ -978,3 +978,96 @@ describe('useKuyaChat — empty-retrieval catalog fallback (Task 6)', () => {
     expect(mockBuildListingsEnumeration).not.toHaveBeenCalled()
   })
 })
+
+// ── Phase 3 (T3.2): post-generation grounding gate ─────────────────────────────
+// NOTE on the question wording: the plan's example "when is the UPCAT deadline?"
+// routes to the deterministic SSoT path (UPCAT is a strong listing acronym) and
+// never reaches an LLM branch, so the grounding gate can't be exercised with it.
+// "tell me about the colleges" is a FACTUAL question (looksFactual === true via
+// "colleges") that no classifyDataIntent signal matches (dataIntent === null),
+// so it reaches the LLM branch — the only place the gate lives.
+const GROUNDING_FALLBACK =
+  "I don't want to risk giving you a wrong date or figure — please double-check that detail on the official page via the Lists tab. 📚"
+
+describe('useKuyaChat — grounding gate (Gemini path, T3.2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockModelExists.mockResolvedValue(false)
+    mockOrderBy.mockResolvedValue([])
+    mockGetSettings.mockResolvedValue({ aiProvider: 'gemini' } as never)
+    mockGetGeminiKey.mockResolvedValue('AIza-test')
+  })
+
+  it('replaces an ungrounded factual answer (invented year) with the safe fallback', async () => {
+    // Context has NO year; the model invents "2025" → grounding fails → fallback.
+    mockBuildRagContext.mockResolvedValueOnce({ blocks: '[LISTINGS]\n- Colleges accept applications each semester', sources: ['listings'] })
+    mockGenerateGeminiReply.mockResolvedValue('The colleges open applications in 2025.')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('tell me about the colleges')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe(GROUNDING_FALLBACK)
+    // Persisted value is the safe fallback, NOT the fabricated text.
+    const assistantInsert = mockValues.mock.calls.find(c => (c[0] as { role: string }).role === 'assistant')
+    expect((assistantInsert![0] as { text: string }).text).toBe(GROUNDING_FALLBACK)
+  })
+
+  it('leaves a grounded factual answer unchanged (invented year IS in context)', async () => {
+    mockBuildRagContext.mockResolvedValueOnce({ blocks: '[LISTINGS]\n- Colleges open applications in 2026', sources: ['listings'] })
+    mockGenerateGeminiReply.mockResolvedValue('The colleges open applications in 2026.')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('tell me about the colleges')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('The colleges open applications in 2026.')
+  })
+
+  it('does NOT gate a non-factual reasoning answer that contains a year', async () => {
+    // "what is photosynthesis?" → looksFactual === false → gate is skipped even
+    // though the answer has a year (1779) absent from the context.
+    mockBuildRagContext.mockResolvedValueOnce({ blocks: '[RELEVANT FLASHCARDS]\nQ: plants\nA: chlorophyll', sources: ['flashcards'] })
+    mockGenerateGeminiReply.mockResolvedValue('Photosynthesis was first described in 1779.')
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('what is photosynthesis?')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe('Photosynthesis was first described in 1779.')
+  })
+})
+
+describe('useKuyaChat — grounding gate (local path, T3.2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockModelExists.mockResolvedValue(true)
+    mockOrderBy.mockResolvedValue([])
+    mockGetSettings.mockResolvedValue({ aiProvider: 'local' } as never)
+    mockGetGeminiKey.mockResolvedValue(null)
+  })
+
+  it('replaces an ungrounded local answer (invented peso amount) with the safe fallback', async () => {
+    mockBuildRagContext.mockResolvedValueOnce({ blocks: '[LISTINGS]\n- College grants vary by program', sources: ['listings'] })
+    mockStream.mockImplementation(async (_p, onToken) => {
+      const t = 'These colleges give a ₱90,000 grant per year.'
+      onToken(t); return t
+    })
+    const { result } = renderHook(() => useKuyaChat())
+    await act(async () => {})
+    await act(async () => {
+      result.current.send('tell me about the colleges')
+      await new Promise(r => setTimeout(r, 200))
+    })
+    const assistantMsg = result.current.messages.find(m => m.role === 'assistant')
+    expect(assistantMsg?.text).toBe(GROUNDING_FALLBACK)
+    const assistantInsert = mockValues.mock.calls.find(c => (c[0] as { role: string }).role === 'assistant')
+    expect((assistantInsert![0] as { text: string }).text).toBe(GROUNDING_FALLBACK)
+  })
+})

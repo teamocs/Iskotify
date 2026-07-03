@@ -18,6 +18,7 @@ import { generateGeminiReply } from '../services/geminiClient'
 import { classifyDataIntent, answerFromData, ssotNotFoundMessage, looksFactual, stripTag } from '../services/ssotAnswer'
 import { buildListingsEnumeration, buildSubjectsContext } from '../services/chatContext'
 import { buildRetrievalQuery } from '../utils/retrievalQuery'
+import { verifyGrounding } from '../services/groundingCheck'
 
 export interface ChatMessage {
   id: string
@@ -45,6 +46,30 @@ const TAGALOG_INDICATORS = /\b(kong|mong|akin|sayo|ikaw|siya|niya|mga|nang|kasi|
 function isTagalogHeavy(text: string): boolean {
   const matches = text.match(TAGALOG_INDICATORS)
   return (matches?.length ?? 0) >= 3
+}
+
+// ── Grounding enforcement (Phase 3, T3.2) ──────────────────────────────────────
+// Warm, safe replacement shown when a factual answer contains a date/amount/URL
+// the retrieved context does NOT support (a fabricated figure the 1B/Gemini
+// invented). We persist THIS, never the fabricated text.
+const GROUNDING_FALLBACK =
+  "I don't want to risk giving you a wrong date or figure — please double-check that detail on the official page via the Lists tab. 📚"
+
+/**
+ * Deterministic grounding gate applied to a finalized LLM answer. Only runs for
+ * FACTUAL questions with a non-empty retrieved context (never math, non-factual
+ * reasoning, or empty-context sends). If any URL/year/amount in `displayText`
+ * is absent from `blocks`, replace the whole answer with GROUNDING_FALLBACK.
+ */
+function applyGroundingGate(displayText: string, retrievalQuery: string, blocks: string): string {
+  if (
+    looksFactual(retrievalQuery) &&
+    blocks.trim().length > 0 &&
+    !verifyGrounding(displayText, blocks).grounded
+  ) {
+    return GROUNDING_FALLBACK
+  }
+  return displayText
 }
 
 // ── Gemini prompt helper ───────────────────────────────────────────────────────
@@ -397,15 +422,19 @@ export function useKuyaChat(): UseKuyaChat {
               ? "I couldn't process that. Try rephrasing your question."
               : best
 
+            // Grounding gate: on a factual question with retrieved context, reject
+            // a fabricated date/amount/URL and show/persist the safe fallback.
+            const groundedText = applyGroundingGate(displayText, retrievalQuery, blocks)
+
             setMessages(prev => prev.map(m =>
-              m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m
+              m.id === assistantId ? { ...m, text: groundedText, isStreaming: false } : m
             ))
             setIsStreaming(false)
 
             // Persist to DB — fire-and-forget
             void dbRef.current.transaction(async tx => {
               await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
-              await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
+              await tx.insert(chatMessages).values({ role: 'assistant', text: groundedText, mode, createdAt: now + 1 })
             }).then(() => scheduleWebPersist()).catch(() => {})
             return
           }
@@ -494,15 +523,19 @@ export function useKuyaChat(): UseKuyaChat {
             ? "I couldn't process that. Try rephrasing your question."
             : localBest
 
+          // Grounding gate: on a factual question with retrieved context, reject
+          // a fabricated date/amount/URL and show/persist the safe fallback.
+          const groundedText = applyGroundingGate(displayText, retrievalQuery, blocks)
+
           setMessages(prev => prev.map(m =>
-            m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m
+            m.id === assistantId ? { ...m, text: groundedText, isStreaming: false } : m
           ))
           setIsStreaming(false)
 
           // Persist to DB — fire-and-forget, DB failure does not affect UI
           void dbRef.current.transaction(async tx => {
             await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode, createdAt: now })
-            await tx.insert(chatMessages).values({ role: 'assistant', text: displayText, mode, createdAt: now + 1 })
+            await tx.insert(chatMessages).values({ role: 'assistant', text: groundedText, mode, createdAt: now + 1 })
           }).then(() => scheduleWebPersist()).catch(() => {})
 
         } catch (err) {
