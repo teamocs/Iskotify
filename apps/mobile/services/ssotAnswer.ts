@@ -186,6 +186,17 @@ export function classifyDataIntent(question: string): DataIntent | null {
   const q = question.trim()
   if (!q) return null
 
+  // Strong, unambiguous data signals (exam/scholarship acronyms) take precedence
+  // over the math guard, so a data lookup that happens to contain a number or
+  // operator ("is the UPCAT 2026 exam +2 weeks delayed?") still routes to the
+  // deterministic listings path instead of being stolen by isMathQuestion.
+  // Acronyms ONLY (precision-biased): generic words like "exam"/"scholarship"
+  // would steal reasoning questions ("what is a scholarship"). First-person
+  // PROFILE questions still win — "am I ready for the UPCAT exam?" is about the
+  // student, not a catalog lookup — so profile signals suppress this shortcut.
+  const STRONG_LISTING = /\b(upcat|acet|dcat|ustet|pupcet|usthet|\bcet\b|dost|ched)\b/i
+  if (STRONG_LISTING.test(q) && !anyMatch(q, PROFILE_SIGNALS)) return 'listings'
+
   // Math is always reasoning → LLM. Checked first so "solve 2x+5=11" never
   // false-matches a data keyword.
   if (isMathQuestion(q)) return null
@@ -202,13 +213,31 @@ export function classifyDataIntent(question: string): DataIntent | null {
   return null
 }
 
+/**
+ * looksFactual — cheap guard for "this question is asking about catalog data"
+ * (exams, scholarships, schools, courses, subjects, etc.) rather than a
+ * reasoning/definition/math question. Shared with the RAG pipeline so that an
+ * empty retrieval on a factual-looking question can fall back to deterministic
+ * SSoT enumeration instead of letting the LLM hallucinate.
+ *
+ * False when the question is empty or a math question; otherwise true when it
+ * mentions a factual catalog noun.
+ */
+const FACTUAL_NOUNS =
+  /\b(exams?|scholarships?|grants?|listings?|schools?|universit(?:y|ies)|colleges?|courses?|programs?|degrees?|subjects?|topics?|deadlines?|requirements?)\b/i
+
+export function looksFactual(question: string): boolean {
+  if (!question || isMathQuestion(question)) return false
+  return FACTUAL_NOUNS.test(question)
+}
+
 // ── answerFromData ────────────────────────────────────────────────────────────
 
 /**
  * Strip the leading "[TAG]\n" (or "[TAG]\r\n") bracket header that the
  * chatContext builders prepend, leaving just the human-readable body.
  */
-function stripTag(block: string): string {
+export function stripTag(block: string): string {
   return block.replace(/^\[[^\]]+\]\r?\n/, '').trim()
 }
 

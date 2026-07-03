@@ -311,7 +311,8 @@ describe('isMathQuestion', () => {
     expect(isMathQuestion('What is the hypotenuse')).toBe(true)
   })
 
-  it('detects multi-digit numbers (12, 100, etc.)', () => {
+  it('detects a digit paired with an interrogative (not a bare number)', () => {
+    // "find" + a digit is math; the bare multi-digit run alone is NOT (years/counts).
     expect(isMathQuestion('Find 12 percent of 50')).toBe(true)
   })
 
@@ -336,6 +337,22 @@ describe('isMathQuestion', () => {
     expect(isMathQuestion('Tell me about the Philippine revolution')).toBe(false)
     expect(isMathQuestion('Anong dapat kong i-focus today?')).toBe(false)
     expect(isMathQuestion('Explain how plants make food')).toBe(false)
+  })
+
+  describe('bare numbers are not math', () => {
+    it('does NOT flag a year in a listings question', () => {
+      expect(isMathQuestion('when is UPCAT 2026?')).toBe(false)
+      expect(isMathQuestion('what scholarships are open in 2026')).toBe(false)
+    })
+    it('does NOT flag a bare count', () => {
+      expect(isMathQuestion('are there 155 scholarships?')).toBe(false)
+    })
+    it('STILL flags real math', () => {
+      expect(isMathQuestion('what is 12 + 5')).toBe(true)   // operator + digit
+      expect(isMathQuestion('solve 2x + 6 = 14')).toBe(true) // pattern/keyword
+      expect(isMathQuestion('what is 144')).toBe(true)       // weak-interrogative + digit
+      expect(isMathQuestion('simplify 3/4')).toBe(true)      // keyword
+    })
   })
 })
 

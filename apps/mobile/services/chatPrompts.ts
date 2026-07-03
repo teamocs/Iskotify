@@ -321,8 +321,11 @@ export function isMathQuestion(question: string): boolean {
   if (MATH_OPERATORS.test(question) && /\d/.test(question)) return true
   // Algebraic patterns like "5x", "3y + 2"
   if (/\b\d+\s*[xyz]\b/i.test(question)) return true
-  // Multi-digit numbers — a single "1" might just be a list item, but "12" looks math-y
-  if (/\d{2,}/.test(question)) return true
+  // NOTE: a bare multi-digit run (e.g. a year "2026" or a count "155") is NOT
+  // inherently math — that rule was removed because it misrouted factual
+  // listings/scholarship questions ("when is UPCAT 2026?") into math mode.
+  // Real math is still covered by operator+digit, the algebraic pattern above,
+  // strong keywords, and the weak-interrogative+digit rule below ("what is 144").
   if (STRONG_MATH_KEYWORDS.test(question)) return true
   // "what is 7" / "find 5" — interrogative + any digit
   if (WEAK_INTERROGATIVES.test(question) && /\d/.test(question)) return true

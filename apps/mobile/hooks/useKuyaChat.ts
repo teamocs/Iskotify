@@ -15,7 +15,9 @@ import { chatMessages } from '../db/schema'
 import { getSettings } from '../services/settings'
 import { getGeminiKey } from '../services/geminiKey'
 import { generateGeminiReply } from '../services/geminiClient'
-import { classifyDataIntent, answerFromData, ssotNotFoundMessage } from '../services/ssotAnswer'
+import { classifyDataIntent, answerFromData, ssotNotFoundMessage, looksFactual, stripTag } from '../services/ssotAnswer'
+import { buildListingsEnumeration, buildSubjectsContext } from '../services/chatContext'
+import { buildRetrievalQuery } from '../utils/retrievalQuery'
 
 export interface ChatMessage {
   id: string
@@ -218,6 +220,14 @@ export function useKuyaChat(): UseKuyaChat {
     // Snapshot history before this exchange for the LLM prompt (max 10 messages)
     const historyForPrompt = messagesRef.current.slice(-10).map(m => ({ role: m.role, text: m.text }))
 
+    // History-aware retrieval query: anaphoric / very short follow-ups
+    // ("what about abroad?", "and the deadline?") don't carry enough to classify
+    // or retrieve on their own, so prepend the most recent PRIOR user question.
+    // The user-visible message, persistence, and the [QUESTION] shown to the model
+    // all stay `trimmed`; only classification + RAG retrieval use retrievalQuery.
+    const prevUserText = [...messagesRef.current].reverse().find(m => m.role === 'user')?.text ?? null
+    const retrievalQuery = buildRetrievalQuery(trimmed, prevUserText)
+
     // Auto-detect mode from the question itself — no UI picker required.
     const mode = detectChatMode(trimmed)
     const isMath = isMathQuestion(trimmed)
@@ -226,7 +236,8 @@ export function useKuyaChat(): UseKuyaChat {
 
     // SSoT data-intent classification (rule-based, no AI). Non-null → answer
     // deterministically from local DB without the LLM; null → reasoning → LLM.
-    const dataIntent = classifyDataIntent(trimmed)
+    // Classify on the history-aware query so follow-ups route correctly.
+    const dataIntent = classifyDataIntent(retrievalQuery)
 
     InteractionManager.runAfterInteractions(() => {
       void (async () => {
@@ -278,10 +289,27 @@ export function useKuyaChat(): UseKuyaChat {
             getGeminiKey(),
           ])
 
+          // Provider known now (before RAG): cloud Gemini has a ~1M-token context,
+          // so widen the RAG budget/char-cap for it (these fields override the
+          // pipeline builtins only when > 0). Local keeps the tighter aiCfg budget.
+          isGeminiMode = settings.aiProvider === 'gemini' && geminiKey !== null
+          const isGemini = isGeminiMode
+          const ragCfg: AiChatConfig | undefined = isGemini
+            ? {
+                // Default block flags so ragBlocksEnabled is always present; aiCfg
+                // (when loaded) overrides them, then the widened budgets win.
+                ragBlocksEnabled: { flashcards: true, listings: true, courses: true, progress: true },
+                ...(aiCfg ?? {}),
+                ragTotalTokenBudget: Math.max(aiCfg?.ragTotalTokenBudget ?? 0, 2400),
+                ragPerBlockCharCap: Math.max(aiCfg?.ragPerBlockCharCap ?? 0, 700),
+              }
+            : aiCfg
+
           // ── Stage 2: RAG pipeline with resolved cfg ────────────────────────
           // cfg enables block-disabling and budget overrides in the pipeline.
+          // Retrieval uses the history-aware query so follow-ups fetch context.
           const { blocks, sources } = await buildRagContext(
-            dbRef.current, trimmed, effectiveMode, statsRef.current, aiCfg,
+            dbRef.current, retrievalQuery, effectiveMode, statsRef.current, ragCfg,
           )
 
           // Dev debug: log which sources contributed to the context + active overrides
@@ -295,7 +323,28 @@ export function useKuyaChat(): UseKuyaChat {
             if (activeOverrides.length > 0) console.log('[ai-config] overrides:', activeOverrides.join(', '))
           }
 
-          isGeminiMode = settings.aiProvider === 'gemini' && geminiKey !== null
+          // ── Empty-retrieval fallback → deterministic catalog enumeration ───
+          // A factual-looking question (exams/scholarships/schools/subjects…)
+          // that retrieved NOTHING would otherwise let the 1B answer ungrounded.
+          // Enumerate the catalog from local data instead of hallucinating.
+          if (!dataIntent && blocks.trim().length === 0 && looksFactual(retrievalQuery)) {
+            const enumBlock =
+              (await buildListingsEnumeration(dbRef.current, retrievalQuery))
+              ?? (await buildSubjectsContext(dbRef.current))
+            if (enumBlock) {
+              if (controller.signal.aborted || assistantIdRef.current !== assistantId || !isMountedRef.current) return
+              const enumText = stripTag(enumBlock)
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, text: enumText, isStreaming: false } : m
+              ))
+              setIsStreaming(false)
+              void dbRef.current.transaction(async tx => {
+                await tx.insert(chatMessages).values({ role: 'user', text: trimmed, mode: 'topic', createdAt: now })
+                await tx.insert(chatMessages).values({ role: 'assistant', text: enumText, mode: 'topic', createdAt: now + 1 })
+              }).then(() => scheduleWebPersist()).catch(() => {})
+              return
+            }
+          }
 
           // ── Gemini cloud path ─────────────────────────────────────────────
           if (settings.aiProvider === 'gemini' && geminiKey !== null) {
@@ -316,21 +365,37 @@ export function useKuyaChat(): UseKuyaChat {
             // geminiClient still backstops a genuine overflow.
             const maxOutputTokens = isMath ? 1024 : 768
 
-            const reply = await generateGeminiReply(
-              geminiKey,
-              systemPrompt,
-              userContent,
-              { maxOutputTokens, temperature: isMath ? 0.05 : 0.2 },
-            )
+            const geminiOpts = { maxOutputTokens, temperature: isMath ? 0.05 : 0.2 }
+            const reply = await generateGeminiReply(geminiKey, systemPrompt, userContent, geminiOpts)
 
             if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
             if (!isMountedRef.current) return
 
-            const displayText = reply.trim().length === 0
+            // A Tagalog-heavy reply is often correct — don't discard it. Retry ONCE
+            // forcing English; prefer the English retry, else fall back to the
+            // original reply's best-available text (never the old canned re-ask).
+            let best = reply.trim()
+            if (isTagalogHeavy(reply)) {
+              const retry = await generateGeminiReply(
+                geminiKey,
+                systemPrompt,
+                userContent + '\n\n[INSTRUCTION] Your previous reply used Tagalog. Answer again in clear ENGLISH only.',
+                geminiOpts,
+              )
+              if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
+              if (!isMountedRef.current) return
+              const retryText = retry.trim()
+              if (retryText.length > 0 && !isTagalogHeavy(retryText)) {
+                best = retryText // English retry — the good outcome
+              } else if (best.length === 0 && retryText.length > 0) {
+                best = retryText // original empty → use whatever the retry produced
+              }
+              // else keep `best` (the original reply) as the best-available text
+            }
+
+            const displayText = best.length === 0
               ? "I couldn't process that. Try rephrasing your question."
-              : isTagalogHeavy(reply)
-                ? "Let me try that again — could you re-ask your question?"
-                : reply.trim()
+              : best
 
             setMessages(prev => prev.map(m =>
               m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m
@@ -390,11 +455,44 @@ export function useKuyaChat(): UseKuyaChat {
           const totalText = (accumulatedRef.current + finalChunk).trim()
           accumulatedRef.current = ''
 
-          const displayText = totalText.length === 0
+          // A Tagalog-heavy answer is often correct — don't discard it. Re-run the
+          // local model ONCE with an English-forcing instruction appended to the
+          // question (buffer to a string; no need to re-stream to the UI). Prefer
+          // the English retry; else keep the original as the best-available text.
+          let localBest = totalText
+          if (isTagalogHeavy(totalText)) {
+            const retryPrompt = buildChatPrompt(
+              mode,
+              trimmed + '\n\n[INSTRUCTION] Your previous reply used Tagalog. Answer again in clear ENGLISH only.',
+              undefined,
+              historyForPrompt,
+              undefined,
+              undefined,
+              undefined,
+              blocks,
+              localSystemPrompt,
+            )
+            let retryText = ''
+            await streamChatInference(retryPrompt, (tokenText) => {
+              if (controller.signal.aborted) return
+              retryText += parseChatChunk(tokenText)
+            }, controller.signal, samplerOptions)
+
+            if (controller.signal.aborted || assistantIdRef.current !== assistantId) return
+            if (!isMountedRef.current) return
+
+            const retryTrim = retryText.trim()
+            if (retryTrim.length > 0 && !isTagalogHeavy(retryTrim)) {
+              localBest = retryTrim // English retry — the good outcome
+            } else if (localBest.length === 0 && retryTrim.length > 0) {
+              localBest = retryTrim // original empty → use whatever the retry produced
+            }
+            // else keep `localBest` (the original answer) as the best-available text
+          }
+
+          const displayText = localBest.length === 0
             ? "I couldn't process that. Try rephrasing your question."
-            : isTagalogHeavy(totalText)
-              ? "Let me try that again — could you re-ask your question?"
-              : totalText
+            : localBest
 
           setMessages(prev => prev.map(m =>
             m.id === assistantId ? { ...m, text: displayText, isStreaming: false } : m

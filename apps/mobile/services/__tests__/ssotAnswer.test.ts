@@ -7,6 +7,8 @@ import {
   classifyDataIntent,
   answerFromData,
   ssotNotFoundMessage,
+  looksFactual,
+  stripTag,
   type DataIntent,
 } from '../ssotAnswer'
 import { _clearForTests } from '../queryCache'
@@ -158,6 +160,45 @@ describe('classifyDataIntent', () => {
     it('routes "where can nurses work abroad" to destinations, not courses', () => {
       expect(classifyDataIntent('where can nurses work abroad with this course')).toBe('destinations')
     })
+  })
+
+  describe('strong listing signals beat the math guard', () => {
+    it('routes a strong listing signal to listings even if a digit/operator is present', () => {
+      // UPCAT acronym is a strong listing signal; must not be stolen by the math guard.
+      expect(classifyDataIntent('is the UPCAT 2026 exam +2 weeks delayed?')).toBe('listings')
+    })
+    it('still returns null for a pure math question', () => {
+      expect(classifyDataIntent('solve 2x + 6 = 14')).toBe(null)
+    })
+  })
+})
+
+// ── looksFactual: exported factual-lookup guard (Task 6 shared helper) ─────────
+
+describe('looksFactual', () => {
+  it('flags factual-lookup questions', () => {
+    expect(looksFactual('what exams are available')).toBe(true)
+    expect(looksFactual('list the scholarships')).toBe(true)
+    expect(looksFactual('what subjects can I review')).toBe(true)
+  })
+  it('does not flag reasoning questions', () => {
+    expect(looksFactual('what is photosynthesis')).toBe(false)
+    expect(looksFactual('solve 2x + 6 = 14')).toBe(false)
+  })
+  it('returns false for empty input', () => {
+    expect(looksFactual('')).toBe(false)
+    expect(looksFactual('   ')).toBe(false)
+  })
+})
+
+// ── stripTag: exported header-stripping helper (Task 6 shared helper) ──────────
+
+describe('stripTag', () => {
+  it('removes a leading "[TAG]\\n" bracket header', () => {
+    expect(stripTag('[LISTINGS]\n- UPCAT 2026 (exam)')).toBe('- UPCAT 2026 (exam)')
+  })
+  it('leaves untagged text unchanged (trimmed)', () => {
+    expect(stripTag('  plain body  ')).toBe('plain body')
   })
 })
 
