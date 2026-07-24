@@ -327,6 +327,40 @@ describe('HomeScreen', () => {
       expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
     })
 
+    it('a scoreless ACET tile (non-UPCAT, has its own published blueprint) routes to practice/start/acet, not the UPCAT diagnostic', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'acet', priority: 1, title: 'ACET 2026', type: 'exam', examDate: null, deadline: null }],
+      })
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        blueprintSlugs: ['upcat', 'acet', 'ustet'],
+      })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByLabelText('ACET 2026'))
+      expect(router.push).toHaveBeenCalledWith('/practice/start/acet')
+    })
+
+    it('a scoreless exam tile with no published blueprint still routes to the diagnostic', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'random-exam', priority: 1, title: 'Random Exam', type: 'exam', examDate: null, deadline: null }],
+      })
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        blueprintSlugs: ['upcat', 'acet', 'ustet'],
+      })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByLabelText('Random Exam'))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
+    })
+
     it('shows "—" for a focused exam with no readiness data', () => {
       mockUseHomeStats.mockReturnValue({
         ...emptyStats,

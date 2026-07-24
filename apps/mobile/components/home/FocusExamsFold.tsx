@@ -10,7 +10,7 @@ import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { subjectColor } from '../../utils/subjectColors'
 import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import {
-  buildFocusExamSlots, buildExamPickerOptions, examAcronym,
+  buildFocusExamSlots, buildExamPickerOptions, examAcronym, resolveFocusTileRoute,
   DEFAULT_SUGGESTED_EXAM_SLUGS, type FocusExamSlot,
 } from '../../utils/focusExamSlots'
 import type { ExamListingSummary, BlueprintInfo } from '../../hooks/useHomeCatalog'
@@ -80,7 +80,7 @@ export function FocusExamsFold({
     if (slot.kind === 'blank') { setPickerOpen(true); return }
     if (slot.kind === 'suggested') { void onAddListing(slot.slug); return }
     const hasScore = readinessFor(slot.slug) != null
-    router.push(hasScore ? (`/practice/start/${slot.slug}` as never) : ('/practice/diagnostic' as never))
+    router.push(resolveFocusTileRoute(slot.slug, hasScore, blueprintSlugs) as never)
   }
 
   const s = useMemo(() => makeStyles(), [])

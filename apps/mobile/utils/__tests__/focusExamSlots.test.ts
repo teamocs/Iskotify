@@ -1,5 +1,5 @@
 import {
-  buildFocusExamSlots, buildExamPickerOptions, examAcronym,
+  buildFocusExamSlots, buildExamPickerOptions, examAcronym, resolveFocusTileRoute,
   DEFAULT_SUGGESTED_EXAM_SLUGS, FOCUS_EXAM_SLOT_COUNT,
 } from '../focusExamSlots'
 
@@ -98,5 +98,29 @@ describe('buildExamPickerOptions', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ slug: `e${i}`, title: `Exam ${i}` }))
     const opts = buildExamPickerOptions(many, [], new Map(), new Set(), 9)
     expect(opts).toHaveLength(9)
+  })
+})
+
+describe('resolveFocusTileRoute', () => {
+  const blueprintSlugs = ['upcat', 'acet', 'ustet']
+
+  it('routes a scored exam to its own practice/start page, regardless of blueprint', () => {
+    expect(resolveFocusTileRoute('upcat', true, blueprintSlugs)).toBe('/practice/start/upcat')
+    expect(resolveFocusTileRoute('acet', true, blueprintSlugs)).toBe('/practice/start/acet')
+    expect(resolveFocusTileRoute('random-exam', true, [])).toBe('/practice/start/random-exam')
+  })
+
+  it('routes a scoreless UPCAT tile to the diagnostic (diagnostic content is UPCAT-based)', () => {
+    expect(resolveFocusTileRoute('upcat', false, blueprintSlugs)).toBe('/practice/diagnostic')
+  })
+
+  it('routes a scoreless non-UPCAT tile with its own published blueprint to practice/start/:slug', () => {
+    expect(resolveFocusTileRoute('acet', false, blueprintSlugs)).toBe('/practice/start/acet')
+    expect(resolveFocusTileRoute('ustet', false, blueprintSlugs)).toBe('/practice/start/ustet')
+  })
+
+  it('routes a scoreless exam with no published blueprint to the diagnostic', () => {
+    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs)).toBe('/practice/diagnostic')
+    expect(resolveFocusTileRoute('acet', false, [])).toBe('/practice/diagnostic')
   })
 })

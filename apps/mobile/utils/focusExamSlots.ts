@@ -96,6 +96,33 @@ export function examAcronym(title: string, blueprintAcronym?: string | null): st
   return title.trim().slice(0, 4).toUpperCase() || '?'
 }
 
+// ── Tile-tap routing ─────────────────────────────────────────────────────────
+
+/**
+ * resolveFocusTileRoute — where a "My Entrance Exams" tile tap should navigate.
+ *
+ *   - A scored tile always goes to its own /practice/start/:slug chooser
+ *     (mock exam / Study Sprint), regardless of blueprint status.
+ *   - A scoreless tile goes to the diagnostic ONLY when it's UPCAT (the
+ *     diagnostic's content and recorded sessions are UPCAT-based — see
+ *     services/diagnostic listingSlug 'upcat') or when the exam has no
+ *     published blueprint (no mock content exists to start yet).
+ *   - A scoreless non-UPCAT exam WITH its own published blueprint has a
+ *     mock/sprint chooser of its own, so it routes there instead of
+ *     dead-ending into the UPCAT diagnostic.
+ */
+export function resolveFocusTileRoute(
+  slug: string,
+  hasScore: boolean,
+  blueprintSlugs: readonly string[],
+): string {
+  if (!hasScore && slug !== 'upcat' && !blueprintSlugs.includes(slug)) {
+    return '/practice/diagnostic'
+  }
+  if (!hasScore && slug === 'upcat') return '/practice/diagnostic'
+  return `/practice/start/${slug}`
+}
+
 // ── Exam picker modal options ────────────────────────────────────────────────
 
 export interface ExamPickerOption {
