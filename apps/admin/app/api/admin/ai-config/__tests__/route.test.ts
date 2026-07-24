@@ -106,6 +106,9 @@ describe('GET /api/admin/ai-config', () => {
     expect(json.defaults).toHaveProperty('ragTotalTokenBudget')
     expect(json.defaults.ragTotalTokenBudget).toBe(700)
     expect(json.defaults.ragPerBlockCharCap).toBe(280)
+    // Kuya Baw kill-switch default — retired (false) until an admin flips it on.
+    expect(json.defaults).toHaveProperty('chatEnabled')
+    expect(json.defaults.chatEnabled).toBe(false)
   })
 
   it('returns config=null when row not found (PGRST116)', async () => {
@@ -184,5 +187,47 @@ describe('PUT /api/admin/ai-config', () => {
 
     const call = upsertCalls.find(c => c.table === 'ai_chat_config')
     expect(call?.data.id).toBe(1)
+    // chat_enabled is untouched when the field isn't in the body at all.
+    expect(call?.data).not.toHaveProperty('chat_enabled')
+  })
+
+  // ── Kuya Baw kill-switch — chat_enabled ────────────────────────────────────
+  it('forwards chat_enabled = true when the admin flips the toggle on', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+    mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+    mockUpsert.mockReturnValue({ error: null })
+
+    const { PUT } = await import('../route')
+    const res = await PUT(makeReq('PUT', { chat_enabled: true }))
+    expect(res.status).toBe(200)
+
+    const call = upsertCalls.find(c => c.table === 'ai_chat_config')
+    expect(call?.data.chat_enabled).toBe(true)
+  })
+
+  it('forwards chat_enabled = false when the admin flips the toggle off', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+    mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+    mockUpsert.mockReturnValue({ error: null })
+
+    const { PUT } = await import('../route')
+    const res = await PUT(makeReq('PUT', { chat_enabled: false }))
+    expect(res.status).toBe(200)
+
+    const call = upsertCalls.find(c => c.table === 'ai_chat_config')
+    expect(call?.data.chat_enabled).toBe(false)
+  })
+
+  it('coerces a non-boolean chat_enabled to false (fail-closed)', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+    mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+    mockUpsert.mockReturnValue({ error: null })
+
+    const { PUT } = await import('../route')
+    const res = await PUT(makeReq('PUT', { chat_enabled: 'yes' }))
+    expect(res.status).toBe(200)
+
+    const call = upsertCalls.find(c => c.table === 'ai_chat_config')
+    expect(call?.data.chat_enabled).toBe(false)
   })
 })

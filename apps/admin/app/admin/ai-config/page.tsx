@@ -23,6 +23,7 @@ interface AiChatConfigRow {
     courses: boolean
     progress: boolean
   }
+  chat_enabled: boolean
   updated_at: string | null
 }
 

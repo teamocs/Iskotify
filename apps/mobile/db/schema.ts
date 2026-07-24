@@ -511,6 +511,8 @@ export const aiChatConfig = sqliteTable('ai_chat_config', {
   ragPerBlockCharCap:       integer('rag_per_block_char_cap').notNull().default(280),
   // jsonb stored as TEXT on SQLite; default is all-enabled JSON
   ragBlocksEnabled:         text('rag_blocks_enabled').notNull().default('{}'),
+  // Kuya Baw kill-switch — retired by default (0) until an admin re-enables it remotely.
+  chatEnabled:              integer('chat_enabled', { mode: 'boolean' }).notNull().default(false),
   remoteUpdatedAt:          integer('remote_updated_at'),
 })
 

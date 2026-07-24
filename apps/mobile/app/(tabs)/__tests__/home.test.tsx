@@ -34,6 +34,14 @@ jest.mock('../../../providers/KuyaChatProvider', () => ({
   useKuyaChatModal: () => ({ open: mockOpenKuya }),
 }))
 
+// Kuya Baw kill-switch — default enabled=true so the pre-existing hero-band
+// assertions below reflect the pre-kill-switch behavior. A dedicated describe
+// block further down covers the disabled (hidden hero band) case.
+const mockUseKuyaEnabled = jest.fn(() => ({ enabled: true, loading: false }))
+jest.mock('../../../hooks/useKuyaEnabled', () => ({
+  useKuyaEnabled: () => mockUseKuyaEnabled(),
+}))
+
 // Controlled admissions rows — override per-test via mockAdmissionsRows.value
 const mockAdmissionsRows = { value: [] as any[] }
 
@@ -156,6 +164,7 @@ describe('HomeScreen', () => {
   beforeEach(() => {
     mockUseHomeStats.mockReturnValue(emptyStats)
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockUseKuyaEnabled.mockReturnValue({ enabled: true, loading: false })
     mockTopicBest.value = []
     mockSubjectBest.value = []
     // The session-readiness cache is module-level — reset it so each test sees
@@ -601,5 +610,24 @@ describe('HomeScreen', () => {
     render(<HomeScreen />)
     // t1 = max(90,50)=90 ; t2 = max(null,50)=50 → (90+50)/2 = 70
     expect(await screen.findByText('70%')).toBeTruthy()
+  })
+
+  // ── Kuya Baw kill-switch ────────────────────────────────────────────────────
+  describe('Kuya Baw kill-switch — chat disabled', () => {
+    it('hides the entire hero band (mascot, speech bubble, AI Coach badge)', () => {
+      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
+      render(<HomeScreen />)
+      expect(screen.queryByText('Kuya Baw')).toBeNull()
+      expect(screen.queryByText('AI Coach')).toBeNull()
+      expect(screen.queryByLabelText('Ask Kuya Baw')).toBeNull()
+      expect(screen.queryByLabelText('Tap Kuya Baw for a new tip')).toBeNull()
+    })
+
+    it('still renders the rest of the home screen (Explore, My Focus) without the hero band', () => {
+      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
+      render(<HomeScreen />)
+      expect(screen.getByText('Explore')).toBeTruthy()
+      expect(screen.getByText('My Focus')).toBeTruthy()
+    })
   })
 })

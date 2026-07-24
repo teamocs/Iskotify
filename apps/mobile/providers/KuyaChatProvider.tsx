@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
-import { Platform } from 'react-native'
+import { Alert, Platform } from 'react-native'
 import { AskKuyaModal } from '../components/AskKuyaModal'
 import { KuyaDownloadSheet } from '../components/KuyaDownloadSheet'
 import { modelExists, hasEnoughRam, warmUpLlama } from '../services/llm'
 import { getGeminiKey } from '../services/geminiKey'
 import { getSettings } from '../services/settings'
+import { getAiConfig } from '../services/aiConfig'
 import { useDb } from '../hooks/useDb'
 import { capture } from '../lib/analytics'
+
+const KILL_SWITCH_MESSAGE = 'Kuya Baw is taking a break — check back soon.'
 
 interface KuyaChatValue {
   open: () => void
@@ -60,8 +63,23 @@ export function KuyaChatProvider({ children }: { children: ReactNode }) {
     setChatVisible(true)
   }, [])
 
-  // Tap handler: check provider preference first, then model availability.
+  // Tap handler: check the kill-switch first, then provider preference, then model availability.
   const open = useCallback(async () => {
+    // --- Kill-switch: defense in depth behind the 4 hidden entry points. Any
+    // caller that somehow still reaches open() (e.g. a stale render) gets a
+    // friendly bounce instead of a chat that can't actually be used. ---
+    try {
+      const cfg = await getAiConfig(db)
+      if (!cfg.chatEnabled) {
+        Alert.alert('', KILL_SWITCH_MESSAGE)
+        return
+      }
+    } catch {
+      // Fail-closed: if the config read itself fails, treat chat as disabled.
+      Alert.alert('', KILL_SWITCH_MESSAGE)
+      return
+    }
+
     capture('kuya_chat_opened', { platform: Platform.OS })
     // --- Web path: local model is unavailable — only Gemini is supported ---
     if (Platform.OS === 'web') {

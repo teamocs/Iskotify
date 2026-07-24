@@ -26,6 +26,7 @@ function makeDb(): DrizzleClient {
       rag_total_token_budget INTEGER NOT NULL DEFAULT 700,
       rag_per_block_char_cap INTEGER NOT NULL DEFAULT 280,
       rag_blocks_enabled TEXT NOT NULL DEFAULT '{}',
+      chat_enabled INTEGER NOT NULL DEFAULT 0,
       remote_updated_at INTEGER
     );
   `)
@@ -178,6 +179,28 @@ describe('getAiConfig — ragBlocksEnabled parsing', () => {
     await db.insert(schema.aiChatConfig).values({ id: 1, ragBlocksEnabled: '' })
     const cfg = await getAiConfig(db)
     expect(cfg.ragBlocksEnabled).toEqual({ flashcards: true, listings: true, courses: true, progress: true })
+  })
+})
+
+describe('getAiConfig — chatEnabled (Kuya Baw kill-switch)', () => {
+  it('defaults to false when there is no row at all', async () => {
+    const db = makeDb()
+    const cfg = await getAiConfig(db)
+    expect(cfg.chatEnabled).toBe(false)
+  })
+
+  it('defaults to false when the row has chat_enabled = 0', async () => {
+    const db = makeDb()
+    await db.insert(schema.aiChatConfig).values({ id: 1, chatEnabled: false, ragBlocksEnabled: '{}' })
+    const cfg = await getAiConfig(db)
+    expect(cfg.chatEnabled).toBe(false)
+  })
+
+  it('is true only when the row has chat_enabled = 1', async () => {
+    const db = makeDb()
+    await db.insert(schema.aiChatConfig).values({ id: 1, chatEnabled: true, ragBlocksEnabled: '{}' })
+    const cfg = await getAiConfig(db)
+    expect(cfg.chatEnabled).toBe(true)
   })
 })
 

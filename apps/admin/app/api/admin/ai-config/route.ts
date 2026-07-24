@@ -69,6 +69,9 @@ export async function PUT(req: NextRequest) {
   if ('rag_blocks_enabled' in body && typeof body.rag_blocks_enabled === 'object') {
     payload.rag_blocks_enabled = body.rag_blocks_enabled
   }
+  if ('chat_enabled' in body) {
+    payload.chat_enabled = body.chat_enabled === true
+  }
 
   const { error } = await supabase
     .from('ai_chat_config')

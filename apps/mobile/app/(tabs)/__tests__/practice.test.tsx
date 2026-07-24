@@ -76,6 +76,14 @@ jest.mock('../../../providers/KuyaChatProvider', () => ({
   useKuyaChatModal: () => ({ open: mockOpenKuya }),
 }))
 
+// Kuya Baw kill-switch — default enabled=true so the pre-existing "AI Chat" study-tools
+// card assertions below reflect the pre-kill-switch behavior. A dedicated describe block
+// further down covers the disabled case.
+const mockUseKuyaEnabled = jest.fn(() => ({ enabled: true, loading: false }))
+jest.mock('../../../hooks/useKuyaEnabled', () => ({
+  useKuyaEnabled: () => mockUseKuyaEnabled(),
+}))
+
 // Mock listPublishedBlueprints — tests override this via mockListPublishedBlueprints
 const mockListPublishedBlueprints = jest.fn().mockResolvedValue([])
 jest.mock('../../../services/examBlueprints', () => ({
@@ -255,6 +263,29 @@ describe('PracticeScreen', () => {
     fireEvent.press(screen.getByTestId('study-tools-collapsed'))
     fireEvent.press(screen.getByText('AI Chat'))
     expect(mockOpenKuya).toHaveBeenCalledTimes(1)
+  })
+
+  describe('Kuya Baw kill-switch — chat disabled', () => {
+    beforeEach(() => {
+      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
+    })
+    afterEach(() => {
+      mockUseKuyaEnabled.mockReturnValue({ enabled: true, loading: false })
+    })
+
+    it('hides the AI Chat card in Study Tools while keeping Notes/Requirements', () => {
+      render(<PracticeScreen />)
+      fireEvent.press(screen.getByTestId('study-tools-collapsed'))
+      expect(screen.getByText('Notes')).toBeTruthy()
+      expect(screen.getByText('Requirements')).toBeTruthy()
+      expect(screen.queryByText('AI Chat')).toBeNull()
+    })
+
+    it('drops "AI Chat" from the collapsed Study Tools subtitle', () => {
+      render(<PracticeScreen />)
+      expect(screen.getByText('Requirements · Notes')).toBeTruthy()
+      expect(screen.queryByText('Requirements · Notes · AI Chat')).toBeNull()
+    })
   })
 
   it('Saved Decks section header always shown (create deck reachable)', () => {

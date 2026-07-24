@@ -39,6 +39,12 @@ export interface AiChatConfig {
     courses: boolean
     progress: boolean
   }
+  /**
+   * Kuya Baw kill-switch. Retired by default — chat is hidden app-wide unless
+   * an admin explicitly re-enables it remotely. Missing row/column → false
+   * (fail-closed), unlike the override/budget fields above.
+   */
+  chatEnabled: boolean
 }
 
 const ALL_BLOCKS_ENABLED = { flashcards: true, listings: true, courses: true, progress: true }
@@ -77,7 +83,7 @@ export async function getAiConfig(db: DrizzleClient): Promise<AiChatConfig> {
       const rows = await db.select().from(aiChatConfig).where(eq(aiChatConfig.id, 1)).limit(1)
       const row = rows[0]
       if (!row) {
-        return { ragBlocksEnabled: { ...ALL_BLOCKS_ENABLED } }
+        return { ragBlocksEnabled: { ...ALL_BLOCKS_ENABLED }, chatEnabled: false }
       }
       return {
         coreRulesOverride:        nonEmpty(row.coreRulesOverride),
@@ -90,9 +96,11 @@ export async function getAiConfig(db: DrizzleClient): Promise<AiChatConfig> {
         ragTotalTokenBudget:      positiveInt(row.ragTotalTokenBudget),
         ragPerBlockCharCap:       positiveInt(row.ragPerBlockCharCap),
         ragBlocksEnabled:         parseBlocksEnabled(row.ragBlocksEnabled),
+        // Missing/falsy column (including pre-migration rows) → disabled.
+        chatEnabled:              row.chatEnabled === true,
       }
     } catch {
-      return { ragBlocksEnabled: { ...ALL_BLOCKS_ENABLED } }
+      return { ragBlocksEnabled: { ...ALL_BLOCKS_ENABLED }, chatEnabled: false }
     }
   })
 }

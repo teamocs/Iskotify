@@ -21,6 +21,7 @@ interface AiChatConfigRow {
     courses: boolean
     progress: boolean
   }
+  chat_enabled: boolean
   updated_at: string | null
 }
 
@@ -58,6 +59,7 @@ export function AiConfigEditor({ initialConfig, defaults }: Props) {
   const [totalBudget, setTotalBudget] = useState(initialConfig?.rag_total_token_budget ?? 0)
   const [charCap, setCharCap]         = useState(initialConfig?.rag_per_block_char_cap ?? 0)
   const [blocks, setBlocks]           = useState(toBlocks(initialConfig?.rag_blocks_enabled))
+  const [chatEnabled, setChatEnabled] = useState(initialConfig?.chat_enabled ?? defaults.chatEnabled)
 
   async function handleSave() {
     setSaving(true)
@@ -78,6 +80,7 @@ export function AiConfigEditor({ initialConfig, defaults }: Props) {
           rag_total_token_budget: totalBudget,
           rag_per_block_char_cap: charCap,
           rag_blocks_enabled: blocks,
+          chat_enabled: chatEnabled,
         }),
       })
       if (!res.ok) {
@@ -124,6 +127,27 @@ export function AiConfigEditor({ initialConfig, defaults }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* Kill-switch — Kuya Baw is retired by default until an admin flips this on. */}
+      <section className="rounded-2xl border border-black/[0.08] bg-white shadow-sm p-6 space-y-3">
+        <h3 className="font-heading font-semibold text-[#1d1d1f] text-base">Kuya Baw Chat</h3>
+        <p className="text-xs text-[#6e6e73]">
+          Chat is retired by default app-wide (hero band, tab bar FAB, sidebar, and Practice tab
+          entry points are all hidden) until this is turned on. Students already syncing pick up
+          the change on their next app sync.
+        </p>
+        <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-[#800000] focus:ring-[#800000]"
+            checked={chatEnabled}
+            onChange={e => setChatEnabled(e.target.checked)}
+          />
+          <span className="text-sm font-semibold text-[#1d1d1f]">
+            Chat enabled {chatEnabled ? '(live for all students)' : '(hidden for all students)'}
+          </span>
+        </label>
+      </section>
+
       {/* Core guardrails */}
       <section className="rounded-2xl border border-black/[0.08] bg-white shadow-sm p-6 space-y-5">
         <h3 className="font-heading font-semibold text-[#1d1d1f] text-base">Core Rules Override</h3>

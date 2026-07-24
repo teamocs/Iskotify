@@ -14,6 +14,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 import { useKuyaChatModal } from '../providers/KuyaChatProvider'
+import { useKuyaEnabled } from '../hooks/useKuyaEnabled'
 
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
   index:     { label: 'Home',    icon: Home2Outlined },
@@ -57,6 +58,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
   const { open: openKuya } = useKuyaChatModal()
+  const { enabled: kuyaEnabled } = useKuyaEnabled()
 
   const routeByName = new Map(state.routes.map(r => [r.name, r]))
 
@@ -89,21 +91,24 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     >
       {LEFT_TABS.map(renderTab)}
 
-      {/* Center "Ask Kuya Baw" — raised circular accent button (quick chat access) */}
-      <View style={styles.centerSlot}>
-        <Pressable
-          onPress={openKuya}
-          style={({ pressed }) => [styles.fab, { backgroundColor: t.surface2, borderColor: t.border }, pressed && { opacity: 0.88 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Ask Kuya Baw"
-        >
-          <Image
-            source={require('../assets/images/kuya-baw-logo.png')}
-            style={styles.fabImg}
-            resizeMode="cover"
-          />
-        </Pressable>
-      </View>
+      {/* Center "Ask Kuya Baw" — raised circular accent button (quick chat access).
+          Hidden while chat is retired (kill-switch) so the bar renders without the FAB. */}
+      {kuyaEnabled && (
+        <View style={styles.centerSlot}>
+          <Pressable
+            onPress={openKuya}
+            style={({ pressed }) => [styles.fab, { backgroundColor: t.surface2, borderColor: t.border }, pressed && { opacity: 0.88 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Ask Kuya Baw"
+          >
+            <Image
+              source={require('../assets/images/kuya-baw-logo.png')}
+              style={styles.fabImg}
+              resizeMode="cover"
+            />
+          </Pressable>
+        </View>
+      )}
 
       {RIGHT_TABS.map(renderTab)}
     </View>

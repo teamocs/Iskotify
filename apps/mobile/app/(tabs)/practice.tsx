@@ -36,6 +36,7 @@ import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
+import { useKuyaEnabled } from '../../hooks/useKuyaEnabled'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch } from '../../services/sync'
 
@@ -637,6 +638,7 @@ export default function PracticeScreen() {
   }, [db, refresh, refreshing, sync.isSyncing])
 
   const { open: openKuya } = useKuyaChatModal()
+  const { enabled: kuyaEnabled } = useKuyaEnabled()
 
   const { theme: t, typo } = useTheme()
   // Web-only adaptive grids: native tablets (iPad etc.) keep the phone 2-col
@@ -1038,13 +1040,15 @@ export default function PracticeScreen() {
                   subtitle="Your study notes & reminders"
                   onPress={() => router.push('/notes')}
                 />
-                <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>💬</Text>}
-                  iconBg="rgba(34,197,94,0.14)"
-                  title="AI Chat"
-                  subtitle="Ask Kuya Baw anything about exams & courses"
-                  onPress={() => { void openKuya() }}
-                />
+                {kuyaEnabled && (
+                  <ListCard
+                    icon={<Text style={{ fontSize: 15 }}>💬</Text>}
+                    iconBg="rgba(34,197,94,0.14)"
+                    title="AI Chat"
+                    subtitle="Ask Kuya Baw anything about exams & courses"
+                    onPress={() => { void openKuya() }}
+                  />
+                )}
               </View>
             </View>
           ) : (
@@ -1059,7 +1063,7 @@ export default function PracticeScreen() {
               <Text style={s.collapsedIcon}>🛠️</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.collapsedLabel}>Study Tools</Text>
-                <Text style={s.collapsedSub}>Requirements · Notes · AI Chat</Text>
+                <Text style={s.collapsedSub}>{kuyaEnabled ? 'Requirements · Notes · AI Chat' : 'Requirements · Notes'}</Text>
               </View>
               <Text style={s.collapsedChevron}>›</Text>
             </Pressable>

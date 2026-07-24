@@ -24,6 +24,14 @@ jest.mock('../../providers/KuyaChatProvider', () => ({
   useKuyaChatModal: () => ({ open: jest.fn() }),
 }))
 
+// Mock the Kuya Baw kill-switch hook — default enabled=true so the existing
+// "renders Kuya Baw entry" assertions below reflect the pre-kill-switch behavior.
+// A dedicated describe block further down covers the disabled case.
+const mockUseKuyaEnabled = jest.fn(() => ({ enabled: true, loading: false }))
+jest.mock('../../hooks/useKuyaEnabled', () => ({
+  useKuyaEnabled: () => mockUseKuyaEnabled(),
+}))
+
 // Mock useWindowDimensions to return a desktop-width screen
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   default: () => ({ width: 1280, height: 900, scale: 1, fontScale: 1 }),
@@ -73,5 +81,24 @@ describe('SidebarNav', () => {
     const buttons = getAllByRole('button')
     const examsBtn = buttons.find(b => b.props.accessibilityLabel === 'Exams')
     expect(examsBtn?.props.accessibilityState?.selected).toBe(false)
+  })
+})
+
+describe('SidebarNav — Kuya Baw kill-switch', () => {
+  afterEach(() => {
+    mockUseKuyaEnabled.mockReturnValue({ enabled: true, loading: false })
+  })
+
+  it('hides the Ask Kuya Baw entry when chat is disabled', () => {
+    mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
+    const { queryByText } = render(<SidebarNav />)
+    expect(queryByText('Ask Kuya Baw')).toBeNull()
+  })
+
+  it('still renders the primary nav items when chat is disabled', () => {
+    mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
+    const { getByText } = render(<SidebarNav />)
+    expect(getByText('Home')).toBeTruthy()
+    expect(getByText('Exams')).toBeTruthy()
   })
 })

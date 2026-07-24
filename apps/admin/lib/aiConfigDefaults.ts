@@ -110,6 +110,13 @@ export const BUILTIN_MATH_ADDENDUM =
 export const BUILTIN_RAG_TOTAL_TOKEN_BUDGET = 700
 export const BUILTIN_RAG_PER_BLOCK_CHAR_CAP = 280
 
+/**
+ * Kuya Baw kill-switch default. Chat is retired by default (Task 1) — an admin
+ * must explicitly flip this on in the AI Chat Config page to bring it back.
+ * Must match the migration default (`chat_enabled boolean not null default false`).
+ */
+export const BUILTIN_CHAT_ENABLED = false
+
 /** Convenience shape for the admin GET /api/admin/ai-config defaults field. */
 export interface AiConfigDefaults {
   coreRules: string
@@ -121,6 +128,7 @@ export interface AiConfigDefaults {
   mathAddendum: string
   ragTotalTokenBudget: number
   ragPerBlockCharCap: number
+  chatEnabled: boolean
 }
 
 export const AI_CONFIG_DEFAULTS: AiConfigDefaults = {
@@ -133,4 +141,5 @@ export const AI_CONFIG_DEFAULTS: AiConfigDefaults = {
   mathAddendum:        BUILTIN_MATH_ADDENDUM,
   ragTotalTokenBudget: BUILTIN_RAG_TOTAL_TOKEN_BUDGET,
   ragPerBlockCharCap:  BUILTIN_RAG_PER_BLOCK_CHAR_CAP,
+  chatEnabled:         BUILTIN_CHAT_ENABLED,
 }

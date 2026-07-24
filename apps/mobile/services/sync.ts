@@ -358,7 +358,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .gt('updated_at', since),
       // AI chat config — single row (id=1). incremental: only pull when updated_at changed.
       supabase.from('ai_chat_config')
-        .select('id,core_rules_override,scope_block_override,grounding_rule_override,anti_injection_override,progress_addendum_override,topic_addendum_override,math_addendum_override,rag_total_token_budget,rag_per_block_char_cap,rag_blocks_enabled,updated_at')
+        .select('id,core_rules_override,scope_block_override,grounding_rule_override,anti_injection_override,progress_addendum_override,topic_addendum_override,math_addendum_override,rag_total_token_budget,rag_per_block_char_cap,rag_blocks_enabled,chat_enabled,updated_at')
         .gt('updated_at', since),
     ])
 
@@ -727,6 +727,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
         // jsonb → store as JSON string on SQLite
         ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
+        // Kuya Baw kill-switch — missing column (pre-migration remote) → disabled.
+        chatEnabled:              !!row.chat_enabled,
         remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), aiChatConfig.id)
 

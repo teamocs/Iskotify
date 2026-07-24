@@ -23,6 +23,7 @@ import { subjectsToImprove } from '../../utils/subjectsToImprove'
 import { subjectColor } from '../../utils/subjectColors'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useAiCoach } from '../../hooks/useAiCoach'
+import { useKuyaEnabled } from '../../hooks/useKuyaEnabled'
 import { useTheme } from '../../theme/ThemeContext'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 import { useDb } from '../../hooks/useDb'
@@ -315,6 +316,7 @@ export default function HomeScreen() {
   const [showNotifModal, setShowNotifModal] = useState(false)
   const { phrase: kuyaMsg, onTap: onKuyaTap } = useAiCoach()
   const { open: openKuya } = useKuyaChatModal()
+  const { enabled: kuyaEnabled } = useKuyaEnabled()
 
   const [upcomingExpanded, setUpcomingExpanded] = useState(false)
 
@@ -601,32 +603,36 @@ export default function HomeScreen() {
 
         <View>
 
-          {/* (2) Hero band — full-bleed maroon stripe, animated Kuya Baw overhanging it */}
-          <View style={s.heroWrap}>
-            <View style={s.heroBand} />
-            <Pressable
-              style={s.heroMascot}
-              onPress={onKuyaTap}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Tap Kuya Baw for a new tip"
-            >
-              <KuyaHeroAnimation width={MASCOT_W} height={MASCOT_H} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [s.heroBubble, pressed && { opacity: 0.85 }]}
-              onPress={() => { void openKuya() }}
-              accessibilityRole="button"
-              accessibilityLabel="Ask Kuya Baw"
-            >
-              <View style={s.kuyaNameRow}>
-                <Text style={s.kuyaName} maxFontSizeMultiplier={1.4}>Kuya Baw</Text>
-                <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText} maxFontSizeMultiplier={1.4}>AI Coach</Text></View>
-              </View>
-              <Text style={s.kuyaText} numberOfLines={3} maxFontSizeMultiplier={1.4}>{kuyaMsg}</Text>
-              <Text style={s.askHint} maxFontSizeMultiplier={1.4}>Ask Kuya Baw ›</Text>
-            </Pressable>
-          </View>
+          {/* (2) Hero band — full-bleed maroon stripe, animated Kuya Baw overhanging it.
+              Hidden app-wide while chat is retired (kill-switch); Task 3 replaces this
+              area entirely, so this gate is intentionally the whole band, nothing fancier. */}
+          {kuyaEnabled && (
+            <View style={s.heroWrap}>
+              <View style={s.heroBand} />
+              <Pressable
+                style={s.heroMascot}
+                onPress={onKuyaTap}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Tap Kuya Baw for a new tip"
+              >
+                <KuyaHeroAnimation width={MASCOT_W} height={MASCOT_H} />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [s.heroBubble, pressed && { opacity: 0.85 }]}
+                onPress={() => { void openKuya() }}
+                accessibilityRole="button"
+                accessibilityLabel="Ask Kuya Baw"
+              >
+                <View style={s.kuyaNameRow}>
+                  <Text style={s.kuyaName} maxFontSizeMultiplier={1.4}>Kuya Baw</Text>
+                  <View style={s.kuyaBadge}><Text style={s.kuyaBadgeText} maxFontSizeMultiplier={1.4}>AI Coach</Text></View>
+                </View>
+                <Text style={s.kuyaText} numberOfLines={3} maxFontSizeMultiplier={1.4}>{kuyaMsg}</Text>
+                <Text style={s.askHint} maxFontSizeMultiplier={1.4}>Ask Kuya Baw ›</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* (3) Explore — discovery quick-links into the Lists screen's tabs */}
           <View style={s.section}>

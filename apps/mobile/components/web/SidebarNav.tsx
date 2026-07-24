@@ -26,6 +26,7 @@ import {
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
+import { useKuyaEnabled } from '../../hooks/useKuyaEnabled'
 import { spacing, radius, typography } from '../../theme/tokens'
 
 const SIDEBAR_WIDTH = 240
@@ -118,6 +119,7 @@ export function SidebarNav() {
   const { theme: t } = useTheme()
   const pathname = usePathname()
   const { open: openKuya } = useKuyaChatModal()
+  const { enabled: kuyaEnabled } = useKuyaEnabled()
 
   return (
     <View
@@ -152,32 +154,34 @@ export function SidebarNav() {
         ))}
       </View>
 
-      {/* Ask Kuya Baw entry — mascot mini */}
-      <Pressable
-        onPress={() => { void openKuya() }}
-        accessibilityRole="button"
-        accessibilityLabel="Ask Kuya Baw"
-        style={(state) => {
-          const { hovered, pressed } = state as { hovered?: boolean; pressed: boolean }
-          return [
-            styles.kuyaRow,
-            { borderColor: t.border },
-            hovered && { backgroundColor: t.surface },
-            pressed && { opacity: 0.8 },
-          ]
-        }}
-      >
-        <Image
-          source={require('../../assets/images/kuya-baw-logo.png')}
-          style={styles.kuyaImg}
-          resizeMode="contain"
-          accessibilityLabel="Kuya Baw mascot"
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kuyaLabel, { color: t.accentText }]}>Ask Kuya Baw</Text>
-          <Text style={[styles.kuyaSub, { color: t.textTertiary }]}>AI Study Coach</Text>
-        </View>
-      </Pressable>
+      {/* Ask Kuya Baw entry — mascot mini. Hidden while chat is retired (kill-switch). */}
+      {kuyaEnabled && (
+        <Pressable
+          onPress={() => { void openKuya() }}
+          accessibilityRole="button"
+          accessibilityLabel="Ask Kuya Baw"
+          style={(state) => {
+            const { hovered, pressed } = state as { hovered?: boolean; pressed: boolean }
+            return [
+              styles.kuyaRow,
+              { borderColor: t.border },
+              hovered && { backgroundColor: t.surface },
+              pressed && { opacity: 0.8 },
+            ]
+          }}
+        >
+          <Image
+            source={require('../../assets/images/kuya-baw-logo.png')}
+            style={styles.kuyaImg}
+            resizeMode="contain"
+            accessibilityLabel="Kuya Baw mascot"
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kuyaLabel, { color: t.accentText }]}>Ask Kuya Baw</Text>
+            <Text style={[styles.kuyaSub, { color: t.textTertiary }]}>AI Study Coach</Text>
+          </View>
+        </Pressable>
+      )}
 
       {/* Spacer pushes bottom items down */}
       <View style={{ flex: 1 }} />
