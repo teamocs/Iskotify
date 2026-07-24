@@ -31,10 +31,24 @@ describe('normalizeSchoolType', () => {
     expect(normalizeSchoolType('Private — Non-Sectarian University')).toBe('Private')
   })
 
-  it('falls back to Other for ambiguous/ungrouped free text', () => {
-    expect(normalizeSchoolType('State')).toBe('Other')
-    expect(normalizeSchoolType('Local')).toBe('Other')
-    expect(normalizeSchoolType('Local Government')).toBe('Other')
+  it('buckets bare "State" (exact match, trimmed/case-insensitive) as SUC', () => {
+    expect(normalizeSchoolType('State')).toBe('SUC')
+    expect(normalizeSchoolType('state')).toBe('SUC')
+    expect(normalizeSchoolType('  State  ')).toBe('SUC')
+    expect(normalizeSchoolType('STATE')).toBe('SUC')
+  })
+
+  it('buckets anything starting with "Local" as LUC', () => {
+    expect(normalizeSchoolType('Local')).toBe('LUC')
+    expect(normalizeSchoolType('Local University')).toBe('LUC')
+    expect(normalizeSchoolType('Local Government')).toBe('LUC')
+    expect(normalizeSchoolType('Local Government College')).toBe('LUC')
+  })
+
+  it('does not let "State" prefixed/compound words false-positive into SUC', () => {
+    // Exact-match only for bare STATE — a word merely starting with "State"
+    // (e.g. "Statewide Academy") must not be swept into SUC.
+    expect(normalizeSchoolType('Statewide Academy')).toBe('Other')
     expect(normalizeSchoolType('Public / State University')).toBe('Other')
   })
 
