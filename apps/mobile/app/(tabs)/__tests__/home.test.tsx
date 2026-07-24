@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import HomeScreen from '../index'
 
 jest.mock('expo-router', () => ({
@@ -28,20 +28,6 @@ jest.mock('@lineiconshq/free-icons', () => ({
   User4Outlined: {},
 }))
 
-const mockOpenKuya = jest.fn()
-
-jest.mock('../../../providers/KuyaChatProvider', () => ({
-  useKuyaChatModal: () => ({ open: mockOpenKuya }),
-}))
-
-// Kuya Baw kill-switch — default enabled=true so the pre-existing hero-band
-// assertions below reflect the pre-kill-switch behavior. A dedicated describe
-// block further down covers the disabled (hidden hero band) case.
-const mockUseKuyaEnabled = jest.fn(() => ({ enabled: true, loading: false }))
-jest.mock('../../../hooks/useKuyaEnabled', () => ({
-  useKuyaEnabled: () => mockUseKuyaEnabled(),
-}))
-
 // Controlled admissions rows — override per-test via mockAdmissionsRows.value
 const mockAdmissionsRows = { value: [] as any[] }
 
@@ -62,10 +48,8 @@ jest.mock('../../../services/notifications', () => ({
   cancelNoteReminder: jest.fn().mockResolvedValue(undefined),
 }))
 
-// The Subjects-to-improve grid is now SESSION-based (consistent with Subject
-// Details): Home reads per-topic best + subject-level mock best from the
-// aggregates. Control them per-test; default to "no sessions" so the flashcard
-// accuracy fallback still drives the older grid tests.
+// Subject preparedness is SESSION-based (Global Constraints): Home reads per-topic
+// best + subject-level mock best from the aggregates. Control them per-test.
 const mockTopicBest = { value: [] as Array<{ topicId: string; bestPct: number }> }
 const mockSubjectBest = { value: [] as Array<{ subject: string; bestPct: number }> }
 
@@ -80,23 +64,29 @@ jest.mock('../../../hooks/useHomeStats', () => ({
   useHomeStats: () => mockUseHomeStats(),
 }))
 
-// Mirror the useHomeStats global-mock pattern for usePracticeData (the
-// "Subjects to improve" grid data source). Override per-test via mockReturnValue.
 const mockUsePracticeData = jest.fn()
 
 jest.mock('../../../hooks/usePracticeData', () => ({
   usePracticeData: () => mockUsePracticeData(),
 }))
 
-const emptyPracticeData = {
-  subjects: [] as Array<{ id: string; name: string }>,
-  topicRows: [] as any[],
-  recommendedTopics: [],
-  totalCards: 0,
-  cardCountByTopic: {},
-  topicIdsByListingSlug: {},
-  refresh: jest.fn().mockResolvedValue(undefined),
-}
+const mockAddListing = jest.fn().mockResolvedValue(undefined)
+jest.mock('../../../hooks/useFocusListings', () => ({
+  useFocusListings: () => ({
+    focusListings: [],
+    addListing: mockAddListing,
+    removeListing: jest.fn(),
+    moveListing: jest.fn(),
+    isInFocus: () => false,
+    getPriority: () => null,
+    refresh: jest.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+const mockUseHomeCatalog = jest.fn()
+jest.mock('../../../hooks/useHomeCatalog', () => ({
+  useHomeCatalog: () => mockUseHomeCatalog(),
+}))
 
 jest.mock('../../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
@@ -111,38 +101,15 @@ jest.mock('../../../hooks/useNotifications', () => ({
   }),
 }))
 
-// Mock AiCoachProvider so HomeScreen can render without the real provider tree.
-// useAiCoach is mocked to derive its phrase from the current useHomeStats() so
-// tests asserting on listing-derived text (e.g. "UPCAT 2025") still pass.
-jest.mock('../../../providers/AiCoachProvider', () => {
-  const React = require('react')
-  return {
-    AiCoachProvider: ({ children }: { children: React.ReactNode }) => children,
-    useCoachContext: () => ({
-      stats: {
-        listing: null, daysLeft: null, todayAccuracy: null, streakDays: 0,
-        weakTopics: [], firstTopicId: null, fullName: '',
-        importantDayIndices: [], practiceDayIndices: [], focusedListings: [],
-        listingAccuracy: {},
-      },
-      ringIndex: 0,
-      nextPhrase: () => ({ id: null, text: 'Tara mag-review tayo!' }),
-    }),
-  }
-})
-
-const mockOnKuyaTap = jest.fn()
-
-jest.mock('../../../hooks/useAiCoach', () => {
-  const { useHomeStats } = require('../../../hooks/useHomeStats')
-  const { pickTemplate } = require('../../../services/coachTemplates')
-  return {
-    useAiCoach: () => {
-      const stats = useHomeStats()
-      return { phrase: pickTemplate(stats, 0), onTap: mockOnKuyaTap }
-    },
-  }
-})
+const emptyPracticeData = {
+  subjects: [] as Array<{ id: string; name: string }>,
+  topicRows: [] as any[],
+  recommendedTopics: [],
+  totalCards: 0,
+  cardCountByTopic: {},
+  topicIdsByListingSlug: {},
+  refresh: jest.fn().mockResolvedValue(undefined),
+}
 
 const emptyStats = {
   listing: null,
@@ -160,13 +127,28 @@ const emptyStats = {
   refresh: jest.fn().mockResolvedValue(undefined),
 }
 
+const emptyCatalog = {
+  examListings: [] as Array<{ slug: string; title: string; examDate: number | null }>,
+  scholarshipListings: [] as any[],
+  blueprintSlugs: [] as string[],
+  blueprintInfo: new Map<string, { acronym: string; name: string }>(),
+  listingMockBest: new Map<string, number>(),
+  profile: {},
+  clusters: new Set<string>(),
+  region: '',
+  loaded: true,
+  refresh: jest.fn().mockResolvedValue(undefined),
+}
+
 describe('HomeScreen', () => {
   beforeEach(() => {
     mockUseHomeStats.mockReturnValue(emptyStats)
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
-    mockUseKuyaEnabled.mockReturnValue({ enabled: true, loading: false })
+    mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+    mockAddListing.mockClear()
     mockTopicBest.value = []
     mockSubjectBest.value = []
+    mockAdmissionsRows.value = []
     // The session-readiness cache is module-level — reset it so each test sees
     // its own mocked aggregate values (not a previous test's cached maps).
     const { _clearForTests } = require('../../../services/queryCache')
@@ -187,65 +169,49 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Student')).toBeTruthy()
   })
 
-  it('renders Kuya Baw name in the hero speech bubble', () => {
+  // ── Kuya hero band is gone (Task 3 supersedes it entirely) ───────────────────
+  it('does not render the Kuya Baw hero band', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('Kuya Baw')).toBeTruthy()
-  })
-
-  it('renders the Ask Kuya Baw hint inside the bubble', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('Ask Kuya Baw ›')).toBeTruthy()
-  })
-
-  it('pressing the speech bubble calls openKuya from KuyaChatProvider', () => {
-    mockOpenKuya.mockClear()
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Ask Kuya Baw'))
-    expect(mockOpenKuya).toHaveBeenCalledTimes(1)
-  })
-
-  it('pressing the mascot calls onKuyaTap (new tip)', () => {
-    mockOnKuyaTap.mockClear()
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Tap Kuya Baw for a new tip'))
-    expect(mockOnKuyaTap).toHaveBeenCalledTimes(1)
-  })
-
-  it('AI Coach badge is visible in the hero bubble', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('AI Coach')).toBeTruthy()
-  })
-
-  it('collapsed coach row is NOT present (expand/collapse removed)', () => {
-    render(<HomeScreen />)
-    expect(screen.queryByTestId('kuya-coach-collapsed')).toBeNull()
+    expect(screen.queryByText('Kuya Baw')).toBeNull()
+    expect(screen.queryByText('AI Coach')).toBeNull()
+    expect(screen.queryByLabelText('Ask Kuya Baw')).toBeNull()
   })
 
   it('does NOT render the Quick Practice CTA (removed)', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      firstTopicId: 'topic-1',
-      weakTopics: [{ topicId: 'topic-1', topicName: 'Algebra', accuracy: 40 }],
-    })
     render(<HomeScreen />)
     expect(screen.queryByText('Quick Practice')).toBeNull()
   })
 
-  it('renders My Focus section header', () => {
+  it('Your Progress analytics section is NOT present (removed)', () => {
     render(<HomeScreen />)
-    expect(screen.getByText('My Focus')).toBeTruthy()
+    expect(screen.queryByText('Your Progress')).toBeNull()
+    expect(screen.queryByText('READINESS')).toBeNull()
+    expect(screen.queryByText('WEAK AREAS')).toBeNull()
   })
 
-  it('renders the My Focus subheadline (no longer mentions streaks)', () => {
+  it('settings tile navigates to /settings when pressed', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    mockUseHomeStats.mockReturnValue(emptyStats)
+    mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
-    expect(screen.getByText('Your readiness for each target exam')).toBeTruthy()
+    fireEvent.press(screen.getByLabelText('Settings'))
+    expect(router.push).toHaveBeenCalledWith('/settings')
   })
 
-  it('renders the Upcoming Dates subheadline', () => {
+  it('profile tile navigates to the profile tab when pressed', () => {
+    const { router } = require('expo-router')
+    jest.clearAllMocks()
+    mockUseHomeStats.mockReturnValue(emptyStats)
+    mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
-    expect(screen.getByText('Deadlines and exam dates on your radar')).toBeTruthy()
+    fireEvent.press(screen.getByLabelText('Profile'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/profile')
   })
 
+  // ── Explore ───────────────────────────────────────────────────────────────
   it('renders the Explore section header with its subheadline', () => {
     render(<HomeScreen />)
     expect(screen.getByText('Explore')).toBeTruthy()
@@ -263,6 +229,9 @@ describe('HomeScreen', () => {
   it('pressing the Universities explore card deep-links to the Universities tab', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
+    mockUseHomeStats.mockReturnValue(emptyStats)
+    mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
     fireEvent.press(screen.getByText('Universities'))
     expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=universities')
@@ -271,207 +240,299 @@ describe('HomeScreen', () => {
   it('pressing the Destinations explore card deep-links to the Destinations tab', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
+    mockUseHomeStats.mockReturnValue(emptyStats)
+    mockUsePracticeData.mockReturnValue(emptyPracticeData)
+    mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
     fireEvent.press(screen.getByText('Destinations'))
     expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=destinations')
   })
 
-  it('renders focus card title + readiness % when focusedListings mocked', () => {
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 72 },
-      streakDays: 3,
+  // ── My Entrance Exams (FocusExamsFold) ───────────────────────────────────────
+  describe('My Entrance Exams', () => {
+    it('renders the section header with a "See more" action to Lists', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      render(<HomeScreen />)
+      expect(screen.getByText('My Entrance Exams')).toBeTruthy()
+      fireEvent.press(screen.getByText('See more'))
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
     })
-    render(<HomeScreen />)
-    // Title appears in both focus card and Upcoming Dates — getAllByText
-    expect(screen.getAllByText('UPCAT 2026').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('72%')).toBeTruthy()
-  })
 
-  it('focus card does NOT render any streak text (streak removed)', () => {
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 72 },
-      streakDays: 3,
+    it('suggests the default exams (with "+ Add") when nothing is focused', () => {
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        examListings: [
+          { slug: 'upcat', title: 'UPCAT', examDate: null },
+          { slug: 'acet', title: 'ACET', examDate: null },
+          { slug: 'dcat-dlsu', title: 'DCAT', examDate: null },
+        ],
+      })
+      render(<HomeScreen />)
+      expect(screen.getAllByText('+ Add')).toHaveLength(3)
+      expect(screen.getByLabelText('UPCAT')).toBeTruthy()
+      expect(screen.getByLabelText('ACET')).toBeTruthy()
+      expect(screen.getByLabelText('DCAT')).toBeTruthy()
+      // 6 slots − 3 focused/suggested = 3 blanks
+      expect(screen.getAllByLabelText('Add an exam')).toHaveLength(3)
     })
-    render(<HomeScreen />)
-    expect(screen.queryByText(/streak/i)).toBeNull()
-    expect(screen.queryByText(/🔥/)).toBeNull()
-  })
 
-  it('focus card shows "—" for readiness when the listing has no accuracy yet', () => {
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: {}, // not practiced → no fill, em-dash
+    it('adds a suggested exam to Focus when its tile is tapped (does not navigate)', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        examListings: [{ slug: 'upcat', title: 'UPCAT', examDate: null }],
+      })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByLabelText('UPCAT'))
+      expect(mockAddListing).toHaveBeenCalledWith('upcat')
+      expect(router.push).not.toHaveBeenCalled()
     })
-    render(<HomeScreen />)
-    expect(screen.getByText('—')).toBeTruthy()
-  })
 
-  it('pressing a focus card navigates to /listings/:slug', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: {},
+    it('a focused exam tile with no score yet navigates to the diagnostic', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: null, deadline: null }],
+      })
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByLabelText('UPCAT 2026'))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
     })
-    render(<HomeScreen />)
-    // Title may appear in both focus card and upcoming dates — press the first
-    fireEvent.press(screen.getAllByText('UPCAT 2026')[0])
-    expect(router.push).toHaveBeenCalledWith('/listings/upcat-2026')
-  })
 
-  it('shows empty state InfoBanner when no focusedListings', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText(/Add an exam or scholarship/)).toBeTruthy()
-  })
-
-  it('renders Upcoming Dates section header', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('Upcoming Dates')).toBeTruthy()
-  })
-
-  it('shows upcoming listing deadline when present', () => {
-    const futureDate = Date.now() + 7 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      importantDayIndices: [Math.floor(futureDate / 86_400_000)],
+    it('a focused exam tile with a mock-best score navigates to practice/start/:slug', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: null, deadline: null }],
+      })
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        listingMockBest: new Map([['upcat', 72]]),
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('72%')).toBeTruthy()
+      fireEvent.press(screen.getByLabelText('UPCAT 2026'))
+      expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
     })
-    render(<HomeScreen />)
-    // UPCAT 2026 appears in both focus card AND upcoming dates
-    const els = screen.getAllByText('UPCAT 2026')
-    expect(els.length).toBeGreaterThanOrEqual(1)
-  })
 
-  it('shows empty state for upcoming dates when no listings', () => {
-    render(<HomeScreen />)
-    expect(screen.getByText('Add scholarships and exams to your focus list to track upcoming dates')).toBeTruthy()
-  })
-
-  it('UPCAT countdown banner is not rendered (removed in Wave 1a)', () => {
-    const futureDate = new Date(Date.now() + 90 * 86_400_000)
-    const isoDate = futureDate.toISOString().slice(0, 10)
-    mockAdmissionsRows.value = [{
-      id: 'au-upcat-2027',
-      reportDate: '2026-06-01',
-      severity: 'urgent',
-      schoolSlug: 'upcat',
-      schoolName: 'UPCAT',
-      title: 'UPCAT 2027 Exam',
-      body: 'UPCAT 2027 examination schedule.',
-      actionRequired: null,
-      eventDate: isoDate,
-      eventType: 'exam',
-      sources: '[]',
-      verified: true,
-      remoteUpdatedAt: null,
-    }]
-    render(<HomeScreen />)
-    expect(screen.queryByTestId('upcat-countdown-banner')).toBeNull()
-    mockAdmissionsRows.value = []
-  })
-
-  it('upcat-countdown-banner testID is absent (banner removed)', () => {
-    mockAdmissionsRows.value = []
-    render(<HomeScreen />)
-    expect(screen.queryByTestId('upcat-countdown-banner')).toBeNull()
-  })
-
-  it('folds an admission event into Upcoming Dates widget', async () => {
-    const futureDate = new Date(Date.now() + 30 * 86_400_000)
-    const isoDate = futureDate.toISOString().slice(0, 10)
-    mockAdmissionsRows.value = [{
-      id: 'au-dost-deadline',
-      reportDate: '2026-06-01',
-      severity: 'important',
-      schoolSlug: null,
-      schoolName: 'DOST',
-      title: 'DOST SEI Application Deadline',
-      body: 'Last day to apply.',
-      actionRequired: null,
-      eventDate: isoDate,
-      eventType: 'deadline',
-      sources: '[]',
-      verified: false,
-      remoteUpdatedAt: null,
-    }]
-    const { findAllByText } = render(<HomeScreen />)
-    // The admission event now surfaces both in the "News & Events" shortlist and
-    // (folded) in the Upcoming Dates widget — assert it appears at least once.
-    const items = await findAllByText('DOST SEI Application Deadline')
-    expect(items.length).toBeGreaterThan(0)
-    mockAdmissionsRows.value = []
-  })
-
-  it('Weak Areas section is NOT present (removed from Home)', () => {
-    render(<HomeScreen />)
-    expect(screen.queryByText('Weak Areas')).toBeNull()
-  })
-
-  it('SplitStatCard stat labels are NOT present (removed from Home)', () => {
-    render(<HomeScreen />)
-    expect(screen.queryByText('DAYS LEFT')).toBeNull()
-    expect(screen.queryByText('ACCURACY')).toBeNull()
-    expect(screen.queryByText('STREAK')).toBeNull()
-  })
-
-  it('settings tile navigates to /settings when pressed', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Settings'))
-    expect(router.push).toHaveBeenCalledWith('/settings')
-  })
-
-  it('profile tile navigates to the profile tab when pressed', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Profile'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/profile')
-  })
-
-  it('Your Progress analytics section is NOT present (removed)', () => {
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      weakTopics: [{ topicId: 't1', topicName: 'Algebra', accuracy: 40 }],
-      listingAccuracy: { 'upcat-2026': 80 },
+    it('shows "—" for a focused exam with no readiness data', () => {
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: null, deadline: null }],
+      })
+      render(<HomeScreen />)
+      // 1 focused (upcat) + 2 suggested defaults to fill the fold to 3 — none have
+      // readiness data yet, so all three tiles show the "—" badge.
+      expect(screen.getAllByText('—')).toHaveLength(3)
     })
-    render(<HomeScreen />)
-    expect(screen.queryByText('Your Progress')).toBeNull()
-    expect(screen.queryByText('READINESS')).toBeNull()
-    expect(screen.queryByText('WEAK AREAS')).toBeNull()
-    expect(screen.queryByText('By subject')).toBeNull()
-    expect(screen.queryByText(/Start practicing to see your readiness/)).toBeNull()
+
+    it('excludes school-level focus entries from the exam tiles', () => {
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'school:abc123', priority: 1, title: 'Some School', type: 'school', examDate: null, deadline: null }],
+      })
+      render(<HomeScreen />)
+      expect(screen.queryByLabelText('Some School')).toBeNull()
+    })
+
+    it('opens the exam picker when a blank tile is tapped, and adds + closes on selection', () => {
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        examListings: [{ slug: 'ustet', title: 'USTET', examDate: null }],
+      })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getAllByLabelText('Add an exam')[0]!)
+      expect(screen.getByLabelText('Add USTET to Focus')).toBeTruthy()
+      fireEvent.press(screen.getByLabelText('Add USTET to Focus'))
+      expect(mockAddListing).toHaveBeenCalledWith('ustet')
+    })
   })
 
-  // ── Section order: Explore renders ABOVE My Focus ────────────────────────────
-  it('renders the Explore section before the My Focus section', () => {
+  // ── Subject preparedness ──────────────────────────────────────────────────
+  describe('Subject preparedness', () => {
+    it('renders the section header', () => {
+      render(<HomeScreen />)
+      expect(screen.getByText('Subject preparedness')).toBeTruthy()
+    })
+
+    it('shows an InfoBanner empty state with a Practice CTA when there are no subjects', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      render(<HomeScreen />)
+      expect(screen.getByText(/Practice a subject to see your preparedness/)).toBeTruthy()
+      fireEvent.press(screen.getByText('Practice'))
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/practice')
+    })
+
+    it('renders a subject card with its readiness % and a "Take exam" CTA', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's-math', name: 'Math' }],
+        topicRows: [{ topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: null }],
+      })
+      mockTopicBest.value = [{ topicId: 't1', bestPct: 80 }]
+      render(<HomeScreen />)
+      expect(screen.getByText('Math')).toBeTruthy()
+      expect(await screen.findByText('80%')).toBeTruthy()
+      expect(screen.getByText('Take exam ›')).toBeTruthy()
+    })
+
+    it('shows 0% (not a flashcard-accuracy fallback) when a subject has no session data', () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's-math', name: 'Math' }],
+        topicRows: [{ topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 }],
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('0%')).toBeTruthy()
+    })
+
+    it('pressing a subject card navigates to the diagnostic scoped to that subject', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's-math', name: 'Math' }],
+        topicRows: [{ topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: null }],
+      })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByLabelText('Math'))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?subject=Math')
+    })
+  })
+
+  // ── Recommended Scholarships ──────────────────────────────────────────────
+  describe('Recommended Scholarships', () => {
+    it('renders the section header with a "See all" action to the scholarships tab', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      render(<HomeScreen />)
+      expect(screen.getByText('Recommended Scholarships')).toBeTruthy()
+      // RecommendedScholarships renders before NewsAndDates, so its "See all" is first.
+      const seeAlls = screen.getAllByText('See all')
+      fireEvent.press(seeAlls[0]!)
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=scholarships')
+    })
+
+    it('shows an InfoBanner empty state when there are no open/upcoming scholarships', () => {
+      render(<HomeScreen />)
+      expect(screen.getByText(/Complete your profile/)).toBeTruthy()
+    })
+
+    it('renders a scholarship card with title, provider/grant, and a match pill', () => {
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        scholarshipListings: [{
+          id: 'sch-1', slug: 'dost-sei', title: 'DOST-SEI Scholarship', type: 'scholarship', status: 'active',
+          provider: 'DOST', grantAmount: 'Full tuition + stipend', deadline: null,
+          isVerified: true, incomeCeiling: null, gwaRequirement: null, serviceObligationYears: null,
+          province: null, city: null, scope: 'national', scholarshipMeta: '{}', targetCourses: ['all'],
+        }],
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('DOST-SEI Scholarship')).toBeTruthy()
+      expect(screen.getByText('DOST · Full tuition + stipend')).toBeTruthy()
+    })
+
+    it('excludes closed scholarships', () => {
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        scholarshipListings: [{
+          id: 'sch-closed', slug: 'closed-sch', title: 'Closed Scholarship', type: 'scholarship', status: 'closed',
+          provider: 'Someone', grantAmount: '', deadline: null,
+          isVerified: true, incomeCeiling: null, gwaRequirement: null, serviceObligationYears: null,
+          province: null, city: null, scope: 'national', scholarshipMeta: '{}', targetCourses: ['all'],
+        }],
+      })
+      render(<HomeScreen />)
+      expect(screen.queryByText('Closed Scholarship')).toBeNull()
+    })
+  })
+
+  // ── News & Dates (merged) ─────────────────────────────────────────────────
+  describe('News & Dates', () => {
+    it('renders the merged section header (old separate sections are gone)', () => {
+      render(<HomeScreen />)
+      expect(screen.getByText('News & Dates')).toBeTruthy()
+      expect(screen.queryByText('Upcoming Dates')).toBeNull()
+      expect(screen.queryByText('News & Events')).toBeNull()
+    })
+
+    it('shows an empty-state InfoBanner when there is nothing to show', () => {
+      render(<HomeScreen />)
+      expect(screen.getByText(/Add exams or scholarships to your focus/)).toBeTruthy()
+    })
+
+    it('shows a focused listing exam date', () => {
+      const futureDate = Date.now() + 10 * 86_400_000
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null }],
+      })
+      render(<HomeScreen />)
+      expect(screen.getAllByText('UPCAT 2026').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('folds an admission event into the merged feed', async () => {
+      const futureDate = new Date(Date.now() + 30 * 86_400_000)
+      const isoDate = futureDate.toISOString().slice(0, 10)
+      mockAdmissionsRows.value = [{
+        id: 'au-dost-deadline',
+        reportDate: '2026-06-01',
+        severity: 'important',
+        schoolSlug: null,
+        schoolName: 'DOST',
+        title: 'DOST SEI Application Deadline',
+        body: 'Last day to apply.',
+        actionRequired: null,
+        eventDate: isoDate,
+        eventType: 'deadline',
+        sources: '[]',
+        verified: false,
+        remoteUpdatedAt: null,
+      }]
+      render(<HomeScreen />)
+      const items = await waitFor(() => screen.getAllByText('DOST SEI Application Deadline'))
+      expect(items.length).toBeGreaterThan(0)
+    })
+
+    it('"See all" navigates to the Updates tab', () => {
+      const { router } = require('expo-router')
+      jest.clearAllMocks()
+      mockUseHomeStats.mockReturnValue(emptyStats)
+      mockUsePracticeData.mockReturnValue(emptyPracticeData)
+      mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+      render(<HomeScreen />)
+      // NewsAndDates renders after RecommendedScholarships, so its "See all" is last.
+      const seeAlls = screen.getAllByText('See all')
+      fireEvent.press(seeAlls[seeAlls.length - 1]!)
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/updates')
+    })
+  })
+
+  // ── Section order: FocusExamsFold → Subject preparedness → Explore → Scholarships → News&Dates ──
+  it('renders the sections in the brief-specified order', () => {
     render(<HomeScreen />)
-    // Both section headers must be present.
-    expect(screen.getByText('Explore')).toBeTruthy()
-    expect(screen.getByText('My Focus')).toBeTruthy()
-    // Collect rendered text strings in document order (recurse children only,
-    // avoiding the circular refreshControl prop that breaks JSON.stringify).
     const texts: string[] = []
     const walk = (node: any): void => {
       if (node == null) return
@@ -480,154 +541,11 @@ describe('HomeScreen', () => {
       if (node.children) walk(node.children)
     }
     walk(screen.toJSON())
-    const exploreIdx = texts.indexOf('Explore')
-    const myFocusIdx = texts.indexOf('My Focus')
-    expect(exploreIdx).toBeGreaterThanOrEqual(0)
-    expect(myFocusIdx).toBeGreaterThanOrEqual(0)
-    expect(exploreIdx).toBeLessThan(myFocusIdx)
-  })
-
-  // ── My Focus: "add more targets" affordance ──────────────────────────────────
-  it('renders an "Add exam or scholarship" target card when there are focused listings', () => {
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 72 },
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText(/Add exam or scholarship/)).toBeTruthy()
-  })
-
-  it('pressing the add-target card navigates to the Lists tab', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    const futureDate = Date.now() + 10 * 86_400_000
-    mockUseHomeStats.mockReturnValue({
-      ...emptyStats,
-      focusedListings: [
-        { slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: futureDate, deadline: null },
-      ],
-      listingAccuracy: { 'upcat-2026': 72 },
-    })
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Add exam or scholarship'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
-  })
-
-  it('does NOT render the add-target card when there are no focused listings', () => {
-    render(<HomeScreen />)
-    expect(screen.queryByText(/Add exam or scholarship/)).toBeNull()
-  })
-
-  // ── Subjects to improve grid ─────────────────────────────────────────────────
-  it('renders the Subjects to improve section header when subjects exist', () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's-math', name: 'Math' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
-      ],
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('Subjects to improve')).toBeTruthy()
-  })
-
-  it('renders a subject card with its name and mastery %', () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's-math', name: 'Math' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
-        { topic: { id: 't2', name: 'Geometry', subjectId: 's-math' }, accuracy: 60 },
-      ],
-    })
-    render(<HomeScreen />)
-    expect(screen.getByText('Math')).toBeTruthy()
-    expect(screen.getByText('50%')).toBeTruthy() // (40 + 60) / 2
-  })
-
-  it('pressing a subject card navigates to /subjects/:id', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's-math', name: 'Math' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: 40 },
-      ],
-    })
-    render(<HomeScreen />)
-    fireEvent.press(screen.getByLabelText('Math'))
-    expect(router.push).toHaveBeenCalledWith('/subjects/s-math')
-  })
-
-  it('renders no subject cards when usePracticeData has no subjects with topics', () => {
-    render(<HomeScreen />)
-    // No subject names, no Subjects-to-improve header content beyond the prompt.
-    expect(screen.queryByText('Math')).toBeNull()
-    expect(screen.queryByText(/50%/)).toBeNull()
-  })
-
-  // ── REGRESSION: mock-practiced subject in the grid (session-based) ───────────
-  // A subject practiced ONLY through a mock (subtest session) has flashcard
-  // accuracy = null on every topic, but a subject-level mock best keyed by the
-  // subject NAME. The grid must show the mock % (was 0% when grid read only
-  // flashcard user_progress accuracy — RED before this fix).
-  it('shows a mock-practiced subject\'s real % in the grid (Reading Comprehension via mock)', async () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's-rc', name: 'Reading Comprehension' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Main Idea', subjectId: 's-rc' }, accuracy: null },
-        { topic: { id: 't2', name: 'Inference', subjectId: 's-rc' }, accuracy: null },
-      ],
-    })
-    // No per-topic review bests; only a subject-level mock best (subtest == name).
-    mockTopicBest.value = []
-    mockSubjectBest.value = [{ subject: 'Reading Comprehension', bestPct: 68 }]
-
-    render(<HomeScreen />)
-    // Mock lifts both topics → average 68% (NOT 0%).
-    expect(await screen.findByText('68%')).toBeTruthy()
-    expect(screen.queryByText('0%')).toBeNull()
-  })
-
-  it('a per-topic review best raises the grid % above the subject mock', async () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's-math', name: 'Math' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Algebra', subjectId: 's-math' }, accuracy: null },
-        { topic: { id: 't2', name: 'Geometry', subjectId: 's-math' }, accuracy: null },
-      ],
-    })
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 90 }] // review beats mock
-    mockSubjectBest.value = [{ subject: 'Math', bestPct: 50 }]
-
-    render(<HomeScreen />)
-    // t1 = max(90,50)=90 ; t2 = max(null,50)=50 → (90+50)/2 = 70
-    expect(await screen.findByText('70%')).toBeTruthy()
-  })
-
-  // ── Kuya Baw kill-switch ────────────────────────────────────────────────────
-  describe('Kuya Baw kill-switch — chat disabled', () => {
-    it('hides the entire hero band (mascot, speech bubble, AI Coach badge)', () => {
-      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
-      render(<HomeScreen />)
-      expect(screen.queryByText('Kuya Baw')).toBeNull()
-      expect(screen.queryByText('AI Coach')).toBeNull()
-      expect(screen.queryByLabelText('Ask Kuya Baw')).toBeNull()
-      expect(screen.queryByLabelText('Tap Kuya Baw for a new tip')).toBeNull()
-    })
-
-    it('still renders the rest of the home screen (Explore, My Focus) without the hero band', () => {
-      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
-      render(<HomeScreen />)
-      expect(screen.getByText('Explore')).toBeTruthy()
-      expect(screen.getByText('My Focus')).toBeTruthy()
-    })
+    const idx = (label: string) => texts.indexOf(label)
+    expect(idx('My Entrance Exams')).toBeGreaterThanOrEqual(0)
+    expect(idx('Subject preparedness')).toBeGreaterThan(idx('My Entrance Exams'))
+    expect(idx('Explore')).toBeGreaterThan(idx('Subject preparedness'))
+    expect(idx('Recommended Scholarships')).toBeGreaterThan(idx('Explore'))
+    expect(idx('News & Dates')).toBeGreaterThan(idx('Recommended Scholarships'))
   })
 })
