@@ -18,8 +18,12 @@ interface Props {
   region: string
 }
 
-function grantLabel(l: ScholarshipListingSummary): string | null {
-  return l.grantAmount && l.grantAmount.trim() ? l.grantAmount.trim() : null
+/** Grant amount and/or monthly stipend, whichever is present (brief: "grant amount/stipend when present"). */
+function amountLabel(l: ScholarshipListingSummary): string | null {
+  const parts: string[] = []
+  if (l.grantAmount && l.grantAmount.trim()) parts.push(l.grantAmount.trim())
+  if (l.monthlyStipend != null) parts.push(`₱${l.monthlyStipend.toLocaleString()}/mo stipend`)
+  return parts.length > 0 ? parts.join(' + ') : null
 }
 
 export function RecommendedScholarships({ scholarships, profile, clusters, region }: Props) {
@@ -41,8 +45,8 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
       {recommended.length > 0 ? (
         <View style={{ gap: spacing.sm }}>
           {recommended.map(({ listing, status }) => {
-            const grant = grantLabel(listing)
-            const subtitle = [listing.provider, grant].filter(Boolean).join(' · ') || undefined
+            const amount = amountLabel(listing)
+            const subtitle = [listing.provider, amount].filter(Boolean).join(' · ') || undefined
             return (
               <ListCard
                 key={listing.id}

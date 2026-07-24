@@ -27,6 +27,7 @@ export interface ScholarshipListingSummary extends RankableListing {
   status: string
   provider: string
   grantAmount: string
+  monthlyStipend: number | null
   deadline: number | null
 }
 
@@ -91,7 +92,7 @@ export function useHomeCatalog(): HomeCatalog {
             incomeCeiling: listingsTable.incomeCeiling, gwaRequirement: listingsTable.gwaRequirement,
             serviceObligationYears: listingsTable.serviceObligationYears,
             scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
-            grantAmount: listingsTable.grantAmount,
+            grantAmount: listingsTable.grantAmount, monthlyStipend: listingsTable.monthlyStipend,
           }).from(listingsTable),
           listPublishedBlueprints(db),
           db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),

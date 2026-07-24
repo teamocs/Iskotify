@@ -454,6 +454,20 @@ describe('HomeScreen', () => {
       expect(screen.getByText('DOST · Full tuition + stipend')).toBeTruthy()
     })
 
+    it('shows a monthly stipend when grantAmount is blank but monthlyStipend is set', () => {
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        scholarshipListings: [{
+          id: 'sch-2', slug: 'sm-foundation', title: 'SM Foundation Scholarship', type: 'scholarship', status: 'active',
+          provider: 'SM Foundation', grantAmount: '', monthlyStipend: 5000, deadline: null,
+          isVerified: true, incomeCeiling: null, gwaRequirement: null, serviceObligationYears: null,
+          province: null, city: null, scope: 'national', scholarshipMeta: '{}', targetCourses: ['all'],
+        }],
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('SM Foundation · ₱5,000/mo stipend')).toBeTruthy()
+    })
+
     it('excludes closed scholarships', () => {
       mockUseHomeCatalog.mockReturnValue({
         ...emptyCatalog,
