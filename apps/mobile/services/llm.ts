@@ -54,7 +54,7 @@ const MIN_RAM_BYTES = 1.8e9
 // Extended from 60 s → 300 s: chat sessions often have a pause between messages;
 // releasing at 60 s was re-incurring the full model-load cost mid-conversation.
 // The context is released when the app backgrounds via releaseContextIfIdle()
-// (AiCoachProvider's AppState listener).
+// (currently unwired — kept for a future self-hosted AI feature's AppState listener).
 export const IDLE_RELEASE_MS = 300_000
 
 export function hasEnoughRam(): boolean {
@@ -314,7 +314,7 @@ export async function runInference(prompt: string): Promise<LlmOutput | null> {
   })
 }
 
-// ── Coach inference (used by AiCoachProvider) ────────────────────────────────
+// ── Coach inference (currently unwired — reserved for a future self-hosted AI feature) ──
 
 export async function runCoachInference(prompt: string): Promise<string | null> {
   return withMutex(async () => {

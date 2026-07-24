@@ -315,9 +315,9 @@ export function useHomeStats(): HomeStats {
   }, [load]))
 
   // Return a referentially-stable object: a fresh `{ ...stats }` on every render
-  // makes every consumer (incl. the app-wide AiCoachProvider) treat `stats` as
-  // changed each render, re-running effects/DB work and cascading re-renders that
-  // make taps feel laggy. `stats` only changes when `load()` calls setStats, and
-  // `load` is stable, so this memo changes only when the data actually changes.
+  // makes every consumer treat `stats` as changed each render, re-running
+  // effects/DB work and cascading re-renders that make taps feel laggy. `stats`
+  // only changes when `load()` calls setStats, and `load` is stable, so this
+  // memo changes only when the data actually changes.
   return useMemo(() => ({ ...stats, refresh: load }), [stats, load])
 }
