@@ -8,6 +8,9 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { Card } from '../ui/Card'
 import { useWebContentWidth } from '../ui/webMaxWidth'
+import { normalizeSchoolType, type SchoolTypeBucket } from '../../utils/schoolType'
+import { passesFreeTuitionFilter } from '../../utils/freeTuitionFilter'
+import { parseSchoolSearchIntent } from '../../utils/schoolSearchIntent'
 
 // ---------------------------------------------------------------------------
 // Shared tertiary-schools directory: data load + region/type/free-tuition
@@ -24,8 +27,27 @@ export interface SchoolRow {
   region: string | null
   province: string | null
   type: string | null
+  isSuc: boolean
+  isLuc: boolean
   dataConfidence: string | null
   freeTuition: boolean | null
+  entranceExamAcronym: string | null
+  /** Raw JSON-encoded text[] from university_profiles.requirements — only used
+   *  to derive a "Requirements ✓" presence indicator on the card, so it's kept
+   *  as the raw string rather than parsed (parsing/splitting is the detail
+   *  screen's job — see safeParseArray in app/schools/[slug].tsx). */
+  requirements: string | null
+}
+
+/** True when a JSON-encoded text[] column has at least one entry. */
+function hasNonEmptyJsonArray(raw: string | null | undefined): boolean {
+  if (!raw) return false
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0
+  } catch {
+    return false
+  }
 }
 
 type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'VERY LOW' | null
@@ -50,7 +72,10 @@ const ALL_TYPES   = 'All Types'
 type SchoolCardStyles = {
   card: object; cardBody: object; cardName: object; cardSub: object
   badgeRow: object; badge: object; badgeTxt: object
-  freeBadge: object; freeBadgeTxt: object; chevron: object
+  freeBadge: object; freeBadgeTxt: object
+  examBadge: object; examBadgeTxt: object
+  reqBadge: object; reqBadgeTxt: object
+  chevron: object
 }
 
 interface SchoolCardProps {
@@ -63,6 +88,7 @@ const SchoolCard = memo(function SchoolCard({ school, styles, onPress }: SchoolC
   const confidence = (school.dataConfidence?.toUpperCase() ?? null) as ConfidenceLevel
   const badge = confidenceBadgeStyle(confidence)
   const locationParts = [school.region, school.province].filter(Boolean)
+  const hasRequirements = hasNonEmptyJsonArray(school.requirements)
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
@@ -80,9 +106,19 @@ const SchoolCard = memo(function SchoolCard({ school, styles, onPress }: SchoolC
           <View style={[styles.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
             <Text style={[styles.badgeTxt, { color: badge.text }]} maxFontSizeMultiplier={1.4}>{badge.label}</Text>
           </View>
+          {school.entranceExamAcronym ? (
+            <View style={[styles.badge, styles.examBadge]}>
+              <Text style={[styles.badgeTxt, styles.examBadgeTxt]} maxFontSizeMultiplier={1.4}>{school.entranceExamAcronym}</Text>
+            </View>
+          ) : null}
           {school.freeTuition ? (
             <View style={[styles.badge, styles.freeBadge]}>
               <Text style={[styles.badgeTxt, styles.freeBadgeTxt]} maxFontSizeMultiplier={1.4}>Free Tuition</Text>
+            </View>
+          ) : null}
+          {hasRequirements ? (
+            <View style={[styles.badge, styles.reqBadge]}>
+              <Text style={[styles.badgeTxt, styles.reqBadgeTxt]} maxFontSizeMultiplier={1.4}>Requirements ✓</Text>
             </View>
           ) : null}
         </View>
@@ -123,14 +159,18 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
     async function load() {
       const rows = await db
         .select({
-          id:             schoolsTable.id,
-          name:           schoolsTable.name,
-          acronym:        schoolsTable.acronym,
-          region:         schoolsTable.region,
-          province:       schoolsTable.province,
-          type:           schoolsTable.type,
-          dataConfidence: profilesTable.dataConfidence,
-          freeTuition:    profilesTable.freeTuition,
+          id:                  schoolsTable.id,
+          name:                schoolsTable.name,
+          acronym:             schoolsTable.acronym,
+          region:              schoolsTable.region,
+          province:            schoolsTable.province,
+          type:                schoolsTable.type,
+          isSuc:               schoolsTable.isSuc,
+          isLuc:               schoolsTable.isLuc,
+          dataConfidence:      profilesTable.dataConfidence,
+          freeTuition:         profilesTable.freeTuition,
+          entranceExamAcronym: profilesTable.entranceExamAcronym,
+          requirements:        profilesTable.requirements,
         })
         .from(schoolsTable)
         .leftJoin(profilesTable, eq(schoolsTable.id, profilesTable.schoolId))
@@ -155,25 +195,41 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
     return [ALL_REGIONS, ...Array.from(set).sort()]
   }, [schools])
 
+  // Normalized type buckets (SUC/LUC/Private/State College/Other) instead of one
+  // chip per raw free-text `type` string (52+ distinct values in production).
+  // Fixed, meaningful display order rather than alphabetical.
   const types = useMemo<string[]>(() => {
-    const set = new Set<string>()
-    for (const s of schools) if (s.type) set.add(s.type)
-    return [ALL_TYPES, ...Array.from(set).sort()]
+    const present = new Set<SchoolTypeBucket>()
+    for (const s of schools) present.add(normalizeSchoolType(s.type))
+    const order: SchoolTypeBucket[] = ['SUC', 'LUC', 'State College', 'Private', 'Other']
+    return [ALL_TYPES, ...order.filter(b => present.has(b))]
   }, [schools])
 
+  // Light intent parse over the search box: "free tuition universities in
+  // bicol" → region=Bicol, freeTuitionOnly=true, remaining tokens ("in",
+  // "universities") already stripped so they don't zero out the name match.
+  const intent = useMemo(() => parseSchoolSearchIntent(query), [query])
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const nameQ = intent.nameQuery
+    // Chip selection wins when set explicitly; otherwise fall back to the
+    // region detected in the search query.
+    const effRegion = selRegion !== ALL_REGIONS ? selRegion : intent.region
+    const effFreeTuitionOnly = freeTuitionOnly || intent.freeTuitionOnly
     return schools.filter(s => {
-      if (q && !(
-        s.name.toLowerCase().includes(q) ||
-        (s.acronym ?? '').toLowerCase().includes(q)
+      if (nameQ && !(
+        s.name.toLowerCase().includes(nameQ) ||
+        (s.acronym ?? '').toLowerCase().includes(nameQ)
       )) return false
-      if (selRegion !== ALL_REGIONS && s.region !== selRegion) return false
-      if (selType !== ALL_TYPES && s.type !== selType) return false
-      if (freeTuitionOnly && !s.freeTuition) return false
+      if (effRegion && s.region !== effRegion) return false
+      if (selType !== ALL_TYPES && normalizeSchoolType(s.type) !== selType) return false
+      // Free tuition: profile.freeTuition === true OR the school is an
+      // SUC/LUC (RA 10931 covers both) — previously this silently dropped
+      // every profile-less school (freeTuition null).
+      if (effFreeTuitionOnly && !passesFreeTuitionFilter(s, s.freeTuition)) return false
       return true
     })
-  }, [schools, query, selRegion, selType, freeTuitionOnly])
+  }, [schools, intent, selRegion, selType, freeTuitionOnly])
 
   const s = useMemo(() => StyleSheet.create({
     root:          { flex: 1 },
@@ -193,6 +249,10 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
     badgeTxt:      { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
     freeBadge:     { backgroundColor: 'rgba(22,163,74,0.10)', borderColor: 'rgba(22,163,74,0.25)' },
     freeBadgeTxt:  { color: '#16a34a' },
+    examBadge:     { backgroundColor: t.accentSurface, borderColor: t.accent },
+    examBadgeTxt:  { color: t.accentText },
+    reqBadge:      { backgroundColor: t.successSurface, borderColor: t.success },
+    reqBadgeTxt:   { color: t.success },
     chevron:       { color: t.textTertiary, fontSize: typo.lg, flexShrink: 0 },
     empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
     countTxt:      { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
@@ -202,7 +262,10 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
   const cardStyles = useMemo<SchoolCardStyles>(() => ({
     card: s.card, cardBody: s.cardBody, cardName: s.cardName, cardSub: s.cardSub,
     badgeRow: s.badgeRow, badge: s.badge, badgeTxt: s.badgeTxt,
-    freeBadge: s.freeBadge, freeBadgeTxt: s.freeBadgeTxt, chevron: s.chevron,
+    freeBadge: s.freeBadge, freeBadgeTxt: s.freeBadgeTxt,
+    examBadge: s.examBadge, examBadgeTxt: s.examBadgeTxt,
+    reqBadge: s.reqBadge, reqBadgeTxt: s.reqBadgeTxt,
+    chevron: s.chevron,
   }), [s])
 
   const handlePressSchool = useCallback((id: string) => {

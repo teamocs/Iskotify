@@ -325,7 +325,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at')
         .gt('updated_at', since),
       supabase.from('university_profiles')
-        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at')
+        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,requirements,qualifications,updated_at')
         .gt('updated_at', since),
       fetchAllPaginated((from, to) => supabase.from('course_school_rankings')
         .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at')
@@ -632,6 +632,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         notablePrograms: JSON.stringify(row.notable_programs ?? []),
         prcStrongBoards: JSON.stringify(row.prc_strong_boards ?? []),
         notes: row.notes ?? null, dataConfidence: row.data_confidence ?? null,
+        requirements: JSON.stringify(row.requirements ?? []),
+        qualifications: JSON.stringify(row.qualifications ?? []),
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), universityProfiles.schoolId)
     })

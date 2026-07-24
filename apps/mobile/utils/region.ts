@@ -37,3 +37,47 @@ export function canonicalizeRegion(raw: string | null | undefined): string {
 export function isNcr(raw: string | null | undefined): boolean {
   return canonicalizeRegion(raw) === 'NCR'
 }
+
+// Aliases usable for free-text search matching (e.g. "universities in bicol").
+// Bare roman-numeral / single-letter aliases ('I', 'V', 'X', ...) are excluded —
+// they're too ambiguous against ordinary English words even with word boundaries
+// (e.g. a lone "i" or "x" token in a sentence) — longest-first so multi-word
+// aliases ("national capital region") win over shorter overlapping ones.
+const FREE_TEXT_ALIASES = Object.keys(REGION_MAP)
+  .filter(a => a.length >= 3)
+  .sort((a, b) => b.length - a.length)
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export interface RegionMatch {
+  /** Canonical region label, e.g. "Region V (Bicol)". */
+  region: string
+  /** The literal alias text that matched (lowercased), e.g. "bicol" — callers
+   *  that strip the matched words out of a free-text query (school search
+   *  intent parsing) use this to know exactly what to remove. */
+  alias: string
+}
+
+/**
+ * Find the first region alias mentioned in free text (word-boundary match).
+ * Used by the schools search box to parse "free tuition universities in bicol"
+ * style queries into a region filter.
+ */
+export function findRegionMatch(text: string): RegionMatch | null {
+  const s = text ?? ''
+  if (!s.trim()) return null
+  for (const alias of FREE_TEXT_ALIASES) {
+    const re = new RegExp(`\\b${escapeRegExp(alias)}\\b`, 'i')
+    // alias always comes from Object.keys(REGION_MAP), so the lookup is never
+    // actually missing — the `?? alias` fallback only appeases noUncheckedIndexedAccess.
+    if (re.test(s)) return { region: REGION_MAP[alias] ?? alias, alias }
+  }
+  return null
+}
+
+/** Convenience wrapper over {@link findRegionMatch} returning just the region. */
+export function findRegionInText(text: string): string | null {
+  return findRegionMatch(text)?.region ?? null
+}

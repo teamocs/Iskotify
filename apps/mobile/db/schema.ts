@@ -416,6 +416,10 @@ export const universityProfiles = sqliteTable('university_profiles', {
   prcStrongBoards: text('prc_strong_boards').notNull().default('[]'),
   notes: text('notes'),
   dataConfidence: text('data_confidence'),
+  // Task 5: paper-document requirements vs eligibility qualifications (both
+  // JSON-encoded text[] mirrors, same convention as coursesOffered/scholarshipsOffered).
+  requirements: text('requirements').notNull().default('[]'),
+  qualifications: text('qualifications').notNull().default('[]'),
   remoteUpdatedAt: integer('remote_updated_at'),
 })
 

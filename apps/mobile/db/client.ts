@@ -417,6 +417,8 @@ export const MIGRATIONS = [
     prc_strong_boards TEXT NOT NULL DEFAULT '[]',
     notes TEXT,
     data_confidence TEXT,
+    requirements TEXT NOT NULL DEFAULT '[]',
+    qualifications TEXT NOT NULL DEFAULT '[]',
     remote_updated_at INTEGER
   )`,
   `CREATE TABLE IF NOT EXISTS course_school_rankings (
@@ -586,6 +588,15 @@ export const MIGRATIONS = [
   // way every other post-launch column addition does. NOT NULL + DEFAULT 0
   // matches the "retired until an admin re-enables it remotely" default.
   `ALTER TABLE ai_chat_config ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 0`,
+
+  // ── Task 5: university_profiles.requirements / .qualifications ─────────────
+  // Same reasoning as chat_enabled above: the university_profiles CREATE_SQL
+  // entry is CREATE TABLE IF NOT EXISTS, a no-op on devices that already synced
+  // the table, so pre-existing installs only pick up the new columns via these
+  // ALTER TABLEs. JSON-encoded text[] mirrors, defaulting to '[]' (empty) since
+  // migration 046 ships with no backfill.
+  `ALTER TABLE university_profiles ADD COLUMN requirements TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE university_profiles ADD COLUMN qualifications TEXT NOT NULL DEFAULT '[]'`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
