@@ -578,6 +578,14 @@ export const MIGRATIONS = [
   `ALTER TABLE question_feedback ADD COLUMN source_table TEXT NOT NULL DEFAULT 'flashcards'`,
   `ALTER TABLE question_feedback ADD COLUMN question_text TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE question_feedback ADD COLUMN synced INTEGER NOT NULL DEFAULT 0`,
+
+  // ── Kuya Baw kill-switch — ai_chat_config.chat_enabled ─────────────────────
+  // The ai_chat_config CREATE_SQL entry above is CREATE TABLE IF NOT EXISTS, so
+  // devices that already have the table (pre-existing installs) never pick up
+  // new columns added to that block. This ALTER backfills chat_enabled the same
+  // way every other post-launch column addition does. NOT NULL + DEFAULT 0
+  // matches the "retired until an admin re-enables it remotely" default.
+  `ALTER TABLE ai_chat_config ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
