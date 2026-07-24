@@ -72,6 +72,51 @@ describe('buildDiagnosticQuestions', () => {
     // Bank yields nothing (only row is passage-linked) → falls back to the bundle.
     expect(out).toEqual(PRE_ASSESS_QUESTIONS)
   })
+
+  it('backfills only the subtest the bank yielded zero questions for (mixed coverage), leaving the others bank-sourced', () => {
+    const rows = [
+      // Mathematics: every row is passage-linked → buildPreAssessFromUpcat filters
+      // all of them out, so the bank yields zero standalone Mathematics questions
+      // even though the bank build overall is non-empty (Science/LP/RC below).
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `M${i}`, subtest: 'Mathematics', setId: 'PASS-M' })),
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `S${i}`, subtest: 'Science' })),
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `L${i}`, subtest: 'Language Proficiency' })),
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `R${i}`, subtest: 'Reading Comprehension' })),
+    ]
+    const out = buildDiagnosticQuestions(rows, [...DIAGNOSTIC_SUBTESTS], 10, () => 0)
+
+    // All 4 subtests must be represented — the defect was silently dropping the
+    // subtest whose bank rows were all filtered out.
+    for (const subtest of DIAGNOSTIC_SUBTESTS) {
+      expect(out.some(q => q.subject === subtest)).toBe(true)
+    }
+
+    // Bank-covered subtests are untouched: 10 each, straight from the bank rows.
+    expect(out.filter(q => q.subject === 'Science')).toHaveLength(10)
+    expect(out.filter(q => q.subject === 'Language Proficiency')).toHaveLength(10)
+    expect(out.filter(q => q.subject === 'Reading Comprehension')).toHaveLength(10)
+
+    // Mathematics (zero from the bank) is backfilled from the bundle — the bundle
+    // only has 5 Mathematics-labeled items, so all 5 (not 10) are used, and they
+    // must be exactly the bundled ones (ids prefixed pre-math-), not bank rows.
+    const mathQuestions = out.filter(q => q.subject === 'Mathematics')
+    expect(mathQuestions).toHaveLength(5)
+    expect(mathQuestions.every(q => q.id.startsWith('pre-math-'))).toBe(true)
+    expect(mathQuestions).toEqual(PRE_ASSESS_QUESTIONS.filter(q => q.subject === 'Mathematics'))
+  })
+
+  it('backfills the same way on the single-subject (?subject=) path', () => {
+    // Simulates ?subject=Mathematics: only Mathematics is requested, and the bank
+    // has rows for other subtests but zero standalone Mathematics rows.
+    const rows = [
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `M${i}`, subtest: 'Mathematics', setId: 'PASS-M' })),
+      ...Array.from({ length: 12 }, (_, i) => row({ questionId: `S${i}`, subtest: 'Science' })),
+    ]
+    const out = buildDiagnosticQuestions(rows, ['Mathematics'], 10, () => 0)
+    expect(out.length).toBeGreaterThan(0)
+    expect(out.every(q => q.subject === 'Mathematics')).toBe(true)
+    expect(out).toEqual(PRE_ASSESS_QUESTIONS.filter(q => q.subject === 'Mathematics'))
+  })
 })
 
 describe('scoreDiagnostic', () => {

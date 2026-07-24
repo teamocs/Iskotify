@@ -33,6 +33,15 @@ export function resolveDiagnosticSubtests(subjectParam?: string | null): string[
  * and Science); otherwise it falls back further to the whole bundle rather than
  * showing no questions at all (the bundle has no Language Proficiency / Reading
  * Comprehension-labeled items).
+ *
+ * The bank build is per-subtest under the hood (each subtest's rows are filtered/
+ * shuffled independently), so it's possible for the bank to yield questions for
+ * some requested subtests but zero for another (e.g. every Reading Comprehension
+ * row is passage-linked, which buildPreAssessFromUpcat excludes). When that
+ * happens, only the affected subtest is backfilled from the bundle (its own
+ * subject's items, up to perSubtest) — bank-covered subtests are left untouched.
+ * A fully-empty bank build (every requested subtest has zero) still takes the
+ * whole-bundle fallback above as a natural consequence of this per-subtest check.
  */
 export function buildDiagnosticQuestions(
   rows: UpcatLocalRow[],
@@ -41,9 +50,19 @@ export function buildDiagnosticQuestions(
   rng: () => number = Math.random,
 ): PreAssessQuestion[] {
   const built = buildPreAssessFromUpcat(rows, subtests, perSubtest, rng)
-  if (built.length > 0) return built
-  const scoped = PRE_ASSESS_QUESTIONS.filter(q => subtests.includes(q.subject))
-  return scoped.length > 0 ? scoped : PRE_ASSESS_QUESTIONS
+  if (built.length === 0) {
+    const scoped = PRE_ASSESS_QUESTIONS.filter(q => subtests.includes(q.subject))
+    return scoped.length > 0 ? scoped : PRE_ASSESS_QUESTIONS
+  }
+
+  const covered = new Set(built.map(q => q.subject))
+  const missing = subtests.filter(st => !covered.has(st))
+  if (missing.length === 0) return built
+
+  const backfill = missing.flatMap(st =>
+    PRE_ASSESS_QUESTIONS.filter(q => q.subject === st).slice(0, perSubtest),
+  )
+  return [...built, ...backfill]
 }
 
 export interface DiagnosticScore {
