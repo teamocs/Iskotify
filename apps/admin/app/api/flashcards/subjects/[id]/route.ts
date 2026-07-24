@@ -90,10 +90,14 @@ export async function DELETE(
     if (error.code === 'PGRST116') {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
-    // 23503 = foreign_key_violation — surface a useful message instead of generic 500.
+    // 23503 = foreign_key_violation — practice_sessions.topic_id RESTRICTs the cascade
+    // delete of this subject's topics once students have practice history on them.
     if (error.code === '23503') {
       return NextResponse.json(
-        { error: 'Cannot delete: this subject is still referenced by other records.', detail: error.message },
+        {
+          error: "Cannot delete: students have practice history on this subject's topics. Archive it instead (unpublish its topics) rather than deleting.",
+          detail: error.message,
+        },
         { status: 409 },
       )
     }

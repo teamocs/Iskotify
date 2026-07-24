@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ExamTagSelector } from '@/components/flashcards/ExamTagSelector'
+import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
 import { Topbar } from '@/components/admin/Topbar'
+
+const MAX_SAMPLE_TEXT_CHARS = 20000
 
 interface Listing {
   slug: string
@@ -35,6 +38,10 @@ export default function NewFlashcardsPage() {
   const [generateCount, setGenerateCount] = useState<number>(10)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
+  const [formatNotes, setFormatNotes] = useState('')
+  const [sampleText, setSampleText] = useState('')
+  const [sampleFileName, setSampleFileName] = useState('')
+  const [sampleFileError, setSampleFileError] = useState('')
 
   useEffect(() => {
     fetch('/api/admin/listings')
@@ -68,6 +75,17 @@ export default function NewFlashcardsPage() {
     setCards((prev) => prev.filter((_, i) => i !== index))
   }
 
+  async function handleSampleFile(file: File) {
+    setSampleFileError('')
+    try {
+      const text = await file.text()
+      setSampleText(text.slice(0, MAX_SAMPLE_TEXT_CHARS))
+      setSampleFileName(file.name)
+    } catch {
+      setSampleFileError('Could not read that file — try pasting the sample text instead.')
+    }
+  }
+
   const isValid =
     subject.trim().length > 0 &&
     topic.trim().length > 0 &&
@@ -92,6 +110,8 @@ export default function NewFlashcardsPage() {
           listing_slugs: selectedSlugs,
           count: generateCount,
           existing_questions: cards.map(c => c.question).filter(q => q.trim().length > 0),
+          formatNotes: formatNotes.trim() || undefined,
+          sampleText: sampleText.trim() || undefined,
         }),
       })
       const body = await res.json() as { cards?: CardRow[]; error?: string }
@@ -209,6 +229,46 @@ export default function NewFlashcardsPage() {
                 Auto-generate flashcards tuned to Philippine entrance / scholarship exam standards
                 (UPCAT, ACET, DOST-SEI, CHED, etc.). Cards are appended to the list below for your review before saving.
               </p>
+
+              <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                FORMAT INSTRUCTIONS <span className="font-normal text-[#9ca3af]">(optional)</span>
+              </label>
+              <textarea
+                value={formatNotes}
+                onChange={(e) => setFormatNotes(e.target.value)}
+                disabled={isGenerating}
+                rows={3}
+                placeholder="Describe the exact question format you want, e.g. &quot;4-option multiple choice, one paragraph reading passage per question&quot;"
+                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y mb-3 disabled:opacity-50"
+              />
+
+              <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                SAMPLE QUESTIONS TO IMITATE <span className="font-normal text-[#9ca3af]">(optional)</span>
+              </label>
+              <textarea
+                value={sampleText}
+                onChange={(e) => { setSampleText(e.target.value.slice(0, MAX_SAMPLE_TEXT_CHARS)); setSampleFileName('') }}
+                disabled={isGenerating}
+                rows={3}
+                placeholder="Paste sample questions here, or upload a .txt/.csv/.md file below"
+                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y mb-2 disabled:opacity-50"
+              />
+              <div className="mb-3">
+                <CsvDropzone
+                  onFileSelected={handleSampleFile}
+                  disabled={isGenerating}
+                  accept=".txt,.csv,.md,text/plain,text/csv,text/markdown"
+                  label="Drop a .txt/.csv/.md sample file here or click to browse"
+                  hint="Parsed locally in your browser — nothing is uploaded except the extracted text."
+                  sampleHref=""
+                />
+                {sampleFileName && (
+                  <p className="text-[10px] text-[#6e6e73] mt-1">Loaded: {sampleFileName} ({sampleText.length.toLocaleString()} chars)</p>
+                )}
+                {sampleFileError && (
+                  <p className="text-[10px] text-[#800000] mt-1">{sampleFileError}</p>
+                )}
+              </div>
 
               <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
                 HOW MANY CARDS?

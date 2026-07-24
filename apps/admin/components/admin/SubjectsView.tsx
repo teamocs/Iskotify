@@ -57,6 +57,11 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   const [editName, setEditName] = useState('')
   const [editSlugs, setEditSlugs] = useState<string[]>([])
 
+  const [creating, setCreating] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createSlugs, setCreateSlugs] = useState<string[]>([])
+  const [createError, setCreateError] = useState('')
+
   const scholarships = listings.filter(l => l.type === 'scholarship')
   const exams = listings.filter(l => l.type === 'exam')
 
@@ -78,6 +83,47 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     setEditSlugs(prev =>
       prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
     )
+  }
+
+  function startCreate() {
+    setCreating(true)
+    setCreateName('')
+    setCreateSlugs([])
+    setCreateError('')
+    setEditingSubject(null)
+    setDeletingSubject(null)
+  }
+
+  function toggleCreateSlug(slug: string) {
+    setCreateSlugs(prev =>
+      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
+    )
+  }
+
+  async function createSubject() {
+    if (!createName.trim()) return
+    setSaving(true)
+    setCreateError('')
+    try {
+      const res = await fetch('/api/flashcards/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: createName.trim(), listing_slugs: createSlugs }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setCreateError(body.error ?? 'Something went wrong')
+        return
+      }
+      const created = await res.json()
+      setSubjects(prev =>
+        [...prev, { id: created.id, name: created.name, listing_slugs: created.listing_slugs ?? [], topics: [], totalCards: 0, overallStatus: 'draft' }]
+          .sort((a, b) => a.name.localeCompare(b.name))
+      )
+      setCreating(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function saveEdit() {
@@ -134,6 +180,12 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
       <div className="flex items-center justify-between">
         <p className="text-sm text-[#6e6e73]">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</p>
         <div className="flex gap-2">
+          <button
+            onClick={startCreate}
+            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] transition-colors"
+          >
+            + New subject
+          </button>
           <Link
             href="/admin/flashcards/new"
             className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] transition-colors"
@@ -387,6 +439,103 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                 className="px-4 py-1.5 text-sm font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create modal */}
+      {creating && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => { if (!saving) { setCreating(false); setCreateError('') } }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-subject-heading"
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && !saving) {
+                setCreating(false)
+                setCreateError('')
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
+          >
+            <h2 id="new-subject-heading" className="text-base font-semibold text-[#1d1d1f]">New Subject</h2>
+
+            <div className="space-y-1">
+              <label htmlFor="new-subject-name" className="text-xs font-medium text-[#6e6e73]">Subject name</label>
+              <input
+                id="new-subject-name"
+                autoFocus
+                value={createName}
+                onChange={e => setCreateName(e.target.value)}
+                placeholder="e.g. Biology"
+                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+              />
+            </div>
+
+            {scholarships.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-[#6e6e73]">Scholarships</p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {scholarships.map(l => (
+                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={createSlugs.includes(l.slug)}
+                        onChange={() => toggleCreateSlug(l.slug)}
+                        className="accent-[#800000]"
+                      />
+                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
+                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {exams.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-[#6e6e73]">Exams</p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {exams.map(l => (
+                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={createSlugs.includes(l.slug)}
+                        onChange={() => toggleCreateSlug(l.slug)}
+                        className="accent-[#800000]"
+                      />
+                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
+                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {createError && (
+              <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">{createError}</p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => { setCreating(false); setCreateError('') }}
+                className="text-sm text-[#6e6e73] hover:text-[#1d1d1f] px-3 py-1.5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createSubject}
+                disabled={saving || !createName.trim()}
+                className="px-4 py-1.5 text-sm font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Creating…' : 'Create'}
               </button>
             </div>
           </div>

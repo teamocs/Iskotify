@@ -21,6 +21,7 @@ async function requireAdmin() {
 const MIN_COUNT = 1
 const MAX_COUNT = 25
 const DEFAULT_COUNT = 10
+const MAX_SAMPLE_TEXT_CHARS = 20000
 
 interface GeneratedCard {
   question: string
@@ -45,8 +46,10 @@ export function buildGenerationPrompt(params: {
   count: number
   listingSlugs: string[]
   existingQuestions?: string[]
+  formatNotes?: string
+  sampleText?: string
 }): string {
-  const { subject, topic, count, listingSlugs, existingQuestions = [] } = params
+  const { subject, topic, count, listingSlugs, existingQuestions = [], formatNotes, sampleText } = params
   const examLine = listingSlugs.length > 0
     ? `Target these specific exams (match their style and difficulty): ${listingSlugs.join(', ')}.`
     : `Target general Philippine college-entrance and scholarship exam style.`
@@ -86,6 +89,8 @@ Return ONLY valid JSON. No markdown fences. No preamble. Exact shape:
   ]
 }
 
+${formatNotes && formatNotes.trim() ? `\nFORMAT INSTRUCTIONS FROM ADMIN\nThe admin has described the exact question format they want. Follow it precisely, in addition to the quality standards above:\n${formatNotes.trim()}\n` : ''}
+${sampleText && sampleText.trim() ? `\nSAMPLE QUESTIONS TO IMITATE\nMatch the style, structure, tone, and difficulty of these sample questions as closely as possible. Do NOT copy them verbatim — generate new, original questions in the same style:\n${sampleText.trim()}\n` : ''}
 ${existingQuestions.length > 0 ? `\nDO NOT duplicate or paraphrase any of these existing questions in this topic:\n${existingQuestions.map(q => `- ${q}`).join('\n')}\n` : ''}
 Generate ${count} cards now.`
 }
@@ -115,6 +120,8 @@ export async function POST(req: NextRequest) {
       listing_slugs?: string[]
       existing_questions?: string[]
       count?: number
+      formatNotes?: string
+      sampleText?: string
     } | null
 
     const subject = body?.subject_name?.trim() ?? ''
@@ -125,12 +132,14 @@ export async function POST(req: NextRequest) {
       : []
     const requestedCount = typeof body?.count === 'number' ? body.count : DEFAULT_COUNT
     const count = Math.max(MIN_COUNT, Math.min(MAX_COUNT, Math.floor(requestedCount)))
+    const formatNotes = typeof body?.formatNotes === 'string' ? body.formatNotes.slice(0, MAX_SAMPLE_TEXT_CHARS) : undefined
+    const sampleText = typeof body?.sampleText === 'string' ? body.sampleText.slice(0, MAX_SAMPLE_TEXT_CHARS) : undefined
 
     if (!subject || !topic) {
       return NextResponse.json({ error: 'subject_name and topic_name are required' }, { status: 400 })
     }
 
-    const prompt = buildGenerationPrompt({ subject, topic, count, listingSlugs, existingQuestions })
+    const prompt = buildGenerationPrompt({ subject, topic, count, listingSlugs, existingQuestions, formatNotes, sampleText })
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
     const model = genAI.getGenerativeModel({
