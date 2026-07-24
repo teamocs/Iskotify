@@ -133,7 +133,7 @@ export function FocusExamsFold({
                 ) : null}
               </View>
               <View style={[s.monogram, { backgroundColor: accent }]}>
-                <Text style={s.monogramTxt} maxFontSizeMultiplier={1.2}>{acronym}</Text>
+                <Text style={[s.monogramTxt, { color: t.textInverse }]} maxFontSizeMultiplier={1.2}>{acronym}</Text>
               </View>
               <Text style={[s.tileTitle, { color: t.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>{slot.title}</Text>
             </Pressable>
@@ -145,7 +145,7 @@ export function FocusExamsFold({
         <Pressable style={s.backdrop} onPress={() => setPickerOpen(false)} accessibilityRole="button" accessibilityLabel="Close" />
         <View style={[s.sheet, { backgroundColor: t.bg }]}>
           <WebTopSpacer />
-          <View style={s.handle} />
+          <View style={[s.handle, { backgroundColor: t.divider }]} />
           <View style={s.sheetHeader}>
             <Text style={[s.sheetTitle, { fontSize: typo.lg, color: t.textPrimary }]}>Add an exam</Text>
             <Pressable onPress={() => setPickerOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
@@ -213,12 +213,12 @@ function makeStyles() {
     addPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
     addPillTxt: { fontSize: 10, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     monogram: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    monogramTxt: { fontSize: 12, fontWeight: '700', color: '#ffffff', fontFamily: 'Outfit_700Bold' },
+    monogramTxt: { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     tileTitle: { fontSize: 11, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
     // Modal
     backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
     sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, maxHeight: '80%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 32, paddingTop: 12 },
-    handle: { width: 36, height: 4, backgroundColor: 'rgba(128,128,128,0.35)', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
     sheetTitle: { fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     pickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
