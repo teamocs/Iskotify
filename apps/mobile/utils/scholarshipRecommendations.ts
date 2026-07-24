@@ -37,6 +37,13 @@ function toMatchInput(l: ScholarshipListingLike): MatchInput {
   }
 }
 
+/** Minimal shape of a student's focused listing — mirrors hooks/useHomeStats.ts's FocusedListing. */
+export interface FocusedListingRef {
+  slug: string
+  type: string
+  priority: number
+}
+
 export interface SelectRecommendedScholarshipsOpts {
   profile?: StudentProfile
   clusters?: Set<string> | null
@@ -44,6 +51,11 @@ export interface SelectRecommendedScholarshipsOpts {
   /** Clock for date-proximity ordering (rankForDisplay). Deterministic by default. */
   now?: number
   limit?: number
+  /** Scholarships the student has explicitly focused — pinned to the front (in
+   *  focus-priority order) so they never silently drop off Home. Entries whose
+   *  type isn't 'scholarship', or whose slug isn't among the open/upcoming
+   *  candidates (e.g. it since closed), are ignored. */
+  focusedListings?: FocusedListingRef[]
 }
 
 /**
@@ -51,6 +63,10 @@ export interface SelectRecommendedScholarshipsOpts {
  * the Lists screen's scholarships tab (rankForDisplay: eligibility → course-cluster
  * match → deadline proximity), each carrying its matchScholarship eligibility
  * status for the MatchPill. Capped to `limit` (default 6).
+ *
+ * Focused scholarships (opts.focusedListings) are pinned first, in focus-priority
+ * order, so a scholarship the student explicitly focused always surfaces on Home
+ * instead of only appearing when it happens to rank in the top `limit`.
  */
 export function selectRecommendedScholarships<T extends ScholarshipListingLike>(
   listings: T[],
@@ -65,7 +81,25 @@ export function selectRecommendedScholarships<T extends ScholarshipListingLike>(
     now: opts.now ?? 0,
   })
   const limit = opts.limit ?? RECOMMENDED_SCHOLARSHIPS_LIMIT
-  return ranked.slice(0, limit).map(listing => ({
+
+  const bySlug = new Map(open.map(l => [l.slug, l]))
+  const pinnedSlugs = (opts.focusedListings ?? [])
+    .filter(f => f.type === 'scholarship' && bySlug.has(f.slug))
+    .sort((a, b) => a.priority - b.priority)
+    .map(f => f.slug)
+
+  const seen = new Set<string>()
+  const pinned: T[] = []
+  for (const slug of pinnedSlugs) {
+    if (seen.has(slug)) continue // dedup: a focused slug listed twice
+    seen.add(slug)
+    pinned.push(bySlug.get(slug)!)
+  }
+
+  const rest = ranked.filter(l => !seen.has(l.slug))
+  const finalList = [...pinned, ...rest].slice(0, limit)
+
+  return finalList.map(listing => ({
     listing,
     status: matchScholarship(toMatchInput(listing), opts.profile ?? {}).status,
   }))

@@ -481,6 +481,30 @@ describe('HomeScreen', () => {
       render(<HomeScreen />)
       expect(screen.queryByText('Closed Scholarship')).toBeNull()
     })
+
+    // Regression: the old "My Focus" section used to guarantee a focused
+    // scholarship always showed on Home. Now that it's gone, a focused
+    // scholarship must still surface here even if it doesn't rank in the top 6.
+    it('still shows a focused scholarship even when it would rank outside the top 6', () => {
+      const makeRow = (i: number) => ({
+        id: `sch-${i}`, slug: `sch-${i}`, title: `Scholarship ${i}`, type: 'scholarship', status: 'active',
+        provider: 'Provider', grantAmount: '', deadline: null,
+        isVerified: true, incomeCeiling: null, gwaRequirement: null, serviceObligationYears: null,
+        province: null, city: null, scope: 'national', scholarshipMeta: '{}', targetCourses: ['all'],
+      })
+      mockUseHomeCatalog.mockReturnValue({
+        ...emptyCatalog,
+        // 7 equally-ranked scholarships — index 6 ("Scholarship 6") would be
+        // sliced off by the default limit-6 cap without focus-pinning.
+        scholarshipListings: Array.from({ length: 7 }, (_, i) => makeRow(i)),
+      })
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'sch-6', priority: 1, title: 'Scholarship 6', type: 'scholarship', examDate: null, deadline: null }],
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('Scholarship 6')).toBeTruthy()
+    })
   })
 
   // ── News & Dates (merged) ─────────────────────────────────────────────────

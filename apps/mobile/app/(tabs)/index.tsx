@@ -421,6 +421,7 @@ export default function HomeScreen() {
             profile={catalog.profile}
             clusters={catalog.clusters}
             region={catalog.region}
+            focusedListings={focusedListings}
           />
 
           {/* (6) News & Dates — merged feed (dates lead, news fills remaining slots) */}

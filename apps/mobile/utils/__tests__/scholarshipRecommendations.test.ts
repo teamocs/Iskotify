@@ -68,3 +68,57 @@ describe('selectRecommendedScholarships', () => {
     expect(result[0]!.status).toBe('eligible')
   })
 })
+
+describe('selectRecommendedScholarships — focused-listing pinning', () => {
+  it('pins a focused scholarship first even when it ranks outside the top 6', () => {
+    // 7 equally-ranked candidates → without pinning, rankForDisplay's stable
+    // index-tiebreak keeps input order and the 7th (last) one is sliced off.
+    const rows = Array.from({ length: 7 }, (_, i) => makeScholarship({ id: `s${i}`, slug: `s${i}` }))
+    const focusedListings = [{ slug: 's6', type: 'scholarship', priority: 1 }]
+
+    const unpinned = selectRecommendedScholarships(rows)
+    expect(unpinned.map(r => r.listing.id)).not.toContain('s6')
+
+    const pinned = selectRecommendedScholarships(rows, { focusedListings })
+    expect(pinned).toHaveLength(6)
+    expect(pinned[0]!.listing.id).toBe('s6')
+  })
+
+  it('orders multiple focused scholarships by focus priority', () => {
+    const rows = Array.from({ length: 8 }, (_, i) => makeScholarship({ id: `s${i}`, slug: `s${i}` }))
+    // priority 2 listed before priority 1 in the input — output must respect priority order.
+    const focusedListings = [
+      { slug: 's7', type: 'scholarship', priority: 2 },
+      { slug: 's6', type: 'scholarship', priority: 1 },
+    ]
+    const result = selectRecommendedScholarships(rows, { focusedListings })
+    expect(result[0]!.listing.id).toBe('s6')
+    expect(result[1]!.listing.id).toBe('s7')
+  })
+
+  it('does not duplicate a focused scholarship that also ranks in the top 6', () => {
+    const rows = Array.from({ length: 5 }, (_, i) => makeScholarship({ id: `s${i}`, slug: `s${i}` }))
+    const focusedListings = [{ slug: 's0', type: 'scholarship', priority: 1 }]
+    const result = selectRecommendedScholarships(rows, { focusedListings })
+    const ids = result.map(r => r.listing.id)
+    expect(ids.filter(id => id === 's0')).toHaveLength(1)
+    expect(ids).toEqual(['s0', 's1', 's2', 's3', 's4'])
+  })
+
+  it('does not force-include a focused scholarship that is not in the candidate set (e.g. closed)', () => {
+    const rows = [
+      makeScholarship({ id: 'open-1', slug: 'open-1' }),
+      makeScholarship({ id: 'closed-1', slug: 'closed-1', status: 'closed' }),
+    ]
+    const focusedListings = [{ slug: 'closed-1', type: 'scholarship', priority: 1 }]
+    const result = selectRecommendedScholarships(rows, { focusedListings })
+    expect(result.map(r => r.listing.id)).toEqual(['open-1'])
+  })
+
+  it('ignores focused listings that are not scholarships', () => {
+    const rows = [makeScholarship({ id: 'open-1', slug: 'open-1' })]
+    const focusedListings = [{ slug: 'upcat', type: 'exam', priority: 1 }]
+    const result = selectRecommendedScholarships(rows, { focusedListings })
+    expect(result.map(r => r.listing.id)).toEqual(['open-1'])
+  })
+})

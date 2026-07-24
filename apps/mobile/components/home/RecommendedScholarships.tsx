@@ -7,7 +7,7 @@ import { SectionHeader } from '../ui/SectionHeader'
 import { ListCard } from '../ui/ListCard'
 import { InfoBanner } from '../ui/InfoBanner'
 import { MatchPill } from '../scholarships/MatchPill'
-import { selectRecommendedScholarships } from '../../utils/scholarshipRecommendations'
+import { selectRecommendedScholarships, type FocusedListingRef } from '../../utils/scholarshipRecommendations'
 import type { StudentProfile } from '../../utils/scholarshipMatch'
 import type { ScholarshipListingSummary } from '../../hooks/useHomeCatalog'
 
@@ -16,6 +16,10 @@ interface Props {
   profile: StudentProfile
   clusters: Set<string>
   region: string
+  /** Student's focused listings (from useHomeStats) — a focused scholarship is
+   *  pinned to the front so it never silently drops off Home. Optional so
+   *  existing callers/tests keep working unchanged. */
+  focusedListings?: FocusedListingRef[]
 }
 
 /** Grant amount and/or monthly stipend, whichever is present (brief: "grant amount/stipend when present"). */
@@ -26,12 +30,12 @@ function amountLabel(l: ScholarshipListingSummary): string | null {
   return parts.length > 0 ? parts.join(' + ') : null
 }
 
-export function RecommendedScholarships({ scholarships, profile, clusters, region }: Props) {
+export function RecommendedScholarships({ scholarships, profile, clusters, region, focusedListings }: Props) {
   const { theme: t } = useTheme()
 
   const recommended = useMemo(
-    () => selectRecommendedScholarships(scholarships, { profile, clusters, region, now: Date.now() }),
-    [scholarships, profile, clusters, region],
+    () => selectRecommendedScholarships(scholarships, { profile, clusters, region, now: Date.now(), focusedListings }),
+    [scholarships, profile, clusters, region, focusedListings],
   )
 
   return (
