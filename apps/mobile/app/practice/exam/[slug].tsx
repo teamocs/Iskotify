@@ -6,8 +6,12 @@ import { useDb } from '../../../hooks/useDb'
 import { subscribe } from '../../../services/queryCache'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState, type BuiltExam, type ReviewSection } from '../../../utils/examBuilder'
-import type { ExamQuestion } from '../../../utils/upcatExam'
+import {
+  buildBlueprintExam, buildStudySprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
+  groupReviewBySection, sectionChipState, scaleBlueprintTiming, STUDY_SPRINT_MINUTES,
+  type BuiltExam, type ReviewSection, type ScaledBlueprintTiming,
+} from '../../../utils/examBuilder'
+import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { SectionGrid } from '../../../components/practice/SectionGrid'
@@ -36,12 +40,15 @@ function fmtTime(totalSecs: number): string {
 /** Section boundary: the flat index where this runnable section begins, plus its time budget. */
 interface SectionBound { name: string; start: number; end: number; timeMinutes: number | null }
 
-function computeBounds(built: BuiltExam): SectionBound[] {
+/** timing is null for the pre-scaling render pass, or when a section has no scaled
+ *  entry — either way the declared (unscaled) section time is the correct fallback. */
+function computeBounds(built: BuiltExam, timing: ScaledBlueprintTiming | null): SectionBound[] {
   const bounds: SectionBound[] = []
   let cursor = 0
   for (const bs of built.runnable) {
     const len = bs.questions.length
-    bounds.push({ name: bs.section.name, start: cursor, end: cursor + len, timeMinutes: bs.section.timeMinutes })
+    const timeMinutes = timing?.sectionMinutes.get(bs.section.id) ?? bs.section.timeMinutes
+    bounds.push({ name: bs.section.name, start: cursor, end: cursor + len, timeMinutes })
     cursor += len
   }
   return bounds
@@ -132,8 +139,17 @@ export default function BlueprintExam() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [blueprint, setBlueprint] = useState<ExamBlueprint | null>(null)
   const [built, setBuilt] = useState<BuiltExam | null>(null)
+  // 'full' (default, loaded at prestart) or 'sprint' once Study Sprint is started —
+  // gates sectionBlocked (Sprint always runs a single fixed 30-min timer, never
+  // per-section locks) and which sample rebuilds `built`/`questions` on start.
+  const [examMode, setExamMode] = useState<'full' | 'sprint'>('full')
   const [courseClusters, setCourseClusters] = useState<string[]>([])
   const [questions, setQuestions] = useState<FlatQuestion[]>([])
+  // Raw question pools + passages from the last load, kept for Study Sprint's
+  // on-demand rebuild (buildStudySprintExam samples fewer items per section
+  // than the full mock already shown on the prestart card).
+  const poolsRef = useRef<Map<string, RawUpcatQuestion[]>>(new Map())
+  const passagesRef = useRef<RawUpcatPassage[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   // Question-report state: which indexes were reported + which index the modal is open for.
@@ -166,8 +182,15 @@ export default function BlueprintExam() {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
   }, [idx])
 
-  const bounds = useMemo(() => (built ? computeBounds(built) : []), [built])
-  const sectionBlocked = !!blueprint?.sectionBlocked && bounds.length > 0
+  // Timer scaling (Task 4): when a thin question pool sampled fewer questions than
+  // the blueprint declares, scale the total + per-section time budgets down by the
+  // same ratio rather than running the full declared clock against a short exam.
+  const timing = useMemo(
+    () => (blueprint && built ? scaleBlueprintTiming(blueprint, built) : null),
+    [blueprint, built],
+  )
+  const bounds = useMemo(() => (built ? computeBounds(built, timing) : []), [built, timing])
+  const sectionBlocked = examMode === 'full' && !!blueprint?.sectionBlocked && bounds.length > 0
 
   // B2: section chip state — recomputed whenever idx, floorIdx, or sectionBlocked changes.
   const sectionChips = useMemo(
@@ -183,8 +206,10 @@ export default function BlueprintExam() {
       if (!bp) { setQuestions([]); setBuilt(null); setPhase('empty'); return }
       const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
       const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
+      poolsRef.current = pools; passagesRef.current = passages
       const b = buildBlueprintExam(bp, pools, passages)
       const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
+      setExamMode('full')
       setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
       if (flat.length) examLoadedRef.current = true
       setPhase(flat.length ? 'prestart' : 'empty')
@@ -211,17 +236,33 @@ export default function BlueprintExam() {
     [blueprint, courseClusters],
   )
 
-  // --- Start the exam: arm the total timer (and the first section timer if blocked). ---
-  function startExam() {
+  // --- Start the exam: arm the total timer (and the first section timer if blocked).
+  //     'full' reuses the sample already built at load (scaled timing per `timing`).
+  //     'sprint' rebuilds a smaller, 30-min-fixed sample from the same raw pools and
+  //     never section-locks (examMode gates `sectionBlocked` above). ---
+  function startExam(mode: 'full' | 'sprint') {
     if (!blueprint) return
+    setExamMode(mode)
     const now = Date.now()
-    setEndTime(now + blueprint.totalTimeMinutes * 60_000)
-    if (sectionBlocked) {
+
+    if (mode === 'sprint') {
+      const sprintBuilt = buildStudySprintExam(blueprint, poolsRef.current, passagesRef.current, STUDY_SPRINT_MINUTES)
+      const flat: FlatQuestion[] = sprintBuilt.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
+      setBuilt(sprintBuilt); setQuestions(flat)
+      setIdx(0); setFloorIdx(0)
+      setEndTime(now + STUDY_SPRINT_MINUTES * 60_000)
+      setPhase('exam')
+      return
+    }
+
+    const totalMinutes = timing?.totalMinutes ?? blueprint.totalTimeMinutes
+    setEndTime(now + totalMinutes * 60_000)
+    if (blueprint.sectionBlocked && bounds.length > 0) {
       const first = bounds[0]!
       setSectionIdx(0)
       setIdx(first.start)
       setFloorIdx(first.start)
-      setSectionEndTime(now + (first.timeMinutes ?? blueprint.totalTimeMinutes) * 60_000)
+      setSectionEndTime(now + (first.timeMinutes ?? totalMinutes) * 60_000)
     }
     setPhase('exam')
   }
@@ -315,6 +356,9 @@ export default function BlueprintExam() {
 
   if (phase === 'prestart' && blueprint && built) {
     const hours = Math.round((blueprint.totalTimeMinutes / 60) * 10) / 10
+    const scaledMinutes = timing?.totalMinutes ?? blueprint.totalTimeMinutes
+    const scaledHours = Math.round((scaledMinutes / 60) * 10) / 10
+    const isScaled = scaledMinutes !== blueprint.totalTimeMinutes
     const runnableNames = new Set(built.runnable.map(b => b.section.name))
     return (
       <SafeAreaView style={s.root}>
@@ -329,6 +373,9 @@ export default function BlueprintExam() {
           <View style={s.metaCard}>
             <Text style={s.metaBig}>{blueprint.totalItems} items · {hours}h</Text>
             <Text style={s.metaSub}>{built.totalQuestions} items available now</Text>
+            {isScaled ? (
+              <Text style={s.metaSub}>Full Mock timer today: {scaledHours}h (scaled to available items)</Text>
+            ) : null}
           </View>
 
           {blueprint.mechanicsNote ? (
@@ -349,11 +396,12 @@ export default function BlueprintExam() {
           <Text style={s.sectionLbl}>Structure</Text>
           {[...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder).map(sec => {
             const live = runnableNames.has(sec.name)
+            const secMinutes = timing?.sectionMinutes.get(sec.id) ?? sec.timeMinutes
             return (
               <View key={sec.id} style={[s.structRow, !live && s.structRowSoon]}>
                 <Text style={[s.structName, !live && s.structSoonTxt]}>{sec.name}</Text>
                 <Text style={[s.structCount, !live && s.structSoonTxt]}>
-                  {live ? `${sec.itemCount} items${sectionBlocked && sec.timeMinutes ? ` · ${sec.timeMinutes}m` : ''}` : 'Content coming soon'}
+                  {live ? `${sec.itemCount} items${sectionBlocked && secMinutes ? ` · ${secMinutes}m` : ''}` : 'Content coming soon'}
                 </Text>
               </View>
             )
@@ -379,9 +427,17 @@ export default function BlueprintExam() {
             accessibilityRole="button"
             style={[s.primaryBtn, built.totalQuestions === 0 && s.footDisabled]}
             disabled={built.totalQuestions === 0}
-            onPress={startExam}
+            onPress={() => startExam('full')}
           >
-            <Text style={s.primaryBtnTxt}>Start exam</Text>
+            <Text style={s.primaryBtnTxt}>Full Mock</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.sprintBtn, built.totalQuestions === 0 && s.footDisabled]}
+            disabled={built.totalQuestions === 0}
+            onPress={() => startExam('sprint')}
+          >
+            <Text style={s.sprintBtnTxt}>Study Sprint · {STUDY_SPRINT_MINUTES} min</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
@@ -779,6 +835,11 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     footnote: { fontSize: typo.xs, color: t.textTertiary, marginTop: 10, marginBottom: 4, lineHeight: 17, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
     primaryBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 16, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center', marginTop: spacing.sm },
     primaryBtnTxt: { color: t.textInverse, fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
+    sprintBtn: {
+      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accent, borderRadius: 16, borderCurve: 'continuous',
+      paddingVertical: 14, alignItems: 'center', marginTop: spacing.sm,
+    },
+    sprintBtnTxt: { color: t.accentText, fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
     ghostBtn: { paddingVertical: 12, alignItems: 'center' },
     ghostTxt: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular' },
   })

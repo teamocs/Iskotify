@@ -45,6 +45,7 @@ export function buildBlueprintExam(
   blueprint: ExamBlueprint,
   questionsByCategory: Map<string, RawUpcatQuestion[]>,
   passages: RawUpcatPassage[],
+  itemCountFor?: (section: BlueprintSection) => number,
 ): BuiltExam {
   const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
   const runnable: BuiltSection[] = []
@@ -52,11 +53,112 @@ export function buildBlueprintExam(
   for (const section of [...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
     const pool = questionsByCategory.get(section.skillCategory) ?? []
     if (pool.length === 0) { comingSoon.push(section); continue }
-    const picked = shuffle(pool).slice(0, Math.max(1, section.itemCount))
+    const target = itemCountFor ? itemCountFor(section) : section.itemCount
+    const picked = shuffle(pool).slice(0, Math.max(1, target))
     const questions: ExamQuestion[] = picked.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
     runnable.push({ section, questions, available: pool.length })
   }
   return { runnable, comingSoon, totalQuestions: runnable.reduce((n, s) => n + s.questions.length, 0) }
+}
+
+// ---------------------------------------------------------------------------
+// Timer scaling (Task 4) — a thin question pool can sample far fewer questions
+// than a blueprint declares (buildBlueprintExam caps each section at the
+// available pool size). Left unscaled, the countdown would still run the FULL
+// declared time against a short exam. These are pure so the math is unit-
+// tested independent of the [slug].tsx screen that arms the timers.
+// ---------------------------------------------------------------------------
+
+/**
+ * Scale a blueprint's total time budget down when the runnable exam sampled
+ * fewer questions than the blueprint declares. Never scales UP (an over-
+ * supplied or exactly-matched pool keeps the declared time). Always at least
+ * 1 minute. Guards divide-by-zero when declaredTotal is 0.
+ */
+export function scaleExamTimeMinutes(totalTimeMinutes: number, sampledTotal: number, declaredTotal: number): number {
+  if (declaredTotal <= 0 || sampledTotal >= declaredTotal) return totalTimeMinutes
+  return Math.max(1, Math.round((totalTimeMinutes * sampledTotal) / declaredTotal))
+}
+
+/**
+ * Same scaling, applied to a single section's own declared time budget using
+ * ITS OWN sampled/declared ratio (not the blueprint-wide ratio) — sections
+ * shrink independently since pool availability varies per skill category.
+ * Sections without a declared time budget (timeMinutes === null, i.e.
+ * unblocked blueprints) pass through unchanged.
+ */
+export function scaleSectionTimeMinutes(sectionTimeMinutes: number | null, sampledCount: number, declaredCount: number): number | null {
+  if (sectionTimeMinutes == null) return null
+  if (declaredCount <= 0 || sampledCount >= declaredCount) return sectionTimeMinutes
+  return Math.max(1, Math.round((sectionTimeMinutes * sampledCount) / declaredCount))
+}
+
+export interface ScaledBlueprintTiming {
+  totalMinutes: number
+  /** section.id -> scaled minutes (null when the section has no declared time budget). */
+  sectionMinutes: Map<string, number | null>
+}
+
+/**
+ * Combine the two scalers over a built exam — the single call site (startExam
+ * in app/practice/exam/[slug].tsx) needs both the total countdown and, for
+ * section-blocked blueprints, each section's own countdown.
+ */
+export function scaleBlueprintTiming(
+  blueprint: { totalItems: number; totalTimeMinutes: number },
+  built: BuiltExam,
+): ScaledBlueprintTiming {
+  const totalMinutes = scaleExamTimeMinutes(blueprint.totalTimeMinutes, built.totalQuestions, blueprint.totalItems)
+  const sectionMinutes = new Map<string, number | null>()
+  for (const bs of built.runnable) {
+    sectionMinutes.set(bs.section.id, scaleSectionTimeMinutes(bs.section.timeMinutes, bs.questions.length, bs.section.itemCount))
+  }
+  return { totalMinutes, sectionMinutes }
+}
+
+// ---------------------------------------------------------------------------
+// Study Sprint (Task 4) — a fixed 30-minute mode that proportionally samples
+// fewer questions per section so a full mock's pacing roughly holds at 1/9th
+// the length (or whatever fraction of the declared total the fixed sprint
+// budget represents).
+// ---------------------------------------------------------------------------
+
+export const STUDY_SPRINT_MINUTES = 30
+
+/**
+ * Study Sprint item budget per section: proportionally scale each section's
+ * declared item_count down to fit the sprint's fixed minute budget
+ * (round-to-nearest, minimum 1 so any section with content still appears).
+ * Guards divide-by-zero by returning the full item_count when totalTimeMinutes
+ * is 0.
+ */
+export function computeSprintItemCounts(
+  sections: readonly { id: string; itemCount: number }[],
+  totalTimeMinutes: number,
+  sprintMinutes: number = STUDY_SPRINT_MINUTES,
+): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const s of sections) {
+    const scaled = totalTimeMinutes > 0 ? Math.round((s.itemCount * sprintMinutes) / totalTimeMinutes) : s.itemCount
+    map.set(s.id, Math.max(1, scaled))
+  }
+  return map
+}
+
+/**
+ * Build a Study Sprint exam: same section/pool sampling as buildBlueprintExam,
+ * but each section's item_count is first scaled down to the sprint budget via
+ * computeSprintItemCounts. Sections with an empty pool are still excluded as
+ * comingSoon exactly like the full mock.
+ */
+export function buildStudySprintExam(
+  blueprint: ExamBlueprint,
+  questionsByCategory: Map<string, RawUpcatQuestion[]>,
+  passages: RawUpcatPassage[],
+  sprintMinutes: number = STUDY_SPRINT_MINUTES,
+): BuiltExam {
+  const counts = computeSprintItemCounts(blueprint.sections, blueprint.totalTimeMinutes, sprintMinutes)
+  return buildBlueprintExam(blueprint, questionsByCategory, passages, sec => counts.get(sec.id) ?? sec.itemCount)
 }
 
 export interface PenaltyScore { raw: number; adjusted: number; correct: number; wrong: number; blank: number }

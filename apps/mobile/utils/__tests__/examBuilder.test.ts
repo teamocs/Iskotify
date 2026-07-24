@@ -1,4 +1,9 @@
-import { buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand, groupReviewBySection, sectionChipState, orderBlueprintsForUser } from '../examBuilder'
+import {
+  buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
+  groupReviewBySection, sectionChipState, orderBlueprintsForUser,
+  scaleExamTimeMinutes, scaleSectionTimeMinutes, scaleBlueprintTiming,
+  computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES,
+} from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -32,6 +37,142 @@ describe('buildBlueprintExam', () => {
     const pools = new Map([['Mathematics', q('Mathematics', 2)]])
     const built = buildBlueprintExam(bp(), pools, [])
     expect(built.runnable[0]!.questions).toHaveLength(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Timer scaling (Task 4)
+// ---------------------------------------------------------------------------
+
+describe('scaleExamTimeMinutes', () => {
+  it('keeps the declared time when the sampled total meets or exceeds the declared total', () => {
+    expect(scaleExamTimeMinutes(270, 245, 245)).toBe(270)
+    expect(scaleExamTimeMinutes(270, 300, 245)).toBe(270) // over-supplied pool never scales up
+  })
+
+  it('scales proportionally when the sampled total is short of the declared total', () => {
+    // 270 * 100/245 = 110.2 -> 110
+    expect(scaleExamTimeMinutes(270, 100, 245)).toBe(110)
+  })
+
+  it('never returns less than 1 minute', () => {
+    expect(scaleExamTimeMinutes(270, 1, 2450)).toBe(1)
+  })
+
+  it('falls back to the declared time when declaredTotal is 0 (guards divide-by-zero)', () => {
+    expect(scaleExamTimeMinutes(270, 0, 0)).toBe(270)
+  })
+})
+
+describe('scaleSectionTimeMinutes', () => {
+  it('returns null when the section has no declared time budget', () => {
+    expect(scaleSectionTimeMinutes(null, 5, 10)).toBeNull()
+  })
+
+  it('keeps the declared section time when sampled meets/exceeds declared', () => {
+    expect(scaleSectionTimeMinutes(90, 90, 90)).toBe(90)
+    expect(scaleSectionTimeMinutes(90, 100, 90)).toBe(90)
+  })
+
+  it('scales proportionally when under-sampled', () => {
+    // 90 * 30/90 = 30
+    expect(scaleSectionTimeMinutes(90, 30, 90)).toBe(30)
+  })
+
+  it('never returns less than 1 minute', () => {
+    expect(scaleSectionTimeMinutes(90, 1, 900)).toBe(1)
+  })
+
+  it('guards divide-by-zero on a zero declared count', () => {
+    expect(scaleSectionTimeMinutes(90, 5, 0)).toBe(90)
+  })
+})
+
+describe('scaleBlueprintTiming', () => {
+  const blueprint = { totalItems: 245, totalTimeMinutes: 270 }
+  const built = {
+    runnable: [
+      { section: { id: 'acet:1', name: 'Verbal', skillCategory: 'English/Language', itemCount: 90, timeMinutes: 90, requiresSpatialLogic: false, displayOrder: 1 }, questions: new Array(45).fill({}), available: 45 },
+      { section: { id: 'acet:2', name: 'Numerical', skillCategory: 'Mathematics', itemCount: 60, timeMinutes: 75, requiresSpatialLogic: false, displayOrder: 2 }, questions: new Array(60).fill({}), available: 60 },
+    ],
+    comingSoon: [],
+    totalQuestions: 105,
+  }
+
+  it('scales the total time using the blueprint-wide ratio', () => {
+    // 270 * 105/245 = 115.7 -> 116
+    expect(scaleBlueprintTiming(blueprint, built).totalMinutes).toBe(116)
+  })
+
+  it('scales each section using its OWN sampled/declared ratio, not the blueprint-wide one', () => {
+    const timing = scaleBlueprintTiming(blueprint, built)
+    // acet:1 sampled 45/90 -> 90*45/90 = 45
+    expect(timing.sectionMinutes.get('acet:1')).toBe(45)
+    // acet:2 fully sampled 60/60 -> unchanged
+    expect(timing.sectionMinutes.get('acet:2')).toBe(75)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Study Sprint sampling (Task 4)
+// ---------------------------------------------------------------------------
+
+describe('computeSprintItemCounts', () => {
+  it('scales each section item_count proportionally to the sprint budget', () => {
+    const sections = [{ id: 'a', itemCount: 90 }, { id: 'b', itemCount: 60 }, { id: 'c', itemCount: 30 }]
+    // totalTimeMinutes 180, sprint 30 -> ratio 1/6
+    const counts = computeSprintItemCounts(sections, 180, 30)
+    expect(counts.get('a')).toBe(15) // 90/6
+    expect(counts.get('b')).toBe(10) // 60/6
+    expect(counts.get('c')).toBe(5)  // 30/6
+  })
+
+  it('never returns less than 1', () => {
+    const sections = [{ id: 'a', itemCount: 2 }]
+    const counts = computeSprintItemCounts(sections, 270, 30)
+    expect(counts.get('a')).toBe(1) // round(2*30/270) = round(0.22) = 0 -> clamped to 1
+  })
+
+  it('defaults sprintMinutes to STUDY_SPRINT_MINUTES (30)', () => {
+    const sections = [{ id: 'a', itemCount: 90 }]
+    expect(computeSprintItemCounts(sections, 90).get('a')).toBe(STUDY_SPRINT_MINUTES)
+  })
+
+  it('falls back to the full item_count when totalTimeMinutes is 0 (guards divide-by-zero)', () => {
+    const sections = [{ id: 'a', itemCount: 40 }]
+    expect(computeSprintItemCounts(sections, 0).get('a')).toBe(40)
+  })
+})
+
+describe('buildStudySprintExam', () => {
+  it('samples a proportionally smaller subset per section than the full mock', () => {
+    const pools = new Map<string, RawUpcatQuestion[]>([
+      ['Mathematics', q('Mathematics', 100)],
+      ['Abstract/Non-Verbal Reasoning', q('Abstract', 100)],
+    ])
+    const blueprint = bp({ totalTimeMinutes: 60, sections: [
+      { id: 'x:1', name: 'Math', skillCategory: 'Mathematics', itemCount: 30, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 },
+      { id: 'x:2', name: 'Abstract', skillCategory: 'Abstract/Non-Verbal Reasoning', itemCount: 20, timeMinutes: null, requiresSpatialLogic: true, displayOrder: 2 },
+    ] })
+    const sprint = buildStudySprintExam(blueprint, pools, [], 30)
+    // Math: round(30*30/60)=15, Abstract: round(20*30/60)=10
+    expect(sprint.runnable.find(s => s.section.name === 'Math')!.questions).toHaveLength(15)
+    expect(sprint.runnable.find(s => s.section.name === 'Abstract')!.questions).toHaveLength(10)
+    expect(sprint.totalQuestions).toBe(25)
+  })
+
+  it('still excludes sections with an empty pool as comingSoon', () => {
+    const pools = new Map<string, RawUpcatQuestion[]>([['Mathematics', q('Mathematics', 100)]])
+    const sprint = buildStudySprintExam(bp(), pools, [])
+    expect(sprint.comingSoon.map(s => s.name)).toEqual(['Abstract'])
+  })
+})
+
+describe('buildBlueprintExam with itemCountFor override', () => {
+  it('uses the override instead of the section declared item_count when provided', () => {
+    const pools = new Map<string, RawUpcatQuestion[]>([['Mathematics', q('Mathematics', 100)]])
+    const built = buildBlueprintExam(bp(), pools, [], () => 1)
+    expect(built.runnable[0]!.questions).toHaveLength(1)
   })
 })
 
