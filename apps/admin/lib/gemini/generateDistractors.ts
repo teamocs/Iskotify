@@ -18,20 +18,51 @@ interface DistractorInput {
   answer: string
 }
 
+// Task F — distractor difficulty overhaul. The old prompt asked for "plausible"
+// distractors but gave the model no way to tell a lazy category-error filler
+// ("Chair" as an organelle) apart from a genuinely competitive one — Gemini
+// defaulted to the former. This version adds an explicit tiered rubric plus a
+// WEAK-vs-STRONG few-shot contrast so "plausible" has a concrete bar to clear,
+// and explicitly forbids the laziest failure modes (all/none-of-the-above,
+// joke options, length/format giveaways). JSON contract is UNCHANGED — same
+// wrong_N / wrong_N_why / explanation / strategy_tip keys — so every caller
+// (generateDistractorsForCard's own parsing below, /api/flashcards/generate,
+// enhance-batch, distractors, and the Task F regenerate-distractors route)
+// keeps working without changes.
 function buildPrompt({ subject, topic, question, answer }: DistractorInput): string {
-  return `You are writing multiple-choice distractors for a Philippine college entrance / scholarship exam flashcard.
+  return `You are writing multiple-choice distractors for a Philippine college entrance / scholarship exam flashcard. These exams (UPCAT, ACET, DCAT, etc.) are competitive — the wrong options must be genuinely tempting to a well-prepared student, not just "not the answer."
 
 Subject: ${subject}
 Topic: ${topic}
 Question: ${question}
 Correct answer (DO NOT include in your output): ${answer}
 
+DIFFICULTY RUBRIC — every distractor you write must land in TIER 2 or TIER 3. TIER 1 is banned outright.
+- TIER 1 (BANNED): category errors, random unrelated words, or anything a student would reject in under a second because it isn't even the right kind of answer (e.g. "Chair" as a cell organelle, "Tuesday" as a chemical formula).
+- TIER 2 (acceptable floor): a plausible near-miss — the direct result of ONE realistic calculation slip, a commonly confused term, or a partially-true statement a distracted but reasonably prepared student could believe.
+- TIER 3 (aim for at least 2 of the 3 distractors): the EXACT result of a NAMEABLE common misconception or a specific wrong step you can point to (e.g. "divided instead of multiplied", "used radius where diameter was needed", "confused the setting with the theme", "off-by-one in an inclusive range", "applied the formula for perimeter instead of area").
+
+FEW-SHOT — WEAK vs STRONG on the SAME question (study the contrast, then match the STRONG bar):
+
+Example 1 — Math. Question: "Solve for x: 2x + 5 = 17." Correct answer: "6"
+  WEAK (reject — no realistic solution path lands here): "100", "-3", "42"
+  STRONG (this is the bar): "11" (added 5 instead of subtracting it: 2x = 17+5 = 22 → x = 11), "8.5" (divided before subtracting, an order-of-operations slip: x = 17 ÷ 2 = 8.5), "7" (arithmetic slip: misreads 17-5 as 14 instead of 12, so x = 7)
+
+Example 2 — Biology. Question: "What organelle is the primary site of ATP production in a eukaryotic cell?" Correct answer: "Mitochondria"
+  WEAK (reject — not even biology, or nonsensical): "Chloroplast juice", "The cell wall's neighbor", "Photosynthesis"
+  STRONG (this is the bar): "Nucleus" (confuses the cell's control center with its energy producer — the single most common mix-up), "Ribosome" (confuses the site of protein synthesis with the site of energy production), "Golgi apparatus" (another membrane-bound organelle students routinely conflate with mitochondria)
+
 Generate exactly 3 incorrect distractors that:
-- Are plausible to a student who hasn't fully mastered this topic
-- Reflect common student mistakes (sign errors, wrong formula application, near-synonyms, wrong dates, etc.)
-- Are in the SAME format and length as the correct answer (if answer is a number → distractors are numbers; if a phrase → phrases of similar length)
+- Land in TIER 2 or TIER 3 of the rubric above, matching the STRONG standard shown, never the WEAK one
+- Reflect a common, NAMEABLE student mistake (sign errors, wrong formula application, near-synonyms, confused dates, off-by-one errors, etc.) — you must be able to name the misconception in the "_why" field below
+- Match the correct answer's FORMAT and LENGTH closely: if the answer is a number, all distractors are numbers of a similar plausible magnitude; if a phrase or sentence, distractors use the same grammatical form (noun phrase vs. noun phrase, full sentence vs. full sentence) and stay within roughly ±30% of its length. An option that stands out by length or format is itself a giveaway — never produce one.
 - Are unambiguously WRONG when checked against the correct answer
 - Are different from each other AND different from the correct answer
+
+FORBIDDEN — never output any of these, under any circumstance:
+- "All of the above", "None of the above", "Both A and B" (or any other combining/umbrella option)
+- Joke options, sarcasm, or anything not seriously intended as a real candidate answer
+- An option that is obviously the odd one out by length, tone, or seriousness compared to the others
 
 Also write:
 - A 1–2 sentence explanation of why the correct answer is correct (mention the relevant concept or formula). The explanation is for the student to read AFTER they answer.

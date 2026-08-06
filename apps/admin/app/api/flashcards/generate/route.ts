@@ -70,6 +70,7 @@ QUALITY STANDARDS (non-negotiable)
 - Test conceptual understanding, NOT rote memorization. Avoid "what is the definition of X" — instead probe application, analysis, or comparison.
 - Difficulty: rigorous college-entrance level. A well-prepared HS senior should solve each in 1–2 minutes with effort.
 - Single best, unambiguous answer. No "all of the above", no opinion-based answers, no trick questions.
+- Write the "answer" specific and well-defined enough to support strong, misconception-based multiple-choice distractors generated in a later step (avoid vague, multi-part, or overly broad answers — a distractor-writer needs one precise correct value or statement to contrast against).
 - Cover a SPREAD of sub-topics within "${topic}". Do not duplicate concepts across cards.
 - Calibrate to the Philippine context where relevant (Filipino authors, Philippine history, local geography, peso currency, metric units).
 - Math/Science: include word problems and multi-step application questions, not just formula recall. Use realistic numbers.

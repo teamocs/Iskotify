@@ -166,6 +166,54 @@ describe('generateDistractorsForCard', () => {
       expect(promptArg).toContain('strategy_tip')
     })
   })
+
+  // Task F — distractor difficulty overhaul. These assert the prompt's
+  // STRUCTURE (rubric / few-shots / forbidden patterns), not its wording, so
+  // they stay meaningful even if the prose is later tweaked.
+  describe('distractor difficulty rubric (Task F)', () => {
+    async function capturedPrompt(): Promise<string> {
+      mockGenerateContent.mockResolvedValueOnce({
+        response: { text: () => JSON.stringify({ wrong_1: 'a', wrong_2: 'b', wrong_3: 'c', explanation: 'e' }) },
+      })
+      const { generateDistractorsForCard } = await importLib()
+      await generateDistractorsForCard({ subject: 'Math', topic: 'Algebra', question: 'Q', answer: 'Correct' })
+      return mockGenerateContent.mock.calls[0]?.[0] as string
+    }
+
+    it('includes an explicit tiered difficulty rubric', async () => {
+      const prompt = await capturedPrompt()
+      expect(prompt).toMatch(/DIFFICULTY RUBRIC/i)
+      expect(prompt).toMatch(/TIER 1/)
+      expect(prompt).toMatch(/TIER 2/)
+      expect(prompt).toMatch(/TIER 3/)
+    })
+
+    it('includes a WEAK-vs-STRONG few-shot contrast for the same question', async () => {
+      const prompt = await capturedPrompt()
+      expect(prompt).toMatch(/FEW-SHOT/i)
+      expect(prompt).toMatch(/WEAK/)
+      expect(prompt).toMatch(/STRONG/)
+    })
+
+    it('forbids "all/none of the above" and joke options', async () => {
+      const prompt = await capturedPrompt()
+      expect(prompt).toMatch(/FORBIDDEN/i)
+      expect(prompt).toMatch(/all of the above/i)
+      expect(prompt).toMatch(/none of the above/i)
+      expect(prompt).toMatch(/joke options/i)
+    })
+
+    it('requires distractors to match the correct answer\'s length/format', async () => {
+      const prompt = await capturedPrompt()
+      expect(prompt).toMatch(/length/i)
+      expect(prompt).toMatch(/format/i)
+    })
+
+    it('requires each distractor to be tied to a nameable misconception', async () => {
+      const prompt = await capturedPrompt()
+      expect(prompt).toMatch(/misconception/i)
+    })
+  })
 })
 
 describe('generateOptionExplanations', () => {

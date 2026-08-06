@@ -338,6 +338,16 @@ describe('buildGenerationPrompt', () => {
     expect(out).toMatch(/NOT rote memorization/i)
   })
 
+  // Task F — buildGenerationPrompt doesn't write distractors itself (that's
+  // generateDistractorsForCard, chained per-card below), but the "answer" it
+  // asks for feeds straight into that pipeline, so it must steer toward
+  // answers precise enough to support strong distractors.
+  it('asks for answers precise enough to support strong distractors later (Task F)', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 10, listingSlugs: [] })
+    expect(out).toMatch(/distractors/i)
+  })
+
   it('requests JSON output without markdown fences', async () => {
     const { buildGenerationPrompt } = await importRoute()
     const out = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 10, listingSlugs: [] })

@@ -3,6 +3,7 @@ import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { SubjectsView } from '@/components/admin/SubjectsView'
 import { GenerateExplanationsButton } from '@/components/admin/GenerateExplanationsButton'
+import { RegenerateDistractorsPanel } from '@/components/admin/RegenerateDistractorsPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,8 +64,17 @@ export default async function FlashcardsPage() {
   return (
     <>
       <Topbar title="Knowledge Base" exportHref="/api/admin/flashcards/export" />
-      <div className="flex justify-end px-4 md:px-6 pt-3">
+      <div className="flex flex-wrap items-center justify-end gap-2 px-4 md:px-6 pt-3">
         <GenerateExplanationsButton source="flashcards" label="✨ Generate explanations for cards" />
+      </div>
+      <div className="px-4 md:px-6 pt-3">
+        <RegenerateDistractorsPanel
+          subjects={subjects.map(s => ({
+            id: s.id,
+            name: s.name,
+            topics: s.topics.map(t => ({ id: t.id, name: t.name })),
+          }))}
+        />
       </div>
       <SubjectsView subjects={subjects} listings={listings} />
     </>

@@ -27,6 +27,7 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
       { href: '/admin/flashcards', icon: '🃏', label: 'Knowledgebase' },
       { href: '/admin/upcat/import', icon: '📥', label: 'Import CSV' },
       { href: '/admin/flashcards/drafts', icon: '📝', label: 'Drafts' },
+      { href: '/admin/upcat/review-queue', icon: '🔍', label: 'Distractor Review Queue' },
       { href: '/admin/exam-blueprints', icon: '🧭', label: 'Exam Blueprints' },
     ],
   },
