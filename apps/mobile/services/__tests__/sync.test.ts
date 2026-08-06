@@ -1595,7 +1595,8 @@ describe('pushUserData includes notes', () => {
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabels
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabelAssignments
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userRequirements
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // questionAttempts
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // questionAttempts
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // flashcardSrs
     }
 
     const { pushUserData } = require('../sync')
@@ -1608,6 +1609,7 @@ describe('pushUserData includes notes', () => {
     expect(payload).toHaveProperty('note_label_assignments')
     expect(payload).toHaveProperty('user_requirements')
     expect(payload).toHaveProperty('question_attempts')
+    expect(payload).toHaveProperty('flashcard_srs')
   })
 })
 

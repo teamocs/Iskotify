@@ -20,7 +20,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedDecks, userProgress, practiceSessions,
-  userRequirements, questionAttempts,
+  userRequirements, questionAttempts, flashcardSrs,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -79,7 +79,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   // 5000 rows) — this SELECT is a full-table read, but the table itself is
   // capped, so this payload does NOT grow without bound across a user's
   // lifetime the way it would without that retention pruning.
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts] = await Promise.all([
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts, srsRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
@@ -90,6 +90,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     db.select().from(noteLabelAssignments),
     db.select().from(userRequirements),
     db.select().from(questionAttempts),
+    db.select().from(flashcardSrs),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -104,6 +105,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     note_label_assignments: assignRows,
     user_requirements: reqRows,
     question_attempts: attempts,
+    flashcard_srs: srsRows,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -241,6 +243,20 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         }
       } catch (e) {
         console.warn('[sync] question_attempts restore failed (non-fatal):', e)
+      }
+
+      // flashcard_srs (Task H spaced-repetition state). OPTIONAL on pull:
+      // older backups (and the remote column itself, pre-migration-051)
+      // predate this field. Own try/catch, same reasoning as
+      // question_attempts above.
+      try {
+        const remoteSrs: typeof flashcardSrs.$inferInsert[] = data.flashcard_srs ?? []
+        if (remoteSrs.length > 0) {
+          tx.delete(flashcardSrs).run()
+          for (const row of remoteSrs) tx.insert(flashcardSrs).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] flashcard_srs restore failed (non-fatal):', e)
       }
     })
   } catch (e) {

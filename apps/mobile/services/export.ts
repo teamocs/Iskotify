@@ -14,6 +14,7 @@ import {
   noteLabels,
   noteLabelAssignments,
   questionAttempts,
+  flashcardSrs,
 } from '../db/schema'
 import { invalidate } from './queryCache'
 
@@ -24,7 +25,7 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts] = await Promise.all([
+  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts, srsRows] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
     db.select().from(savedDecks),
@@ -34,6 +35,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
     db.select().from(questionAttempts),
+    db.select().from(flashcardSrs),
   ])
 
   const payload = {
@@ -48,6 +50,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     note_labels: labelRows,
     note_label_assignments: assignRows,
     question_attempts: attempts,
+    flashcard_srs: srsRows,
   }
 
   const json = JSON.stringify(payload, null, 2)
@@ -225,6 +228,25 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       elapsedMs: Number(row.elapsedMs ?? row.elapsed_ms ?? 0),
       answeredAt: Number(row.answeredAt ?? row.answered_at ?? Date.now()),
     })
+  }
+
+  // Flashcard SRS state (Task H) — replace entirely. Optional: older export
+  // files predate this field.
+  await db.delete(flashcardSrs)
+  const srsImportRows = Array.isArray(data.flashcard_srs) ? (data.flashcard_srs as ExportRow[]) : []
+  for (const row of srsImportRows) {
+    const flashcardId = String(row.flashcardId ?? row.flashcard_id ?? '')
+    if (!flashcardId) continue
+    await db.insert(flashcardSrs).values({
+      flashcardId,
+      intervalDays: Number(row.intervalDays ?? row.interval_days ?? 0),
+      easeFactor: Number(row.easeFactor ?? row.ease_factor ?? 2.5),
+      repetitions: Number(row.repetitions ?? 0),
+      lapses: Number(row.lapses ?? 0),
+      dueAt: Number(row.dueAt ?? row.due_at ?? 0),
+      lastReviewedAt: row.lastReviewedAt != null ? Number(row.lastReviewedAt) : row.last_reviewed_at != null ? Number(row.last_reviewed_at) : null,
+      lastGrade: row.lastGrade != null ? String(row.lastGrade) : row.last_grade != null ? String(row.last_grade) : null,
+    }).onConflictDoNothing()
   }
 
   // Notes — replace entirely

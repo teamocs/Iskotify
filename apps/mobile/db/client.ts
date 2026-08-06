@@ -545,6 +545,23 @@ export const MIGRATIONS = [
   `ALTER TABLE upcat_questions ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE flashcards ADD COLUMN option_explanations TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE flashcards ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
+
+  // ── Task H: flashcard spaced-repetition (SM-2-lite) state ──────────────────
+  // One row per flashcard the user has reviewed at least once; no row means
+  // "never reviewed" (not due). due_at is an epoch-ms timestamp; ease_factor/
+  // interval_days follow utils/srs.ts's clamps. Column shape mirrors
+  // SrsCardState 1:1 — see db/schema.ts's flashcardSrs comment.
+  `CREATE TABLE IF NOT EXISTS flashcard_srs (
+    flashcard_id TEXT PRIMARY KEY NOT NULL,
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease_factor REAL NOT NULL DEFAULT 2.5,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    due_at INTEGER NOT NULL DEFAULT 0,
+    last_reviewed_at INTEGER,
+    last_grade TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS flashcard_srs_due_at_idx ON flashcard_srs (due_at)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

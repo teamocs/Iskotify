@@ -139,6 +139,23 @@ export const questionAttempts = sqliteTable('question_attempts', {
   index('question_attempts_question_id_idx').on(t.questionId),
 ])
 
+// Task H: SM-2-lite spaced-repetition state, one row per flashcard the user has
+// reviewed at least once (no row = never reviewed / not yet scheduled). Column
+// names deliberately mirror utils/srs.ts's SrsCardState so hooks/useRecordSrs.ts
+// can read/write a row with no field renaming.
+export const flashcardSrs = sqliteTable('flashcard_srs', {
+  flashcardId: text('flashcard_id').primaryKey(),
+  intervalDays: real('interval_days').notNull().default(0),
+  easeFactor: real('ease_factor').notNull().default(2.5),
+  repetitions: integer('repetitions').notNull().default(0),
+  lapses: integer('lapses').notNull().default(0),
+  dueAt: integer('due_at').notNull().default(0),
+  lastReviewedAt: integer('last_reviewed_at'),
+  lastGrade: text('last_grade'),
+}, (t) => [
+  index('flashcard_srs_due_at_idx').on(t.dueAt),
+])
+
 export const savedDecks = sqliteTable('saved_decks', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
