@@ -22,15 +22,46 @@ function shuffleWithCorrect(
 }
 
 /**
+ * True when `options` already holds 4 admin-authored strings and
+ * `correctAnswerIndex` points at one of them. These cards don't need
+ * generated distractors — and Gemma-quality distractors shouldn't overwrite
+ * curated ones — so enhanceOneCard skips them entirely (finding #1).
+ */
+function hasFourAdminOptions(
+  options: string | null | undefined,
+  correctAnswerIndex: number | null | undefined,
+): boolean {
+  if (correctAnswerIndex == null || correctAnswerIndex < 0 || correctAnswerIndex > 3) return false
+  try {
+    const parsed = JSON.parse(options ?? '[]')
+    return Array.isArray(parsed) && parsed.length === 4
+  } catch {
+    return false
+  }
+}
+
+/**
  * Enhance a single flashcard via the local LLM. Returns true if the card was
  * enhanced (DB updated), false if it was skipped (no topic, model returned
- * unusable output, etc.). Never throws — failures are logged.
+ * unusable output, already has 4 admin-authored options, etc.). Never
+ * throws — failures are logged.
  */
 async function enhanceOneCard(
   db: DrizzleClient,
-  card: { id: string; topicId: string; question: string; answer: string },
+  card: {
+    id: string
+    topicId: string
+    question: string
+    answer: string
+    options?: string | null
+    correctAnswerIndex?: number | null
+  },
 ): Promise<boolean> {
   try {
+    // Finding #1: a card with 4 curated admin options doesn't need — and
+    // shouldn't get — generated distractors overwriting them.
+    if (hasFourAdminOptions(card.options, card.correctAnswerIndex)) return false
+
     const topicRows = await db
       .select({ subjectId: topics.subjectId, topicName: topics.name })
       .from(topics)
@@ -71,6 +102,14 @@ async function enhanceOneCard(
         aiCorrectIndex: correctIndex,
         aiExplanation: output.explanation,
         aiEnhancedAt: Date.now(),
+        // Finding #1 belt-and-braces: mirror the DB trigger
+        // (clear_ai_options_on_content_change, 049/050) that clears these on
+        // every REMOTE write path. Fresh aiOptions here would otherwise keep
+        // whatever optionExplanations/strategyTip were attached to the
+        // PREVIOUS options — stale "why this is wrong" text describing
+        // options no longer on screen.
+        optionExplanations: '[]',
+        strategyTip: '',
       })
       .where(eq(flashcards.id, card.id))
     return true
@@ -97,6 +136,8 @@ export async function runEnhancement(db: DrizzleClient): Promise<void> {
         topicId: flashcards.topicId,
         question: flashcards.question,
         answer: flashcards.answer,
+        options: flashcards.options,
+        correctAnswerIndex: flashcards.correctAnswerIndex,
       })
       .from(flashcards)
       .where(isNull(flashcards.aiEnhancedAt))
@@ -150,6 +191,8 @@ export async function enhanceCardsByIds(
       topicId: flashcards.topicId,
       question: flashcards.question,
       answer: flashcards.answer,
+      options: flashcards.options,
+      correctAnswerIndex: flashcards.correctAnswerIndex,
     })
     .from(flashcards)
     .where(and(inArray(flashcards.id, cardIds), isNull(flashcards.aiEnhancedAt)))
