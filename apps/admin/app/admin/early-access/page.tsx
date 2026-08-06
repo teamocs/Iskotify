@@ -2,6 +2,9 @@ import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { SendApkButton } from '@/components/admin/SendApkButton'
 import { ApkUrlForm } from '@/components/admin/ApkUrlForm'
+import { UpdateApkUrlForm } from '@/components/admin/UpdateApkUrlForm'
+import { UpdateEmailTemplateForm } from '@/components/admin/UpdateEmailTemplateForm'
+import { DEFAULT_UPDATE_EMAIL_TEMPLATE } from '@/lib/updateRollout'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,10 +29,17 @@ const STATUS_STYLES: Record<string, string> = {
 async function getData(): Promise<{
   rows: EarlyAccessRegistration[]
   apkUrl: string
+  updateApkUrl: string
+  updateEmailTemplate: string
 }> {
   const db = createServerClient()
 
-  const [{ data: regData }, { data: configData }] = await Promise.all([
+  const [
+    { data: regData },
+    { data: configData },
+    { data: updateApkData },
+    { data: updateTemplateData },
+  ] = await Promise.all([
     db
       .from('early_access_registrations')
       .select('id,full_name,email,school,grade_level,platform,status,created_at')
@@ -39,16 +49,28 @@ async function getData(): Promise<{
       .select('value')
       .eq('key', 'early_access_apk_url')
       .maybeSingle(),
+    db
+      .from('app_config')
+      .select('value')
+      .eq('key', 'update_apk_url')
+      .maybeSingle(),
+    db
+      .from('app_config')
+      .select('value')
+      .eq('key', 'update_email_template')
+      .maybeSingle(),
   ])
 
   return {
     rows: (regData ?? []) as EarlyAccessRegistration[],
     apkUrl: (configData?.value ?? '') as string,
+    updateApkUrl: (updateApkData?.value ?? '') as string,
+    updateEmailTemplate: (updateTemplateData?.value ?? '') as string,
   }
 }
 
 export default async function EarlyAccessPage() {
-  const { rows, apkUrl } = await getData()
+  const { rows, apkUrl, updateApkUrl, updateEmailTemplate } = await getData()
 
   return (
     <>
@@ -95,6 +117,43 @@ export default async function EarlyAccessPage() {
           )}
 
           <ApkUrlForm currentUrl={apkUrl} />
+        </div>
+
+        {/* App update section — for users who already installed Iskotify */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-[13px] font-semibold text-[#1d1d1f]">App update &mdash; for existing users</p>
+            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+              This APK and email are for pushing an <strong>update</strong> to users who already installed Iskotify &mdash; distinct from the first-install early-access APK above. Set the hosted URL of the new build, then edit the email that tells existing users how to install it.
+            </p>
+          </div>
+
+          {updateApkUrl ? (
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
+              <span className="text-green-600 text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
+              <div className="min-w-0">
+                <p className="text-[13px] text-green-800 font-medium">Update APK link set &mdash; the update email points at this URL.</p>
+                <a
+                  href={updateApkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px] text-[#800000] underline break-all"
+                >
+                  {updateApkUrl}
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
+              <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
+              <p className="text-[13px] text-amber-800">
+                No update APK link set yet &mdash; paste the hosted download URL for the new build below.
+              </p>
+            </div>
+          )}
+
+          <UpdateApkUrlForm currentUrl={updateApkUrl} />
+          <UpdateEmailTemplateForm initialTemplate={updateEmailTemplate || DEFAULT_UPDATE_EMAIL_TEMPLATE} />
         </div>
 
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">

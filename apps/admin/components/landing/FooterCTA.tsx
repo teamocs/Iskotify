@@ -77,15 +77,24 @@ export function FooterCTA() {
             <span className="text-white/60 font-body text-sm">© 2026 Iskotify. All rights reserved.</span>
           </div>
           <nav className="flex items-center gap-5">
-            <Link href="#" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
+            <Link href="/privacy" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
               Privacy Policy
             </Link>
-            <Link href="#" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
+            <Link href="/terms" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
               Terms of Service
             </Link>
-            <Link href="#" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
+            <Link href="/contact" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
               Contact
             </Link>
+            <a
+              href="https://www.facebook.com/share/g/193aUvEccE/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Join the private Iskotify beta community on Facebook"
+              className="text-white/50 hover:text-white/80 text-sm font-body transition-colors"
+            >
+              Community
+            </a>
           </nav>
         </div>
       </footer>
