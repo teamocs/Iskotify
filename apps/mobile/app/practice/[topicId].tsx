@@ -11,7 +11,7 @@ import { parseAiOptions } from '../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
-import { pickQuestions } from '../../utils/flashcardExam'
+import { pickQuestions, dedupeByStem } from '../../utils/flashcardExam'
 import { getDueFlashcards } from '../../services/srsAggregates'
 import { FlashcardExam } from '../../components/practice/FlashcardExam'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
@@ -45,6 +45,16 @@ export default function QuizScreen() {
   const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
   // Task H: due-today option — flashcardId → dueAt for cards in this topic that are due now.
   const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
+
+  // Task H bugfix: dedupedQuestions/dueQuestions are the SAME deduped-by-stem
+  // pool pickQuestions itself would produce — every count shown below is that
+  // pool's .length (not the pre-dedup allQuestions.length), and the "Due
+  // today" button hands the exam this exact dueQuestions array rather than
+  // recomputing it, so the badge can never promise more than what gets served.
+  // (Hooks must run unconditionally, so these live up here — before the
+  // phase-gated early returns below — not down in the chooser JSX.)
+  const dedupedQuestions = useMemo(() => dedupeByStem(allQuestions), [allQuestions])
+  const dueQuestions = useMemo(() => pickQuestions(allQuestions, 'due', dueAtById), [allQuestions, dueAtById])
 
   const { theme: t, typo } = useTheme()
   // Web-only max-width centering for the chooser scroll content (null on native/sm).
@@ -206,12 +216,12 @@ export default function QuizScreen() {
   // ── Phase: chooser ──────────────────────────────────────────────────────────
 
   function choose(mode: 'quick' | 'full' | 'due') {
-    const q = pickQuestions(allQuestions, mode, dueAtById)
+    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode)
     setExamQuestions(q)
     setPhase('exam')
   }
 
-  const dueCount = Object.keys(dueAtById).length
+  const dueCount = dueQuestions.length
 
   return (
     <SafeAreaView style={s.root}>
@@ -219,7 +229,7 @@ export default function QuizScreen() {
       <ScrollView contentContainerStyle={[s.chooserContent, webWidth]} showsVerticalScrollIndicator={false}>
         <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
         <Text style={s.title}>{topicName}</Text>
-        <Text style={s.sub}>{allQuestions.length} cards available</Text>
+        <Text style={s.sub}>{dedupedQuestions.length} cards available</Text>
 
         {dueCount > 0 ? (
           <Pressable accessibilityRole="button" style={[s.choiceCard, s.dueChoiceCard]} onPress={() => choose('due')}>
@@ -235,7 +245,7 @@ export default function QuizScreen() {
 
         <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('full')}>
           <Text style={s.choiceTitle}>Full</Text>
-          <Text style={s.choiceSub}>All {Math.min(allQuestions.length, 60)} questions, in order</Text>
+          <Text style={s.choiceSub}>All {Math.min(dedupedQuestions.length, 60)} questions, in order</Text>
         </Pressable>
 
         <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>

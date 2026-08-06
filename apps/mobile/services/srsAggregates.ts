@@ -13,6 +13,7 @@
 import { and, eq, inArray, gt, lte } from 'drizzle-orm'
 import { flashcardSrs, flashcards } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
+import { dedupeByStem } from '../utils/flashcardExam'
 
 export interface DueFlashcardRow {
   flashcardId: string
@@ -31,6 +32,15 @@ export interface DueFlashcardRow {
  * Passing an explicit EMPTY array returns [] immediately rather than falling
  * through to "all due flashcards" — callers scoping to a card pool that
  * happens to be empty must get an empty due list, not the global one.
+ *
+ * Task H bugfix: the result is collapsed with utils/flashcardExam.ts's
+ * dedupeByStem — the SAME normalized-stem-collision rule pickQuestions('due',
+ * …) applies before it ever serves a quiz. Before this, a "Due today (N)"
+ * badge built from this list's raw length could promise more cards than
+ * pickQuestions('due', …) actually delivered whenever two due cards shared a
+ * normalized stem (pickQuestions deduped, this function didn't). Reusing the
+ * one imported helper — rather than reimplementing the rule here — is what
+ * keeps the count and the served quiz from drifting apart again.
  */
 export async function getDueFlashcards(
   db: DrizzleClient,
@@ -51,12 +61,25 @@ export async function getDueFlashcards(
       flashcardId: flashcardSrs.flashcardId,
       topicId: flashcards.topicId,
       dueAt: flashcardSrs.dueAt,
+      // Pulled only to compute the dedup key below — not part of the public
+      // DueFlashcardRow shape (matches the `stem` pickQuestions dedupes on
+      // for the common, non-embedded-MCQ card: see mcDistractors.ts's
+      // buildQuizQuestions, which uses card.question.trim() as the stem for
+      // AI-enhanced/admin-option cards, i.e. the vast majority of cards a
+      // chooser has already run through on-demand enhancement before quiz).
+      question: flashcards.question,
     })
     .from(flashcardSrs)
     .innerJoin(flashcards, eq(flashcardSrs.flashcardId, flashcards.id))
     .where(and(...conds))
 
-  return rows.map(r => ({ flashcardId: r.flashcardId, topicId: r.topicId, dueAt: Number(r.dueAt) }))
+  const mapped = rows.map(r => ({
+    flashcardId: r.flashcardId,
+    topicId: r.topicId,
+    dueAt: Number(r.dueAt),
+    stem: r.question,
+  }))
+  return dedupeByStem(mapped).map(({ stem: _stem, ...row }) => row)
 }
 
 export interface DueCounts {

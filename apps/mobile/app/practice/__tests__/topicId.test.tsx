@@ -25,10 +25,10 @@ jest.mock('../../../services/srsAggregates', () => ({
   getDueFlashcards: (...args: any[]) => mockGetDueFlashcards(...args),
 }))
 
-function makeCardRow(id: string) {
+function makeCardRow(id: string, question = `Question ${id}`) {
   return {
     id,
-    question: `Question ${id}`,
+    question,
     answer: `Answer ${id}`,
     explanation: `Explanation ${id}`,
     options: JSON.stringify(['a', 'b', 'c', 'd']),
@@ -92,5 +92,31 @@ describe('[topicId] chooser — Due today (Task H)', () => {
     fireEvent.press(screen.getByText('Due today (2)'))
 
     expect(screen.getByTestId('exam').props.children).toBe('exam:c2,c1')
+  })
+
+  it('the "Due today (N)" count matches exactly what the quiz serves when two due cards share a normalized stem (Task H bugfix)', async () => {
+    // c1 and c2 are both due AND share a normalized stem — pickQuestions('due', …)
+    // dedupes by stem before filtering to due, so only ONE of them can ever be
+    // served. The badge must report that same number, not the raw due-id count.
+    mockDbInstance = makeDb([
+      makeCardRow('c1', 'What is 2+2?'),
+      makeCardRow('c2', '  what is 2+2?  '),
+    ])
+    mockGetDueFlashcards.mockResolvedValue([
+      { flashcardId: 'c1', topicId: 't1', dueAt: 100 },
+      { flashcardId: 'c2', topicId: 't1', dueAt: 200 },
+    ])
+    render(<QuizScreen />)
+    await act(async () => {})
+
+    const dueEl = screen.getByText(/Due today \(\d+\)/)
+    const label = ([] as unknown[]).concat(dueEl.props.children).join('')
+    const n = Number(/Due today \((\d+)\)/.exec(label)![1])
+    expect(n).toBe(1)
+
+    fireEvent.press(dueEl)
+    const served = screen.getByTestId('exam').props.children as string
+    const servedCount = served.replace('exam:', '').split(',').filter(Boolean).length
+    expect(servedCount).toBe(n)
   })
 })

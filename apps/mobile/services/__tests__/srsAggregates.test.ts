@@ -4,6 +4,8 @@ import * as schema from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
 import type { DrizzleClient } from '../../db/client'
 import { getDueFlashcards, getDueCounts } from '../srsAggregates'
+import { pickQuestions } from '../../utils/flashcardExam'
+import { buildQuizQuestions, type RawCard } from '../../utils/mcDistractors'
 
 // Real CREATE_SQL + MIGRATIONS (same harness as db/__tests__/*.repro.test.ts)
 // so flashcards + flashcard_srs match production shape exactly.
@@ -104,5 +106,51 @@ describe('getDueCounts', () => {
     const counts = await getDueCounts(db, NOW)
     expect(counts.total).toBe(0)
     expect(counts.byTopic).toEqual({})
+  })
+})
+
+// ── Task H bugfix: due-count badge must never promise more than the quiz serves ──
+//
+// pickQuestions('due', …) (utils/flashcardExam.ts) dedupes by normalized stem
+// BEFORE filtering to the due set. getDueFlashcards/getDueCounts used to
+// report the raw (un-deduped) due-id count, so two due cards sharing a stem
+// made the "Due today (N)" badge overstate what the quiz actually delivers.
+describe('duplicate-stem due cards (Task H bugfix)', () => {
+  beforeEach(() => {
+    // fc6: same question text as fc1 modulo case/whitespace — a normalized-
+    // stem duplicate living in the same topic as fc1.
+    raw.exec(`
+      INSERT INTO flashcards (id, topic_id, question, answer, explanation, status)
+        VALUES ('fc6','t1','  Q1  ','a1','e1','published');
+      INSERT INTO flashcard_srs (flashcard_id, due_at) VALUES ('fc1', ${NOW - DAY});
+      INSERT INTO flashcard_srs (flashcard_id, due_at) VALUES ('fc6', ${NOW - 2 * DAY});
+    `)
+  })
+
+  it('getDueFlashcards collapses duplicate-stem due cards to one row', async () => {
+    const rows = await getDueFlashcards(db, NOW)
+    expect(rows.length).toBe(1)
+  })
+
+  it('getDueCounts.total/byTopic reflect the deduped count, not the raw due-row count', async () => {
+    const counts = await getDueCounts(db, NOW)
+    expect(counts.total).toBe(1)
+    expect(counts.byTopic).toEqual({ t1: 1 })
+  })
+
+  it('the reported due count equals what pickQuestions("due", …) actually serves', async () => {
+    const dueRows = await getDueFlashcards(db, NOW)
+    const dueAtById = Object.fromEntries(dueRows.map(r => [r.flashcardId, r.dueAt]))
+
+    // Mirror a chooser screen: fetch full card content for the due ids, build
+    // quiz questions, and hand them to pickQuestions exactly as the chooser does.
+    const cardRows = raw.prepare(
+      `SELECT id, question, answer, explanation FROM flashcards WHERE id IN (${dueRows.map(() => '?').join(',')})`,
+    ).all(...dueRows.map(r => r.flashcardId)) as Array<{ id: string; question: string; answer: string; explanation: string }>
+    const rawCards: RawCard[] = cardRows.map(r => ({ ...r, options: null, correctAnswerIndex: null }))
+    const parsed = buildQuizQuestions(rawCards)
+    const served = pickQuestions(parsed, 'due', dueAtById)
+
+    expect(dueRows.length).toBe(served.length)
   })
 })
