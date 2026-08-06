@@ -230,9 +230,9 @@ describe('EarlyAccessForm', () => {
     expect(html).toContain('type="email"')
   })
 
-  it('explains the free early-access offer and the Aug 2, 2026 cutoff', () => {
+  it('explains the free early-access offer', () => {
     expect(html).toContain('free early access')
-    expect(html).toContain('August 2, 2026')
+    expect(html).not.toContain('August 2, 2026')
   })
 })
 

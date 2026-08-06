@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy'
 // Mirrors services/llm.ts (model constants + download + lazy init + mutex) but
 // initialises a SEPARATE llama.rn context in EMBEDDING mode and exposes a single
 // `embedText`. Nothing here is wired into chat/ragPipeline/sync yet — it exists
-// so the Phase 2 spike (app/dev-embedding-spike.tsx) can validate the model URL
+// so a future self-hosted-AI feature can validate the model URL before download
 // and llama.rn embedding mode on a real device before any retrieval code is built.
 //
 // SPIKE-REQUIRED: verify this URL serves the GGUF unauthenticated (HEAD 200) and

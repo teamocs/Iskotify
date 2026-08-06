@@ -10,7 +10,6 @@ import { useTheme } from '../../theme/ThemeContext'
 import { eq } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
 import { webEntryTarget } from '../../utils/webEntryTarget'
-import { isEarlyAccessActivated, setEarlyAccessActivated } from '../../utils/earlyAccessActivation'
 import { isRecoveryUrl } from '../../utils/recoveryUrl'
 
 // Must be at module level — signals openAuthSessionAsync in landing.tsx to close
@@ -141,26 +140,6 @@ export default function AuthCallback() {
 
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          // ── Native early-access gate ──────────────────────────────────────────────
-          // callback.tsx is the PRIMARY native OAuth handler, so enforce approval here
-          // too (mirrors /activate) — otherwise a fresh unapproved install could enter
-          // via this path. Skip when already activated (grandfathered/previous activation).
-          // Web is gated separately in _layout's onAuthStateChange.
-          if (Platform.OS !== 'web' && !(await isEarlyAccessActivated())) {
-            let approved = false
-            try {
-              const { data: eaStatus } = await supabase.rpc('early_access_status')
-              approved = eaStatus === 'approved' || eaStatus === 'sent'
-            } catch (eaErr) {
-              console.warn('[auth/callback] early-access check failed (blocking):', eaErr)
-            }
-            if (!approved) {
-              router.replace('/activate')   // do NOT write a profile or enter the app
-              return
-            }
-            await setEarlyAccessActivated()
-          }
-
           // Preserve a name the user typed during (anonymous) onboarding — only fall
           // back to the Google display name when there's no local name yet. Writing the
           // Google name unconditionally would clobber the onboarding name (or blank it

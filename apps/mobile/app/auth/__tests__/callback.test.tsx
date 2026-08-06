@@ -1,17 +1,11 @@
 /**
  * Tests for app/auth/callback.tsx
  *
- * The native early-access gate (Edit 1) is the main focus:
- *   - Not-activated + RPC 'none'  → router.replace('/activate'), no DB write
- *   - Not-activated + RPC 'pending' → router.replace('/activate'), no DB write
- *   - RPC throws (network error)  → fail-closed → /activate, no DB write
- *   - Not-activated + RPC 'sent'  → setEarlyAccessActivated + normal flow
- *   - Not-activated + RPC 'approved' → setEarlyAccessActivated + normal flow
- *   - Already activated (flag=true) → gate skipped, RPC not called, normal flow
- *   - Web platform                 → gate never runs (Platform.OS = 'web')
- *
- * Web branches of callback.tsx (no-code + web fallback) are tested separately
- * and must remain unaffected by the native gate.
+ * The native early-access activation gate was removed (open access) — every
+ * successful code exchange now writes the profile and enters the app
+ * regardless of any early-access RPC/status, including when the network is
+ * unavailable. Web branches of callback.tsx (no-code + web fallback) are
+ * covered separately.
  */
 import React from 'react'
 import { render, waitFor, act } from '@testing-library/react-native'
@@ -68,20 +62,10 @@ jest.mock('../../../services/sync', () => ({
   pushUserData: jest.fn().mockResolvedValue(undefined),
 }))
 
-// ── earlyAccessActivation ─────────────────────────────────────────────────────
-const mockIsActivated = jest.fn()
-const mockSetActivated = jest.fn().mockResolvedValue(undefined)
-jest.mock('../../../utils/earlyAccessActivation', () => ({
-  isEarlyAccessActivated: () => mockIsActivated(),
-  setEarlyAccessActivated: () => mockSetActivated(),
-  clearEarlyAccessActivated: jest.fn().mockResolvedValue(undefined),
-}))
-
 // ── Supabase ─────────────────────────────────────────────────────────────────
 const mockExchangeCode = jest.fn()
 const mockGetSession = jest.fn()
 const mockGetUser = jest.fn()
-const mockRpc = jest.fn()
 const mockSupabaseFrom = jest.fn()
 // Captures onAuthStateChange callbacks so tests can fire PASSWORD_RECOVERY etc.
 const authStateCallbacks: Array<(event: string) => void> = []
@@ -98,7 +82,6 @@ jest.mock('../../../services/supabase', () => ({
         return { data: { subscription: { unsubscribe: mockUnsubscribe } } }
       },
     },
-    rpc: (name: string) => mockRpc(name),
     from: (t: string) => mockSupabaseFrom(t),
   },
 }))
@@ -137,143 +120,50 @@ function setupSuccessfulExchange(userId = 'user-abc') {
 beforeEach(() => {
   jest.clearAllMocks()
   authStateCallbacks.length = 0
-  mockSetActivated.mockResolvedValue(undefined)
   // Default: native platform (Android)
   Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true })
   // Default: code param present (simulates deep-link from Google OAuth)
   mockUseLocalSearchParams.mockReturnValue({ code: 'test-code-123' })
 })
 
-// ── NATIVE GATE: unapproved / fail-closed ─────────────────────────────────────
+// ── OPEN ACCESS: no gate blocks a successful code exchange ───────────────────
+// Regression coverage for the removed native activation gate: a legitimate
+// sign-in must always reach the profile-write + app-entry flow, even when a
+// network/RPC call unrelated to auth fails along the way (the exact failure
+// mode that used to fail-closed to /activate before the profile was created).
 
-describe('auth/callback — native early-access gate: blocking cases', () => {
-  it('not-activated + RPC returns none → router.replace(/activate), no userSettings insert', async () => {
+describe('auth/callback — open access (no early-access gate)', () => {
+  it('successful exchange → userSettings insert runs, never routes to /activate', async () => {
     setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(false)
-    mockRpc.mockResolvedValue({ data: 'none', error: null })
-
-    render(<AuthCallback />)
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/activate')
-    })
-    // Profile must NOT be written
-    expect(mockInsert).not.toHaveBeenCalled()
-    expect(mockOnConflictDoUpdate).not.toHaveBeenCalled()
-  })
-
-  it('not-activated + RPC returns pending → router.replace(/activate), no userSettings insert', async () => {
-    setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(false)
-    mockRpc.mockResolvedValue({ data: 'pending', error: null })
-
-    render(<AuthCallback />)
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/activate')
-    })
-    expect(mockInsert).not.toHaveBeenCalled()
-  })
-
-  it('not-activated + RPC throws → fail-closed → /activate, no userSettings insert', async () => {
-    setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(false)
-    mockRpc.mockRejectedValue(new Error('network timeout'))
-
-    render(<AuthCallback />)
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/activate')
-    })
-    expect(mockInsert).not.toHaveBeenCalled()
-  })
-})
-
-// ── NATIVE GATE: approved / activated pass-through ────────────────────────────
-
-describe('auth/callback — native early-access gate: pass-through cases', () => {
-  it('not-activated + RPC returns sent → setEarlyAccessActivated called, insert runs', async () => {
-    setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(false)
-    mockRpc.mockResolvedValue({ data: 'sent', error: null })
-
-    render(<AuthCallback />)
-
-    await waitFor(() => {
-      expect(mockSetActivated).toHaveBeenCalledTimes(1)
-    })
-    // Normal profile-write flow must run
-    expect(mockInsert).toHaveBeenCalled()
-    expect(mockReplace).not.toHaveBeenCalledWith('/activate')
-  })
-
-  it('not-activated + RPC returns approved → setEarlyAccessActivated called, insert runs', async () => {
-    setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(false)
-    mockRpc.mockResolvedValue({ data: 'approved', error: null })
-
-    render(<AuthCallback />)
-
-    await waitFor(() => {
-      expect(mockSetActivated).toHaveBeenCalledTimes(1)
-    })
-    expect(mockInsert).toHaveBeenCalled()
-    expect(mockReplace).not.toHaveBeenCalledWith('/activate')
-  })
-
-  it('already activated (flag=true) → gate skipped, RPC not called, insert runs', async () => {
-    setupSuccessfulExchange()
-    mockIsActivated.mockResolvedValue(true)
 
     render(<AuthCallback />)
 
     await waitFor(() => {
       expect(mockInsert).toHaveBeenCalled()
     })
-    // Gate must be skipped: no RPC, no setActivated
-    expect(mockRpc).not.toHaveBeenCalled()
-    expect(mockSetActivated).not.toHaveBeenCalled()
     expect(mockReplace).not.toHaveBeenCalledWith('/activate')
   })
-})
 
-// ── WEB PLATFORM: gate must never fire ───────────────────────────────────────
-
-describe('auth/callback — web platform (gate bypassed)', () => {
-  beforeEach(() => {
-    Object.defineProperty(Platform, 'OS', { get: () => 'web', configurable: true })
-  })
-
-  it('on web: gate skipped even when not activated; RPC never called; insert runs', async () => {
-    mockIsActivated.mockResolvedValue(false)
-    mockExchangeCode.mockResolvedValue({ error: null })
-    mockGetUser.mockResolvedValue({
-      data: {
-        user: {
-          id: 'web-user',
-          email: 'web@test.com',
-          user_metadata: {},
-        },
-      },
+  it('transient network error on the post-auth backup check still creates the profile and enters the app', async () => {
+    // Regression: the old fail-closed gate ran an RPC BEFORE the userSettings
+    // upsert; any network hiccup bounced the user to /activate and skipped
+    // profile creation entirely. Simulate a network failure on the (now only
+    // remaining) post-auth network call — the cloud-backup existence check —
+    // and assert the profile is still written and the user still enters the app.
+    setupSuccessfulExchange()
+    const mockSelectChain = jest.fn(() => {
+      throw new Error('network timeout')
     })
-    const mockMaybeSingle = jest.fn().mockResolvedValue({ data: null })
-    const mockLimit = jest.fn(() => ({ maybeSingle: mockMaybeSingle }))
-    const mockEq = jest.fn(() => ({ limit: mockLimit }))
-    mockSupabaseFrom.mockReturnValue({ select: jest.fn(() => ({ eq: mockEq })) })
-    mockSelectFrom.mockReturnValue({
-      where: jest.fn(() => ({ limit: jest.fn().mockResolvedValue([]) })),
-      limit: jest.fn().mockResolvedValue([]),
-    })
+    mockSupabaseFrom.mockReturnValue({ select: mockSelectChain })
 
     render(<AuthCallback />)
 
     await waitFor(() => {
-      // Normal web flow: insert runs, /activate never called
       expect(mockInsert).toHaveBeenCalled()
-      expect(mockReplace).not.toHaveBeenCalledWith('/activate')
     })
-    // Gate must NOT have called the RPC
-    expect(mockRpc).not.toHaveBeenCalled()
+    // The user must land in onboarding/app, never bounced to a gate screen.
+    expect(mockReplace).not.toHaveBeenCalledWith('/activate')
+    expect(mockReplace).toHaveBeenCalledWith('/onboarding')
   })
 })
 
@@ -347,7 +237,6 @@ describe('auth/callback — password recovery (web)', () => {
       writable: true,
       configurable: true,
     })
-    mockIsActivated.mockResolvedValue(false)
     mockExchangeCode.mockResolvedValue({ error: null })
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'web-user', email: 'web@test.com', user_metadata: {} } },

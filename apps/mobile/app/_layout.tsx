@@ -30,8 +30,6 @@ import { notes as notesTable, userSettings, focusListings as focusListingsTable 
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
-import { isEarlyAccessExpired, EARLY_ACCESS_GATE_ENABLED, shouldBlockForEarlyAccess } from '../utils/earlyAccess'
-import { isEarlyAccessActivated, setEarlyAccessActivated } from '../utils/earlyAccessActivation'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 import { initAnalytics, identifyUser, resetAnalytics } from '../lib/analytics'
@@ -154,16 +152,6 @@ function AppInit({ onReady }: { onReady: () => void }) {
       let webTarget: string | undefined
 
       try {
-        // Early-access expiry gate (web) — applies regardless of session, before
-        // any normal web routing. The check is synchronous and session-independent,
-        // so it runs ahead of the session fetch to keep the expired path fast.
-        // Dormant until the cutoff (see utils/earlyAccess.ts).
-        if (isEarlyAccessExpired()) {
-          router.replace('/expired')
-          onReady()
-          return
-        }
-
         const { data: { session } } = await supabase.auth.getSession()
 
         if (!session) {
@@ -171,25 +159,6 @@ function AppInit({ onReady }: { onReady: () => void }) {
           router.replace('/auth/sign-in')
           onReady()
           return
-        }
-
-        // Approved-account gate (web) — DORMANT (see utils/earlyAccess.ts). While
-        // disabled, a signed-in user is NEVER bounced to /early-access-required, so a
-        // browser refresh keeps them in the app (the session itself persists via
-        // localStorage in services/supabase.ts). Re-enable by flipping
-        // EARLY_ACCESS_GATE_ENABLED once the approval + APK-email pipeline is live.
-        if (EARLY_ACCESS_GATE_ENABLED) {
-          try {
-            const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
-            if (!eaErr && shouldBlockForEarlyAccess(eaStatus)) {
-              router.replace('/early-access-required')
-              onReady()
-              return
-            }
-            if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
-          } catch (e) {
-            console.warn('[layout] early_access gate error (allowing through):', e)
-          }
         }
 
         // Session exists — pull latest user data from Supabase (non-fatal)
@@ -249,20 +218,6 @@ function AppInit({ onReady }: { onReady: () => void }) {
         async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
             if (session.user) identifyUser(session.user.id, { email: session.user.email ?? undefined })
-            // Approved-account gate (web) — DORMANT (see utils/earlyAccess.ts).
-            // Disabled so signed-in users are never bounced to /early-access-required.
-            if (EARLY_ACCESS_GATE_ENABLED) {
-              try {
-                const { data: eaStatus, error: eaErr } = await supabase.rpc('early_access_status')
-                if (!eaErr && shouldBlockForEarlyAccess(eaStatus)) {
-                  router.replace('/early-access-required')
-                  return
-                }
-                if (eaErr) console.warn('[layout] early_access gate check failed (allowing through):', eaErr)
-              } catch (e) {
-                console.warn('[layout] early_access gate error (allowing through):', e)
-              }
-            }
             try { await pullUserData(db) } catch { /* non-fatal */ }
             const [rows, focusRows] = await Promise.all([
               db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
@@ -315,33 +270,11 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
     // Navigate based on local DB — instant, no network required
     try {
-      // Early-access expiry gate — blocks the app once the trial build expires.
-      // Dormant until the cutoff (see utils/earlyAccess.ts); when tripped it
-      // routes to the standalone /expired screen and skips all normal routing.
-      if (isEarlyAccessExpired()) {
-        router.replace('/expired')
-        onReady()
-        return
-      }
       const [rows, focusRows] = await Promise.all([
         db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
         db.select().from(focusListingsTable).limit(1),
       ])
       const settings = rows[0]
-
-      // Native early-access activation gate (one-time, then fully offline). Established
-      // installs (already have a profile) are grandfathered so this OTA can't disrupt
-      // them; only a truly fresh install (no profile) must activate before it can be used.
-      const activated = await isEarlyAccessActivated()
-      if (!activated) {
-        if (settings?.fullName) {
-          await setEarlyAccessActivated()        // grandfather existing/in-progress user
-        } else {
-          router.replace('/activate')
-          onReady()
-          return
-        }
-      }
 
       if (!settings?.fullName) {
         router.replace('/landing')
