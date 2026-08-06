@@ -172,7 +172,15 @@ export function itemMatchesSession(item: PlanItemRef, session: SessionCompletion
   }
 }
 
-/** Does a just-recorded batch of flashcard_srs reviews satisfy this item? */
+/**
+ * Does a just-recorded batch of flashcard_srs reviews satisfy this item?
+ * Deliberately satisfied by ANY recorded review (reviewCount > 0), not by
+ * reviewCount >= item.targetCount — so an srs_review item can complete before
+ * its advertised targetCount of due cards is actually cleared (e.g. reviewing
+ * 1 of 15 due cards ticks the item off). Same "get them moving, don't gate on
+ * finishing everything" spirit as the diagnostic item's itemMatchesSession
+ * above; targetCount here is purely a display number, not a completion bar.
+ */
 export function itemMatchesSrsReview(item: PlanItemRef, reviewCount: number): boolean {
   return item.kind === 'srs_review' && reviewCount > 0
 }

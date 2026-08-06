@@ -22,10 +22,17 @@ export interface DueFlashcardRow {
 }
 
 /**
- * getDueFlashcards — every published flashcard whose flashcard_srs row is
- * currently due (0 < dueAt <= now). A card with no flashcard_srs row (never
+ * getDueFlashcards — every published flashcard whose flashcard_srs row is due
+ * as of `now` (0 < dueAt <= now). A card with no flashcard_srs row (never
  * reviewed) never appears — "due" describes the review queue, not the whole
  * unreviewed catalog (see utils/srs.ts's isDue).
+ *
+ * `now` is a generic as-of cutoff, not necessarily "the current instant": it
+ * defaults to Date.now() but callers may pass any point in time, e.g.
+ * services/studyPlan.ts's getTomorrowDueSrsCount passes a future instant to
+ * preview what will be due by then. This is deliberate — it's the single due
+ * query (with dedupeByStem below), so a forward-looking preview reuses it
+ * rather than standing up a second, drift-prone due-count query.
  *
  * `ids`, when passed, scopes the result to that flashcard id set (e.g. a
  * single topic/deck/listing's card pool for a chooser's "Due today" option).

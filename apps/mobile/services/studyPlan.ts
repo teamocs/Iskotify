@@ -109,6 +109,20 @@ export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<
   }
 }
 
+/**
+ * getTomorrowDueSrsCount — how many flashcards will be due by this time
+ * tomorrow, for the "N more tomorrow" preview shown when today's plan is
+ * empty (see hooks/useStudyPlan.ts). Routes through getDueCounts exactly
+ * like today's real dueSrsCount does — getDueCounts/getDueFlashcards' `now`
+ * cutoff is a generic point-in-time, not necessarily "right now", so passing
+ * a future instant here reuses the SAME dedupeByStem-aware query rather than
+ * standing up a second, drift-prone due-count query.
+ */
+export async function getTomorrowDueSrsCount(db: DrizzleClient, tomorrow: Date): Promise<number> {
+  const counts = await getDueCounts(db, tomorrow.getTime())
+  return counts.total
+}
+
 /** Persists a freshly-generated draft plan for `planDate`. Returns the inserted rows. */
 export async function persistPlanItems(
   db: DrizzleClient,

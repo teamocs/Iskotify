@@ -4,7 +4,7 @@ import { InteractionManager } from 'react-native'
 import { useDb } from './useDb'
 import { subscribe } from '../services/queryCache'
 import {
-  gatherPlanInputs, getPlanItemsForDate, persistPlanItems, markPlanItemDone,
+  gatherPlanInputs, getPlanItemsForDate, persistPlanItems, markPlanItemDone, getTomorrowDueSrsCount,
 } from '../services/studyPlan'
 import { generateStudyPlan, formatPlanDate, type StudyPlanItemKind } from '../utils/studyPlan'
 
@@ -69,11 +69,18 @@ export function useStudyPlan(): UseStudyPlanResult {
         rows = await persistPlanItems(db, planDate, drafts, now)
 
         if (drafts.length === 0) {
-          // All caught up today — preview tomorrow's rough size (approximate:
-          // reuses today's due-SRS/weak-topic signals against tomorrow's
-          // date; never persisted, purely a "N more tomorrow" hint).
+          // All caught up today — preview tomorrow's rough size. Weak topics
+          // don't have a "due by when" clock (accuracy doesn't shift overnight),
+          // and this branch only runs when weakTopics is already empty (see
+          // utils/studyPlan.ts's noSignal), so the one signal that can
+          // legitimately differ tomorrow is the due-SRS count: re-fetched as of
+          // this time tomorrow via services/studyPlan.ts's getTomorrowDueSrsCount
+          // (which itself routes through the same getDueCounts/dedupeByStem
+          // query today's count uses — never a second, drift-prone due query).
+          // Never persisted, purely a "N more tomorrow" hint.
           const tomorrow = new Date(now + 86_400_000)
-          const tomorrowDraft = generateStudyPlan({ ...input, today: tomorrow })
+          const tomorrowDueSrsCount = await getTomorrowDueSrsCount(db, tomorrow)
+          const tomorrowDraft = generateStudyPlan({ ...input, today: tomorrow, dueSrsCount: tomorrowDueSrsCount })
           if (isMountedRef.current) setTomorrowItemCount(tomorrowDraft.length)
         } else if (isMountedRef.current) {
           setTomorrowItemCount(0)

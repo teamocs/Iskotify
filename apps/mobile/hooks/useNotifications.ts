@@ -51,7 +51,12 @@ export function useNotifications() {
     try {
       await db.update(userSettings).set({ dailyReminderHour: hour }).where(eq(userSettings.id, 1))
       if (enabled) {
-        await scheduleIskotifyNotifications(listings, { dailyReminderHour: hour, weeklySummaryEnabled })
+        // Same permission gate as schedule()/toggle() — an ungranted (or
+        // revoked) OS permission must never be silently rescheduled against.
+        const granted = await requestNotificationPermissions()
+        if (granted) {
+          await scheduleIskotifyNotifications(listings, { dailyReminderHour: hour, weeklySummaryEnabled })
+        }
       }
     } catch (e) {
       console.error('[useNotifications] setReminderHour error:', e)
@@ -65,7 +70,11 @@ export function useNotifications() {
     try {
       await db.update(userSettings).set({ weeklySummaryEnabled: next }).where(eq(userSettings.id, 1))
       if (enabled) {
-        await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled: next })
+        // Same permission gate as schedule()/toggle() — see setReminderHour above.
+        const granted = await requestNotificationPermissions()
+        if (granted) {
+          await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled: next })
+        }
       }
     } catch (e) {
       console.error('[useNotifications] toggleWeeklySummary error:', e)

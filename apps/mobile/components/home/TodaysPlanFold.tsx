@@ -144,7 +144,7 @@ export function TodaysPlanFold({
                   accessibilityState={{ checked: done }}
                   accessibilityLabel={done ? 'Marked done' : 'Mark done'}
                 >
-                  {done ? <Text style={s.checkmark}>✓</Text> : null}
+                  {done ? <Text style={[s.checkmark, { color: t.textInverse }]}>✓</Text> : null}
                 </Pressable>
                 <Text style={s.kindIcon}>{KIND_ICON[item.kind]}</Text>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -191,7 +191,7 @@ function makeStyles() {
       width: 22, height: 22, borderRadius: 11, borderWidth: 2,
       alignItems: 'center', justifyContent: 'center',
     },
-    checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+    checkmark: { fontSize: 13, fontWeight: '700' },
     kindIcon: { fontSize: 18 },
     itemTitle: { fontSize: 14, fontWeight: '600', fontFamily: 'Outfit_600SemiBold' },
     itemSub: { fontSize: 11, fontFamily: 'Lexend_400Regular', marginTop: 1 },
