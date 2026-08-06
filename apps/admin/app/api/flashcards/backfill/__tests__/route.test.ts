@@ -93,6 +93,30 @@ describe('POST /api/flashcards/backfill', () => {
     expect(body).toEqual({ processed: 3, succeeded: 2, failed: 1, remaining: 47 })
   })
 
+  it('persists option_explanations and strategy_tip returned by the Gemini pipeline (Finding 2)', async () => {
+    mockLimit.mockResolvedValueOnce({
+      data: [
+        { id: 'c1', question: 'Q1', answer: 'A1', flashcard_topics: { name: 'T', flashcard_subjects: { name: 'S' } } },
+      ],
+      error: null,
+    })
+    mockGenerate.mockResolvedValueOnce({
+      options: ['x', 'A1', 'y', 'z'],
+      correctIndex: 1,
+      explanation: '',
+      optionExplanations: ['wrong x', null, 'wrong y', 'wrong z'],
+      strategyTip: 'Tip.',
+    })
+    mockCountIsNull.mockResolvedValueOnce({ count: 0, error: null })
+
+    const POST = await importRoute()
+    await POST(makeReq('?limit=1'))
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      option_explanations: ['wrong x', null, 'wrong y', 'wrong z'],
+      strategy_tip: 'Tip.',
+    }))
+  })
+
   it('defaults limit to 50 when query missing', async () => {
     mockLimit.mockResolvedValueOnce({ data: [], error: null })
     mockCountIsNull.mockResolvedValueOnce({ count: 0, error: null })

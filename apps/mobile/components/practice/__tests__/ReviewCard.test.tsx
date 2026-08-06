@@ -1,4 +1,6 @@
 import React from 'react'
+import fs from 'fs'
+import path from 'path'
 import { render, screen } from '@testing-library/react-native'
 import { ReviewCard } from '../ReviewCard'
 
@@ -179,5 +181,25 @@ describe('ReviewCard', () => {
     )
     expect(screen.getByText('✓')).toBeTruthy()
     expect(screen.queryByText('✗')).toBeNull()
+  })
+
+  // Finding 3 (Important, reviewed): cardOk/cardBad/optRowCorrect/optRowWrong/
+  // tipChip border colors were hardcoded dark-theme rgba() literals while
+  // their backgrounds correctly used theme tokens (t.successSurface/
+  // t.dangerSurface/t.warningSurface) — a visible border/background mismatch
+  // in light mode, and a violation of the branch's "no hardcoded colors"
+  // constraint. This asserts directly on the source: no leftover rgba()
+  // literals, and the borders use the theme tokens that exist in both
+  // theme/tokens.ts palettes (t.success/t.danger/t.warning).
+  it('uses theme tokens (not hardcoded rgba literals) for status borders', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../ReviewCard.tsx'), 'utf8')
+    expect(src).not.toMatch(/rgba\(74,\s*222,\s*128/)   // old hardcoded dark-mode success
+    expect(src).not.toMatch(/rgba\(248,\s*113,\s*113/)  // old hardcoded dark-mode danger
+    expect(src).not.toMatch(/rgba\(251,\s*191,\s*36/)   // old hardcoded dark-mode warning
+    expect(src).toMatch(/cardOk:\s*\{\s*borderColor:\s*t\.success\s*\}/)
+    expect(src).toMatch(/cardBad:\s*\{\s*borderColor:\s*t\.danger\s*\}/)
+    expect(src).toMatch(/optRowCorrect:.*borderColor:\s*t\.success/)
+    expect(src).toMatch(/optRowWrong:.*borderColor:\s*t\.danger/)
+    expect(src).toMatch(/tipChip:[\s\S]*?borderColor:\s*t\.warning/)
   })
 })

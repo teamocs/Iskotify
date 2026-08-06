@@ -91,6 +91,30 @@ describe('POST /api/flashcards/distractors', () => {
     expect(body.cached).toBe(true)
   })
 
+  it('persists option_explanations and strategy_tip returned by the Gemini pipeline (Finding 2)', async () => {
+    mockSingle.mockResolvedValueOnce({
+      data: {
+        id: 'c1', question: 'Q', answer: 'Right',
+        flashcard_topics: { name: 'Algebra', flashcard_subjects: { name: 'Math' } },
+      },
+      error: null,
+    })
+    mockGenerate.mockResolvedValueOnce({
+      options: ['W1', 'Right', 'W2', 'W3'],
+      correctIndex: 1,
+      explanation: 'because',
+      optionExplanations: ['wrong W1', null, 'wrong W2', 'wrong W3'],
+      strategyTip: 'Check the units.',
+    })
+    const POST = await importRoute()
+    const res = await POST(makeReq({ cardId: 'c1' }))
+    expect(res.status).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      option_explanations: ['wrong W1', null, 'wrong W2', 'wrong W3'],
+      strategy_tip: 'Check the units.',
+    }))
+  })
+
   it('returns 200 with cached=false when Gemini returns null', async () => {
     mockSingle.mockResolvedValueOnce({
       data: {

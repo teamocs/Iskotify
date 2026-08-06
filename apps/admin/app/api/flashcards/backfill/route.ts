@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
         ai_correct_index: result.correctIndex,
         ai_explanation: result.explanation,
         ai_enhanced_at: new Date().toISOString(),
+        option_explanations: result.optionExplanations,
+        strategy_tip: result.strategyTip,
       })
       .eq('id', card.id)
     return !updateError

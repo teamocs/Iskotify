@@ -15,6 +15,18 @@ import { generateOptionExplanations } from '@/lib/gemini/generateDistractors'
 // 001_initial_schema.sql / 006_flashcard_updated_at.sql) — required so the
 // mobile app's incremental cursor sync (services/sync.ts) actually pulls the
 // new content down, per the note in 049_question_explanations.sql.
+//
+// Eligibility filter (Finding 4 fix): filters on `option_explanations = '[]'`
+// (the column's DB default — see 049_question_explanations.sql), NOT on
+// `strategy_tip = ''`. generateOptionExplanations legitimately returns
+// strategyTip:'' on a row it successfully processed (it only returns null —
+// meaning nothing gets written — when EVERY field, including all option
+// rationales, comes back empty; see generateDistractors.ts). A successful
+// write always sets option_explanations to a 4-length array (possibly all
+// null entries, but never `[]`), so this filter can't re-trigger on rows
+// that were already processed, while still catching rows where the Gemini
+// call failed or was never attempted (which leave option_explanations at
+// its untouched '[]' default).
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
@@ -49,7 +61,7 @@ async function processUpcatQuestions(supabase: any, limit: number) {
   const { data: rows } = await supabase
     .from('upcat_questions')
     .select('question_id, question_text, options, correct_index, main_subject, topic')
-    .eq('strategy_tip', '')
+    .eq('option_explanations', '[]')
     .limit(limit)
 
   const list = (rows ?? []) as Array<{
@@ -82,7 +94,7 @@ async function processFlashcards(supabase: any, limit: number) {
   const { data: rows } = await supabase
     .from('flashcards')
     .select('id, question, options, correct_answer_index, ai_options, ai_correct_index, flashcard_topics(name, flashcard_subjects(name))')
-    .eq('strategy_tip', '')
+    .eq('option_explanations', '[]')
     .limit(limit)
 
   const list = (rows ?? []) as Array<{
@@ -142,7 +154,7 @@ export async function POST(req: NextRequest) {
   const { count: remaining } = await supabase
     .from(source as Source)
     .select('*', { count: 'exact', head: true })
-    .eq('strategy_tip', '')
+    .eq('option_explanations', '[]')
 
   if (succeeded > 0 && source === 'flashcards') revalidateTag('drafts')
 

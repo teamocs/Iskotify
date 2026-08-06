@@ -114,8 +114,8 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       backgroundColor: t.surface, borderWidth: 1.5, borderColor: t.border, borderRadius: radius.lg,
       borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.md,
     },
-    cardOk: { borderColor: 'rgba(74,222,128,0.35)' },
-    cardBad: { borderColor: 'rgba(248,113,113,0.35)' },
+    cardOk: { borderColor: t.success },
+    cardBad: { borderColor: t.danger },
     // Question stem stays the dominant element, matching QuestionCard's scale.
     qText: {
       fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold',
@@ -127,8 +127,8 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous',
       paddingVertical: 9, paddingHorizontal: spacing.md,
     },
-    optRowCorrect: { backgroundColor: t.successSurface, borderColor: 'rgba(74,222,128,0.45)' },
-    optRowWrong: { backgroundColor: t.dangerSurface, borderColor: 'rgba(248,113,113,0.45)' },
+    optRowCorrect: { backgroundColor: t.successSurface, borderColor: t.success },
+    optRowWrong: { backgroundColor: t.dangerSurface, borderColor: t.danger },
     optLetter: { width: 22, height: 22, borderRadius: 7, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' },
     optLetterCorrect: { backgroundColor: t.success },
     optLetterWrong: { backgroundColor: t.danger },
@@ -158,7 +158,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     wrongLetter: { fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
     tipChip: {
       flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: t.warningSurface, borderWidth: 1,
-      borderColor: 'rgba(251,191,36,0.4)', borderRadius: radius.pill, paddingHorizontal: spacing.md,
+      borderColor: t.warning, borderRadius: radius.pill, paddingHorizontal: spacing.md,
       paddingVertical: 6, marginTop: spacing.sm,
     },
     tipTxt: { fontSize: typo.sm, color: t.warning, fontWeight: '600', fontFamily: 'Lexend_600SemiBold', lineHeight: Math.round(typo.sm * 1.4) },

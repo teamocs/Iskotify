@@ -18,6 +18,11 @@ const mockProfileSingle = vi.fn()
 const mockSubjectSingle = vi.fn()
 const mockTopicSingle = vi.fn()
 const mockInsertCardSelect = vi.fn()
+const mockCardsUpdate = vi.fn((_data: unknown) => ({
+  eq(_col: string, _val: unknown) {
+    return Promise.resolve({ error: null })
+  },
+}))
 
 function makeChain(table: string): any {
   if (table === 'profiles') {
@@ -50,13 +55,7 @@ function makeChain(table: string): any {
     insert(_data: unknown) {
       return { select: mockInsertCardSelect }
     },
-    update(_data: unknown) {
-      return {
-        eq(_col: string, _val: unknown) {
-          return Promise.resolve({ error: null })
-        },
-      }
-    },
+    update: mockCardsUpdate,
   }
 }
 
@@ -67,9 +66,17 @@ vi.mock('@iskotify/utils', () => ({
 }))
 
 // Stub distractor generation — fire-and-forget should not make real calls
+const mockGenerateDistractors = vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/gemini/generateDistractors', () => ({
-  generateDistractorsForCard: vi.fn().mockResolvedValue(null),
+  generateDistractorsForCard: mockGenerateDistractors,
 }))
+
+// Flush the fire-and-forget backfillDistractorsFor() promise chain (POST
+// returns before it settles) so tests can assert on its side effects.
+async function flushMicrotasks() {
+  await new Promise(resolve => setImmediate(resolve))
+  await new Promise(resolve => setImmediate(resolve))
+}
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 function adminUser() {
@@ -94,6 +101,9 @@ function resetAll() {
   mockTopicSingle.mockReset()
   mockInsertCardSelect.mockReset()
   mockFrom.mockClear()
+  mockCardsUpdate.mockClear()
+  mockGenerateDistractors.mockReset()
+  mockGenerateDistractors.mockResolvedValue(null)
 }
 
 function makeReq(body: unknown) {
@@ -165,6 +175,34 @@ describe('POST /api/flashcards/manual', () => {
     const body = await res.json()
     expect(body.ok).toBe(true)
     expect(body.topic_id).toBe('topic-1')
+  })
+
+  it('persists option_explanations and strategy_tip from the background distractor generation (Finding 2)', async () => {
+    adminUser()
+    mockSubjectSingle.mockResolvedValueOnce({ data: { id: 'subj-1' }, error: null })
+    mockTopicSingle.mockResolvedValueOnce({ data: { id: 'topic-1' }, error: null })
+    mockInsertCardSelect.mockResolvedValueOnce({
+      data: [{ id: 'card-1', question: 'Q?', answer: 'A' }],
+      error: null,
+    })
+    mockGenerateDistractors.mockResolvedValueOnce({
+      options: ['A', 'W1', 'W2', 'W3'],
+      correctIndex: 0,
+      explanation: 'because',
+      optionExplanations: [null, 'wrong W1', 'wrong W2', 'wrong W3'],
+      strategyTip: 'Check the units.',
+    })
+
+    const { POST } = await import('../route')
+    const res = await POST(makeReq(validBody))
+    expect(res.status).toBe(200)
+
+    await flushMicrotasks()
+
+    expect(mockCardsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      option_explanations: [null, 'wrong W1', 'wrong W2', 'wrong W3'],
+      strategy_tip: 'Check the units.',
+    }))
   })
 
   it('returns 500 when subject upsert fails', async () => {

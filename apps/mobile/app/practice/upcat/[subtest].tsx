@@ -490,35 +490,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       color: t.textSecondary,
       fontFamily: 'Lexend_600SemiBold',
     },
-    reviewCard: { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, padding: 14, marginBottom: 10 },
-    reviewOk: {
-      backgroundColor: 'rgba(34,197,94,0.06)',
-      borderColor: 'rgba(34,197,94,0.18)',
-    },
-    reviewBad: {
-      backgroundColor: 'rgba(239,68,68,0.06)',
-      borderColor: 'rgba(239,68,68,0.18)',
-    },
-    reviewQ: {
-      fontSize: typo.md,
-      fontWeight: '600',
-      color: t.textPrimary,
-      marginBottom: 8,
-      fontFamily: 'Outfit_600SemiBold',
-    },
-    reviewOpt: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      lineHeight: 20,
-      fontFamily: 'Lexend_400Regular',
-    },
-    reviewExp: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      marginTop: 8,
-      lineHeight: 17,
-      fontFamily: 'Lexend_400Regular',
-    },
     primaryBtn: {
       backgroundColor: 'rgba(128,0,0,0.85)',
       borderRadius: 16,

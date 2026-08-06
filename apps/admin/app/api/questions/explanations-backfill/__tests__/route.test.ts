@@ -28,9 +28,17 @@ function nonAdmin() {
 }
 
 // ── Supabase chain ─────────────────────────────────────────────────────────────
-// select().eq('strategy_tip','').limit(n)  → rows
-// select('*', {count:'exact', head:true}).eq('strategy_tip','')  → count
+// select().eq(col, val).limit(n)  → rows
+// select('*', {count:'exact', head:true}).eq(col, val)  → count
 // update({...}).eq('id'|'question_id', v) → { error }
+// Finding 4: the eligibility filter must reflect "explanations were
+// attempted" (option_explanations empty), not `.eq('strategy_tip','')` —
+// generateOptionExplanations legitimately returns strategyTip:'' on a
+// successfully-processed row, which would make it eligible forever under
+// the old filter. lastSelectEqArgs/lastCountEqArgs capture what column+value
+// the route actually filters on so tests can assert on it directly.
+let lastSelectEqArgs: [string, unknown] | undefined
+let lastCountEqArgs: [string, unknown] | undefined
 const mockLimit = vi.fn()
 const mockEqAfterSelect = vi.fn(() => ({ limit: mockLimit }))
 const mockCountEq = vi.fn(() => Promise.resolve({ count: 0, error: null }))
@@ -43,8 +51,20 @@ function makeChain(table: string) {
   }
   return {
     select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
-      if (opts?.count === 'exact') return { eq: mockCountEq }
-      return { eq: mockEqAfterSelect }
+      if (opts?.count === 'exact') {
+        return {
+          eq: (col: string, val: unknown) => {
+            lastCountEqArgs = [col, val]
+            return mockCountEq()
+          },
+        }
+      }
+      return {
+        eq: (col: string, val: unknown) => {
+          lastSelectEqArgs = [col, val]
+          return mockEqAfterSelect()
+        },
+      }
     },
     update: mockUpdate,
   }
@@ -65,6 +85,8 @@ beforeEach(() => {
   mockCountEq.mockReset()
   mockUpdateEq.mockClear()
   mockUpdate.mockClear()
+  lastSelectEqArgs = undefined
+  lastCountEqArgs = undefined
   mockFrom.mockClear()
 })
 
@@ -101,6 +123,38 @@ describe('POST /api/questions/explanations-backfill', () => {
     const res = await POST(makeReq({}))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/source/i)
+  })
+
+  // Finding 4 (Important, reviewed): generateOptionExplanations legitimately
+  // returns strategyTip:'' when Gemini gives per-option rationales but no
+  // tip (it only returns null when EVERY field is empty — see
+  // generateDistractors.ts). A filter on `.eq('strategy_tip','')` would keep
+  // such successfully-processed rows eligible forever, burning a Gemini call
+  // on every admin click. The eligibility signal must instead reflect
+  // "explanations were attempted": option_explanations still at its default
+  // '[]' (a processed row always gets a 4-length array, even if every entry
+  // is null — see byLetter.map in generateOptionExplanations — so it can
+  // never equal '[]' after a real write).
+  it('filters upcat_questions eligibility on option_explanations, not strategy_tip (Finding 4)', async () => {
+    adminUser()
+    mockLimit.mockResolvedValueOnce({ data: [], error: null })
+    mockCountEq.mockResolvedValueOnce({ count: 0, error: null })
+    const POST = await importRoute()
+    await POST(makeReq({ source: 'upcat_questions' }))
+    expect(lastSelectEqArgs?.[0]).toBe('option_explanations')
+    expect(lastSelectEqArgs?.[0]).not.toBe('strategy_tip')
+    expect(lastCountEqArgs?.[0]).toBe('option_explanations')
+    expect(lastCountEqArgs?.[0]).not.toBe('strategy_tip')
+  })
+
+  it('filters flashcards eligibility on option_explanations, not strategy_tip (Finding 4)', async () => {
+    adminUser()
+    mockLimit.mockResolvedValueOnce({ data: [], error: null })
+    mockCountEq.mockResolvedValueOnce({ count: 0, error: null })
+    const POST = await importRoute()
+    await POST(makeReq({ source: 'flashcards' }))
+    expect(lastSelectEqArgs?.[0]).toBe('option_explanations')
+    expect(lastCountEqArgs?.[0]).toBe('option_explanations')
   })
 
   it('returns zero counts when no rows need backfilling (upcat_questions)', async () => {
