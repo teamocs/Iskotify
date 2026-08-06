@@ -611,7 +611,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       ai_correct_index INTEGER,
       ai_explanation TEXT,
       ai_enhanced_at INTEGER,
-      status TEXT NOT NULL DEFAULT 'published'
+      status TEXT NOT NULL DEFAULT 'published',
+      option_explanations TEXT NOT NULL DEFAULT '[]',
+      strategy_tip TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE listings (
       id TEXT PRIMARY KEY NOT NULL,
@@ -752,7 +754,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       has_visual INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'published',
       skill_category TEXT,
-      remote_updated_at INTEGER
+      remote_updated_at INTEGER,
+      option_explanations TEXT NOT NULL DEFAULT '[]',
+      strategy_tip TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS upcat_facts (
       id TEXT PRIMARY KEY NOT NULL,

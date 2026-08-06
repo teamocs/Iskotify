@@ -29,6 +29,11 @@ export const flashcards = sqliteTable('flashcards', {
   aiExplanation: text('ai_explanation'),
   aiEnhancedAt: integer('ai_enhanced_at'),
   status: text('status').notNull().default('published'),
+  // JSON-encoded (string|null)[], index-aligned with options/aiOptions (whichever
+  // is actually served) — null at the correct index. Same text-storing-JSON
+  // pattern as `options`/`listingSlugs` above.
+  optionExplanations: text('option_explanations').notNull().default('[]'),
+  strategyTip: text('strategy_tip').notNull().default(''),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
 ])
@@ -238,6 +243,10 @@ export const upcatQuestions = sqliteTable('upcat_questions', {
   status: text('status').notNull().default('published'),
   skillCategory: text('skill_category'),
   remoteUpdatedAt: integer('remote_updated_at'),
+  // JSON-encoded (string|null)[], index-aligned with `options` — null at the
+  // correct index. Same text-storing-JSON pattern as `options` above.
+  optionExplanations: text('option_explanations').notNull().default('[]'),
+  strategyTip: text('strategy_tip').notNull().default(''),
 }, (t) => [
   index('upcat_questions_subtest_idx').on(t.subtest),
   index('upcat_questions_set_idx').on(t.setId),

@@ -298,7 +298,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       fetchAllPaginated((from, to) => supabase.from('upcat_questions')
-        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,updated_at')
+        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,option_explanations,strategy_tip,updated_at')
         .gt('updated_at', since)
         .order('question_id')
         .range(from, to)),
@@ -385,7 +385,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const cardResults = contentSlugs.length === 0 ? [] : await Promise.all(
       contentSlugs.map(slug =>
         fetchAllPaginated((from, to) => supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,updated_at')
+          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,option_explanations,strategy_tip,updated_at')
           .contains('listing_slugs', [slug])
           .gt('updated_at', since)
           .order('id')
@@ -474,6 +474,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt,
           // status synced so unpublished cards propagate to device (local readers filter published)
           status: (row as any).status ?? 'published',
+          optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
+          strategyTip: (row as any).strategy_tip ?? '',
         }
 
         // Only include ai_* fields when Supabase actually has them. This preserves
@@ -515,6 +517,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         setId: row.set_id ?? null, setPosition: row.set_position ?? null,
         hasVisual: !!row.has_visual, status: row.status,
         skillCategory: row.skill_category ?? null,
+        optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
+        strategyTip: (row as any).strategy_tip ?? '',
         remoteUpdatedAt: new Date(row.updated_at).getTime(),
       })), upcatQuestions.questionId)
 

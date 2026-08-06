@@ -536,6 +536,15 @@ export const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS question_attempts_answered_at_idx ON question_attempts (answered_at)`,
   `CREATE INDEX IF NOT EXISTS question_attempts_question_id_idx ON question_attempts (question_id)`,
+
+  // ── Task E: per-option "why it's wrong" rationale + strategy tip ───────────
+  // JSON-encoded (string|null)[] mirrors, same pattern as `options`/`ai_options`
+  // above — text column storing JSON. Defaults match the remote migration
+  // (049_question_explanations.sql) so pre-backfill rows render nothing extra.
+  `ALTER TABLE upcat_questions ADD COLUMN option_explanations TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE upcat_questions ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE flashcards ADD COLUMN option_explanations TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE flashcards ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
