@@ -65,7 +65,8 @@ const MOST_MISSED_LIMIT = 6
  *   Tier 2: subtest string — handles UPCAT/USTET session records that carry
  *            subtest='Mathematics' etc. and have topicId='' + deckId=''
  *
- * Sentinels '__full__' and '__weak__' are still skipped.
+ * Sentinels '__full__', '__weak__', and '__due__' (Task H's global due-review
+ * run — see app/practice/due/index.tsx) are still skipped.
  */
 export function computeTopicMastery(
   sessions: Array<{
@@ -81,7 +82,7 @@ export function computeTopicMastery(
   const grouped: Record<string, { score: number; total: number; count: number }> = {}
   for (const s of sessions) {
     const key = s.topicId || s.deckId || (s.subtest ? 'subtest:' + s.subtest : '')
-    if (!key || key === '__full__' || key === '__weak__') continue
+    if (!key || key === '__full__' || key === '__weak__' || key === '__due__') continue
     if (!grouped[key]) grouped[key] = { score: 0, total: 0, count: 0 }
     grouped[key]!.score += s.score
     grouped[key]!.total += s.total
@@ -206,6 +207,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
             let title = 'Session'
             if (s.deckId === '__full__') title = 'Full Review'
             else if (s.deckId === '__weak__') title = 'Weak Topics'
+            else if (s.deckId === '__due__') title = 'Due Review'
             else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
             else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
             else if (s.subtest) title = s.subtest

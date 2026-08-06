@@ -18,12 +18,14 @@ import {
   getSubjectSessionPercentages,
   getListingMockBest,
 } from '../../services/homeAggregates'
+import { getDueCounts, type DueCounts } from '../../services/srsAggregates'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
 import { readinessTone } from '../../utils/readinessTone'
 import type { ReadinessTone } from '../../utils/readinessTone'
 import { subjectsToImprove } from '../../utils/subjectsToImprove'
 import { subjectColor } from '../../utils/subjectColors'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
+import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -90,12 +92,17 @@ function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
 function DeckCard({
   deck,
   totalCards,
+  dueCount,
   onDelete,
 }: {
   deck: SavedDeck
   totalCards: number
+  /** Cards from this deck's topics currently due for SRS review (Task H). */
+  dueCount: number
   onDelete: () => void
 }) {
+  const { theme: t, typo } = useTheme()
+
   function handleLongPress() {
     Alert.alert('Delete Deck', `Delete "${deck.name}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -111,6 +118,19 @@ function DeckCard({
         subtitle={`${deck.topicIds.length} topic${deck.topicIds.length !== 1 ? 's' : ''} · ${totalCards} cards`}
         onPress={() => router.push(`/practice/deck/${deck.id}`)}
         onLongPress={handleLongPress}
+        trailing={dueCount > 0 ? (
+          <View style={{
+            backgroundColor: t.warningSurface, borderRadius: radius.sm, borderCurve: 'continuous',
+            paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2,
+          }}>
+            <Text
+              style={{ fontSize: typo.xs, fontWeight: '700', color: t.warning, fontFamily: 'Lexend_600SemiBold' }}
+              maxFontSizeMultiplier={1.4}
+            >
+              {dueCount} due
+            </Text>
+          </View>
+        ) : undefined}
       />
     </View>
   )
@@ -118,7 +138,33 @@ function DeckCard({
 
 // ── Create Deck Modal ─────────────────────────────────────────────────────────
 
-type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object; searchBar: object; searchBarTxt: object; resultRow: object; resultType: object; resultName: object; resultEmpty: object }
+type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object; searchBar: object; searchBarTxt: object; resultRow: object; resultType: object; resultName: object; resultEmpty: object; subjectHeader: object }
+
+// Deck-creation topic picker item: a subject header (Task H item 5 — group
+// browsing by the existing subject→topic taxonomy) or a selectable topic row,
+// flattened into one FlatList data array so the list stays virtualized.
+type PickerItem =
+  | { kind: 'header'; key: string; subjectName: string }
+  | { kind: 'topic'; key: string; row: TopicRow }
+
+function buildPickerItems(subjects: Array<{ id: string; name: string }>, topicRows: TopicRow[]): PickerItem[] {
+  const topicRowById = new Map(topicRows.map(r => [r.topic.id, r]))
+  const groups = groupTopicsBySubject(
+    {
+      topics: topicRows.map(r => ({ id: r.topic.id, name: r.topic.name, subjectId: r.topic.subjectId, accuracy: r.accuracy })),
+      subjects,
+    },
+    (topic) => topicRowById.get(topic.id)!,
+    undefined,
+    'alpha', // browsing context (picking topics to bundle into a deck), not a study-priority ranking
+  )
+  const items: PickerItem[] = []
+  for (const group of groups) {
+    items.push({ kind: 'header', key: `h:${group.subjectId}`, subjectName: group.subjectName })
+    for (const row of group.rows) items.push({ kind: 'topic', key: row.topic.id, row })
+  }
+  return items
+}
 
 // Memoized row for the deck-topic FlatList — keeps renderItem cheap so a row only
 // re-renders when its own selected state changes.
@@ -148,12 +194,14 @@ const TopicSelectRow = memo(function TopicSelectRow({
 
 function CreateDeckModal({
   visible,
+  subjects,
   topicRows,
   onClose,
   onCreate,
   m,
 }: {
   visible: boolean
+  subjects: Array<{ id: string; name: string }>
   topicRows: TopicRow[]
   onClose: () => void
   onCreate: (name: string, topicIds: string[]) => Promise<void>
@@ -179,16 +227,23 @@ function CreateDeckModal({
     })
   }, [])
 
-  const renderTopic = useCallback(({ item: row }: { item: TopicRow }) => (
-    <TopicSelectRow
-      id={row.topic.id}
-      name={row.topic.name}
-      cardCount={row.cardCount}
-      selected={selected.has(row.topic.id)}
-      onToggle={toggleTopic}
-      m={m}
-    />
-  ), [selected, toggleTopic, m])
+  const pickerItems = useMemo(() => buildPickerItems(subjects, topicRows), [subjects, topicRows])
+
+  const renderItem = useCallback(({ item }: { item: PickerItem }) => {
+    if (item.kind === 'header') {
+      return <Text style={m.subjectHeader} maxFontSizeMultiplier={1.4}>{item.subjectName}</Text>
+    }
+    return (
+      <TopicSelectRow
+        id={item.row.topic.id}
+        name={item.row.topic.name}
+        cardCount={item.row.cardCount}
+        selected={selected.has(item.row.topic.id)}
+        onToggle={toggleTopic}
+        m={m}
+      />
+    )
+  }, [selected, toggleTopic, m])
 
   async function handleCreate() {
     if (!name.trim() || selected.size === 0) return
@@ -239,11 +294,11 @@ function CreateDeckModal({
               <Text style={m.label}>Select topics  ({selected.size} chosen)</Text>
               <FlatList
                 style={m.topicList}
-                data={topicRows}
+                data={pickerItems}
                 extraData={selected}
-                keyExtractor={(row) => row.topic.id}
+                keyExtractor={(item) => item.key}
                 showsVerticalScrollIndicator={false}
-                renderItem={renderTopic}
+                renderItem={renderItem}
               />
               <View style={m.footerRow}>
                 <Pressable style={({ pressed }) => [m.backBtn, pressed && { opacity: 0.7 }]} onPress={() => setStep(1)} accessibilityRole="button">
@@ -445,6 +500,28 @@ function makeStyles(
         paddingVertical: spacing.sm + 2,
       },
       searchBarTxt: { flex: 1, fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      // "Review due cards" row (Task H) — warning-toned to read as "needs attention"
+      // (same tone the strength/readiness system already uses for Review-level items).
+      dueRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        backgroundColor: t.warningSurface,
+        borderWidth: 1,
+        borderColor: 'rgba(251,191,36,0.35)',
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm + 4,
+      },
+      dueIconWrap: {
+        width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous',
+        backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center',
+      },
+      dueIcon: { fontSize: 18 },
+      dueTitle: { fontSize: typo.base, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+      dueSub: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+      dueChevron: { fontSize: 20, color: t.warning },
     }),
     rc: StyleSheet.create({
       grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -520,6 +597,18 @@ function makeStyles(
       checkmark: { color: t.textInverse, fontSize: typo.xs, fontWeight: '700' },
       topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
       topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+      // Subject group header in the deck-creation topic picker (Task H item 5).
+      subjectHeader: {
+        fontSize: typo.xs,
+        fontWeight: '700',
+        color: t.textTertiary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        fontFamily: 'Lexend_600SemiBold',
+        paddingTop: spacing.md,
+        paddingBottom: spacing.xs,
+        paddingHorizontal: spacing.xs / 2,
+      },
       footerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
       backBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
       backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
@@ -607,12 +696,30 @@ export default function PracticeScreen() {
     return () => { cancelled = true }
   }, [db, reloadKey])
 
+  // Task H: SRS due-card counts (total + per-topic, for deck badges + the
+  // "Review due cards" row). Same cachedQuery/reloadKey convention as the
+  // readiness maps above.
+  const [dueCounts, setDueCounts] = useState<DueCounts>(() => ({ total: 0, byTopic: {} }))
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const counts = await cachedQuery('practice:dueCounts', 30_000, () => getDueCounts(db))
+        if (!cancelled) setDueCounts(counts)
+      } catch (e) {
+        console.warn('[practice/dueCounts] load failed:', e)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [db, reloadKey])
+
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     // Drop the cached readiness maps and re-trigger their effects for fresh data.
     invalidate('practice:sessionReadiness')
     invalidate('practice:mockReadiness')
+    invalidate('practice:dueCounts')
     setReloadKey(k => k + 1)
     try { await refresh() } finally { setRefreshing(false) }
   }, [refresh])
@@ -626,6 +733,7 @@ export default function PracticeScreen() {
       await syncOnLaunch(db)
       invalidate('practice:sessionReadiness')
       invalidate('practice:mockReadiness')
+      invalidate('practice:dueCounts')
       setReloadKey(k => k + 1)
       await refresh()
     } catch (e) {
@@ -712,6 +820,12 @@ export default function PracticeScreen() {
     [cardCountByTopic]
   )
 
+  // Task H: sum a deck's per-topic due counts — same reduce shape as deckCardCount.
+  const deckDueCount = useCallback(
+    (deck: SavedDeck) => deck.topicIds.reduce((sum, tid) => sum + (dueCounts.byTopic[tid] ?? 0), 0),
+    [dueCounts]
+  )
+
   // Per-subject readiness (lowest first) for the Subject readiness grid —
   // SESSION-based, consistent with Home + Subject Details.
   const subjectReadiness = useMemo(
@@ -760,6 +874,27 @@ export default function PracticeScreen() {
         contentContainerStyle={s.list}
         refreshControl={refreshCtl}
       >
+        {/* (1.5) Review due cards — Task H: prominent top placement, only when cards are due */}
+        {dueCounts.total > 0 ? (
+          <Pressable
+            style={({ pressed }) => [s.dueRow, pressed && { opacity: 0.85 }]}
+            onPress={() => router.push('/practice/due')}
+            accessibilityRole="button"
+            accessibilityLabel={`Review ${dueCounts.total} due card${dueCounts.total !== 1 ? 's' : ''}`}
+          >
+            <View style={s.dueIconWrap}>
+              <Text style={s.dueIcon} maxFontSizeMultiplier={1.4}>🔁</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.dueTitle} maxFontSizeMultiplier={1.4}>Review due cards</Text>
+              <Text style={s.dueSub} maxFontSizeMultiplier={1.4}>
+                {dueCounts.total} card{dueCounts.total !== 1 ? 's' : ''} ready for spaced review
+              </Text>
+            </View>
+            <Text style={s.dueChevron} maxFontSizeMultiplier={1.4}>›</Text>
+          </Pressable>
+        ) : null}
+
         {/* (2) Search — full-width bar opening the search modal (top, under header) */}
         <View>
           <Pressable
@@ -998,6 +1133,7 @@ export default function PracticeScreen() {
                   key={deck.id}
                   deck={deck}
                   totalCards={deckCardCount(deck)}
+                  dueCount={deckDueCount(deck)}
                   onDelete={() => deleteDeck(deck.id)}
                 />
               ))}
@@ -1060,6 +1196,7 @@ export default function PracticeScreen() {
 
       <CreateDeckModal
         visible={modalVisible}
+        subjects={subjects}
         topicRows={topicRows}
         onClose={() => setModalVisible(false)}
         onCreate={createDeck}

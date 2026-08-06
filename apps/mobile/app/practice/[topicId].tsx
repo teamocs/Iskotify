@@ -12,6 +12,7 @@ import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhanc
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { pickQuestions } from '../../utils/flashcardExam'
+import { getDueFlashcards } from '../../services/srsAggregates'
 import { FlashcardExam } from '../../components/practice/FlashcardExam'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../components/ui/webMaxWidth'
@@ -42,6 +43,8 @@ export default function QuizScreen() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
+  // Task H: due-today option — flashcardId → dueAt for cards in this topic that are due now.
+  const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
 
   const { theme: t, typo } = useTheme()
   // Web-only max-width centering for the chooser scroll content (null on native/sm).
@@ -60,6 +63,10 @@ export default function QuizScreen() {
     choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, width: '100%', marginBottom: spacing.md },
     choiceTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs / 2 },
     choiceSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    // "Due today" chooser option (Task H) — warning-toned, same convention as
+    // the practice-tab "Review due cards" row.
+    dueChoiceCard: { backgroundColor: t.warningSurface, borderColor: 'rgba(251,191,36,0.35)' },
+    dueChoiceTitle: { color: t.warning },
     ghostBtn: { paddingVertical: spacing.md, width: '100%', alignItems: 'center' },
     ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
@@ -117,6 +124,15 @@ export default function QuizScreen() {
     setAllQuestions(parsed)
     if (parsed.length > 0) loadedRef.current = true
     setPhase(parsed.length === 0 ? 'empty' : 'chooser')
+
+    // Task H: which of this topic's cards are due right now.
+    try {
+      const ids = parsed.map(q => q.id).filter((id): id is string => id != null)
+      const due = await getDueFlashcards(db, Date.now(), ids)
+      setDueAtById(Object.fromEntries(due.map(r => [r.flashcardId, r.dueAt])))
+    } catch (e) {
+      console.warn('[practice/topic] due lookup failed:', e)
+    }
   }, [db, topicId])
 
   useEffect(() => { void load() }, [load])
@@ -189,11 +205,13 @@ export default function QuizScreen() {
 
   // ── Phase: chooser ──────────────────────────────────────────────────────────
 
-  function choose(mode: 'quick' | 'full') {
-    const q = pickQuestions(allQuestions, mode)
+  function choose(mode: 'quick' | 'full' | 'due') {
+    const q = pickQuestions(allQuestions, mode, dueAtById)
     setExamQuestions(q)
     setPhase('exam')
   }
+
+  const dueCount = Object.keys(dueAtById).length
 
   return (
     <SafeAreaView style={s.root}>
@@ -202,6 +220,13 @@ export default function QuizScreen() {
         <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
         <Text style={s.title}>{topicName}</Text>
         <Text style={s.sub}>{allQuestions.length} cards available</Text>
+
+        {dueCount > 0 ? (
+          <Pressable accessibilityRole="button" style={[s.choiceCard, s.dueChoiceCard]} onPress={() => choose('due')}>
+            <Text style={[s.choiceTitle, s.dueChoiceTitle]}>Due today ({dueCount})</Text>
+            <Text style={s.choiceSub}>Cards scheduled for review, most overdue first</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('quick')}>
           <Text style={s.choiceTitle}>Quick (15)</Text>

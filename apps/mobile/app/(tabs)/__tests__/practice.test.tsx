@@ -30,9 +30,10 @@ jest.mock('../../../hooks/useFocusListings', () => ({
   }),
 }))
 
+const mockDecks: any[] = []
 jest.mock('../../../hooks/useSavedDecks', () => ({
   useSavedDecks: () => ({
-    decks: [],
+    decks: mockDecks,
     createDeck: jest.fn(),
     deleteDeck: jest.fn(),
   }),
@@ -69,6 +70,12 @@ jest.mock('../../../services/homeAggregates', () => ({
   getTopicBestSessionPercentages: jest.fn().mockResolvedValue([]),
   getSubjectSessionPercentages: jest.fn().mockResolvedValue([]),
   getListingMockBest: (...args: any[]) => mockGetListingMockBest(...args),
+}))
+
+// Task H: due-count aggregate — seedable per test, defaults to "nothing due".
+const mockGetDueCounts = jest.fn()
+jest.mock('../../../services/srsAggregates', () => ({
+  getDueCounts: (...args: any[]) => mockGetDueCounts(...args),
 }))
 
 // Mock listPublishedBlueprints — tests override this via mockListPublishedBlueprints
@@ -111,8 +118,11 @@ describe('PracticeScreen', () => {
     // Reset the My Focus mock-readiness aggregate (default: nothing practiced)
     mockGetListingMockBest.mockReset()
     mockGetListingMockBest.mockResolvedValue([])
+    mockGetDueCounts.mockReset()
+    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
     // Reset shared focus listings array
     mockFocusListings.splice(0, mockFocusListings.length)
+    mockDecks.splice(0, mockDecks.length)
   })
 
   it('renders the Exams title', () => {
@@ -372,5 +382,49 @@ describe('PracticeScreen', () => {
     await act(async () => {})
     fireEvent.press(screen.getByText('＋ Add exam or scholarship'))
     expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
+  })
+
+  // ── Task H: due queue surfaces ──────────────────────────────────────────────
+
+  it('does not render the "Review due cards" row when nothing is due', async () => {
+    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    expect(screen.queryByText('Review due cards')).toBeNull()
+  })
+
+  it('renders a prominent "Review due cards" row with the count when cards are due, and navigates to /practice/due', async () => {
+    mockGetDueCounts.mockResolvedValue({ total: 7, byTopic: { t1: 7 } })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    expect(screen.getByText('Review due cards')).toBeTruthy()
+    expect(screen.getByText('7 cards ready for spaced review')).toBeTruthy()
+    fireEvent.press(screen.getByText('Review due cards'))
+    expect(router.push).toHaveBeenCalledWith('/practice/due')
+  })
+
+  it('singular-izes the due-cards subtitle for exactly 1 due card', async () => {
+    mockGetDueCounts.mockResolvedValue({ total: 1, byTopic: { t1: 1 } })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    expect(screen.getByText('1 card ready for spaced review')).toBeTruthy()
+  })
+
+  it('shows a "N due" badge on a Saved Deck whose topics have due cards', async () => {
+    mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1', 't2'], createdAt: 0 })
+    mockGetDueCounts.mockResolvedValue({ total: 5, byTopic: { t1: 3, t2: 2 } })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    expect(screen.getByText('My Deck')).toBeTruthy()
+    expect(screen.getByText('5 due')).toBeTruthy()
+  })
+
+  it('does not show a due badge on a Saved Deck with no due cards', async () => {
+    mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1'], createdAt: 0 })
+    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
+    render(<PracticeScreen />)
+    await act(async () => {})
+    expect(screen.getByText('My Deck')).toBeTruthy()
+    expect(screen.queryByText(/due$/)).toBeNull()
   })
 })
