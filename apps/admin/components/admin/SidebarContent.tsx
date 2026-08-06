@@ -31,12 +31,6 @@ const NAV: { section: string; items: { href: string; icon: string; label: string
     ],
   },
   {
-    section: 'AI',
-    items: [
-      { href: '/admin/ai-config', icon: '🤖', label: 'AI Chat Config' },
-    ],
-  },
-  {
     section: 'MODERATION',
     items: [
       { href: '/admin/reports', icon: '🚩', label: 'Reported Questions' },
