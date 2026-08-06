@@ -11,7 +11,7 @@ const faqs: FAQItem[] = [
   {
     question: 'How much does Iskotify cost?',
     answer:
-      'Iskotify is free to use during Early Access — no subscription and no hidden fees. Start now and get full access to scholarships, exam content, and AI coach features while we build toward launch.',
+      'Iskotify is free to use during Early Access — no subscription and no hidden fees. Start now and get full access to scholarships and exam content while we build toward launch.',
   },
   {
     question: 'Which scholarships are listed?',

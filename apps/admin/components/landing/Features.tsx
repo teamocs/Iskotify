@@ -1,5 +1,3 @@
-import Image from 'next/image'
-
 function ScholarshipCard() {
   return (
     <div className="w-full max-w-xs mx-auto">
@@ -66,42 +64,6 @@ function QuizCard() {
               {opt}
             </div>
           ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function KuyaBawChat() {
-  return (
-    <div className="w-full max-w-xs mx-auto flex flex-col gap-3">
-      {/* User bubble */}
-      <div className="flex justify-end">
-        <div className="bg-[#800000] text-white rounded-[16px] rounded-tr-[4px] px-4 py-2.5 max-w-[80%]">
-          <p className="text-xs font-body leading-snug">Paano ko malalaman ang Pythagorean theorem?</p>
-        </div>
-      </div>
-      {/* Kuya Baw bubble */}
-      <div className="flex items-end gap-2">
-        <div className="flex-shrink-0">
-          <Image
-            src="/kuya-baw-avatar.png"
-            alt="Kuya Baw"
-            width={36}
-            height={36}
-            className="rounded-full bg-[#800000]/10 p-1"
-          />
-        </div>
-        <div className="bg-white border border-[#f0f0f0] rounded-[16px] rounded-bl-[4px] px-4 py-2.5 shadow-sm max-w-[80%]">
-          <p className="text-[#1d1d1f] text-xs font-body leading-snug">
-            Sa right triangle, ang <strong>a² + b² = c²</strong>. Ang c ay ang hypotenuse — ang pinakamahabang gilid. 📐
-          </p>
-        </div>
-      </div>
-      {/* Another user bubble */}
-      <div className="flex justify-end">
-        <div className="bg-[#800000] text-white rounded-[16px] rounded-tr-[4px] px-4 py-2.5 max-w-[80%]">
-          <p className="text-xs font-body leading-snug">Give me a sample problem!</p>
         </div>
       </div>
     </div>
@@ -194,14 +156,6 @@ export function Features() {
             copy="Compare universities by historical PRC board-exam passing rates and accreditation — then prep for UPCAT, ACET, and more with AI flashcards and full mock exams."
             visual={<QuizCard />}
           />
-
-          <FeatureBlock
-            imageRight
-            eyebrow="AI Companion"
-            title="Your AI study companion — Kuya Baw"
-            copy="Ask Kuya Baw anything about your exam topics. Get explanations, mnemonics, and study tips in Taglish, tailored to the exam you're targeting."
-            visual={<KuyaBawChat />}
-          />
         </div>
 
         <div className="mt-24">
@@ -265,13 +219,12 @@ export function Features() {
               }
             />
             <BenefitCard
-              title="Exam prep with Kuya Baw"
-              copy="AI flashcards and mock exams for UPCAT, ACET, and more — plus Kuya Baw, your AI study buddy, on call 24/7."
+              title="Smart study plan & progress analytics"
+              copy="Daily goals paced to your exam date, spaced-repetition flashcards, and per-subject tracking — so you always know what to review next."
               icon={
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#800000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                  <path d="M9.5 12.5l1.5 1.5 3.5-3.5" />
+                  <path d="M3 3v18h18" />
+                  <path d="M7 15l4-5 3 3 5-7" />
                 </svg>
               }
             />

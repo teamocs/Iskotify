@@ -109,54 +109,34 @@ export function Hero() {
 
                 {/* (1b) Date + greeting */}
                 <p className="text-[#8a8a8e] text-[6px] font-semibold font-body uppercase tracking-[0.12em] mb-0.5">Monday, June 16</p>
-                <p className="text-[#1d1d1f] text-[13px] font-body leading-tight mb-2">
+                <p className="text-[#1d1d1f] text-[13px] font-body leading-tight mb-3">
                   Good morning, <span className="font-extrabold font-heading">Chris</span>!
                 </p>
 
-                {/* (2) Hero band — full-bleed maroon stripe with Kuya Baw + speech bubble */}
-                <div className="relative -mx-2.5 h-[62px] mb-2">
-                  <div className="absolute left-0 right-0 bottom-0 h-[50px] bg-[#800000]/95" />
-                  <Image
-                    src="/kuya-baw-waving.png"
-                    alt="Kuya Baw"
-                    width={46}
-                    height={46}
-                    className="absolute left-2 bottom-0 object-contain drop-shadow"
-                  />
-                  <div className="absolute left-[58px] right-2.5 top-1 bottom-1.5 bg-white rounded-[9px] border border-black/[0.05] px-1.5 py-1 flex flex-col shadow-[0_1px_3px_rgba(0,0,0,0.10)]">
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <span className="text-[#800000] text-[7px] font-bold font-heading">Kuya Baw</span>
-                      <span className="ml-auto bg-[#800000]/[0.08] border border-[#800000]/25 text-[#800000] text-[5px] px-1 py-px rounded font-body leading-none">AI Coach</span>
-                    </div>
-                    <p className="text-[#1d1d1f] text-[6px] font-body leading-[1.35]">Tara, let&apos;s review Math today — you&apos;ve got this! 💪</p>
-                    <span className="mt-auto self-end text-[#800000] text-[5px] font-semibold font-body">Ask Kuya Baw ›</span>
-                  </div>
-                </div>
-
-                {/* (3) Explore — 2×2 quick-links into the Lists tabs */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1">Explore</p>
-                <div className="grid grid-cols-2 gap-1 mb-2">
+                {/* (2) Explore — 2×2 quick-links into the Lists tabs */}
+                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">Explore</p>
+                <div className="grid grid-cols-2 gap-1.5 mb-3">
                   {[
                     { e: '🎓', l: 'Universities' },
                     { e: '🏅', l: 'Scholarships' },
                     { e: '📈', l: 'Courses' },
                     { e: '🌏', l: 'Destinations' },
                   ].map((it) => (
-                    <div key={it.l} className="flex items-center gap-1 bg-white border border-black/[0.06] rounded-[7px] px-1.5 py-1">
+                    <div key={it.l} className="flex items-center gap-1 bg-white border border-black/[0.06] rounded-[7px] px-1.5 py-1.5">
                       <span className="text-[8px] leading-none">{it.e}</span>
                       <span className="text-[#1d1d1f] text-[6px] font-body font-medium">{it.l}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* (4) My Focus — readiness progress-bar cards + add-target ghost */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1">My Focus</p>
-                <div className="flex flex-col gap-1 mb-2">
+                {/* (3) My Focus — readiness progress-bar cards + add-target ghost */}
+                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">My Focus</p>
+                <div className="flex flex-col gap-1.5 mb-3">
                   {[
                     { t: 'UPCAT', sub: '57 days · exam', pct: 72, w: 'w-[72%]', fill: 'bg-[#16a34a]/15', color: 'text-[#16a34a]' },
                     { t: 'DOST-SEI', sub: '21 days · scholarship', pct: 45, w: 'w-[45%]', fill: 'bg-[#d97706]/15', color: 'text-[#d97706]' },
                   ].map((f) => (
-                    <div key={f.t} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[8px] px-1.5 py-1.5">
+                    <div key={f.t} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[8px] px-1.5 py-2">
                       <div className={`absolute left-0 top-0 bottom-0 ${f.w} ${f.fill}`} />
                       <div className="relative flex items-center gap-1">
                         <div className="flex-1 min-w-0">
@@ -167,20 +147,20 @@ export function Hero() {
                       </div>
                     </div>
                   ))}
-                  <div className="border border-dashed border-black/15 rounded-[8px] py-1 flex items-center justify-center">
+                  <div className="border border-dashed border-black/15 rounded-[8px] py-1.5 flex items-center justify-center">
                     <span className="text-[#8a8a8e] text-[6px] font-body font-semibold">＋ Add exam or scholarship</span>
                   </div>
                 </div>
 
-                {/* (5) Subjects to improve — vertical readiness fill, distinct color per subject */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1">Subjects to improve</p>
-                <div className="grid grid-cols-3 gap-1">
+                {/* (4) Subjects to improve — vertical readiness fill, distinct color per subject */}
+                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">Subjects to improve</p>
+                <div className="grid grid-cols-3 gap-1.5">
                   {[
                     { n: 'Math', pct: 48, h: 'h-[48%]', dot: 'bg-[#3b82f6]', fill: 'bg-[#3b82f6]/15' },
                     { n: 'Science', pct: 61, h: 'h-[61%]', dot: 'bg-[#8b5cf6]', fill: 'bg-[#8b5cf6]/15' },
                     { n: 'Reading', pct: 55, h: 'h-[55%]', dot: 'bg-[#0d9488]', fill: 'bg-[#0d9488]/15' },
                   ].map((sub) => (
-                    <div key={sub.n} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[7px] h-[40px] p-1 flex flex-col justify-between">
+                    <div key={sub.n} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[7px] h-[54px] p-1.5 flex flex-col justify-between">
                       <div className={`absolute left-0 right-0 bottom-0 ${sub.h} ${sub.fill}`} />
                       <div className={`relative w-1.5 h-1.5 rounded-full ${sub.dot}`} />
                       <span className="relative text-[#1d1d1f] text-[6px] font-body font-semibold">{sub.n}</span>
@@ -189,7 +169,7 @@ export function Hero() {
                   ))}
                 </div>
 
-                {/* (6) Bottom nav — Home / Review / [Ask Kuya Baw] / Exams / Updates */}
+                {/* (5) Bottom nav — Home / Review / Exams / Updates */}
                 <div className="mt-auto flex justify-around items-center pt-1 pb-1 border-t border-black/[0.06]">
                   {/* Home (active) */}
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#800000" strokeWidth="2.4" aria-hidden="true">
@@ -199,12 +179,6 @@ export function Hero() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0b0b5" strokeWidth="2.2" aria-hidden="true">
                     <path d="M4 5h16M4 12h16M4 19h10" />
                   </svg>
-                  {/* Center: Ask Kuya Baw (raised maroon) */}
-                  <div className="w-6 h-6 -mt-3 rounded-full bg-[#800000] flex items-center justify-center shadow-md">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" aria-hidden="true">
-                      <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 9 9 0 0 1-4-1L3 20l1-4.5a8.5 8.5 0 0 1-1-4A8.38 8.38 0 0 1 11.5 3 8.5 8.5 0 0 1 21 11.5z" />
-                    </svg>
-                  </div>
                   {/* Exams */}
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0b0b5" strokeWidth="2.2" aria-hidden="true">
                     <path d="M6 2h9l5 5v15H6zM14 2v6h6" />
