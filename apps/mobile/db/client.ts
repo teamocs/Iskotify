@@ -562,6 +562,20 @@ export const MIGRATIONS = [
     last_grade TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS flashcard_srs_due_at_idx ON flashcard_srs (due_at)`,
+
+  // ── Task I: Personalized study plan ────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS study_plan_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    plan_date TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ref_id TEXT NOT NULL DEFAULT '',
+    target_count INTEGER NOT NULL DEFAULT 1,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS study_plan_items_plan_date_idx ON study_plan_items (plan_date)`,
+  `ALTER TABLE user_settings ADD COLUMN daily_reminder_hour INTEGER NOT NULL DEFAULT 9`,
+  `ALTER TABLE user_settings ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

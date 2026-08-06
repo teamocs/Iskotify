@@ -107,6 +107,13 @@ export const userSettings = sqliteTable('user_settings', {
   syncRev: integer('sync_rev').notNull().default(0),
   // AI chat provider preference: 'local' = on-device Gemma 4 E2B, 'gemini' = user's BYOK Gemini key.
   aiProvider: text('ai_provider').notNull().default('local'),
+  // Task I: Today's Plan notification preferences. dailyReminderHour is a
+  // 0-23 local hour for the daily practice nudge (services/notifications.ts
+  // reschedules DAILY at this hour instead of the hardcoded 9am default).
+  // weeklySummaryEnabled gates the WEEKLY weak-areas nudge independently of
+  // the notificationsEnabled master switch.
+  dailyReminderHour: integer('daily_reminder_hour').notNull().default(9),
+  weeklySummaryEnabled: integer('weekly_summary_enabled', { mode: 'boolean' }).notNull().default(true),
 })
 
 export const userProgress = sqliteTable('user_progress', {
@@ -571,6 +578,27 @@ export const examBlueprintSections = sqliteTable('exam_blueprint_sections', {
   displayOrder: integer('display_order').notNull().default(0),
   remoteUpdatedAt: integer('remote_updated_at'),
 }, (t) => [index('exam_blueprint_sections_slug_idx').on(t.blueprintSlug)])
+
+// ── Task I: Personalized study plan ──────────────────────────────────────────
+// One row per generated plan item (2-4 per calendar day), created idempotently
+// by hooks/useStudyPlan.ts on the first load of a given planDate. completedAt
+// is set either by a manual check-off or automatically when a matching
+// practice session / SRS review completes — see utils/studyPlan.ts's
+// itemMatchesSession / itemMatchesSrsReview and services/studyPlan.ts's
+// mark-done bookkeeping.
+export const studyPlanItems = sqliteTable('study_plan_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  // 'YYYY-MM-DD', device-local calendar day — utils/studyPlan.ts's formatPlanDate.
+  planDate: text('plan_date').notNull(),
+  kind: text('kind').notNull(),
+  // topicId (topic_practice) / listingSlug (mock_section) / '' (srs_review, diagnostic).
+  refId: text('ref_id').notNull().default(''),
+  targetCount: integer('target_count').notNull().default(1),
+  completedAt: integer('completed_at'),
+  createdAt: integer('created_at').notNull(),
+}, (t) => [
+  index('study_plan_items_plan_date_idx').on(t.planDate),
+])
 
 export const examCourseNotes = sqliteTable('exam_course_notes', {
   id: text('id').primaryKey(),

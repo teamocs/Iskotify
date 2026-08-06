@@ -237,7 +237,9 @@ function makeTestDb(): DrizzleClient {
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
       sync_rev INTEGER NOT NULL DEFAULT 0,
-      ai_provider TEXT NOT NULL DEFAULT 'local'
+      ai_provider TEXT NOT NULL DEFAULT 'local',
+      daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
+      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -682,7 +684,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
       sync_rev INTEGER NOT NULL DEFAULT 0,
-      ai_provider TEXT NOT NULL DEFAULT 'local'
+      ai_provider TEXT NOT NULL DEFAULT 'local',
+      daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
+      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -1596,7 +1600,8 @@ describe('pushUserData includes notes', () => {
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabelAssignments
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userRequirements
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // questionAttempts
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // flashcardSrs
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // flashcardSrs
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // studyPlanItems
     }
 
     const { pushUserData } = require('../sync')
@@ -1610,6 +1615,7 @@ describe('pushUserData includes notes', () => {
     expect(payload).toHaveProperty('user_requirements')
     expect(payload).toHaveProperty('question_attempts')
     expect(payload).toHaveProperty('flashcard_srs')
+    expect(payload).toHaveProperty('study_plan_items')
   })
 })
 

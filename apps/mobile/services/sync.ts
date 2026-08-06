@@ -20,7 +20,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedDecks, userProgress, practiceSessions,
-  userRequirements, questionAttempts, flashcardSrs,
+  userRequirements, questionAttempts, flashcardSrs, studyPlanItems,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -79,7 +79,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   // 5000 rows) — this SELECT is a full-table read, but the table itself is
   // capped, so this payload does NOT grow without bound across a user's
   // lifetime the way it would without that retention pruning.
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts, srsRows] = await Promise.all([
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts, srsRows, planRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
@@ -91,6 +91,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     db.select().from(userRequirements),
     db.select().from(questionAttempts),
     db.select().from(flashcardSrs),
+    db.select().from(studyPlanItems),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -106,6 +107,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     user_requirements: reqRows,
     question_attempts: attempts,
     flashcard_srs: srsRows,
+    study_plan_items: planRows,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -144,6 +146,8 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         notificationsEnabled: remoteSettings.notificationsEnabled ?? true,
         theme: remoteSettings.theme ?? 'system',
         focusModeEnabled: remoteSettings.focusModeEnabled ?? true,
+        dailyReminderHour: remoteSettings.dailyReminderHour ?? 9,
+        weeklySummaryEnabled: remoteSettings.weeklySummaryEnabled ?? true,
         targetExams: remoteSettings.targetExams ?? '[]',
         targetCourses: remoteSettings.targetCourses ?? '[]',
         schoolRegion: remoteSettings.schoolRegion ?? '',
@@ -257,6 +261,19 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         }
       } catch (e) {
         console.warn('[sync] flashcard_srs restore failed (non-fatal):', e)
+      }
+
+      // study_plan_items (Task I). OPTIONAL on pull: older backups (and the
+      // remote column itself, pre-migration-052) predate this field. Own
+      // try/catch, same reasoning as flashcard_srs above.
+      try {
+        const remotePlan: typeof studyPlanItems.$inferInsert[] = data.study_plan_items ?? []
+        if (remotePlan.length > 0) {
+          tx.delete(studyPlanItems).run()
+          for (const row of remotePlan) tx.insert(studyPlanItems).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] study_plan_items restore failed (non-fatal):', e)
       }
     })
   } catch (e) {

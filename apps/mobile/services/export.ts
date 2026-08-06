@@ -15,6 +15,7 @@ import {
   noteLabelAssignments,
   questionAttempts,
   flashcardSrs,
+  studyPlanItems,
 } from '../db/schema'
 import { invalidate } from './queryCache'
 
@@ -25,7 +26,7 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts, srsRows] = await Promise.all([
+  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts, srsRows, planRows] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
     db.select().from(savedDecks),
@@ -36,6 +37,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     db.select().from(noteLabelAssignments),
     db.select().from(questionAttempts),
     db.select().from(flashcardSrs),
+    db.select().from(studyPlanItems),
   ])
 
   const payload = {
@@ -51,6 +53,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     note_label_assignments: assignRows,
     question_attempts: attempts,
     flashcard_srs: srsRows,
+    study_plan_items: planRows,
   }
 
   const json = JSON.stringify(payload, null, 2)
@@ -141,6 +144,8 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     email: s.email ? String(s.email) : null,
     notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
     theme: String(s.theme ?? 'system'),
+    dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
+    weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
   }).onConflictDoUpdate({
     target: userSettings.id,
     set: {
@@ -152,6 +157,8 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       email: s.email ? String(s.email) : null,
       notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
       theme: String(s.theme ?? 'system'),
+      dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
+      weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
     },
   })
 
@@ -247,6 +254,24 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       lastReviewedAt: row.lastReviewedAt != null ? Number(row.lastReviewedAt) : row.last_reviewed_at != null ? Number(row.last_reviewed_at) : null,
       lastGrade: row.lastGrade != null ? String(row.lastGrade) : row.last_grade != null ? String(row.last_grade) : null,
     }).onConflictDoNothing()
+  }
+
+  // Study plan items (Task I) — replace entirely. Optional: older export
+  // files predate this field.
+  await db.delete(studyPlanItems)
+  const planImportRows = Array.isArray(data.study_plan_items) ? (data.study_plan_items as ExportRow[]) : []
+  for (const row of planImportRows) {
+    const planDate = String(row.planDate ?? row.plan_date ?? '')
+    const kind = String(row.kind ?? '')
+    if (!planDate || !kind) continue
+    await db.insert(studyPlanItems).values({
+      planDate,
+      kind,
+      refId: String(row.refId ?? row.ref_id ?? ''),
+      targetCount: Number(row.targetCount ?? row.target_count ?? 1),
+      completedAt: row.completedAt != null ? Number(row.completedAt) : row.completed_at != null ? Number(row.completed_at) : null,
+      createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
+    })
   }
 
   // Notes — replace entirely
