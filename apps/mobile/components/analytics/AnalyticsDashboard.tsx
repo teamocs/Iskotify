@@ -179,6 +179,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     paceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
     paceLabel: { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     paceVal: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    paceFootnote: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic', marginBottom: 10 },
     // Task G: Most Common Mistakes section
     mistakeRow: {
       flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10,
@@ -197,6 +198,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     percentileBand: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     percentileMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
     percentileVal: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    percentileDisclaimer: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic', marginBottom: 8 },
     smallEmptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingVertical: 8 },
   }), [t, typo])
 
@@ -240,7 +242,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
 
   const latestPercentile = analytics.mockAttemptHistory[analytics.mockAttemptHistory.length - 1]
   const percentileSummary = latestPercentile
-    ? `Latest: ${latestPercentile.band} (${latestPercentile.percentile}th)`
+    ? `Latest: ${latestPercentile.band} (est. ~${latestPercentile.percentile}th)`
     : 'No full mock attempts yet'
 
   const content = (
@@ -362,7 +364,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
               <View style={s.masteryRow}>
                 <Text style={s.masteryLabel} numberOfLines={1}>{row.name}</Text>
                 <View style={s.masteryBarBg}>
-                  <View style={[s.masteryBarFill, { width: `${row.accuracy}%` as `${number}%`, backgroundColor: row.accuracy != null && row.accuracy >= 80 ? '#4ade80' : row.accuracy != null && row.accuracy >= 50 ? '#fbbf24' : '#f87171' }]} />
+                  <View style={[s.masteryBarFill, { width: `${row.accuracy}%` as `${number}%`, backgroundColor: row.accuracy != null && row.accuracy >= 80 ? t.success : row.accuracy != null && row.accuracy >= 50 ? t.warning : t.danger }]} />
                 </View>
                 <Text style={s.masteryPct} maxFontSizeMultiplier={1.4}>{row.accuracy ?? 0}%</Text>
               </View>
@@ -396,6 +398,8 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                   <Text style={s.paceOverallVal} maxFontSizeMultiplier={1.4}>{fmtDuration(analytics.avgTime.overallAvgMs)}</Text>
                   <Text style={s.paceOverallLbl} maxFontSizeMultiplier={1.4}>avg / question · {analytics.avgTime.overallCount} timed</Text>
                 </View>
+                {/* elapsedMs accumulates time spent on revisits (Task D), so this isn't first-pass speed. */}
+                <Text style={s.paceFootnote}>Includes time spent revisiting a question</Text>
                 {analytics.avgTime.bySubject.map(sub => (
                   <View key={sub.subject} style={s.paceRow}>
                     <Text style={s.paceLabel} numberOfLines={1}>{sub.subject}</Text>
@@ -431,21 +435,25 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
           <View style={s.sectionBody}>
             {analytics.mostMissedTopics.length > 0 ? (
               analytics.mostMissedTopics.map((m: ResolvedMissedTopic, i: number) => {
-                // Same red/amber/green tiering + rgba(...) fill convention as the Recent Sessions badge below.
+                // Tiered by miss rate using the theme's semantic status tokens (danger/warning/success
+                // + *Surface), same red/amber/green convention as the Recent Sessions badge below —
+                // no hardcoded hex/rgba here.
                 const tone = m.missRate >= 60
-                  ? { fg: '#f87171', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.22)' }
+                  ? { fg: t.danger, bg: t.dangerSurface, border: t.danger }
                   : m.missRate >= 30
-                    ? { fg: '#fbbf24', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.22)' }
-                    : { fg: '#4ade80', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.25)' }
+                    ? { fg: t.warning, bg: t.warningSurface, border: t.warning }
+                    : { fg: t.success, bg: t.successSurface, border: t.success }
                 const row = (
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.mistakeLabel} numberOfLines={1}>{m.label}</Text>
-                    <Text style={s.mistakeSub}>{m.missCount} miss{m.missCount !== 1 ? 'es' : ''} · {m.missRate}% miss rate</Text>
+                    {/* Finding 1: wrong answers and skips are reported separately — a skip isn't
+                        a conceptual error, so it must never read as one under this heading. */}
+                    <Text style={s.mistakeSub}>{m.wrongCount} wrong{m.skipCount > 0 ? ` · ${m.skipCount} skipped` : ''}</Text>
                   </View>
                 )
                 const badge = (
                   <View style={[s.mistakeBadge, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-                    <Text style={[s.mistakeBadgeTxt, { color: tone.fg }]} maxFontSizeMultiplier={1.4}>{m.missCount}</Text>
+                    <Text style={[s.mistakeBadgeTxt, { color: tone.fg }]} maxFontSizeMultiplier={1.4}>{m.wrongCount}</Text>
                   </View>
                 )
                 return m.destination ? (
@@ -494,13 +502,17 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
           </Pressable>
           {percentileExpanded ? (
             <View style={s.sectionBody}>
+              {/* Finding 3: match the results screen's framing (app/practice/exam/[slug].tsx) —
+                  a history view implies a track record, so the "estimated, not normed" disclaimer
+                  matters more here, not less. Shown once for the whole section, not per row. */}
+              <Text style={s.percentileDisclaimer}>Estimated percentile (not a normed score)</Text>
               {analytics.mockAttemptHistory.slice(-8).reverse().map((mh: MockAttemptPercentile, i: number) => (
                 <View key={`${mh.listingSlug}-${mh.completedAt}`} style={[s.percentileRow, i === 0 && { borderTopWidth: 0 }]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.percentileBand} numberOfLines={1}>{mh.band}</Text>
                     <Text style={s.percentileMeta}>{fmtDate(mh.completedAt)} · {mh.pct}% raw</Text>
                   </View>
-                  <Text style={s.percentileVal} maxFontSizeMultiplier={1.4}>{mh.percentile}th</Text>
+                  <Text style={s.percentileVal} maxFontSizeMultiplier={1.4}>est. ~{mh.percentile}th</Text>
                 </View>
               ))}
             </View>
@@ -521,8 +533,8 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                   <Text style={s.recentTitle} numberOfLines={1}>{rs.title}</Text>
                   <Text style={s.recentDate}>{fmtDate(rs.completedAt)}</Text>
                 </View>
-                <View style={[s.recentBadge, { backgroundColor: rs.accuracy >= 80 ? 'rgba(34,197,94,0.12)' : rs.accuracy >= 60 ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)', borderColor: rs.accuracy >= 80 ? 'rgba(34,197,94,0.25)' : rs.accuracy >= 60 ? 'rgba(245,158,11,0.22)' : 'rgba(239,68,68,0.22)' }]}>
-                  <Text style={[s.recentBadgeTxt, { color: rs.accuracy >= 80 ? '#4ade80' : rs.accuracy >= 60 ? '#fbbf24' : '#f87171' }]} maxFontSizeMultiplier={1.4}>{rs.accuracy}%</Text>
+                <View style={[s.recentBadge, { backgroundColor: rs.accuracy >= 80 ? t.successSurface : rs.accuracy >= 60 ? t.warningSurface : t.dangerSurface, borderColor: rs.accuracy >= 80 ? t.success : rs.accuracy >= 60 ? t.warning : t.danger }]}>
+                  <Text style={[s.recentBadgeTxt, { color: rs.accuracy >= 80 ? t.success : rs.accuracy >= 60 ? t.warning : t.danger }]} maxFontSizeMultiplier={1.4}>{rs.accuracy}%</Text>
                 </View>
               </View>
             ))}

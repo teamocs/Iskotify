@@ -22,6 +22,10 @@ function attempt(overrides: Partial<AttemptRecord> = {}): AttemptRecord {
     listingSlug: 'upcat',
     subtest: 'Mathematics',
     topic: 'Algebra',
+    // Non-null by default so `correct: false` overrides (used throughout this
+    // file before skip-tracking existed) still read as genuine wrong answers,
+    // not skips — matches buildAttemptRows' convention (utils/attemptRows.ts).
+    selectedIndex: 0,
     correct: true,
     elapsedMs: 30_000,
     answeredAt: 1_700_000_000_000,
@@ -111,6 +115,49 @@ describe('computeMostMissedTopics', () => {
     ]
     const groups = computeMostMissedTopics(attempts)
     expect(groups.map(g => g.rawTopic)).toEqual(['B', 'A'])
+  })
+
+  // Finding 1: a skipped question (selectedIndex: null, correct: false — the
+  // buildAttemptRows convention for "ran out of time / never answered") is
+  // NOT a genuine mistake and must not inflate — or outrank — real wrong
+  // answers in this ranking.
+  it('reports wrong answers and skips separately, and never lets a skip-only topic outrank a topic with a genuine wrong answer', () => {
+    const attempts = [
+      // Topic "Skipped Only": 3 questions abandoned under time pressure — zero conceptual errors.
+      attempt({ topic: 'Skipped Only', correct: false, selectedIndex: null }),
+      attempt({ topic: 'Skipped Only', correct: false, selectedIndex: null }),
+      attempt({ topic: 'Skipped Only', correct: false, selectedIndex: null }),
+      // Topic "Genuine Mistake": just 1 question, but actually answered wrong.
+      attempt({ topic: 'Genuine Mistake', correct: false, selectedIndex: 2 }),
+    ]
+    const groups = computeMostMissedTopics(attempts)
+
+    const skipOnly = groups.find(g => g.rawTopic === 'Skipped Only')!
+    const genuine = groups.find(g => g.rawTopic === 'Genuine Mistake')!
+
+    // Counts reported separately per topic.
+    expect(skipOnly.wrongCount).toBe(0)
+    expect(skipOnly.skipCount).toBe(3)
+    expect(genuine.wrongCount).toBe(1)
+    expect(genuine.skipCount).toBe(0)
+
+    // Ranked by WRONG answers — despite 3 misses vs 1, the skip-only topic
+    // must not outrank the topic with a real wrong answer.
+    expect(groups.map(g => g.rawTopic)).toEqual(['Genuine Mistake', 'Skipped Only'])
+  })
+
+  it('a mixed topic (some wrong, some skipped) tracks both counts independently', () => {
+    const attempts = [
+      attempt({ topic: 'Mixed', correct: false, selectedIndex: 1 }),
+      attempt({ topic: 'Mixed', correct: false, selectedIndex: null }),
+      attempt({ topic: 'Mixed', correct: false, selectedIndex: null }),
+      attempt({ topic: 'Mixed', correct: true }),
+    ]
+    const groups = computeMostMissedTopics(attempts)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]!.wrongCount).toBe(1)
+    expect(groups[0]!.skipCount).toBe(2)
+    expect(groups[0]!.attemptCount).toBe(4)
   })
 })
 

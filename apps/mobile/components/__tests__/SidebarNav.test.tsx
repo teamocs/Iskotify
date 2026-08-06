@@ -32,6 +32,7 @@ describe('SidebarNav', () => {
     expect(getByText('Exams')).toBeTruthy()
     expect(getByText('Lists')).toBeTruthy()
     expect(getByText('Updates')).toBeTruthy()
+    expect(getByText('Progress')).toBeTruthy()
   })
 
   it('renders bottom nav items (Profile and Settings)', () => {

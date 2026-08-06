@@ -42,6 +42,13 @@ export interface AttemptRecord {
   listingSlug: string
   subtest: string | null
   topic: string | null
+  /**
+   * null means the question was never answered (buildAttemptRows'
+   * skip convention — utils/attemptRows.ts:52-70) — distinct from a wrong
+   * pick. Every consumer that treats `correct: false` as "a mistake" must
+   * check this first: a skip is "ran out of time", not "doesn't know it".
+   */
+  selectedIndex: number | null
   correct: boolean
   elapsedMs: number
   answeredAt: number
@@ -106,6 +113,12 @@ export interface MissedTopicRaw {
   rawTopic: string | null
   subtest: string | null
   listingSlug: string
+  /** Genuinely answered wrong (selectedIndex !== null) — the actual mistakes. Ranking key. */
+  wrongCount: number
+  /** Never answered (selectedIndex === null, buildAttemptRows' skip convention) — "ran out of
+   *  time", not "doesn't know it". Tracked separately so it never masquerades as a mistake. */
+  skipCount: number
+  /** wrongCount + skipCount — every non-correct attempt, kept for the miss-rate calc below. */
   missCount: number
   attemptCount: number
   missRate: number
@@ -114,13 +127,20 @@ export interface MissedTopicRaw {
 
 /**
  * computeMostMissedTopics — group attempts by topic (falling back to subtest
- * when topic is absent), counting wrong answers. A row with neither topic nor
- * subtest can't be attributed to any group and is skipped (partial topic
- * coverage caveat above) — it still contributes to computeAvgTimePerQuestion's
- * overall average, just not here.
+ * when topic is absent), counting wrong answers and skips SEPARATELY. A row
+ * with neither topic nor subtest can't be attributed to any group and is
+ * skipped (partial topic coverage caveat above) — it still contributes to
+ * computeAvgTimePerQuestion's overall average, just not here.
  *
- * Returns every group with at least one miss, sorted by miss count desc, then
- * miss rate desc. Caller slices to a display limit after resolving labels
+ * Finding 1: a skipped question (selectedIndex: null, correct: false — a
+ * section abandoned under time pressure) is not a conceptual error, so it
+ * must never inflate a topic's ranking the way a genuine wrong answer does.
+ * wrongCount/skipCount are reported independently for the UI to show both
+ * ("12 wrong · 3 skipped"), and the sort ranks by wrongCount first.
+ *
+ * Returns every group with at least one non-correct attempt (wrong or
+ * skipped), sorted by wrong-answer count desc, then miss rate desc, then
+ * skip count desc. Caller slices to a display limit after resolving labels
  * (resolveMissedTopicLabels) since the limit is a display concern.
  */
 export function computeMostMissedTopics(attempts: AttemptRecord[]): MissedTopicRaw[] {
@@ -138,6 +158,8 @@ export function computeMostMissedTopics(attempts: AttemptRecord[]): MissedTopicR
       rawTopic: topicKey,
       subtest: subtestKey,
       listingSlug: a.listingSlug,
+      wrongCount: 0,
+      skipCount: 0,
       missCount: 0,
       attemptCount: 0,
       missRate: 0,
@@ -147,6 +169,11 @@ export function computeMostMissedTopics(attempts: AttemptRecord[]): MissedTopicR
 
     cur.attemptCount += 1
     if (!a.correct) {
+      if (a.selectedIndex === null) {
+        cur.skipCount += 1
+      } else {
+        cur.wrongCount += 1
+      }
       cur.missCount += 1
       cur.lastMissedAt = Math.max(cur.lastMissedAt, a.answeredAt)
     }
@@ -164,7 +191,7 @@ export function computeMostMissedTopics(attempts: AttemptRecord[]): MissedTopicR
   return Array.from(grouped.values())
     .filter(v => v.missCount > 0)
     .map(v => ({ ...v, missRate: Math.round((v.missCount / v.attemptCount) * 100) }))
-    .sort((a, b) => b.missCount - a.missCount || b.missRate - a.missRate)
+    .sort((a, b) => b.wrongCount - a.wrongCount || b.missRate - a.missRate || b.skipCount - a.skipCount)
 }
 
 export interface MissedTopicDestination {
