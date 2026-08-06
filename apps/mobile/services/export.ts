@@ -13,6 +13,7 @@ import {
   notes as notesTable,
   noteLabels,
   noteLabelAssignments,
+  questionAttempts,
 } from '../db/schema'
 import { invalidate } from './queryCache'
 
@@ -23,7 +24,7 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows] = await Promise.all([
+  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
     db.select().from(savedDecks),
@@ -32,6 +33,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     db.select().from(notesTable),
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
+    db.select().from(questionAttempts),
   ])
 
   const payload = {
@@ -45,6 +47,7 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     notes: noteRows,
     note_labels: labelRows,
     note_label_assignments: assignRows,
+    question_attempts: attempts,
   }
 
   const json = JSON.stringify(payload, null, 2)
@@ -201,6 +204,26 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       total: Number(row.total ?? 0),
       durationSecs: Number(row.durationSecs ?? row.duration_secs ?? 0),
       completedAt: Number(row.completedAt ?? row.completed_at ?? Date.now()),
+    })
+  }
+
+  // Question attempts (Task D telemetry) — replace entirely. Optional: older
+  // export files predate this field.
+  await db.delete(questionAttempts)
+  const attemptRows = Array.isArray(data.question_attempts) ? (data.question_attempts as ExportRow[]) : []
+  for (const row of attemptRows) {
+    await db.insert(questionAttempts).values({
+      sessionKey: Number(row.sessionKey ?? row.session_key ?? 0),
+      sourceTable: String(row.sourceTable ?? row.source_table ?? ''),
+      questionId: String(row.questionId ?? row.question_id ?? ''),
+      listingSlug: String(row.listingSlug ?? row.listing_slug ?? ''),
+      subtest: row.subtest != null ? String(row.subtest) : null,
+      topic: row.topic != null ? String(row.topic) : null,
+      selectedIndex: row.selectedIndex != null ? Number(row.selectedIndex) : row.selected_index != null ? Number(row.selected_index) : null,
+      correctIndex: Number(row.correctIndex ?? row.correct_index ?? 0),
+      correct: Boolean(row.correct),
+      elapsedMs: Number(row.elapsedMs ?? row.elapsed_ms ?? 0),
+      answeredAt: Number(row.answeredAt ?? row.answered_at ?? Date.now()),
     })
   }
 

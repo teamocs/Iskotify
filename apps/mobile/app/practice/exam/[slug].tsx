@@ -5,12 +5,15 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { subscribe } from '../../../services/queryCache'
 import { useRecordSession } from '../../../hooks/useRecordSession'
+import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
 import {
   buildBlueprintExam, buildStudySprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
   groupReviewBySection, sectionChipState, scaleBlueprintTiming, STUDY_SPRINT_MINUTES,
   type BuiltExam, type ReviewSection, type ScaledBlueprintTiming,
 } from '../../../utils/examBuilder'
+import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
+import { buildAttemptRows } from '../../../utils/attemptRows'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { SectionGrid } from '../../../components/practice/SectionGrid'
@@ -136,6 +139,7 @@ export default function BlueprintExam() {
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
+  const { recordAttempts } = useRecordAttempts()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [blueprint, setBlueprint] = useState<ExamBlueprint | null>(null)
@@ -181,6 +185,22 @@ export default function BlueprintExam() {
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
+  }, [idx])
+
+  // Per-question timing (Task D): starts once the exam actually begins (not
+  // during 'prestart' dwell time), then accumulates elapsed ms per flat index
+  // as idx changes — revisits (navigating back) add onto the same index's
+  // running total rather than overwriting it. Read at submit() via finalizeTiming.
+  const timingRef = useRef<TimingState | null>(null)
+  useEffect(() => {
+    if (phase === 'exam' && timingRef.current === null) {
+      timingRef.current = createTimingState(idx, Date.now())
+    }
+  }, [phase, idx])
+  useEffect(() => {
+    if (timingRef.current) {
+      timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
+    }
   }, [idx])
 
   // Timer scaling (Task 4): when a thin question pool sampled fewer questions than
@@ -268,7 +288,7 @@ export default function BlueprintExam() {
     setPhase('exam')
   }
 
-  function submit() {
+  async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
     if (blueprint) {
@@ -280,6 +300,25 @@ export default function BlueprintExam() {
         if (answers[i] === fq.q.correctIndex) cur.correct++
         bySection.set(fq.sectionName, cur)
       })
+
+      // Task D: per-question attempt rows, written before recordSession so
+      // they're committed before recordSession's fire-and-forget backup push.
+      const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
+      const rows = buildAttemptRows({
+        sessionKey: startRef,
+        sourceTable: 'upcat_questions',
+        listingSlug: slug,
+        questions: questions.map(fq => ({
+          questionId: fq.q.questionId,
+          correctIndex: fq.q.correctIndex,
+          subtest: fq.sectionName,
+          topic: fq.q.topic ?? null,
+        })),
+        answers,
+        elapsedByIdx,
+      })
+      await recordAttempts(rows)
+
       for (const [section, b] of bySection) {
         void recordSession({
           listingSlug: slug,

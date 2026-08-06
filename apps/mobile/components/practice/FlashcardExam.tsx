@@ -1,16 +1,20 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useDb } from '../../hooks/useDb'
 import { submitQuestionReport } from '../../services/questionReports'
 import { ReportQuestionModal } from './ReportQuestionModal'
 import { useRecordSession } from '../../hooks/useRecordSession'
+import { useRecordAttempts } from '../../hooks/useRecordAttempts'
+import { useRecordProgress } from '../../hooks/useRecordProgress'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
+import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../utils/attemptTiming'
+import { buildAttemptRows } from '../../utils/attemptRows'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'exam' | 'results'
@@ -31,6 +35,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
+  const { recordAttempts } = useRecordAttempts()
+  const { recordProgress } = useRecordProgress()
 
   const [phase, setPhase] = useState<Phase>('exam')
   const [idx, setIdx] = useState(0)
@@ -39,6 +45,17 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // Which question index the report modal is open for (null = closed).
   const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
+
+  // Task D: per-question timing + attempt sessionKey. Unlike the routed exam
+  // screens (which remount on retake via router.replace), FlashcardExam is a
+  // reused shared component — "Retake exam" resets phase/idx/answers on the
+  // SAME instance, so attemptStartRef/timingRef need their own manual reset
+  // there too (startRef above can't be reset: its setter was discarded).
+  const attemptStartRef = useRef(startRef)
+  const timingRef = useRef<TimingState>(createTimingState(0, startRef))
+  useEffect(() => {
+    timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
+  }, [idx])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
@@ -57,8 +74,36 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
-  function submit() {
+  async function submit() {
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
+
+    // Task D: per-question attempt rows + the user_progress producer fix,
+    // written before recordSession so they're committed before its
+    // fire-and-forget backup push. answeredAt is shared across both writes
+    // so they line up as "this run".
+    const answeredAt = Date.now()
+    const elapsedByIdx = finalizeTiming(timingRef.current, answeredAt)
+    const rows = buildAttemptRows({
+      sessionKey: attemptStartRef.current,
+      sourceTable: 'flashcards',
+      listingSlug: listingSlug ?? '',
+      questions: questions.map((q, i) => ({
+        questionId: q.id ?? String(i),
+        correctIndex: q.answerIndex,
+        subtest: subtest ?? null,
+        topic: topicId ?? null,
+      })),
+      answers,
+      elapsedByIdx,
+      answeredAt,
+    })
+    await recordAttempts(rows)
+    await recordProgress(questions.map((q, i) => ({
+      flashcardId: q.id ?? String(i),
+      correct: answers[i] === q.answerIndex,
+      answeredAt,
+    })))
+
     void recordSession({
       listingSlug: listingSlug ?? '',
       topicId: topicId ?? '',
@@ -140,6 +185,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               setIdx(0)
               setReported({})
               setPhase('exam')
+              // New attempt on the same mounted instance: fresh sessionKey +
+              // timing baseline so the retake's rows don't blend with the
+              // previous run's (see attemptStartRef/timingRef declaration above).
+              const now = Date.now()
+              attemptStartRef.current = now
+              timingRef.current = createTimingState(0, now)
             }}
           >
             <Text style={s.primaryBtnTxt}>Retake exam</Text>

@@ -20,7 +20,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedDecks, userProgress, practiceSessions,
-  userRequirements,
+  userRequirements, questionAttempts,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -74,7 +74,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows] = await Promise.all([
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
@@ -84,6 +84,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
     db.select().from(userRequirements),
+    db.select().from(questionAttempts),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -97,6 +98,7 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     note_labels: labelRows,
     note_label_assignments: assignRows,
     user_requirements: reqRows,
+    question_attempts: attempts,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -220,6 +222,20 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         }
       } catch (e) {
         console.warn('[sync] user_requirements restore failed (non-fatal):', e)
+      }
+
+      // question_attempts (Task D telemetry). OPTIONAL on pull: older backups
+      // (and the remote column itself, pre-migration-048) predate this field,
+      // so `?? []` keeps them restoring fine. Own try/catch, same reasoning
+      // as user_requirements above.
+      try {
+        const remoteAttempts: typeof questionAttempts.$inferInsert[] = data.question_attempts ?? []
+        if (remoteAttempts.length > 0) {
+          tx.delete(questionAttempts).run()
+          for (const row of remoteAttempts) tx.insert(questionAttempts).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] question_attempts restore failed (non-fatal):', e)
       }
     })
   } catch (e) {

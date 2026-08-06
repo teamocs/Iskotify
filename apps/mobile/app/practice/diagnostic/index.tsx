@@ -6,10 +6,13 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
+import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import {
   resolveDiagnosticSubtests, buildDiagnosticQuestions, scoreDiagnostic,
   buildDiagnosticSessionParams, weakestSubject, SECONDS_PER_QUESTION, QUESTIONS_PER_SUBTEST,
 } from '../../../utils/diagnosticExam'
+import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
+import { buildAttemptRows } from '../../../utils/attemptRows'
 import type { PreAssessQuestion } from '../../../data/preAssessment'
 import { readinessTone, type ReadinessTone } from '../../../utils/readinessTone'
 import { Card } from '../../../components/ui/Card'
@@ -51,6 +54,7 @@ export default function DiagnosticExam() {
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
+  const { recordAttempts } = useRecordAttempts()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [questions, setQuestions] = useState<PreAssessQuestion[]>([])
@@ -70,6 +74,21 @@ export default function DiagnosticExam() {
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
+  }, [idx])
+
+  // Per-question timing (Task D) — see app/practice/exam/[slug].tsx for the
+  // same pattern: starts once questions load (phase becomes 'exam'), then
+  // accumulates elapsed ms per index as idx changes.
+  const timingRef = useRef<TimingState | null>(null)
+  useEffect(() => {
+    if (phase === 'exam' && timingRef.current === null) {
+      timingRef.current = createTimingState(idx, Date.now())
+    }
+  }, [phase, idx])
+  useEffect(() => {
+    if (timingRef.current) {
+      timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
+    }
   }, [idx])
 
   useEffect(() => {
@@ -98,10 +117,29 @@ export default function DiagnosticExam() {
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
-  function submit() {
+  async function submit() {
     if (submittedRef.current) return // guard against double-submit (timer + tap)
     submittedRef.current = true
     const score = scoreDiagnostic(questions, answers)
+
+    // Task D: per-question attempt rows, written before recordSession so
+    // they're committed before recordSession's fire-and-forget backup push.
+    const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
+    const rows = buildAttemptRows({
+      sessionKey: startRef,
+      sourceTable: 'upcat_questions',
+      listingSlug: 'upcat',
+      questions: questions.map(q => ({
+        questionId: q.id,
+        correctIndex: q.answerIndex,
+        subtest: q.subject,
+        topic: null,
+      })),
+      answers,
+      elapsedByIdx,
+    })
+    await recordAttempts(rows)
+
     for (const params of buildDiagnosticSessionParams(score.bySubject, startRef)) {
       void recordSession(params)
     }

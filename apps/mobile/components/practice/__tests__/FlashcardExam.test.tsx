@@ -18,6 +18,14 @@ jest.mock('../../../hooks/useRecordSession', () => ({
   useRecordSession: jest.fn(),
 }))
 
+jest.mock('../../../hooks/useRecordAttempts', () => ({
+  useRecordAttempts: jest.fn(),
+}))
+
+jest.mock('../../../hooks/useRecordProgress', () => ({
+  useRecordProgress: jest.fn(),
+}))
+
 // QuestionNavigator uses ScrollView + useTheme; render it shallowly
 jest.mock('../../upcat/QuestionNavigator', () => ({
   QuestionNavigator: ({ total, currentIdx }: { total: number; currentIdx: number }) => {
@@ -38,6 +46,8 @@ jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as any)
 const mockDb = { __mock: 'db' }
 
 const mockRecordSession = jest.fn().mockResolvedValue(undefined)
+const mockRecordAttempts = jest.fn().mockResolvedValue(undefined)
+const mockRecordProgress = jest.fn().mockResolvedValue(undefined)
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -47,6 +57,12 @@ beforeEach(() => {
 
   const { useRecordSession } = require('../../../hooks/useRecordSession')
   ;(useRecordSession as jest.Mock).mockReturnValue({ recordSession: mockRecordSession })
+
+  const { useRecordAttempts } = require('../../../hooks/useRecordAttempts')
+  ;(useRecordAttempts as jest.Mock).mockReturnValue({ recordAttempts: mockRecordAttempts })
+
+  const { useRecordProgress } = require('../../../hooks/useRecordProgress')
+  ;(useRecordProgress as jest.Mock).mockReturnValue({ recordProgress: mockRecordProgress })
 
   const { submitQuestionReport } = require('../../../services/questionReports')
   ;(submitQuestionReport as jest.Mock).mockResolvedValue(undefined)
@@ -139,6 +155,102 @@ describe('FlashcardExam', () => {
     expect(mockRecordSession).toHaveBeenCalledWith(
       expect.objectContaining({ score: 3, total: 3, listingSlug: 'test-listing' }),
     )
+  })
+
+  it('9. submit writes a question_attempts row per question and a user_progress row per card (Task D)', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    // Q1 correct, Q2 correct, Q3 WRONG (index 0 = "Red", correct is index 1)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Red'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
+    const attemptRows = mockRecordAttempts.mock.calls[0]![0] as any[]
+    expect(attemptRows).toHaveLength(3)
+    expect(attemptRows.map(r => r.questionId)).toEqual(['q1', 'q2', 'q3'])
+    expect(attemptRows[0]).toMatchObject({ sourceTable: 'flashcards', listingSlug: 'test-listing', correctIndex: 1, selectedIndex: 1, correct: true })
+    expect(attemptRows[2]).toMatchObject({ correctIndex: 1, selectedIndex: 0, correct: false })
+
+    expect(mockRecordProgress).toHaveBeenCalledTimes(1)
+    const progressRows = mockRecordProgress.mock.calls[0]![0] as any[]
+    expect(progressRows).toEqual([
+      { flashcardId: 'q1', correct: true, answeredAt: expect.any(Number) },
+      { flashcardId: 'q2', correct: true, answeredAt: expect.any(Number) },
+      { flashcardId: 'q3', correct: false, answeredAt: expect.any(Number) },
+    ])
+  })
+
+  it('10. a question left unanswered (Skip to the end, Submit) writes a null-selectedIndex attempt row', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    // Skip Q1 unanswered, answer Q2, skip to Q3 and submit without answering it.
+    fireEvent.press(screen.getByText('Skip'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    const attemptRows = mockRecordAttempts.mock.calls[0]![0] as any[]
+    expect(attemptRows[0]).toMatchObject({ selectedIndex: null, correct: false })
+    expect(attemptRows[2]).toMatchObject({ selectedIndex: null, correct: false })
+  })
+
+  it('11. retaking after a submit resets the sessionKey and timing baseline (does not carry over attempt 1\'s elapsed time)', async () => {
+    // Deterministic clock: FlashcardExam has no interval timers of its own, so
+    // fully controlling Date.now() lets us prove the retake reset precisely
+    // instead of relying on real elapsed wall-clock time in a fast test run.
+    let t = 1_000_000
+    const dateSpy = jest.spyOn(Date, 'now').mockImplementation(() => t)
+
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    const tick = () => { t += 100 }
+
+    tick(); fireEvent.press(screen.getByText('4'))
+    tick(); fireEvent.press(screen.getByText('Next'))
+    tick(); fireEvent.press(screen.getByText('Manila'))
+    tick(); fireEvent.press(screen.getByText('Next'))
+    tick(); fireEvent.press(screen.getByText('Blue'))
+    tick()
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+    const firstCall = mockRecordAttempts.mock.calls[0]![0] as any[]
+    const firstSessionKey = firstCall[0].sessionKey
+
+    t += 5000 // idle time on the results screen before retaking
+    await act(async () => {
+      fireEvent.press(screen.getByText('Retake exam'))
+    })
+
+    tick(); fireEvent.press(screen.getByText('4'))
+    tick(); fireEvent.press(screen.getByText('Next'))
+    tick(); fireEvent.press(screen.getByText('Manila'))
+    tick(); fireEvent.press(screen.getByText('Next'))
+    tick(); fireEvent.press(screen.getByText('Blue'))
+    tick()
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(mockRecordAttempts).toHaveBeenCalledTimes(2)
+    const secondCall = mockRecordAttempts.mock.calls[1]![0] as any[]
+    expect(secondCall[0].sessionKey).toBeGreaterThan(firstSessionKey)
+    // Bug this guards against: if timingRef/attemptStartRef weren't reset on
+    // retake, attempt 2's rows would carry over the ~5000ms results-screen
+    // idle gap plus all of attempt 1's dwell time onto idx 0.
+    const secondTotalElapsed = secondCall.reduce((sum: number, r: any) => sum + r.elapsedMs, 0)
+    expect(secondTotalElapsed).toBeLessThan(1000)
+
+    dateSpy.mockRestore()
   })
 
   it('4. "Retake exam" returns to Q1', async () => {

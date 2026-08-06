@@ -26,6 +26,11 @@ jest.mock('../../../../hooks/useRecordSession', () => ({
   useRecordSession: () => ({ recordSession: mockRecordSession }),
 }))
 
+const mockRecordAttempts = jest.fn().mockResolvedValue(undefined)
+jest.mock('../../../../hooks/useRecordAttempts', () => ({
+  useRecordAttempts: () => ({ recordAttempts: mockRecordAttempts }),
+}))
+
 let mockBankRows: any[] = []
 // Return a STABLE db reference (like the real Context-provided client) so the
 // screen's load effect (deps: [db, subjectParam]) doesn't refire on every
@@ -43,6 +48,7 @@ describe('DiagnosticExam', () => {
     mockReplace.mockReset()
     mockBack.mockReset()
     mockRecordSession.mockClear()
+    mockRecordAttempts.mockClear()
     mockSearchParams = {}
     mockBankRows = []
   })
@@ -85,6 +91,33 @@ describe('DiagnosticExam', () => {
 
     await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
     expect(screen.getByText('Back to Home')).toBeTruthy()
+  })
+
+  it('writes a question_attempts row per question on submit (Task D)', async () => {
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+
+    fireEvent.press(screen.getByText('a'))
+    fireEvent.press(screen.getByText('Submit'))
+
+    await waitFor(() => expect(mockRecordAttempts).toHaveBeenCalledTimes(1))
+    const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      sourceTable: 'upcat_questions',
+      listingSlug: 'upcat',
+      questionId: 'S1',
+      subtest: 'Science',
+      selectedIndex: 0,
+      correctIndex: 0,
+      correct: true,
+    })
+    expect(typeof rows[0].elapsedMs).toBe('number')
+    expect(typeof rows[0].answeredAt).toBe('number')
   })
 
   it('selecting an option exposes accessibilityState={{selected:true}} on that option only', async () => {

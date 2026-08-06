@@ -113,6 +113,27 @@ export const userProgress = sqliteTable('user_progress', {
   index('user_progress_flashcard_id_idx').on(t.flashcardId),
 ])
 
+// Per-question attempt telemetry (Task D foundation for analytics/SRS): one
+// row per question in every exam/upcat/diagnostic/flashcard run, written
+// alongside (not instead of) the aggregate practice_sessions row.
+export const questionAttempts = sqliteTable('question_attempts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionKey: integer('session_key').notNull(),
+  sourceTable: text('source_table').notNull(),
+  questionId: text('question_id').notNull(),
+  listingSlug: text('listing_slug').notNull().default(''),
+  subtest: text('subtest'),
+  topic: text('topic'),
+  selectedIndex: integer('selected_index'),
+  correctIndex: integer('correct_index').notNull(),
+  correct: integer('correct', { mode: 'boolean' }).notNull(),
+  elapsedMs: integer('elapsed_ms').notNull().default(0),
+  answeredAt: integer('answered_at').notNull(),
+}, (t) => [
+  index('question_attempts_answered_at_idx').on(t.answeredAt),
+  index('question_attempts_question_id_idx').on(t.questionId),
+])
+
 export const savedDecks = sqliteTable('saved_decks', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),

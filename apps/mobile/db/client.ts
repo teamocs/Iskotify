@@ -515,6 +515,27 @@ export const MIGRATIONS = [
   // mirrors, defaulting to '[]' (empty) since migration 046 ships with no backfill.
   `ALTER TABLE university_profiles ADD COLUMN requirements TEXT NOT NULL DEFAULT '[]'`,
   `ALTER TABLE university_profiles ADD COLUMN qualifications TEXT NOT NULL DEFAULT '[]'`,
+
+  // ── Task D: per-question attempt telemetry ─────────────────────────────────
+  // One row per question per exam/upcat/diagnostic/flashcard run (timing +
+  // selected/correct index), written alongside the existing practice_sessions
+  // aggregate row. Foundation for Task G (analytics) and Task H (SRS).
+  `CREATE TABLE IF NOT EXISTS question_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    session_key INTEGER NOT NULL,
+    source_table TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    listing_slug TEXT NOT NULL DEFAULT '',
+    subtest TEXT,
+    topic TEXT,
+    selected_index INTEGER,
+    correct_index INTEGER NOT NULL,
+    correct INTEGER NOT NULL,
+    elapsed_ms INTEGER NOT NULL DEFAULT 0,
+    answered_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS question_attempts_answered_at_idx ON question_attempts (answered_at)`,
+  `CREATE INDEX IF NOT EXISTS question_attempts_question_id_idx ON question_attempts (question_id)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

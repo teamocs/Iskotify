@@ -6,7 +6,10 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions, upcatPassages } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
+import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
+import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
+import { buildAttemptRows } from '../../../utils/attemptRows'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
@@ -34,6 +37,7 @@ export default function UpcatExam() {
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
+  const { recordAttempts } = useRecordAttempts()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
@@ -61,6 +65,21 @@ export default function UpcatExam() {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
   }, [idx])
 
+  // Per-question timing (Task D) — see app/practice/exam/[slug].tsx for the
+  // same pattern: starts once questions load (phase becomes 'exam'), then
+  // accumulates elapsed ms per index as idx changes.
+  const timingRef = useRef<TimingState | null>(null)
+  useEffect(() => {
+    if (phase === 'exam' && timingRef.current === null) {
+      timingRef.current = createTimingState(idx, Date.now())
+    }
+  }, [phase, idx])
+  useEffect(() => {
+    if (timingRef.current) {
+      timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
+    }
+  }, [idx])
+
   function parseOptions(raw: string | null | undefined): string[] {
     try {
       const v = JSON.parse(raw ?? '[]')
@@ -86,6 +105,7 @@ export default function UpcatExam() {
           explanation: r.explanation,
           setId: r.setId,
           setPosition: r.setPosition,
+          topic: r.topic ?? null,
         }))
         const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
         const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
@@ -104,11 +124,30 @@ export default function UpcatExam() {
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
-  function submit() {
+  async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const result = scoreExam(scored)
+
+    // Task D: per-question attempt rows, written before recordSession so
+    // they're committed before recordSession's fire-and-forget backup push.
+    const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
+    const rows = buildAttemptRows({
+      sessionKey: startRef,
+      sourceTable: 'upcat_questions',
+      listingSlug: 'upcat',
+      questions: questions.map(q => ({
+        questionId: q.questionId,
+        correctIndex: q.correctIndex,
+        subtest: q.subtest,
+        topic: q.topic ?? null,
+      })),
+      answers,
+      elapsedByIdx,
+    })
+    await recordAttempts(rows)
+
     for (const st of Object.keys(result.bySubtest)) {
       const b = result.bySubtest[st]!
       void recordSession({
