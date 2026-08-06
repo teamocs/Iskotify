@@ -26,6 +26,10 @@ jest.mock('../../../hooks/useRecordProgress', () => ({
   useRecordProgress: jest.fn(),
 }))
 
+jest.mock('../../../hooks/useRecordSrs', () => ({
+  useRecordSrs: jest.fn(),
+}))
+
 // QuestionNavigator uses ScrollView + useTheme; render it shallowly
 jest.mock('../../upcat/QuestionNavigator', () => ({
   QuestionNavigator: ({ total, currentIdx }: { total: number; currentIdx: number }) => {
@@ -48,6 +52,7 @@ const mockDb = { __mock: 'db' }
 const mockRecordSession = jest.fn().mockResolvedValue(undefined)
 const mockRecordAttempts = jest.fn().mockResolvedValue(undefined)
 const mockRecordProgress = jest.fn().mockResolvedValue(undefined)
+const mockRecordSrs = jest.fn().mockResolvedValue(undefined)
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -63,6 +68,9 @@ beforeEach(() => {
 
   const { useRecordProgress } = require('../../../hooks/useRecordProgress')
   ;(useRecordProgress as jest.Mock).mockReturnValue({ recordProgress: mockRecordProgress })
+
+  const { useRecordSrs } = require('../../../hooks/useRecordSrs')
+  ;(useRecordSrs as jest.Mock).mockReturnValue({ recordSrs: mockRecordSrs })
 
   const { submitQuestionReport } = require('../../../services/questionReports')
   ;(submitQuestionReport as jest.Mock).mockResolvedValue(undefined)
@@ -185,6 +193,54 @@ describe('FlashcardExam', () => {
       { flashcardId: 'q2', correct: true, answeredAt: expect.any(Number) },
       { flashcardId: 'q3', correct: false, answeredAt: expect.any(Number) },
     ])
+  })
+
+  it('12. submit calls recordSrs (Task H) with one row per card carrying correctness + elapsed time', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Red')) // wrong
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(mockRecordSrs).toHaveBeenCalledTimes(1)
+    const srsRows = mockRecordSrs.mock.calls[0]![0] as any[]
+    expect(srsRows).toHaveLength(3)
+    expect(srsRows[0]).toMatchObject({ flashcardId: 'q1', correct: true })
+    expect(srsRows[2]).toMatchObject({ flashcardId: 'q3', correct: false })
+    expect(srsRows.every(r => typeof r.elapsedMs === 'number')).toBe(true)
+  })
+
+  it('13. a rejected recordSrs never breaks submit — the results screen still renders (fire-and-forget/error-isolated)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordSrs.mockRejectedValueOnce(new Error('SQLITE_BUSY'))
+
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    // Submit still completed — results screen rendered, recordSession still fired.
+    expect(screen.getByText('100%')).toBeTruthy()
+    expect(mockRecordSession).toHaveBeenCalled()
+
+    // Let the rejected recordSrs promise settle and be swallowed.
+    await new Promise(r => setTimeout(r, 0))
+    expect(warnSpy).toHaveBeenCalledWith('[FlashcardExam] recordSrs failed:', expect.any(Error))
+
+    warnSpy.mockRestore()
   })
 
   it('10. a question left unanswered (Skip to the end, Submit) writes a null-selectedIndex attempt row', async () => {

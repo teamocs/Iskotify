@@ -7,6 +7,7 @@ import { ReportQuestionModal } from './ReportQuestionModal'
 import { useRecordSession } from '../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../hooks/useRecordAttempts'
 import { useRecordProgress } from '../../hooks/useRecordProgress'
+import { useRecordSrs } from '../../hooks/useRecordSrs'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
@@ -26,7 +27,7 @@ export interface FlashcardExamProps {
   subtest?: string
   /** Pass the launching topicId for single-topic quizzes so analytics groups correctly. */
   topicId?: string
-  /** Pass the launching deckId (or '__full__'/'__weak__' sentinel) for deck quizzes. */
+  /** Pass the launching deckId (or '__full__'/'__weak__'/'__due__' sentinel) for deck quizzes. */
   deckId?: string
   onExit: () => void
 }
@@ -37,6 +38,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { recordProgress } = useRecordProgress()
+  const { recordSrs } = useRecordSrs()
 
   const [phase, setPhase] = useState<Phase>('exam')
   const [idx, setIdx] = useState(0)
@@ -103,6 +105,18 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       correct: answers[i] === q.answerIndex,
       answeredAt,
     })))
+
+    // Task H: SRS scheduling is derived bookkeeping, not the attempt record
+    // itself (user_progress/question_attempts above already captured this
+    // run) — fire-and-forget + error-isolated so a flashcard_srs write
+    // failure can never strand the student behind the double-submit guard.
+    // Same convention as recordSession below and useRecordAttempts's
+    // fire-and-forget prune.
+    void recordSrs(questions.map((q, i) => ({
+      flashcardId: q.id ?? String(i),
+      correct: answers[i] === q.answerIndex,
+      elapsedMs: elapsedByIdx[i] ?? 0,
+    }))).catch(err => console.warn('[FlashcardExam] recordSrs failed:', err))
 
     void recordSession({
       listingSlug: listingSlug ?? '',
