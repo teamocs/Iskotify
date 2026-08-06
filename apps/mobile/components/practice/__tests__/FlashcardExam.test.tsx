@@ -221,6 +221,18 @@ describe('FlashcardExam', () => {
     expect(screen.queryByText('⚐ Report')).toBeNull()
   })
 
+  it('8. selecting an option exposes accessibilityState={{selected:true}} on that option only', () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('4'))
+
+    const buttons = screen.getAllByRole('button')
+    const optionButtons = buttons.filter(b => b.props.accessibilityState?.selected !== undefined)
+    expect(optionButtons).toHaveLength(4)
+    const selected = optionButtons.filter(b => b.props.accessibilityState?.selected === true)
+    expect(selected).toHaveLength(1)
+  })
+
   it('7. cancelling the report modal does not submit and keeps the report button', async () => {
     const { submitQuestionReport } = require('../../../services/questionReports')
     render(<FlashcardExam {...DEFAULT_PROPS} />)

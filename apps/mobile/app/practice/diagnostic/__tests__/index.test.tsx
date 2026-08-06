@@ -87,6 +87,22 @@ describe('DiagnosticExam', () => {
     expect(screen.getByText('Back to Home')).toBeTruthy()
   })
 
+  it('selecting an option exposes accessibilityState={{selected:true}} on that option only', async () => {
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+
+    fireEvent.press(screen.getByText('b'))
+
+    const optionButtons = screen.getAllByRole('button').filter(b => b.props.accessibilityState?.selected !== undefined)
+    expect(optionButtons).toHaveLength(4)
+    const selected = optionButtons.filter(b => b.props.accessibilityState?.selected === true)
+    expect(selected).toHaveLength(1)
+  })
+
   it('"Back to Home" routes to the tabs root', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [

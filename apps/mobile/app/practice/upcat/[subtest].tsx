@@ -7,8 +7,9 @@ import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions, upcatPassages } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
-import { PassagePanel } from '../../../components/upcat/PassagePanel'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
+import { QuestionCard } from '../../../components/practice/QuestionCard'
+import { OptionList } from '../../../components/practice/OptionList'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
@@ -256,39 +257,18 @@ export default function UpcatExam() {
         contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
-        {q.passageText ? <PassagePanel passage={q.passageText} /> : null}
-        <View style={s.qCard}>
-          <Text style={s.qText}>{q.questionText}</Text>
-          <View style={s.reportRow}>
-            {reported[idx] ? (
-              <Text style={s.reportedTxt} maxFontSizeMultiplier={1.4}>Reported ✓</Text>
-            ) : (
-              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
-                <Text style={s.reportBtn} maxFontSizeMultiplier={1.4}>⚐ Report</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
+        <QuestionCard
+          questionText={q.questionText}
+          passageText={q.passageText}
+          reported={reported[idx]}
+          onReport={() => setReportIdx(idx)}
+        />
       </ScrollView>
 
-      {/* Fixed options zone: capped at 55% of the window so 4 normal options always fit
-          without scrolling, while very long options scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.55, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <View style={s.opts}>
-          {q.options.map((o, oi) => (
-            <Pressable
-              key={oi}
-              accessibilityRole="button"
-              style={[s.opt, sel === oi && s.optOn]}
-              onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
-            >
-              <View style={[s.optLetter, sel === oi && s.optLetterOn]}>
-                <Text style={[s.optLetterTxt, sel === oi && { color: t.textInverse }]}>{LETTERS[oi]}</Text>
-              </View>
-              <Text style={s.optTxt}>{o}</Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* Fixed options zone: capped at 42% of the window so the question pane keeps
+          the majority of the viewport; very long option lists scroll inside this zone. */}
+      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
+        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
       </ScrollView>
 
       <View style={s.footer}>
@@ -388,62 +368,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontVariant: ['tabular-nums'],
     },
     timerTxtLow: { color: t.danger },
-    qCard: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 20,
-      borderCurve: 'continuous',
-      padding: 18,
-      marginHorizontal: 14,
-      marginBottom: spacing.md,
-    },
-    qText: {
-      fontSize: typo.lg,
-      fontWeight: '600',
-      color: t.textPrimary,
-      lineHeight: 24,
-      fontFamily: 'Outfit_600SemiBold',
-    },
-    reportRow: { marginTop: 10, alignItems: 'flex-end' },
-    reportBtn: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    reportedTxt: { fontSize: typo.xs, color: t.success, fontFamily: 'Lexend_400Regular' },
-    opts: { gap: 9, paddingHorizontal: 14 },
-    opt: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-      backgroundColor: t.surface,
-      borderWidth: 1.5,
-      borderColor: t.border,
-      borderRadius: 16,
-      borderCurve: 'continuous',
-      paddingVertical: 13,
-      paddingHorizontal: 13,
-    },
-    optOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    optLetter: {
-      width: 30,
-      height: 30,
-      borderRadius: 9,
-      backgroundColor: t.surface2,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    optLetterOn: { backgroundColor: t.accent },
-    optLetterTxt: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textSecondary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    optTxt: {
-      flex: 1,
-      fontSize: typo.md,
-      color: t.textPrimary,
-      fontFamily: 'Lexend_400Regular',
-      lineHeight: 19,
-    },
     footer: {
       flexDirection: 'row',
       gap: spacing.sm,

@@ -6,7 +6,10 @@ import { submitQuestionReport } from '../../services/questionReports'
 import { ReportQuestionModal } from './ReportQuestionModal'
 import { useRecordSession } from '../../hooks/useRecordSession'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
+import { QuestionCard } from './QuestionCard'
+import { OptionList } from './OptionList'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
@@ -96,7 +99,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? '#16a34a' : t.accentText }]}>{pct}%</Text>
+            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
             <Text style={s.scoreSub}>
               {score}/{questions.length} correct
@@ -117,8 +120,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
                     key={oi}
                     style={[
                       s.reviewOpt,
-                      oi === q.answerIndex && { color: '#16a34a', fontWeight: '700' },
-                      oi === sel && oi !== q.answerIndex && { color: '#dc2626' },
+                      oi === q.answerIndex && { color: t.success, fontWeight: '700' },
+                      oi === sel && oi !== q.answerIndex && { color: t.danger },
                     ]}
                   >
                     {LETTERS[oi]}. {o}
@@ -187,33 +190,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <View style={s.qCard}>
-          <Text style={s.qText}>{q.stem}</Text>
-          <View style={s.reportRow}>
-            {reported[idx] ? (
-              <Text style={s.reportedTxt}>Reported ✓</Text>
-            ) : (
-              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
-                <Text style={s.reportBtn}>⚐ Report</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        <View style={s.opts}>
-          {q.options.map((o, oi) => (
-            <Pressable
-              key={oi}
-              style={[s.opt, sel === oi && s.optOn]}
-              onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
-            >
-              <View style={[s.optLetter, sel === oi && s.optLetterOn]}>
-                <Text style={[s.optLetterTxt, sel === oi && { color: '#fff' }]}>{LETTERS[oi]}</Text>
-              </View>
-              <Text style={s.optTxt}>{o}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <QuestionCard
+          questionText={q.stem}
+          reported={reported[idx]}
+          onReport={() => setReportIdx(idx)}
+        />
+        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
       </ScrollView>
 
       <View style={s.footer}>
@@ -281,78 +263,13 @@ function makeStyles(
       color: t.accentText,
       fontFamily: 'Lexend_600SemiBold',
     },
-    qCard: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 20,
-      padding: 18,
-      marginHorizontal: 14,
-      marginBottom: 12,
-    },
-    qText: {
-      fontSize: typo.lg,
-      fontWeight: '600',
-      color: t.textPrimary,
-      lineHeight: 24,
-      fontFamily: 'Outfit_600SemiBold',
-    },
-    reportRow: {
-      marginTop: 10,
-      alignItems: 'flex-end',
-    },
-    reportBtn: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
-    },
-    reportedTxt: {
-      fontSize: typo.xs,
-      color: '#16a34a',
-      fontFamily: 'Lexend_400Regular',
-    },
-    opts: { gap: 9, paddingHorizontal: 14 },
-    opt: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: t.surface,
-      borderWidth: 1.5,
-      borderColor: t.border,
-      borderRadius: 16,
-      paddingVertical: 13,
-      paddingHorizontal: 13,
-    },
-    optOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    optLetter: {
-      width: 30,
-      height: 30,
-      borderRadius: 9,
-      backgroundColor: t.surface2,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    optLetterOn: { backgroundColor: t.accent },
-    optLetterTxt: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textSecondary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    optTxt: {
-      flex: 1,
-      fontSize: typo.md,
-      color: t.textPrimary,
-      fontFamily: 'Lexend_400Regular',
-      lineHeight: 19,
-    },
     footer: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
       flexDirection: 'row',
-      gap: 8,
+      gap: spacing.sm,
       padding: 14,
       backgroundColor: t.bg,
       borderTopWidth: 1,
@@ -382,7 +299,7 @@ function makeStyles(
     footPrimaryTxt: {
       fontSize: typo.md,
       fontWeight: '700',
-      color: '#fff',
+      color: t.textInverse,
       fontFamily: 'Outfit_700Bold',
     },
     scoreCard: {
@@ -393,11 +310,11 @@ function makeStyles(
       alignItems: 'center',
     },
     pass: {
-      backgroundColor: 'rgba(34,197,94,0.08)',
+      backgroundColor: t.successSurface,
       borderColor: 'rgba(34,197,94,0.25)',
     },
     fail: {
-      backgroundColor: 'rgba(239,68,68,0.07)',
+      backgroundColor: t.dangerSurface,
       borderColor: 'rgba(239,68,68,0.20)',
     },
     scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
@@ -425,11 +342,11 @@ function makeStyles(
     },
     reviewCard: { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 10 },
     reviewOk: {
-      backgroundColor: 'rgba(34,197,94,0.06)',
+      backgroundColor: t.successSurface,
       borderColor: 'rgba(34,197,94,0.18)',
     },
     reviewBad: {
-      backgroundColor: 'rgba(239,68,68,0.06)',
+      backgroundColor: t.dangerSurface,
       borderColor: 'rgba(239,68,68,0.18)',
     },
     reviewQ: {
@@ -460,7 +377,7 @@ function makeStyles(
       marginTop: 8,
     },
     primaryBtnTxt: {
-      color: '#fff',
+      color: t.textInverse,
       fontWeight: '700',
       fontSize: typo.md,
       fontFamily: 'Outfit_700Bold',
