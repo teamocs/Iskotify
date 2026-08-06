@@ -143,8 +143,6 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
     // admissions_updates mirror
     expect(supabase.from).toHaveBeenCalledWith('admissions_updates')
-    // AI chat config (Task B)
-    expect(supabase.from).toHaveBeenCalledWith('ai_chat_config')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {
@@ -239,7 +237,9 @@ function makeTestDb(): DrizzleClient {
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
       sync_rev INTEGER NOT NULL DEFAULT 0,
-      ai_provider TEXT NOT NULL DEFAULT 'local'
+      ai_provider TEXT NOT NULL DEFAULT 'local',
+      daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
+      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -613,7 +613,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       ai_correct_index INTEGER,
       ai_explanation TEXT,
       ai_enhanced_at INTEGER,
-      status TEXT NOT NULL DEFAULT 'published'
+      status TEXT NOT NULL DEFAULT 'published',
+      option_explanations TEXT NOT NULL DEFAULT '[]',
+      strategy_tip TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE listings (
       id TEXT PRIMARY KEY NOT NULL,
@@ -682,7 +684,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       target_courses TEXT NOT NULL DEFAULT '[]',
       school_region TEXT NOT NULL DEFAULT '',
       sync_rev INTEGER NOT NULL DEFAULT 0,
-      ai_provider TEXT NOT NULL DEFAULT 'local'
+      ai_provider TEXT NOT NULL DEFAULT 'local',
+      daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
+      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -754,7 +758,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       has_visual INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'published',
       skill_category TEXT,
-      remote_updated_at INTEGER
+      remote_updated_at INTEGER,
+      option_explanations TEXT NOT NULL DEFAULT '[]',
+      strategy_tip TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS upcat_facts (
       id TEXT PRIMARY KEY NOT NULL,
@@ -1592,7 +1598,10 @@ describe('pushUserData includes notes', () => {
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // notes
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabels
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabelAssignments
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // userRequirements
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userRequirements
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // questionAttempts
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // flashcardSrs
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // studyPlanItems
     }
 
     const { pushUserData } = require('../sync')
@@ -1604,6 +1613,9 @@ describe('pushUserData includes notes', () => {
     expect(payload).toHaveProperty('note_labels')
     expect(payload).toHaveProperty('note_label_assignments')
     expect(payload).toHaveProperty('user_requirements')
+    expect(payload).toHaveProperty('question_attempts')
+    expect(payload).toHaveProperty('flashcard_srs')
+    expect(payload).toHaveProperty('study_plan_items')
   })
 })
 

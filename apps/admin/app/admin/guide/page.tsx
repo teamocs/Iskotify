@@ -16,7 +16,7 @@ const TYPE_LABEL: Record<DataTableColumnConfig['type'], string> = {
 const GROUPS: { title: string; blurb: string; tables: string[] }[] = [
   {
     title: 'Courses & Careers',
-    blurb: 'Feeds the Lists → Courses tab, the Career destinations/countries screens, and Kuya Baw’s career answers.',
+    blurb: 'Feeds the Lists → Courses tab, the Career destinations/countries screens, and the AI-generated career insights shown in the app.',
     tables: ['career_courses', 'career_facts', 'ai_career_impact', 'career_destinations', 'career_countries', 'career_programs', 'course_taxonomy_map'],
   },
   {

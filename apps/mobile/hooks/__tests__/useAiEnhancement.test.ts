@@ -161,6 +161,108 @@ describe('enhanceCardsByIds', () => {
   })
 })
 
+describe('finding #1: stale explanations paired with locally-generated aiOptions', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('skips a card that already has 4 admin-authored options — Gemma distractors never overwrite curated ones', async () => {
+    mockModelExists.mockResolvedValue(true)
+    const updateSet = jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) })
+    const cards = [{
+      id: 'c1', topicId: 't1', question: 'Capital of France?', answer: 'Paris',
+      options: JSON.stringify(['Paris', 'London', 'Rome', 'Berlin']),
+      correctAnswerIndex: 0,
+    }]
+    const db: any = {
+      select: jest.fn().mockImplementation(() => ({
+        from: jest.fn().mockImplementation((table: any) => {
+          const name = table?._?.name
+          return {
+            where: jest.fn().mockImplementation(() => {
+              const limitData =
+                name === 'topics' ? [{ subjectId: 's1', topicName: 'Geography' }] :
+                name === 'subjects' ? [{ name: 'Geography' }] : cards
+              const thenable: any = Promise.resolve(cards)
+              thenable.limit = jest.fn().mockResolvedValue(limitData)
+              return thenable
+            }),
+          }
+        }),
+      })),
+      update: jest.fn().mockReturnValue({ set: updateSet }),
+    }
+    const result = await enhanceCardsByIds(db, ['c1'])
+    expect(mockRunInference).not.toHaveBeenCalled()
+    expect(updateSet).not.toHaveBeenCalled()
+    expect(result.enhanced).toEqual([])
+    expect(result.skipped).toEqual(['c1'])
+  })
+
+  it('still enhances a card with fewer than 4 admin options', async () => {
+    mockModelExists.mockResolvedValue(true)
+    mockRunInference.mockResolvedValue({
+      wrong_option_1: 'A', wrong_option_2: 'B', wrong_option_3: 'C', explanation: 'x',
+    })
+    const updateSet = jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) })
+    const cards = [{
+      id: 'c1', topicId: 't1', question: 'Capital of France?', answer: 'Paris',
+      options: JSON.stringify(['Paris']),
+      correctAnswerIndex: 0,
+    }]
+    const db: any = {
+      select: jest.fn().mockImplementation(() => ({
+        from: jest.fn().mockImplementation((table: any) => {
+          const name = table?._?.name
+          return {
+            where: jest.fn().mockImplementation(() => {
+              const limitData =
+                name === 'topics' ? [{ subjectId: 's1', topicName: 'Geography' }] :
+                name === 'subjects' ? [{ name: 'Geography' }] : cards
+              const thenable: any = Promise.resolve(cards)
+              thenable.limit = jest.fn().mockResolvedValue(limitData)
+              return thenable
+            }),
+          }
+        }),
+      })),
+      update: jest.fn().mockReturnValue({ set: updateSet }),
+    }
+    await enhanceCardsByIds(db, ['c1'])
+    expect(mockRunInference).toHaveBeenCalled()
+    expect(updateSet).toHaveBeenCalled()
+  })
+
+  it('clears optionExplanations/strategyTip on the enhanced card so no stale rationale can render', async () => {
+    mockModelExists.mockResolvedValue(true)
+    mockRunInference.mockResolvedValue({
+      wrong_option_1: 'A', wrong_option_2: 'B', wrong_option_3: 'C', explanation: 'x',
+    })
+    const updateSet = jest.fn().mockReturnValue({ where: jest.fn().mockResolvedValue(undefined) })
+    const cards = [{ id: 'c1', topicId: 't1', question: 'Capital of France?', answer: 'Paris' }]
+    const db: any = {
+      select: jest.fn().mockImplementation(() => ({
+        from: jest.fn().mockImplementation((table: any) => {
+          const name = table?._?.name
+          return {
+            where: jest.fn().mockImplementation(() => {
+              const limitData =
+                name === 'topics' ? [{ subjectId: 's1', topicName: 'Geography' }] :
+                name === 'subjects' ? [{ name: 'Geography' }] : cards
+              const thenable: any = Promise.resolve(cards)
+              thenable.limit = jest.fn().mockResolvedValue(limitData)
+              return thenable
+            }),
+          }
+        }),
+      })),
+      update: jest.fn().mockReturnValue({ set: updateSet }),
+    }
+    await enhanceCardsByIds(db, ['c1'])
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ optionExplanations: '[]', strategyTip: '' }),
+    )
+  })
+})
+
 describe('shuffleWithCorrect bug regression', () => {
   beforeEach(() => jest.clearAllMocks())
 

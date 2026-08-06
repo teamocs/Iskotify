@@ -8,6 +8,10 @@ interface Props {
   hint?: string
   sampleHref?: string
   sampleLabel?: string
+  /** File input `accept` attribute. Defaults to CSV-only for the existing import flows. */
+  accept?: string
+  /** Dropzone headline text. Defaults to the CSV import copy. */
+  label?: string
 }
 
 export function CsvDropzone({
@@ -16,6 +20,8 @@ export function CsvDropzone({
   hint = 'Max 5 MB · UTF-8 · larger files are split into batches automatically',
   sampleHref = '/sample-flashcards.csv',
   sampleLabel = 'Download sample CSV',
+  accept = '.csv,text/csv',
+  label = 'Drop CSV here or click to browse',
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -50,20 +56,22 @@ export function CsvDropzone({
       `}
     >
       <div className="text-3xl mb-2">📄</div>
-      <div className="text-[#1d1d1f] font-semibold mb-1 font-heading">Drop CSV here or click to browse</div>
+      <div className="text-[#1d1d1f] font-semibold mb-1 font-heading">{label}</div>
       <div className="text-[#6e6e73] text-sm">{hint}</div>
-      <a
-        href={sampleHref}
-        onClick={e => e.stopPropagation()}
-        download
-        className="inline-block mt-4 text-sm text-[#800000] font-medium underline hover:text-[#9a0a1f]"
-      >
-        {sampleLabel}
-      </a>
+      {sampleHref && (
+        <a
+          href={sampleHref}
+          onClick={e => e.stopPropagation()}
+          download
+          className="inline-block mt-4 text-sm text-[#800000] font-medium underline hover:text-[#9a0a1f]"
+        >
+          {sampleLabel}
+        </a>
+      )}
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept={accept}
         className="hidden"
         onChange={handlePicked}
         disabled={disabled}

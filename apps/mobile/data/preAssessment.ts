@@ -7,6 +7,9 @@ export interface PreAssessQuestion {
   options: string[]    // 4 options, no letter prefix
   answerIndex: number  // 0–3
   explanation: string
+  /** Index-aligned with `options`; null at answerIndex. Task E — omitted (undefined) for bundled static questions, which have none. */
+  optionExplanations?: (string | null)[]
+  strategyTip?: string
 }
 
 export const PRE_ASSESS_QUESTIONS: PreAssessQuestion[] = [

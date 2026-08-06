@@ -4,6 +4,7 @@ import { pushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { capture } from '../lib/analytics'
+import { markPlanItemsDoneForSession } from '../services/studyPlan'
 
 export interface SessionParams {
   listingSlug: string
@@ -60,6 +61,15 @@ export function useRecordSession() {
     invalidate('analytics:')
     invalidate('home:')
     invalidate('practice:')
+    // Task I: best-effort "Today's Plan" mark-done bookkeeping. Fire-and-forget
+    // — the real practiceSessions row above is already committed, so a failure
+    // here must never surface to the caller (same convention as the
+    // pushUserData backup below).
+    void markPlanItemsDoneForSession(db, {
+      topicId: record.topicId,
+      listingSlug: record.listingSlug,
+      subtest: record.subtest,
+    }).catch(err => console.warn('[recordSession] plan bookkeeping failed:', err))
     // Best-effort backup to Supabase if signed in. Don't block the UI on this.
     void pushUserData(db).catch(err => console.warn('[recordSession] push failed:', err))
   }

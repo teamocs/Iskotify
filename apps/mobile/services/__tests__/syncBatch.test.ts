@@ -37,7 +37,9 @@ function makeDb() {
       ai_correct_index INTEGER,
       ai_explanation TEXT,
       ai_enhanced_at INTEGER,
-      status TEXT NOT NULL DEFAULT 'published'
+      status TEXT NOT NULL DEFAULT 'published',
+      option_explanations TEXT NOT NULL DEFAULT '[]',
+      strategy_tip TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE university_profiles (
       school_id TEXT PRIMARY KEY NOT NULL,
@@ -69,6 +71,8 @@ function makeDb() {
       prc_strong_boards TEXT NOT NULL DEFAULT '[]',
       notes TEXT,
       data_confidence TEXT,
+      requirements TEXT NOT NULL DEFAULT '[]',
+      qualifications TEXT NOT NULL DEFAULT '[]',
       remote_updated_at INTEGER
     );
   `)
@@ -127,6 +131,8 @@ function makeProfileRow(i: number, overrides: Record<string, unknown> = {}) {
     prcStrongBoards: '[]',
     notes: null,
     dataConfidence: 'high',
+    requirements: '[]',
+    qualifications: '[]',
     remoteUpdatedAt: 1000 + i,
     ...overrides,
   }
@@ -262,14 +268,14 @@ describe('batchUpsert', () => {
     expect(row.ai_enhanced_at).toBe(999)
   })
 
-  it('chunks a wide table (universityProfiles, 30 cols) so no statement exceeds the 999-param bound', () => {
+  it('chunks a wide table (universityProfiles, 32 cols) so no statement exceeds the 999-param bound', () => {
     const { raw, db } = makeDb()
     const colCount = Object.keys(getTableColumns(universityProfiles)).length
-    expect(colCount).toBe(30)
-    const expectedChunk = Math.max(1, Math.floor(900 / colCount)) // 30 rows/chunk
+    expect(colCount).toBe(32)
+    const expectedChunk = Math.max(1, Math.floor(900 / colCount)) // 28 rows/chunk
 
     const rows = Array.from({ length: 100 }, (_, i) => makeProfileRow(i))
-    // 100 rows × 30 cols = 3000 bound params unchunked — well over SQLite's 999 limit
+    // 100 rows × 32 cols = 3200 bound params unchunked — well over SQLite's 999 limit
     let chunkSizes: number[] = []
     db.transaction((tx) => {
       const wrapped = makeCountingTx(tx)
@@ -277,7 +283,7 @@ describe('batchUpsert', () => {
       chunkSizes = wrapped.chunkSizes
     })
 
-    expect(chunkSizes).toEqual([30, 30, 30, 10])
+    expect(chunkSizes).toEqual([28, 28, 28, 16])
     for (const size of chunkSizes) {
       expect(size).toBeLessThanOrEqual(expectedChunk)
       expect(size * colCount).toBeLessThanOrEqual(900)

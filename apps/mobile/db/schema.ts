@@ -29,6 +29,11 @@ export const flashcards = sqliteTable('flashcards', {
   aiExplanation: text('ai_explanation'),
   aiEnhancedAt: integer('ai_enhanced_at'),
   status: text('status').notNull().default('published'),
+  // JSON-encoded (string|null)[], index-aligned with options/aiOptions (whichever
+  // is actually served) — null at the correct index. Same text-storing-JSON
+  // pattern as `options`/`listingSlugs` above.
+  optionExplanations: text('option_explanations').notNull().default('[]'),
+  strategyTip: text('strategy_tip').notNull().default(''),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
 ])
@@ -102,6 +107,13 @@ export const userSettings = sqliteTable('user_settings', {
   syncRev: integer('sync_rev').notNull().default(0),
   // AI chat provider preference: 'local' = on-device Gemma 4 E2B, 'gemini' = user's BYOK Gemini key.
   aiProvider: text('ai_provider').notNull().default('local'),
+  // Task I: Today's Plan notification preferences. dailyReminderHour is a
+  // 0-23 local hour for the daily practice nudge (services/notifications.ts
+  // reschedules DAILY at this hour instead of the hardcoded 9am default).
+  // weeklySummaryEnabled gates the WEEKLY weak-areas nudge independently of
+  // the notificationsEnabled master switch.
+  dailyReminderHour: integer('daily_reminder_hour').notNull().default(9),
+  weeklySummaryEnabled: integer('weekly_summary_enabled', { mode: 'boolean' }).notNull().default(true),
 })
 
 export const userProgress = sqliteTable('user_progress', {
@@ -111,6 +123,44 @@ export const userProgress = sqliteTable('user_progress', {
   answeredAt: integer('answered_at').notNull(),
 }, (t) => [
   index('user_progress_flashcard_id_idx').on(t.flashcardId),
+])
+
+// Per-question attempt telemetry (Task D foundation for analytics/SRS): one
+// row per question in every exam/upcat/diagnostic/flashcard run, written
+// alongside (not instead of) the aggregate practice_sessions row.
+export const questionAttempts = sqliteTable('question_attempts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionKey: integer('session_key').notNull(),
+  sourceTable: text('source_table').notNull(),
+  questionId: text('question_id').notNull(),
+  listingSlug: text('listing_slug').notNull().default(''),
+  subtest: text('subtest'),
+  topic: text('topic'),
+  selectedIndex: integer('selected_index'),
+  correctIndex: integer('correct_index').notNull(),
+  correct: integer('correct', { mode: 'boolean' }).notNull(),
+  elapsedMs: integer('elapsed_ms').notNull().default(0),
+  answeredAt: integer('answered_at').notNull(),
+}, (t) => [
+  index('question_attempts_answered_at_idx').on(t.answeredAt),
+  index('question_attempts_question_id_idx').on(t.questionId),
+])
+
+// Task H: SM-2-lite spaced-repetition state, one row per flashcard the user has
+// reviewed at least once (no row = never reviewed / not yet scheduled). Column
+// names deliberately mirror utils/srs.ts's SrsCardState so hooks/useRecordSrs.ts
+// can read/write a row with no field renaming.
+export const flashcardSrs = sqliteTable('flashcard_srs', {
+  flashcardId: text('flashcard_id').primaryKey(),
+  intervalDays: real('interval_days').notNull().default(0),
+  easeFactor: real('ease_factor').notNull().default(2.5),
+  repetitions: integer('repetitions').notNull().default(0),
+  lapses: integer('lapses').notNull().default(0),
+  dueAt: integer('due_at').notNull().default(0),
+  lastReviewedAt: integer('last_reviewed_at'),
+  lastGrade: text('last_grade'),
+}, (t) => [
+  index('flashcard_srs_due_at_idx').on(t.dueAt),
 ])
 
 export const savedDecks = sqliteTable('saved_decks', {
@@ -155,16 +205,6 @@ export const userRequirements = sqliteTable('user_requirements', {
   acquiredAt: integer('acquired_at').notNull(),
 }, t => [
   primaryKey({ columns: [t.listingSlug, t.requirementIndex] }),
-])
-
-export const chatMessages = sqliteTable('chat_messages', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  role: text('role').notNull(),
-  text: text('text').notNull(),
-  mode: text('mode').notNull(),
-  createdAt: integer('created_at').notNull(),
-}, t => [
-  index('chat_messages_created_at_idx').on(t.createdAt),
 ])
 
 export const notes = sqliteTable('notes', {
@@ -227,6 +267,10 @@ export const upcatQuestions = sqliteTable('upcat_questions', {
   status: text('status').notNull().default('published'),
   skillCategory: text('skill_category'),
   remoteUpdatedAt: integer('remote_updated_at'),
+  // JSON-encoded (string|null)[], index-aligned with `options` — null at the
+  // correct index. Same text-storing-JSON pattern as `options` above.
+  optionExplanations: text('option_explanations').notNull().default('[]'),
+  strategyTip: text('strategy_tip').notNull().default(''),
 }, (t) => [
   index('upcat_questions_subtest_idx').on(t.subtest),
   index('upcat_questions_set_idx').on(t.setId),
@@ -416,6 +460,10 @@ export const universityProfiles = sqliteTable('university_profiles', {
   prcStrongBoards: text('prc_strong_boards').notNull().default('[]'),
   notes: text('notes'),
   dataConfidence: text('data_confidence'),
+  // Task 5: paper-document requirements vs eligibility qualifications (both
+  // JSON-encoded text[] mirrors, same convention as coursesOffered/scholarshipsOffered).
+  requirements: text('requirements').notNull().default('[]'),
+  qualifications: text('qualifications').notNull().default('[]'),
   remoteUpdatedAt: integer('remote_updated_at'),
 })
 
@@ -494,26 +542,6 @@ export const resultWatches = sqliteTable('result_watches', {
   slug: text('slug').primaryKey(), addedAt: integer('added_at').notNull(),
 })
 
-// ── AI Chat Config (remote-controlled Kuya Baw settings) ──────────────────────
-
-export const aiChatConfig = sqliteTable('ai_chat_config', {
-  id: integer('id').primaryKey(),
-  // Per-piece text overrides — empty string means "use builtin default"
-  coreRulesOverride:        text('core_rules_override').notNull().default(''),
-  scopeBlockOverride:       text('scope_block_override').notNull().default(''),
-  groundingRuleOverride:    text('grounding_rule_override').notNull().default(''),
-  antiInjectionOverride:    text('anti_injection_override').notNull().default(''),
-  progressAddendumOverride: text('progress_addendum_override').notNull().default(''),
-  topicAddendumOverride:    text('topic_addendum_override').notNull().default(''),
-  mathAddendumOverride:     text('math_addendum_override').notNull().default(''),
-  // RAG budget tuning — 0 means "use builtin default"
-  ragTotalTokenBudget:      integer('rag_total_token_budget').notNull().default(700),
-  ragPerBlockCharCap:       integer('rag_per_block_char_cap').notNull().default(280),
-  // jsonb stored as TEXT on SQLite; default is all-enabled JSON
-  ragBlocksEnabled:         text('rag_blocks_enabled').notNull().default('{}'),
-  remoteUpdatedAt:          integer('remote_updated_at'),
-})
-
 // ── Exam Blueprints (data-driven exam mechanics) ─────────────────────────────
 
 export const examSkillCategories = sqliteTable('exam_skill_categories', {
@@ -550,6 +578,27 @@ export const examBlueprintSections = sqliteTable('exam_blueprint_sections', {
   displayOrder: integer('display_order').notNull().default(0),
   remoteUpdatedAt: integer('remote_updated_at'),
 }, (t) => [index('exam_blueprint_sections_slug_idx').on(t.blueprintSlug)])
+
+// ── Task I: Personalized study plan ──────────────────────────────────────────
+// One row per generated plan item (2-4 per calendar day), created idempotently
+// by hooks/useStudyPlan.ts on the first load of a given planDate. completedAt
+// is set either by a manual check-off or automatically when a matching
+// practice session / SRS review completes — see utils/studyPlan.ts's
+// itemMatchesSession / itemMatchesSrsReview and services/studyPlan.ts's
+// mark-done bookkeeping.
+export const studyPlanItems = sqliteTable('study_plan_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  // 'YYYY-MM-DD', device-local calendar day — utils/studyPlan.ts's formatPlanDate.
+  planDate: text('plan_date').notNull(),
+  kind: text('kind').notNull(),
+  // topicId (topic_practice) / listingSlug (mock_section) / '' (srs_review, diagnostic).
+  refId: text('ref_id').notNull().default(''),
+  targetCount: integer('target_count').notNull().default(1),
+  completedAt: integer('completed_at'),
+  createdAt: integer('created_at').notNull(),
+}, (t) => [
+  index('study_plan_items_plan_date_idx').on(t.planDate),
+])
 
 export const examCourseNotes = sqliteTable('exam_course_notes', {
   id: text('id').primaryKey(),

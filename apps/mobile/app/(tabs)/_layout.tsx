@@ -42,7 +42,7 @@ export default function TabLayout() {
             <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
             <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
             <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
-            <Tabs.Screen name="analytics" options={{ href: null }} />
+            <Tabs.Screen name="analytics" options={{ title: 'Progress' }} />
             <Tabs.Screen name="profile"  options={{ title: 'Profile' }} />
           </Tabs>
           </View>
@@ -64,7 +64,7 @@ export default function TabLayout() {
         <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
         <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
         <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
-        <Tabs.Screen name="analytics" options={{ href: null }} />
+        <Tabs.Screen name="analytics" options={{ title: 'Progress' }} />
         {/* Profile is reachable from the Home header avatar (not shown in the tab bar). */}
         <Tabs.Screen name="profile"  options={{ title: 'Profile' }} />
       </Tabs>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable, Alert, BackHandler } from 'react-native'
+import { StyleSheet, View, Text, Pressable, Alert, BackHandler, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -14,6 +14,8 @@ import {
   Brush2Outlined,
   Bug1Outlined,
   Comment1Outlined,
+  Download1Outlined,
+  Bell1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
@@ -23,7 +25,15 @@ import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../components/ui/WebTopSpacer'
 import { Card } from '../components/ui/Card'
 import { SectionHeader } from '../components/ui/SectionHeader'
-import { getSettings } from '../services/settings'
+import { AiModelDownloadSheet } from '../components/AiModelDownloadSheet'
+import { useNotifications } from '../hooks/useNotifications'
+import { useHomeStats } from '../hooks/useHomeStats'
+
+function formatHour(hour: number): string {
+  const h12 = hour % 12 === 0 ? 12 : hour % 12
+  const suffix = hour < 12 ? 'AM' : 'PM'
+  return `${h12}:00 ${suffix}`
+}
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
@@ -66,7 +76,12 @@ export default function SettingsScreen() {
   const { theme: t, typo, themePref, setTheme } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
-  const [aiProvider, setAiProvider] = useState<'local' | 'gemini'>('local')
+  const [modelDownloadVisible, setModelDownloadVisible] = useState(false)
+  const { focusedListings } = useHomeStats()
+  const {
+    enabled: notifEnabled, toggle: toggleNotifs,
+    dailyReminderHour, weeklySummaryEnabled, setReminderHour, toggleWeeklySummary,
+  } = useNotifications()
 
   useEffect(() => {
     async function load() {
@@ -75,8 +90,6 @@ export default function SettingsScreen() {
       if (!row) return
       setProfileName(row.fullName || 'Student')
       setProfileEmail(row.email ?? '')
-      const s = await getSettings(db)
-      setAiProvider(s.aiProvider)
     }
     void load()
   }, [db])
@@ -117,6 +130,14 @@ export default function SettingsScreen() {
     segBtnOn: { backgroundColor: t.accent },
     segTxt: { fontSize: typo.xs, fontWeight: '600' as const, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
     segTxtOn: { color: '#fff' },
+    notifRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
+    notifLabel: { fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
+    notifSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    notifRowDisabled: { opacity: 0.45 },
+    stepper: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm },
+    stepperBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border },
+    stepperBtnTxt: { fontSize: 16, fontWeight: '700' as const, color: t.textPrimary },
+    stepperValue: { fontSize: typo.sm, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', minWidth: 68, textAlign: 'center' as const },
   }), [t, typo])
 
   const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark' }[] = [
@@ -180,14 +201,14 @@ export default function SettingsScreen() {
               onPress={() => router.push('/privacy')} />
           </Card>
 
-          <SectionHeader title="AI Chat" />
+          <SectionHeader title="AI Features" />
           <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
             <SettingsRow
-              icon={SparkOutlined}
+              icon={Download1Outlined}
               iconBg="rgba(74,222,128,0.12)"
               iconColor="#4ade80"
-              label={aiProvider === 'gemini' ? 'Kuya Baw — Gemini (your key)' : 'Kuya Baw — On-device'}
-              onPress={() => router.push('/settings/gemini-key')}
+              label="On-device AI model"
+              onPress={() => setModelDownloadVisible(true)}
             />
           </Card>
 
@@ -198,6 +219,69 @@ export default function SettingsScreen() {
             <View style={s.divider} />
             <SettingsRow icon={Comment1Outlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Leave Feedback"
               onPress={() => router.push('/settings/leave-feedback')} />
+          </Card>
+
+          <SectionHeader title="Notifications" subtitle="Daily nudges, reminders, and your weekly summary" />
+          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <View style={s.notifRow}>
+              <View style={s.appearIcon}>
+                <Lineicons icon={Bell1Outlined} size={15} color={t.textSecondary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.notifLabel}>Push Notifications</Text>
+                <Text style={s.notifSub}>{notifEnabled ? 'On' : 'Off'} — daily nudge, weekly summary, exam countdowns</Text>
+              </View>
+              <Switch
+                value={notifEnabled}
+                onValueChange={() => void toggleNotifs(focusedListings)}
+                trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+                thumbColor={notifEnabled ? t.accentText : t.textTertiary}
+                ios_backgroundColor={t.border}
+              />
+            </View>
+            <View style={s.divider} />
+            <View style={[s.notifRow, !notifEnabled && s.notifRowDisabled]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.notifLabel}>Daily reminder time</Text>
+                <Text style={s.notifSub}>When your daily practice nudge fires</Text>
+              </View>
+              <View style={s.stepper}>
+                <Pressable
+                  style={({ pressed }) => [s.stepperBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}
+                  disabled={!notifEnabled}
+                  accessibilityRole="button"
+                  accessibilityLabel="Earlier"
+                >
+                  <Text style={s.stepperBtnTxt}>‹</Text>
+                </Pressable>
+                <Text style={s.stepperValue}>{formatHour(dailyReminderHour)}</Text>
+                <Pressable
+                  style={({ pressed }) => [s.stepperBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => void setReminderHour((dailyReminderHour + 1) % 24, focusedListings)}
+                  disabled={!notifEnabled}
+                  accessibilityRole="button"
+                  accessibilityLabel="Later"
+                >
+                  <Text style={s.stepperBtnTxt}>›</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View style={s.divider} />
+            <View style={[s.notifRow, !notifEnabled && s.notifRowDisabled]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.notifLabel}>Weekly summary</Text>
+                <Text style={s.notifSub}>Sunday nudge to review your weak areas</Text>
+              </View>
+              <Switch
+                value={weeklySummaryEnabled}
+                onValueChange={() => void toggleWeeklySummary(focusedListings)}
+                disabled={!notifEnabled}
+                trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+                thumbColor={weeklySummaryEnabled ? t.accentText : t.textTertiary}
+                ios_backgroundColor={t.border}
+              />
+            </View>
           </Card>
 
           <SectionHeader title="Session" />
@@ -228,6 +312,12 @@ export default function SettingsScreen() {
           </Card>
         </View>
       </ScreenScroll>
+
+      <AiModelDownloadSheet
+        visible={modelDownloadVisible}
+        onClose={() => setModelDownloadVisible(false)}
+        onReady={() => setModelDownloadVisible(false)}
+      />
     </SafeAreaView>
   )
 }

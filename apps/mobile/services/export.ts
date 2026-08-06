@@ -13,6 +13,9 @@ import {
   notes as notesTable,
   noteLabels,
   noteLabelAssignments,
+  questionAttempts,
+  flashcardSrs,
+  studyPlanItems,
 } from '../db/schema'
 import { invalidate } from './queryCache'
 
@@ -23,7 +26,7 @@ export type ExportResult =
   | { status: 'cancelled' }
 
 export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
-  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows] = await Promise.all([
+  const [settings, focus, decks, progress, sessions, noteRows, labelRows, assignRows, attempts, srsRows, planRows] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(focusListings),
     db.select().from(savedDecks),
@@ -32,6 +35,9 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     db.select().from(notesTable),
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
+    db.select().from(questionAttempts),
+    db.select().from(flashcardSrs),
+    db.select().from(studyPlanItems),
   ])
 
   const payload = {
@@ -45,6 +51,9 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
     notes: noteRows,
     note_labels: labelRows,
     note_label_assignments: assignRows,
+    question_attempts: attempts,
+    flashcard_srs: srsRows,
+    study_plan_items: planRows,
   }
 
   const json = JSON.stringify(payload, null, 2)
@@ -135,6 +144,8 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     email: s.email ? String(s.email) : null,
     notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
     theme: String(s.theme ?? 'system'),
+    dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
+    weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
   }).onConflictDoUpdate({
     target: userSettings.id,
     set: {
@@ -146,6 +157,8 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       email: s.email ? String(s.email) : null,
       notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
       theme: String(s.theme ?? 'system'),
+      dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
+      weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
     },
   })
 
@@ -202,6 +215,75 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       durationSecs: Number(row.durationSecs ?? row.duration_secs ?? 0),
       completedAt: Number(row.completedAt ?? row.completed_at ?? Date.now()),
     })
+  }
+
+  // Question attempts (Task D telemetry) — replace entirely, but ONLY when
+  // the import file actually carries this field. Finding #3: older export
+  // files (taken before this branch) predate question_attempts/flashcard_srs/
+  // study_plan_items entirely — unconditionally deleting first would wipe
+  // this device's SRS scheduling state and telemetry on every restore of an
+  // old backup, even though the file never meant to touch them. Mirrors
+  // sync.ts's pull path, which only wipes+replaces when the remote payload
+  // actually has rows for the field.
+  const attemptRows = Array.isArray(data.question_attempts) ? (data.question_attempts as ExportRow[]) : []
+  if (attemptRows.length > 0) {
+    await db.delete(questionAttempts)
+    for (const row of attemptRows) {
+      await db.insert(questionAttempts).values({
+        sessionKey: Number(row.sessionKey ?? row.session_key ?? 0),
+        sourceTable: String(row.sourceTable ?? row.source_table ?? ''),
+        questionId: String(row.questionId ?? row.question_id ?? ''),
+        listingSlug: String(row.listingSlug ?? row.listing_slug ?? ''),
+        subtest: row.subtest != null ? String(row.subtest) : null,
+        topic: row.topic != null ? String(row.topic) : null,
+        selectedIndex: row.selectedIndex != null ? Number(row.selectedIndex) : row.selected_index != null ? Number(row.selected_index) : null,
+        correctIndex: Number(row.correctIndex ?? row.correct_index ?? 0),
+        correct: Boolean(row.correct),
+        elapsedMs: Number(row.elapsedMs ?? row.elapsed_ms ?? 0),
+        answeredAt: Number(row.answeredAt ?? row.answered_at ?? Date.now()),
+      })
+    }
+  }
+
+  // Flashcard SRS state (Task H) — replace entirely, same "only when the
+  // file has rows" guard as question_attempts above (finding #3).
+  const srsImportRows = Array.isArray(data.flashcard_srs) ? (data.flashcard_srs as ExportRow[]) : []
+  if (srsImportRows.length > 0) {
+    await db.delete(flashcardSrs)
+    for (const row of srsImportRows) {
+      const flashcardId = String(row.flashcardId ?? row.flashcard_id ?? '')
+      if (!flashcardId) continue
+      await db.insert(flashcardSrs).values({
+        flashcardId,
+        intervalDays: Number(row.intervalDays ?? row.interval_days ?? 0),
+        easeFactor: Number(row.easeFactor ?? row.ease_factor ?? 2.5),
+        repetitions: Number(row.repetitions ?? 0),
+        lapses: Number(row.lapses ?? 0),
+        dueAt: Number(row.dueAt ?? row.due_at ?? 0),
+        lastReviewedAt: row.lastReviewedAt != null ? Number(row.lastReviewedAt) : row.last_reviewed_at != null ? Number(row.last_reviewed_at) : null,
+        lastGrade: row.lastGrade != null ? String(row.lastGrade) : row.last_grade != null ? String(row.last_grade) : null,
+      }).onConflictDoNothing()
+    }
+  }
+
+  // Study plan items (Task I) — replace entirely, same "only when the file
+  // has rows" guard as question_attempts above (finding #3).
+  const planImportRows = Array.isArray(data.study_plan_items) ? (data.study_plan_items as ExportRow[]) : []
+  if (planImportRows.length > 0) {
+    await db.delete(studyPlanItems)
+    for (const row of planImportRows) {
+      const planDate = String(row.planDate ?? row.plan_date ?? '')
+      const kind = String(row.kind ?? '')
+      if (!planDate || !kind) continue
+      await db.insert(studyPlanItems).values({
+        planDate,
+        kind,
+        refId: String(row.refId ?? row.ref_id ?? ''),
+        targetCount: Number(row.targetCount ?? row.target_count ?? 1),
+        completedAt: row.completedAt != null ? Number(row.completedAt) : row.completed_at != null ? Number(row.completed_at) : null,
+        createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
+      })
+    }
   }
 
   // Notes — replace entirely

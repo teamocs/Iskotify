@@ -1,9 +1,6 @@
 import { initLlama, type LlamaContext } from 'llama.rn'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as Device from 'expo-device'
-import { parseCoachPhrase } from './coachPrompts'
-
-export { parseCoachPhrase }
 
 // Gemma 3 1B Q8_0 from bartowski's GGUF repo (public, ungated).
 // Verified 2026-06-11: HEAD → 302 → 200 unauthenticated; Content-Length 1,069,306,624 bytes.
@@ -54,7 +51,7 @@ const MIN_RAM_BYTES = 1.8e9
 // Extended from 60 s → 300 s: chat sessions often have a pause between messages;
 // releasing at 60 s was re-incurring the full model-load cost mid-conversation.
 // The context is released when the app backgrounds via releaseContextIfIdle()
-// (AiCoachProvider's AppState listener).
+// (currently unwired — kept for a future self-hosted AI feature's AppState listener).
 export const IDLE_RELEASE_MS = 300_000
 
 export function hasEnoughRam(): boolean {
@@ -104,19 +101,11 @@ let inflightChain: Promise<unknown> = Promise.resolve()
 async function getContext(): Promise<LlamaContext> {
   if (ctxRef) return ctxRef
   // ── n_ctx decision ────────────────────────────────────────────────────────
-  // Worst-case token budget with PROMPTS V2 (rough BPE estimate, 1 tok ≈ 4 chars):
-  //   System prompt v2 (MATH, the largest: CORE_RULES+addenda): ~554 tokens
-  //   RAG blocks (ragPipeline hard cap):                        ≤700 tokens
-  //   10-message chat history (avg 40 tok/msg × 10):            ~400 tokens
-  //   User question (max practical):                             ~80 tokens
-  //   Model response budget (math path nPredict):               ~300 tokens
-  //   Gemma turn tokens + overhead:                              ~30 tokens
-  //   ABSOLUTE WORST CASE:                                    ~2,064 tokens
-  // That adversarial maximum brushes n_ctx 2048 (llama.cpp truncates output at
-  // the boundary — degrades gracefully, no crash). The REALISTIC case is
-  // ~1,100–1,300 tokens (math questions rarely match listings/courses blocks,
-  // history is usually short). Raising n_ctx costs KV RAM on 2 GB-gate devices,
-  // so 2048 stays. If prompts/budgets grow again, recompute this table first.
+  // Sized for the two remaining on-device consumers: MCQ distractor generation
+  // (buildPrompt/runInference — bounded prompt + JSON response) and the raw
+  // completion used by the offline tier of hybrid listing search. Both fit
+  // comfortably within a few hundred tokens; the 3072 ceiling leaves generous
+  // headroom without meaningfully increasing KV RAM on 2 GB-gate devices.
   //
   // ── Speculative / MTP ─────────────────────────────────────────────────────
   // Gemma 3 has no MTP heads — speculative decoding is not applicable.
@@ -314,28 +303,6 @@ export async function runInference(prompt: string): Promise<LlmOutput | null> {
   })
 }
 
-// ── Coach inference (used by AiCoachProvider) ────────────────────────────────
-
-export async function runCoachInference(prompt: string): Promise<string | null> {
-  return withMutex(async () => {
-    const ctx = await getContext()
-    lastUsedAt = Date.now()
-    try {
-      const result = await ctx.completion({
-        prompt,
-        n_predict: 80,
-        temperature: 0.7,
-        stop: ['<end_of_turn>', '<eos>', '\n\n'],
-      })
-      lastUsedAt = Date.now()
-      return parseCoachPhrase(result.text)
-    } catch (err) {
-      await releaseContext()
-      throw err
-    }
-  })
-}
-
 // ── Raw completion (used by the offline tier of hybrid listing search) ───────
 
 export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<string | null> {
@@ -351,62 +318,6 @@ export async function runRawCompletion(prompt: string, maxTokens = 80): Promise<
       })
       lastUsedAt = Date.now()
       return (result.text ?? '').trim() || null
-    } catch (err) {
-      await releaseContext()
-      throw err
-    }
-  })
-}
-
-// ── Chat streaming inference (used by useKuyaChat) ───────────────────────────
-
-export interface StreamChatOptions {
-  /** Max tokens to generate. Defaults to 320 so conversational answers finish
-   *  instead of getting cut off mid-sentence (the old 96 ≈ 2 sentences was the
-   *  main cause of truncated replies). Math queries pass ~448 for long
-   *  multi-step solutions. n_ctx (3072) has headroom for both. */
-  nPredict?: number
-  /** Sampling temperature. Defaults to 0.2 (balanced). Math should use ~0.05
-   *  so the model doesn't hallucinate digits. */
-  temperature?: number
-}
-
-export async function streamChatInference(
-  prompt: string,
-  onToken: (text: string) => void,
-  signal: AbortSignal,
-  options: StreamChatOptions = {},
-): Promise<string> {
-  // Non-math default: 96 tokens fits 2 clear sentences for Gemma 3 1B Q8_0
-  // (1B is fast; less truncation than the previous 48-token cap).
-  // Stop tokens already include '<end_of_turn>' so Gemma's turn-end EOS fires
-  // before the hard limit in most cases.
-  const nPredict = options.nPredict ?? 96
-  const temperature = options.temperature ?? 0.2
-  return withMutex(async () => {
-    if (signal.aborted) return ''
-    const ctx = await getContext()
-    lastUsedAt = Date.now()
-    let collected = ''
-    try {
-      const result = await ctx.completion(
-        {
-          prompt,
-          n_predict: nPredict,
-          temperature,
-          top_k: 40,
-          penalty_repeat: 1.1,
-          stop: ['<end_of_turn>', '<eos>', '<start_of_turn>'],
-        },
-        (tokenData: { token?: string }) => {
-          if (signal.aborted) return
-          const text = tokenData.token ?? ''
-          collected += text
-          onToken(text)
-        },
-      )
-      lastUsedAt = Date.now()
-      return collected || result.text || ''
     } catch (err) {
       await releaseContext()
       throw err

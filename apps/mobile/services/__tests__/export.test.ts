@@ -1,4 +1,4 @@
-import { exportUserData } from '../export'
+import { exportUserData, importUserData } from '../export'
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'android' },
@@ -16,6 +16,7 @@ const mockRequestDirPerms = jest.fn().mockResolvedValue({ granted: true, directo
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: '/tmp/',
   writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+  readAsStringAsync: jest.fn(),
   EncodingType: { UTF8: 'utf8' },
   StorageAccessFramework: {
     requestDirectoryPermissionsAsync: (...args: unknown[]) => mockRequestDirPerms(...args),
@@ -29,7 +30,12 @@ jest.mock('expo-document-picker', () => ({
 }))
 
 jest.mock('drizzle-orm', () => ({
+  ...jest.requireActual('drizzle-orm'),
   eq: jest.fn((col, val) => ({ col, val })),
+}))
+
+jest.mock('../queryCache', () => ({
+  invalidate: jest.fn(),
 }))
 
 function makeDb(settingsRow: { selectedListingSlug: string; lastSyncedAt: number } | null) {
@@ -130,6 +136,125 @@ describe('exportUserData (iOS, share sheet)', () => {
     await expect(
       exportUserData(makeDb({ selectedListingSlug: 'upcat', lastSyncedAt: 0 }) as any)
     ).rejects.toThrow('Sharing not available')
+  })
+})
+
+// ── importUserData (Finding #3) ──────────────────────────────────────────────
+
+function tableName(table: unknown): string {
+  const { getTableName } = require('drizzle-orm')
+  return getTableName(table as any)
+}
+
+function makeImportDb() {
+  const deletedTables: string[] = []
+  const insertedRows: { table: string; row: Record<string, unknown> }[] = []
+
+  const db = {
+    delete: jest.fn().mockImplementation((table: unknown) => {
+      deletedTables.push(tableName(table))
+      return Promise.resolve(undefined)
+    }),
+    insert: jest.fn().mockImplementation((table: unknown) => {
+      const name = tableName(table)
+      return {
+        values: jest.fn().mockImplementation((row: Record<string, unknown>) => {
+          insertedRows.push({ table: name, row })
+          const chain: any = Promise.resolve(undefined)
+          chain.onConflictDoNothing = jest.fn().mockResolvedValue(undefined)
+          chain.onConflictDoUpdate = jest.fn().mockResolvedValue(undefined)
+          return chain
+        }),
+      }
+    }),
+  }
+
+  return { db, deletedTables, insertedRows }
+}
+
+const BASE_PAYLOAD = {
+  exported_at: '2026-05-24T00:00:00.000Z',
+  settings: { selectedListingSlug: 'upcat', lastSyncedAt: 0 },
+}
+
+function mockImportFile(payload: Record<string, unknown>) {
+  const DocumentPicker = require('expo-document-picker')
+  const FileSystem = require('expo-file-system/legacy')
+  DocumentPicker.getDocumentAsync.mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///picked/export.json' }],
+  })
+  FileSystem.readAsStringAsync.mockResolvedValue(JSON.stringify(payload))
+}
+
+describe('importUserData guards deletes on the field being present (Finding #3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    const RN = require('react-native')
+    RN.Platform.OS = 'android'
+  })
+
+  it('does NOT delete question_attempts/flashcard_srs/study_plan_items when the import file lacks those keys (old backup)', async () => {
+    mockImportFile(BASE_PAYLOAD) // no question_attempts / flashcard_srs / study_plan_items keys at all
+    const { db, deletedTables, insertedRows } = makeImportDb()
+
+    await importUserData(db as any)
+
+    expect(deletedTables).not.toContain('question_attempts')
+    expect(deletedTables).not.toContain('flashcard_srs')
+    expect(deletedTables).not.toContain('study_plan_items')
+    expect(insertedRows.some(r => r.table === 'question_attempts')).toBe(false)
+    expect(insertedRows.some(r => r.table === 'flashcard_srs')).toBe(false)
+    expect(insertedRows.some(r => r.table === 'study_plan_items')).toBe(false)
+  })
+
+  it('DOES delete+replace question_attempts/flashcard_srs/study_plan_items when the import file has rows for them', async () => {
+    mockImportFile({
+      ...BASE_PAYLOAD,
+      question_attempts: [{
+        sessionKey: 1, sourceTable: 'flashcards', questionId: 'q1', listingSlug: 'upcat',
+        selectedIndex: 1, correctIndex: 1, correct: true, elapsedMs: 500, answeredAt: 1000,
+      }],
+      flashcard_srs: [{
+        flashcardId: 'f1', intervalDays: 3, easeFactor: 2.5, repetitions: 1, lapses: 0, dueAt: 2000,
+      }],
+      study_plan_items: [{
+        planDate: '2026-05-24', kind: 'flashcard', refId: 'f1', targetCount: 1, createdAt: 1000,
+      }],
+    })
+    const { db, deletedTables, insertedRows } = makeImportDb()
+
+    await importUserData(db as any)
+
+    expect(deletedTables).toContain('question_attempts')
+    expect(deletedTables).toContain('flashcard_srs')
+    expect(deletedTables).toContain('study_plan_items')
+
+    const attemptRow = insertedRows.find(r => r.table === 'question_attempts')
+    expect(attemptRow?.row).toMatchObject({ questionId: 'q1', correct: true })
+
+    const srsRow = insertedRows.find(r => r.table === 'flashcard_srs')
+    expect(srsRow?.row).toMatchObject({ flashcardId: 'f1', intervalDays: 3 })
+
+    const planRow = insertedRows.find(r => r.table === 'study_plan_items')
+    expect(planRow?.row).toMatchObject({ planDate: '2026-05-24', kind: 'flashcard' })
+  })
+
+  it('an empty array for the field still counts as "present" but inserts nothing (and per sync.ts parity, does not wipe either)', async () => {
+    mockImportFile({ ...BASE_PAYLOAD, question_attempts: [], flashcard_srs: [], study_plan_items: [] })
+    const { db, deletedTables, insertedRows } = makeImportDb()
+
+    await importUserData(db as any)
+
+    // Empty arrays carry no rows to restore — matching sync.ts's "only wipe
+    // when there's something to replace it with" behavior, an empty list is
+    // treated the same as an absent key: nothing is deleted or inserted.
+    expect(deletedTables).not.toContain('question_attempts')
+    expect(deletedTables).not.toContain('flashcard_srs')
+    expect(deletedTables).not.toContain('study_plan_items')
+    expect(insertedRows.some(r => r.table === 'question_attempts')).toBe(false)
+    expect(insertedRows.some(r => r.table === 'flashcard_srs')).toBe(false)
+    expect(insertedRows.some(r => r.table === 'study_plan_items')).toBe(false)
   })
 })
 

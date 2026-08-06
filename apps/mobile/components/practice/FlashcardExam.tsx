@@ -1,15 +1,23 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useDb } from '../../hooks/useDb'
 import { submitQuestionReport } from '../../services/questionReports'
 import { ReportQuestionModal } from './ReportQuestionModal'
 import { useRecordSession } from '../../hooks/useRecordSession'
+import { useRecordAttempts } from '../../hooks/useRecordAttempts'
+import { useRecordProgress } from '../../hooks/useRecordProgress'
+import { useRecordSrs } from '../../hooks/useRecordSrs'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
+import { QuestionCard } from './QuestionCard'
+import { OptionList } from './OptionList'
+import { ReviewCard } from './ReviewCard'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
+import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../utils/attemptTiming'
+import { buildAttemptRows } from '../../utils/attemptRows'
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'exam' | 'results'
 
 export interface FlashcardExamProps {
@@ -19,7 +27,7 @@ export interface FlashcardExamProps {
   subtest?: string
   /** Pass the launching topicId for single-topic quizzes so analytics groups correctly. */
   topicId?: string
-  /** Pass the launching deckId (or '__full__'/'__weak__' sentinel) for deck quizzes. */
+  /** Pass the launching deckId (or '__full__'/'__weak__'/'__due__' sentinel) for deck quizzes. */
   deckId?: string
   onExit: () => void
 }
@@ -28,6 +36,9 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const db = useDb()
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
+  const { recordAttempts } = useRecordAttempts()
+  const { recordProgress } = useRecordProgress()
+  const { recordSrs } = useRecordSrs()
 
   const [phase, setPhase] = useState<Phase>('exam')
   const [idx, setIdx] = useState(0)
@@ -36,6 +47,24 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // Which question index the report modal is open for (null = closed).
   const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
+
+  // Task D: per-question timing + attempt sessionKey. Unlike the routed exam
+  // screens (which remount on retake via router.replace), FlashcardExam is a
+  // reused shared component — "Retake exam" resets phase/idx/answers on the
+  // SAME instance, so attemptStartRef/timingRef need their own manual reset
+  // there too (startRef above can't be reset: its setter was discarded).
+  const attemptStartRef = useRef(startRef)
+  const timingRef = useRef<TimingState>(createTimingState(0, startRef))
+  // Finding #2: unlike the three routed exam engines, FlashcardExam previously
+  // had NO double-submit guard at all — a failure mid-submit (e.g. the
+  // recordAttempts insert rejecting) let a re-tap of Submit run the whole
+  // sequence again, double-inserting attempt/progress rows. Reset alongside
+  // attemptStartRef/timingRef on retake (same reasoning: reused instance,
+  // not a remount).
+  const submittedRef = useRef(false)
+  useEffect(() => {
+    timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
+  }, [idx])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
@@ -54,8 +83,57 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
-  function submit() {
+  async function submit() {
+    if (submittedRef.current) return  // guard against double-submit (re-tap after a mid-submit failure)
+    submittedRef.current = true
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
+
+    // Task D: per-question attempt rows + the user_progress producer fix,
+    // written before recordSession so they're committed before its
+    // fire-and-forget backup push. answeredAt is shared across both writes
+    // so they line up as "this run".
+    const answeredAt = Date.now()
+    const elapsedByIdx = finalizeTiming(timingRef.current, answeredAt)
+    const rows = buildAttemptRows({
+      sessionKey: attemptStartRef.current,
+      sourceTable: 'flashcards',
+      listingSlug: listingSlug ?? '',
+      questions: questions.map((q, i) => ({
+        questionId: q.id ?? String(i),
+        correctIndex: q.answerIndex,
+        subtest: subtest ?? null,
+        topic: topicId ?? null,
+      })),
+      answers,
+      elapsedByIdx,
+      answeredAt,
+    })
+    // Finding #2: telemetry is best-effort — it must never gate the results
+    // screen. submittedRef is already flipped above; if this insert rejects
+    // (disk full, storage quota, etc.) the student must still reach results.
+    try {
+      await recordAttempts(rows)
+    } catch (err) {
+      console.warn('[FlashcardExam] recordAttempts failed:', err)
+    }
+    await recordProgress(questions.map((q, i) => ({
+      flashcardId: q.id ?? String(i),
+      correct: answers[i] === q.answerIndex,
+      answeredAt,
+    })))
+
+    // Task H: SRS scheduling is derived bookkeeping, not the attempt record
+    // itself (user_progress/question_attempts above already captured this
+    // run) — fire-and-forget + error-isolated so a flashcard_srs write
+    // failure can never strand the student behind the double-submit guard.
+    // Same convention as recordSession below and useRecordAttempts's
+    // fire-and-forget prune.
+    void recordSrs(questions.map((q, i) => ({
+      flashcardId: q.id ?? String(i),
+      correct: answers[i] === q.answerIndex,
+      elapsedMs: elapsedByIdx[i] ?? 0,
+    }))).catch(err => console.warn('[FlashcardExam] recordSrs failed:', err))
+
     void recordSession({
       listingSlug: listingSlug ?? '',
       topicId: topicId ?? '',
@@ -96,7 +174,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? '#16a34a' : t.accentText }]}>{pct}%</Text>
+            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
             <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
             <Text style={s.scoreSub}>
               {score}/{questions.length} correct
@@ -104,31 +182,19 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           </View>
 
           <Text style={s.sectionLbl}>Review</Text>
-          {questions.map((q, i) => {
-            const sel = answers[i]
-            const ok = sel === q.answerIndex
-            return (
-              <View key={q.id ?? i} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
-                <Text style={s.reviewQ}>
-                  Q{i + 1}. {q.stem}
-                </Text>
-                {q.options.map((o, oi) => (
-                  <Text
-                    key={oi}
-                    style={[
-                      s.reviewOpt,
-                      oi === q.answerIndex && { color: '#16a34a', fontWeight: '700' },
-                      oi === sel && oi !== q.answerIndex && { color: '#dc2626' },
-                    ]}
-                  >
-                    {LETTERS[oi]}. {o}
-                    {oi === q.answerIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
-                  </Text>
-                ))}
-                {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
-              </View>
-            )
-          })}
+          {questions.map((q, i) => (
+            <ReviewCard
+              key={q.id ?? i}
+              index={i + 1}
+              questionText={q.stem}
+              options={q.options}
+              correctIndex={q.answerIndex}
+              selectedIndex={answers[i]}
+              explanation={q.explanation}
+              optionExplanations={q.optionExplanations}
+              strategyTip={q.strategyTip}
+            />
+          ))}
 
           <Pressable
             style={s.primaryBtn}
@@ -137,6 +203,13 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               setIdx(0)
               setReported({})
               setPhase('exam')
+              // New attempt on the same mounted instance: fresh sessionKey +
+              // timing baseline so the retake's rows don't blend with the
+              // previous run's (see attemptStartRef/timingRef declaration above).
+              const now = Date.now()
+              attemptStartRef.current = now
+              timingRef.current = createTimingState(0, now)
+              submittedRef.current = false
             }}
           >
             <Text style={s.primaryBtnTxt}>Retake exam</Text>
@@ -187,33 +260,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <View style={s.qCard}>
-          <Text style={s.qText}>{q.stem}</Text>
-          <View style={s.reportRow}>
-            {reported[idx] ? (
-              <Text style={s.reportedTxt}>Reported ✓</Text>
-            ) : (
-              <Pressable accessibilityRole="button" onPress={() => setReportIdx(idx)} hitSlop={8}>
-                <Text style={s.reportBtn}>⚐ Report</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        <View style={s.opts}>
-          {q.options.map((o, oi) => (
-            <Pressable
-              key={oi}
-              style={[s.opt, sel === oi && s.optOn]}
-              onPress={() => setAnswers(a => ({ ...a, [idx]: oi }))}
-            >
-              <View style={[s.optLetter, sel === oi && s.optLetterOn]}>
-                <Text style={[s.optLetterTxt, sel === oi && { color: '#fff' }]}>{LETTERS[oi]}</Text>
-              </View>
-              <Text style={s.optTxt}>{o}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <QuestionCard
+          questionText={q.stem}
+          reported={reported[idx]}
+          onReport={() => setReportIdx(idx)}
+        />
+        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
       </ScrollView>
 
       <View style={s.footer}>
@@ -281,78 +333,13 @@ function makeStyles(
       color: t.accentText,
       fontFamily: 'Lexend_600SemiBold',
     },
-    qCard: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 20,
-      padding: 18,
-      marginHorizontal: 14,
-      marginBottom: 12,
-    },
-    qText: {
-      fontSize: typo.lg,
-      fontWeight: '600',
-      color: t.textPrimary,
-      lineHeight: 24,
-      fontFamily: 'Outfit_600SemiBold',
-    },
-    reportRow: {
-      marginTop: 10,
-      alignItems: 'flex-end',
-    },
-    reportBtn: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
-    },
-    reportedTxt: {
-      fontSize: typo.xs,
-      color: '#16a34a',
-      fontFamily: 'Lexend_400Regular',
-    },
-    opts: { gap: 9, paddingHorizontal: 14 },
-    opt: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: t.surface,
-      borderWidth: 1.5,
-      borderColor: t.border,
-      borderRadius: 16,
-      paddingVertical: 13,
-      paddingHorizontal: 13,
-    },
-    optOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    optLetter: {
-      width: 30,
-      height: 30,
-      borderRadius: 9,
-      backgroundColor: t.surface2,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    optLetterOn: { backgroundColor: t.accent },
-    optLetterTxt: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textSecondary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    optTxt: {
-      flex: 1,
-      fontSize: typo.md,
-      color: t.textPrimary,
-      fontFamily: 'Lexend_400Regular',
-      lineHeight: 19,
-    },
     footer: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
       flexDirection: 'row',
-      gap: 8,
+      gap: spacing.sm,
       padding: 14,
       backgroundColor: t.bg,
       borderTopWidth: 1,
@@ -382,7 +369,7 @@ function makeStyles(
     footPrimaryTxt: {
       fontSize: typo.md,
       fontWeight: '700',
-      color: '#fff',
+      color: t.textInverse,
       fontFamily: 'Outfit_700Bold',
     },
     scoreCard: {
@@ -393,11 +380,11 @@ function makeStyles(
       alignItems: 'center',
     },
     pass: {
-      backgroundColor: 'rgba(34,197,94,0.08)',
+      backgroundColor: t.successSurface,
       borderColor: 'rgba(34,197,94,0.25)',
     },
     fail: {
-      backgroundColor: 'rgba(239,68,68,0.07)',
+      backgroundColor: t.dangerSurface,
       borderColor: 'rgba(239,68,68,0.20)',
     },
     scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
@@ -423,35 +410,6 @@ function makeStyles(
       marginTop: 8,
       fontFamily: 'Lexend_600SemiBold',
     },
-    reviewCard: { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 10 },
-    reviewOk: {
-      backgroundColor: 'rgba(34,197,94,0.06)',
-      borderColor: 'rgba(34,197,94,0.18)',
-    },
-    reviewBad: {
-      backgroundColor: 'rgba(239,68,68,0.06)',
-      borderColor: 'rgba(239,68,68,0.18)',
-    },
-    reviewQ: {
-      fontSize: typo.md,
-      fontWeight: '600',
-      color: t.textPrimary,
-      marginBottom: 8,
-      fontFamily: 'Outfit_600SemiBold',
-    },
-    reviewOpt: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      lineHeight: 20,
-      fontFamily: 'Lexend_400Regular',
-    },
-    reviewExp: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      marginTop: 8,
-      lineHeight: 17,
-      fontFamily: 'Lexend_400Regular',
-    },
     primaryBtn: {
       backgroundColor: 'rgba(128,0,0,0.85)',
       borderRadius: 16,
@@ -460,7 +418,7 @@ function makeStyles(
       marginTop: 8,
     },
     primaryBtnTxt: {
-      color: '#fff',
+      color: t.textInverse,
       fontWeight: '700',
       fontSize: typo.md,
       fontFamily: 'Outfit_700Bold',

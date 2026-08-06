@@ -56,6 +56,8 @@ interface ProfileDetail {
   academicCalendar: string | null
   coursesOffered: string
   scholarshipsOffered: string
+  requirements: string
+  qualifications: string
   websiteUrl: string | null
   applicationPortalUrl: string | null
   facebookUrl: string | null
@@ -264,6 +266,8 @@ export default function SchoolProfileScreen() {
   const scholarships      = safeParseArray(profile?.scholarshipsOffered ?? '[]')
   const notablePrograms   = safeParseArray(profile?.notablePrograms     ?? '[]')
   const prcStrongBoards   = safeParseArray(profile?.prcStrongBoards     ?? '[]')
+  const requirements      = safeParseArray(profile?.requirements        ?? '[]')
+  const qualifications    = safeParseArray(profile?.qualifications      ?? '[]')
 
   const hasEntranceExam = !!(
     profile?.entranceExamName ||
@@ -519,6 +523,34 @@ export default function SchoolProfileScreen() {
                 </>
               ) : null}
             </Card>
+          </View>
+        ) : null}
+
+        {/* ── Application Requirements (paper documents) ── */}
+        {requirements.length > 0 ? (
+          <View style={s.section}>
+            <SectionHeader title="Application Requirements" />
+            <View style={s.pillWrap}>
+              {requirements.map((r, i) => (
+                <View key={`req-${i}`} style={s.pill}>
+                  <Text style={s.pillTxt}>{r}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── Qualifications (eligibility criteria) ── */}
+        {qualifications.length > 0 ? (
+          <View style={s.section}>
+            <SectionHeader title="Qualifications" />
+            <View style={s.pillWrap}>
+              {qualifications.map((q, i) => (
+                <View key={`qual-${i}`} style={s.pill}>
+                  <Text style={s.pillTxt}>{q}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         ) : null}
 

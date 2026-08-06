@@ -9,12 +9,25 @@ export interface UpcatLocalRow {
   correctIndex: number
   explanation: string | null
   setId: string | null
+  /** JSON-encoded (string|null)[], index-aligned with `options`. Task E. */
+  optionExplanations?: string | null
+  strategyTip?: string | null
 }
 
 function parseOptions(json: string): string[] {
   try {
     const v = JSON.parse(json)
     return Array.isArray(v) ? v.map(String) : []
+  } catch {
+    return []
+  }
+}
+
+/** Like parseOptions but preserves `null` entries (the correct-index slot in optionExplanations). */
+function parseOptionExplanations(json: string): (string | null)[] {
+  try {
+    const v = JSON.parse(json)
+    return Array.isArray(v) ? v.map(x => (x == null ? null : String(x))) : []
   } catch {
     return []
   }
@@ -66,6 +79,8 @@ export function buildPreAssessFromUpcat(
         options: parseOptions(r.options),
         answerIndex: r.correctIndex,
         explanation: r.explanation ?? '',
+        optionExplanations: r.optionExplanations ? parseOptionExplanations(r.optionExplanations) : undefined,
+        strategyTip: r.strategyTip || undefined,
       })
     }
   }

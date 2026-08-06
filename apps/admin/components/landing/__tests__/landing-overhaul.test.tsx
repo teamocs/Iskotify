@@ -17,7 +17,7 @@ import { Hero } from '../Hero'
 import { Testimonials } from '../Testimonials'
 import { FAQ } from '../FAQ'
 import { FooterCTA } from '../FooterCTA'
-import { KuyaBawCTA } from '../KuyaBawCTA'
+import { Features } from '../Features'
 import { EarlyAccessForm } from '../EarlyAccessForm'
 
 // The web app URL the landing buttons fall back to when no env var is set
@@ -100,13 +100,20 @@ describe('Hero', () => {
   it('mockup reflects the current Home sections', () => {
     expect(html).toContain('My Focus')
     expect(html).toContain('Subjects to improve')
-    expect(html).toContain('Ask Kuya Baw')
   })
 
   it('mockup drops the old dashboard design', () => {
     expect(html).not.toContain('Quick Practice')
     expect(html).not.toContain('Weak Areas')
     expect(html).not.toContain('Days Left')
+  })
+
+  // Kuya Baw / AI-chat marketing was retired — the mock app has no chat FAB
+  // or Kuya hero band (real app: 4-tab bar, focus-tile home, no chat).
+  it('no longer markets Kuya Baw / AI chat in the mock', () => {
+    expect(html).not.toContain('Ask Kuya Baw')
+    expect(html).not.toContain('Kuya Baw')
+    expect(html).not.toContain('AI Coach')
   })
 })
 
@@ -229,24 +236,28 @@ describe('EarlyAccessForm', () => {
   })
 })
 
-// ─── KuyaBawCTA ─────────────────────────────────────────────────────────────
-describe('KuyaBawCTA', () => {
+// ─── Features ───────────────────────────────────────────────────────────────
+describe('Features', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(KuyaBawCTA)) })
+  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Features)) })
 
-  it('does not say "Download Free"', () => {
-    expect(html).not.toContain('Download Free')
+  it('no longer markets Kuya Baw / AI chat', () => {
+    expect(html).not.toContain('Kuya Baw')
+    expect(html).not.toContain('AI Companion')
+    expect(html).not.toContain('study companion')
   })
 
-  it('no longer says "Download Now"', () => {
-    expect(html).not.toContain('Download Now')
+  it('replaces the retired benefit card with the study-plan/analytics card', () => {
+    expect(html).toContain('Smart study plan &amp; progress analytics')
+    expect(html).toContain('spaced-repetition flashcards')
   })
 
-  it('offers a free-trial CTA', () => {
-    expect(html).toContain('Start free trial')
+  it('keeps the career AI-impact and AI-proof course copy', () => {
+    expect(html).toContain('AI-proof course')
+    expect(html).toContain('AI&#x27;s impact')
   })
 
-  it('does not use the elongated pill class', () => {
-    expect(html).not.toContain('rounded-[980px]')
+  it('keeps the AI flashcards exam-prep copy', () => {
+    expect(html).toContain('AI flashcards')
   })
 })

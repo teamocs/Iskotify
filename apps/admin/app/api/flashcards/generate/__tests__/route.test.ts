@@ -149,6 +149,33 @@ describe('POST /api/flashcards/generate', () => {
     expect(body.cards[1]!.explanation).toBe('')
   })
 
+  it('threads optionExplanations/strategyTip from generateDistractorsForCard into the returned cards (Task E)', async () => {
+    adminUser()
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => JSON.stringify({
+          cards: [{ question: 'Q1', answer: 'A1', explanation: 'E1' }],
+        }),
+      },
+    })
+    mockGenerateDistractors.mockResolvedValueOnce({
+      options: ['A1', 'B', 'C', 'D'],
+      correctIndex: 0,
+      explanation: 'AI explanation',
+      optionExplanations: [null, 'B is wrong', 'C is wrong', 'D is wrong'],
+      strategyTip: 'Check units before comparing.',
+    })
+    const { POST } = await importRoute()
+    const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra', count: 1 }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      cards: Array<{ optionExplanations?: (string | null)[]; strategyTip?: string; aiOptions?: string[] }>
+    }
+    expect(body.cards[0]!.aiOptions).toEqual(['A1', 'B', 'C', 'D'])
+    expect(body.cards[0]!.optionExplanations).toEqual([null, 'B is wrong', 'C is wrong', 'D is wrong'])
+    expect(body.cards[0]!.strategyTip).toBe('Check units before comparing.')
+  })
+
   it('strips markdown fences and trailing prose from Gemini output', async () => {
     adminUser()
     mockGenerateContent.mockResolvedValueOnce({
@@ -311,6 +338,16 @@ describe('buildGenerationPrompt', () => {
     expect(out).toMatch(/NOT rote memorization/i)
   })
 
+  // Task F — buildGenerationPrompt doesn't write distractors itself (that's
+  // generateDistractorsForCard, chained per-card below), but the "answer" it
+  // asks for feeds straight into that pipeline, so it must steer toward
+  // answers precise enough to support strong distractors.
+  it('asks for answers precise enough to support strong distractors later (Task F)', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 10, listingSlugs: [] })
+    expect(out).toMatch(/distractors/i)
+  })
+
   it('requests JSON output without markdown fences', async () => {
     const { buildGenerationPrompt } = await importRoute()
     const out = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 10, listingSlugs: [] })
@@ -343,5 +380,93 @@ describe('buildGenerationPrompt', () => {
       subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [], existingQuestions: [],
     })
     expect(out).not.toMatch(/DO NOT duplicate or paraphrase/i)
+  })
+
+  it('includes a FORMAT INSTRUCTIONS section with the admin text when formatNotes is provided', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({
+      subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [],
+      formatNotes: '4-option multiple choice, one paragraph reading passage per question',
+    })
+    expect(out).toContain('FORMAT INSTRUCTIONS FROM ADMIN')
+    expect(out).toContain('4-option multiple choice, one paragraph reading passage per question')
+  })
+
+  it('omits the FORMAT INSTRUCTIONS section when formatNotes is absent or blank', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out1 = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [] })
+    expect(out1).not.toContain('FORMAT INSTRUCTIONS FROM ADMIN')
+    const out2 = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [], formatNotes: '   ' })
+    expect(out2).not.toContain('FORMAT INSTRUCTIONS FROM ADMIN')
+  })
+
+  it('includes a SAMPLE QUESTIONS section with the sample text when sampleText is provided', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({
+      subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [],
+      sampleText: 'Q: What is the capital of Laguna? A: Santa Cruz',
+    })
+    expect(out).toContain('SAMPLE QUESTIONS TO IMITATE')
+    expect(out).toContain('Q: What is the capital of Laguna? A: Santa Cruz')
+  })
+
+  it('omits the SAMPLE QUESTIONS section when sampleText is absent or blank', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out1 = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [] })
+    expect(out1).not.toContain('SAMPLE QUESTIONS TO IMITATE')
+    const out2 = buildGenerationPrompt({ subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [], sampleText: '   ' })
+    expect(out2).not.toContain('SAMPLE QUESTIONS TO IMITATE')
+  })
+
+  it('includes both format and sample sections together when both are provided', async () => {
+    const { buildGenerationPrompt } = await importRoute()
+    const out = buildGenerationPrompt({
+      subject: 'Math', topic: 'Algebra', count: 5, listingSlugs: [],
+      formatNotes: 'True/False only',
+      sampleText: 'True or False: 2+2=4',
+    })
+    expect(out).toContain('FORMAT INSTRUCTIONS FROM ADMIN')
+    expect(out).toContain('True/False only')
+    expect(out).toContain('SAMPLE QUESTIONS TO IMITATE')
+    expect(out).toContain('True or False: 2+2=4')
+  })
+})
+
+describe('POST /api/flashcards/generate — formatNotes/sampleText passthrough', () => {
+  it('forwards formatNotes and sampleText from the request body into the prompt', async () => {
+    adminUser()
+    mockGenerateContent.mockResolvedValueOnce({
+      response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
+    })
+    const { POST } = await importRoute()
+    await POST(makeReq({
+      subject_name: 'Math',
+      topic_name: 'Algebra',
+      formatNotes: 'Short-answer only, no MCQ',
+      sampleText: 'Sample: Solve for x in 2x=4',
+    }))
+    const promptArg = mockGenerateContent.mock.calls[0]?.[0] as string
+    expect(promptArg).toContain('FORMAT INSTRUCTIONS FROM ADMIN')
+    expect(promptArg).toContain('Short-answer only, no MCQ')
+    expect(promptArg).toContain('SAMPLE QUESTIONS TO IMITATE')
+    expect(promptArg).toContain('Sample: Solve for x in 2x=4')
+  })
+
+  it('caps sampleText and formatNotes at 20k chars before building the prompt', async () => {
+    adminUser()
+    mockGenerateContent.mockResolvedValueOnce({
+      response: { text: () => JSON.stringify({ cards: [{ question: 'Q', answer: 'A', explanation: '' }] }) },
+    })
+    const { POST } = await importRoute()
+    const longText = 'x'.repeat(25000)
+    await POST(makeReq({
+      subject_name: 'Math',
+      topic_name: 'Algebra',
+      sampleText: longText,
+    }))
+    const promptArg = mockGenerateContent.mock.calls[0]?.[0] as string
+    // Prompt should not contain the full 25k-char run — it was capped to 20k.
+    expect(promptArg).not.toContain(longText)
+    expect(promptArg).toContain('x'.repeat(20000))
   })
 })

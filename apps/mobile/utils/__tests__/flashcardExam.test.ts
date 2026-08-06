@@ -26,4 +26,37 @@ describe('pickQuestions', () => {
     const out = pickQuestions(items, 'full')
     expect(out.length).toBe(2)
   })
+
+  describe('due mode (Task H)', () => {
+    it('keeps only items present in dueAtById, ordering most-overdue (smallest dueAt) first', () => {
+      const items = [q('a'), q('b'), q('c'), q('d')]
+      const dueAtById = { c: 100, a: 300 } // b, d not due
+      const out = pickQuestions(items, 'due', dueAtById)
+      expect(out.map(x => x.id)).toEqual(['c', 'a'])
+    })
+
+    it('returns an empty array when dueAtById is missing or empty (never falls back to "all")', () => {
+      const items = [q('a'), q('b')]
+      expect(pickQuestions(items, 'due')).toEqual([])
+      expect(pickQuestions(items, 'due', {})).toEqual([])
+    })
+
+    it('drops items with no id even if dueAtById happens to have a matching key', () => {
+      const items = [{ stem: 'no id', options: [], answerIndex: 0 } as any]
+      expect(pickQuestions(items, 'due', { undefined: 1 } as any)).toEqual([])
+    })
+
+    it('caps at FULL_CAP', () => {
+      const items = Array.from({ length: FULL_CAP + 20 }, (_, i) => q('c'+i))
+      const dueAtById = Object.fromEntries(items.map((it, i) => [it.id, i]))
+      expect(pickQuestions(items, 'due', dueAtById).length).toBe(FULL_CAP)
+    })
+
+    it('deduplicates by stem before filtering to due', () => {
+      const items = [q('a','What is 2+2?'), q('b','what is 2+2? ')]
+      const dueAtById = { a: 1, b: 2 }
+      // 'b' is deduped away (normalized stem collides with 'a'), so only 'a' remains due.
+      expect(pickQuestions(items, 'due', dueAtById).map(x => x.id)).toEqual(['a'])
+    })
+  })
 })

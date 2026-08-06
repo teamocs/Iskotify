@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import Papa from 'papaparse'
 import { Topbar } from '@/components/admin/Topbar'
+import { GenerateExplanationsButton } from '@/components/admin/GenerateExplanationsButton'
 import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
 import { QuestionBankEditorTable, type DisplayRow } from '@/components/flashcards/QuestionBankEditorTable'
 import { normalizeQuestionBankHeader } from '@/lib/csv/questionBankHeaders'
@@ -127,6 +128,9 @@ export default function QuestionBankImportPage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <Topbar title="Import Question Bank" exportHref="/api/admin/upcat-questions/export" />
+      <div className="flex justify-end px-4 md:px-6 pt-3">
+        <GenerateExplanationsButton source="upcat_questions" label="✨ Generate explanations for questions" />
+      </div>
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 max-w-6xl mx-auto space-y-6">
           <div>

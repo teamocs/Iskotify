@@ -2,7 +2,7 @@
  * SidebarNav — persistent desktop sidebar for lg breakpoint (web only).
  *
  * Reuses the exact same icon components as TabBar.tsx:
- *   Home2Outlined, Bolt2Outlined, GraduationCap1Outlined, Bell1Outlined
+ *   Home2Outlined, Bolt2Outlined, GraduationCap1Outlined, Bell1Outlined, TrendUp1Outlined
  * plus User4Outlined for profile and Gear1Outlined for settings.
  *
  * Hover support: react-native-web 0.21.2 exposes `hovered` in the Pressable
@@ -21,11 +21,11 @@ import {
   Bolt2Outlined,
   GraduationCap1Outlined,
   Bell1Outlined,
+  TrendUp1Outlined,
   User4Outlined,
   Gear1Outlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
 import { spacing, radius, typography } from '../../theme/tokens'
 
 const SIDEBAR_WIDTH = 240
@@ -39,10 +39,11 @@ interface NavEntry {
 }
 
 const NAV_ITEMS: NavEntry[] = [
-  { label: 'Home',    icon: Home2Outlined,           route: '/',          activePrefix: '/(tabs)/index' },
-  { label: 'Exams',   icon: Bolt2Outlined,            route: '/practice',  activePrefix: '/practice' },
-  { label: 'Lists',   icon: GraduationCap1Outlined,   route: '/listings',  activePrefix: '/listings' },
-  { label: 'Updates', icon: Bell1Outlined,             route: '/updates',   activePrefix: '/updates' },
+  { label: 'Home',     icon: Home2Outlined,          route: '/',          activePrefix: '/(tabs)/index' },
+  { label: 'Exams',    icon: Bolt2Outlined,           route: '/practice',  activePrefix: '/practice' },
+  { label: 'Lists',    icon: GraduationCap1Outlined,  route: '/listings',  activePrefix: '/listings' },
+  { label: 'Updates',  icon: Bell1Outlined,           route: '/updates',   activePrefix: '/updates' },
+  { label: 'Progress', icon: TrendUp1Outlined,        route: '/analytics', activePrefix: '/analytics' },
 ]
 
 const BOTTOM_ITEMS: NavEntry[] = [
@@ -117,7 +118,6 @@ function SidebarItem({ entry, active, onPress }: SidebarItemProps) {
 export function SidebarNav() {
   const { theme: t } = useTheme()
   const pathname = usePathname()
-  const { open: openKuya } = useKuyaChatModal()
 
   return (
     <View
@@ -151,33 +151,6 @@ export function SidebarNav() {
           />
         ))}
       </View>
-
-      {/* Ask Kuya Baw entry — mascot mini */}
-      <Pressable
-        onPress={() => { void openKuya() }}
-        accessibilityRole="button"
-        accessibilityLabel="Ask Kuya Baw"
-        style={(state) => {
-          const { hovered, pressed } = state as { hovered?: boolean; pressed: boolean }
-          return [
-            styles.kuyaRow,
-            { borderColor: t.border },
-            hovered && { backgroundColor: t.surface },
-            pressed && { opacity: 0.8 },
-          ]
-        }}
-      >
-        <Image
-          source={require('../../assets/images/kuya-baw-logo.png')}
-          style={styles.kuyaImg}
-          resizeMode="contain"
-          accessibilityLabel="Kuya Baw mascot"
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.kuyaLabel, { color: t.accentText }]}>Ask Kuya Baw</Text>
-          <Text style={[styles.kuyaSub, { color: t.textTertiary }]}>AI Study Coach</Text>
-        </View>
-      </Pressable>
 
       {/* Spacer pushes bottom items down */}
       <View style={{ flex: 1 }} />
@@ -253,30 +226,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: radius.pill,
-  },
-  kuyaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    minHeight: 44,
-  },
-  kuyaImg: {
-    width: 32,
-    height: 32,
-  },
-  kuyaLabel: {
-    fontSize: typography.sm,
-    fontFamily: 'Outfit_700Bold',
-  },
-  kuyaSub: {
-    fontSize: typography.xs,
-    fontFamily: 'Lexend_400Regular',
   },
   bottomSection: {
     borderTopWidth: 1,

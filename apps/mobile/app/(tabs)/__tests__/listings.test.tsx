@@ -33,6 +33,15 @@ jest.mock('../../../services/settings', () => ({
   getSettings: jest.fn().mockResolvedValue({}),
 }))
 
+// Readiness aggregates run their own multi-level groupBy/subquery SQL the simple
+// row-based `makeDb` mock below can't express — mock the service directly
+// (same pattern as sync/settings/listingSearch above). Individual tests can
+// override these via mockResolvedValueOnce for readiness-specific assertions.
+jest.mock('../../../services/homeAggregates', () => ({
+  getListingMockBest: jest.fn().mockResolvedValue([]),
+  getListingAccuracy: jest.fn().mockResolvedValue([]),
+}))
+
 // Isolate the screen from the on-device LLM import chain.
 jest.mock('../../../services/listingSearch', () => ({
   aiSearchListings: jest.fn().mockResolvedValue(null),

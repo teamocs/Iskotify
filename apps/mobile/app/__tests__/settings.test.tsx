@@ -4,6 +4,13 @@ import SettingsScreen from '../settings'
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), back: jest.fn() },
+  // settings.tsx now pulls in useHomeStats (Task I: Notifications section
+  // needs focusedListings) — same useFocusEffect stand-in used across the
+  // suite (e.g. hooks/__tests__/useAnalytics.test.ts): just run the effect.
+  useFocusEffect: (cb: () => void) => {
+    const React = require('react')
+    React.useEffect(cb, [cb])
+  },
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -24,6 +31,17 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Brush2Outlined: {},
   Bug1Outlined: {},
   Comment1Outlined: {},
+  Download1Outlined: {},
+  Bell1Outlined: {},
+}))
+
+// AiModelDownloadSheet pulls in the native background-downloader module via
+// useModelDownload — mock the sheet itself so this screen test stays isolated
+// from that native dependency (mirrors how heavy child components are mocked
+// elsewhere in this suite).
+jest.mock('../../components/AiModelDownloadSheet', () => ({
+  AiModelDownloadSheet: ({ visible }: { visible: boolean }) =>
+    visible ? require('react').createElement(require('react-native').Text, null, 'AI Model Download Sheet') : null,
 }))
 
 jest.mock('expo-constants', () => ({
@@ -67,6 +85,22 @@ describe('SettingsScreen', () => {
     expect(screen.getByText('Exit App')).toBeTruthy()
   })
 
+  it('renders the Notifications section with master toggle, reminder time, and weekly summary', async () => {
+    render(<SettingsScreen />)
+    expect(screen.getByText('Notifications')).toBeTruthy()
+    expect(await screen.findByText('Push Notifications')).toBeTruthy()
+    expect(screen.getByText('Daily reminder time')).toBeTruthy()
+    expect(screen.getByText('9:00 AM')).toBeTruthy() // default hour
+    expect(screen.getByText('Weekly summary')).toBeTruthy()
+  })
+
+  it('stepping the reminder time forward shows the next hour', async () => {
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    fireEvent.press(screen.getByLabelText('Later'))
+    expect(await screen.findByText('10:00 AM')).toBeTruthy()
+  })
+
   it('renders Feedback section with Report a Bug and Leave Feedback rows', () => {
     render(<SettingsScreen />)
     expect(screen.getByText('Feedback')).toBeTruthy()
@@ -94,5 +128,18 @@ describe('SettingsScreen', () => {
   it('shows Student as default name when no listing is loaded', async () => {
     render(<SettingsScreen />)
     expect(await screen.findByText('Student')).toBeTruthy()
+  })
+
+  it('renders the AI Features section with an On-device AI model row', () => {
+    render(<SettingsScreen />)
+    expect(screen.getByText('AI Features')).toBeTruthy()
+    expect(screen.getByText('On-device AI model')).toBeTruthy()
+  })
+
+  it('opens the AI model download sheet on press', () => {
+    render(<SettingsScreen />)
+    expect(screen.queryByText('AI Model Download Sheet')).toBeNull()
+    fireEvent.press(screen.getByText('On-device AI model'))
+    expect(screen.getByText('AI Model Download Sheet')).toBeTruthy()
   })
 })

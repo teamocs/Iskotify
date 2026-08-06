@@ -20,7 +20,7 @@ import type { DrizzleClient } from '../db/client'
 import {
   subjects, topics, flashcards, listings, userSettings,
   focusListings, savedDecks, userProgress, practiceSessions,
-  userRequirements,
+  userRequirements, questionAttempts, flashcardSrs, studyPlanItems,
   notes as notesTable, noteLabels, noteLabelAssignments,
   upcatPassages, upcatQuestions, upcatFacts, upcatCutoffs,
   careerCourses, careerDestinations, careerCountries, careerPrograms,
@@ -29,7 +29,6 @@ import {
   courseSchoolQuality, barResults, courseTaxonomyMap,
   admissionsUpdates,
   examSkillCategories, examBlueprints, examBlueprintSections, examCourseNotes,
-  aiChatConfig,
 } from '../db/schema'
 import { supabase } from './supabase'
 import { pushPendingReports } from './questionReports'
@@ -75,7 +74,12 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows] = await Promise.all([
+  // question_attempts is bounded by hooks/useRecordAttempts.ts's
+  // pruneOldAttempts (utils/attemptRetention.ts, MAX_RETAINED_ATTEMPTS =
+  // 5000 rows) — this SELECT is a full-table read, but the table itself is
+  // capped, so this payload does NOT grow without bound across a user's
+  // lifetime the way it would without that retention pruning.
+  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts, srsRows, planRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
@@ -85,6 +89,9 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
     db.select().from(userRequirements),
+    db.select().from(questionAttempts),
+    db.select().from(flashcardSrs),
+    db.select().from(studyPlanItems),
   ])
 
   await supabase.from('user_app_data').upsert({
@@ -98,6 +105,9 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
     note_labels: labelRows,
     note_label_assignments: assignRows,
     user_requirements: reqRows,
+    question_attempts: attempts,
+    flashcard_srs: srsRows,
+    study_plan_items: planRows,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
@@ -136,6 +146,8 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         notificationsEnabled: remoteSettings.notificationsEnabled ?? true,
         theme: remoteSettings.theme ?? 'system',
         focusModeEnabled: remoteSettings.focusModeEnabled ?? true,
+        dailyReminderHour: remoteSettings.dailyReminderHour ?? 9,
+        weeklySummaryEnabled: remoteSettings.weeklySummaryEnabled ?? true,
         targetExams: remoteSettings.targetExams ?? '[]',
         targetCourses: remoteSettings.targetCourses ?? '[]',
         schoolRegion: remoteSettings.schoolRegion ?? '',
@@ -222,6 +234,47 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
       } catch (e) {
         console.warn('[sync] user_requirements restore failed (non-fatal):', e)
       }
+
+      // question_attempts (Task D telemetry). OPTIONAL on pull: older backups
+      // (and the remote column itself, pre-migration-048) predate this field,
+      // so `?? []` keeps them restoring fine. Own try/catch, same reasoning
+      // as user_requirements above.
+      try {
+        const remoteAttempts: typeof questionAttempts.$inferInsert[] = data.question_attempts ?? []
+        if (remoteAttempts.length > 0) {
+          tx.delete(questionAttempts).run()
+          for (const row of remoteAttempts) tx.insert(questionAttempts).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] question_attempts restore failed (non-fatal):', e)
+      }
+
+      // flashcard_srs (Task H spaced-repetition state). OPTIONAL on pull:
+      // older backups (and the remote column itself, pre-migration-051)
+      // predate this field. Own try/catch, same reasoning as
+      // question_attempts above.
+      try {
+        const remoteSrs: typeof flashcardSrs.$inferInsert[] = data.flashcard_srs ?? []
+        if (remoteSrs.length > 0) {
+          tx.delete(flashcardSrs).run()
+          for (const row of remoteSrs) tx.insert(flashcardSrs).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] flashcard_srs restore failed (non-fatal):', e)
+      }
+
+      // study_plan_items (Task I). OPTIONAL on pull: older backups (and the
+      // remote column itself, pre-migration-052) predate this field. Own
+      // try/catch, same reasoning as flashcard_srs above.
+      try {
+        const remotePlan: typeof studyPlanItems.$inferInsert[] = data.study_plan_items ?? []
+        if (remotePlan.length > 0) {
+          tx.delete(studyPlanItems).run()
+          for (const row of remotePlan) tx.insert(studyPlanItems).values(row).run()
+        }
+      } catch (e) {
+        console.warn('[sync] study_plan_items restore failed (non-fatal):', e)
+      }
     })
   } catch (e) {
     console.warn('[sync] secondary data restore failed (non-fatal):', e)
@@ -243,7 +296,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // School-level focus entries ("school:<id>") have no content of their own —
     // no flashcard is tagged with a school pseudo-slug, and every consumer of
-    // selectedListingSlug (profile title, recommended topics, chat context)
+    // selectedListingSlug (profile title, recommended topics)
     // expects a CONTENT slug. Map them to 'general-cet' (the shared general
     // entrance practice) for both the per-slug flashcards pull and the cursor
     // write below; otherwise a school-only-focus user syncs ZERO review cards
@@ -252,7 +305,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // NOTE: we intentionally do NOT early-return when slugs.length === 0.
     // Only the per-slug flashcards pull genuinely needs focus slugs; every
     // catalog table (listings, subjects/topics, upcat, career_*, university/
-    // course/taxonomy, blueprints, admissions, ai_chat_config) is public and
+    // course/taxonomy, blueprints, admissions) is public and
     // must ALWAYS mirror so a focus-less session (anonymous web visitor, or a
     // launch that fires before pullUserData restores focus on sign-in) still
     // populates Courses/Destinations. The flashcards pull below is the only
@@ -278,7 +331,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
       fetchAllPaginated((from, to) => supabase.from('upcat_questions')
-        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,updated_at')
+        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,option_explanations,strategy_tip,updated_at')
         .gt('updated_at', since)
         .order('question_id')
         .range(from, to)),
@@ -325,7 +378,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         .select('id,name,acronym,region,province,city,type,is_suc,is_luc,deped_school_id,rank_in_province,updated_at')
         .gt('updated_at', since),
       supabase.from('university_profiles')
-        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,updated_at')
+        .select('school_id,data_tier,institution_type,year_established,known_for_courses,prc_top_courses,ched_coe_cod,accreditation,entrance_exam_name,entrance_exam_acronym,testing_center_type,application_open,application_close,exam_month,estimated_passing_rate,estimated_slots,tuition_fee_range,free_tuition,academic_calendar,courses_offered,scholarships_offered,website_url,application_portal_url,facebook_url,exam_difficulty,notable_programs,prc_strong_boards,notes,data_confidence,requirements,qualifications,updated_at')
         .gt('updated_at', since),
       fetchAllPaginated((from, to) => supabase.from('course_school_rankings')
         .select('id,course_tab,course_name,rank,school_name,region,province,wilson_score,raw_pass_rate,total_examinees,total_passers,years_with_data,exam_periods,tertiary_school_id,updated_at')
@@ -347,7 +400,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // NOTE: .eq('status','published') removed from blueprints so unpublish propagates.
     // Local readers (examBlueprints.ts getExamBlueprint / listPublishedBlueprintSlugs)
     // already filter status='published' in JS — verified in examBlueprints.ts:22,43.
-    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes, aiChatConfigRes] = await Promise.all([
+    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes] = await Promise.all([
       supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at')
@@ -355,10 +408,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at')
-        .gt('updated_at', since),
-      // AI chat config — single row (id=1). incremental: only pull when updated_at changed.
-      supabase.from('ai_chat_config')
-        .select('id,core_rules_override,scope_block_override,grounding_rule_override,anti_injection_override,progress_addendum_override,topic_addendum_override,math_addendum_override,rag_total_token_budget,rag_per_block_char_cap,rag_blocks_enabled,updated_at')
         .gt('updated_at', since),
     ])
 
@@ -369,7 +418,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const cardResults = contentSlugs.length === 0 ? [] : await Promise.all(
       contentSlugs.map(slug =>
         fetchAllPaginated((from, to) => supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,updated_at')
+          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,option_explanations,strategy_tip,updated_at')
           .contains('listing_slugs', [slug])
           .gt('updated_at', since)
           .order('id')
@@ -458,6 +507,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           remoteUpdatedAt,
           // status synced so unpublished cards propagate to device (local readers filter published)
           status: (row as any).status ?? 'published',
+          optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
+          strategyTip: (row as any).strategy_tip ?? '',
         }
 
         // Only include ai_* fields when Supabase actually has them. This preserves
@@ -499,6 +550,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         setId: row.set_id ?? null, setPosition: row.set_position ?? null,
         hasVisual: !!row.has_visual, status: row.status,
         skillCategory: row.skill_category ?? null,
+        optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
+        strategyTip: (row as any).strategy_tip ?? '',
         remoteUpdatedAt: new Date(row.updated_at).getTime(),
       })), upcatQuestions.questionId)
 
@@ -588,7 +641,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         keyCaveat: row.key_caveat ?? null, pointTo: row.point_to ?? null,
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), careerFacts.id)
-      // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
@@ -632,6 +684,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         notablePrograms: JSON.stringify(row.notable_programs ?? []),
         prcStrongBoards: JSON.stringify(row.prc_strong_boards ?? []),
         notes: row.notes ?? null, dataConfidence: row.data_confidence ?? null,
+        requirements: JSON.stringify(row.requirements ?? []),
+        qualifications: JSON.stringify(row.qualifications ?? []),
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), universityProfiles.schoolId)
     })
@@ -712,23 +766,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), examCourseNotes.id)
-
-      // ── AI Chat Config (single row, id=1) ───────────────────────────────────
-      batchUpsert(tx, aiChatConfig, (aiChatConfigRes.data ?? []).map((row) => ({
-        id: 1,
-        coreRulesOverride:        row.core_rules_override ?? '',
-        scopeBlockOverride:       row.scope_block_override ?? '',
-        groundingRuleOverride:    row.grounding_rule_override ?? '',
-        antiInjectionOverride:    row.anti_injection_override ?? '',
-        progressAddendumOverride: row.progress_addendum_override ?? '',
-        topicAddendumOverride:    row.topic_addendum_override ?? '',
-        mathAddendumOverride:     row.math_addendum_override ?? '',
-        ragTotalTokenBudget:      row.rag_total_token_budget ?? 700,
-        ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
-        // jsonb → store as JSON string on SQLite
-        ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
-        remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
-      })), aiChatConfig.id)
 
       // Cursor write LAST so an interrupted sync re-pulls next launch.
       // selectedListingSlug is only (re)written when we actually have a slug —

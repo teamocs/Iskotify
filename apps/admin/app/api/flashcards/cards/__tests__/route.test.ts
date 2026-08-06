@@ -338,6 +338,7 @@ describe('POST /api/flashcards/cards — batch path', () => {
       {
         question: 'Q1', answer: 'A1', explanation: 'E1',
         aiOptions: ['A1', 'B', 'C', 'D'], aiCorrectIndex: 0, aiExplanation: 'because A1',
+        optionExplanations: [null, 'B is wrong', 'C is wrong', 'D is wrong'], strategyTip: 'Check units.',
       },
       {
         question: 'Q2', answer: 'A2', explanation: 'E2',
@@ -367,10 +368,12 @@ describe('POST /api/flashcards/cards — batch path', () => {
       ai_options: ['A1', 'B', 'C', 'D'],
       ai_correct_index: 0,
       ai_explanation: 'because A1',
+      option_explanations: [null, 'B is wrong', 'C is wrong', 'D is wrong'],
+      strategy_tip: 'Check units.',
     })
     expect(typeof row0.ai_enhanced_at).toBe('string')
 
-    // Card 2 — ai_* should be null when not provided
+    // Card 2 — ai_* should be null when not provided; option_explanations/strategy_tip default to empty
     expect(row1).toMatchObject({
       topic_id: 'topic-1',
       question: 'Q2',
@@ -379,6 +382,8 @@ describe('POST /api/flashcards/cards — batch path', () => {
       ai_correct_index: null,
       ai_explanation: null,
       ai_enhanced_at: null,
+      option_explanations: [],
+      strategy_tip: '',
     })
   })
 

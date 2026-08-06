@@ -148,10 +148,11 @@ describe('computeTopicMastery', () => {
     expect(rc.accuracy).toBe(90)
   })
 
-  it('skips __full__ and __weak__ sentinel deckIds', () => {
+  it('skips __full__, __weak__, and __due__ sentinel deckIds', () => {
     const sessions = [
       { topicId: '', deckId: '__full__', subtest: null, listingSlug: '', score: 5, total: 10, completedAt: Date.now() },
       { topicId: '', deckId: '__weak__', subtest: null, listingSlug: '', score: 3, total: 10, completedAt: Date.now() },
+      { topicId: '', deckId: '__due__', subtest: null, listingSlug: '', score: 4, total: 10, completedAt: Date.now() },
     ]
     const mastery = computeTopicMastery(sessions as any, topicNameMap, deckMap)
     expect(mastery).toHaveLength(0)

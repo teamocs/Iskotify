@@ -3,12 +3,11 @@
  *
  * Mocks:
  *  - expo-router (usePathname, router)
- *  - KuyaChatProvider (useKuyaChatModal)
  *  - useWindowDimensions → lg width so useBreakpoint returns 'lg'
  *
  * Default jest dimensions are phone-sized (sm) but here we explicitly mock
  * useWindowDimensions to return a desktop width to verify the sidebar renders
- * its nav items and Kuya Baw entry.
+ * its nav items.
  */
 import React from 'react'
 import { render } from '@testing-library/react-native'
@@ -17,11 +16,6 @@ import { render } from '@testing-library/react-native'
 jest.mock('expo-router', () => ({
   usePathname: jest.fn(() => '/'),
   router: { push: jest.fn() },
-}))
-
-// Mock KuyaChatProvider
-jest.mock('../../providers/KuyaChatProvider', () => ({
-  useKuyaChatModal: () => ({ open: jest.fn() }),
 }))
 
 // Mock useWindowDimensions to return a desktop-width screen
@@ -38,11 +32,7 @@ describe('SidebarNav', () => {
     expect(getByText('Exams')).toBeTruthy()
     expect(getByText('Lists')).toBeTruthy()
     expect(getByText('Updates')).toBeTruthy()
-  })
-
-  it('renders Kuya Baw entry', () => {
-    const { getByText } = render(<SidebarNav />)
-    expect(getByText('Ask Kuya Baw')).toBeTruthy()
+    expect(getByText('Progress')).toBeTruthy()
   })
 
   it('renders bottom nav items (Profile and Settings)', () => {

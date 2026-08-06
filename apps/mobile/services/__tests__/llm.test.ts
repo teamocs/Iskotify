@@ -126,19 +126,7 @@ describe('parseResponse', () => {
   })
 })
 
-describe('coach exports', () => {
-  it('re-exports parseCoachPhrase from coachPrompts', () => {
-    const { parseCoachPhrase } = require('../llm')
-    expect(typeof parseCoachPhrase).toBe('function')
-    expect(parseCoachPhrase('Tara mag-review tayo!')).toBe('Tara mag-review tayo!')
-    expect(parseCoachPhrase('')).toBeNull()
-  })
-
-  it('exports runCoachInference as an async function', () => {
-    const { runCoachInference } = require('../llm')
-    expect(typeof runCoachInference).toBe('function')
-  })
-
+describe('exports', () => {
   it('exports releaseContextIfIdle as an async function', () => {
     const { releaseContextIfIdle } = require('../llm')
     expect(typeof releaseContextIfIdle).toBe('function')
@@ -151,7 +139,7 @@ describe('inference mutex', () => {
     jest.clearAllMocks()
   })
 
-  it('serializes concurrent coach inferences in FIFO order', async () => {
+  it('serializes concurrent raw completions in FIFO order', async () => {
     const order: number[] = []
     let n = 0
     const completion = jest.fn().mockImplementation(async () => {
@@ -159,7 +147,7 @@ describe('inference mutex', () => {
       order.push(i)
       await new Promise(r => setTimeout(r, 5))
       order.push(-i)
-      return { text: 'Tara mag-review tayo na!' }
+      return { text: 'ok' }
     })
     const llama = require('llama.rn')
     llama.initLlama.mockResolvedValue({
@@ -167,12 +155,12 @@ describe('inference mutex', () => {
       release: jest.fn().mockResolvedValue(undefined),
     })
 
-    const { runCoachInference } = require('../llm')
+    const { runRawCompletion } = require('../llm')
 
     await Promise.all([
-      runCoachInference('a'),
-      runCoachInference('b'),
-      runCoachInference('c'),
+      runRawCompletion('a'),
+      runRawCompletion('b'),
+      runRawCompletion('c'),
     ])
 
     // FIFO: each inference completes (negative number) before the next starts (positive number)
@@ -186,9 +174,9 @@ describe('inference mutex', () => {
     const llama = require('llama.rn')
     llama.initLlama.mockResolvedValue({ completion, release })
 
-    const { runCoachInference } = require('../llm')
+    const { runRawCompletion } = require('../llm')
 
-    await expect(runCoachInference('boom')).rejects.toThrow('native crash')
+    await expect(runRawCompletion('boom')).rejects.toThrow('native crash')
     expect(release).toHaveBeenCalled()
   })
 })
@@ -281,8 +269,8 @@ describe('getContext — single init (no MTP, no fallback)', () => {
     const llama = require('llama.rn')
     llama.initLlama.mockResolvedValue(mockCtx)
 
-    const { runCoachInference } = require('../llm')
-    await runCoachInference('hello')
+    const { runRawCompletion } = require('../llm')
+    await runRawCompletion('hello')
 
     expect(llama.initLlama).toHaveBeenCalledTimes(1)
     const callArgs = llama.initLlama.mock.calls[0]![0]
@@ -300,8 +288,8 @@ describe('getContext — single init (no MTP, no fallback)', () => {
     const llama = require('llama.rn')
     llama.initLlama.mockRejectedValueOnce(new Error('init failed'))
 
-    const { runCoachInference } = require('../llm')
-    await expect(runCoachInference('hello')).rejects.toThrow('init failed')
+    const { runRawCompletion } = require('../llm')
+    await expect(runRawCompletion('hello')).rejects.toThrow('init failed')
     // Only one init attempt — no retry
     expect(llama.initLlama).toHaveBeenCalledTimes(1)
   })
@@ -402,86 +390,5 @@ describe('modelExists — generalized stale-model cleanup', () => {
     const { modelExists } = require('../llm')
     // Must not throw
     await expect(modelExists()).resolves.toBe(false)
-  })
-})
-
-describe('streamChatInference', () => {
-  beforeEach(() => {
-    jest.resetModules()
-    jest.clearAllMocks()
-  })
-
-  it('fires onToken for each token emitted by the completion callback', async () => {
-    const tokens = ['Hello', ' ', 'world', '!']
-    const completion = jest.fn().mockImplementation(async (_params, cb) => {
-      for (const t of tokens) cb({ token: t })
-      return { text: tokens.join('') }
-    })
-    const llama = require('llama.rn')
-    llama.initLlama.mockResolvedValue({
-      completion,
-      release: jest.fn().mockResolvedValue(undefined),
-    })
-
-    const { streamChatInference } = require('../llm')
-    const collected: string[] = []
-    const controller = new AbortController()
-    const final = await streamChatInference('test prompt', (t: string) => collected.push(t), controller.signal)
-
-    expect(collected).toEqual(['Hello', ' ', 'world', '!'])
-    expect(final).toBe('Hello world!')
-  })
-
-  it('stops emitting tokens after abort signal fires', async () => {
-    const completion = jest.fn().mockImplementation(async (_params, cb) => {
-      cb({ token: 'first' })
-      cb({ token: 'second' })
-      // Caller aborts here in the test body via controller.abort()
-      cb({ token: 'third' })
-      cb({ token: 'fourth' })
-      return { text: 'firstsecondthirdfourth' }
-    })
-    const llama = require('llama.rn')
-    llama.initLlama.mockResolvedValue({
-      completion,
-      release: jest.fn().mockResolvedValue(undefined),
-    })
-
-    const { streamChatInference } = require('../llm')
-    const controller = new AbortController()
-    const collected: string[] = []
-    const promise = streamChatInference('p', (t: string) => {
-      collected.push(t)
-      if (collected.length === 2) controller.abort()
-    }, controller.signal)
-    await promise
-
-    // Only the first two tokens should have been collected (signal blocks 3rd and 4th)
-    expect(collected).toEqual(['first', 'second'])
-  })
-
-  it('passes top_k: 40 and n_predict: 96 to completion (no top_p)', async () => {
-    const completion = jest.fn().mockResolvedValue({ text: 'ok' })
-    const llama = require('llama.rn')
-    llama.initLlama.mockResolvedValue({
-      completion,
-      release: jest.fn().mockResolvedValue(undefined),
-    })
-
-    const { streamChatInference } = require('../llm')
-    const controller = new AbortController()
-    await streamChatInference('p', () => {}, controller.signal)
-
-    const config = completion.mock.calls[0]![0]
-    // Default nPredict 48 → 96 (Gemma 3 1B is fast; less truncation)
-    expect(config.n_predict).toBe(96)
-    expect(config.top_k).toBe(40)
-    expect(config.temperature).toBe(0.2)
-    expect(config.penalty_repeat).toBe(1.1)
-    expect(config.top_p).toBeUndefined()
-    // Verify Gemma stop tokens
-    expect(config.stop).toContain('<end_of_turn>')
-    expect(config.stop).toContain('<eos>')
-    expect(config.stop).not.toContain('<|im_end|>')
   })
 })

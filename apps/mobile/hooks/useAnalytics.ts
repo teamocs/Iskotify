@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
-import { practiceSessions, topics, savedDecks } from '../db/schema'
+import { practiceSessions, topics, savedDecks, questionAttempts } from '../db/schema'
 import { resolveTopicLabel } from '../utils/topicLabel'
 import { cachedQuery, subscribe } from '../services/queryCache'
 import { getPracticeDayIndices } from '../services/homeAggregates'
 import { computeStreakFromDays, localDayOffsetMs } from './useHomeStats'
+import {
+  computeAvgTimePerQuestion, computeMostMissedTopics, resolveMissedTopicLabels,
+  computeAccuracyTrend, computeMockAttemptHistory,
+  type AvgTimeResult, type ResolvedMissedTopic, type TrendPoint, type MockAttemptPercentile,
+} from '../services/analyticsAggregates'
 
 export interface WeeklyBar {
   dayLabel: string
@@ -37,9 +42,20 @@ export interface AnalyticsData {
   weeklyData: WeeklyBar[]
   topicMastery: TopicMastery[]
   recentSessions: RecentSession[]
+  /** Task G: avg elapsedMs per question, overall + per subject, from question_attempts. */
+  avgTime: AvgTimeResult
+  /** Task G: top missed topics by wrong-answer count, with a tap-through destination where one exists. */
+  mostMissedTopics: ResolvedMissedTopic[]
+  /** Task G: 8-week accuracy trend — a longer window than weeklyData's fixed 7 days. */
+  accuracyTrend: TrendPoint[]
+  /** Task G: percentile-band history across full mock-exam attempts, oldest first. */
+  mockAttemptHistory: MockAttemptPercentile[]
   isLoading: boolean
   refresh: () => Promise<void>
 }
+
+/** Display cap for the Most Common Mistakes list — computeMostMissedTopics returns every group with a miss. */
+const MOST_MISSED_LIMIT = 6
 
 // ── Exported pure function (tested in hooks/__tests__/useAnalytics.test.ts) ──
 
@@ -49,7 +65,8 @@ export interface AnalyticsData {
  *   Tier 2: subtest string — handles UPCAT/USTET session records that carry
  *            subtest='Mathematics' etc. and have topicId='' + deckId=''
  *
- * Sentinels '__full__' and '__weak__' are still skipped.
+ * Sentinels '__full__', '__weak__', and '__due__' (Task H's global due-review
+ * run — see app/practice/due/index.tsx) are still skipped.
  */
 export function computeTopicMastery(
   sessions: Array<{
@@ -65,7 +82,7 @@ export function computeTopicMastery(
   const grouped: Record<string, { score: number; total: number; count: number }> = {}
   for (const s of sessions) {
     const key = s.topicId || s.deckId || (s.subtest ? 'subtest:' + s.subtest : '')
-    if (!key || key === '__full__' || key === '__weak__') continue
+    if (!key || key === '__full__' || key === '__weak__' || key === '__due__') continue
     if (!grouped[key]) grouped[key] = { score: 0, total: 0, count: 0 }
     grouped[key]!.score += s.score
     grouped[key]!.total += s.total
@@ -128,7 +145,10 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
   const db = useDb()
   const [data, setData] = useState<Omit<AnalyticsData, 'refresh'>>({
     sessionCount: 0, avgAccuracy: null, streak: 0,
-    weeklyData: [], topicMastery: [], recentSessions: [], isLoading: true,
+    weeklyData: [], topicMastery: [], recentSessions: [],
+    avgTime: { overallAvgMs: null, overallCount: 0, bySubject: [] },
+    mostMissedTopics: [], accuracyTrend: [], mockAttemptHistory: [],
+    isLoading: true,
   })
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
@@ -140,16 +160,23 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       const fetcher = async () => {
         // Local-day bucketing offset — read at call time (never cached across days)
         const offsetMs = localDayOffsetMs()
-        const [allSessions, topicRows, deckRows, dayIndices] = await Promise.all([
+        const [allSessions, topicRows, deckRows, dayIndices, allAttempts] = await Promise.all([
           db.select().from(practiceSessions),
           db.select({ id: topics.id, name: topics.name, subjectId: topics.subjectId }).from(topics),
           db.select({ id: savedDecks.id, name: savedDecks.name }).from(savedDecks),
           getPracticeDayIndices(db, offsetMs),
+          // Bounded by pruneOldAttempts (MAX_RETAINED_ATTEMPTS, see utils/attemptRetention.ts)
+          // so a full-table fetch + JS aggregation here stays cheap.
+          db.select().from(questionAttempts),
         ])
 
         const filtered = slug === 'overall'
           ? allSessions
           : allSessions.filter(s => s.listingSlug === slug)
+
+        const filteredAttempts = slug === 'overall'
+          ? allAttempts
+          : allAttempts.filter(a => a.listingSlug === slug)
 
         const sessionCount = filtered.length
         const withScore = filtered.filter(s => s.total > 0)
@@ -180,13 +207,24 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
             let title = 'Session'
             if (s.deckId === '__full__') title = 'Full Review'
             else if (s.deckId === '__weak__') title = 'Weak Topics'
+            else if (s.deckId === '__due__') title = 'Due Review'
             else if (s.topicId) title = resolveTopicLabel(s.topicId, topicNameMap)
             else if (s.deckId) title = deckMap.get(s.deckId) ?? s.deckId
             else if (s.subtest) title = s.subtest
             return { id: s.id, title, accuracy: s.total > 0 ? Math.round((s.score / s.total) * 100) : 0, completedAt: s.completedAt }
           })
 
-        return { sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions, isLoading: false }
+        const avgTime = computeAvgTimePerQuestion(filteredAttempts)
+        const mostMissedTopics = resolveMissedTopicLabels(computeMostMissedTopics(filteredAttempts), topicNameMap)
+          .slice(0, MOST_MISSED_LIMIT)
+        const accuracyTrend = computeAccuracyTrend(filtered)
+        const mockAttemptHistory = computeMockAttemptHistory(filtered)
+
+        return {
+          sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions,
+          avgTime, mostMissedTopics, accuracyTrend, mockAttemptHistory,
+          isLoading: false,
+        }
       }
 
       const result = await cachedQuery(`analytics:${slug}`, 30_000, fetcher)

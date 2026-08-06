@@ -1,30 +1,27 @@
-// RN Image is fine for a tiny bundled asset; adding expo-image is a native module that would break OTA delivery.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native'
+import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   Home2Outlined,
   Bolt2Outlined,
   GraduationCap1Outlined,
   Bell1Outlined,
+  TrendUp1Outlined,
 } from '@lineiconshq/free-icons'
 // Type-only import for the custom tabBar prop; the app uses expo-router Tabs (JS navigator) by design.
 // eslint-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
-import { useKuyaChatModal } from '../providers/KuyaChatProvider'
 
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
-  index:     { label: 'Home',    icon: Home2Outlined },
-  practice:  { label: 'Exams',   icon: Bolt2Outlined },
-  listings:  { label: 'Lists',   icon: GraduationCap1Outlined },
-  updates:   { label: 'Updates', icon: Bell1Outlined },
+  index:     { label: 'Home',     icon: Home2Outlined },
+  practice:  { label: 'Exams',    icon: Bolt2Outlined },
+  listings:  { label: 'Lists',    icon: GraduationCap1Outlined },
+  updates:   { label: 'Updates',  icon: Bell1Outlined },
+  analytics: { label: 'Progress', icon: TrendUp1Outlined },
 }
 
-// Two tabs on each side of the center "Ask Kuya Baw" button.
-const LEFT_TABS = ['index', 'practice']
-const RIGHT_TABS = ['listings', 'updates']
+const TABS = ['index', 'practice', 'listings', 'updates', 'analytics']
 
 function NavItem({
   label,
@@ -56,7 +53,6 @@ function NavItem({
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
-  const { open: openKuya } = useKuyaChatModal()
 
   const routeByName = new Map(state.routes.map(r => [r.name, r]))
 
@@ -87,25 +83,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         },
       ]}
     >
-      {LEFT_TABS.map(renderTab)}
-
-      {/* Center "Ask Kuya Baw" — raised circular accent button (quick chat access) */}
-      <View style={styles.centerSlot}>
-        <Pressable
-          onPress={openKuya}
-          style={({ pressed }) => [styles.fab, { backgroundColor: t.surface2, borderColor: t.border }, pressed && { opacity: 0.88 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Ask Kuya Baw"
-        >
-          <Image
-            source={require('../assets/images/kuya-baw-logo.png')}
-            style={styles.fabImg}
-            resizeMode="cover"
-          />
-        </Pressable>
-      </View>
-
-      {RIGHT_TABS.map(renderTab)}
+      {TABS.map(renderTab)}
     </View>
   )
 }
@@ -138,23 +116,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Outfit_600SemiBold',
     letterSpacing: 0.1,
   },
-  centerSlot: {
-    width: 72,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  // Mascot avatar treatment matching the chat screen: the logo fills a clean
-  // circle (cover) on a surface ring; marginTop + shadow raise it above the bar.
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -22,
-    borderWidth: 1,
-    boxShadow: '0px 4px 8px rgba(0,0,0,0.28)',
-  },
-  fabImg: { width: 56, height: 56 },
 })

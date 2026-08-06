@@ -63,6 +63,16 @@ CREATE TABLE IF NOT EXISTS saved_decks (
 
 // Note: existing devices keep a harmless orphaned saved_listings table — no DROP migration added.
 // The saved_listings feature was removed; fresh installs no longer create the table via CREATE_SQL.
+//
+// Note (Kuya Baw chat retirement): createDrizzleClient() re-runs CREATE_SQL + every
+// entry in MIGRATIONS on EVERY app launch (see the bottom of this file) — there is no
+// stored migration index/version anywhere, so this list is content-idempotent, not
+// position-tracked. It is therefore safe to delete a retired entry outright (same
+// precedent as saved_listings above): existing devices simply keep the harmless
+// orphaned table/columns, and fresh installs never create them. The chat_messages
+// table, the flashcards_fts/upcat_facts_fts/career_facts_fts FTS5 indexes + triggers
+// (chat RAG retrieval only), and the ai_chat_config table + chat_enabled column were
+// removed on this basis when the Kuya Baw chat feature was retired.
 export const MIGRATIONS = [
   `ALTER TABLE user_settings ADD COLUMN full_name TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE user_settings ADD COLUMN school TEXT NOT NULL DEFAULT ''`,
@@ -119,14 +129,6 @@ export const MIGRATIONS = [
     PRIMARY KEY (listing_slug, requirement_index)
   )`,
   `ALTER TABLE user_settings ADD COLUMN focus_mode_enabled INTEGER NOT NULL DEFAULT 1`,
-  `CREATE TABLE IF NOT EXISTS chat_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    role TEXT NOT NULL,
-    text TEXT NOT NULL,
-    mode TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  )`,
-  `CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON chat_messages (created_at)`,
   `CREATE TABLE IF NOT EXISTS notes (
     id TEXT PRIMARY KEY NOT NULL,
     title TEXT NOT NULL DEFAULT '',
@@ -155,39 +157,6 @@ export const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS note_label_assignments_note_idx ON note_label_assignments (note_id)`,
   `ALTER TABLE notes ADD COLUMN reminder_at INTEGER`,
-
-  // ── Flashcard full-text search (FTS5) for Kuya chat RAG ──────────────
-  // Indexes question+answer+explanation so the chat can retrieve relevant
-  // flashcards at inference time and inject them into the prompt.
-  // flashcard_id + topic_id stored UNINDEXED so retrieval avoids a JOIN.
-  `CREATE VIRTUAL TABLE IF NOT EXISTS flashcards_fts USING fts5(
-    flashcard_id UNINDEXED,
-    topic_id UNINDEXED,
-    question,
-    answer,
-    explanation,
-    tokenize = 'unicode61 remove_diacritics 2'
-  )`,
-  // Triggers keep flashcards_fts in sync with flashcards on insert/update/delete.
-  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_ai AFTER INSERT ON flashcards BEGIN
-    INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
-    VALUES (new.id, new.topic_id, new.question, new.answer, new.explanation);
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_ad AFTER DELETE ON flashcards BEGIN
-    DELETE FROM flashcards_fts WHERE flashcard_id = old.id;
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS flashcards_fts_au AFTER UPDATE ON flashcards BEGIN
-    DELETE FROM flashcards_fts WHERE flashcard_id = old.id;
-    INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
-    VALUES (new.id, new.topic_id, new.question, new.answer, new.explanation);
-  END`,
-  // One-time backfill for users who already have flashcards before this migration.
-  // INSERT-SELECT is idempotent enough for users without prior rows; for users
-  // who already populated, the unique nature of flashcard_id + the natural
-  // de-dup on re-running is handled by checking row existence first.
-  `INSERT INTO flashcards_fts (flashcard_id, topic_id, question, answer, explanation)
-   SELECT f.id, f.topic_id, f.question, f.answer, f.explanation FROM flashcards f
-   WHERE NOT EXISTS (SELECT 1 FROM flashcards_fts WHERE flashcard_id = f.id)`,
   `ALTER TABLE notes ADD COLUMN google_event_id TEXT`,
   `ALTER TABLE user_settings ADD COLUMN google_calendar_connected INTEGER NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS upcat_passages (
@@ -231,20 +200,6 @@ export const MIGRATIONS = [
     id TEXT PRIMARY KEY NOT NULL, topic TEXT NOT NULL, question TEXT NOT NULL,
     answer TEXT NOT NULL, source TEXT, valid_year INTEGER, remote_updated_at INTEGER
   )`,
-  `CREATE VIRTUAL TABLE IF NOT EXISTS upcat_facts_fts USING fts5(
-    fact_id UNINDEXED, topic, question, answer,
-    tokenize = 'unicode61 remove_diacritics 2'
-  )`,
-  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ai AFTER INSERT ON upcat_facts BEGIN
-    INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_ad AFTER DELETE ON upcat_facts BEGIN
-    DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
-  END`,
-  `CREATE TRIGGER IF NOT EXISTS upcat_facts_fts_au AFTER UPDATE ON upcat_facts BEGIN
-    DELETE FROM upcat_facts_fts WHERE fact_id = old.id;
-    INSERT INTO upcat_facts_fts (fact_id, topic, question, answer) VALUES (new.id, new.topic, new.question, new.answer);
-  END`,
   `CREATE TABLE IF NOT EXISTS question_feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_id TEXT NOT NULL,
@@ -362,16 +317,6 @@ export const MIGRATIONS = [
     point_to TEXT,
     remote_updated_at INTEGER
   )`,
-  `CREATE VIRTUAL TABLE IF NOT EXISTS career_facts_fts USING fts5(
-    fact_id UNINDEXED, course_name, quick_answer, key_caveat, tokenize='unicode61 remove_diacritics 2')`,
-  `CREATE TRIGGER IF NOT EXISTS career_facts_ai AFTER INSERT ON career_facts BEGIN
-    INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat); END`,
-  `CREATE TRIGGER IF NOT EXISTS career_facts_ad AFTER DELETE ON career_facts BEGIN
-    DELETE FROM career_facts_fts WHERE fact_id = old.id; END`,
-  `CREATE TRIGGER IF NOT EXISTS career_facts_au AFTER UPDATE ON career_facts BEGIN
-    DELETE FROM career_facts_fts WHERE fact_id = old.id;
-    INSERT INTO career_facts_fts (fact_id, course_name, quick_answer, key_caveat) VALUES (new.id, new.course_name, new.quick_answer, new.key_caveat); END`,
-
   // ── Epic C: University / course tables ──────────────────────────────────────
   `CREATE TABLE IF NOT EXISTS tertiary_schools (
     id TEXT PRIMARY KEY NOT NULL,
@@ -417,6 +362,8 @@ export const MIGRATIONS = [
     prc_strong_boards TEXT NOT NULL DEFAULT '[]',
     notes TEXT,
     data_confidence TEXT,
+    requirements TEXT NOT NULL DEFAULT '[]',
+    qualifications TEXT NOT NULL DEFAULT '[]',
     remote_updated_at INTEGER
   )`,
   `CREATE TABLE IF NOT EXISTS course_school_rankings (
@@ -554,30 +501,81 @@ export const MIGRATIONS = [
   // NOT NULL + DEFAULT prevents Drizzle from inserting NULL and silently throwing.
   `ALTER TABLE user_settings ADD COLUMN ai_provider TEXT NOT NULL DEFAULT 'local'`,
 
-  // ── Task B (Epic B): AI Chat Config — remote-controlled Kuya Baw settings ──
-  // Single-row table (id=1) mirroring Supabase ai_chat_config.
-  // NOT NULL + DEFAULT on every column prevents silent NULL insert failures.
-  `CREATE TABLE IF NOT EXISTS ai_chat_config (
-    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
-    core_rules_override TEXT NOT NULL DEFAULT '',
-    scope_block_override TEXT NOT NULL DEFAULT '',
-    grounding_rule_override TEXT NOT NULL DEFAULT '',
-    anti_injection_override TEXT NOT NULL DEFAULT '',
-    progress_addendum_override TEXT NOT NULL DEFAULT '',
-    topic_addendum_override TEXT NOT NULL DEFAULT '',
-    math_addendum_override TEXT NOT NULL DEFAULT '',
-    rag_total_token_budget INTEGER NOT NULL DEFAULT 700,
-    rag_per_block_char_cap INTEGER NOT NULL DEFAULT 280,
-    rag_blocks_enabled TEXT NOT NULL DEFAULT '{}',
-    remote_updated_at INTEGER
-  )`,
-
   // ── Question reports: offline-first upload queue ───────────────────────────
   // question_feedback rows now snapshot the question + remember their Supabase
   // source table; synced=0 rows are retried on launch (pushPendingReports).
   `ALTER TABLE question_feedback ADD COLUMN source_table TEXT NOT NULL DEFAULT 'flashcards'`,
   `ALTER TABLE question_feedback ADD COLUMN question_text TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE question_feedback ADD COLUMN synced INTEGER NOT NULL DEFAULT 0`,
+
+  // ── Task 5: university_profiles.requirements / .qualifications ─────────────
+  // The university_profiles CREATE_SQL entry is CREATE TABLE IF NOT EXISTS, a
+  // no-op on devices that already synced the table, so pre-existing installs
+  // only pick up the new columns via these ALTER TABLEs. JSON-encoded text[]
+  // mirrors, defaulting to '[]' (empty) since migration 046 ships with no backfill.
+  `ALTER TABLE university_profiles ADD COLUMN requirements TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE university_profiles ADD COLUMN qualifications TEXT NOT NULL DEFAULT '[]'`,
+
+  // ── Task D: per-question attempt telemetry ─────────────────────────────────
+  // One row per question per exam/upcat/diagnostic/flashcard run (timing +
+  // selected/correct index), written alongside the existing practice_sessions
+  // aggregate row. Foundation for Task G (analytics) and Task H (SRS).
+  `CREATE TABLE IF NOT EXISTS question_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    session_key INTEGER NOT NULL,
+    source_table TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    listing_slug TEXT NOT NULL DEFAULT '',
+    subtest TEXT,
+    topic TEXT,
+    selected_index INTEGER,
+    correct_index INTEGER NOT NULL,
+    correct INTEGER NOT NULL,
+    elapsed_ms INTEGER NOT NULL DEFAULT 0,
+    answered_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS question_attempts_answered_at_idx ON question_attempts (answered_at)`,
+  `CREATE INDEX IF NOT EXISTS question_attempts_question_id_idx ON question_attempts (question_id)`,
+
+  // ── Task E: per-option "why it's wrong" rationale + strategy tip ───────────
+  // JSON-encoded (string|null)[] mirrors, same pattern as `options`/`ai_options`
+  // above — text column storing JSON. Defaults match the remote migration
+  // (049_question_explanations.sql) so pre-backfill rows render nothing extra.
+  `ALTER TABLE upcat_questions ADD COLUMN option_explanations TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE upcat_questions ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE flashcards ADD COLUMN option_explanations TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE flashcards ADD COLUMN strategy_tip TEXT NOT NULL DEFAULT ''`,
+
+  // ── Task H: flashcard spaced-repetition (SM-2-lite) state ──────────────────
+  // One row per flashcard the user has reviewed at least once; no row means
+  // "never reviewed" (not due). due_at is an epoch-ms timestamp; ease_factor/
+  // interval_days follow utils/srs.ts's clamps. Column shape mirrors
+  // SrsCardState 1:1 — see db/schema.ts's flashcardSrs comment.
+  `CREATE TABLE IF NOT EXISTS flashcard_srs (
+    flashcard_id TEXT PRIMARY KEY NOT NULL,
+    interval_days REAL NOT NULL DEFAULT 0,
+    ease_factor REAL NOT NULL DEFAULT 2.5,
+    repetitions INTEGER NOT NULL DEFAULT 0,
+    lapses INTEGER NOT NULL DEFAULT 0,
+    due_at INTEGER NOT NULL DEFAULT 0,
+    last_reviewed_at INTEGER,
+    last_grade TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS flashcard_srs_due_at_idx ON flashcard_srs (due_at)`,
+
+  // ── Task I: Personalized study plan ────────────────────────────────────────
+  `CREATE TABLE IF NOT EXISTS study_plan_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    plan_date TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ref_id TEXT NOT NULL DEFAULT '',
+    target_count INTEGER NOT NULL DEFAULT 1,
+    completed_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS study_plan_items_plan_date_idx ON study_plan_items (plan_date)`,
+  `ALTER TABLE user_settings ADD COLUMN daily_reminder_hour INTEGER NOT NULL DEFAULT 9`,
+  `ALTER TABLE user_settings ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

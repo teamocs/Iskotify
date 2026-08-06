@@ -13,9 +13,12 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, layout } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListCard } from '../../components/ui/ListCard'
+import { Badge } from '../../components/ui/Badge'
 import { syncOnLaunch } from '../../services/sync'
 import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
 import { getSettings } from '../../services/settings'
+import { getListingMockBest, getListingAccuracy } from '../../services/homeAggregates'
+import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { MatchPill } from '../../components/scholarships/MatchPill'
@@ -101,6 +104,12 @@ const TAB_LABELS: { key: Tab; label: string }[] = [
 
 const VALID_TABS: readonly string[] = TAB_LABELS.map(t => t.key)
 
+// Mirrors FocusExamsFold's / the practice diagnostic screen's tone→Badge mapping
+// so the same readiness % reads the same color everywhere in the app.
+const TONE_TO_BADGE: Record<ReadinessTone, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
+}
+
 /** Validate a ?tab= deep-link param into a Tab, or null when absent/invalid. */
 function parseTabParam(v: unknown): Tab | null {
   return typeof v === 'string' && VALID_TABS.includes(v) ? (v as Tab) : null
@@ -125,6 +134,10 @@ export default function ListsScreen() {
   const [userRegion, setUserRegion] = useState<string>('')
   const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
   const [blueprintSlugs, setBlueprintSlugs] = useState<Set<string>>(new Set())
+  // Per-exam readiness (Global Constraints: getListingMockBest, falling back to
+  // listingAccuracy) — same source the Home exam tiles use, so the numbers agree.
+  const [listingMockBest, setListingMockBest] = useState<Map<string, number>>(new Map())
+  const [listingAccuracy, setListingAccuracy] = useState<Record<string, number>>({})
 
   // ── Destinations tab state ────────────────────────────────────────────────
   const [destCountries, setDestCountries] = useState<CountryWithCount[]>([])
@@ -157,7 +170,7 @@ export default function ListsScreen() {
   // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadListings = useCallback(async () => {
-    const [rows, settings, ccRows, bpSlugs] = await Promise.all([
+    const [rows, settings, ccRows, bpSlugs, mockBestRows, accuracyRows] = await Promise.all([
       db.select({
         id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
         type: listingsTable.type, examDate: listingsTable.examDate, deadline: listingsTable.deadline, region: listingsTable.region,
@@ -169,7 +182,13 @@ export default function ListsScreen() {
       getSettings(db),
       db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
       listPublishedBlueprintSlugs(db),
+      getListingMockBest(db),
+      getListingAccuracy(db),
     ])
+    setListingMockBest(new Map(mockBestRows.map(r => [r.listingSlug, r.bestPct])))
+    setListingAccuracy(Object.fromEntries(
+      accuracyRows.filter(r => r.total > 0).map(r => [r.listingSlug, Math.round((r.ok / r.total) * 100)]),
+    ))
     // The local target_courses column stores a JSON array of cluster names (or ["all"]).
     setAll(rows.map(r => ({ ...r, targetCourses: parseStrArray(r.targetCourses as unknown as string) })) as ListingRow[])
     setUserRegion(settings.schoolRegion ?? '')
@@ -429,6 +448,9 @@ export default function ListsScreen() {
     const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id)) ? matchStatusMap.get(l.id)! : 'unknown'
     const p = getPriority(l.slug)
     const hasMock = exam && blueprintSlugs.has(l.slug)
+    // Same source + fallback as the Home exam tiles (getListingMockBest → listingAccuracy)
+    // so the readiness % a student sees here always agrees with the homepage.
+    const readinessPct = hasMock ? (listingMockBest.get(l.slug) ?? listingAccuracy[l.slug] ?? null) : null
 
     const datePart = exam ? fmtDate(l.examDate) : null
     const regionPart = l.region ? `📍 ${l.region}` : (l.province ? l.province : null)
@@ -466,6 +488,9 @@ export default function ListsScreen() {
                 <Text style={s.mockBadgeTxt} maxFontSizeMultiplier={1.4}>📝 Mock</Text>
               </View>
             ) : null}
+            {hasMock ? (
+              <Badge label={readinessPct != null ? `${readinessPct}%` : '—'} tone={TONE_TO_BADGE[readinessTone(readinessPct)]} />
+            ) : null}
             {p !== null && !hasMock ? (
               <View style={s.focusBadge}>
                 <Text style={s.focusBadgeTxt} maxFontSizeMultiplier={1.4}>#{p} Focus</Text>
@@ -476,7 +501,7 @@ export default function ListsScreen() {
       </Pressable>
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchStatusMap, getPriority, blueprintSlugs, s, t, scholarColor])
+  }, [matchStatusMap, getPriority, blueprintSlugs, listingMockBest, listingAccuracy, s, t, scholarColor])
 
   const renderListingItem = useCallback(({ item }: { item: ListingRow }) => renderCard(item), [renderCard])
 

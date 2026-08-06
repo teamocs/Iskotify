@@ -6,9 +6,9 @@ import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { spacing } from '../../theme/tokens'
 
 /**
- * Analytics tab screen — hidden from the tab bar (href:null in _layout.tsx).
- * Content has been moved into the Profile screen via <AnalyticsDashboard />.
- * This thin wrapper keeps the route alive for any direct navigations.
+ * Progress tab screen (Task G) — the "Progress" entry in the tab bar / desktop
+ * sidebar. Same <AnalyticsDashboard /> also embedded read-only in Profile;
+ * this is now its full-screen, directly-navigable home.
  */
 export default function AnalyticsScreen() {
   const { theme: t, typo } = useTheme()
@@ -23,8 +23,8 @@ export default function AnalyticsScreen() {
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
       <View style={s.header}>
-        <Text style={s.title}>Analytics</Text>
-        <Text style={s.subtitle}>Your practice progress</Text>
+        <Text style={s.title}>Progress</Text>
+        <Text style={s.subtitle}>Your practice performance, over time</Text>
       </View>
       <View style={s.dashWrap}>
         <AnalyticsDashboard />
