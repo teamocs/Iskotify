@@ -217,61 +217,73 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     })
   }
 
-  // Question attempts (Task D telemetry) — replace entirely. Optional: older
-  // export files predate this field.
-  await db.delete(questionAttempts)
+  // Question attempts (Task D telemetry) — replace entirely, but ONLY when
+  // the import file actually carries this field. Finding #3: older export
+  // files (taken before this branch) predate question_attempts/flashcard_srs/
+  // study_plan_items entirely — unconditionally deleting first would wipe
+  // this device's SRS scheduling state and telemetry on every restore of an
+  // old backup, even though the file never meant to touch them. Mirrors
+  // sync.ts's pull path, which only wipes+replaces when the remote payload
+  // actually has rows for the field.
   const attemptRows = Array.isArray(data.question_attempts) ? (data.question_attempts as ExportRow[]) : []
-  for (const row of attemptRows) {
-    await db.insert(questionAttempts).values({
-      sessionKey: Number(row.sessionKey ?? row.session_key ?? 0),
-      sourceTable: String(row.sourceTable ?? row.source_table ?? ''),
-      questionId: String(row.questionId ?? row.question_id ?? ''),
-      listingSlug: String(row.listingSlug ?? row.listing_slug ?? ''),
-      subtest: row.subtest != null ? String(row.subtest) : null,
-      topic: row.topic != null ? String(row.topic) : null,
-      selectedIndex: row.selectedIndex != null ? Number(row.selectedIndex) : row.selected_index != null ? Number(row.selected_index) : null,
-      correctIndex: Number(row.correctIndex ?? row.correct_index ?? 0),
-      correct: Boolean(row.correct),
-      elapsedMs: Number(row.elapsedMs ?? row.elapsed_ms ?? 0),
-      answeredAt: Number(row.answeredAt ?? row.answered_at ?? Date.now()),
-    })
+  if (attemptRows.length > 0) {
+    await db.delete(questionAttempts)
+    for (const row of attemptRows) {
+      await db.insert(questionAttempts).values({
+        sessionKey: Number(row.sessionKey ?? row.session_key ?? 0),
+        sourceTable: String(row.sourceTable ?? row.source_table ?? ''),
+        questionId: String(row.questionId ?? row.question_id ?? ''),
+        listingSlug: String(row.listingSlug ?? row.listing_slug ?? ''),
+        subtest: row.subtest != null ? String(row.subtest) : null,
+        topic: row.topic != null ? String(row.topic) : null,
+        selectedIndex: row.selectedIndex != null ? Number(row.selectedIndex) : row.selected_index != null ? Number(row.selected_index) : null,
+        correctIndex: Number(row.correctIndex ?? row.correct_index ?? 0),
+        correct: Boolean(row.correct),
+        elapsedMs: Number(row.elapsedMs ?? row.elapsed_ms ?? 0),
+        answeredAt: Number(row.answeredAt ?? row.answered_at ?? Date.now()),
+      })
+    }
   }
 
-  // Flashcard SRS state (Task H) — replace entirely. Optional: older export
-  // files predate this field.
-  await db.delete(flashcardSrs)
+  // Flashcard SRS state (Task H) — replace entirely, same "only when the
+  // file has rows" guard as question_attempts above (finding #3).
   const srsImportRows = Array.isArray(data.flashcard_srs) ? (data.flashcard_srs as ExportRow[]) : []
-  for (const row of srsImportRows) {
-    const flashcardId = String(row.flashcardId ?? row.flashcard_id ?? '')
-    if (!flashcardId) continue
-    await db.insert(flashcardSrs).values({
-      flashcardId,
-      intervalDays: Number(row.intervalDays ?? row.interval_days ?? 0),
-      easeFactor: Number(row.easeFactor ?? row.ease_factor ?? 2.5),
-      repetitions: Number(row.repetitions ?? 0),
-      lapses: Number(row.lapses ?? 0),
-      dueAt: Number(row.dueAt ?? row.due_at ?? 0),
-      lastReviewedAt: row.lastReviewedAt != null ? Number(row.lastReviewedAt) : row.last_reviewed_at != null ? Number(row.last_reviewed_at) : null,
-      lastGrade: row.lastGrade != null ? String(row.lastGrade) : row.last_grade != null ? String(row.last_grade) : null,
-    }).onConflictDoNothing()
+  if (srsImportRows.length > 0) {
+    await db.delete(flashcardSrs)
+    for (const row of srsImportRows) {
+      const flashcardId = String(row.flashcardId ?? row.flashcard_id ?? '')
+      if (!flashcardId) continue
+      await db.insert(flashcardSrs).values({
+        flashcardId,
+        intervalDays: Number(row.intervalDays ?? row.interval_days ?? 0),
+        easeFactor: Number(row.easeFactor ?? row.ease_factor ?? 2.5),
+        repetitions: Number(row.repetitions ?? 0),
+        lapses: Number(row.lapses ?? 0),
+        dueAt: Number(row.dueAt ?? row.due_at ?? 0),
+        lastReviewedAt: row.lastReviewedAt != null ? Number(row.lastReviewedAt) : row.last_reviewed_at != null ? Number(row.last_reviewed_at) : null,
+        lastGrade: row.lastGrade != null ? String(row.lastGrade) : row.last_grade != null ? String(row.last_grade) : null,
+      }).onConflictDoNothing()
+    }
   }
 
-  // Study plan items (Task I) — replace entirely. Optional: older export
-  // files predate this field.
-  await db.delete(studyPlanItems)
+  // Study plan items (Task I) — replace entirely, same "only when the file
+  // has rows" guard as question_attempts above (finding #3).
   const planImportRows = Array.isArray(data.study_plan_items) ? (data.study_plan_items as ExportRow[]) : []
-  for (const row of planImportRows) {
-    const planDate = String(row.planDate ?? row.plan_date ?? '')
-    const kind = String(row.kind ?? '')
-    if (!planDate || !kind) continue
-    await db.insert(studyPlanItems).values({
-      planDate,
-      kind,
-      refId: String(row.refId ?? row.ref_id ?? ''),
-      targetCount: Number(row.targetCount ?? row.target_count ?? 1),
-      completedAt: row.completedAt != null ? Number(row.completedAt) : row.completed_at != null ? Number(row.completed_at) : null,
-      createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
-    })
+  if (planImportRows.length > 0) {
+    await db.delete(studyPlanItems)
+    for (const row of planImportRows) {
+      const planDate = String(row.planDate ?? row.plan_date ?? '')
+      const kind = String(row.kind ?? '')
+      if (!planDate || !kind) continue
+      await db.insert(studyPlanItems).values({
+        planDate,
+        kind,
+        refId: String(row.refId ?? row.ref_id ?? ''),
+        targetCount: Number(row.targetCount ?? row.target_count ?? 1),
+        completedAt: row.completedAt != null ? Number(row.completedAt) : row.completed_at != null ? Number(row.completed_at) : null,
+        createdAt: Number(row.createdAt ?? row.created_at ?? Date.now()),
+      })
+    }
   }
 
   // Notes — replace entirely
