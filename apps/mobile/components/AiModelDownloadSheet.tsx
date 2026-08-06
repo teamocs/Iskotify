@@ -1,8 +1,7 @@
-// RN Image is fine for a bundled asset; expo-image is a native module that would break OTA.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { View, Text, Image, Modal, Pressable, StyleSheet, Platform } from 'react-native'
+import { View, Text, Modal, Pressable, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { SparkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../theme/ThemeContext'
 import { useModelDownload } from '../hooks/useModelDownload'
 import { MODEL_SIZE_LABEL, MODEL_SIZE_BYTES } from '../services/llm'
@@ -17,11 +16,12 @@ interface Props {
 }
 
 /**
- * Bottom-sheet shown when the user taps Kuya Baw but the model is not yet
- * downloaded. Handles the full lifecycle: absent → downloading (progress bar)
- * → ready (auto-close + open chat), unsupported (no download button).
+ * Bottom-sheet for downloading the on-device AI model that powers AI-enhanced
+ * flashcards (useAiEnhancement) and the offline tier of listing search.
+ * Handles the full lifecycle: absent → downloading (progress bar) → ready
+ * (auto-close), unsupported (device can't run the model — no download button).
  */
-export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
+export function AiModelDownloadSheet({ visible, onClose, onReady }: Props) {
   // Pass onReady as the onDownloadComplete callback so the hook fires it
   // the moment the native download task signals done (status flips to 'ready').
   const { modelStatus, progress, bytesDownloaded, bytesTotal, startDownload, lastError } =
@@ -64,11 +64,15 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
       alignSelf: 'center',
       marginBottom: 20,
     },
-    mascot: {
-      width: 72,
-      height: 72,
+    iconWrap: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: t.accentSurface,
+      alignItems: 'center',
+      justifyContent: 'center',
       alignSelf: 'center',
-      marginBottom: 12,
+      marginBottom: 16,
     },
     title: {
       fontFamily: 'Outfit_700Bold',
@@ -138,19 +142,6 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
       fontSize: typo.sm,
       color: t.textSecondary,
     },
-    btnGemini: {
-      borderRadius: 14,
-      paddingVertical: 12,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: 'rgba(128,0,0,0.25)',
-      backgroundColor: t.accentSurface,
-    },
-    btnGeminiText: {
-      fontFamily: 'Lexend_600SemiBold',
-      fontSize: typo.sm,
-      color: t.accentText,
-    },
   })
 
   return (
@@ -167,52 +158,40 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
         <View style={s.sheet}>
           <View style={s.handle} />
 
-          <Image
-            source={require('../assets/images/kuya-baw-logo.png')}
-            style={s.mascot}
-            resizeMode="contain"
-          />
+          <View style={s.iconWrap}>
+            <Lineicons icon={SparkOutlined} size={24} color={t.accentText} />
+          </View>
 
-          {/* Web: model download is not available — show Gemini-only path */}
+          {/* Web: the on-device model only runs on the native app — no download path here. */}
           {Platform.OS === 'web' ? (
             <>
-              <Text style={s.title}>Kuya Baw on the web</Text>
+              <Text style={s.title}>AI features run on the mobile app</Text>
               <Text style={s.body}>
-                {'On the web, Kuya Baw answers using your free Gemini key.\nAdd your key to start chatting.'}
+                The on-device AI model that powers AI-enhanced flashcards and smarter
+                offline search only runs on the Iskotify mobile app.
               </Text>
               <View style={s.btnRow}>
-                <Pressable
-                  style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
-                  onPress={() => {
-                    onClose()
-                    router.push('/settings/gemini-key')
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Set up Gemini key"
-                >
-                  <Text style={s.btnPrimaryText}>Set up your Gemini key (free)</Text>
-                </Pressable>
                 <Pressable
                   style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]}
                   onPress={onClose}
                   accessibilityRole="button"
-                  accessibilityLabel="Cancel"
+                  accessibilityLabel="Close"
                 >
-                  <Text style={s.btnSecondaryText}>Cancel</Text>
+                  <Text style={s.btnSecondaryText}>Close</Text>
                 </Pressable>
               </View>
             </>
           ) : (
             <>
-              <Text style={s.title}>Kuya Baw needs to download his brain 🧠</Text>
+              <Text style={s.title}>Download the on-device AI model</Text>
 
               {isUnsupported ? (
                 <Text style={s.body}>
-                  {`This phone can't run Kuya's on-device brain — use a free Gemini key instead.`}
+                  This device doesn't have enough memory to run the on-device AI model.
                 </Text>
               ) : (
                 <Text style={s.body}>
-                  {`One-time download (${MODEL_SIZE_LABEL}). Wi-Fi strongly recommended.`}
+                  {`One-time download (${MODEL_SIZE_LABEL}). Powers AI-enhanced flashcards and smarter offline search. Wi-Fi strongly recommended.`}
                 </Text>
               )}
 
@@ -234,21 +213,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
               ) : null}
 
               <View style={s.btnRow}>
-                {isUnsupported ? (
-                  <Pressable
-                    style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
-                    onPress={() => {
-                      onClose()
-                      router.push('/settings/gemini-key')
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Use your own Gemini key"
-                  >
-                    <Text style={s.btnPrimaryText}>
-                      Use a free Gemini key instead
-                    </Text>
-                  </Pressable>
-                ) : (
+                {!isUnsupported && (
                   <Pressable
                     style={({ pressed }) => [s.btnPrimary, pressed && { opacity: 0.82 }]}
                     onPress={isDownloading ? undefined : startDownload}
@@ -262,22 +227,6 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
                   </Pressable>
                 )}
 
-                {isUnsupported ? null : (
-                  <Pressable
-                    style={({ pressed }) => [s.btnGemini, pressed && { opacity: 0.7 }]}
-                    onPress={() => {
-                      onClose()
-                      router.push('/settings/gemini-key')
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Use your own Gemini key instead"
-                  >
-                    <Text style={s.btnGeminiText}>
-                      Use your own Gemini key instead (free)
-                    </Text>
-                  </Pressable>
-                )}
-
                 <Pressable
                   style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]}
                   onPress={onClose}
@@ -285,7 +234,7 @@ export function KuyaDownloadSheet({ visible, onClose, onReady }: Props) {
                   accessibilityLabel="Cancel"
                 >
                   <Text style={s.btnSecondaryText}>
-                    {isDownloading ? 'Continue in background' : 'Cancel'}
+                    {isDownloading ? 'Continue in background' : isUnsupported ? 'Close' : 'Cancel'}
                   </Text>
                 </Pressable>
               </View>

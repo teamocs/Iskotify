@@ -24,6 +24,16 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Brush2Outlined: {},
   Bug1Outlined: {},
   Comment1Outlined: {},
+  Download1Outlined: {},
+}))
+
+// AiModelDownloadSheet pulls in the native background-downloader module via
+// useModelDownload — mock the sheet itself so this screen test stays isolated
+// from that native dependency (mirrors how heavy child components are mocked
+// elsewhere in this suite).
+jest.mock('../../components/AiModelDownloadSheet', () => ({
+  AiModelDownloadSheet: ({ visible }: { visible: boolean }) =>
+    visible ? require('react').createElement(require('react-native').Text, null, 'AI Model Download Sheet') : null,
 }))
 
 jest.mock('expo-constants', () => ({
@@ -94,5 +104,18 @@ describe('SettingsScreen', () => {
   it('shows Student as default name when no listing is loaded', async () => {
     render(<SettingsScreen />)
     expect(await screen.findByText('Student')).toBeTruthy()
+  })
+
+  it('renders the AI Features section with an On-device AI model row', () => {
+    render(<SettingsScreen />)
+    expect(screen.getByText('AI Features')).toBeTruthy()
+    expect(screen.getByText('On-device AI model')).toBeTruthy()
+  })
+
+  it('opens the AI model download sheet on press', () => {
+    render(<SettingsScreen />)
+    expect(screen.queryByText('AI Model Download Sheet')).toBeNull()
+    fireEvent.press(screen.getByText('On-device AI model'))
+    expect(screen.getByText('AI Model Download Sheet')).toBeTruthy()
   })
 })

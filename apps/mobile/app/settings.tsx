@@ -14,6 +14,7 @@ import {
   Brush2Outlined,
   Bug1Outlined,
   Comment1Outlined,
+  Download1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
@@ -23,7 +24,7 @@ import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../components/ui/WebTopSpacer'
 import { Card } from '../components/ui/Card'
 import { SectionHeader } from '../components/ui/SectionHeader'
-import { getSettings } from '../services/settings'
+import { AiModelDownloadSheet } from '../components/AiModelDownloadSheet'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
@@ -66,7 +67,7 @@ export default function SettingsScreen() {
   const { theme: t, typo, themePref, setTheme } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
-  const [aiProvider, setAiProvider] = useState<'local' | 'gemini'>('local')
+  const [modelDownloadVisible, setModelDownloadVisible] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -75,8 +76,6 @@ export default function SettingsScreen() {
       if (!row) return
       setProfileName(row.fullName || 'Student')
       setProfileEmail(row.email ?? '')
-      const s = await getSettings(db)
-      setAiProvider(s.aiProvider)
     }
     void load()
   }, [db])
@@ -180,14 +179,14 @@ export default function SettingsScreen() {
               onPress={() => router.push('/privacy')} />
           </Card>
 
-          <SectionHeader title="AI Chat" />
+          <SectionHeader title="AI Features" />
           <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
             <SettingsRow
-              icon={SparkOutlined}
+              icon={Download1Outlined}
               iconBg="rgba(74,222,128,0.12)"
               iconColor="#4ade80"
-              label={aiProvider === 'gemini' ? 'Kuya Baw — Gemini (your key)' : 'Kuya Baw — On-device'}
-              onPress={() => router.push('/settings/gemini-key')}
+              label="On-device AI model"
+              onPress={() => setModelDownloadVisible(true)}
             />
           </Card>
 
@@ -228,6 +227,12 @@ export default function SettingsScreen() {
           </Card>
         </View>
       </ScreenScroll>
+
+      <AiModelDownloadSheet
+        visible={modelDownloadVisible}
+        onClose={() => setModelDownloadVisible(false)}
+        onReady={() => setModelDownloadVisible(false)}
+      />
     </SafeAreaView>
   )
 }
