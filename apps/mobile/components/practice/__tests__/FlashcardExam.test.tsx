@@ -309,6 +309,46 @@ describe('FlashcardExam', () => {
     dateSpy.mockRestore()
   })
 
+  it('finding #2: a rejected recordAttempts insert still reaches the results screen (telemetry is best-effort)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordAttempts.mockRejectedValueOnce(new Error('disk full'))
+
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(screen.getByText('100%')).toBeTruthy()
+    expect(warnSpy).toHaveBeenCalledWith('[FlashcardExam] recordAttempts failed:', expect.any(Error))
+
+    warnSpy.mockRestore()
+  })
+
+  it('finding #2: the submittedRef guard blocks a rapid re-tap of Submit from double-inserting attempt/progress rows', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+      fireEvent.press(screen.getByText('Submit')) // rapid re-tap before the first submit() settles
+    })
+
+    expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
+    expect(mockRecordProgress).toHaveBeenCalledTimes(1)
+  })
+
   it('4. "Retake exam" returns to Q1', async () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 

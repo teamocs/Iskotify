@@ -142,4 +142,31 @@ describe('BlueprintExam', () => {
       expect.objectContaining({ listingSlug: 'test-mock', subtest: 'Math', score: 2, total: 2 }),
     )
   })
+
+  it('finding #2: a rejected recordAttempts insert still reaches the results screen (telemetry is best-effort)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordAttempts.mockRejectedValueOnce(new Error('disk full'))
+
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+    fireEvent.press(screen.getByText('Full Mock'))
+
+    await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    // Reached results despite the telemetry insert rejecting — not stranded
+    // behind the double-submit guard.
+    expect(screen.getByText('Per-section')).toBeTruthy()
+    expect(warnSpy).toHaveBeenCalledWith('[exam/[slug]] recordAttempts failed:', expect.any(Error))
+
+    warnSpy.mockRestore()
+  })
 })

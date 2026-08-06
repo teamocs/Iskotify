@@ -137,4 +137,29 @@ describe('UpcatExam', () => {
     const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
     expect(rows[0]).toMatchObject({ selectedIndex: 0, correctIndex: 1, correct: false, topic: null })
   })
+
+  it('finding #2: a rejected recordAttempts insert still reaches the results screen (telemetry is best-effort)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordAttempts.mockRejectedValueOnce(new Error('disk full'))
+
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: 'Arithmetic' },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    // Reached results despite the telemetry insert rejecting — not stranded
+    // behind the double-submit guard.
+    expect(screen.getByText('Per-subtest')).toBeTruthy()
+    expect(warnSpy).toHaveBeenCalledWith('[practice/upcat/[subtest]] recordAttempts failed:', expect.any(Error))
+
+    warnSpy.mockRestore()
+  })
 })

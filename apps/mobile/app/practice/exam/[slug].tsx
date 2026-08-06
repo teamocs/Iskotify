@@ -308,7 +308,15 @@ export default function BlueprintExam() {
         answers,
         elapsedByIdx,
       })
-      await recordAttempts(rows)
+      // Finding #2: telemetry is best-effort — it must never gate the results
+      // screen. submittedRef is already flipped above; if this insert rejects
+      // (disk full, storage quota, etc.) the student must still reach
+      // results, not get stranded behind the double-submit guard.
+      try {
+        await recordAttempts(rows)
+      } catch (err) {
+        console.warn('[exam/[slug]] recordAttempts failed:', err)
+      }
 
       for (const [section, b] of bySection) {
         void recordSession({

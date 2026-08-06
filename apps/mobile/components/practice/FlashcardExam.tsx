@@ -55,6 +55,13 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // there too (startRef above can't be reset: its setter was discarded).
   const attemptStartRef = useRef(startRef)
   const timingRef = useRef<TimingState>(createTimingState(0, startRef))
+  // Finding #2: unlike the three routed exam engines, FlashcardExam previously
+  // had NO double-submit guard at all — a failure mid-submit (e.g. the
+  // recordAttempts insert rejecting) let a re-tap of Submit run the whole
+  // sequence again, double-inserting attempt/progress rows. Reset alongside
+  // attemptStartRef/timingRef on retake (same reasoning: reused instance,
+  // not a remount).
+  const submittedRef = useRef(false)
   useEffect(() => {
     timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
   }, [idx])
@@ -77,6 +84,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function submit() {
+    if (submittedRef.current) return  // guard against double-submit (re-tap after a mid-submit failure)
+    submittedRef.current = true
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
 
     // Task D: per-question attempt rows + the user_progress producer fix,
@@ -99,7 +108,14 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       elapsedByIdx,
       answeredAt,
     })
-    await recordAttempts(rows)
+    // Finding #2: telemetry is best-effort — it must never gate the results
+    // screen. submittedRef is already flipped above; if this insert rejects
+    // (disk full, storage quota, etc.) the student must still reach results.
+    try {
+      await recordAttempts(rows)
+    } catch (err) {
+      console.warn('[FlashcardExam] recordAttempts failed:', err)
+    }
     await recordProgress(questions.map((q, i) => ({
       flashcardId: q.id ?? String(i),
       correct: answers[i] === q.answerIndex,
@@ -193,6 +209,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               const now = Date.now()
               attemptStartRef.current = now
               timingRef.current = createTimingState(0, now)
+              submittedRef.current = false
             }}
           >
             <Text style={s.primaryBtnTxt}>Retake exam</Text>

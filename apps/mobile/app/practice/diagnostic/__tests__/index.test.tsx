@@ -120,6 +120,28 @@ describe('DiagnosticExam', () => {
     expect(typeof rows[0].answeredAt).toBe('number')
   })
 
+  it('finding #2: a rejected recordAttempts insert still reaches the results screen (telemetry is best-effort)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordAttempts.mockRejectedValueOnce(new Error('disk full'))
+
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+
+    fireEvent.press(screen.getByText('a'))
+    fireEvent.press(screen.getByText('Submit'))
+
+    // Reached results despite the telemetry insert rejecting — not stranded
+    // behind the double-submit guard.
+    await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+    expect(warnSpy).toHaveBeenCalledWith('[practice/diagnostic] recordAttempts failed:', expect.any(Error))
+
+    warnSpy.mockRestore()
+  })
+
   it('selecting an option exposes accessibilityState={{selected:true}} on that option only', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [

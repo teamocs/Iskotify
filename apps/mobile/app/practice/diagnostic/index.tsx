@@ -141,7 +141,15 @@ export default function DiagnosticExam() {
       answers,
       elapsedByIdx,
     })
-    await recordAttempts(rows)
+    // Finding #2: telemetry is best-effort — it must never gate the results
+    // screen. submittedRef is already flipped above; if this insert rejects
+    // (disk full, storage quota, etc.) the student must still reach
+    // results, not get stranded behind the double-submit guard.
+    try {
+      await recordAttempts(rows)
+    } catch (err) {
+      console.warn('[practice/diagnostic] recordAttempts failed:', err)
+    }
 
     for (const params of buildDiagnosticSessionParams(score.bySubject, startRef)) {
       void recordSession(params)
