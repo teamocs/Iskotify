@@ -32,7 +32,7 @@ describe('question_attempts — real CREATE_SQL + MIGRATIONS', () => {
     expect(indexNames).toContain('question_attempts_question_id_idx')
   })
 
-  it('matches db/schema.ts column shape: 7 NOT NULL columns (incl. 2 with defaults) + 4 nullable columns', () => {
+  it('matches db/schema.ts column shape: 8 NOT NULL columns (6 plain + 2 with defaults) + 3 nullable columns', () => {
     const { raw } = makeDb()
     const cols = raw.prepare(`PRAGMA table_info(question_attempts)`).all() as {
       name: string; notnull: number; dflt_value: string | null; pk: number
