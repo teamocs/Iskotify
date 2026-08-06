@@ -66,7 +66,7 @@ export default function AboutScreen() {
         <Card elevated style={s.card}>
           <SectionHeader title="Features" />
           <Text style={s.cardBody}>
-            {'• Subject-by-subject practice questions\n• Spaced-repetition flashcard decks\n• Weak-area identification and coaching\n• Exam countdown and daily reminders\n• Offline-first — study without internet\n• AI Coach powered by Kuya Baw'}
+            {'• Subject-by-subject practice questions\n• Spaced-repetition flashcard decks\n• Weak-area identification and coaching\n• Exam countdown and daily reminders\n• Offline-first — study without internet\n• AI-enhanced flashcards and study feedback'}
           </Text>
         </Card>
 

@@ -29,7 +29,6 @@ import {
   courseSchoolQuality, barResults, courseTaxonomyMap,
   admissionsUpdates,
   examSkillCategories, examBlueprints, examBlueprintSections, examCourseNotes,
-  aiChatConfig,
 } from '../db/schema'
 import { supabase } from './supabase'
 import { pushPendingReports } from './questionReports'
@@ -243,7 +242,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // School-level focus entries ("school:<id>") have no content of their own —
     // no flashcard is tagged with a school pseudo-slug, and every consumer of
-    // selectedListingSlug (profile title, recommended topics, chat context)
+    // selectedListingSlug (profile title, recommended topics)
     // expects a CONTENT slug. Map them to 'general-cet' (the shared general
     // entrance practice) for both the per-slug flashcards pull and the cursor
     // write below; otherwise a school-only-focus user syncs ZERO review cards
@@ -252,7 +251,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // NOTE: we intentionally do NOT early-return when slugs.length === 0.
     // Only the per-slug flashcards pull genuinely needs focus slugs; every
     // catalog table (listings, subjects/topics, upcat, career_*, university/
-    // course/taxonomy, blueprints, admissions, ai_chat_config) is public and
+    // course/taxonomy, blueprints, admissions) is public and
     // must ALWAYS mirror so a focus-less session (anonymous web visitor, or a
     // launch that fires before pullUserData restores focus on sign-in) still
     // populates Courses/Destinations. The flashcards pull below is the only
@@ -347,7 +346,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // NOTE: .eq('status','published') removed from blueprints so unpublish propagates.
     // Local readers (examBlueprints.ts getExamBlueprint / listPublishedBlueprintSlugs)
     // already filter status='published' in JS — verified in examBlueprints.ts:22,43.
-    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes, aiChatConfigRes] = await Promise.all([
+    const [skillCatRes, blueprintsRes, sectionsRes, courseNotesRes] = await Promise.all([
       supabase.from('exam_skill_categories').select('name,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_blueprints').select('slug,name,acronym,total_items,total_time_minutes,has_guessing_penalty,guessing_penalty,section_blocked,scoring_note,mechanics_note,status,display_order,updated_at')
@@ -355,10 +354,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('exam_blueprint_sections').select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at')
         .gt('updated_at', since),
       supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at')
-        .gt('updated_at', since),
-      // AI chat config — single row (id=1). incremental: only pull when updated_at changed.
-      supabase.from('ai_chat_config')
-        .select('id,core_rules_override,scope_block_override,grounding_rule_override,anti_injection_override,progress_addendum_override,topic_addendum_override,math_addendum_override,rag_total_token_budget,rag_per_block_char_cap,rag_blocks_enabled,chat_enabled,updated_at')
         .gt('updated_at', since),
     ])
 
@@ -588,7 +583,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         keyCaveat: row.key_caveat ?? null, pointTo: row.point_to ?? null,
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), careerFacts.id)
-      // FTS triggers auto-sync career_facts_fts on each career_facts upsert above.
     })
 
     await new Promise<void>(r => setTimeout(r, 0))
@@ -714,25 +708,6 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), examCourseNotes.id)
-
-      // ── AI Chat Config (single row, id=1) ───────────────────────────────────
-      batchUpsert(tx, aiChatConfig, (aiChatConfigRes.data ?? []).map((row) => ({
-        id: 1,
-        coreRulesOverride:        row.core_rules_override ?? '',
-        scopeBlockOverride:       row.scope_block_override ?? '',
-        groundingRuleOverride:    row.grounding_rule_override ?? '',
-        antiInjectionOverride:    row.anti_injection_override ?? '',
-        progressAddendumOverride: row.progress_addendum_override ?? '',
-        topicAddendumOverride:    row.topic_addendum_override ?? '',
-        mathAddendumOverride:     row.math_addendum_override ?? '',
-        ragTotalTokenBudget:      row.rag_total_token_budget ?? 700,
-        ragPerBlockCharCap:       row.rag_per_block_char_cap ?? 280,
-        // jsonb → store as JSON string on SQLite
-        ragBlocksEnabled:         JSON.stringify(row.rag_blocks_enabled ?? {}),
-        // Kuya Baw kill-switch — missing column (pre-migration remote) → disabled.
-        chatEnabled:              !!row.chat_enabled,
-        remoteUpdatedAt:          row.updated_at ? new Date(row.updated_at).getTime() : null,
-      })), aiChatConfig.id)
 
       // Cursor write LAST so an interrupted sync re-pulls next launch.
       // selectedListingSlug is only (re)written when we actually have a slug —

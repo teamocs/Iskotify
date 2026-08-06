@@ -19,7 +19,6 @@ import {
 import { DrizzleProvider } from '../db'
 import { ThemeProvider, useTheme } from '../theme/ThemeContext'
 import { useDb } from '../hooks/useDb'
-import { KuyaChatProvider } from '../providers/KuyaChatProvider'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
@@ -434,9 +433,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AnalyticsScreenTracker />
-      <KuyaChatProvider>
-        {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
-      </KuyaChatProvider>
+      {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
     </>
   )
 }

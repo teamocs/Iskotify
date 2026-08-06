@@ -143,8 +143,6 @@ describe('syncOnLaunch', () => {
     expect(supabase.from).toHaveBeenCalledWith('course_taxonomy_map')
     // admissions_updates mirror
     expect(supabase.from).toHaveBeenCalledWith('admissions_updates')
-    // AI chat config (Task B)
-    expect(supabase.from).toHaveBeenCalledWith('ai_chat_config')
   })
 
   it('calls db.transaction when slug is set via fallback', async () => {

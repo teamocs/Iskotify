@@ -9,8 +9,6 @@
  * or use the Gemini path on web.
  */
 
-export { parseCoachPhrase } from './coachPrompts'
-
 export const MODEL_PATH = ''
 export const MODEL_DOWNLOAD_URL = ''
 export const MODEL_SIZE_BYTES = 0
@@ -41,17 +39,4 @@ export function buildPrompt(_params: {
 
 export function parseResponse(_text: string): LlmOutput | null { return null }
 export async function runInference(_prompt: string): Promise<LlmOutput | null> { return null }
-export async function runCoachInference(_prompt: string): Promise<string | null> { return null }
 export async function runRawCompletion(_prompt: string, _maxTokens?: number): Promise<string | null> { return null }
-
-export interface StreamChatOptions {
-  nPredict?: number
-  temperature?: number
-}
-
-export async function streamChatInference(
-  _prompt: string,
-  _onToken: (text: string) => void,
-  _signal: AbortSignal,
-  _options?: StreamChatOptions,
-): Promise<string> { return '' }

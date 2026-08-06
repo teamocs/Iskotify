@@ -4,8 +4,7 @@
  * Strategy (mirrors WebSetupOverlay.test.tsx):
  *  - theme/ThemeContext is mapped to __mocks__/themeContextMock.js by jest.config.js
  *    so useTheme() works without a real DB.
- *  - react-native-safe-area-context is mocked with zero insets (same pattern as
- *    AskKuyaModal.test.tsx).
+ *  - react-native-safe-area-context is mocked with zero insets.
  *  - We drive the syncStatus store directly via its exported helpers.
  */
 import React from 'react'

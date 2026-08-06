@@ -19,7 +19,7 @@ import { submitBugReport } from '../../services/appFeedback'
 
 // Lightweight area picker — covers the app's main surfaces; "General" is the
 // default so a user never has to pick one to file a report.
-const AREAS = ['General', 'Home', 'Review', 'Exams', 'Ask Kuya Baw', 'Updates', 'Settings'] as const
+const AREAS = ['General', 'Home', 'Review', 'Exams', 'Updates', 'Settings'] as const
 
 interface PickedImage {
   uri: string

@@ -1,7 +1,17 @@
 import { eq, and, asc, lt, ne } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { coachPhrases, userRequirements } from '../db/schema'
-import { COACH_CATEGORIES, type CoachCategory } from './coachPrompts'
+
+export const COACH_CATEGORIES = [
+  'motivation',
+  'weak_area',
+  'exam_countdown',
+  'streak',
+  'requirements',
+  'daily_reminder',
+] as const
+
+export type CoachCategory = typeof COACH_CATEGORIES[number]
 
 export interface QueuedPhrase {
   id: number

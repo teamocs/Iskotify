@@ -71,19 +71,6 @@ jest.mock('../../../services/homeAggregates', () => ({
   getListingMockBest: (...args: any[]) => mockGetListingMockBest(...args),
 }))
 
-const mockOpenKuya = jest.fn()
-jest.mock('../../../providers/KuyaChatProvider', () => ({
-  useKuyaChatModal: () => ({ open: mockOpenKuya }),
-}))
-
-// Kuya Baw kill-switch — default enabled=true so the pre-existing "AI Chat" study-tools
-// card assertions below reflect the pre-kill-switch behavior. A dedicated describe block
-// further down covers the disabled case.
-const mockUseKuyaEnabled = jest.fn(() => ({ enabled: true, loading: false }))
-jest.mock('../../../hooks/useKuyaEnabled', () => ({
-  useKuyaEnabled: () => mockUseKuyaEnabled(),
-}))
-
 // Mock listPublishedBlueprints — tests override this via mockListPublishedBlueprints
 const mockListPublishedBlueprints = jest.fn().mockResolvedValue([])
 jest.mock('../../../services/examBlueprints', () => ({
@@ -118,7 +105,6 @@ describe('PracticeScreen', () => {
 
   beforeEach(() => {
     mockListPublishedBlueprints.mockClear()
-    mockOpenKuya.mockClear()
     router.push.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockListPublishedBlueprints.mockResolvedValue([])
@@ -247,45 +233,21 @@ describe('PracticeScreen', () => {
     expect(screen.getByText('Study Tools')).toBeTruthy()
   })
 
-  it('Study Tools expands to Notes + AI Chat — GWA Calculator removed', () => {
+  it('Study Tools expands to Requirements + Notes — GWA Calculator removed', () => {
     render(<PracticeScreen />)
     const collapsed = screen.getByTestId('study-tools-collapsed')
     fireEvent.press(collapsed)
     // Kept cards present
     expect(screen.getByText('Notes')).toBeTruthy()
-    expect(screen.getByText('AI Chat')).toBeTruthy()
-    // Removed card absent
+    expect(screen.getByText('Requirements')).toBeTruthy()
+    // Removed cards absent
     expect(screen.queryByText('GWA Calculator')).toBeNull()
+    expect(screen.queryByText('AI Chat')).toBeNull()
   })
 
-  it('AI Chat card in Study Tools calls openKuya on press', () => {
+  it('collapsed Study Tools subtitle shows Requirements · Notes only', () => {
     render(<PracticeScreen />)
-    fireEvent.press(screen.getByTestId('study-tools-collapsed'))
-    fireEvent.press(screen.getByText('AI Chat'))
-    expect(mockOpenKuya).toHaveBeenCalledTimes(1)
-  })
-
-  describe('Kuya Baw kill-switch — chat disabled', () => {
-    beforeEach(() => {
-      mockUseKuyaEnabled.mockReturnValue({ enabled: false, loading: false })
-    })
-    afterEach(() => {
-      mockUseKuyaEnabled.mockReturnValue({ enabled: true, loading: false })
-    })
-
-    it('hides the AI Chat card in Study Tools while keeping Notes/Requirements', () => {
-      render(<PracticeScreen />)
-      fireEvent.press(screen.getByTestId('study-tools-collapsed'))
-      expect(screen.getByText('Notes')).toBeTruthy()
-      expect(screen.getByText('Requirements')).toBeTruthy()
-      expect(screen.queryByText('AI Chat')).toBeNull()
-    })
-
-    it('drops "AI Chat" from the collapsed Study Tools subtitle', () => {
-      render(<PracticeScreen />)
-      expect(screen.getByText('Requirements · Notes')).toBeTruthy()
-      expect(screen.queryByText('Requirements · Notes · AI Chat')).toBeNull()
-    })
+    expect(screen.getByText('Requirements · Notes')).toBeTruthy()
   })
 
   it('Saved Decks section header always shown (create deck reachable)', () => {

@@ -157,16 +157,6 @@ export const userRequirements = sqliteTable('user_requirements', {
   primaryKey({ columns: [t.listingSlug, t.requirementIndex] }),
 ])
 
-export const chatMessages = sqliteTable('chat_messages', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  role: text('role').notNull(),
-  text: text('text').notNull(),
-  mode: text('mode').notNull(),
-  createdAt: integer('created_at').notNull(),
-}, t => [
-  index('chat_messages_created_at_idx').on(t.createdAt),
-])
-
 export const notes = sqliteTable('notes', {
   id: text('id').primaryKey(),
   title: text('title').notNull().default(''),
@@ -496,28 +486,6 @@ export const admissionsUpdates = sqliteTable('admissions_updates', {
 
 export const resultWatches = sqliteTable('result_watches', {
   slug: text('slug').primaryKey(), addedAt: integer('added_at').notNull(),
-})
-
-// ── AI Chat Config (remote-controlled Kuya Baw settings) ──────────────────────
-
-export const aiChatConfig = sqliteTable('ai_chat_config', {
-  id: integer('id').primaryKey(),
-  // Per-piece text overrides — empty string means "use builtin default"
-  coreRulesOverride:        text('core_rules_override').notNull().default(''),
-  scopeBlockOverride:       text('scope_block_override').notNull().default(''),
-  groundingRuleOverride:    text('grounding_rule_override').notNull().default(''),
-  antiInjectionOverride:    text('anti_injection_override').notNull().default(''),
-  progressAddendumOverride: text('progress_addendum_override').notNull().default(''),
-  topicAddendumOverride:    text('topic_addendum_override').notNull().default(''),
-  mathAddendumOverride:     text('math_addendum_override').notNull().default(''),
-  // RAG budget tuning — 0 means "use builtin default"
-  ragTotalTokenBudget:      integer('rag_total_token_budget').notNull().default(700),
-  ragPerBlockCharCap:       integer('rag_per_block_char_cap').notNull().default(280),
-  // jsonb stored as TEXT on SQLite; default is all-enabled JSON
-  ragBlocksEnabled:         text('rag_blocks_enabled').notNull().default('{}'),
-  // Kuya Baw kill-switch — retired by default (0) until an admin re-enables it remotely.
-  chatEnabled:              integer('chat_enabled', { mode: 'boolean' }).notNull().default(false),
-  remoteUpdatedAt:          integer('remote_updated_at'),
 })
 
 // ── Exam Blueprints (data-driven exam mechanics) ─────────────────────────────

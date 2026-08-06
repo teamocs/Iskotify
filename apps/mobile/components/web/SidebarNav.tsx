@@ -25,8 +25,6 @@ import {
   Gear1Outlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { useKuyaChatModal } from '../../providers/KuyaChatProvider'
-import { useKuyaEnabled } from '../../hooks/useKuyaEnabled'
 import { spacing, radius, typography } from '../../theme/tokens'
 
 const SIDEBAR_WIDTH = 240
@@ -118,8 +116,6 @@ function SidebarItem({ entry, active, onPress }: SidebarItemProps) {
 export function SidebarNav() {
   const { theme: t } = useTheme()
   const pathname = usePathname()
-  const { open: openKuya } = useKuyaChatModal()
-  const { enabled: kuyaEnabled } = useKuyaEnabled()
 
   return (
     <View
@@ -153,35 +149,6 @@ export function SidebarNav() {
           />
         ))}
       </View>
-
-      {/* Ask Kuya Baw entry — mascot mini. Hidden while chat is retired (kill-switch). */}
-      {kuyaEnabled && (
-        <Pressable
-          onPress={() => { void openKuya() }}
-          accessibilityRole="button"
-          accessibilityLabel="Ask Kuya Baw"
-          style={(state) => {
-            const { hovered, pressed } = state as { hovered?: boolean; pressed: boolean }
-            return [
-              styles.kuyaRow,
-              { borderColor: t.border },
-              hovered && { backgroundColor: t.surface },
-              pressed && { opacity: 0.8 },
-            ]
-          }}
-        >
-          <Image
-            source={require('../../assets/images/kuya-baw-logo.png')}
-            style={styles.kuyaImg}
-            resizeMode="contain"
-            accessibilityLabel="Kuya Baw mascot"
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.kuyaLabel, { color: t.accentText }]}>Ask Kuya Baw</Text>
-            <Text style={[styles.kuyaSub, { color: t.textTertiary }]}>AI Study Coach</Text>
-          </View>
-        </Pressable>
-      )}
 
       {/* Spacer pushes bottom items down */}
       <View style={{ flex: 1 }} />
@@ -257,30 +224,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: radius.pill,
-  },
-  kuyaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    borderWidth: 1,
-    minHeight: 44,
-  },
-  kuyaImg: {
-    width: 32,
-    height: 32,
-  },
-  kuyaLabel: {
-    fontSize: typography.sm,
-    fontFamily: 'Outfit_700Bold',
-  },
-  kuyaSub: {
-    fontSize: typography.xs,
-    fontFamily: 'Lexend_400Regular',
   },
   bottomSection: {
     borderTopWidth: 1,

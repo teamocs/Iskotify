@@ -15,8 +15,8 @@ const FAQ: { q: string; a: string }[] = [
     a: 'Go to your Profile and tap "Change Focus". You can pick from UPCAT, DOST, AdNU, and more upcoming exams. You can now select multiple focus listings!',
   },
   {
-    q: 'How does the AI Coach work?',
-    a: 'Kuya Baw analyzes your practice history to identify your weakest subjects and gives you personalized tips. The more you practice, the smarter the coaching gets.',
+    q: 'How does AI Study Feedback work?',
+    a: 'Iskotify analyzes your practice history to identify your weakest subjects and gives you personalized tips. The more you practice, the smarter the feedback gets.',
   },
   {
     q: 'Can I use Iskotify offline?',

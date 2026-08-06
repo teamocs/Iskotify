@@ -169,14 +169,6 @@ describe('HomeScreen', () => {
     expect(screen.getByText('Student')).toBeTruthy()
   })
 
-  // ── Kuya hero band is gone (Task 3 supersedes it entirely) ───────────────────
-  it('does not render the Kuya Baw hero band', () => {
-    render(<HomeScreen />)
-    expect(screen.queryByText('Kuya Baw')).toBeNull()
-    expect(screen.queryByText('AI Coach')).toBeNull()
-    expect(screen.queryByLabelText('Ask Kuya Baw')).toBeNull()
-  })
-
   it('does NOT render the Quick Practice CTA (removed)', () => {
     render(<HomeScreen />)
     expect(screen.queryByText('Quick Practice')).toBeNull()

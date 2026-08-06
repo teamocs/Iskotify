@@ -195,24 +195,4 @@ describe('updateSettings', () => {
     expect(s.targetCampus).toBeNull()
   })
 
-  it('defaults aiProvider to "local"', async () => {
-    const db = makeDb()
-    const s = await getSettings(db)
-    expect(s.aiProvider).toBe('local')
-  })
-
-  it('round-trips aiProvider field to "gemini"', async () => {
-    const db = makeDb()
-    await updateSettings(db, { aiProvider: 'gemini' })
-    const s = await getSettings(db)
-    expect(s.aiProvider).toBe('gemini')
-  })
-
-  it('can switch aiProvider back to "local"', async () => {
-    const db = makeDb()
-    await updateSettings(db, { aiProvider: 'gemini' })
-    await updateSettings(db, { aiProvider: 'local' })
-    const s = await getSettings(db)
-    expect(s.aiProvider).toBe('local')
-  })
 })

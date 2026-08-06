@@ -18,7 +18,7 @@ const SLIDES: Slide[] = [
   {
     emoji: '🏠',
     title: 'Home — your dashboard',
-    body: 'A daily greeting, tips from Kuya Baw, and your exam readiness at a glance.',
+    body: 'A daily greeting, personalized study tips, and your exam readiness at a glance.',
   },
   {
     emoji: '📚',
@@ -29,11 +29,6 @@ const SLIDES: Slide[] = [
     emoji: '🔎',
     title: 'Lists',
     body: 'Browse universities, scholarships, courses, and career destinations — all searchable.',
-  },
-  {
-    emoji: '💬',
-    title: 'Ask Kuya Baw',
-    body: 'Tap the center button to ask about your exams, courses, or any study question.',
   },
   {
     emoji: '🔔',

@@ -374,7 +374,7 @@ export default function HomeScreen() {
 
         <View>
 
-          {/* (2) My Entrance Exams — top fold (replaces the Kuya hero band) */}
+          {/* (2) My Entrance Exams — top fold */}
           <FocusExamsFold
             focusedListings={focusedListings}
             examListings={catalog.examListings}
