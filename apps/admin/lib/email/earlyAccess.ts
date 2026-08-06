@@ -77,7 +77,7 @@ function buildHtml(args: SendEarlyAccessApkEmailArgs): string {
         <strong>Important:</strong> Sign in with <strong>${escapeHtml(args.to)}</strong> &mdash; the same email you registered with. Using a different email will not unlock your early access.
       </div>
 
-      <p>Early access is <strong>completely FREE</strong> until <strong>August&nbsp;2, 2026</strong>. Enjoy full access to all features during this period.</p>
+      <p>Early access is <strong>completely FREE</strong>. Enjoy full access to all features.</p>
 
       <p>Having trouble installing? Just reply to this email and we&rsquo;ll help you out.</p>
 
@@ -109,7 +109,7 @@ HOW TO INSTALL
 
 IMPORTANT: You must sign in with ${args.to} — the email you registered with. A different email will not unlock your access.
 
-Early access is completely FREE until August 2, 2026.
+Early access is completely FREE.
 
 Having trouble? Just reply to this email.
 

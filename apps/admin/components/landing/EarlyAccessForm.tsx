@@ -70,8 +70,7 @@ export function EarlyAccessForm() {
       {/* Explanatory copy */}
       <p className="text-[#6e6e73] font-body text-sm leading-relaxed mb-6 text-center">
         Iskotify is in <span className="font-semibold text-[#1d1d1f]">free early access</span> for Android.
-        We&apos;ll email you the app (APK) to install. Early access runs until{' '}
-        <span className="font-semibold text-[#1d1d1f]">August 2, 2026</span> — before we launch on the Google Play Store.
+        We&apos;ll email you the app (APK) to install — before we launch on the Google Play Store.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
