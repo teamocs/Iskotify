@@ -5,6 +5,10 @@ export interface RawUpcatQuestion {
   questionId: string; subtest: string; questionText: string; options: string[]
   correctIndex: number; explanation: string; setId: string | null; setPosition: number | null
   mainSubject?: string | null; topic?: string | null
+  /** Index-aligned with `options`; null at the correct index. Task E — "why this option is wrong". */
+  optionExplanations?: (string | null)[] | null
+  /** Optional short formula/mnemonic/pacing tip. Task E. */
+  strategyTip?: string | null
 }
 export interface RawUpcatPassage { setId: string; subtest: string; passageText: string }
 export interface ExamQuestion extends RawUpcatQuestion { passageText: string | null }

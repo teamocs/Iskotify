@@ -277,4 +277,62 @@ describe('buildQuizQuestions', () => {
       }
     })
   })
+
+  // Task E: per-option "why it's wrong" rationale + strategy tip must survive
+  // the option shuffle attached to the SAME option text they describe.
+  describe('optionExplanations / strategyTip (Task E)', () => {
+    it('re-permutes optionExplanations alongside aiOptions so each rationale stays with its option text', () => {
+      const c: RawCard = {
+        id: 'e1', question: 'Q?', answer: 'Correct', explanation: 'admin exp',
+        aiOptions: ['Wrong1', 'Correct', 'Wrong2', 'Wrong3'],
+        aiCorrectIndex: 1,
+        optionExplanations: ['Because reason 1', null, 'Because reason 2', 'Because reason 3'],
+        strategyTip: 'Check units first.',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.strategyTip).toBe('Check units first.')
+      expect(q!.optionExplanations).toHaveLength(4)
+      // The correct index's rationale is always null, wherever it landed.
+      expect(q!.optionExplanations![q!.answerIndex]).toBeNull()
+      // Each wrong option's rationale is still attached to that same option text.
+      const byOption = new Map(q!.options.map((o, i) => [o, q!.optionExplanations![i]]))
+      expect(byOption.get('Wrong1')).toBe('Because reason 1')
+      expect(byOption.get('Wrong2')).toBe('Because reason 2')
+      expect(byOption.get('Wrong3')).toBe('Because reason 3')
+    })
+
+    it('re-permutes optionExplanations alongside admin-stored options', () => {
+      const c: RawCard = {
+        id: 'e2', question: 'Q?', answer: 'Correct', explanation: 'exp',
+        options: ['A', 'B', 'C', 'D'],
+        correctAnswerIndex: 2,
+        optionExplanations: ['wrong-A', 'wrong-B', null, 'wrong-D'],
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.optionExplanations![q!.answerIndex]).toBeNull()
+      const byOption = new Map(q!.options.map((o, i) => [o, q!.optionExplanations![i]]))
+      expect(byOption.get('A')).toBe('wrong-A')
+      expect(byOption.get('B')).toBe('wrong-B')
+      expect(byOption.get('D')).toBe('wrong-D')
+    })
+
+    it('omits optionExplanations/strategyTip when absent (no crash, undefined not [])', () => {
+      const c = card({ id: 'e3', options: ['A', 'B', 'C', 'D'], correctAnswerIndex: 0 })
+      const [q] = buildQuizQuestions([c])
+      expect(q!.optionExplanations).toBeUndefined()
+      expect(q!.strategyTip).toBeUndefined()
+    })
+
+    it('embedded-format and placeholder-fallback cards never carry optionExplanations even if the card had one set', () => {
+      // optionExplanations on a RawCard only pairs with aiOptions or admin options —
+      // priority 3 (embedded) and 4 (placeholder) synthesize their own option sets,
+      // so any stray optionExplanations must NOT be attached to mismatched options.
+      const c: RawCard = {
+        id: 'e4', question: 'What is X?', answer: 'Y', explanation: '',
+        optionExplanations: ['stray', 'stray', 'stray', 'stray'],
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.optionExplanations).toBeUndefined()
+    })
+  })
 })

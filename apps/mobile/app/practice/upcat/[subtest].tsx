@@ -13,6 +13,7 @@ import { buildAttemptRows } from '../../../utils/attemptRows'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
+import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
@@ -20,7 +21,6 @@ import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'loading' | 'exam' | 'results'
 
 function fmtTime(totalSecs: number): string {
@@ -106,6 +106,8 @@ export default function UpcatExam() {
           setId: r.setId,
           setPosition: r.setPosition,
           topic: r.topic ?? null,
+          optionExplanations: parseOptions(r.optionExplanations) as (string | null)[],
+          strategyTip: r.strategyTip ?? null,
         }))
         const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
         const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
@@ -217,31 +219,19 @@ export default function UpcatExam() {
           ))}
 
           <Text style={s.sectionLbl}>Review</Text>
-          {questions.map((q, i) => {
-            const sel = answers[i]
-            const ok = sel === q.correctIndex
-            return (
-              <View key={q.questionId} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
-                <Text style={s.reviewQ}>
-                  Q{i + 1}. {q.questionText}
-                </Text>
-                {q.options.map((o, oi) => (
-                  <Text
-                    key={oi}
-                    style={[
-                      s.reviewOpt,
-                      oi === q.correctIndex && { color: t.success, fontWeight: '700' },
-                      oi === sel && oi !== q.correctIndex && { color: t.danger },
-                    ]}
-                  >
-                    {LETTERS[oi]}. {o}
-                    {oi === q.correctIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
-                  </Text>
-                ))}
-                {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
-              </View>
-            )
-          })}
+          {questions.map((q, i) => (
+            <ReviewCard
+              key={q.questionId}
+              index={i + 1}
+              questionText={q.questionText}
+              options={q.options}
+              correctIndex={q.correctIndex}
+              selectedIndex={answers[i]}
+              explanation={q.explanation}
+              optionExplanations={q.optionExplanations}
+              strategyTip={q.strategyTip}
+            />
+          ))}
 
           <Pressable
             accessibilityRole="button"

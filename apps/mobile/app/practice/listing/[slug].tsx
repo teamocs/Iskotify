@@ -85,6 +85,8 @@ export default function ListingQuizScreen() {
           aiCorrectIndex: flashcardsTable.aiCorrectIndex,
           aiExplanation: flashcardsTable.aiExplanation,
           aiEnhancedAt: flashcardsTable.aiEnhancedAt,
+          optionExplanations: flashcardsTable.optionExplanations,
+          strategyTip: flashcardsTable.strategyTip,
         }).from(flashcardsTable)
       }
 
@@ -145,6 +147,8 @@ export default function ListingQuizScreen() {
         aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
         aiExplanation: row.aiExplanation ?? null,
+        optionExplanations: safeParseOptions(row.optionExplanations) as (string | null)[],
+        strategyTip: row.strategyTip ?? null,
       }))
       const parsed = buildQuizQuestions(rawCards)
       setAllQuestions(parsed)

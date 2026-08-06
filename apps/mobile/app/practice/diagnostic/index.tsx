@@ -19,6 +19,7 @@ import { Card } from '../../../components/ui/Card'
 import { Badge } from '../../../components/ui/Badge'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
+import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { PillButton } from '../../../components/ui/PillButton'
 import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
@@ -102,6 +103,8 @@ export default function DiagnosticExam() {
           correctIndex: upcatQuestions.correctIndex,
           explanation: upcatQuestions.explanation,
           setId: upcatQuestions.setId,
+          optionExplanations: upcatQuestions.optionExplanations,
+          strategyTip: upcatQuestions.strategyTip,
         }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
         const subtests = resolveDiagnosticSubtests(subjectParam)
         const built = buildDiagnosticQuestions(rows, subtests, QUESTIONS_PER_SUBTEST)
@@ -206,6 +209,25 @@ export default function DiagnosticExam() {
           })}
           {Object.keys(score.bySubject).length === 0 ? (
             <Text style={s.emptyTxt}>No questions were answered.</Text>
+          ) : null}
+
+          {questions.length > 0 ? (
+            <>
+              <Text style={s.sectionLbl}>Review</Text>
+              {questions.map((q, i) => (
+                <ReviewCard
+                  key={q.id ?? i}
+                  index={i + 1}
+                  questionText={q.stem}
+                  options={q.options}
+                  correctIndex={q.answerIndex}
+                  selectedIndex={answers[i]}
+                  explanation={q.explanation}
+                  optionExplanations={q.optionExplanations}
+                  strategyTip={q.strategyTip}
+                />
+              ))}
+            </>
           ) : null}
 
           <View style={s.ctaGroup}>

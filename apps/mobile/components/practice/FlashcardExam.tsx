@@ -10,13 +10,13 @@ import { useRecordProgress } from '../../hooks/useRecordProgress'
 import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
+import { ReviewCard } from './ReviewCard'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../utils/attemptTiming'
 import { buildAttemptRows } from '../../utils/attemptRows'
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'exam' | 'results'
 
 export interface FlashcardExamProps {
@@ -152,31 +152,19 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           </View>
 
           <Text style={s.sectionLbl}>Review</Text>
-          {questions.map((q, i) => {
-            const sel = answers[i]
-            const ok = sel === q.answerIndex
-            return (
-              <View key={q.id ?? i} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
-                <Text style={s.reviewQ}>
-                  Q{i + 1}. {q.stem}
-                </Text>
-                {q.options.map((o, oi) => (
-                  <Text
-                    key={oi}
-                    style={[
-                      s.reviewOpt,
-                      oi === q.answerIndex && { color: t.success, fontWeight: '700' },
-                      oi === sel && oi !== q.answerIndex && { color: t.danger },
-                    ]}
-                  >
-                    {LETTERS[oi]}. {o}
-                    {oi === q.answerIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
-                  </Text>
-                ))}
-                {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
-              </View>
-            )
-          })}
+          {questions.map((q, i) => (
+            <ReviewCard
+              key={q.id ?? i}
+              index={i + 1}
+              questionText={q.stem}
+              options={q.options}
+              correctIndex={q.answerIndex}
+              selectedIndex={answers[i]}
+              explanation={q.explanation}
+              optionExplanations={q.optionExplanations}
+              strategyTip={q.strategyTip}
+            />
+          ))}
 
           <Pressable
             style={s.primaryBtn}

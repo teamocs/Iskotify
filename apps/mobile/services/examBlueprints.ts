@@ -91,6 +91,8 @@ export async function getQuestionsByCategory(db: DrizzleClient, categories: stri
       options: parseOptions(r.options), correctIndex: r.correctIndex, explanation: r.explanation,
       setId: r.setId, setPosition: r.setPosition,
       mainSubject: r.mainSubject ?? null, topic: r.topic ?? null,
+      optionExplanations: parseOptions(r.optionExplanations) as (string | null)[],
+      strategyTip: r.strategyTip ?? null,
     })
   }
   return map

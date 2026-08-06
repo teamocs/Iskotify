@@ -19,6 +19,7 @@ import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { SectionGrid } from '../../../components/practice/SectionGrid'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
+import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
@@ -26,7 +27,6 @@ import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const
 type Phase = 'loading' | 'prestart' | 'empty' | 'exam' | 'results'
 
 /** A flattened exam question that remembers which section it belongs to. */
@@ -70,7 +70,6 @@ interface ReviewAccordionProps {
 }
 
 function ReviewAccordion({ reviewSections, questions, answers, styles: s }: ReviewAccordionProps) {
-  const { theme: t } = useTheme()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   function toggle(name: string) {
@@ -103,26 +102,18 @@ function ReviewAccordion({ reviewSections, questions, answers, styles: s }: Revi
                   const fq = questions[ref.flatIndex]
                   if (!fq) return null
                   const q = fq.q
-                  const sel = answers[ref.flatIndex]
-                  const ok = ref.status === 'correct'
                   return (
-                    <View key={q.questionId} style={[s.reviewCard, ok ? s.reviewOk : s.reviewBad]}>
-                      <Text style={s.reviewQ}>Q{ref.flatIndex + 1}. {q.questionText}</Text>
-                      {q.options.map((o, oi) => (
-                        <Text
-                          key={oi}
-                          style={[
-                            s.reviewOpt,
-                            oi === q.correctIndex && { color: t.success, fontWeight: '700' },
-                            oi === sel && oi !== q.correctIndex ? { color: t.danger } : null,
-                          ]}
-                        >
-                          {LETTERS[oi]}. {o}
-                          {oi === q.correctIndex ? '  ✓' : oi === sel ? '  ✗' : ''}
-                        </Text>
-                      ))}
-                      {q.explanation ? <Text style={s.reviewExp}>💡 {q.explanation}</Text> : null}
-                    </View>
+                    <ReviewCard
+                      key={q.questionId}
+                      index={ref.flatIndex + 1}
+                      questionText={q.questionText}
+                      options={q.options}
+                      correctIndex={q.correctIndex}
+                      selectedIndex={answers[ref.flatIndex]}
+                      explanation={q.explanation}
+                      optionExplanations={q.optionExplanations}
+                      strategyTip={q.strategyTip}
+                    />
                   )
                 })}
               </View>

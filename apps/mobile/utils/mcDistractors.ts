@@ -12,6 +12,16 @@ export interface RawCard {
   aiOptions?: string[] | null
   aiCorrectIndex?: number | null
   aiExplanation?: string | null
+  /**
+   * Index-aligned with WHICHEVER option array is actually served for this
+   * card (aiOptions when present, else options) — null at the correct index.
+   * Task E — "why this option is wrong". Threaded through both branches of
+   * buildQuizQuestions below and re-permuted alongside whichever options
+   * array gets shuffled.
+   */
+  optionExplanations?: (string | null)[] | null
+  /** Optional short formula/mnemonic/pacing tip. Task E. */
+  strategyTip?: string | null
 }
 
 export interface QuizQuestion {
@@ -20,6 +30,9 @@ export interface QuizQuestion {
   options: string[]
   answerIndex: number
   explanation: string
+  /** Index-aligned with `options` above (post-shuffle); null at answerIndex. Task E. */
+  optionExplanations?: (string | null)[]
+  strategyTip?: string
 }
 
 // Generic, topic-agnostic placeholders used when a card has no admin-set
@@ -43,16 +56,28 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-function shuffleWithIndex(opts: string[], correctIdx: number): { options: string[]; correctIndex: number } {
+/**
+ * Shuffles `opts` (Fisher-Yates), tracking where the correct answer landed.
+ * When `aux` is provided (Task E's optionExplanations, aligned to the PRE-
+ * shuffle `opts` order), it is permuted through the exact same swaps so the
+ * "why this option is wrong" text stays attached to the option it describes.
+ */
+function shuffleWithIndex(
+  opts: string[],
+  correctIdx: number,
+  aux?: (string | null)[] | null,
+): { options: string[]; correctIndex: number; aux: (string | null)[] | undefined } {
   const a = [...opts]
+  const b = aux ? [...aux] : undefined
   let cIdx = correctIdx
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     const tmp = a[i] as string; a[i] = a[j] as string; a[j] = tmp
+    if (b) { const tmpB = b[i] ?? null; b[i] = b[j] ?? null; b[j] = tmpB }
     if (i === cIdx) cIdx = j
     else if (j === cIdx) cIdx = i
   }
-  return { options: a, correctIndex: cIdx }
+  return { options: a, correctIndex: cIdx, aux: b }
 }
 
 function stripPrefix(answer: string): string {
@@ -80,6 +105,7 @@ function parseEmbedded(card: RawCard): QuizQuestion | null {
 export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
   return cards.map(card => {
     const explanation = card.aiExplanation ?? card.explanation
+    const strategyTip = card.strategyTip?.trim() || undefined
 
     // Priority 1: AI-generated options
     if (
@@ -88,13 +114,19 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       card.aiCorrectIndex >= 0 && card.aiCorrectIndex <= 3
     ) {
       {
-        const { options, correctIndex } = shuffleWithIndex(card.aiOptions, card.aiCorrectIndex)
+        // optionExplanations is stored index-aligned with WHICHEVER option
+        // array it was generated alongside — for AI-enhanced cards that's
+        // aiOptions (see admin's lib/gemini/generateDistractors.ts), so it's
+        // paired with aiOptions/aiCorrectIndex here.
+        const { options, correctIndex, aux } = shuffleWithIndex(card.aiOptions, card.aiCorrectIndex, card.optionExplanations)
         return {
           id: card.id,
           stem: card.question.trim(),
           options,
           answerIndex: correctIndex,
           explanation,
+          optionExplanations: aux,
+          strategyTip,
         }
       }
     }
@@ -106,13 +138,15 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       card.correctAnswerIndex >= 0 && card.correctAnswerIndex <= 3
     ) {
       {
-        const { options, correctIndex } = shuffleWithIndex(card.options, card.correctAnswerIndex)
+        const { options, correctIndex, aux } = shuffleWithIndex(card.options, card.correctAnswerIndex, card.optionExplanations)
         return {
           id: card.id,
           stem: card.question.trim(),
           options,
           answerIndex: correctIndex,
           explanation,
+          optionExplanations: aux,
+          strategyTip,
         }
       }
     }

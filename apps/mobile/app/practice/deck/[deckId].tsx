@@ -89,6 +89,8 @@ export default function DeckQuizScreen() {
             aiCorrectIndex: flashcardsTable.aiCorrectIndex,
             aiExplanation: flashcardsTable.aiExplanation,
             aiEnhancedAt: flashcardsTable.aiEnhancedAt,
+            optionExplanations: flashcardsTable.optionExplanations,
+            strategyTip: flashcardsTable.strategyTip,
           })
           .from(flashcardsTable)
           .where(inArray(flashcardsTable.topicId, topicIds))
@@ -114,6 +116,8 @@ export default function DeckQuizScreen() {
         aiOptions: parseAiOptions(row.aiOptions),
         aiCorrectIndex: row.aiCorrectIndex ?? null,
         aiExplanation: row.aiExplanation ?? null,
+        optionExplanations: safeParseOptions(row.optionExplanations) as (string | null)[],
+        strategyTip: row.strategyTip ?? null,
       }))
       const parsed = buildQuizQuestions(shuffle(rawCards))
       setAllQuestions(parsed)
