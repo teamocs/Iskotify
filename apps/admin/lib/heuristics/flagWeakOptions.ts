@@ -95,10 +95,25 @@ function parseNumeric(s: string): number | null {
  *    sight without engaging with the question.
  *  - `none_or_all_of_above` — "none/all of the above" or "both X and Y"
  *    style combining options (never legitimate on a single-best-answer exam).
- *  - `numeric_outlier` — when options are (mostly) numeric: either one value
- *    is off by more than 5x the median magnitude, or exactly one option
- *    isn't numeric while the rest are. Either way it stands out without
- *    reading the question.
+ *  - `numeric_outlier` — exactly one option isn't numeric while the rest
+ *    are (e.g. `10, 12, 11, "Twelve"`). That format mismatch stands out
+ *    without reading the question.
+ *
+ *    This rule intentionally does NOT flag numeric-only sets on magnitude
+ *    alone (e.g. one value being 10x+ another). An earlier version compared
+ *    each option's ratio to the sorted median and flagged anything past a
+ *    fixed multiple — but ordinary geometric-progression and
+ *    order-of-magnitude distractor sets (`1, 5, 25, 125`; `0.1, 1, 10, 100`;
+ *    `3, 9, 27, 81`) are common and legitimate on a math entrance-exam bank,
+ *    and no fixed threshold separates them from a genuinely broken outlier:
+ *    with a 4-option set the sorted-median pivot is asymmetric, so a
+ *    geometric progression's low-end ratio shrinks quadratically with the
+ *    common ratio while its high-end ratio only grows linearly, and a
+ *    max/min-ratio reformulation fares no better (`0.1, 1, 10, 100` has a
+ *    larger max/min spread than plenty of genuinely-fine sets). Rather than
+ *    chase an unreliable threshold, this rule keeps only the mixed
+ *    numeric/non-numeric signal, which is a format tell, not a magnitude
+ *    guess.
  *
  * Options with fewer than 2 non-empty entries have nothing to compare and
  * are always reported clean.
@@ -133,25 +148,14 @@ export function flagWeakOptions(options: string[]): WeakOptionsResult {
     flags.add('none_or_all_of_above')
   }
 
-  // Rule 4 — numeric-only outliers
+  // Rule 4 — mixed numeric / non-numeric options. Deliberately does NOT
+  // flag magnitude alone (see doc comment above) — geometric-progression and
+  // order-of-magnitude distractor sets are legitimate and a fixed ratio
+  // threshold can't tell them apart from a genuine outlier.
   const numericValues = trimmed.map(parseNumeric)
   const numericCount = numericValues.filter(n => n !== null).length
-  if (numericCount >= 2) {
-    if (numericCount === trimmed.length) {
-      // All options are numeric — flag a magnitude outlier vs. the median.
-      const sorted = (numericValues as number[]).slice().sort((a, b) => a - b)
-      const median = sorted[Math.floor(sorted.length / 2)]!
-      if (median !== 0) {
-        const hasOutlier = sorted.some(v => {
-          const ratio = Math.abs(v) / Math.abs(median)
-          return ratio > 5 || ratio < 0.2
-        })
-        if (hasOutlier) flags.add('numeric_outlier')
-      }
-    } else {
-      // Mixed numeric / non-numeric — the odd-format option(s) stand out.
-      flags.add('numeric_outlier')
-    }
+  if (numericCount >= 2 && numericCount !== trimmed.length) {
+    flags.add('numeric_outlier')
   }
 
   return { flags: Array.from(flags), clean: flags.size === 0 }

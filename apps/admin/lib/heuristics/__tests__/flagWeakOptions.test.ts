@@ -73,10 +73,17 @@ describe('flagWeakOptions', () => {
   })
 
   describe('numeric_outlier', () => {
-    it('flags a magnitude outlier among numeric options', () => {
+    // The magnitude-ratio-vs-median branch was removed (see flagWeakOptions.ts
+    // doc comment) — it false-positived on ordinary geometric-progression and
+    // order-of-magnitude distractor sets with no fixed threshold able to tell
+    // those apart from a genuine outlier. A pure magnitude spread like
+    // ['12', '15', '13', '9000'] is legitimately ambiguous (it's shaped just
+    // like a valid order-of-magnitude set) and is now reported clean; the
+    // mixed numeric/non-numeric branch below remains the true-positive case
+    // for this rule since it's a format signal, not a magnitude guess.
+    it('does not flag a pure numeric magnitude spread on its own', () => {
       const result = flagWeakOptions(['12', '15', '13', '9000'])
-      expect(result.clean).toBe(false)
-      expect(result.flags).toContain('numeric_outlier')
+      expect(result.flags).not.toContain('numeric_outlier')
     })
 
     it('flags a single non-numeric option among numeric peers', () => {
@@ -91,6 +98,32 @@ describe('flagWeakOptions', () => {
 
     it('does not flag numeric options within a reasonable magnitude range', () => {
       const result = flagWeakOptions(['₱1,200', '₱1,350', '₱1,280', '₱1,420'])
+      expect(result.flags).not.toContain('numeric_outlier')
+    })
+
+    // Wide-but-legitimate numeric spreads: geometric progressions and
+    // order-of-magnitude sets are ordinary distractor patterns for exponent,
+    // scientific-notation, percentage, and geometric-sequence questions on a
+    // math entrance exam. A magnitude-ratio-vs-median check false-positives
+    // on all of these, which floods the review queue with noise on normal
+    // questions. See flagWeakOptions.ts for why the rule was narrowed.
+    it('does not flag a power-of-two progression (2, 4, 8, 16)', () => {
+      const result = flagWeakOptions(['2', '4', '8', '16'])
+      expect(result.flags).not.toContain('numeric_outlier')
+    })
+
+    it('does not flag a power-of-five geometric progression (1, 5, 25, 125)', () => {
+      const result = flagWeakOptions(['1', '5', '25', '125'])
+      expect(result.flags).not.toContain('numeric_outlier')
+    })
+
+    it('does not flag a power-of-three geometric progression (3, 9, 27, 81)', () => {
+      const result = flagWeakOptions(['3', '9', '27', '81'])
+      expect(result.flags).not.toContain('numeric_outlier')
+    })
+
+    it('does not flag an order-of-magnitude set (0.1, 1, 10, 100)', () => {
+      const result = flagWeakOptions(['0.1', '1', '10', '100'])
       expect(result.flags).not.toContain('numeric_outlier')
     })
   })
