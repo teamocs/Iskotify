@@ -74,6 +74,11 @@ export async function pushUserData(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
+  // question_attempts is bounded by hooks/useRecordAttempts.ts's
+  // pruneOldAttempts (utils/attemptRetention.ts, MAX_RETAINED_ATTEMPTS =
+  // 5000 rows) — this SELECT is a full-table read, but the table itself is
+  // capped, so this payload does NOT grow without bound across a user's
+  // lifetime the way it would without that retention pruning.
   const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
