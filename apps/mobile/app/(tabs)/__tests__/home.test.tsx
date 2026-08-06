@@ -101,6 +101,23 @@ jest.mock('../../../hooks/useNotifications', () => ({
   }),
 }))
 
+// Task I: Today's Plan fold reads useStudyPlan() directly (mocked here, same
+// convention as useHomeStats/usePracticeData/useHomeCatalog above) rather
+// than exercising the real hook's DB + expo-router useFocusEffect wiring.
+const mockUseStudyPlan = jest.fn()
+jest.mock('../../../hooks/useStudyPlan', () => ({
+  useStudyPlan: () => mockUseStudyPlan(),
+}))
+
+const emptyStudyPlan = {
+  items: [] as any[],
+  loading: false,
+  allDone: false,
+  tomorrowItemCount: 0,
+  markComplete: jest.fn().mockResolvedValue(undefined),
+  refresh: jest.fn().mockResolvedValue(undefined),
+}
+
 const emptyPracticeData = {
   subjects: [] as Array<{ id: string; name: string }>,
   topicRows: [] as any[],
@@ -145,6 +162,7 @@ describe('HomeScreen', () => {
     mockUseHomeStats.mockReturnValue(emptyStats)
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockUseHomeCatalog.mockReturnValue(emptyCatalog)
+    mockUseStudyPlan.mockReturnValue(emptyStudyPlan)
     mockAddListing.mockClear()
     mockTopicBest.value = []
     mockSubjectBest.value = []

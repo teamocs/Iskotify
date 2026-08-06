@@ -103,45 +103,73 @@ export async function cancelAllIskotifyNotifications(): Promise<void> {
   )
 }
 
+/** Task I: today's top not-yet-done plan item + streak, for the dynamic daily body. */
+export interface DailyPlanSummary {
+  /** utils/studyPlan.ts's describeTopPlanItem() output. */
+  topItemLabel: string
+  streakDays: number
+}
+
+export interface ScheduleOptions {
+  /** 0-23 local hour for the daily practice nudge. Defaults to 9 (the original hardcoded time). */
+  dailyReminderHour?: number
+  /** Settings → Notifications "weekly summary" toggle. Defaults to true. */
+  weeklySummaryEnabled?: boolean
+  /** When present, the daily body names today's top plan item + streak instead of the static copy. */
+  dailyPlanSummary?: DailyPlanSummary | null
+}
+
 export async function scheduleIskotifyNotifications(
-  listings: NotificationListing[]
+  listings: NotificationListing[],
+  options: ScheduleOptions = {},
 ): Promise<void> {
   const N = getN()
   if (!N) return
 
   await cancelAllIskotifyNotifications()
 
-  // 1. Daily practice reminder — every day at 9 AM
+  // 1. Daily practice reminder — every day at the user's chosen hour (default 9 AM).
+  //    Body is dynamic when a plan summary is available (Task I): names today's
+  //    top plan item + current streak instead of the static copy.
+  const hour = options.dailyReminderHour ?? 9
+  const summary = options.dailyPlanSummary
+  const dailyBody = summary
+    ? `${summary.topItemLabel}${summary.streakDays > 0 ? ` · 🔥 ${summary.streakDays}-day streak` : ''}`
+    : 'Keep your streak going and tackle those weak areas today!'
+
   await N.scheduleNotificationAsync({
     identifier: 'daily-practice',
     content: {
       title: 'Iskotify — Time to Study! 📚',
-      body: 'Keep your streak going and tackle those weak areas today!',
+      body: dailyBody,
       sound: true,
     },
     trigger: {
       type: N.SchedulableTriggerInputTypes.DAILY,
-      hour: 9,
+      hour,
       minute: 0,
     },
   })
 
-  // 2. Weekly weak-areas nudge — every Sunday at 10 AM
+  // 2. Weekly weak-areas nudge — every Sunday at 10 AM. Gated independently
+  //    by the Settings → Notifications "weekly summary" toggle.
   //    weekday: 1 = Sunday in expo-notifications (1-7 Sun-Sat)
-  await N.scheduleNotificationAsync({
-    identifier: 'weekly-weak-areas',
-    content: {
-      title: 'Iskotify — Review Weak Areas 🎯',
-      body: 'Focus on your weak topics this week to boost your exam score!',
-      sound: true,
-    },
-    trigger: {
-      type: N.SchedulableTriggerInputTypes.WEEKLY,
-      weekday: 1,
-      hour: 10,
-      minute: 0,
-    },
-  })
+  if (options.weeklySummaryEnabled !== false) {
+    await N.scheduleNotificationAsync({
+      identifier: 'weekly-weak-areas',
+      content: {
+        title: 'Iskotify — Review Weak Areas 🎯',
+        body: 'Focus on your weak topics this week to boost your exam score!',
+        sound: true,
+      },
+      trigger: {
+        type: N.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: 1,
+        hour: 10,
+        minute: 0,
+      },
+    })
+  }
 
   // 3. Exam/deadline countdowns
   const now = Date.now()

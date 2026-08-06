@@ -10,6 +10,7 @@ import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
 import { SubjectPreparednessGrid } from '../../components/home/SubjectPreparednessGrid'
 import { RecommendedScholarships } from '../../components/home/RecommendedScholarships'
@@ -20,6 +21,8 @@ import { usePracticeData } from '../../hooks/usePracticeData'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { useHomeCatalog } from '../../hooks/useHomeCatalog'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useStudyPlan } from '../../hooks/useStudyPlan'
+import { describeTopPlanItem } from '../../utils/studyPlan'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
@@ -165,11 +168,16 @@ function NotificationModal({
 }
 
 export default function HomeScreen() {
-  const { fullName, focusedListings, noteReminders, listingAccuracy, refresh } = useHomeStats()
+  const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays, refresh } = useHomeStats()
   const { subjects, topicRows } = usePracticeData()
   const { addListing } = useFocusListings()
   const catalog = useHomeCatalog()
   const db = useDb()
+  const studyPlan = useStudyPlan()
+  const topicNameById = useMemo(
+    () => new Map(topicRows.map(r => [r.topic.id, r.topic.name])),
+    [topicRows],
+  )
 
   // ── Admissions feed ─────────────────────────────────────────────────────────
   const [admissionItems, setAdmissionItems] = useState<FeedItem[]>([])
@@ -266,11 +274,17 @@ export default function HomeScreen() {
   const { enabled: notifEnabled, schedule: scheduleNotifs, toggle: toggleNotifs } = useNotifications()
   const [showNotifModal, setShowNotifModal] = useState(false)
 
+  // Task I: the daily nudge names today's top not-yet-done plan item + streak
+  // (services/notifications.ts's dynamic body) — rescheduled whenever the
+  // plan or streak changes, per the brief's "rescheduled on plan generation".
   useEffect(() => {
-    if (focusedListings.length > 0) {
-      void scheduleNotifs(focusedListings)
-    }
-  }, [focusedListings, scheduleNotifs])
+    if (focusedListings.length === 0) return
+    const topItem = studyPlan.items.find(i => i.completedAt == null) ?? null
+    const summary = topItem
+      ? { topItemLabel: describeTopPlanItem(topItem, topicNameById.get(topItem.refId)), streakDays }
+      : null
+    void scheduleNotifs(focusedListings, summary)
+  }, [focusedListings, scheduleNotifs, studyPlan.items, streakDays, topicNameById])
 
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => StyleSheet.create({
@@ -373,6 +387,17 @@ export default function HomeScreen() {
         </Text>
 
         <View>
+
+          {/* (1c) Today's Plan — top fold, above My Entrance Exams */}
+          <TodaysPlanFold
+            items={studyPlan.items}
+            loading={studyPlan.loading}
+            allDone={studyPlan.allDone}
+            tomorrowItemCount={studyPlan.tomorrowItemCount}
+            streakDays={streakDays}
+            topicNameById={topicNameById}
+            onMarkComplete={(id) => void studyPlan.markComplete(id)}
+          />
 
           {/* (2) My Entrance Exams — top fold */}
           <FocusExamsFold
