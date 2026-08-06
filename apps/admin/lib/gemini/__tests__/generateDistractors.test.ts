@@ -113,4 +113,126 @@ describe('generateDistractorsForCard', () => {
     expect(promptArg).toContain('Mitochondria')
     expect(promptArg).toMatch(/DO NOT include/i)
   })
+
+  // Task E — option_explanations + strategy_tip threaded through the same call.
+  describe('optionExplanations / strategyTip (Task E)', () => {
+    it('returns optionExplanations (null at correctIndex) and strategyTip re-permuted alongside options', async () => {
+      mockGenerateContent.mockResolvedValueOnce({
+        response: {
+          text: () => JSON.stringify({
+            wrong_1: 'Wrong A', wrong_1_why: 'Confuses concept A.',
+            wrong_2: 'Wrong B', wrong_2_why: 'Off-by-one mistake.',
+            wrong_3: 'Wrong C', wrong_3_why: 'Applies the wrong formula.',
+            explanation: 'Because reasons',
+            strategy_tip: 'Check units before comparing.',
+          }),
+        },
+      })
+      const { generateDistractorsForCard } = await importLib()
+      const out = await generateDistractorsForCard({ subject: 'Math', topic: 'Algebra', question: 'Q', answer: 'Correct' })
+      expect(out).not.toBeNull()
+      expect(out!.strategyTip).toBe('Check units before comparing.')
+      expect(out!.optionExplanations).toHaveLength(4)
+      expect(out!.optionExplanations[out!.correctIndex]).toBeNull()
+
+      const byOption = new Map(out!.options.map((o, i) => [o, out!.optionExplanations[i]]))
+      expect(byOption.get('Wrong A')).toBe('Confuses concept A.')
+      expect(byOption.get('Wrong B')).toBe('Off-by-one mistake.')
+      expect(byOption.get('Wrong C')).toBe('Applies the wrong formula.')
+      expect(byOption.get('Correct')).toBeNull()
+    })
+
+    it('defaults strategyTip to "" and optionExplanations entries to null when Gemini omits the new fields (backward-compatible prompt shape)', async () => {
+      mockGenerateContent.mockResolvedValueOnce({
+        response: {
+          text: () => JSON.stringify({ wrong_1: 'a', wrong_2: 'b', wrong_3: 'c', explanation: 'e' }),
+        },
+      })
+      const { generateDistractorsForCard } = await importLib()
+      const out = await generateDistractorsForCard({ subject: 'S', topic: 'T', question: 'Q', answer: 'Correct' })
+      expect(out).not.toBeNull()
+      expect(out!.strategyTip).toBe('')
+      expect(out!.optionExplanations.filter(e => e !== null)).toHaveLength(0)
+    })
+
+    it('prompt asks for wrong_N_why and strategy_tip', async () => {
+      mockGenerateContent.mockResolvedValueOnce({
+        response: { text: () => JSON.stringify({ wrong_1: 'a', wrong_2: 'b', wrong_3: 'c', explanation: 'e' }) },
+      })
+      const { generateDistractorsForCard } = await importLib()
+      await generateDistractorsForCard({ subject: 'S', topic: 'T', question: 'Q', answer: 'A' })
+      const promptArg = mockGenerateContent.mock.calls[0]?.[0] as string
+      expect(promptArg).toContain('wrong_1_why')
+      expect(promptArg).toContain('strategy_tip')
+    })
+  })
+})
+
+describe('generateOptionExplanations', () => {
+  it('returns null when GEMINI_API_KEY is missing', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    const { generateOptionExplanations } = await importLib()
+    const out = await generateOptionExplanations({
+      subject: 'Math', topic: 'Algebra', question: 'Q', options: ['A', 'B', 'C', 'D'], correctIndex: 0,
+    })
+    expect(out).toBeNull()
+  })
+
+  it('returns null when options.length !== 4 or correctIndex is out of range', async () => {
+    const { generateOptionExplanations } = await importLib()
+    expect(await generateOptionExplanations({
+      subject: 'S', topic: 'T', question: 'Q', options: ['A', 'B', 'C'], correctIndex: 0,
+    })).toBeNull()
+    expect(await generateOptionExplanations({
+      subject: 'S', topic: 'T', question: 'Q', options: ['A', 'B', 'C', 'D'], correctIndex: 9,
+    })).toBeNull()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('maps A/B/C/D keys to option_explanations aligned with the input order, null at correctIndex', async () => {
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => JSON.stringify({
+          B: 'B is wrong because...', C: 'C is wrong because...', D: 'D is wrong because...',
+          strategy_tip: 'Plug the answer back in.',
+        }),
+      },
+    })
+    const { generateOptionExplanations } = await importLib()
+    const out = await generateOptionExplanations({
+      subject: 'Math', topic: 'Algebra', question: 'Q?',
+      options: ['Correct', 'Wrong B', 'Wrong C', 'Wrong D'],
+      correctIndex: 0,
+    })
+    expect(out).not.toBeNull()
+    expect(out!.optionExplanations).toEqual([null, 'B is wrong because...', 'C is wrong because...', 'D is wrong because...'])
+    expect(out!.strategyTip).toBe('Plug the answer back in.')
+  })
+
+  it('returns null when Gemini returns nothing useful (all-empty)', async () => {
+    mockGenerateContent.mockResolvedValueOnce({ response: { text: () => JSON.stringify({}) } })
+    const { generateOptionExplanations } = await importLib()
+    const out = await generateOptionExplanations({
+      subject: 'S', topic: 'T', question: 'Q', options: ['A', 'B', 'C', 'D'], correctIndex: 0,
+    })
+    expect(out).toBeNull()
+  })
+
+  it('returns null on malformed JSON', async () => {
+    mockGenerateContent.mockResolvedValueOnce({ response: { text: () => 'not json' } })
+    const { generateOptionExplanations } = await importLib()
+    const out = await generateOptionExplanations({
+      subject: 'S', topic: 'T', question: 'Q', options: ['A', 'B', 'C', 'D'], correctIndex: 0,
+    })
+    expect(out).toBeNull()
+  })
+
+  it('returns null when Gemini throws', async () => {
+    mockGenerateContent.mockRejectedValueOnce(new Error('network down'))
+    const { generateOptionExplanations } = await importLib()
+    const out = await generateOptionExplanations({
+      subject: 'S', topic: 'T', question: 'Q', options: ['A', 'B', 'C', 'D'], correctIndex: 0,
+    })
+    expect(out).toBeNull()
+  })
 })

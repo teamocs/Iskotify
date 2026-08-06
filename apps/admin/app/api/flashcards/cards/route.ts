@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
           Array.isArray(c.aiOptions) && typeof c.aiCorrectIndex === 'number'
             ? new Date().toISOString()
             : null,
+        // Task E — index-aligned with ai_options above (the /generate pipeline
+        // never sets the admin `options` column for these cards).
+        option_explanations: Array.isArray(c.optionExplanations) ? c.optionExplanations : [],
+        strategy_tip: typeof c.strategyTip === 'string' ? c.strategyTip : '',
       }))
       const { error } = await supabase.from('flashcards').insert(rows)
       if (error) {

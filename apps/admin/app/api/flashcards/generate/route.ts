@@ -195,7 +195,13 @@ export async function POST(req: NextRequest) {
 
     // Chain distractor generation for each card. Concurrency cap matches /manual + /backfill.
     const CONCURRENCY = 4
-    const cardsWithDistractors: Array<{ question: string; answer: string; explanation: string; aiOptions?: string[]; aiCorrectIndex?: number; aiExplanation?: string }> = []
+    const cardsWithDistractors: Array<{
+      question: string; answer: string; explanation: string
+      aiOptions?: string[]; aiCorrectIndex?: number; aiExplanation?: string
+      // Task E — index-aligned with aiOptions (this pipeline never sets admin `options`,
+      // so option_explanations is generated/stored aligned with aiOptions here).
+      optionExplanations?: (string | null)[]; strategyTip?: string
+    }> = []
     for (let i = 0; i < deduped.length; i += CONCURRENCY) {
       const slice = deduped.slice(i, i + CONCURRENCY)
       const enriched = await Promise.all(slice.map(async c => {
@@ -203,7 +209,10 @@ export async function POST(req: NextRequest) {
           subject, topic, question: c.question, answer: c.answer,
         })
         return result
-          ? { ...c, aiOptions: result.options, aiCorrectIndex: result.correctIndex, aiExplanation: result.explanation }
+          ? {
+              ...c, aiOptions: result.options, aiCorrectIndex: result.correctIndex, aiExplanation: result.explanation,
+              optionExplanations: result.optionExplanations, strategyTip: result.strategyTip,
+            }
           : c
       }))
       cardsWithDistractors.push(...enriched)

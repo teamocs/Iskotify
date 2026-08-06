@@ -149,6 +149,33 @@ describe('POST /api/flashcards/generate', () => {
     expect(body.cards[1]!.explanation).toBe('')
   })
 
+  it('threads optionExplanations/strategyTip from generateDistractorsForCard into the returned cards (Task E)', async () => {
+    adminUser()
+    mockGenerateContent.mockResolvedValueOnce({
+      response: {
+        text: () => JSON.stringify({
+          cards: [{ question: 'Q1', answer: 'A1', explanation: 'E1' }],
+        }),
+      },
+    })
+    mockGenerateDistractors.mockResolvedValueOnce({
+      options: ['A1', 'B', 'C', 'D'],
+      correctIndex: 0,
+      explanation: 'AI explanation',
+      optionExplanations: [null, 'B is wrong', 'C is wrong', 'D is wrong'],
+      strategyTip: 'Check units before comparing.',
+    })
+    const { POST } = await importRoute()
+    const res = await POST(makeReq({ subject_name: 'Math', topic_name: 'Algebra', count: 1 }))
+    expect(res.status).toBe(200)
+    const body = await res.json() as {
+      cards: Array<{ optionExplanations?: (string | null)[]; strategyTip?: string; aiOptions?: string[] }>
+    }
+    expect(body.cards[0]!.aiOptions).toEqual(['A1', 'B', 'C', 'D'])
+    expect(body.cards[0]!.optionExplanations).toEqual([null, 'B is wrong', 'C is wrong', 'D is wrong'])
+    expect(body.cards[0]!.strategyTip).toBe('Check units before comparing.')
+  })
+
   it('strips markdown fences and trailing prose from Gemini output', async () => {
     adminUser()
     mockGenerateContent.mockResolvedValueOnce({
