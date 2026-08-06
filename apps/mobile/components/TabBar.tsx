@@ -5,6 +5,7 @@ import {
   Bolt2Outlined,
   GraduationCap1Outlined,
   Bell1Outlined,
+  TrendUp1Outlined,
 } from '@lineiconshq/free-icons'
 // Type-only import for the custom tabBar prop; the app uses expo-router Tabs (JS navigator) by design.
 // eslint-disable-next-line react-doctor/rn-no-non-native-navigator
@@ -13,13 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeContext'
 
 const TAB_META: Record<string, { label: string; icon: typeof Home2Outlined }> = {
-  index:     { label: 'Home',    icon: Home2Outlined },
-  practice:  { label: 'Exams',   icon: Bolt2Outlined },
-  listings:  { label: 'Lists',   icon: GraduationCap1Outlined },
-  updates:   { label: 'Updates', icon: Bell1Outlined },
+  index:     { label: 'Home',     icon: Home2Outlined },
+  practice:  { label: 'Exams',    icon: Bolt2Outlined },
+  listings:  { label: 'Lists',    icon: GraduationCap1Outlined },
+  updates:   { label: 'Updates',  icon: Bell1Outlined },
+  analytics: { label: 'Progress', icon: TrendUp1Outlined },
 }
 
-const TABS = ['index', 'practice', 'listings', 'updates']
+const TABS = ['index', 'practice', 'listings', 'updates', 'analytics']
 
 function NavItem({
   label,

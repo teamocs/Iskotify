@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, Pressable } from 'react-native'
+import { router } from 'expo-router'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
@@ -7,6 +8,21 @@ import { usePracticeData } from '../../hooks/usePracticeData'
 import { useTheme } from '../../theme/ThemeContext'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../SubjectAccordion'
+import { TrendLineChart } from './TrendLineChart'
+import type { ResolvedMissedTopic, MockAttemptPercentile } from '../../services/analyticsAggregates'
+
+/** Formats elapsedMs as "42s" or "1m 08s" for the Pace section. */
+function fmtDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000)
+  if (totalSec < 60) return `${totalSec}s`
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}m ${String(s).padStart(2, '0')}s`
+}
+
+function missedTopicHref(topicId: string, listingSlug: string): string {
+  return listingSlug ? `/practice/${topicId}?listingSlug=${encodeURIComponent(listingSlug)}` : `/practice/${topicId}`
+}
 
 function StatCard({ value, label, color }: { value: string; label: string; color?: string }) {
   const { theme: t, typo, isDark } = useTheme()
@@ -79,6 +95,11 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
   // Wave 3a: collapsed states
   const [chartExpanded, setChartExpanded] = useState(false)
   const [sessionsExpanded, setSessionsExpanded] = useState(false)
+  // Task G: collapsed states for the new sections
+  const [trendExpanded, setTrendExpanded] = useState(false)
+  const [paceExpanded, setPaceExpanded] = useState(false)
+  const [mistakesExpanded, setMistakesExpanded] = useState(false)
+  const [percentileExpanded, setPercentileExpanded] = useState(false)
 
   const subjectGroups = useMemo(() => {
     function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
@@ -151,6 +172,32 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     emptyState: { alignItems: 'center', paddingVertical: 48 },
     emptyTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 6 },
     emptySub: { fontSize: typo.base, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
+    // Task G: Pace section
+    paceOverallRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 10 },
+    paceOverallVal: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    paceOverallLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
+    paceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+    paceLabel: { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
+    paceVal: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    // Task G: Most Common Mistakes section
+    mistakeRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10,
+      borderTopWidth: 1, borderTopColor: t.surfaceSubtle,
+    },
+    mistakeLabel: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    mistakeSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    mistakeBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0, borderWidth: 1 },
+    mistakeBadgeTxt: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    mistakeChevron: { fontSize: 13, color: t.textTertiary, marginLeft: 2 },
+    // Task G: Percentile band history
+    percentileRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8,
+      borderTopWidth: 1, borderTopColor: t.surfaceSubtle,
+    },
+    percentileBand: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    percentileMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    percentileVal: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    smallEmptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingVertical: 8 },
   }), [t, typo])
 
   function fmtDate(ts: number): string {
@@ -176,6 +223,25 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
   const allSessions = analytics.recentSessions
   const visibleSessions = sessionsExpanded ? allSessions : allSessions.slice(0, TOP_N)
   const hiddenCount = allSessions.length - TOP_N
+
+  // Task G: summary lines for the new collapsible sections
+  const trendKnown = analytics.accuracyTrend.filter(p => p.accuracy !== null)
+  const trendSummary = trendKnown.length > 0
+    ? `${trendKnown.length} of ${analytics.accuracyTrend.length} weeks active`
+    : 'No activity yet'
+
+  const paceSummary = analytics.avgTime.overallAvgMs !== null
+    ? `${fmtDuration(analytics.avgTime.overallAvgMs)} avg`
+    : 'No timed questions yet'
+
+  const mistakesSummary = analytics.mostMissedTopics.length > 0
+    ? `${analytics.mostMissedTopics.length} area${analytics.mostMissedTopics.length !== 1 ? 's' : ''} to review`
+    : 'No mistakes tracked yet'
+
+  const latestPercentile = analytics.mockAttemptHistory[analytics.mockAttemptHistory.length - 1]
+  const percentileSummary = latestPercentile
+    ? `Latest: ${latestPercentile.band} (${latestPercentile.percentile}th)`
+    : 'No full mock attempts yet'
 
   const content = (
     <>
@@ -250,6 +316,30 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
         ) : null}
       </View>
 
+      {/* Progress trend — 8-week accuracy line chart, a longer window than This Week's 7 days */}
+      <View style={s.section}>
+        <Pressable
+          style={s.sectionHeaderRow}
+          onPress={() => setTrendExpanded(v => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: trendExpanded }}
+          hitSlop={8}
+        >
+          <View style={s.sectionHeaderLeft}>
+            <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Progress Trend</Text>
+            {!trendExpanded ? (
+              <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{trendSummary}</Text>
+            ) : null}
+          </View>
+          <Text style={s.sectionChevron}>{trendExpanded ? '▲' : '▼'}</Text>
+        </Pressable>
+        {trendExpanded ? (
+          <View style={s.sectionBody}>
+            <TrendLineChart points={analytics.accuracyTrend} />
+          </View>
+        ) : null}
+      </View>
+
       {/* Subject mastery — all groups collapsed by default */}
       <View style={s.section}>
         <View style={s.sectionHeaderRow}>
@@ -280,6 +370,143 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
           />
         </View>
       </View>
+
+      {/* Pace — avg time per question overall + per subject, from question_attempts.elapsedMs */}
+      <View style={s.section}>
+        <Pressable
+          style={s.sectionHeaderRow}
+          onPress={() => setPaceExpanded(v => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: paceExpanded }}
+          hitSlop={8}
+        >
+          <View style={s.sectionHeaderLeft}>
+            <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Pace</Text>
+            {!paceExpanded ? (
+              <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{paceSummary}</Text>
+            ) : null}
+          </View>
+          <Text style={s.sectionChevron}>{paceExpanded ? '▲' : '▼'}</Text>
+        </Pressable>
+        {paceExpanded ? (
+          <View style={s.sectionBody}>
+            {analytics.avgTime.overallAvgMs !== null ? (
+              <>
+                <View style={s.paceOverallRow}>
+                  <Text style={s.paceOverallVal} maxFontSizeMultiplier={1.4}>{fmtDuration(analytics.avgTime.overallAvgMs)}</Text>
+                  <Text style={s.paceOverallLbl} maxFontSizeMultiplier={1.4}>avg / question · {analytics.avgTime.overallCount} timed</Text>
+                </View>
+                {analytics.avgTime.bySubject.map(sub => (
+                  <View key={sub.subject} style={s.paceRow}>
+                    <Text style={s.paceLabel} numberOfLines={1}>{sub.subject}</Text>
+                    <Text style={s.paceVal} maxFontSizeMultiplier={1.4}>{fmtDuration(sub.avgMs)}</Text>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <Text style={s.smallEmptyTxt}>Complete a timed quiz to see your pace here.</Text>
+            )}
+          </View>
+        ) : null}
+      </View>
+
+      {/* Most Common Mistakes — top missed topics by wrong-answer count, tap-through where possible */}
+      <View style={s.section}>
+        <Pressable
+          style={s.sectionHeaderRow}
+          onPress={() => setMistakesExpanded(v => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: mistakesExpanded }}
+          hitSlop={8}
+        >
+          <View style={s.sectionHeaderLeft}>
+            <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Most Common Mistakes</Text>
+            {!mistakesExpanded ? (
+              <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{mistakesSummary}</Text>
+            ) : null}
+          </View>
+          <Text style={s.sectionChevron}>{mistakesExpanded ? '▲' : '▼'}</Text>
+        </Pressable>
+        {mistakesExpanded ? (
+          <View style={s.sectionBody}>
+            {analytics.mostMissedTopics.length > 0 ? (
+              analytics.mostMissedTopics.map((m: ResolvedMissedTopic, i: number) => {
+                // Same red/amber/green tiering + rgba(...) fill convention as the Recent Sessions badge below.
+                const tone = m.missRate >= 60
+                  ? { fg: '#f87171', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.22)' }
+                  : m.missRate >= 30
+                    ? { fg: '#fbbf24', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.22)' }
+                    : { fg: '#4ade80', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.25)' }
+                const row = (
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.mistakeLabel} numberOfLines={1}>{m.label}</Text>
+                    <Text style={s.mistakeSub}>{m.missCount} miss{m.missCount !== 1 ? 'es' : ''} · {m.missRate}% miss rate</Text>
+                  </View>
+                )
+                const badge = (
+                  <View style={[s.mistakeBadge, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+                    <Text style={[s.mistakeBadgeTxt, { color: tone.fg }]} maxFontSizeMultiplier={1.4}>{m.missCount}</Text>
+                  </View>
+                )
+                return m.destination ? (
+                  <Pressable
+                    key={m.groupKey}
+                    style={[s.mistakeRow, i === 0 && { borderTopWidth: 0 }]}
+                    onPress={() => router.push(missedTopicHref(m.destination!.topicId, m.destination!.listingSlug) as never)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Review ${m.label}`}
+                  >
+                    {row}
+                    {badge}
+                    <Text style={s.mistakeChevron}>›</Text>
+                  </Pressable>
+                ) : (
+                  <View key={m.groupKey} style={[s.mistakeRow, i === 0 && { borderTopWidth: 0 }]}>
+                    {row}
+                    {badge}
+                  </View>
+                )
+              })
+            ) : (
+              <Text style={s.smallEmptyTxt}>No mistakes tracked yet — keep practicing!</Text>
+            )}
+          </View>
+        ) : null}
+      </View>
+
+      {/* Percentile band history — derived from full mock attempts via estimatePercentileBand, no new table */}
+      {analytics.mockAttemptHistory.length > 0 ? (
+        <View style={s.section}>
+          <Pressable
+            style={s.sectionHeaderRow}
+            onPress={() => setPercentileExpanded(v => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: percentileExpanded }}
+            hitSlop={8}
+          >
+            <View style={s.sectionHeaderLeft}>
+              <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Percentile Band History</Text>
+              {!percentileExpanded ? (
+                <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{percentileSummary}</Text>
+              ) : null}
+            </View>
+            <Text style={s.sectionChevron}>{percentileExpanded ? '▲' : '▼'}</Text>
+          </Pressable>
+          {percentileExpanded ? (
+            <View style={s.sectionBody}>
+              {analytics.mockAttemptHistory.slice(-8).reverse().map((mh: MockAttemptPercentile, i: number) => (
+                <View key={`${mh.listingSlug}-${mh.completedAt}`} style={[s.percentileRow, i === 0 && { borderTopWidth: 0 }]}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.percentileBand} numberOfLines={1}>{mh.band}</Text>
+                    <Text style={s.percentileMeta}>{fmtDate(mh.completedAt)} · {mh.pct}% raw</Text>
+                  </View>
+                  <Text style={s.percentileVal} maxFontSizeMultiplier={1.4}>{mh.percentile}th</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Recent sessions — top 3 + Load more */}
       {allSessions.length > 0 ? (

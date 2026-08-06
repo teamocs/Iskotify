@@ -2,7 +2,7 @@
  * SidebarNav — persistent desktop sidebar for lg breakpoint (web only).
  *
  * Reuses the exact same icon components as TabBar.tsx:
- *   Home2Outlined, Bolt2Outlined, GraduationCap1Outlined, Bell1Outlined
+ *   Home2Outlined, Bolt2Outlined, GraduationCap1Outlined, Bell1Outlined, TrendUp1Outlined
  * plus User4Outlined for profile and Gear1Outlined for settings.
  *
  * Hover support: react-native-web 0.21.2 exposes `hovered` in the Pressable
@@ -21,6 +21,7 @@ import {
   Bolt2Outlined,
   GraduationCap1Outlined,
   Bell1Outlined,
+  TrendUp1Outlined,
   User4Outlined,
   Gear1Outlined,
 } from '@lineiconshq/free-icons'
@@ -38,10 +39,11 @@ interface NavEntry {
 }
 
 const NAV_ITEMS: NavEntry[] = [
-  { label: 'Home',    icon: Home2Outlined,           route: '/',          activePrefix: '/(tabs)/index' },
-  { label: 'Exams',   icon: Bolt2Outlined,            route: '/practice',  activePrefix: '/practice' },
-  { label: 'Lists',   icon: GraduationCap1Outlined,   route: '/listings',  activePrefix: '/listings' },
-  { label: 'Updates', icon: Bell1Outlined,             route: '/updates',   activePrefix: '/updates' },
+  { label: 'Home',     icon: Home2Outlined,          route: '/',          activePrefix: '/(tabs)/index' },
+  { label: 'Exams',    icon: Bolt2Outlined,           route: '/practice',  activePrefix: '/practice' },
+  { label: 'Lists',    icon: GraduationCap1Outlined,  route: '/listings',  activePrefix: '/listings' },
+  { label: 'Updates',  icon: Bell1Outlined,           route: '/updates',   activePrefix: '/updates' },
+  { label: 'Progress', icon: TrendUp1Outlined,        route: '/analytics', activePrefix: '/analytics' },
 ]
 
 const BOTTOM_ITEMS: NavEntry[] = [
