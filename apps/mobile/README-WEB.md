@@ -86,7 +86,7 @@ Then open `http://localhost:3000` in a browser.
 
 | Feature | Web status |
 |---|---|
-| Kuya Baw (AI tutor) | Gemini BYOK only — user supplies their own API key from Google AI Studio; the local on-device Llama model cannot run in a browser |
+| On-device AI model | Not available on web — `services/llm.web.ts` and `hooks/useModelDownload.web.ts` are no-op stubs, since `llama.rn` cannot run in a browser. AI flashcard enhancement and Tier-2 listing search fall back to their non-AI paths. |
 | App data | Stored in the browser (IndexedDB). Cleared when the user clears site data. No cross-device sync on web. |
 | Push notifications | Not available on web |
 | File download (notes export) | Works via browser Blob download |

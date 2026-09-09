@@ -1,5 +1,17 @@
 # Iskotify Web App — Spec & Wave Plan (W1 boot → W2 auth → W3 responsive → W4 deploy)
 
+> **PARTIALLY SUPERSEDED — 2026-08-06.** The web *data layer* described here is still
+> live and accurate: sql.js + IndexedDB persistence, no COOP/COEP headers, `.web.ts(x)`
+> platform files, `Platform.OS === 'web'` gating, auth-first web entry.
+>
+> Every **AI/chat** claim in this document is dead. The Kuya Baw chat was retired
+> entirely (`b9a207c`, `67bae0a`): there is no web chat, no Gemini BYOK, and no
+> `geminiKey.ts` / `flashcardRetriever.ts` / `KuyaChatProvider.tsx` / `KuyaDownloadSheet.tsx`
+> (the last was renamed `components/AiModelDownloadSheet.tsx`). The FTS5 indexes
+> mentioned in decision #1 were retired with the chat's retrieval layer. Treat
+> decisions #1 (AI clause only) and #2, and the "Web feature gating" step, as historical.
+> Current architecture: `iskotify-context.md`.
+
 > Executed via superpowers:subagent-driven-development + TDD. All work in `apps/mobile` (Expo Web / React Native Web — same codebase as native; NO separate Next.js app). Native (iOS/Android) behavior must be UNTOUCHED — every web change is `Platform.OS === 'web'`-gated or in `.web.ts(x)` platform files. NativeWind stays banned in apps/mobile (RN-Web styles via StyleSheet — react-native-web renders them to CSS). Never `{count && <JSX/>}`. Controller verifies each wave in a real browser (serve dist + gstack).
 
 ## Locked architecture decisions (researched)

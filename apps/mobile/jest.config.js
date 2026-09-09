@@ -41,7 +41,6 @@ module.exports = {
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
         '\\.svg$': '<rootDir>/__mocks__/svgMock.js',
-        '^lottie-react-native$': '<rootDir>/__mocks__/lottieMock.js',
         'theme/ThemeContext': '<rootDir>/__mocks__/themeContextMock.js',
         '^expo-secure-store$': '<rootDir>/__mocks__/expoSecureStoreMock.js',
       },

@@ -44,7 +44,7 @@ Verification: admin 614/614 vitest, mobile 1516/1516 jest, both type-checks clea
 | P2 | Export/import misses `user_requirements` (reset-after-export loses checked requirements) · Help FAQ points to "Settings → Export Data" but export lives on Profile | add to `services/export.ts` payload + fix copy |
 | P2 | Note reminders on web save silently but never fire (no web gate/messaging) | disable/annotate the field on web |
 | P2 | No share entry points for schools/exams/listings; no Android App Links for app.iskotify.ph | share icon on detail screens; `intentFilters` in app.json |
-| P3 | No global search on Home · BYOK screen doesn't state chats go to Google · admin early-access queue lacks reject/revoke | small additions |
+| P3 | No global search on Home · admin early-access queue lacks reject/revoke | small additions |
 
 ### Performance & data layer
 | Sev | Finding | Notes |
@@ -81,7 +81,7 @@ Commits `68b3b54`..`c168ea7` + new features:
 - ✅ **Web password reset** — `/auth/reset-password` + recovery detection in callback (`0cf8736`).
 - ✅ **Sync batching** — ~5,300 per-row upserts → ~125 chunked statements (~40×), Tx-split yields (`7d67a61`).
 - ✅ **Desktop max-width** for 13 stack screens + Home/Updates web refresh buttons (`8194043`).
-- ✅ **NEW: Kuya Baw overhaul** — complete, conversational, non-truncated answers on local + Gemini (`68b3b54`).
+- ~~✅ **NEW: Kuya Baw overhaul** — complete, conversational, non-truncated answers on local + Gemini (`68b3b54`).~~ **SUPERSEDED** — the Kuya Baw chat feature was retired entirely on 2026-08-06 (`b9a207c`, `67bae0a`). See `docs/superpowers/plans/2026-08-06-kuya-retirement-and-core-features.md`.
 - ✅ **NEW: crowd-sourced date corrections** — user-submitted exam/scholarship dates + admin moderation (`ce14515`).
 - ✅ **NEW: course-chip split** — comma/semicolon-joined courses render as separate chips (`a66287a`).
 
