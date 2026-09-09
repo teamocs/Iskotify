@@ -137,27 +137,27 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
         <div className="p-6 max-w-3xl mx-auto space-y-8">
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">{error}</div>
+            <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">{error}</div>
           )}
 
           {/* ---- Blueprint fields ---- */}
           <section className="space-y-4">
-            <h2 className="text-[#1d1d1f] font-heading font-bold text-lg tracking-tight border-b border-black/[0.08] pb-2">Blueprint</h2>
+            <h2 className="text-ink font-heading font-bold text-lg tracking-tight border-b border-black/[0.08] pb-2">Blueprint</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Slug</label>
-                <input
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Slug</label>
+                <input aria-label="Slug"
                   value={blueprint.slug}
                   onChange={e => setBp('slug', e.target.value)}
                   disabled={!isNew}
                   placeholder="e.g. upcat-2026"
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm disabled:bg-[#f5f5f7] disabled:text-[#6e6e73]"
+                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm disabled:bg-surface-2 disabled:text-ink-muted"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Acronym</label>
-                <input
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Acronym</label>
+                <input aria-label="Acronym"
                   value={blueprint.acronym}
                   onChange={e => setBp('acronym', e.target.value)}
                   placeholder="e.g. UPCAT"
@@ -167,8 +167,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Name</label>
-              <input
+              <label className="block text-xs font-semibold text-ink-muted mb-1">Name</label>
+              <input aria-label="Name"
                 value={blueprint.name}
                 onChange={e => setBp('name', e.target.value)}
                 placeholder="Full exam name"
@@ -178,8 +178,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Total items</label>
-                <input
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Total items</label>
+                <input aria-label="Total items"
                   type="number" min={0}
                   value={blueprint.total_items}
                   onChange={e => setBp('total_items', Number(e.target.value))}
@@ -187,8 +187,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Total minutes</label>
-                <input
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Total minutes</label>
+                <input aria-label="Total minutes"
                   type="number" min={0}
                   value={blueprint.total_time_minutes}
                   onChange={e => setBp('total_time_minutes', Number(e.target.value))}
@@ -196,8 +196,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Display order</label>
-                <input
+                <label className="block text-xs font-semibold text-ink-muted mb-1">Display order</label>
+                <input aria-label="Display order"
                   type="number" min={0}
                   value={blueprint.display_order}
                   onChange={e => setBp('display_order', Number(e.target.value))}
@@ -208,7 +208,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-sm text-[#3a3a3c] cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
                   <input
                     type="checkbox"
                     checked={blueprint.has_guessing_penalty}
@@ -218,8 +218,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 </label>
                 {blueprint.has_guessing_penalty && (
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Penalty per wrong answer</label>
-                    <input
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">Penalty per wrong answer</label>
+                    <input aria-label="Penalty per wrong answer"
                       type="number" min={0} step={0.01}
                       value={blueprint.guessing_penalty}
                       onChange={e => setBp('guessing_penalty', Number(e.target.value))}
@@ -229,7 +229,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 )}
               </div>
               <div>
-                <label className="flex items-center gap-2 text-sm text-[#3a3a3c] cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
                   <input
                     type="checkbox"
                     checked={blueprint.section_blocked}
@@ -241,8 +241,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Scoring note</label>
-              <textarea
+              <label className="block text-xs font-semibold text-ink-muted mb-1">Scoring note</label>
+              <textarea aria-label="Scoring note"
                 value={blueprint.scoring_note}
                 onChange={e => setBp('scoring_note', e.target.value)}
                 rows={2}
@@ -252,8 +252,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Mechanics note</label>
-              <textarea
+              <label className="block text-xs font-semibold text-ink-muted mb-1">Mechanics note</label>
+              <textarea aria-label="Mechanics note"
                 value={blueprint.mechanics_note}
                 onChange={e => setBp('mechanics_note', e.target.value)}
                 rows={3}
@@ -263,8 +263,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Status</label>
-              <select
+              <label className="block text-xs font-semibold text-ink-muted mb-1">Status</label>
+              <select aria-label="Status"
                 value={blueprint.status}
                 onChange={e => setBp('status', e.target.value)}
                 className="border border-black/[0.15] rounded px-3 py-2 text-sm"
@@ -278,28 +278,28 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
           {/* ---- Sections editor ---- */}
           <section className="space-y-3">
             <div className="flex items-center justify-between border-b border-black/[0.08] pb-2">
-              <h2 className="text-[#1d1d1f] font-heading font-bold text-lg tracking-tight">Sections</h2>
+              <h2 className="text-ink font-heading font-bold text-lg tracking-tight">Sections</h2>
               <button
                 type="button"
                 onClick={addSection}
-                className="text-xs font-semibold text-[#800000] hover:text-[#9a0a1f] transition-colors"
+                className="text-xs font-semibold text-maroon hover:text-maroon-light transition-colors"
               >
                 + Add section
               </button>
             </div>
 
             {sections.length === 0 && (
-              <p className="text-[#6e6e73] text-sm">No sections yet. Click &quot;Add section&quot; to start.</p>
+              <p className="text-ink-muted text-sm">No sections yet. Click &quot;Add section&quot; to start.</p>
             )}
 
             {sections.map((sec, i) => (
-              <div key={i} className="rounded-xl border border-black/[0.08] bg-[#fafafa] p-4 space-y-3">
+              <div key={i} className="rounded-xl border border-black/[0.08] bg-surface-3 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#6e6e73] uppercase tracking-wide">Section {i + 1}</span>
+                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Section {i + 1}</span>
                   <button
                     type="button"
                     onClick={() => removeSection(i)}
-                    className="text-xs text-red-600 hover:text-red-800 transition-colors"
+                    className="text-xs text-danger hover:text-danger-strong transition-colors"
                   >
                     Remove
                   </button>
@@ -307,8 +307,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Name</label>
-                    <input
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">Name</label>
+                    <input aria-label="Name"
                       value={sec.name}
                       onChange={e => setSection(i, 'name', e.target.value)}
                       placeholder="e.g. Mathematics"
@@ -316,8 +316,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Skill category</label>
-                    <select
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">Skill category</label>
+                    <select aria-label="Skill category"
                       value={sec.skill_category}
                       onChange={e => setSection(i, 'skill_category', e.target.value)}
                       className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
@@ -332,8 +332,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Item count</label>
-                    <input
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">Item count</label>
+                    <input aria-label="Item count"
                       type="number" min={0}
                       value={sec.item_count}
                       onChange={e => setSection(i, 'item_count', Number(e.target.value))}
@@ -341,10 +341,10 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">
-                      Per-section minutes <span className="text-[#b0b0b5]">(only if section-blocked)</span>
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">
+                      Per-section minutes <span className="text-ink-subtle">(only if section-blocked)</span>
                     </label>
-                    <input
+                    <input aria-label="Per-section minutes (only if section-blocked)"
                       type="number" min={0}
                       value={sec.time_minutes ?? ''}
                       onChange={e => setSection(i, 'time_minutes', e.target.value === '' ? null : Number(e.target.value))}
@@ -353,7 +353,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                     />
                   </div>
                   <div className="flex items-end pb-2">
-                    <label className="flex items-center gap-2 text-sm text-[#3a3a3c] cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
                       <input
                         type="checkbox"
                         checked={sec.requires_spatial_logic}
@@ -370,28 +370,28 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
           {/* ---- Course notes editor ---- */}
           <section className="space-y-3">
             <div className="flex items-center justify-between border-b border-black/[0.08] pb-2">
-              <h2 className="text-[#1d1d1f] font-heading font-bold text-lg tracking-tight">Course Notes</h2>
+              <h2 className="text-ink font-heading font-bold text-lg tracking-tight">Course Notes</h2>
               <button
                 type="button"
                 onClick={addNote}
-                className="text-xs font-semibold text-[#800000] hover:text-[#9a0a1f] transition-colors"
+                className="text-xs font-semibold text-maroon hover:text-maroon-light transition-colors"
               >
                 + Add note
               </button>
             </div>
 
             {notes.length === 0 && (
-              <p className="text-[#6e6e73] text-sm">No course notes. Click &quot;Add note&quot; for course-specific guidance.</p>
+              <p className="text-ink-muted text-sm">No course notes. Click &quot;Add note&quot; for course-specific guidance.</p>
             )}
 
             {notes.map((n, i) => (
-              <div key={i} className="rounded-xl border border-black/[0.08] bg-[#fafafa] p-4 space-y-3">
+              <div key={i} className="rounded-xl border border-black/[0.08] bg-surface-3 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#6e6e73] uppercase tracking-wide">Note {i + 1}</span>
+                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Note {i + 1}</span>
                   <button
                     type="button"
                     onClick={() => removeNote(i)}
-                    className="text-xs text-red-600 hover:text-red-800 transition-colors"
+                    className="text-xs text-danger hover:text-danger-strong transition-colors"
                   >
                     Remove
                   </button>
@@ -399,8 +399,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Course cluster</label>
-                    <input
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">Course cluster</label>
+                    <input aria-label="Course cluster"
                       value={n.course_cluster}
                       onChange={e => setNote(i, 'course_cluster', e.target.value)}
                       placeholder="all, Engineering & Technology, …"
@@ -408,10 +408,10 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[#6e6e73] mb-1">
-                      Min percentile <span className="text-[#b0b0b5]">(optional)</span>
+                    <label className="block text-xs font-semibold text-ink-muted mb-1">
+                      Min percentile <span className="text-ink-subtle">(optional)</span>
                     </label>
-                    <input
+                    <input aria-label="Min percentile"
                       type="number" min={0} max={100}
                       value={n.min_percentile ?? ''}
                       onChange={e => setNote(i, 'min_percentile', e.target.value === '' ? null : Number(e.target.value))}
@@ -422,8 +422,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#6e6e73] mb-1">Note</label>
-                  <textarea
+                  <label className="block text-xs font-semibold text-ink-muted mb-1">Note</label>
+                  <textarea aria-label="Note"
                     value={n.note}
                     onChange={e => setNote(i, 'note', e.target.value)}
                     rows={2}
@@ -443,8 +443,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
               disabled={busy}
               className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${
                 busy
-                  ? 'bg-[#f5f5f7] text-[#6e6e73] cursor-not-allowed'
-                  : 'bg-[#800000] text-white hover:bg-[#9a0a1f]'
+                  ? 'bg-surface-2 text-ink-muted cursor-not-allowed'
+                  : 'bg-maroon text-white hover:bg-[#9a0a1f]'
               }`}
             >
               {saving ? 'Saving…' : 'Save blueprint'}
@@ -457,8 +457,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
                 disabled={busy}
                 className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors ${
                   busy
-                    ? 'text-[#b0b0b5] cursor-not-allowed'
-                    : 'text-red-700 hover:bg-red-50'
+                    ? 'text-ink-subtle cursor-not-allowed'
+                    : 'text-danger hover:bg-danger-soft'
                 }`}
               >
                 {deleting ? 'Deleting…' : 'Delete blueprint'}
@@ -469,7 +469,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
               type="button"
               onClick={() => router.push('/admin/exam-blueprints')}
               disabled={busy}
-              className="text-sm text-[#6e6e73] hover:text-[#3a3a3c] transition-colors"
+              className="text-sm text-ink-muted hover:text-ink-muted transition-colors"
             >
               Cancel
             </button>

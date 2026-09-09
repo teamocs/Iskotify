@@ -92,7 +92,7 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
     dotsRow: { flexDirection: 'row', gap: 2, position: 'absolute', bottom: 4 },
     dot: { width: 4, height: 4, borderRadius: 2 },
     dotExam: { backgroundColor: t.accentText },
-    dotReminder: { backgroundColor: '#fbbf24' },
+    dotReminder: { backgroundColor: t.warning },
     dotPractice: { backgroundColor: '#60a5fa' },
     closeBtn: { padding: 6 },
   }), [t, typo])

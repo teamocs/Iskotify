@@ -51,19 +51,19 @@ export function CsvDropzone({
       onDragLeave={() => setDragOver(false)}
       className={`
         cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition bg-white
-        ${dragOver ? 'border-[#800000] bg-[#fff5f6]' : 'border-black/[0.12]'}
-        ${disabled ? 'opacity-50 pointer-events-none' : 'hover:border-[#800000]/60'}
+        ${dragOver ? 'border-maroon bg-[#fff5f6]' : 'border-black/[0.12]'}
+        ${disabled ? 'opacity-50 pointer-events-none' : 'hover:border-maroon/60'}
       `}
     >
       <div className="text-3xl mb-2">📄</div>
-      <div className="text-[#1d1d1f] font-semibold mb-1 font-heading">{label}</div>
-      <div className="text-[#6e6e73] text-sm">{hint}</div>
+      <div className="text-ink font-semibold mb-1 font-heading">{label}</div>
+      <div className="text-ink-muted text-sm">{hint}</div>
       {sampleHref && (
         <a
           href={sampleHref}
           onClick={e => e.stopPropagation()}
           download
-          className="inline-block mt-4 text-sm text-[#800000] font-medium underline hover:text-[#9a0a1f]"
+          className="inline-block mt-4 text-sm text-maroon font-medium underline hover:text-maroon-light"
         >
           {sampleLabel}
         </a>
@@ -71,6 +71,7 @@ export function CsvDropzone({
       <input
         ref={inputRef}
         type="file"
+        aria-label="Choose a CSV file to upload"
         accept={accept}
         className="hidden"
         onChange={handlePicked}

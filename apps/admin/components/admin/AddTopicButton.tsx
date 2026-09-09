@@ -13,7 +13,7 @@ export function AddTopicButton({ subjectId }: Props) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 text-xs font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] transition-colors"
+        className="px-3 py-1.5 text-xs font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] transition-colors"
       >
         + Add Topic
       </button>

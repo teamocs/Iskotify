@@ -20,7 +20,7 @@ export function SectionHelp({ title, guideAnchor, children }: Props) {
         onClick={() => setOpen(o => !o)}
         aria-label={`Help: ${title}`}
         aria-expanded={open}
-        className="w-5 h-5 rounded-full border border-black/[0.15] text-[11px] leading-none text-[#6e6e73] hover:text-[#800000] hover:border-[#800000] flex items-center justify-center"
+        className="w-5 h-5 rounded-full border border-black/[0.15] text-[11px] leading-none text-ink-muted hover:text-maroon hover:border-maroon flex items-center justify-center"
       >
         ?
       </button>
@@ -33,13 +33,13 @@ export function SectionHelp({ title, guideAnchor, children }: Props) {
             onClick={() => setOpen(false)}
           />
           <div className="absolute left-0 top-7 z-50 w-72 rounded-[12px] border border-black/[0.08] bg-white shadow-xl p-3 text-left">
-            <p className="text-[13px] font-semibold text-[#1d1d1f] mb-1">{title}</p>
-            <p className="text-[12px] text-[#6e6e73] leading-relaxed">
+            <p className="text-[13px] font-semibold text-ink mb-1">{title}</p>
+            <p className="text-[12px] text-ink-muted leading-relaxed">
               {children ?? 'Add, edit, delete, import, or export rows for this table. Changes reach the mobile app on its next sync.'}
             </p>
             <a
               href={`/admin/guide${guideAnchor ? `#${guideAnchor}` : ''}`}
-              className="inline-block mt-2 text-[12px] font-semibold text-[#800000] hover:underline"
+              className="inline-block mt-2 text-[12px] font-semibold text-maroon hover:underline"
             >
               Full guide →
             </a>

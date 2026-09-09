@@ -45,8 +45,8 @@ export function FilterBar({ listings, onFilter }: Props) {
           onClick={() => setType(f)}
           className={`rounded-[980px] px-4 py-1 text-xs font-medium transition-colors ${
             activeType === f
-              ? 'bg-[#800000] text-white'
-              : 'bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]'
+              ? 'bg-maroon text-white'
+              : 'bg-[#f3f4f6] text-ink-muted hover:bg-[#e5e7eb]'
           }`}
         >
           {f}
@@ -55,10 +55,11 @@ export function FilterBar({ listings, onFilter }: Props) {
       <div className="flex-1" />
       <input
         type="search"
+        aria-label="Search listings"
         placeholder="🔍 Search listings…"
         value={search}
         onChange={e => setQ(e.target.value)}
-        className="bg-[#f3f4f6] rounded-lg px-3 py-1.5 text-xs text-[#6b7280] outline-none w-48"
+        className="bg-surface-2 rounded-lg px-3 py-1.5 text-xs text-ink placeholder-ink-subtle w-48 focus:outline-none focus:ring-2 focus:ring-maroon/40"
       />
     </div>
   )

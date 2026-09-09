@@ -92,7 +92,7 @@ export function AiModelDownloadSheet({ visible, onClose, onReady }: Props) {
     errorText: {
       fontFamily: 'Lexend_400Regular',
       fontSize: typo.xs,
-      color: '#f87171',
+      color: t.danger,
       textAlign: 'center',
       marginBottom: 12,
     },
@@ -130,7 +130,7 @@ export function AiModelDownloadSheet({ visible, onClose, onReady }: Props) {
     btnPrimaryText: {
       fontFamily: 'Outfit_700Bold',
       fontSize: typo.base,
-      color: '#ffffff',
+      color: t.textInverse,
     },
     btnSecondary: {
       borderRadius: 14,

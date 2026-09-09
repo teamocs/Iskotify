@@ -105,21 +105,34 @@ interface FieldProps {
   onJsonError: (name: string, err: string) => void
 }
 
-const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
-const labelCls = "block text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1"
+const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
+const labelCls = "block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1"
 
+/*
+ * Every branch pairs a <label htmlFor> with a control carrying the matching id.
+ * `col.name` is a column key, so it is unique within one edit form — that is
+ * what makes it safe to build a DOM id from. The required marker is aria-hidden
+ * because the `required` attribute already announces the state; without that a
+ * screen reader reads the field name followed by a bare "asterisk".
+ */
 function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
+  const fieldId = `field-${col.name}`
+  const errorId = `${fieldId}-error`
+  const marker = col.required
+    ? <span className="text-danger ml-0.5" aria-hidden="true">*</span>
+    : null
+
   if (col.type === 'boolean') {
     return (
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
-          id={col.name}
+          id={fieldId}
           checked={!!value}
           onChange={(e) => onChange(col.name, e.target.checked)}
-          className="w-4 h-4 rounded accent-[#800000]"
+          className="w-4 h-4 rounded accent-maroon"
         />
-        <label htmlFor={col.name} className="text-sm text-[#1d1d1f] cursor-pointer">{col.label}</label>
+        <label htmlFor={fieldId} className="text-sm text-ink cursor-pointer">{col.label}</label>
       </div>
     )
   }
@@ -127,8 +140,10 @@ function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
   if (col.type === 'textarea') {
     return (
       <div>
-        <label className={labelCls}>{col.label}{col.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+        <label htmlFor={fieldId} className={labelCls}>{col.label}{marker}</label>
         <textarea
+          id={fieldId}
+          required={col.required}
           value={value as string}
           onChange={(e) => onChange(col.name, e.target.value)}
           rows={3}
@@ -141,8 +156,9 @@ function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
   if (col.type === 'json') {
     return (
       <div>
-        <label className={labelCls}>{col.label}</label>
+        <label htmlFor={fieldId} className={labelCls}>{col.label}</label>
         <textarea
+          id={fieldId}
           value={value as string}
           onChange={(e) => {
             onChange(col.name, e.target.value)
@@ -154,8 +170,10 @@ function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
           rows={3}
           className={inputCls + ' font-mono text-xs'}
           placeholder="[]"
+          aria-invalid={jsonError ? true : undefined}
+          aria-describedby={jsonError ? errorId : undefined}
         />
-        {jsonError && <p className="text-xs text-red-600 mt-1">{jsonError}</p>}
+        {jsonError && <p id={errorId} role="alert" className="text-xs text-danger mt-1">{jsonError}</p>}
       </div>
     )
   }
@@ -163,9 +181,11 @@ function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
   if (col.type === 'number') {
     return (
       <div>
-        <label className={labelCls}>{col.label}{col.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+        <label htmlFor={fieldId} className={labelCls}>{col.label}{marker}</label>
         <input
+          id={fieldId}
           type="number"
+          required={col.required}
           value={value as string}
           onChange={(e) => onChange(col.name, e.target.value)}
           className={inputCls}
@@ -177,9 +197,11 @@ function Field({ col, value, onChange, jsonError, onJsonError }: FieldProps) {
   // text (default)
   return (
     <div>
-      <label className={labelCls}>{col.label}{col.required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label htmlFor={fieldId} className={labelCls}>{col.label}{marker}</label>
       <input
+        id={fieldId}
         type="text"
+        required={col.required}
         value={value as string}
         onChange={(e) => onChange(col.name, e.target.value)}
         className={inputCls}
@@ -308,10 +330,10 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
       />
       <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
-          <h2 className="font-heading font-bold text-lg text-[#1d1d1f]">
+          <h2 className="font-heading font-bold text-lg text-ink">
             {isNew ? `New ${config.label}` : `Edit ${config.label}`}
           </h2>
-          <button type="button" onClick={onClose} className="text-[#aeaeb2] hover:text-[#1d1d1f] text-xl">
+          <button type="button" onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">
             ✕
           </button>
         </div>
@@ -320,11 +342,13 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
           {/* ID field for text-id tables (editable on new, readonly on edit) */}
           {config.idType === 'text' && (
             <div>
-              <label className={labelCls}>
+              <label htmlFor="field-record-id" className={labelCls}>
                 {config.idColumn}
-                <span className="text-red-500 ml-0.5">*</span>
+                <span className="text-danger ml-0.5" aria-hidden="true">*</span>
               </label>
               <input
+                id="field-record-id"
+                required
                 type="text"
                 value={String(form[config.idColumn] ?? '')}
                 onChange={(e) => setForm(f => ({ ...f, [config.idColumn]: e.target.value }))}
@@ -352,7 +376,7 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
           }
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>
+            <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>
           )}
 
           {/* Delete zone */}
@@ -360,19 +384,19 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
             <div className="pt-2 border-t border-black/[0.06]">
               {confirming ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-700">Delete this row?</span>
+                  <span className="text-sm text-danger">Delete this row?</span>
                   <button
                     type="button"
                     onClick={handleDelete}
                     disabled={saving}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium bg-danger text-white hover:bg-danger-strong disabled:opacity-50"
                   >
                     Yes, delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirming(false)}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
                   >
                     Cancel
                   </button>
@@ -381,7 +405,7 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
                 <button
                   type="button"
                   onClick={() => setConfirming(true)}
-                  className="text-sm text-red-600 hover:text-red-800"
+                  className="text-sm text-danger hover:text-danger-strong"
                 >
                   Delete this row
                 </button>
@@ -394,7 +418,7 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
           >
             Cancel
           </button>
@@ -402,7 +426,7 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000] disabled:opacity-50"
+            className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50"
           >
             {saving ? 'Saving…' : isNew ? `Create` : 'Save Changes'}
           </button>
@@ -521,23 +545,23 @@ export function DataTableManager({ config }: Props) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">{config.label}</h2>
+              <h2 className="text-ink font-heading font-bold text-xl tracking-tight">{config.label}</h2>
               <SectionHelp title={config.label} guideAnchor={config.table}>{config.helpText}</SectionHelp>
             </div>
-            <p className="text-[#6e6e73] text-sm mt-0.5">
+            <p className="text-ink-muted text-sm mt-0.5">
               {state.loading ? 'Loading…' : `${state.count} row${state.count !== 1 ? 's' : ''}`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <a
               href={`/api/admin/data/${config.table}?export=1&format=csv`}
-              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7]"
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink bg-white hover:bg-surface-2"
             >
               ⬇ CSV
             </a>
             <a
               href={`/api/admin/data/${config.table}?export=1&format=json`}
-              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7]"
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink bg-white hover:bg-surface-2"
             >
               ⬇ JSON
             </a>
@@ -545,7 +569,7 @@ export function DataTableManager({ config }: Props) {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={importing}
-              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] bg-white hover:bg-[#f5f5f7] disabled:opacity-50"
+              className="px-3 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink bg-white hover:bg-surface-2 disabled:opacity-50"
             >
               {importing ? 'Importing…' : '⬆ Import'}
             </button>
@@ -560,7 +584,7 @@ export function DataTableManager({ config }: Props) {
             <button
               type="button"
               onClick={openNew}
-              className="px-4 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000]"
+              className="px-4 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light"
             >
               + New
             </button>
@@ -569,7 +593,7 @@ export function DataTableManager({ config }: Props) {
 
         {/* Import result */}
         {importResult && (
-          <div className={`rounded-[10px] px-3 py-2 text-sm ${importResult.ok ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`}>
+          <div className={`rounded-[10px] px-3 py-2 text-sm ${importResult.ok ? 'bg-success-soft text-success-strong' : 'bg-warning-soft text-warning-strong'}`}>
             <div className="flex items-center justify-between gap-2">
               <span>{importResult.message}</span>
               <button type="button" onClick={() => setImportResult(null)} aria-label="Dismiss" className="text-xs opacity-60 hover:opacity-100">✕</button>
@@ -589,28 +613,29 @@ export function DataTableManager({ config }: Props) {
         <div>
           <input
             type="search"
+            aria-label={`Search by ${config.searchColumns.join(', ')}`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={`Search by ${config.searchColumns.join(', ')}…`}
-            className="w-full max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+            className="w-full max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
           />
         </div>
 
         {/* Error */}
         {state.error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{state.error}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{state.error}</p>
         )}
 
         {/* Table */}
         <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[600px]">
-              <thead className="bg-[#f5f5f7] border-b border-black/[0.08]">
+              <thead className="bg-surface-2 border-b border-black/[0.08]">
                 <tr>
                   {displayCols.map(col => (
                     <th
                       key={col}
-                      className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
+                      className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap"
                     >
                       {col}
                     </th>
@@ -621,14 +646,14 @@ export function DataTableManager({ config }: Props) {
               <tbody className="divide-y divide-black/[0.05]">
                 {state.loading && (
                   <tr>
-                    <td colSpan={displayCols.length + 1} className="px-4 py-8 text-center text-[#6e6e73] text-sm">
+                    <td colSpan={displayCols.length + 1} className="px-4 py-8 text-center text-ink-muted text-sm">
                       Loading…
                     </td>
                   </tr>
                 )}
                 {!state.loading && state.rows.length === 0 && (
                   <tr>
-                    <td colSpan={displayCols.length + 1} className="px-4 py-8 text-center text-[#6e6e73] text-sm">
+                    <td colSpan={displayCols.length + 1} className="px-4 py-8 text-center text-ink-muted text-sm">
                       No rows found.
                     </td>
                   </tr>
@@ -636,17 +661,17 @@ export function DataTableManager({ config }: Props) {
                 {state.rows.map((row, idx) => (
                   <tr
                     key={String(row[config.idColumn] ?? idx)}
-                    className="hover:bg-[#fafafa] cursor-pointer transition-colors"
+                    className="hover:bg-surface-3 cursor-pointer transition-colors"
                     onClick={() => openEdit(row)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openEdit(row) }}
                     role="button"
                     tabIndex={0}
                   >
                     {displayCols.map(col => (
-                      <td key={col} className="px-4 py-3 text-[#1d1d1f] max-w-[200px]">
+                      <td key={col} className="px-4 py-3 text-ink max-w-[200px]">
                         <span className="block truncate">
                           {row[col] == null
-                            ? <span className="text-[#aeaeb2]">—</span>
+                            ? <span className="text-ink-subtle">—</span>
                             : typeof row[col] === 'boolean'
                               ? (row[col] ? '✓' : '')
                               : typeof row[col] === 'object'
@@ -660,7 +685,7 @@ export function DataTableManager({ config }: Props) {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openEdit(row) }}
-                        className="text-[#aeaeb2] hover:text-[#800000] text-xs px-1"
+                        className="text-ink-subtle hover:text-maroon text-xs px-1"
                         aria-label="Edit row"
                       >
                         Edit
@@ -675,7 +700,7 @@ export function DataTableManager({ config }: Props) {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm text-[#6e6e73]">
+          <div className="flex items-center justify-between text-sm text-ink-muted">
             <span>
               Page {page + 1} of {totalPages} ({state.count} rows)
             </span>
@@ -684,7 +709,7 @@ export function DataTableManager({ config }: Props) {
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Prev
               </button>
@@ -692,7 +717,7 @@ export function DataTableManager({ config }: Props) {
                 type="button"
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Next
               </button>

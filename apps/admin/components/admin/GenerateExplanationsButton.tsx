@@ -51,13 +51,13 @@ export function GenerateExplanationsButton({ source, label }: Props) {
       <button
         onClick={handleClick}
         disabled={isPending}
-        className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-white text-[#800000] border border-[#800000]/30 hover:bg-[#800000]/5 transition-colors disabled:opacity-60"
+        className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-white text-maroon border border-maroon/30 hover:bg-maroon/5 transition-colors disabled:opacity-60"
       >
         {isPending ? '⏳ Generating…' : (label ?? '✨ Generate explanations')}
       </button>
       {toast && (
         <div className={`absolute top-10 right-0 z-50 rounded-[12px] px-4 py-2.5 text-[12px] font-medium shadow-lg whitespace-nowrap ${
-          toast.ok ? 'bg-green-700 text-white' : 'bg-red-700 text-white'
+          toast.ok ? 'bg-success text-white' : 'bg-danger-strong text-white'
         }`}>
           {toast.msg}
         </div>

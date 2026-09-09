@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Modal, View, Text, Pressable, TextInput, StyleSheet } from 'react-native'
+import { Modal, View, Text, Pressable, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 
@@ -46,6 +46,7 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Pressable style={s.overlay} onPress={onClose}>
         <Pressable style={s.sheet} onPress={() => {}}>
           <View style={s.handle} />
@@ -96,6 +97,7 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
           </View>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
@@ -177,6 +179,6 @@ function makeStyles(
       justifyContent: 'center',
     },
     submitDisabled: { opacity: 0.4 },
-    submitTxt: { fontSize: typo.md, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    submitTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
   })
 }

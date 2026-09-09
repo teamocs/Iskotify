@@ -52,7 +52,7 @@ export function SessionPausedOverlay({ visible, timeRemainingSecs, onResume, onE
     resumeBtnTxt: {
       fontFamily: 'Outfit_700Bold',
       fontSize: typo.md,
-      color: '#fff',
+      color: t.textInverse,
     },
     endBtn: {
       paddingVertical: 12,

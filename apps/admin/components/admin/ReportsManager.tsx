@@ -50,9 +50,9 @@ const TABS: { key: StatusTab; label: string }[] = [
 
 const PAGE_SIZE = 50
 
-const inputCls = 'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]'
-const labelCls = 'block text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1'
-const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7] disabled:opacity-40'
+const inputCls = 'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink'
+const labelCls = 'block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1'
+const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-ink hover:bg-surface-2 disabled:opacity-40'
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value)
@@ -65,9 +65,9 @@ function useDebounce(value: string, delay: number) {
 
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    new: 'bg-[#800000]/10 text-[#800000]',
-    reviewed: 'bg-amber-100 text-amber-800',
-    resolved: 'bg-green-100 text-green-800',
+    new: 'bg-maroon/10 text-maroon',
+    reviewed: 'bg-warning-soft text-warning-strong',
+    resolved: 'bg-success-soft text-success-strong',
   }
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -79,7 +79,7 @@ function StatusPill({ status }: { status: string }) {
 function SourceBadge({ source }: { source: string }) {
   const isUpcat = source === 'upcat_questions'
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${isUpcat ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${isUpcat ? 'bg-info-soft text-info-strong' : 'bg-purple-100 text-purple-800'}`}>
       {isUpcat ? 'UPCAT' : 'Flashcard'}
     </span>
   )
@@ -276,33 +276,33 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
           <div>
-            <h2 className="font-heading font-bold text-lg text-[#1d1d1f]">Edit Question</h2>
+            <h2 className="font-heading font-bold text-lg text-ink">Edit Question</h2>
             <div className="flex items-center gap-2 mt-1">
               <SourceBadge source={report.source_table} />
-              <span className="text-[11px] text-[#aeaeb2] font-mono">{report.question_id}</span>
+              <span className="text-[11px] text-ink-subtle font-mono">{report.question_id}</span>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-[#aeaeb2] hover:text-[#1d1d1f] text-xl">✕</button>
+          <button type="button" onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Report context */}
-          <div className="bg-[#f5f5f7] rounded-[10px] px-3 py-2">
-            <p className="text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-0.5">Reported reason</p>
-            <p className="text-sm text-[#1d1d1f]">{report.reason || '—'}</p>
+          <div className="bg-surface-2 rounded-[10px] px-3 py-2">
+            <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-0.5">Reported reason</p>
+            <p className="text-sm text-ink">{report.reason || '—'}</p>
           </div>
 
           {loading ? (
-            <p className="text-sm text-[#6e6e73]">Loading question…</p>
+            <p className="text-sm text-ink-muted">Loading question…</p>
           ) : missing ? (
-            <p className="text-sm text-amber-800 bg-amber-50 rounded-[10px] px-3 py-2">
+            <p className="text-sm text-warning-strong bg-warning-soft rounded-[10px] px-3 py-2">
               This question no longer exists. Snapshot at report time: “{report.question_text || '—'}”
             </p>
           ) : isUpcat ? (
             <>
               <div>
                 <label className={labelCls}>Question Text</label>
-                <textarea value={uqText} onChange={(e) => setUqText(e.target.value)} rows={3} className={inputCls} />
+                <textarea aria-label="Question Text" value={uqText} onChange={(e) => setUqText(e.target.value)} rows={3} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Options (correct answer selected)</label>
@@ -315,10 +315,10 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
                         checked={uqCorrectIndex === i}
                         onChange={() => setUqCorrectIndex(i)}
                         disabled={i > 3}
-                        className="accent-[#800000] flex-shrink-0"
+                        className="accent-maroon flex-shrink-0"
                         aria-label={`Mark option ${i + 1} correct`}
                       />
-                      <input
+                      <input aria-label="Options (correct answer selected)"
                         type="text"
                         value={opt}
                         onChange={(e) => {
@@ -335,11 +335,11 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
               </div>
               <div>
                 <label className={labelCls}>Explanation</label>
-                <textarea value={uqExplanation} onChange={(e) => setUqExplanation(e.target.value)} rows={3} className={inputCls} />
+                <textarea aria-label="Explanation" value={uqExplanation} onChange={(e) => setUqExplanation(e.target.value)} rows={3} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Status</label>
-                <select value={uqStatus} onChange={(e) => setUqStatus(e.target.value)} className={inputCls}>
+                <select aria-label="Status" value={uqStatus} onChange={(e) => setUqStatus(e.target.value)} className={inputCls}>
                   <option value="published">Published</option>
                   <option value="draft">Draft</option>
                 </select>
@@ -349,24 +349,24 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
             <>
               <div>
                 <label className={labelCls}>Question</label>
-                <textarea value={fcQuestion} onChange={(e) => setFcQuestion(e.target.value)} rows={3} className={inputCls} />
+                <textarea aria-label="Question" value={fcQuestion} onChange={(e) => setFcQuestion(e.target.value)} rows={3} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Answer</label>
-                <textarea value={fcAnswer} onChange={(e) => setFcAnswer(e.target.value)} rows={2} className={inputCls} />
+                <textarea aria-label="Answer" value={fcAnswer} onChange={(e) => setFcAnswer(e.target.value)} rows={2} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Explanation</label>
-                <textarea value={fcExplanation} onChange={(e) => setFcExplanation(e.target.value)} rows={3} className={inputCls} />
+                <textarea aria-label="Explanation" value={fcExplanation} onChange={(e) => setFcExplanation(e.target.value)} rows={3} className={inputCls} />
               </div>
             </>
           )}
 
           {error ? (
-            <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>
+            <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>
           ) : null}
           {saved ? (
-            <p className="text-sm text-green-700 bg-green-50 rounded-[10px] px-3 py-2">
+            <p className="text-sm text-success bg-success-soft rounded-[10px] px-3 py-2">
               Saved. You can mark this report resolved below.
             </p>
           ) : null}
@@ -376,19 +376,19 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
             <div className="pt-2 border-t border-black/[0.06]">
               {confirmingDelete ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-700">Delete this question permanently?</span>
+                  <span className="text-sm text-danger">Delete this question permanently?</span>
                   <button
                     type="button"
                     onClick={handleDeleteQuestion}
                     disabled={saving}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium bg-danger text-white hover:bg-danger-strong disabled:opacity-50"
                   >
                     Yes, delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(false)}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
                   >
                     Cancel
                   </button>
@@ -397,7 +397,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
-                  className="text-sm text-red-600 hover:text-red-800"
+                  className="text-sm text-danger hover:text-danger-strong"
                 >
                   Delete this question
                 </button>
@@ -411,14 +411,14 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
             type="button"
             onClick={handleMarkResolved}
             disabled={saving}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-green-600/30 text-green-700 hover:bg-green-50 disabled:opacity-50 mr-auto"
+            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-success/30 text-success hover:bg-success-soft disabled:opacity-50 mr-auto"
           >
             ✓ Mark resolved
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7]"
+            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
           >
             Close
           </button>
@@ -426,7 +426,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
             type="button"
             onClick={handleSave}
             disabled={saving || loading || missing}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000] disabled:opacity-50"
+            className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save Question'}
           </button>
@@ -526,22 +526,22 @@ export function ReportsManager() {
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         {/* Header */}
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">Reported Questions</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Reported Questions</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             {state.loading ? 'Loading…' : `${state.count} report${state.count !== 1 ? 's' : ''}`}
           </p>
         </div>
 
         {/* Tabs + Search */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-[#f5f5f7] rounded-[980px] p-1">
+          <div className="flex gap-1 bg-surface-2 rounded-[980px] p-1">
             {TABS.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
                 className={`px-4 py-1.5 rounded-[980px] text-sm font-medium transition-colors ${
-                  tab === key ? 'bg-white text-[#800000] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  tab === key ? 'bg-white text-maroon shadow-sm' : 'text-ink-muted hover:text-ink'
                 }`}
               >
                 {label}
@@ -550,44 +550,45 @@ export function ReportsManager() {
           </div>
           <input
             type="search"
+            aria-label="Search question text or reason"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search question text or reason…"
-            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
           />
         </div>
 
         {/* Errors */}
         {state.error ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{state.error}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{state.error}</p>
         ) : null}
         {actionError ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{actionError}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{actionError}</p>
         ) : null}
 
         {/* Table */}
         <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[760px]">
-              <thead className="bg-[#f5f5f7] border-b border-black/[0.08]">
+              <thead className="bg-surface-2 border-b border-black/[0.08]">
                 <tr>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Question</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Source</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Reason</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Reported</th>
-                  <th className="px-4 py-3 text-right text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Actions</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Question</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Source</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Reason</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Reported</th>
+                  <th className="px-4 py-3 text-right text-ink-muted text-xs font-semibold uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.05]">
                 {state.loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-[#6e6e73] text-sm">Loading…</td>
+                    <td colSpan={6} className="px-4 py-8 text-center text-ink-muted text-sm">Loading…</td>
                   </tr>
                 ) : null}
                 {!state.loading && state.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-[#6e6e73] text-sm">No reports found.</td>
+                    <td colSpan={6} className="px-4 py-8 text-center text-ink-muted text-sm">No reports found.</td>
                   </tr>
                 ) : null}
                 {state.rows.map((row) => {
@@ -595,8 +596,8 @@ export function ReportsManager() {
                   const text = row.question_text || '—'
                   const needsTruncate = text.length > 100
                   return (
-                    <tr key={row.id} className="hover:bg-[#fafafa] transition-colors align-top">
-                      <td className="px-4 py-3 text-[#1d1d1f] max-w-[320px]">
+                    <tr key={row.id} className="hover:bg-surface-3 transition-colors align-top">
+                      <td className="px-4 py-3 text-ink max-w-[320px]">
                         <span className="block whitespace-pre-wrap break-words">
                           {isExpanded || !needsTruncate ? text : `${text.slice(0, 100)}…`}
                         </span>
@@ -604,24 +605,24 @@ export function ReportsManager() {
                           <button
                             type="button"
                             onClick={() => setExpanded(prev => ({ ...prev, [row.id]: !isExpanded }))}
-                            className="text-xs text-[#800000] hover:underline mt-1"
+                            className="text-xs text-maroon hover:underline mt-1"
                           >
                             {isExpanded ? 'Show less' : 'Show more'}
                           </button>
                         ) : null}
                       </td>
                       <td className="px-4 py-3"><SourceBadge source={row.source_table} /></td>
-                      <td className="px-4 py-3 text-[#1d1d1f] max-w-[220px]">
+                      <td className="px-4 py-3 text-ink max-w-[220px]">
                         <span className="block whitespace-pre-wrap break-words">{row.reason || '—'}</span>
                       </td>
                       <td className="px-4 py-3"><StatusPill status={row.status} /></td>
-                      <td className="px-4 py-3 text-[#6e6e73] whitespace-nowrap">{formatDate(row.created_at)}</td>
+                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatDate(row.created_at)}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1.5 justify-end">
                           <button
                             type="button"
                             onClick={() => setEditing(row)}
-                            className="px-3 py-1 rounded-[980px] text-xs font-medium bg-[#800000] text-white hover:bg-[#a00000]"
+                            className="px-3 py-1 rounded-[980px] text-xs font-medium bg-maroon text-white hover:bg-maroon-light"
                           >
                             Edit question
                           </button>
@@ -640,7 +641,7 @@ export function ReportsManager() {
                               <button
                                 type="button"
                                 onClick={() => deleteReport(row.id)}
-                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-red-600 text-white hover:bg-red-700"
+                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-danger text-white hover:bg-danger-strong"
                               >
                                 Confirm
                               </button>
@@ -652,7 +653,7 @@ export function ReportsManager() {
                             <button
                               type="button"
                               onClick={() => setConfirmingDelete(row.id)}
-                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50"
+                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-danger/25 text-danger hover:bg-danger-soft"
                             >
                               Delete
                             </button>
@@ -669,14 +670,14 @@ export function ReportsManager() {
 
         {/* Pagination */}
         {totalPages > 1 ? (
-          <div className="flex items-center justify-between text-sm text-[#6e6e73]">
+          <div className="flex items-center justify-between text-sm text-ink-muted">
             <span>Page {page + 1} of {totalPages} ({state.count} reports)</span>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Prev
               </button>
@@ -684,7 +685,7 @@ export function ReportsManager() {
                 type="button"
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Next
               </button>

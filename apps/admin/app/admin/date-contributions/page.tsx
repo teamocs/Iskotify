@@ -60,8 +60,8 @@ export default async function DateContributionsPage() {
       <Topbar title="Date Corrections" />
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">User-submitted date corrections</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">User-submitted date corrections</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             {rows.length} pending correction{rows.length !== 1 ? 's' : ''}. Approving writes the suggested date onto the listing.
           </p>
         </div>
@@ -70,9 +70,9 @@ export default async function DateContributionsPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px]">
               <thead>
-                <tr className="bg-[#fafafa]">
+                <tr className="bg-surface-3">
                   {['Listing', 'Field', 'Suggested date', 'Note', 'Source', 'Submitted', 'Actions'].map((h) => (
-                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-ink-subtle uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -81,19 +81,19 @@ export default async function DateContributionsPage() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-black/[0.015] transition-colors align-top">
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#1d1d1f]">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink">
                       <span className="font-medium">{titles[row.listing_slug] ?? row.listing_slug}</span>
                       {titles[row.listing_slug] && (
-                        <span className="block text-[11px] text-[#aeaeb2]">{row.listing_slug}</span>
+                        <span className="block text-[11px] text-ink-subtle">{row.listing_slug}</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73] whitespace-nowrap">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted whitespace-nowrap">
                       {FIELD_LABELS[row.field] ?? row.field}
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-[#1d1d1f] whitespace-nowrap">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-ink whitespace-nowrap">
                       {fmtDate(row.suggested_date)}
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73] max-w-[240px]">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted max-w-[240px]">
                       {row.note || '—'}
                     </td>
                     <td className="px-5 py-3 border-b border-black/[0.04] text-[13px]">
@@ -102,15 +102,15 @@ export default async function DateContributionsPage() {
                           href={row.source_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#800000] underline break-all"
+                          className="text-maroon underline break-all"
                         >
                           Link
                         </a>
                       ) : (
-                        <span className="text-[#aeaeb2]">—</span>
+                        <span className="text-ink-subtle">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-[#6e6e73] whitespace-nowrap">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-ink-muted whitespace-nowrap">
                       {fmtDate(row.created_at)}
                     </td>
                     <td className="px-5 py-3 border-b border-black/[0.04]">
@@ -120,7 +120,7 @@ export default async function DateContributionsPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-[#aeaeb2]">
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-subtle">
                       No pending date corrections.
                     </td>
                   </tr>

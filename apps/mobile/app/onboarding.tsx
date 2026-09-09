@@ -213,7 +213,7 @@ export default function OnboardingScreen() {
     resultNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     resultLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
     primaryBtn: { backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.xxl, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
-    primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
+    primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
   }), [t, typo])
 
   // Gate-specific styles — memoised alongside assessStyle so they update with theme
@@ -583,6 +583,9 @@ export default function OnboardingScreen() {
                 <Pressable
                   onPress={() => router.replace('/(tabs)')}
                   style={({ pressed }) => [gateStyle.ghostBtn, pressed ? { opacity: 0.6 } : null]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue anyway"
+                  accessibilityHint="Skips setup for now and finishes it next time you open the app"
                 >
                   <Text style={gateStyle.ghostBtnTxt}>
                     Continue anyway
@@ -651,6 +654,9 @@ export default function OnboardingScreen() {
                     <Pressable
                       key={g}
                       onPress={() => setGradeLevel(g)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`Grade ${g}`}
+                      accessibilityState={{ selected: active, checked: active }}
                       style={({ pressed }) => [{
                         flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', minHeight: 44, justifyContent: 'center',
                         backgroundColor: active ? t.accent : t.surface2,
@@ -698,7 +704,13 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm }}>
-          <Pressable onPress={() => setStep(1)} hitSlop={8} style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}>
+          <Pressable
+            onPress={() => setStep(1)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back to previous step"
+            style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}
+          >
             <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
           </Pressable>
           <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, marginBottom: spacing.xs }}>
@@ -747,6 +759,9 @@ export default function OnboardingScreen() {
                 return (
                   <Pressable
                     onPress={() => setSelectedExams(prev => sel ? prev.filter(s => s.schoolId !== ex.schoolId) : [...prev, ex])}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={`${ex.schoolName}, ${ex.examAcronym}`}
+                    accessibilityState={{ checked: sel }}
                     style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
                   >
                     <View style={{ flex: 1 }}>
@@ -764,6 +779,9 @@ export default function OnboardingScreen() {
               return (
                 <Pressable
                   onPress={() => setSelectedSlugs(prev => sel ? prev.filter(s => s !== lst.slug) : [...prev, lst.slug])}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel={lst.title}
+                  accessibilityState={{ checked: sel }}
                   style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
                 >
                   <View style={{ flex: 1 }}>
@@ -825,7 +843,13 @@ export default function OnboardingScreen() {
             <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, flex: 1 }}>
               Help us match scholarships
             </Text>
-            <Pressable onPress={() => void handleMatcherContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
+            <Pressable
+              onPress={() => void handleMatcherContinue(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}
+              accessibilityRole="button"
+              accessibilityLabel="Skip scholarship matching"
+              style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
+            >
               <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
             </Pressable>
           </View>
@@ -883,7 +907,7 @@ export default function OnboardingScreen() {
               Your latest general weighted average (percentage)
             </Text>
             <TextInput
-              style={[inputStyle, gwaError ? { borderColor: '#f87171' } : {}]}
+              style={[inputStyle, gwaError ? { borderColor: t.danger } : {}]}
               placeholder="e.g. 90.5"
               placeholderTextColor={t.textTertiary}
               value={gwaText}
@@ -892,7 +916,7 @@ export default function OnboardingScreen() {
               returnKeyType="done"
             />
             {gwaError ? (
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#f87171', marginTop: spacing.xs }}>
+              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.danger, marginTop: spacing.xs }}>
                 {gwaError}
               </Text>
             ) : null}
@@ -1101,12 +1125,12 @@ export default function OnboardingScreen() {
                 <Card key={sub} padded={false} style={{ padding: spacing.md }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary }}>{sub}</Text>
-                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: pctSub >= 60 ? '#4ade80' : '#f87171' }}>
+                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: pctSub >= 60 ? t.success : t.danger }}>
                       {c}/{total} ({pctSub}%)
                     </Text>
                   </View>
                   <View style={{ height: 4, backgroundColor: t.surface2, borderRadius: radius.pill }}>
-                    <View style={{ height: 4, borderRadius: radius.pill, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? '#4ade80' : '#f87171' }} />
+                    <View style={{ height: 4, borderRadius: radius.pill, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? t.success : t.danger }} />
                   </View>
                 </Card>
               )
@@ -1123,7 +1147,7 @@ export default function OnboardingScreen() {
                 return (
                   <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
                     <View style={{ width: 28, height: 28, borderRadius: radius.pill, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: '#fff' }}>#{i + 1}</Text>
+                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.textInverse }}>#{i + 1}</Text>
                     </View>
                     <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary, flex: 1 }}>
                       {listing?.title ?? slug}

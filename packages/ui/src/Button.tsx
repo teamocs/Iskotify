@@ -10,14 +10,16 @@ export interface ButtonProps {
   testID?: string;
 }
 
+// Classes resolve against the shared preset in ../tailwind-preset.js. The
+// previous values referenced a `brand` scale that no longer exists there.
 const containerByVariant: Record<ButtonVariant, string> = {
-  primary: "bg-brand active:bg-brand-dark",
-  secondary: "bg-transparent border border-brand active:bg-brand/10"
+  primary: "bg-maroon active:bg-maroon-light",
+  secondary: "bg-transparent border border-maroon active:bg-maroon-dim"
 };
 
 const labelByVariant: Record<ButtonVariant, string> = {
-  primary: "text-white",
-  secondary: "text-brand"
+  primary: "text-ink-inverse",
+  secondary: "text-maroon"
 };
 
 export function Button({

@@ -20,10 +20,10 @@ interface EarlyAccessRegistration {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending:  'bg-amber-100 text-amber-800',
-  approved: 'bg-blue-100 text-blue-800',
-  sent:     'bg-green-100 text-green-800',
-  expired:  'bg-red-100 text-red-800',
+  pending:  'bg-warning-soft text-warning-strong',
+  approved: 'bg-info-soft text-info-strong',
+  sent:     'bg-success-soft text-success-strong',
+  expired:  'bg-danger-soft text-danger-strong',
 }
 
 async function getData(): Promise<{
@@ -77,8 +77,8 @@ export default async function EarlyAccessPage() {
       <Topbar title="Early Access" />
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">Early-access registrations</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Early-access registrations</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             {rows.length} registration{rows.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -86,31 +86,31 @@ export default async function EarlyAccessPage() {
         {/* Early-access APK link section */}
         <div className="space-y-3">
           <div>
-            <p className="text-[13px] font-semibold text-[#1d1d1f]">Early-access APK link</p>
-            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+            <p className="text-[13px] font-semibold text-ink">Early-access APK link</p>
+            <p className="text-[12px] text-ink-muted mt-0.5">
               The link below is emailed to registrants when you press &ldquo;Send APK&rdquo;. Host the APK on GitHub Releases or Google Drive and paste the permanent URL here.
             </p>
           </div>
 
           {apkUrl ? (
-            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
-              <span className="text-green-600 text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-success-soft border border-success/25">
+              <span className="text-success text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
               <div className="min-w-0">
-                <p className="text-[13px] text-green-800 font-medium">APK link set &mdash; &ldquo;Send APK&rdquo; emails this URL.</p>
+                <p className="text-[13px] text-success-strong font-medium">APK link set &mdash; &ldquo;Send APK&rdquo; emails this URL.</p>
                 <a
                   href={apkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[12px] text-[#800000] underline break-all"
+                  className="text-[12px] text-maroon underline break-all"
                 >
                   {apkUrl}
                 </a>
               </div>
             </div>
           ) : (
-            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-warning-soft border border-warning/25">
               <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
-              <p className="text-[13px] text-amber-800">
+              <p className="text-[13px] text-warning-strong">
                 No APK link set yet &mdash; paste the hosted download URL below before sending emails.
               </p>
             </div>
@@ -122,31 +122,31 @@ export default async function EarlyAccessPage() {
         {/* App update section — for users who already installed Iskotify */}
         <div className="space-y-3">
           <div>
-            <p className="text-[13px] font-semibold text-[#1d1d1f]">App update &mdash; for existing users</p>
-            <p className="text-[12px] text-[#6e6e73] mt-0.5">
+            <p className="text-[13px] font-semibold text-ink">App update &mdash; for existing users</p>
+            <p className="text-[12px] text-ink-muted mt-0.5">
               This APK and email are for pushing an <strong>update</strong> to users who already installed Iskotify &mdash; distinct from the first-install early-access APK above. Set the hosted URL of the new build, then edit the email that tells existing users how to install it.
             </p>
           </div>
 
           {updateApkUrl ? (
-            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-green-50 border border-green-200">
-              <span className="text-green-600 text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-success-soft border border-success/25">
+              <span className="text-success text-base leading-none mt-0.5" aria-hidden="true">&#10003;</span>
               <div className="min-w-0">
-                <p className="text-[13px] text-green-800 font-medium">Update APK link set &mdash; the update email points at this URL.</p>
+                <p className="text-[13px] text-success-strong font-medium">Update APK link set &mdash; the update email points at this URL.</p>
                 <a
                   href={updateApkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[12px] text-[#800000] underline break-all"
+                  className="text-[12px] text-maroon underline break-all"
                 >
                   {updateApkUrl}
                 </a>
               </div>
             </div>
           ) : (
-            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-amber-50 border border-amber-200">
+            <div className="flex items-start gap-3 rounded-[12px] px-4 py-3 bg-warning-soft border border-warning/25">
               <span className="text-amber-500 text-base leading-none mt-0.5" aria-hidden="true">&#9888;</span>
-              <p className="text-[13px] text-amber-800">
+              <p className="text-[13px] text-warning-strong">
                 No update APK link set yet &mdash; paste the hosted download URL for the new build below.
               </p>
             </div>
@@ -160,9 +160,9 @@ export default async function EarlyAccessPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">
               <thead>
-                <tr className="bg-[#fafafa]">
+                <tr className="bg-surface-3">
                   {['Email', 'Name', 'School', 'Grade', 'Status', 'Registered', 'Actions'].map(h => (
-                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-ink-subtle uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -171,16 +171,16 @@ export default async function EarlyAccessPage() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-black/[0.015] transition-colors">
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-[#1d1d1f]">{row.email}</td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73]">{row.full_name || '—'}</td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73]">{row.school || '—'}</td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73] whitespace-nowrap">{row.grade_level || '—'}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-ink">{row.email}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted">{row.full_name || '—'}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted">{row.school || '—'}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted whitespace-nowrap">{row.grade_level || '—'}</td>
                     <td className="px-5 py-3 border-b border-black/[0.04]">
                       <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[row.status] ?? 'bg-gray-100 text-gray-600'}`}>
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-[#6e6e73] whitespace-nowrap">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-ink-muted whitespace-nowrap">
                       {new Date(row.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="px-5 py-3 border-b border-black/[0.04]">
@@ -192,7 +192,7 @@ export default async function EarlyAccessPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-[#aeaeb2]">
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-subtle">
                       No early-access registrations yet.
                     </td>
                   </tr>

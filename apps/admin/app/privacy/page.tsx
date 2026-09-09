@@ -13,23 +13,23 @@ const CONTACT_EMAIL = 'teamocsph@gmail.com'
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-8">
-      <h2 className="font-heading font-bold text-lg text-[#1d1d1f] mb-2">{title}</h2>
-      <div className="text-[15px] leading-relaxed text-[#3a3a3c]">{children}</div>
+      <h2 className="font-heading font-bold text-lg text-ink mb-2">{title}</h2>
+      <div className="text-[15px] leading-relaxed text-ink-muted">{children}</div>
     </section>
   )
 }
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-surface-2">
       <main className="max-w-2xl mx-auto px-6 py-14">
         <Link href="/" className="inline-flex items-center gap-2 mb-8">
           <Image src="/logo.svg" alt="Iskotify" width={32} height={32} />
-          <span className="font-heading font-extrabold text-xl text-[#1d1d1f] tracking-tight">Iskotify</span>
+          <span className="font-heading font-extrabold text-xl text-ink tracking-tight">Iskotify</span>
         </Link>
 
-        <h1 className="font-heading font-extrabold text-3xl text-[#1d1d1f] tracking-tight mb-1">Privacy Policy</h1>
-        <p className="text-sm text-[#6e6e73] mb-10">Last updated: {UPDATED}</p>
+        <h1 className="font-heading font-extrabold text-3xl text-ink tracking-tight mb-1">Privacy Policy</h1>
+        <p className="text-sm text-ink-muted mb-10">Last updated: {UPDATED}</p>
 
         <Section title="Who We Are">
           Iskotify helps Filipino students find scholarships, track exam deadlines, and prepare for
@@ -65,11 +65,11 @@ export default function PrivacyPage() {
 
         <Section title="Contact">
           Questions about this policy? Email{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-[#800000] underline">{CONTACT_EMAIL}</a>.
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-maroon underline">{CONTACT_EMAIL}</a>.
         </Section>
 
-        <div className="pt-6 border-t border-black/[0.08] text-sm text-[#6e6e73]">
-          <Link href="/terms" className="text-[#800000] underline">Terms of Service</Link>
+        <div className="pt-6 border-t border-black/[0.08] text-sm text-ink-muted">
+          <Link href="/terms" className="text-maroon underline">Terms of Service</Link>
         </div>
       </main>
     </div>

@@ -99,7 +99,7 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
     sourceBadgeDbTxt: {
       fontFamily: 'Lexend_600SemiBold',
       fontSize: 9,
-      color: isDark ? '#4ade80' : '#16a34a',
+      color: isDark ? t.success : t.success,
     },
     sourceBadgePlaces: {
       backgroundColor: t.accentSurface,

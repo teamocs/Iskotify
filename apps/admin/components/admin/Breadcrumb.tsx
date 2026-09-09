@@ -11,16 +11,16 @@ interface Props {
 
 export function Breadcrumb({ items }: Props) {
   return (
-    <nav className="flex items-center gap-1 text-sm text-[#6e6e73] flex-wrap">
+    <nav className="flex items-center gap-1 text-sm text-ink-muted flex-wrap">
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1
         return (
           <span key={idx} className="flex items-center gap-1">
-            {idx > 0 && <span className="text-[#aeaeb2]">›</span>}
+            {idx > 0 && <span className="text-ink-subtle">›</span>}
             {isLast || !item.href ? (
-              <span className={isLast ? 'font-semibold text-[#1d1d1f]' : ''}>{item.label}</span>
+              <span className={isLast ? 'font-semibold text-ink' : ''}>{item.label}</span>
             ) : (
-              <Link href={item.href} className="hover:text-[#1d1d1f] transition-colors">
+              <Link href={item.href} className="hover:text-ink transition-colors">
                 {item.label}
               </Link>
             )}

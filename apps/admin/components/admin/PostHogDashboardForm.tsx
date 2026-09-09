@@ -45,13 +45,13 @@ export function PostHogDashboardForm({ currentUrl }: Props) {
   }
 
   return (
-    <div className="rounded-[12px] border border-black/[0.07] bg-[#fafafa] px-4 py-4 space-y-3">
-      <p className="text-[12px] font-semibold text-[#1d1d1f] uppercase tracking-wide">
+    <div className="rounded-[12px] border border-black/[0.07] bg-surface-3 px-4 py-4 space-y-3">
+      <p className="text-[12px] font-semibold text-ink uppercase tracking-wide">
         PostHog dashboard embed link
       </p>
 
       <div className="space-y-2">
-        <label htmlFor="posthog-url-input" className="block text-[13px] text-[#6e6e73]">
+        <label htmlFor="posthog-url-input" className="block text-[13px] text-ink-muted">
           In PostHog, open a dashboard → Share → enable sharing → copy the embed URL and paste it here.
         </label>
         <input
@@ -62,9 +62,9 @@ export function PostHogDashboardForm({ currentUrl }: Props) {
           disabled={saving}
           placeholder="https://us.posthog.com/shared/XXXXXXXXXXXXXXXXXXXXXX"
           className={[
-            'w-full rounded-[8px] border px-3 py-2 text-[13px] text-[#1d1d1f]',
-            'placeholder-[#aeaeb2] outline-none transition-colors',
-            'focus:border-[#800000] focus:ring-1 focus:ring-[#800000]/30',
+            'w-full rounded-[8px] border px-3 py-2 text-[13px] text-ink',
+            'placeholder-ink-subtle outline-none transition-colors',
+            'focus:border-maroon focus:ring-1 focus:ring-maroon/30',
             saving ? 'border-black/10 bg-white/60 cursor-not-allowed' : 'border-black/[0.12] bg-white',
           ].join(' ')}
         />
@@ -74,19 +74,19 @@ export function PostHogDashboardForm({ currentUrl }: Props) {
         type="button"
         onClick={handleSave}
         disabled={saving}
-        className="rounded-[980px] px-4 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-60 bg-[#800000] text-white hover:bg-[#a00000]"
+        className="rounded-[980px] px-4 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-60 bg-maroon text-white hover:bg-maroon-light"
       >
         {saving ? 'Saving…' : 'Save link'}
       </button>
 
       <div aria-live="polite" aria-atomic="true">
         {status?.type === 'error' && (
-          <p className="text-[12px] text-red-600 bg-red-50 rounded-[8px] px-3 py-2" role="alert">
+          <p className="text-[12px] text-danger bg-danger-soft rounded-[8px] px-3 py-2" role="alert">
             {status.message}
           </p>
         )}
         {status?.type === 'success' && (
-          <p className="text-[12px] text-green-700 bg-green-50 rounded-[8px] px-3 py-2">
+          <p className="text-[12px] text-success bg-success-soft rounded-[8px] px-3 py-2">
             {status.message}
           </p>
         )}

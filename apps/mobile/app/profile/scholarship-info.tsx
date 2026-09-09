@@ -156,7 +156,7 @@ export default function ScholarshipInfoScreen() {
             Your latest general weighted average (percentage)
           </Text>
           <TextInput
-            style={[inputStyle, gwaError ? { borderColor: '#f87171' } : null]}
+            style={[inputStyle, gwaError ? { borderColor: t.danger } : null]}
             placeholder="e.g. 90.5"
             placeholderTextColor={t.textTertiary}
             value={gwaText}
@@ -165,7 +165,7 @@ export default function ScholarshipInfoScreen() {
             returnKeyType="done"
           />
           {gwaError ? (
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#f87171', marginTop: spacing.xs }}>{gwaError}</Text>
+            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.danger, marginTop: spacing.xs }}>{gwaError}</Text>
           ) : null}
         </Card>
 

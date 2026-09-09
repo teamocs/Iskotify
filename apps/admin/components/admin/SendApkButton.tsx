@@ -55,14 +55,14 @@ export function SendApkButton({ id, status }: Props) {
         className={[
           'rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60',
           isSent
-            ? 'border border-[#800000] text-[#800000] bg-white hover:bg-[#fff8f8]'
-            : 'bg-[#800000] text-white hover:bg-[#a00000]',
+            ? 'border border-maroon text-maroon bg-white hover:bg-[#fff8f8]'
+            : 'bg-maroon text-white hover:bg-maroon-light',
         ].join(' ')}
       >
         {loading ? 'Sending…' : label}
       </button>
       {error && (
-        <p className="text-[11px] text-red-600 leading-tight max-w-[180px]" role="alert">
+        <p className="text-[11px] text-danger leading-tight max-w-[180px]" role="alert">
           {error}
         </p>
       )}

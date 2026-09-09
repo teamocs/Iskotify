@@ -20,7 +20,7 @@ interface Props {
 export function SubjectCardsView({ subjectId, subjectName, topics, defaultOpenTopicId }: Props) {
   if (topics.length === 0) {
     return (
-      <div className="text-center py-16 text-[#6e6e73] text-sm">
+      <div className="text-center py-16 text-ink-muted text-sm">
         No topics yet. Use the &quot;+ Add Topic&quot; button to create one.
       </div>
     )

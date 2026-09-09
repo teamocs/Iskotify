@@ -31,8 +31,8 @@ function StatCard({ value, label, color }: { value: string; label: string; color
     statVal: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', letterSpacing: -0.5 },
     statLbl: { fontSize: typo.xs, color: t.textTertiary, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
-  const safeColor = color === '#4ade80' ? (isDark ? '#4ade80' : '#16a34a')
-    : color === '#fbbf24' ? (isDark ? '#fbbf24' : '#b45309')
+  const safeColor = color === t.success ? (isDark ? t.success : t.success)
+    : color === t.warning ? (isDark ? t.warning : t.warning)
     : color
   return (
     <View style={s.statCard}>
@@ -138,7 +138,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     tab: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 14, paddingVertical: 5, maxWidth: 140 },
     tabActive: { backgroundColor: 'rgba(128,0,0,0.75)', borderColor: 'transparent' },
     tabTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    tabTxtActive: { color: '#fff' },
+    tabTxtActive: { color: t.textInverse },
     scroll: { paddingHorizontal: 0 },
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     section: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 18, marginBottom: 12, overflow: 'hidden' },
@@ -285,12 +285,12 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
         <StatCard
           value={analytics.streak > 0 ? `${analytics.streak}🔥` : '—'}
           label="STREAK"
-          color={isDark ? '#fbbf24' : '#b45309'}
+          color={isDark ? t.warning : t.warning}
         />
         <StatCard
           value={activeDays > 0 ? String(activeDays) : '—'}
           label="ACTIVE DAYS"
-          color={isDark ? '#4ade80' : '#16a34a'}
+          color={isDark ? t.success : t.success}
         />
       </View>
 

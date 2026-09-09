@@ -1,7 +1,7 @@
 function ScholarshipCard() {
   return (
     <div className="w-full max-w-xs mx-auto">
-      <div className="bg-gradient-to-br from-[#800000] to-[#5a0000] rounded-[20px] p-5 shadow-xl text-white">
+      <div className="bg-gradient-to-br from-maroon to-[#5a0000] rounded-[20px] p-5 shadow-xl text-white">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] font-body uppercase tracking-widest text-red-200">CHED Scholarship</span>
           <span className="bg-white/20 rounded-full px-2 py-0.5 text-[10px] font-body text-red-100">Open</span>
@@ -36,10 +36,10 @@ function QuizCard() {
     <div className="w-full max-w-xs mx-auto">
       <div className="bg-white rounded-[20px] p-5 shadow-xl border border-[#f0f0f0]">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-[10px] font-body uppercase tracking-widest text-[#6e6e73]">UPCAT · Math</span>
-          <span className="bg-[#800000]/10 text-[#800000] rounded-full px-2 py-0.5 text-[10px] font-body font-medium">Q 14 / 50</span>
+          <span className="text-[10px] font-body uppercase tracking-widest text-ink-muted">UPCAT · Math</span>
+          <span className="bg-maroon/10 text-maroon rounded-full px-2 py-0.5 text-[10px] font-body font-medium">Q 14 / 50</span>
         </div>
-        <p className="font-heading font-semibold text-[#1d1d1f] text-sm leading-snug mb-4">
+        <p className="font-heading font-semibold text-ink text-sm leading-snug mb-4">
           What is the value of x in: 3x + 9 = 21?
         </p>
         <div className="flex flex-col gap-2">
@@ -49,14 +49,14 @@ function QuizCard() {
               className={[
                 'rounded-[10px] px-3 py-2 text-xs font-body border flex items-center gap-2',
                 i === 1
-                  ? 'bg-[#800000] border-[#800000] text-white font-medium'
-                  : 'bg-[#f5f5f7] border-[#f0f0f0] text-[#6e6e73]',
+                  ? 'bg-maroon border-maroon text-white font-medium'
+                  : 'bg-surface-2 border-[#f0f0f0] text-ink-muted',
               ].join(' ')}
             >
               <span
                 className={[
                   'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-heading font-bold flex-shrink-0',
-                  i === 1 ? 'bg-white/20 text-white' : 'bg-white text-[#6e6e73]',
+                  i === 1 ? 'bg-white/20 text-white' : 'bg-white text-ink-muted',
                 ].join(' ')}
               >
                 {String.fromCharCode(65 + i)}
@@ -79,11 +79,11 @@ type BenefitCardProps = {
 function BenefitCard({ icon, title, copy }: BenefitCardProps) {
   return (
     <div className="bg-white border border-black/[0.06] rounded-[20px] p-6 transition hover:shadow-md hover:-translate-y-0.5">
-      <div className="w-11 h-11 rounded-[12px] bg-[#800000]/[0.08] flex items-center justify-center mb-4">
+      <div className="w-11 h-11 rounded-[12px] bg-maroon/[0.08] flex items-center justify-center mb-4">
         {icon}
       </div>
-      <h4 className="font-heading font-bold text-[#1d1d1f] text-base leading-snug mb-2">{title}</h4>
-      <p className="text-[#6e6e73] font-body text-sm leading-relaxed">{copy}</p>
+      <h4 className="font-heading font-bold text-ink text-base leading-snug mb-2">{title}</h4>
+      <p className="text-ink-muted font-body text-sm leading-relaxed">{copy}</p>
     </div>
   )
 }
@@ -99,9 +99,9 @@ type FeatureBlockProps = {
 function FeatureBlock({ imageRight, eyebrow, title, copy, visual }: FeatureBlockProps) {
   const textBlock = (
     <div className="flex-1">
-      <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">{eyebrow}</p>
-      <h3 className="font-heading font-bold text-[#1d1d1f] text-2xl md:text-3xl leading-tight mb-4">{title}</h3>
-      <p className="text-[#6e6e73] font-body text-base leading-relaxed max-w-md">{copy}</p>
+      <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">{eyebrow}</p>
+      <h3 className="font-heading font-bold text-ink text-2xl md:text-3xl leading-tight mb-4">{title}</h3>
+      <p className="text-ink-muted font-body text-base leading-relaxed max-w-md">{copy}</p>
     </div>
   )
 
@@ -131,11 +131,11 @@ export function Features() {
     <section id="features" className="bg-white py-20 px-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Features</p>
-          <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">Features</p>
+          <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
             Everything You Need, in One App
           </h2>
-          <p className="text-[#6e6e73] font-body text-base md:text-lg leading-relaxed max-w-2xl mx-auto mt-4">
+          <p className="text-ink-muted font-body text-base md:text-lg leading-relaxed max-w-2xl mx-auto mt-4">
             From choosing an AI-proof course to landing the scholarship that pays for it — Iskotify guides every step with real data, not guesswork.
           </p>
         </div>
@@ -160,8 +160,8 @@ export function Features() {
 
         <div className="mt-24">
           <div className="text-center mb-12">
-            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Why Iskotify</p>
-            <h3 className="font-heading font-bold text-[#1d1d1f] text-2xl md:text-3xl leading-tight">
+            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">Why Iskotify</p>
+            <h3 className="font-heading font-bold text-ink text-2xl md:text-3xl leading-tight">
               Decide your future with evidence
             </h3>
           </div>

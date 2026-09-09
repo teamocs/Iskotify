@@ -8,7 +8,7 @@ export function FooterCTA() {
       {/* Download CTA section */}
       <section
         id="download"
-        className="relative bg-gradient-to-br from-[#800000] via-[#9a0000] to-[#5a0000] py-20 px-6 overflow-hidden"
+        className="relative bg-gradient-to-br from-maroon via-[#9a0000] to-[#5a0000] py-20 px-6 overflow-hidden"
       >
         {/* Decorative background circles */}
         <div className="pointer-events-none absolute -top-20 -left-20 w-64 h-64 rounded-full bg-white/[0.04] blur-2xl" />
@@ -40,7 +40,7 @@ export function FooterCTA() {
                 <a
                   href="#early-access"
                   aria-label="Request early access to the free Iskotify Android app"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-[#800000] rounded-xl px-6 py-3 text-sm font-semibold hover:bg-red-50 transition-colors shadow-sm"
+                  className="inline-flex items-center justify-center gap-2 bg-white text-maroon rounded-xl px-6 py-3 text-sm font-semibold hover:bg-danger-soft transition-colors shadow-sm"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M3.18 23.76c.3.17.64.22.99.14l12.49-7.21-2.79-2.79-10.69 9.86zM.35 1.09A1.5 1.5 0 0 0 0 2.06v19.88a1.5 1.5 0 0 0 .35.97l.05.05 11.14-11.14v-.26L.4 1.04l-.05.05zM23.15 10.56l-2.79-1.61-3.12 3.12 3.12 3.12 2.81-1.62c.8-.46.8-1.55-.02-2.01zM4.17.1l12.49 7.21-2.79 2.79L3.18.24A1.18 1.18 0 0 1 4.17.1z" />

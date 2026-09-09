@@ -92,8 +92,8 @@ export default function CourseTagsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 max-w-5xl mx-auto space-y-4">
           <div>
-            <h2 className="text-[#1d1d1f] font-heading font-bold text-2xl tracking-tight">Course-field tags</h2>
-            <p className="text-[#6e6e73] text-sm mt-1">
+            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Course-field tags</h2>
+            <p className="text-ink-muted text-sm mt-1">
               Which course fields each exam/scholarship is open to. <strong>All courses</strong> = no field
               restriction. Tags map to a student&apos;s target course via its cluster, so course-specific
               scholarships (DOST, etc.) reach the right students. {aiCount > 0 ? `${aiCount} were AI-tagged — review and correct any below.` : ''}
@@ -102,6 +102,8 @@ export default function CourseTagsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <input
+              type="search"
+              aria-label="Search listings"
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Search listings…"
@@ -112,36 +114,36 @@ export default function CourseTagsPage() {
                 key={tf}
                 type="button"
                 onClick={() => setTypeFilter(tf)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold ${typeFilter === tf ? 'bg-[#800000] text-white' : 'bg-[#f5f5f7] text-[#6e6e73]'}`}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold ${typeFilter === tf ? 'bg-maroon text-white' : 'bg-surface-2 text-ink-muted'}`}
               >
                 {tf === 'all' ? 'All' : tf === 'exam' ? 'Exams' : 'Scholarships'}
               </button>
             ))}
           </div>
 
-          {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-red-800 text-sm">{error}</div>}
+          {error && <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-2 text-danger-strong text-sm">{error}</div>}
           {loading ? (
-            <div className="text-[#6e6e73] text-sm py-10 text-center">Loading…</div>
+            <div className="text-ink-muted text-sm py-10 text-center">Loading…</div>
           ) : (
             <div className="space-y-2">
-              <div className="text-[#6e6e73] text-xs">{filtered.length} listing{filtered.length === 1 ? '' : 's'}</div>
+              <div className="text-ink-muted text-xs">{filtered.length} listing{filtered.length === 1 ? '' : 's'}</div>
               {filtered.map(r => {
                 const openAll = r.target_courses.length === 0 || r.target_courses.includes('all')
                 return (
                   <div key={r.id} className="rounded-2xl border border-black/[0.08] bg-white p-3 shadow-sm">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${r.type === 'exam' ? 'bg-[#800000]/10 text-[#800000]' : 'bg-green-100 text-green-700'}`}>
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${r.type === 'exam' ? 'bg-maroon/10 text-maroon' : 'bg-success-soft text-success-strong'}`}>
                         {r.type}
                       </span>
-                      <span className="text-[#1d1d1f] text-sm font-semibold flex-1 min-w-0 truncate">{r.title}</span>
-                      {r.target_courses_source === 'ai' && <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">AI</span>}
-                      {savingId === r.id && <span className="text-[10px] text-[#6e6e73]">saving…</span>}
+                      <span className="text-ink text-sm font-semibold flex-1 min-w-0 truncate">{r.title}</span>
+                      {r.target_courses_source === 'ai' && <span className="text-[10px] text-warning bg-warning-soft border border-warning/25 rounded px-1.5 py-0.5">AI</span>}
+                      {savingId === r.id && <span className="text-[10px] text-ink-muted">saving…</span>}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
                         onClick={() => setOpenAll(r)}
-                        className={`text-xs px-2.5 py-1 rounded-full border ${openAll ? 'bg-[#800000] text-white border-[#800000]' : 'bg-white text-[#6e6e73] border-black/[0.15]'}`}
+                        className={`text-xs px-2.5 py-1 rounded-full border ${openAll ? 'bg-maroon text-white border-maroon' : 'bg-white text-ink-muted border-black/[0.15]'}`}
                       >
                         All courses
                       </button>
@@ -152,7 +154,7 @@ export default function CourseTagsPage() {
                             key={c}
                             type="button"
                             onClick={() => toggleCluster(r, c)}
-                            className={`text-xs px-2.5 py-1 rounded-full border ${on ? 'bg-[#800000] text-white border-[#800000]' : 'bg-white text-[#3a3a3c] border-black/[0.15]'}`}
+                            className={`text-xs px-2.5 py-1 rounded-full border ${on ? 'bg-maroon text-white border-maroon' : 'bg-white text-ink-muted border-black/[0.15]'}`}
                           >
                             {c}
                           </button>

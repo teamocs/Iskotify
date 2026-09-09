@@ -199,7 +199,7 @@ export default function NoteEditorScreen() {
     backTxt: { fontSize: typo.lg, color: textCol },
     titleInput: { flex: 1, fontSize: typo.lg, fontWeight: '700', color: textCol, fontFamily: 'Outfit_700Bold' },
     reminderBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: 6, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: hasActiveReminder ? 'rgba(128,0,0,0.08)' : 'transparent', borderRadius: 10, borderWidth: hasActiveReminder ? 1 : 0, borderColor: 'rgba(128,0,0,0.2)', alignSelf: 'flex-start' },
-    reminderBadgeTxt: { fontSize: typo.xs, color: '#800000', fontFamily: 'Lexend_500Medium' },
+    reminderBadgeTxt: { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_500Medium' },
     contentInput: { flex: 1, fontSize: typo.sm, color: textCol, fontFamily: 'Lexend_400Regular', lineHeight: 20, textAlignVertical: 'top', paddingHorizontal: 16, paddingBottom: 16, minHeight: 200 },
     checkRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: 10 },
     checkBox: { width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: textCol, alignItems: 'center', justifyContent: 'center' },
@@ -232,7 +232,7 @@ export default function NoteEditorScreen() {
     reminderOptLabel: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     reminderOptSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
     clearReminderBtn: { marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 14, backgroundColor: 'rgba(248,113,113,0.08)', borderWidth: 1, borderColor: 'rgba(248,113,113,0.3)', alignItems: 'center' },
-    clearReminderTxt: { fontSize: typo.sm, color: '#f87171', fontFamily: 'Lexend_500Medium' },
+    clearReminderTxt: { fontSize: typo.sm, color: t.danger, fontFamily: 'Lexend_500Medium' },
   }), [t, typo, bgColor, textCol, subCol, color, insets, hasActiveReminder])
 
   const unchecked = checkItems.filter(ci => !ci.isChecked)
@@ -246,7 +246,7 @@ export default function NoteEditorScreen() {
 
         {/* Top bar */}
         <View style={s.topBar}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
             <Text style={s.backTxt}>‹</Text>
           </TouchableOpacity>
           <TextInput
@@ -261,8 +261,8 @@ export default function NoteEditorScreen() {
 
         {/* Active reminder badge */}
         {hasActiveReminder && (
-          <TouchableOpacity style={s.reminderBadge} onPress={() => setShowReminderPicker(true)}>
-            <Lineicons icon={Bell1Solid} size={12} color="#800000" />
+          <TouchableOpacity style={s.reminderBadge} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel={`Reminder set for ${formatReminderFull(reminderAt!)}. Change it.`}>
+            <Lineicons icon={Bell1Solid} size={12} color={t.accent} />
             <Text style={s.reminderBadgeTxt}>{formatReminderFull(reminderAt!)}</Text>
           </TouchableOpacity>
         )}
@@ -282,7 +282,7 @@ export default function NoteEditorScreen() {
             <View>
               {unchecked.map(item => (
                 <View key={item.id} style={s.checkRow}>
-                  <TouchableOpacity style={s.checkBox} onPress={() => toggleCheck(item.id)}>
+                  <TouchableOpacity style={s.checkBox} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} accessibilityState={{ checked: item.isChecked }}>
                     <Text style={s.checkMark}> </Text>
                   </TouchableOpacity>
                   <TextInput
@@ -294,12 +294,12 @@ export default function NoteEditorScreen() {
                     onSubmitEditing={addCheckItem}
                     blurOnSubmit={false}
                   />
-                  <TouchableOpacity onPress={() => removeCheckItem(item.id)}>
+                  <TouchableOpacity onPress={() => removeCheckItem(item.id)} accessibilityRole="button" accessibilityLabel={`Remove ${item.text || 'list item'}`}>
                     <Lineicons icon={XmarkOutlined} size={16} color={subCol} />
                   </TouchableOpacity>
                 </View>
               ))}
-              <TouchableOpacity style={s.addItemBtn} onPress={addCheckItem}>
+              <TouchableOpacity style={s.addItemBtn} onPress={addCheckItem} accessibilityRole="button" accessibilityLabel="Add item">
                 <Text style={{ color: subCol, fontSize: 20 }}>+</Text>
                 <Text style={s.addItemTxt}>Add item</Text>
               </TouchableOpacity>
@@ -310,11 +310,11 @@ export default function NoteEditorScreen() {
                   </Text>
                   {checked.map(item => (
                     <View key={item.id} style={s.checkRow}>
-                      <TouchableOpacity style={[s.checkBox, { backgroundColor: subCol }]} onPress={() => toggleCheck(item.id)}>
+                      <TouchableOpacity style={[s.checkBox, { backgroundColor: subCol }]} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} accessibilityState={{ checked: item.isChecked }}>
                         <Text style={s.checkMark}>✓</Text>
                       </TouchableOpacity>
                       <Text style={[s.checkInput, s.checkedText]}>{item.text}</Text>
-                      <TouchableOpacity onPress={() => removeCheckItem(item.id)}>
+                      <TouchableOpacity onPress={() => removeCheckItem(item.id)} accessibilityRole="button" accessibilityLabel={`Remove ${item.text || 'list item'}`}>
                         <Lineicons icon={XmarkOutlined} size={16} color={subCol} />
                       </TouchableOpacity>
                     </View>
@@ -335,28 +335,31 @@ export default function NoteEditorScreen() {
                   style={[
                     s.colorDot,
                     { backgroundColor: key ? NOTE_COLORS[key] : t.surface },
-                    { borderColor: color === key ? '#800000' : (key ? 'rgba(0,0,0,0.2)' : t.border) },
+                    { borderColor: color === key ? t.accent : (key ? 'rgba(0,0,0,0.2)' : t.border) },
                   ]}
                   onPress={() => setColor(key)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={key ? `${key} note colour` : 'Default note colour'}
+                  accessibilityState={{ selected: color === key }}
                 />
               ))}
             </View>
           </ScrollView>
           {/* Reminder */}
-          <TouchableOpacity style={[s.toolBtn, hasActiveReminder && s.toolBtnActive]} onPress={() => setShowReminderPicker(true)}>
-            <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? '#800000' : textCol} />
+          <TouchableOpacity style={[s.toolBtn, hasActiveReminder && s.toolBtnActive]} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel="Reminder" accessibilityState={{ selected: hasActiveReminder }}>
+            <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accent : textCol} />
           </TouchableOpacity>
           {/* Labels */}
-          <TouchableOpacity style={[s.toolBtn, assignedIds.length > 0 && s.toolBtnActive]} onPress={() => setShowLabelPicker(true)}>
-            <Lineicons icon={Bookmark1Outlined} size={20} color={assignedIds.length > 0 ? '#800000' : textCol} />
+          <TouchableOpacity style={[s.toolBtn, assignedIds.length > 0 && s.toolBtnActive]} onPress={() => setShowLabelPicker(true)} accessibilityRole="button" accessibilityLabel="Labels" accessibilityState={{ selected: assignedIds.length > 0 }}>
+            <Lineicons icon={Bookmark1Outlined} size={20} color={assignedIds.length > 0 ? t.accent : textCol} />
           </TouchableOpacity>
           {/* Archive */}
-          <TouchableOpacity style={s.toolBtn} onPress={handleArchive}>
+          <TouchableOpacity style={s.toolBtn} onPress={handleArchive} accessibilityRole="button" accessibilityLabel="Archive note">
             <Lineicons icon={BoxArchive1Outlined} size={20} color={textCol} />
           </TouchableOpacity>
           {/* Trash */}
-          <TouchableOpacity style={s.toolBtn} onPress={handleDelete}>
-            <Lineicons icon={Trash3Outlined} size={20} color="#f87171" />
+          <TouchableOpacity style={s.toolBtn} onPress={handleDelete} accessibilityRole="button" accessibilityLabel="Move note to trash">
+            <Lineicons icon={Trash3Outlined} size={20} color={t.danger} />
           </TouchableOpacity>
         </View>
 
@@ -364,12 +367,12 @@ export default function NoteEditorScreen() {
 
       {/* ── Label picker bottom sheet ─────────────────────────────────────── */}
       <Modal visible={showLabelPicker} transparent animationType="slide" onRequestClose={() => setShowLabelPicker(false)} statusBarTranslucent>
-        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowLabelPicker(false)} />
+        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowLabelPicker(false)} accessibilityRole="button" accessibilityLabel="Close label picker" />
         <View style={s.sheet}>
           <View style={s.sheetHandle} />
           <View style={s.sheetHeader}>
             <Text style={s.sheetTitle}>Labels</Text>
-            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowLabelPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowLabelPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close">
               <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
             </TouchableOpacity>
           </View>
@@ -382,7 +385,7 @@ export default function NoteEditorScreen() {
             {labels.map(label => {
               const on = assignedIds.includes(label.id)
               return (
-                <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)}>
+                <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)} accessibilityRole="checkbox" accessibilityLabel={label.name} accessibilityState={{ checked: assignedIds.indexOf(label.id) !== -1 }}>
                   <Text style={s.labelName}>{label.name}</Text>
                   <View style={[s.checkCircle, on ? s.checkCircleOn : s.checkCircleOff]}>
                     {on && <Lineicons icon={CheckOutlined} size={12} color="#fff" />}
@@ -396,32 +399,32 @@ export default function NoteEditorScreen() {
 
       {/* ── Reminder picker bottom sheet ──────────────────────────────────── */}
       <Modal visible={showReminderPicker} transparent animationType="slide" onRequestClose={() => setShowReminderPicker(false)} statusBarTranslucent>
-        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowReminderPicker(false)} />
+        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowReminderPicker(false)} accessibilityRole="button" accessibilityLabel="Close reminder picker" />
         <View style={s.sheet}>
           <View style={s.sheetHandle} />
           <View style={s.sheetHeader}>
             <Text style={s.sheetTitle}>Set Reminder</Text>
-            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowReminderPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowReminderPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close">
               <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
             </TouchableOpacity>
           </View>
           <ScrollView style={{ maxHeight: 420 }}>
             {reminderOpts.map((opt, i) => (
-              <TouchableOpacity key={i} style={[s.reminderOpt, i === reminderOpts.length - 1 && { borderBottomWidth: 0 }]} onPress={() => opt.ms != null && void handleSetReminder(opt.ms)}>
+              <TouchableOpacity key={i} style={[s.reminderOpt, i === reminderOpts.length - 1 && { borderBottomWidth: 0 }]} onPress={() => opt.ms != null && void handleSetReminder(opt.ms)} accessibilityRole="button" accessibilityLabel={opt.label}>
                 <View style={s.reminderOptIconWrap}>
-                  <Lineicons icon={Alarm1Outlined} size={20} color="#800000" />
+                  <Lineicons icon={Alarm1Outlined} size={20} color={t.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.reminderOptLabel}>{opt.label}</Text>
                   <Text style={s.reminderOptSub}>{opt.sub}</Text>
                 </View>
                 {reminderAt != null && opt.ms === reminderAt && (
-                  <Lineicons icon={CheckOutlined} size={16} color="#800000" />
+                  <Lineicons icon={CheckOutlined} size={16} color={t.accent} />
                 )}
               </TouchableOpacity>
             ))}
             {hasActiveReminder && (
-              <TouchableOpacity style={s.clearReminderBtn} onPress={() => void handleSetReminder(null)}>
+              <TouchableOpacity style={s.clearReminderBtn} onPress={() => void handleSetReminder(null)} accessibilityRole="button" accessibilityLabel="Clear reminder">
                 <Text style={s.clearReminderTxt}>Remove reminder</Text>
               </TouchableOpacity>
             )}

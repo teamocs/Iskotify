@@ -128,7 +128,7 @@ export function SidebarContent({ userEmail, onItemClick }: Props) {
     <>
       <div className="px-4 py-5 border-b border-white/[0.07]">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="w-2 h-2 rounded-full bg-[#800000] shadow-[0_0_8px_rgba(128,0,0,0.6)]" />
+          <span className="w-2 h-2 rounded-full bg-maroon shadow-[0_0_8px_rgba(128,0,0,0.6)]" />
           <span className="font-heading font-extrabold text-white text-[1.05rem] tracking-tight">Iskotify</span>
         </div>
         <p className="text-[10px] text-white/30 font-medium tracking-widest uppercase pl-0.5">Admin Console</p>
@@ -164,7 +164,7 @@ export function SidebarContent({ userEmail, onItemClick }: Props) {
 
       <div className="px-4 py-4 border-t border-white/[0.07]">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-[#800000] flex items-center justify-center text-white text-[10px] font-bold font-heading flex-shrink-0">
+          <div className="w-7 h-7 rounded-full bg-maroon flex items-center justify-center text-white text-[10px] font-bold font-heading flex-shrink-0">
             {initials}
           </div>
           <div className="flex-1 min-w-0">

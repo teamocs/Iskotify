@@ -45,10 +45,11 @@ type Mode = 'sign-in' | 'sign-up'
 // ── Field error label ─────────────────────────────────────────────────────────
 
 function FieldError({ message }: { message: string }) {
+  const { theme: t } = useTheme()
   if (!message) return null
   return (
     <Text
-      style={{ color: '#dc2626', fontSize: 12, fontFamily: 'Lexend_400Regular', marginTop: 4 }}
+      style={{ color: t.danger, fontSize: 12, fontFamily: 'Lexend_400Regular', marginTop: 4 }}
       accessibilityRole="alert"
       maxFontSizeMultiplier={1.4}
     >
@@ -125,7 +126,7 @@ export default function SignInScreen() {
       color: t.textPrimary,
       minHeight: 48,
     },
-    inputError:  { borderColor: '#dc2626' },
+    inputError:  { borderColor: t.danger },
     passwordRow: { position: 'relative' },
     eyeBtn:      { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: spacing.xs, minWidth: 44, minHeight: 48 },
     eyeText:     { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
@@ -139,9 +140,9 @@ export default function SignInScreen() {
       flexDirection: 'row',
       gap: spacing.sm,
     },
-    submitText:  { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#ffffff' },
+    submitText:  { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
     formErrorBox:{ backgroundColor: 'rgba(220,38,38,0.10)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(220,38,38,0.25)', padding: spacing.md, marginTop: spacing.md },
-    formErrorTxt:{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#dc2626' },
+    formErrorTxt:{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.danger },
     forgotRow:   { alignItems: 'center', marginTop: spacing.md },
     forgotText:  { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.accent },
     googleBtn:   {
@@ -159,7 +160,7 @@ export default function SignInScreen() {
     successBox:  { backgroundColor: 'rgba(34,197,94,0.10)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', padding: spacing.lg, gap: spacing.sm },
     successTitle:{ fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textPrimary },
     successText: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: 20 },
-    resetInfo:   { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: '#16a34a', marginTop: spacing.xs },
+    resetInfo:   { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.success, marginTop: spacing.xs },
   })
 
   // ── Validation ──────────────────────────────────────────────────────────────
