@@ -74,7 +74,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       <SafeAreaView style={s.root}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <Text style={s.emptyTxt}>No questions available</Text>
-          <Pressable style={[s.ghostBtn, { marginTop: 16 }]} onPress={onExit}>
+          <Pressable
+            style={[s.ghostBtn, { marginTop: 16 }]}
+            onPress={onExit}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Text style={s.ghostTxt}>← Back</Text>
           </Pressable>
         </View>
@@ -198,6 +203,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
 
           <Pressable
             style={s.primaryBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Retake exam"
             onPress={() => {
               setAnswers({})
               setIdx(0)
@@ -217,6 +224,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
 
           <Pressable
             style={[s.primaryBtn, { marginTop: 8, backgroundColor: 'rgba(0,0,128,0.75)' }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Share your score of ${pct} percent`}
             onPress={() =>
               void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify! 🎓` })
             }
@@ -224,7 +233,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
             <Text style={s.primaryBtnTxt}>Share score</Text>
           </Pressable>
 
-          <Pressable style={s.ghostBtn} onPress={onExit}>
+          <Pressable
+            style={s.ghostBtn}
+            onPress={onExit}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Text style={s.ghostTxt}>← Back</Text>
           </Pressable>
         </ScrollView>
@@ -241,7 +255,12 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   return (
     <SafeAreaView style={s.root}>
       <View style={s.topBar}>
-        <Pressable onPress={onExit} hitSlop={10}>
+        <Pressable
+          onPress={onExit}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Exit exam"
+        >
           <Text style={s.back}>‹</Text>
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
@@ -273,12 +292,17 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(0, i - 1))}
           disabled={idx === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Previous question"
+          accessibilityState={{ disabled: idx === 0 }}
         >
           <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
         <Pressable
           style={s.footBtnGhost}
           onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
+          accessibilityRole="button"
+          accessibilityLabel={isLast ? 'Review answers' : 'Skip this question'}
         >
           <Text style={s.footGhostTxt}>{isLast ? 'Review' : 'Skip'}</Text>
         </Pressable>
@@ -286,6 +310,9 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           style={[s.footBtnPrimary, sel === undefined && !isLast && s.footDisabled]}
           disabled={sel === undefined && !isLast}
           onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
+          accessibilityRole="button"
+          accessibilityLabel={isLast ? 'Submit exam' : 'Next question'}
+          accessibilityState={{ disabled: sel === undefined && !isLast }}
         >
           <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
         </Pressable>

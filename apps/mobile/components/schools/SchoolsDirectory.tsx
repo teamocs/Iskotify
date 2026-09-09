@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, type Theme } from '../../theme/tokens'
 import { Card } from '../ui/Card'
 import { useWebContentWidth } from '../ui/webMaxWidth'
 import { normalizeSchoolType, type SchoolTypeBucket } from '../../utils/schoolType'
@@ -52,15 +52,15 @@ function hasNonEmptyJsonArray(raw: string | null | undefined): boolean {
 
 type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'VERY LOW' | null
 
-function confidenceBadgeStyle(level: ConfidenceLevel): { bg: string; border: string; text: string; label: string } {
+function confidenceBadgeStyle(level: ConfidenceLevel, t: Theme): { bg: string; border: string; text: string; label: string } {
   switch ((level ?? '').toUpperCase()) {
     case 'HIGH':
-      return { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.30)', text: '#16a34a', label: 'HIGH' }
+      return { bg: t.successSurface, border: t.successSurface, text: t.success, label: 'HIGH' }
     case 'MEDIUM':
-      return { bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.30)', text: '#b45309', label: 'MED' }
+      return { bg: t.warningSurface, border: t.warningSurface, text: t.warning, label: 'MED' }
     case 'LOW':
     case 'VERY LOW':
-      return { bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.10)', text: 'rgba(45,10,10,0.45)', label: level === 'VERY LOW' ? 'V-LOW' : 'LOW' }
+      return { bg: t.surfaceSubtle, border: t.divider, text: t.textTertiary, label: level === 'VERY LOW' ? 'V-LOW' : 'LOW' }
     default:
       return { bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', text: 'rgba(45,10,10,0.40)', label: '—' }
   }
@@ -85,8 +85,9 @@ interface SchoolCardProps {
 }
 
 const SchoolCard = memo(function SchoolCard({ school, styles, onPress }: SchoolCardProps) {
+  const { theme: t } = useTheme()
   const confidence = (school.dataConfidence?.toUpperCase() ?? null) as ConfidenceLevel
-  const badge = confidenceBadgeStyle(confidence)
+  const badge = confidenceBadgeStyle(confidence, t)
   const locationParts = [school.region, school.province].filter(Boolean)
   const hasRequirements = hasNonEmptyJsonArray(school.requirements)
   return (
@@ -248,7 +249,7 @@ export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultReg
     badge:         { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderWidth: 1 },
     badgeTxt:      { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
     freeBadge:     { backgroundColor: 'rgba(22,163,74,0.10)', borderColor: 'rgba(22,163,74,0.25)' },
-    freeBadgeTxt:  { color: '#16a34a' },
+    freeBadgeTxt:  { color: t.success },
     examBadge:     { backgroundColor: t.accentSurface, borderColor: t.accent },
     examBadgeTxt:  { color: t.accentText },
     reqBadge:      { backgroundColor: t.successSurface, borderColor: t.success },

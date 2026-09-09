@@ -94,7 +94,7 @@ export default function ResultsTrackerScreen() {
     },
     waitingTxt: {
       fontSize: typo.xs, fontWeight: '700',
-      color: '#4ade80', fontFamily: 'Lexend_600SemiBold',
+      color: t.success, fontFamily: 'Lexend_600SemiBold',
     },
     readyBadge: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
@@ -105,7 +105,7 @@ export default function ResultsTrackerScreen() {
     },
     readyTxt: {
       fontSize: typo.xs, fontWeight: '700',
-      color: '#fbbf24', fontFamily: 'Lexend_600SemiBold',
+      color: t.warning, fontFamily: 'Lexend_600SemiBold',
     },
     subTxt: {
       fontSize: typo.xs, color: t.textTertiary,

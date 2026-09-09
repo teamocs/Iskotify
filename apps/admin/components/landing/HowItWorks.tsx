@@ -84,16 +84,16 @@ const steps: Step[] = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-[#f5f5f7] py-20 px-6">
+    <section id="how-it-works" className="bg-surface-2 py-20 px-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-14">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">
             Getting Started
           </p>
-          <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+          <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
             Your first few minutes in Iskotify
           </h2>
-          <p className="text-[#6e6e73] font-body text-base md:text-lg leading-relaxed mt-4 max-w-2xl mx-auto">
+          <p className="text-ink-muted font-body text-base md:text-lg leading-relaxed mt-4 max-w-2xl mx-auto">
             A guided setup mirrors the real onboarding flow — then you land on a dashboard built around your goals.
           </p>
         </div>
@@ -103,15 +103,15 @@ export function HowItWorks() {
             <div key={step.number} className="relative">
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="font-heading font-extrabold text-[#800000]/20 text-7xl leading-none select-none">
+                  <span className="font-heading font-extrabold text-maroon/20 text-7xl leading-none select-none">
                     {step.number}
                   </span>
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#800000]/10">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-maroon/10">
                     {step.icon}
                   </span>
                 </div>
-                <h3 className="font-heading font-bold text-[#1d1d1f] text-xl mb-3">{step.title}</h3>
-                <p className="text-[#6e6e73] font-body text-sm leading-relaxed">{step.description}</p>
+                <h3 className="font-heading font-bold text-ink text-xl mb-3">{step.title}</h3>
+                <p className="text-ink-muted font-body text-sm leading-relaxed">{step.description}</p>
               </div>
             </div>
           ))}

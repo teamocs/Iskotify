@@ -34,7 +34,7 @@ export default function ArchiveScreen() {
     actionBtnPressed: { opacity: 0.7 },
     actionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_500Medium' },
     dangerBtn: { borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.07)' },
-    dangerTxt: { color: '#f87171' },
+    dangerTxt: { color: t.danger },
     empty: { paddingVertical: 60, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])

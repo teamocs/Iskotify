@@ -71,14 +71,14 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
   }
 
   return (
-    <div className="relative flex flex-wrap items-center gap-2 rounded-xl border border-[#800000]/20 bg-[#800000]/[0.03] px-3 py-2">
-      <span className="text-[11px] font-semibold text-[#800000] whitespace-nowrap">🎯 Regenerate distractors (hard mode)</span>
+    <div className="relative flex flex-wrap items-center gap-2 rounded-xl border border-maroon/20 bg-maroon/[0.03] px-3 py-2">
+      <span className="text-[11px] font-semibold text-maroon whitespace-nowrap">🎯 Regenerate distractors (hard mode)</span>
 
       <select
         aria-label="Subject filter"
         value={subjectId}
         onChange={e => { setSubjectId(e.target.value); setTopicId('') }}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-[#1d1d1f]"
+        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink"
       >
         <option value="">All subjects</option>
         {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -89,7 +89,7 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
         value={topicId}
         onChange={e => setTopicId(e.target.value)}
         disabled={!subjectId}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-[#1d1d1f] disabled:opacity-50"
+        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink disabled:opacity-50"
       >
         <option value="">{subjectId ? 'All topics in subject' : 'All topics'}</option>
         {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -99,7 +99,7 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
         aria-label="Card scope"
         value={scope}
         onChange={e => setScope(e.target.value === 'all' ? 'all' : 'ai_enhanced')}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-[#1d1d1f]"
+        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink"
       >
         <option value="ai_enhanced">Only already AI-enhanced cards</option>
         <option value="all">All cards in scope</option>
@@ -109,14 +109,14 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
         type="button"
         onClick={handleRun}
         disabled={isPending}
-        className="rounded-[980px] px-3 py-1 text-[12px] font-semibold bg-[#800000] text-white hover:bg-[#6b0000] transition-colors disabled:opacity-60"
+        className="rounded-[980px] px-3 py-1 text-[12px] font-semibold bg-maroon text-white hover:bg-[#6b0000] transition-colors disabled:opacity-60"
       >
         {isPending ? '⏳ Regenerating…' : 'Run'}
       </button>
 
       {toast && (
         <div className={`absolute top-full mt-1 right-0 z-50 rounded-[12px] px-4 py-2.5 text-[12px] font-medium shadow-lg whitespace-nowrap ${
-          toast.ok ? 'bg-green-700 text-white' : 'bg-red-700 text-white'
+          toast.ok ? 'bg-success text-white' : 'bg-danger-strong text-white'
         }`}>
           {toast.msg}
         </div>

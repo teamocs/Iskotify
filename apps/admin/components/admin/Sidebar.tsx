@@ -7,7 +7,7 @@ interface Props {
 
 export function Sidebar({ userEmail }: Props) {
   return (
-    <aside className="hidden md:flex w-[220px] flex-shrink-0 bg-[#1d1d1f] flex-col h-full">
+    <aside className="hidden md:flex w-[220px] flex-shrink-0 bg-ink flex-col h-full">
       <SidebarContent userEmail={userEmail} />
     </aside>
   )

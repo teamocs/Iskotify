@@ -62,6 +62,8 @@ export function ScreenScroll({
     <ScrollView
       style={{ flex: 1, backgroundColor: t.bg }}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
       contentContainerStyle={[
         { paddingHorizontal: padded ? spacing.lg : 0, paddingBottom },
         contentContainerStyle,

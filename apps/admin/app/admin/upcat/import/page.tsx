@@ -134,8 +134,8 @@ export default function QuestionBankImportPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 max-w-6xl mx-auto space-y-6">
           <div>
-            <h2 className="text-[#1d1d1f] font-heading font-bold text-2xl tracking-tight">Import the Question Bank</h2>
-            <p className="text-[#6e6e73] text-sm mt-1">
+            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Import the Question Bank</h2>
+            <p className="text-ink-muted text-sm mt-1">
               Upload the authored Question Bank CSV (Q ID, Subtest, Main Subject, Topic, Options A–D, Answer,
               Passage / Set Text, …). Friendly tracker labels or snake_case headers both work, and text encoding is
               repaired automatically. Rows are validated below — fix any errors inline, then import. Rows marked{' '}
@@ -151,21 +151,21 @@ export default function QuestionBankImportPage() {
             sampleLabel="Download sample Question Bank CSV"
           />
 
-          {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">{error}</div>}
+          {error && <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">{error}</div>}
 
           {result && (
-            <div className="rounded-2xl border border-green-200 bg-green-50 p-6 shadow-sm space-y-4">
-              <div className="text-[#1d1d1f] font-heading font-bold">✓ Imported {result.questions} questions across {result.passages} passages into the question bank.</div>
-              <p className="text-[#3a3a3c] text-sm">
+            <div className="rounded-2xl border border-success/25 bg-success-soft p-6 shadow-sm space-y-4">
+              <div className="text-ink font-heading font-bold">✓ Imported {result.questions} questions across {result.passages} passages into the question bank.</div>
+              <p className="text-ink-muted text-sm">
                 Step 2 — project the published questions into the flashcard quiz engine so they appear in the
                 mobile app&apos;s topic/deck practice (in addition to the UPCAT mock exams).
               </p>
               <button type="button" onClick={handleProject} disabled={projecting}
-                className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${projecting ? 'bg-[#f5f5f7] text-[#6e6e73]' : 'bg-[#800000] text-white hover:bg-[#9a0a1f]'}`}>
+                className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${projecting ? 'bg-surface-2 text-ink-muted' : 'bg-maroon text-white hover:bg-[#9a0a1f]'}`}>
                 {projecting ? 'Projecting…' : 'Project to flashcards'}
               </button>
               {projection && (
-                <div className="text-[#1d1d1f] text-sm font-medium">
+                <div className="text-ink text-sm font-medium">
                   ✓ Flashcards now: {projection.cards} cards · {projection.topics} topics · {projection.subjects} subjects.
                 </div>
               )}
@@ -176,12 +176,12 @@ export default function QuestionBankImportPage() {
             <div className="space-y-3">
               {/* Summary + controls */}
               <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">{validCount} rows valid</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-success-soft text-success-strong">{validCount} rows valid</span>
                 {errorRowCount > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">{errorRowCount} rows have errors</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-danger-soft text-danger-strong">{errorRowCount} rows have errors</span>
                 )}
-                <span className="text-[#6e6e73] text-xs">{rows.length} total</span>
-                <label className="ml-auto inline-flex items-center gap-2 text-[#3a3a3c] text-xs cursor-pointer">
+                <span className="text-ink-muted text-xs">{rows.length} total</span>
+                <label className="ml-auto inline-flex items-center gap-2 text-ink-muted text-xs cursor-pointer">
                   <input type="checkbox" checked={showOnlyErrors} onChange={e => { setShowOnlyErrors(e.target.checked); setPage(0) }} />
                   Show only rows with errors
                 </label>
@@ -189,22 +189,22 @@ export default function QuestionBankImportPage() {
 
               {/* Bulk subtest fix — the most common error class */}
               {errorRowCount > 0 && (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
-                  <span className="text-amber-900 text-xs">Bulk fix: set subtest for every row whose subtest is missing or invalid →</span>
-                  <select value={bulkSubtest} onChange={e => setBulkSubtest(e.target.value)}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-sm">
+                  <span className="text-warning-strong text-xs">Bulk fix: set subtest for every row whose subtest is missing or invalid →</span>
+                  <select aria-label="Bulk fix: subtest to apply to invalid rows" value={bulkSubtest} onChange={e => setBulkSubtest(e.target.value)}
                     className="border border-black/[0.15] rounded-md px-2 py-1 text-[13px] bg-white">
                     <option value="">— choose subtest —</option>
                     {VALID_SUBTESTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                   <button type="button" onClick={applyBulkSubtest} disabled={!bulkSubtest}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold ${bulkSubtest ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-black/[0.06] text-[#6e6e73] cursor-not-allowed'}`}>
+                    className={`rounded-md px-3 py-1 text-xs font-semibold ${bulkSubtest ? 'bg-warning text-white hover:bg-warning-strong' : 'bg-black/[0.06] text-ink-muted cursor-not-allowed'}`}>
                     Apply
                   </button>
                 </div>
               )}
 
               {displayedAll.length === 0 ? (
-                <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-6 text-center text-green-800 text-sm">
+                <div className="rounded-xl border border-success/25 bg-success-soft px-4 py-6 text-center text-success-strong text-sm">
                   🎉 No rows with errors. Ready to import.
                 </div>
               ) : (
@@ -218,10 +218,10 @@ export default function QuestionBankImportPage() {
                   {pageCount > 1 && (
                     <div className="flex items-center justify-center gap-3 text-sm">
                       <button type="button" disabled={safePage === 0} onClick={() => setPage(p => Math.max(0, p - 1))}
-                        className={`rounded-md px-3 py-1 ${safePage === 0 ? 'text-[#b0b0b5]' : 'text-[#800000] hover:bg-black/[0.04]'}`}>← Prev</button>
-                      <span className="text-[#6e6e73] text-xs tabular-nums">Page {safePage + 1} of {pageCount} · showing {pageRows.length} of {displayedAll.length}{showOnlyErrors ? ' error rows' : ' rows'}</span>
+                        className={`rounded-md px-3 py-1 ${safePage === 0 ? 'text-ink-subtle' : 'text-maroon hover:bg-black/[0.04]'}`}>← Prev</button>
+                      <span className="text-ink-muted text-xs tabular-nums">Page {safePage + 1} of {pageCount} · showing {pageRows.length} of {displayedAll.length}{showOnlyErrors ? ' error rows' : ' rows'}</span>
                       <button type="button" disabled={safePage >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                        className={`rounded-md px-3 py-1 ${safePage >= pageCount - 1 ? 'text-[#b0b0b5]' : 'text-[#800000] hover:bg-black/[0.04]'}`}>Next →</button>
+                        className={`rounded-md px-3 py-1 ${safePage >= pageCount - 1 ? 'text-ink-subtle' : 'text-maroon hover:bg-black/[0.04]'}`}>Next →</button>
                     </div>
                   )}
                 </>
@@ -230,11 +230,11 @@ export default function QuestionBankImportPage() {
               {/* Import action */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button onClick={handleImport} disabled={busy || validCount === 0}
-                  className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${busy || validCount === 0 ? 'bg-[#f5f5f7] text-[#6e6e73] cursor-not-allowed' : 'bg-[#800000] text-white hover:bg-[#9a0a1f]'}`}>
+                  className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${busy || validCount === 0 ? 'bg-surface-2 text-ink-muted cursor-not-allowed' : 'bg-maroon text-white hover:bg-[#9a0a1f]'}`}>
                   {importing ? 'Importing…' : `Import ${validCount} question${validCount === 1 ? '' : 's'}`}
                 </button>
                 {errorRowCount > 0 && (
-                  <span className="text-amber-700 text-xs">{errorRowCount} row{errorRowCount === 1 ? '' : 's'} with errors will be skipped — fix them above to include them.</span>
+                  <span className="text-warning text-xs">{errorRowCount} row{errorRowCount === 1 ? '' : 's'} with errors will be skipped — fix them above to include them.</span>
                 )}
               </div>
             </div>

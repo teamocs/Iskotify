@@ -73,14 +73,14 @@ export function DraftsTable() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">
+      <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">
         {error}
       </div>
     )
   }
   if (drafts === null) {
     return (
-      <div className="rounded-xl border border-black/[0.08] bg-white px-6 py-12 text-center text-[#6e6e73] text-sm">
+      <div className="rounded-xl border border-black/[0.08] bg-white px-6 py-12 text-center text-ink-muted text-sm">
         Loading drafts…
       </div>
     )
@@ -89,8 +89,8 @@ export function DraftsTable() {
     return (
       <div className="rounded-2xl border border-black/[0.08] bg-white px-6 py-16 text-center shadow-sm">
         <div className="text-4xl mb-3">📥</div>
-        <div className="text-[#1d1d1f] font-semibold font-heading mb-1">No drafts</div>
-        <div className="text-[#6e6e73] text-sm">Import a CSV to get started.</div>
+        <div className="text-ink font-semibold font-heading mb-1">No drafts</div>
+        <div className="text-ink-muted text-sm">Import a CSV to get started.</div>
       </div>
     )
   }
@@ -101,20 +101,20 @@ export function DraftsTable() {
   return (
     <div className="space-y-3">
       {selectedCount > 0 && (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 rounded-xl border border-[#800000]/30 bg-[#fff5f6] px-4 py-3 shadow-sm">
-          <span className="text-[#1d1d1f] text-sm font-medium">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 rounded-xl border border-maroon/30 bg-[#fff5f6] px-4 py-3 shadow-sm">
+          <span className="text-ink text-sm font-medium">
             {selectedCount} draft{selectedCount === 1 ? '' : 's'} selected
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="px-3 py-1.5 rounded-[980px] text-sm font-medium text-[#1d1d1f] hover:bg-black/[0.05] transition-colors"
+              className="px-3 py-1.5 rounded-[980px] text-sm font-medium text-ink hover:bg-black/[0.05] transition-colors"
             >
               Clear
             </button>
             <button
               onClick={() => setBulkModalOpen(true)}
-              className="inline-flex items-center rounded-[980px] bg-green-700 hover:bg-green-800 text-white px-4 py-1.5 text-sm font-semibold shadow-sm"
+              className="inline-flex items-center rounded-[980px] bg-success hover:bg-success-strong text-white px-4 py-1.5 text-sm font-semibold shadow-sm"
             >
               Publish selected
             </button>
@@ -124,14 +124,14 @@ export function DraftsTable() {
 
       <div className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-sm">
         <table className="min-w-full text-sm">
-          <thead className="bg-[#f5f5f7] text-[#6e6e73]">
+          <thead className="bg-surface-2 text-ink-muted">
             <tr>
               <th className="px-3 py-2.5 w-10">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
-                  className="rounded border-black/20 text-[#800000] focus:ring-[#800000]/40 cursor-pointer"
+                  className="rounded border-black/20 text-maroon focus:ring-maroon/40 cursor-pointer"
                   aria-label="Select all drafts"
                 />
               </th>
@@ -154,24 +154,24 @@ export function DraftsTable() {
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleRow(d.topic_id)}
-                      className="rounded border-black/20 text-[#800000] focus:ring-[#800000]/40 cursor-pointer"
+                      className="rounded border-black/20 text-maroon focus:ring-maroon/40 cursor-pointer"
                       aria-label={`Select ${d.topic_name}`}
                     />
                   </td>
-                  <td className="px-4 py-3 text-[#6e6e73]">{d.subject_name}</td>
-                  <td className="px-4 py-3 text-[#1d1d1f] font-medium">{d.topic_name}</td>
-                  <td className="px-4 py-3 text-[#1d1d1f]">{d.total_cards}</td>
+                  <td className="px-4 py-3 text-ink-muted">{d.subject_name}</td>
+                  <td className="px-4 py-3 text-ink font-medium">{d.topic_name}</td>
+                  <td className="px-4 py-3 text-ink">{d.total_cards}</td>
                   <td className="px-4 py-3">
                     <EnhancementCell draft={d} />
                   </td>
                   <td className="px-4 py-3">
                     <SourceBadge source={d.source_type} />
                   </td>
-                  <td className="px-4 py-3 text-[#6e6e73] text-xs">{relTime(d.created_at)}</td>
+                  <td className="px-4 py-3 text-ink-muted text-xs">{relTime(d.created_at)}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/admin/flashcards/review/${d.topic_id}`}
-                      className="inline-flex items-center rounded-[980px] bg-[#800000] hover:bg-[#9a0a1f] text-white px-3 py-1.5 text-xs font-medium transition-colors shadow-sm"
+                      className="inline-flex items-center rounded-[980px] bg-maroon hover:bg-[#9a0a1f] text-white px-3 py-1.5 text-xs font-medium transition-colors shadow-sm"
                     >
                       Review & Publish
                     </Link>
@@ -203,7 +203,7 @@ function EnhancementCell({ draft }: { draft: Draft }) {
   const ready = draft.cards_with_options + draft.cards_enhanced
   if (draft.cards_needing_enhancement === 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-green-700 text-xs font-medium">
+      <span className="inline-flex items-center gap-1 text-success text-xs font-medium">
         <span>✓</span> Complete ({ready}/{draft.total_cards})
       </span>
     )
@@ -212,17 +212,17 @@ function EnhancementCell({ draft }: { draft: Draft }) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-24 h-1.5 bg-black/[0.08] rounded-full overflow-hidden">
-        <div className="h-full bg-[#800000] transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-maroon transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[#6e6e73] text-xs tabular-nums">{ready}/{draft.total_cards}</span>
+      <span className="text-ink-muted text-xs tabular-nums">{ready}/{draft.total_cards}</span>
     </div>
   )
 }
 
 function SourceBadge({ source }: { source: Draft['source_type'] }) {
   const map: Record<Draft['source_type'], string> = {
-    csv: 'bg-blue-100 text-blue-800',
-    pdf: 'bg-amber-100 text-amber-800',
+    csv: 'bg-info-soft text-info-strong',
+    pdf: 'bg-warning-soft text-warning-strong',
     manual: 'bg-gray-100 text-gray-700',
     ai: 'bg-purple-100 text-purple-800',
   }

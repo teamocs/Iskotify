@@ -39,17 +39,17 @@ export const lightTheme = {
   border:        'rgba(128,0,0,0.14)',
   textPrimary:   '#2d0a0a',
   textSecondary: '#6b3737',
-  textTertiary:  'rgba(45,10,10,0.58)',     // was 0.52 → ~4.5:1
+  textTertiary:  'rgba(45,10,10,0.62)',     // 0.52 → 0.58 → 0.62; measured 5.09:1 on #fdf4f4 and #ffffff
   accent:        '#800000',
   accentText:    '#9b1c1c',
   accentSurface: 'rgba(128,0,0,0.10)',
   accentStrong:  'rgba(128,0,0,0.82)',     // opaque maroon for filled pills, badges, active tabs
   textInverse:   '#ffffff',                // text/icons on the maroon accent
   // Semantic status colors — darker on the light palette so they meet contrast on white.
-  success:       '#16a34a',
-  successSurface:'rgba(22,163,74,0.10)',
-  danger:        '#dc2626',
-  dangerSurface: 'rgba(220,38,38,0.10)',
+  success:       '#15803d',                // was #16a34a: 3.05:1, failed AA on both light surfaces → 4.64:1
+  successSurface:'rgba(21,128,61,0.10)',
+  danger:        '#b91c1c',                // was #dc2626: 4.47:1, just under AA → 5.98:1
+  dangerSurface: 'rgba(185,28,28,0.10)',
   warning:       '#b45309',
   warningSurface:'rgba(180,83,9,0.10)',
   tabBar:        'rgba(253,244,244,0.92)',

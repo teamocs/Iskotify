@@ -16,7 +16,7 @@ export function AdminShell({ userEmail, children }: Props) {
 
   return (
     <AdminDrawerContext.Provider value={{ openDrawer: () => setDrawerOpen(true) }}>
-      <div className="flex h-screen overflow-hidden bg-[#f5f5f7]">
+      <div className="flex h-screen overflow-hidden bg-surface-2">
         <Sidebar userEmail={userEmail} />
         <MobileSidebar
           open={drawerOpen}

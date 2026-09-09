@@ -54,7 +54,7 @@ export default function LabelsScreen() {
     createRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     createInput: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular', backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 44 },
     createBtn: { minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.accent },
-    createBtnTxt: { color: '#fff', fontFamily: 'Outfit_700Bold', fontSize: typo.base },
+    createBtnTxt: { color: t.textInverse, fontFamily: 'Outfit_700Bold', fontSize: typo.base },
     row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, gap: spacing.md },
     rowDivider: { borderTopWidth: 1, borderTopColor: t.divider },
     labelName: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },

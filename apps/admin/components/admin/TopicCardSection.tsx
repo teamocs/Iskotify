@@ -28,7 +28,7 @@ interface Props {
 }
 
 const textareaCls =
-  'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f] resize-none'
+  'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink resize-none'
 
 export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }: Props) {
   const router = useRouter()
@@ -220,25 +220,26 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <input
               autoFocus
+              aria-label="Topic name"
               value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter') { e.preventDefault(); saveRename() }
                 if (e.key === 'Escape') { setRenaming(false); setRenameError('') }
               }}
-              className="flex-1 min-w-0 px-3 py-1.5 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+              className="flex-1 min-w-0 px-3 py-1.5 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
             />
-            {renameError && <p className="text-xs text-red-600 flex-shrink-0">{renameError}</p>}
+            {renameError && <p className="text-xs text-danger flex-shrink-0">{renameError}</p>}
             <button
               onClick={saveRename}
               disabled={renameSaving || !renameValue.trim()}
-              className="text-xs font-semibold text-[#800000] hover:text-[#a00000] disabled:opacity-50 flex-shrink-0"
+              className="text-xs font-semibold text-maroon hover:text-maroon-light disabled:opacity-50 flex-shrink-0"
             >
               {renameSaving ? 'Saving…' : 'Save'}
             </button>
             <button
               onClick={() => { setRenaming(false); setRenameError('') }}
-              className="text-xs text-[#6e6e73] hover:text-[#1d1d1f] flex-shrink-0"
+              className="text-xs text-ink-muted hover:text-ink flex-shrink-0"
             >
               Cancel
             </button>
@@ -249,12 +250,12 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
             onClick={() => setIsOpen(o => !o)}
           >
             <span
-              className={`text-[#aeaeb2] transition-transform text-sm inline-block flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+              className={`text-ink-subtle transition-transform text-sm inline-block flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
             >
               ›
             </span>
-            <span className="font-medium text-[#1d1d1f] truncate">{topic.name}</span>
-            <span className="text-xs text-[#6e6e73] flex-shrink-0">({localCardCount} cards)</span>
+            <span className="font-medium text-ink truncate">{topic.name}</span>
+            <span className="text-xs text-ink-muted flex-shrink-0">({localCardCount} cards)</span>
           </button>
         )}
         {!renaming && (
@@ -263,13 +264,13 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
               <>
                 <button
                   onClick={() => setGenerateMoreOpen(true)}
-                  className="text-xs px-3 py-1 rounded-full bg-[#1d1d1f] text-white hover:bg-black"
+                  className="text-xs px-3 py-1 rounded-full bg-ink text-white hover:bg-black"
                 >
                   ✨ Generate more with AI
                 </button>
                 <button
                   onClick={() => setAddingCard(true)}
-                  className="text-xs font-medium text-[#800000] hover:text-[#a00000] px-3 py-1 rounded-[980px] border border-[#800000]/20 hover:bg-[#800000]/5"
+                  className="text-xs font-medium text-maroon hover:text-maroon-light px-3 py-1 rounded-[980px] border border-maroon/20 hover:bg-maroon/5"
                 >
                   + Add Card
                 </button>
@@ -277,13 +278,13 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
             )}
             <button
               onClick={startRename}
-              className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+              className="text-xs text-ink-muted hover:text-ink"
             >
               Rename
             </button>
             <button
               onClick={startDeleteTopic}
-              className="text-xs text-[#6e6e73] hover:text-red-600"
+              className="text-xs text-ink-muted hover:text-danger"
             >
               Delete
             </button>
@@ -293,9 +294,9 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
 
       {/* Delete topic confirm banner */}
       {deletingTopic && (
-        <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex flex-col gap-2">
+        <div className="px-5 py-3 bg-danger-soft border-t border-danger/15 flex flex-col gap-2">
           <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-red-700">
+            <p className="text-sm text-danger">
               Delete <strong>{topic.name}</strong>? This will permanently remove{' '}
               <strong>{localCardCount} card{localCardCount !== 1 ? 's' : ''}</strong>.
             </p>
@@ -303,20 +304,20 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
               <button
                 onClick={confirmDeleteTopic}
                 disabled={topicDeleteSaving}
-                className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
               >
                 Yes, delete
               </button>
               <button
                 onClick={() => { setDeletingTopic(false); setTopicDeleteError('') }}
-                className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                className="text-xs text-ink-muted hover:text-ink"
               >
                 Cancel
               </button>
             </div>
           </div>
           {topicDeleteError && (
-            <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600 border border-red-200">
+            <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger border border-danger/25">
               {topicDeleteError}
             </p>
           )}
@@ -330,13 +331,13 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73] w-[35%]">
+                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[35%]">
                     Question
                   </th>
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73] w-[35%]">
+                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[35%]">
                     Answer
                   </th>
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73] w-[20%]">
+                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[20%]">
                     Explanation
                   </th>
                   <th className="px-5 py-2 w-[10%]" />
@@ -345,9 +346,10 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
               <tbody>
                 {cards.map(card =>
                   editingId === card.id ? (
-                    <tr key={card.id} className="border-b border-[#f3f4f6] bg-[#fafafa]">
+                    <tr key={card.id} className="border-b border-[#f3f4f6] bg-surface-3">
                       <td className="px-5 py-3">
                         <textarea
+                          aria-label="Question"
                           value={editQ}
                           onChange={e => setEditQ(e.target.value)}
                           className={textareaCls}
@@ -356,6 +358,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       </td>
                       <td className="px-5 py-3">
                         <textarea
+                          aria-label="Answer"
                           value={editA}
                           onChange={e => setEditA(e.target.value)}
                           className={textareaCls}
@@ -364,6 +367,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       </td>
                       <td className="px-5 py-3">
                         <textarea
+                          aria-label="Explanation"
                           value={editExp}
                           onChange={e => setEditExp(e.target.value)}
                           className={textareaCls}
@@ -373,20 +377,20 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
                           {error && (
-                            <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600 mb-1">
+                            <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger mb-1">
                               {error}
                             </p>
                           )}
                           <button
                             onClick={saveEdit}
                             disabled={saving || !editQ.trim() || !editA.trim()}
-                            className="text-xs font-medium text-[#800000] hover:text-[#a00000] disabled:opacity-50"
+                            className="text-xs font-medium text-maroon hover:text-maroon-light disabled:opacity-50"
                           >
                             Save
                           </button>
                           <button
                             onClick={() => { setEditingId(null); setError('') }}
-                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                            className="text-xs text-ink-muted hover:text-ink"
                           >
                             Cancel
                           </button>
@@ -395,20 +399,20 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                     </tr>
                   ) : (
                     <tr key={card.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
-                      <td className="px-5 py-3 text-[#1d1d1f]">{card.question}</td>
-                      <td className="px-5 py-3 text-[#374151]">{card.answer}</td>
-                      <td className="px-5 py-3 text-[#6e6e73]">{card.explanation}</td>
+                      <td className="px-5 py-3 text-ink">{card.question}</td>
+                      <td className="px-5 py-3 text-ink-muted">{card.answer}</td>
+                      <td className="px-5 py-3 text-ink-muted">{card.explanation}</td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
                           <button
                             onClick={() => startEdit(card)}
-                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                            className="text-xs text-ink-muted hover:text-ink"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
-                            className="text-xs text-[#6e6e73] hover:text-red-600"
+                            className="text-xs text-ink-muted hover:text-danger"
                           >
                             Delete
                           </button>
@@ -428,6 +432,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                 {editingId === card.id ? (
                   <div className="space-y-2">
                     <textarea
+                      aria-label="Question"
                       value={editQ}
                       onChange={e => setEditQ(e.target.value)}
                       className={textareaCls}
@@ -435,6 +440,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       placeholder="Question"
                     />
                     <textarea
+                      aria-label="Answer"
                       value={editA}
                       onChange={e => setEditA(e.target.value)}
                       className={textareaCls}
@@ -442,6 +448,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       placeholder="Answer"
                     />
                     <textarea
+                      aria-label="Explanation"
                       value={editExp}
                       onChange={e => setEditExp(e.target.value)}
                       className={textareaCls}
@@ -449,7 +456,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       placeholder="Explanation (optional)"
                     />
                     {error && (
-                      <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">
+                      <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">
                         {error}
                       </p>
                     )}
@@ -457,13 +464,13 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                       <button
                         onClick={saveEdit}
                         disabled={saving || !editQ.trim() || !editA.trim()}
-                        className="text-xs font-medium text-[#800000] disabled:opacity-50"
+                        className="text-xs font-medium text-maroon disabled:opacity-50"
                       >
                         Save
                       </button>
                       <button
                         onClick={() => { setEditingId(null); setError('') }}
-                        className="text-xs text-[#6e6e73]"
+                        className="text-xs text-ink-muted"
                       >
                         Cancel
                       </button>
@@ -471,21 +478,21 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
                   </div>
                 ) : (
                   <>
-                    <p className="font-medium text-[#1d1d1f] text-sm">{card.question}</p>
-                    <p className="text-sm text-[#374151] mt-1">{card.answer}</p>
+                    <p className="font-medium text-ink text-sm">{card.question}</p>
+                    <p className="text-sm text-ink-muted mt-1">{card.answer}</p>
                     {card.explanation && (
-                      <p className="text-xs text-[#6e6e73] mt-1">{card.explanation}</p>
+                      <p className="text-xs text-ink-muted mt-1">{card.explanation}</p>
                     )}
                     <div className="flex gap-3 mt-2 justify-end">
                       <button
                         onClick={() => startEdit(card)}
-                        className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                        className="text-xs text-ink-muted hover:text-ink"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
-                        className="text-xs text-[#6e6e73] hover:text-red-600"
+                        className="text-xs text-ink-muted hover:text-danger"
                       >
                         Delete
                       </button>
@@ -498,27 +505,27 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
 
           {/* Delete confirm banner */}
           {deletingId && (
-            <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex flex-col gap-2">
+            <div className="px-5 py-3 bg-danger-soft border-t border-danger/15 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-sm text-red-700">Delete this card? This cannot be undone.</p>
+                <p className="text-sm text-danger">Delete this card? This cannot be undone.</p>
                 <div className="flex gap-3">
                   <button
                     onClick={confirmDelete}
                     disabled={saving}
-                    className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                    className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
                   >
                     Yes, delete
                   </button>
                   <button
                     onClick={() => { setDeletingId(null); setError('') }}
-                    className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                    className="text-xs text-ink-muted hover:text-ink"
                   >
                     Cancel
                   </button>
                 </div>
               </div>
               {error && (
-                <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600 border border-red-200">
+                <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger border border-danger/25">
                   {error}
                 </p>
               )}
@@ -527,17 +534,17 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
 
           {/* Loading / empty / load-more */}
           {loading && (
-            <p className="px-5 py-4 text-sm text-[#6e6e73] border-t border-[#f3f4f6]">Loading…</p>
+            <p className="px-5 py-4 text-sm text-ink-muted border-t border-[#f3f4f6]">Loading…</p>
           )}
           {!loading && cards.length === 0 && (
-            <p className="px-5 py-4 text-sm text-[#6e6e73] border-t border-[#f3f4f6]">
+            <p className="px-5 py-4 text-sm text-ink-muted border-t border-[#f3f4f6]">
               No cards yet. Use &quot;+ Add Card&quot; to create the first one.
             </p>
           )}
           {!loading && hasMore && (
             <button
               onClick={() => loadCards(page + 1)}
-              className="w-full px-5 py-3 text-sm text-[#800000] hover:bg-[#f9fafb] border-t border-[#f3f4f6] text-left transition-colors"
+              className="w-full px-5 py-3 text-sm text-maroon hover:bg-[#f9fafb] border-t border-[#f3f4f6] text-left transition-colors"
             >
               Load more…
             </button>

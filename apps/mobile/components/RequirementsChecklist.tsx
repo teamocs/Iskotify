@@ -83,7 +83,7 @@ export function RequirementsChecklist({ listingSlug, requirements, onAcquiredCou
       borderColor: t.accent,
     },
     checkmark: {
-      color: '#fff',
+      color: t.textInverse,
       fontSize: 14,
       fontFamily: 'Outfit_700Bold',
     },

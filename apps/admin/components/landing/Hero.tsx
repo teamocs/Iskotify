@@ -3,19 +3,19 @@ import { WEB_APP_URL } from '../../lib/links'
 
 export function Hero() {
   return (
-    <section className="relative bg-[#f5f5f7] overflow-hidden py-16 md:py-24 px-6">
+    <section className="relative bg-surface-2 overflow-hidden py-16 md:py-24 px-6">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12 md:gap-16">
 
         {/* Left column */}
         <div className="flex-1 text-center md:text-left">
-          <p className="text-xs tracking-[0.14em] text-[#800000] font-semibold uppercase mb-4 font-body">
+          <p className="text-xs tracking-[0.14em] text-maroon font-semibold uppercase mb-4 font-body">
             Para sa mga Iskolar ng Bayan
           </p>
-          <h1 className="font-heading font-extrabold text-[#1d1d1f] text-4xl md:text-5xl lg:text-[3.25rem] leading-[1.08] tracking-tight mb-5">
+          <h1 className="font-heading font-extrabold text-ink text-4xl md:text-5xl lg:text-[3.25rem] leading-[1.08] tracking-tight mb-5">
             Your Scholarship &amp; Exam Journey —{' '}
-            <span className="text-[#800000]">Made Effortlessly Simple</span>
+            <span className="text-maroon">Made Effortlessly Simple</span>
           </h1>
-          <p className="text-[#6e6e73] text-base md:text-lg mb-8 max-w-lg font-body leading-relaxed">
+          <p className="text-ink-muted text-base md:text-lg mb-8 max-w-lg font-body leading-relaxed">
             Find scholarships, track deadlines, and prepare for your qualifying exams — all in one place.
           </p>
 
@@ -24,7 +24,7 @@ export function Hero() {
             <a
               href="#early-access"
               aria-label="Request early access to the free Iskotify Android app"
-              className="inline-flex items-center justify-center gap-2 bg-[#800000] text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-[#a00000] transition-colors shadow-sm"
+              className="inline-flex items-center justify-center gap-2 bg-maroon text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-maroon-light transition-colors shadow-sm"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M3.18 23.76c.3.17.64.22.99.14l12.49-7.21-2.79-2.79-10.69 9.86zM.35 1.09A1.5 1.5 0 0 0 0 2.06v19.88a1.5 1.5 0 0 0 .35.97l.05.05 11.14-11.14v-.26L.4 1.04l-.05.05zM23.15 10.56l-2.79-1.61-3.12 3.12 3.12 3.12 2.81-1.62c.8-.46.8-1.55-.02-2.01zM4.17.1l12.49 7.21-2.79 2.79L3.18.24A1.18 1.18 0 0 1 4.17.1z" />
@@ -36,7 +36,7 @@ export function Hero() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open the Iskotify web app"
-              className="inline-flex items-center justify-center gap-2 border border-[#800000] text-[#800000] rounded-xl px-6 py-3 text-sm font-medium hover:bg-[#800000]/[0.06] transition-colors"
+              className="inline-flex items-center justify-center gap-2 border border-maroon text-maroon rounded-xl px-6 py-3 text-sm font-medium hover:bg-maroon/[0.06] transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -48,18 +48,25 @@ export function Hero() {
           {/* Social proof strip */}
           <div className="flex items-center gap-3 justify-center md:justify-start flex-wrap">
             <div className="flex items-center gap-1.5">
-              <span className="text-[#800000]">✓</span>
-              <span className="font-medium text-[#1d1d1f] text-sm font-body">Free on Early access</span>
+              <span className="text-maroon">✓</span>
+              <span className="font-medium text-ink text-sm font-body">Free on Early access</span>
             </div>
-            <span className="text-[#d2d2d7]">·</span>
-            <span className="text-[#6e6e73] text-sm font-body">No subscription</span>
-            <span className="text-[#d2d2d7]">·</span>
-            <span className="text-[#6e6e73] text-sm font-body">Be among the first 🎉</span>
+            <span className="text-ink-subtle">·</span>
+            <span className="text-ink-muted text-sm font-body">No subscription</span>
+            <span className="text-ink-subtle">·</span>
+            <span className="text-ink-muted text-sm font-body">Be among the first 🎉</span>
           </div>
         </div>
 
-        {/* Right column — 3D phone mockup mirroring the current Home dashboard */}
-        <div className="flex-shrink-0 flex justify-center" style={{ perspective: '1000px' }}>
+        {/*
+          Right column — 3D phone mockup mirroring the current Home dashboard.
+          aria-hidden because it is an illustration: every string inside it is a
+          screenshot of app chrome, and a screen reader would otherwise read ~40
+          disconnected fragments ("Monday, June 16", "Explore", "Universities")
+          between the hero copy and the rest of the page. The type inside also
+          runs down to 6px, which is why it must never be treated as content.
+        */}
+        <div className="flex-shrink-0 flex justify-center" style={{ perspective: '1000px' }} aria-hidden="true">
           <div style={{ transform: 'rotateY(-18deg) rotateX(4deg)', transformStyle: 'preserve-3d' }}>
             {/* Phone body */}
             <div className="bg-[#0f0f1a] rounded-[40px] w-[220px] h-[460px] border-[6px] border-[#2a2a3a] shadow-2xl relative overflow-hidden">
@@ -71,11 +78,11 @@ export function Hero() {
 
                 {/* Status bar */}
                 <div className="flex justify-between items-center px-1 mb-1.5">
-                  <span className="text-[#1d1d1f] text-[9px] font-semibold font-body">9:41</span>
+                  <span className="text-ink text-[9px] font-semibold font-body">9:41</span>
                   <div className="flex gap-1 items-center">
-                    <div className="w-3 h-1.5 rounded-sm bg-[#1d1d1f]/50" />
-                    <div className="w-3 h-1.5 rounded-[2px] border border-[#1d1d1f]/50 relative">
-                      <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-[#1d1d1f]/50 rounded-r-sm" />
+                    <div className="w-3 h-1.5 rounded-sm bg-ink/50" />
+                    <div className="w-3 h-1.5 rounded-[2px] border border-ink/50 relative">
+                      <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-ink/50 rounded-r-sm" />
                     </div>
                   </div>
                 </div>
@@ -108,13 +115,13 @@ export function Hero() {
                 </div>
 
                 {/* (1b) Date + greeting */}
-                <p className="text-[#8a8a8e] text-[6px] font-semibold font-body uppercase tracking-[0.12em] mb-0.5">Monday, June 16</p>
-                <p className="text-[#1d1d1f] text-[13px] font-body leading-tight mb-3">
+                <p className="text-ink-subtle text-[6px] font-semibold font-body uppercase tracking-[0.12em] mb-0.5">Monday, June 16</p>
+                <p className="text-ink text-[13px] font-body leading-tight mb-3">
                   Good morning, <span className="font-extrabold font-heading">Chris</span>!
                 </p>
 
                 {/* (2) Explore — 2×2 quick-links into the Lists tabs */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">Explore</p>
+                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">Explore</p>
                 <div className="grid grid-cols-2 gap-1.5 mb-3">
                   {[
                     { e: '🎓', l: 'Universities' },
@@ -124,36 +131,36 @@ export function Hero() {
                   ].map((it) => (
                     <div key={it.l} className="flex items-center gap-1 bg-white border border-black/[0.06] rounded-[7px] px-1.5 py-1.5">
                       <span className="text-[8px] leading-none">{it.e}</span>
-                      <span className="text-[#1d1d1f] text-[6px] font-body font-medium">{it.l}</span>
+                      <span className="text-ink text-[6px] font-body font-medium">{it.l}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* (3) My Focus — readiness progress-bar cards + add-target ghost */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">My Focus</p>
+                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">My Focus</p>
                 <div className="flex flex-col gap-1.5 mb-3">
                   {[
-                    { t: 'UPCAT', sub: '57 days · exam', pct: 72, w: 'w-[72%]', fill: 'bg-[#16a34a]/15', color: 'text-[#16a34a]' },
-                    { t: 'DOST-SEI', sub: '21 days · scholarship', pct: 45, w: 'w-[45%]', fill: 'bg-[#d97706]/15', color: 'text-[#d97706]' },
+                    { t: 'UPCAT', sub: '57 days · exam', pct: 72, w: 'w-[72%]', fill: 'bg-[#16a34a]/15', color: 'text-success' },
+                    { t: 'DOST-SEI', sub: '21 days · scholarship', pct: 45, w: 'w-[45%]', fill: 'bg-[#d97706]/15', color: 'text-warning' },
                   ].map((f) => (
                     <div key={f.t} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[8px] px-1.5 py-2">
                       <div className={`absolute left-0 top-0 bottom-0 ${f.w} ${f.fill}`} />
                       <div className="relative flex items-center gap-1">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[#1d1d1f] text-[7px] font-body font-semibold leading-tight truncate">{f.t}</p>
-                          <p className="text-[#8a8a8e] text-[5px] font-body leading-tight">{f.sub}</p>
+                          <p className="text-ink text-[7px] font-body font-semibold leading-tight truncate">{f.t}</p>
+                          <p className="text-ink-subtle text-[5px] font-body leading-tight">{f.sub}</p>
                         </div>
                         <span className={`text-[10px] font-extrabold font-heading ${f.color}`}>{f.pct}%</span>
                       </div>
                     </div>
                   ))}
                   <div className="border border-dashed border-black/15 rounded-[8px] py-1.5 flex items-center justify-center">
-                    <span className="text-[#8a8a8e] text-[6px] font-body font-semibold">＋ Add exam or scholarship</span>
+                    <span className="text-ink-subtle text-[6px] font-body font-semibold">＋ Add exam or scholarship</span>
                   </div>
                 </div>
 
                 {/* (4) Subjects to improve — vertical readiness fill, distinct color per subject */}
-                <p className="text-[#1d1d1f] text-[7px] font-bold font-heading mb-1.5">Subjects to improve</p>
+                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">Subjects to improve</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
                     { n: 'Math', pct: 48, h: 'h-[48%]', dot: 'bg-[#3b82f6]', fill: 'bg-[#3b82f6]/15' },
@@ -163,8 +170,8 @@ export function Hero() {
                     <div key={sub.n} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[7px] h-[54px] p-1.5 flex flex-col justify-between">
                       <div className={`absolute left-0 right-0 bottom-0 ${sub.h} ${sub.fill}`} />
                       <div className={`relative w-1.5 h-1.5 rounded-full ${sub.dot}`} />
-                      <span className="relative text-[#1d1d1f] text-[6px] font-body font-semibold">{sub.n}</span>
-                      <span className="relative text-[#1d1d1f] text-[8px] font-extrabold font-heading leading-none">{sub.pct}%</span>
+                      <span className="relative text-ink text-[6px] font-body font-semibold">{sub.n}</span>
+                      <span className="relative text-ink text-[8px] font-extrabold font-heading leading-none">{sub.pct}%</span>
                     </div>
                   ))}
                 </div>
@@ -204,8 +211,8 @@ export function Hero() {
       </div>
 
       {/* Decorative background shapes */}
-      <div className="pointer-events-none absolute -top-32 -right-32 w-[480px] h-[480px] rounded-full bg-[#800000]/[0.05] blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 -left-20 w-[320px] h-[320px] rounded-full bg-[#800000]/[0.04] blur-2xl" />
+      <div className="pointer-events-none absolute -top-32 -right-32 w-[480px] h-[480px] rounded-full bg-maroon/[0.05] blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-20 -left-20 w-[320px] h-[320px] rounded-full bg-maroon/[0.04] blur-2xl" />
     </section>
   )
 }

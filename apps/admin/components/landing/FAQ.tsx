@@ -44,13 +44,13 @@ function AccordionItem({ item, isOpen, onToggle }: { item: FAQItem; isOpen: bool
         className="w-full flex items-center justify-between gap-4 py-5 text-left group"
         aria-expanded={isOpen}
       >
-        <span className="font-heading font-semibold text-[#1d1d1f] text-base group-hover:text-[#800000] transition-colors">
+        <span className="font-heading font-semibold text-ink text-base group-hover:text-maroon transition-colors">
           {item.question}
         </span>
         <span
           className={[
             'flex-shrink-0 w-6 h-6 rounded-full border border-[#d2d2d7] flex items-center justify-center transition-transform duration-200',
-            isOpen ? 'rotate-45 border-[#800000]' : '',
+            isOpen ? 'rotate-45 border-maroon' : '',
           ].join(' ')}
           aria-hidden="true"
         >
@@ -66,7 +66,7 @@ function AccordionItem({ item, isOpen, onToggle }: { item: FAQItem; isOpen: bool
           isOpen ? 'max-h-48 opacity-100 pb-5' : 'max-h-0 opacity-0',
         ].join(' ')}
       >
-        <p className="text-[#6e6e73] font-body text-sm leading-relaxed">{item.answer}</p>
+        <p className="text-ink-muted font-body text-sm leading-relaxed">{item.answer}</p>
       </div>
     </div>
   )
@@ -80,11 +80,11 @@ export function FAQ() {
   }
 
   return (
-    <section id="faq" className="bg-[#f5f5f7] py-20 px-6">
+    <section id="faq" className="bg-surface-2 py-20 px-6">
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-12">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">FAQ</p>
-          <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">FAQ</p>
+          <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
             Frequently Asked Questions
           </h2>
         </div>

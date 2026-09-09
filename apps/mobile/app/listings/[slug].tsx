@@ -153,7 +153,7 @@ export default function ListingDetailScreen() {
     scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
     typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-    statusTxt: { fontSize: typo.xs, fontWeight: '700', color: '#fbbf24', fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
+    statusTxt: { fontSize: typo.xs, fontWeight: '700', color: t.warning, fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
     regionBadge: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
     regionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     countdownCard: { marginTop: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1 },
@@ -171,7 +171,7 @@ export default function ListingDetailScreen() {
     bodyText: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
     grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: radius.md, padding: spacing.md },
     grantLabel: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    grantVal: { fontSize: typo.lg, fontWeight: '700', color: '#4ade80', fontFamily: 'Outfit_700Bold' },
+    grantVal: { fontSize: typo.lg, fontWeight: '700', color: t.success, fontFamily: 'Outfit_700Bold' },
     linkBtn: { marginTop: spacing.md, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingVertical: spacing.md, alignItems: 'center' },
     linkBtnTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     focusRemoveBtn: {
@@ -193,7 +193,7 @@ export default function ListingDetailScreen() {
       paddingVertical: spacing.md,
       alignItems: 'center',
     },
-    focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: '#fff' },
+    focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textInverse },
     watchBtn: {
       marginTop: spacing.md,
       borderWidth: 1,
@@ -213,7 +213,7 @@ export default function ListingDetailScreen() {
       fontFamily: 'Lexend_400Regular',
     },
     watchBtnTxtActive: {
-      color: '#4ade80',
+      color: t.success,
       fontFamily: 'Lexend_600SemiBold',
     },
     // --- scholarship enrichment styles ---
@@ -227,9 +227,9 @@ export default function ListingDetailScreen() {
     matchPillMaybe: { backgroundColor: 'rgba(245,158,11,0.18)' },
     matchPillIneligible: { backgroundColor: 'rgba(239,68,68,0.18)' },
     matchPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    matchPillTxtEligible: { color: '#4ade80' },
-    matchPillTxtMaybe: { color: '#fbbf24' },
-    matchPillTxtIneligible: { color: '#f87171' },
+    matchPillTxtEligible: { color: t.success },
+    matchPillTxtMaybe: { color: t.warning },
+    matchPillTxtIneligible: { color: t.danger },
     matchReason: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 2 },
     matchMoreBtn: {
       marginTop: spacing.xs,
@@ -245,8 +245,8 @@ export default function ListingDetailScreen() {
     chip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: spacing.xs },
     chipTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
     serviceWarning: { marginTop: spacing.md, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: radius.md, padding: spacing.md },
-    serviceWarningTxt: { fontSize: typo.sm, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 18 },
-    cautionLine: { fontSize: typo.xs, color: '#fbbf24', fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 3 },
+    serviceWarningTxt: { fontSize: typo.sm, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 18 },
+    cautionLine: { fontSize: typo.xs, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 3 },
     verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
     verifiedBadgePill: { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, borderWidth: 1 },
     verifiedPillOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
@@ -429,7 +429,7 @@ export default function ListingDetailScreen() {
           </View>
           <View style={s.badgeRow}>
             <View style={[s.typeBadge, isExam ? s.examBadge : s.scholarBadge]}>
-              <Text style={[s.typeTxt, { color: isExam ? t.accentText : '#4ade80' }]}>
+              <Text style={[s.typeTxt, { color: isExam ? t.accentText : t.success }]}>
                 {isExam ? 'Exam' : 'Scholarship'}
               </Text>
             </View>
@@ -522,7 +522,7 @@ export default function ListingDetailScreen() {
             elevated
             style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}
           >
-            <Text style={[s.countdownNum, { color: daysLeft < 30 ? t.accentText : '#4ade80' }]}>{daysLeft}</Text>
+            <Text style={[s.countdownNum, { color: daysLeft < 30 ? t.accentText : t.success }]}>{daysLeft}</Text>
             <Text style={s.countdownLabel}>days until {isExam ? 'exam' : 'deadline'}</Text>
           </Card>
         ) : null}
@@ -693,7 +693,7 @@ export default function ListingDetailScreen() {
                 {listing.monthlyStipend != null ? (
                   <View style={s.detailRow}>
                     <Text style={s.detailRowLabel}>Monthly Stipend</Text>
-                    <Text style={[s.detailRowVal, { color: '#4ade80' }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
+                    <Text style={[s.detailRowVal, { color: t.success }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
                   </View>
                 ) : null}
                 {listing.applicationWindow ? (
@@ -753,7 +753,7 @@ export default function ListingDetailScreen() {
           <View style={{ marginTop: spacing.xl }}>
             <View style={s.verifiedBadge}>
               <View style={[s.verifiedBadgePill, listing.isVerified ? s.verifiedPillOn : s.verifiedPillOff]}>
-                <Text style={[s.verifiedPillTxt, { color: listing.isVerified ? '#4ade80' : t.textTertiary }]}>
+                <Text style={[s.verifiedPillTxt, { color: listing.isVerified ? t.success : t.textTertiary }]}>
                   {listing.isVerified ? '✓ Verified' : 'Unverified'}
                 </Text>
               </View>

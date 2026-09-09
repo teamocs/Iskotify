@@ -24,13 +24,13 @@ export function SyncNowButton() {
       <button
         onClick={handleSync}
         disabled={isPending}
-        className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-[#800000] text-white hover:bg-[#a00000] transition-colors disabled:opacity-60 shadow-sm"
+        className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-maroon text-white hover:bg-maroon-light transition-colors disabled:opacity-60 shadow-sm"
       >
         {isPending ? '⏳ Syncing…' : '🔄 Sync Now'}
       </button>
       {toast && (
         <div className={`absolute top-10 right-0 z-50 rounded-[12px] px-4 py-2.5 text-[12px] font-medium shadow-lg whitespace-nowrap ${
-          toast.ok ? 'bg-green-700 text-white' : 'bg-red-700 text-white'
+          toast.ok ? 'bg-success text-white' : 'bg-danger-strong text-white'
         }`}>
           {toast.msg}
         </div>

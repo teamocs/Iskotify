@@ -15,9 +15,9 @@ interface Props {
 }
 
 const STATUS_STYLES = {
-  ok:    'bg-green-100 text-green-800',
-  warn:  'bg-amber-100 text-amber-800',
-  error: 'bg-red-100 text-red-800'
+  ok:    'bg-success-soft text-success-strong',
+  warn:  'bg-warning-soft text-warning-strong',
+  error: 'bg-danger-soft text-danger-strong'
 }
 
 function timeAgo(iso: string) {
@@ -38,24 +38,24 @@ export function SyncPanel({ logs }: Props) {
     <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-black/[0.05]">
         <div>
-          <p className="font-heading font-bold text-[15px] text-[#1d1d1f]">Google Sheets Sync</p>
-          <p className="text-[11px] text-[#aeaeb2]">
+          <p className="font-heading font-bold text-[15px] text-ink">Google Sheets Sync</p>
+          <p className="text-[11px] text-ink-subtle">
             {latest ? `Last run: ${timeAgo(latest.created_at)}` : 'Never synced'}
           </p>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-[#6e6e73]">
-          <span className={`w-2 h-2 rounded-full ${isHealthy ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]' : 'bg-amber-500'}`} />
+        <div className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <span className={`w-2 h-2 rounded-full ${isHealthy ? 'bg-success shadow-[0_0_6px_rgba(34,197,94,0.5)]' : 'bg-warning'}`} />
           {isHealthy ? 'Healthy' : 'Stale'}
         </div>
       </div>
       <div>
         {logs.length === 0 && (
-          <p className="px-5 py-4 text-sm text-[#aeaeb2]">No sync history yet.</p>
+          <p className="px-5 py-4 text-sm text-ink-subtle">No sync history yet.</p>
         )}
         {logs.map(log => (
           <div key={log.id} className="flex items-center gap-3 px-5 py-2.5 border-b border-black/[0.04] last:border-0 text-[12px]">
-            <span className="text-[#aeaeb2] w-14 flex-shrink-0">{timeAgo(log.created_at)}</span>
-            <span className="text-[#6e6e73] flex-1">
+            <span className="text-ink-subtle w-14 flex-shrink-0">{timeAgo(log.created_at)}</span>
+            <span className="text-ink-muted flex-1">
               {log.message ?? `${log.synced} synced · ${log.skipped} skipped · ${log.closed} closed`}
             </span>
             <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLES[log.status]}`}>
@@ -65,7 +65,7 @@ export function SyncPanel({ logs }: Props) {
         ))}
       </div>
       <div className="px-5 py-2.5 border-t border-black/[0.04]">
-        <Link href="/admin/sync" className="text-[12px] text-[#800000] font-medium hover:underline">
+        <Link href="/admin/sync" className="text-[12px] text-maroon font-medium hover:underline">
           View full log →
         </Link>
       </div>
