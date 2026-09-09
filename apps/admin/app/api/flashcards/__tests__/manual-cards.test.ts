@@ -73,13 +73,13 @@ describe('POST /api/flashcards/manual', () => {
   }
 
   it('returns 400 when required fields are missing', async () => {
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     const res = await POST(makeManualReq({ subject_name: 'Science' }))
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when listing_slugs is empty', async () => {
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     const res = await POST(
       makeManualReq({
         subject_name: 'Science',
@@ -92,7 +92,7 @@ describe('POST /api/flashcards/manual', () => {
   })
 
   it('returns 400 when cards array is empty', async () => {
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     const res = await POST(
       makeManualReq({
         subject_name: 'Science',
@@ -109,7 +109,7 @@ describe('POST /api/flashcards/manual', () => {
       .mockResolvedValueOnce({ data: { id: 'subj-1' }, error: null })
       .mockResolvedValueOnce({ data: { id: 'topic-1' }, error: null })
 
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     const res = await POST(
       makeManualReq({
         subject_name: 'Science',
@@ -134,7 +134,7 @@ describe('POST /api/flashcards/manual', () => {
       .mockResolvedValueOnce({ data: { id: 'subj-1' }, error: null })
       .mockResolvedValueOnce({ data: { id: 'topic-1' }, error: null })
 
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     await POST(
       makeManualReq({
         subject_name: 'Science',
@@ -150,7 +150,7 @@ describe('POST /api/flashcards/manual', () => {
 
   it('returns 500 when subject upsert fails', async () => {
     mockSingle.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } })
-    const { POST } = await import('../../manual/route')
+    const { POST } = await import('../manual/route')
     const res = await POST(
       makeManualReq({
         subject_name: 'Science',
@@ -174,7 +174,7 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
 
   it('updates card and returns 200', async () => {
     mockEqFlat.mockResolvedValueOnce({ error: null })
-    const { PATCH } = await import('../../cards/[id]/route')
+    const { PATCH } = await import('../cards/[id]/route')
     const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
       method: 'PATCH',
       body: JSON.stringify({ answer: 'Updated' }),
@@ -190,7 +190,7 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
 
   it('returns 500 when update fails', async () => {
     mockEqFlat.mockResolvedValueOnce({ error: { message: 'DB error' } })
-    const { PATCH } = await import('../../cards/[id]/route')
+    const { PATCH } = await import('../cards/[id]/route')
     const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
       method: 'PATCH',
       body: JSON.stringify({ answer: 'x' }),
@@ -201,7 +201,7 @@ describe('PATCH /api/flashcards/cards/[id]', () => {
   })
 
   it('returns 400 when no updatable fields provided', async () => {
-    const { PATCH } = await import('../../cards/[id]/route')
+    const { PATCH } = await import('../cards/[id]/route')
     const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', {
       method: 'PATCH',
       body: JSON.stringify({ topic_id: 'other-topic', status: 'published' }),
@@ -223,7 +223,7 @@ describe('DELETE /api/flashcards/cards/[id]', () => {
 
   it('deletes card and returns 200', async () => {
     mockEqFlat.mockResolvedValueOnce({ error: null })
-    const { DELETE } = await import('../../cards/[id]/route')
+    const { DELETE } = await import('../cards/[id]/route')
     const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', { method: 'DELETE' })
     const res = await DELETE(req, { params: Promise.resolve({ id: 'card-1' }) })
     expect(res.status).toBe(200)
@@ -232,7 +232,7 @@ describe('DELETE /api/flashcards/cards/[id]', () => {
 
   it('returns 500 when delete fails', async () => {
     mockEqFlat.mockResolvedValueOnce({ error: { message: 'DB error' } })
-    const { DELETE } = await import('../../cards/[id]/route')
+    const { DELETE } = await import('../cards/[id]/route')
     const req = new NextRequest('http://localhost/api/flashcards/cards/card-1', { method: 'DELETE' })
     const res = await DELETE(req, { params: Promise.resolve({ id: 'card-1' }) })
     expect(res.status).toBe(500)
