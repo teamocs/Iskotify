@@ -26,8 +26,8 @@ export default async function AnalyticsPage() {
       <Topbar title="Analytics" />
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">Product analytics</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Product analytics</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             Live usage from the Iskotify app &amp; web mirror, powered by PostHog.
           </p>
         </div>
@@ -43,9 +43,9 @@ export default async function AnalyticsPage() {
             />
           </div>
         ) : (
-          <div className="rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-4 space-y-2">
-            <p className="text-[13px] font-semibold text-amber-800">No dashboard linked yet</p>
-            <ol className="list-decimal list-inside text-[13px] text-amber-800 space-y-1">
+          <div className="rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-4 space-y-2">
+            <p className="text-[13px] font-semibold text-warning-strong">No dashboard linked yet</p>
+            <ol className="list-decimal list-inside text-[13px] text-warning-strong space-y-1">
               <li>Create a free PostHog account and project, then set the app keys (see the app&apos;s .env).</li>
               <li>In PostHog, build a dashboard, open <span className="font-medium">Share</span>, enable sharing, and copy the embed/share URL.</li>
               <li>Paste it below — it appears here for the whole team, no redeploy needed.</li>
@@ -56,7 +56,7 @@ export default async function AnalyticsPage() {
         {/* Embed-link config (stored in app_config, no redeploy needed) */}
         <PostHogDashboardForm currentUrl={dashboardUrl} />
 
-        <p className="text-[12px] text-[#aeaeb2]">
+        <p className="text-[12px] text-ink-subtle">
           Full insights, funnels, and retention live in your PostHog project. This page embeds one shared dashboard for quick team access.
         </p>
       </div>

@@ -46,7 +46,7 @@ export function DateContributionActions({ id }: Props) {
           onClick={() => run('approve')}
           disabled={loading !== null}
           aria-label="Approve this date correction and apply it to the listing"
-          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 bg-[#800000] text-white hover:bg-[#a00000]"
+          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 bg-maroon text-white hover:bg-maroon-light"
         >
           {loading === 'approve' ? 'Approving…' : 'Approve'}
         </button>
@@ -55,13 +55,13 @@ export function DateContributionActions({ id }: Props) {
           onClick={() => run('reject')}
           disabled={loading !== null}
           aria-label="Reject this date correction"
-          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 border border-[#800000] text-[#800000] bg-white hover:bg-[#fff8f8]"
+          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 border border-maroon text-maroon bg-white hover:bg-[#fff8f8]"
         >
           {loading === 'reject' ? 'Rejecting…' : 'Reject'}
         </button>
       </div>
       {error && (
-        <p className="text-[11px] text-red-600 leading-tight max-w-[220px]" role="alert">
+        <p className="text-[11px] text-danger leading-tight max-w-[220px]" role="alert">
           {error}
         </p>
       )}

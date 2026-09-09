@@ -32,7 +32,7 @@ export function ListingsView({ listings, logs, total, active, upcoming, lastSync
         <StatCard
           label="Active"
           value={active}
-          accent="text-green-700"
+          accent="text-success"
           sub="Open for applications"
           onClick={() => setFilter('Active')}
           active={filter === 'Active'}
@@ -40,7 +40,7 @@ export function ListingsView({ listings, logs, total, active, upcoming, lastSync
         <StatCard
           label="Upcoming"
           value={upcoming}
-          accent="text-amber-700"
+          accent="text-warning"
           sub="Opening soon"
           onClick={() => setFilter('Upcoming')}
           active={filter === 'Upcoming'}

@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * These custom properties mirror packages/ui/tailwind-preset.js one-for-one.
+ * The preset is the source of truth; these exist only for the handful of places
+ * that need a raw CSS value (inline styles, third-party overrides). Prefer the
+ * Tailwind token classes — text-ink, bg-surface-2, border-maroon — in components.
+ */
 :root {
   --maroon:       #800000;
   --maroon-light: #a00000;
@@ -13,9 +19,11 @@
   --sidebar-bg:   #1d1d1f;
   --border:       rgba(0,0,0,0.08);
   --border-light: rgba(0,0,0,0.05);
-  --text-primary:   #1d1d1f;
-  --text-secondary: #6e6e73;
-  --text-tertiary:  #aeaeb2;
+  /* Contrast-audited text ramp — every step clears 4.5:1 on #ffffff, #f5f5f7
+     and #fafafa. See the preset for the measured ratios. */
+  --ink:          #1d1d1f;
+  --ink-muted:    #55555a;
+  --ink-subtle:   #6e6e73;
   --shadow-sm:   0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04);
   --shadow-card: 0 8px 32px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
 }
@@ -23,8 +31,58 @@
 html, body { height: 100%; }
 
 body {
-  font-family: 'Lexend', -apple-system, sans-serif;
+  font-family: var(--font-body), 'Lexend', -apple-system, system-ui, sans-serif;
   background: var(--surface-2);
-  color: var(--text-primary);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Visible only to assistive tech, until focused — used by the skip link. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus,
+.focus-visible\:not-sr-only:focus-visible {
+  position: fixed;
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1.25rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/*
+ * Keyboard users get a high-contrast ring on every focusable element. Pointer
+ * users do not, because :focus-visible only matches keyboard-initiated focus.
+ * This is a floor, not a ceiling — components may still style focus themselves.
+ */
+:focus-visible {
+  outline: 2px solid var(--maroon);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/*
+ * Respect the OS "reduce motion" setting without destroying state changes:
+ * transitions still run, just fast enough not to induce vestibular symptoms,
+ * so a user can still tell that a drawer opened or a row changed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -51,7 +51,7 @@ export function CalendarStrip({
     numToday: { color: t.bg },
     dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
     dotActive: { backgroundColor: '#60a5fa' },
-    dotReminder: { backgroundColor: '#fbbf24' },
+    dotReminder: { backgroundColor: t.warning },
     dotExam: { backgroundColor: t.accentText },
   }), [t, typo])
 

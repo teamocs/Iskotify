@@ -31,46 +31,46 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7]">
+    <div className="min-h-screen flex items-center justify-center bg-surface-2">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Image src="/logo.svg" alt="Iskotify" width={40} height={40} className="mx-auto mb-3" />
-          <h1 className="font-heading font-bold text-2xl text-[#1d1d1f] tracking-tight">Admin Console</h1>
-          <p className="text-sm text-[#6e6e73] mt-1">Sign in to manage listings</p>
+          <h1 className="font-heading font-bold text-2xl text-ink tracking-tight">Admin Console</h1>
+          <p className="text-sm text-ink-muted mt-1">Sign in to manage listings</p>
         </div>
         <form
           onSubmit={handleSubmit}
           className="bg-white rounded-[22px] shadow-[0_8px_32px_rgba(0,0,0,0.06)] p-8 space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-[#6e6e73] mb-1.5 uppercase tracking-wide">Email</label>
-            <input
+            <label className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Email</label>
+            <input aria-label="Email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 rounded-[10px] border border-black/[0.08] text-sm text-[#1d1d1f] bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/30 focus:border-[#800000]"
+              className="w-full px-3.5 py-2.5 rounded-[10px] border border-black/[0.08] text-sm text-ink bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/30 focus:border-maroon"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6e6e73] mb-1.5 uppercase tracking-wide">Password</label>
-            <input
+            <label className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Password</label>
+            <input aria-label="Password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 rounded-[10px] border border-black/[0.08] text-sm text-[#1d1d1f] bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/30 focus:border-[#800000]"
+              className="w-full px-3.5 py-2.5 rounded-[10px] border border-black/[0.08] text-sm text-ink bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/30 focus:border-maroon"
               placeholder="••••••••"
             />
           </div>
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>
+            <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>
           )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#800000] text-white rounded-[980px] py-2.5 text-sm font-medium font-body hover:bg-[#a00000] transition-colors disabled:opacity-50"
+            className="w-full bg-maroon text-white rounded-[980px] py-2.5 text-sm font-medium font-body hover:bg-maroon-light transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>

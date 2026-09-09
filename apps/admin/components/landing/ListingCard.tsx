@@ -1,14 +1,14 @@
 import type { Listing } from '@iskotify/utils'
 
 const STATUS_STYLES: Record<string, { badge: string; label: string }> = {
-  active:   { badge: 'bg-green-100 text-green-700',   label: 'Active' },
-  upcoming: { badge: 'bg-amber-100 text-amber-700',   label: 'Upcoming' },
-  closed:   { badge: 'bg-gray-100 text-gray-500',     label: 'Closed' },
+  active:   { badge: 'bg-success-soft text-success-strong',   label: 'Active' },
+  upcoming: { badge: 'bg-warning-soft text-warning-strong',   label: 'Upcoming' },
+  closed:   { badge: 'bg-ink-subtle/10 text-ink-muted',     label: 'Closed' },
 }
 
 const TYPE_STYLES: Record<string, { badge: string; label: string; accent: string; iconBg: string; icon: string }> = {
-  scholarship: { badge: 'bg-[#fef2f2] text-[#800000]', label: 'Scholarship', accent: 'bg-[#800000]', iconBg: 'bg-[#800000]/10', icon: '🎓' },
-  exam:        { badge: 'bg-[#eff6ff] text-[#1e3a8a]', label: 'Exam',        accent: 'bg-[#1e3a8a]', iconBg: 'bg-[#1e3a8a]/10', icon: '📝' },
+  scholarship: { badge: 'bg-maroon-dim text-maroon', label: 'Scholarship', accent: 'bg-maroon', iconBg: 'bg-maroon/10', icon: '🎓' },
+  exam:        { badge: 'bg-info-soft text-info-strong', label: 'Exam',        accent: 'bg-info', iconBg: 'bg-info-soft', icon: '📝' },
 }
 
 function formatDeadline(listing: Listing): string {
@@ -49,7 +49,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
               {status.label}
             </span>
           </div>
-          <h3 className="font-heading font-bold text-[13.5px] text-[#1d1d1f] leading-snug line-clamp-2">
+          <h3 className="font-heading font-bold text-[13.5px] text-ink leading-snug line-clamp-2">
             {listing.title}
           </h3>
         </div>
@@ -60,13 +60,13 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
       {/* Details */}
       <div className="px-5 py-4 flex-1 flex flex-col gap-2">
-        <p className="text-[11.5px] text-[#6e6e73] font-body">{listing.provider}</p>
+        <p className="text-[11.5px] text-ink-muted font-body">{listing.provider}</p>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11.5px] font-semibold text-[#1d1d1f] font-body">{formatAmount(listing)}</span>
+          <span className="text-[11.5px] font-semibold text-ink font-body">{formatAmount(listing)}</span>
           {listing.region && (
             <>
-              <span className="text-[#d2d2d7]">·</span>
-              <span className="text-[11px] text-[#6e6e73] font-body truncate">{listing.region}</span>
+              <span className="text-ink-subtle">·</span>
+              <span className="text-[11px] text-ink-muted font-body truncate">{listing.region}</span>
             </>
           )}
         </div>
@@ -74,7 +74,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
       {/* Footer */}
       <div className="px-5 pb-5 flex items-center justify-between gap-2">
-        <span className={`text-[11px] font-semibold font-body ${isClosed ? 'text-[#6e6e73]' : 'text-[#800000]'}`}>
+        <span className={`text-[11px] font-semibold font-body ${isClosed ? 'text-ink-muted' : 'text-maroon'}`}>
           {formatDeadline(listing)}
         </span>
         {!isClosed && (
@@ -82,7 +82,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
             href={listing.external_url || '#'}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-shrink-0 bg-[#800000] text-white rounded-[10px] px-3 py-1.5 text-[11px] font-semibold font-body hover:bg-[#a00000] transition-colors"
+            className="flex-shrink-0 bg-maroon text-white rounded-[10px] px-3 py-1.5 text-[11px] font-semibold font-body hover:bg-maroon-light transition-colors"
           >
             Apply →
           </a>

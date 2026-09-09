@@ -74,6 +74,6 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     cardActive: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
     cardDisabled: { opacity: 0.4 },
     cardTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    cardTxtActive: { color: '#fff' },
+    cardTxtActive: { color: t.textInverse },
   })
 }

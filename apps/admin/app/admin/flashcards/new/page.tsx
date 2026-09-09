@@ -177,7 +177,7 @@ export default function NewFlashcardsPage() {
         {/* Back link */}
         <Link
           href="/admin/flashcards"
-          className="inline-block text-xs text-[#6e6e73] hover:text-[#1d1d1f] transition-colors mb-4"
+          className="inline-block text-xs text-ink-muted hover:text-ink transition-colors mb-4"
         >
           ← Back to Knowledgebase
         </Link>
@@ -188,30 +188,30 @@ export default function NewFlashcardsPage() {
           <div className="space-y-5 lg:sticky lg:top-6">
             {/* Subject / Topic */}
             <div className="bg-white border border-[#e5e7eb] rounded-2xl p-4">
-              <p className="text-[11px] font-bold text-[#800000] uppercase tracking-wider mb-3">
+              <p className="text-[11px] font-bold text-maroon uppercase tracking-wider mb-3">
                 Subject &amp; Topic
               </p>
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                  <label className="text-[11px] text-ink-muted font-semibold block mb-1">
                     SUBJECT
                   </label>
-                  <input
+                  <input aria-label="Subject"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="e.g. Science"
-                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full font-semibold text-[#1d1d1f] placeholder:font-normal placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors"
+                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full font-semibold text-ink placeholder:font-normal placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                  <label className="text-[11px] text-ink-muted font-semibold block mb-1">
                     TOPIC
                   </label>
-                  <input
+                  <input aria-label="Topic"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
                     placeholder="e.g. Cell Biology"
-                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full font-semibold text-[#1d1d1f] placeholder:font-normal placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors"
+                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full font-semibold text-ink placeholder:font-normal placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors"
                   />
                 </div>
               </div>
@@ -220,38 +220,38 @@ export default function NewFlashcardsPage() {
             {/* AI generation */}
             <div className="bg-white border border-[#e5e7eb] rounded-2xl p-4">
               <div className="flex items-baseline justify-between mb-3">
-                <p className="text-[11px] font-bold text-[#800000] uppercase tracking-wider">
+                <p className="text-[11px] font-bold text-maroon uppercase tracking-wider">
                   Generate with AI
                 </p>
-                <span className="text-[10px] text-[#9ca3af]">Gemini 2.5 Flash</span>
+                <span className="text-[10px] text-ink-subtle">Gemini 2.5 Flash</span>
               </div>
-              <p className="text-[11px] text-[#6e6e73] mb-3 leading-relaxed">
+              <p className="text-[11px] text-ink-muted mb-3 leading-relaxed">
                 Auto-generate flashcards tuned to Philippine entrance / scholarship exam standards
                 (UPCAT, ACET, DOST-SEI, CHED, etc.). Cards are appended to the list below for your review before saving.
               </p>
 
-              <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
-                FORMAT INSTRUCTIONS <span className="font-normal text-[#9ca3af]">(optional)</span>
+              <label className="text-[11px] text-ink-muted font-semibold block mb-1">
+                FORMAT INSTRUCTIONS <span className="font-normal text-ink-subtle">(optional)</span>
               </label>
-              <textarea
+              <textarea aria-label="Format instructions"
                 value={formatNotes}
                 onChange={(e) => setFormatNotes(e.target.value)}
                 disabled={isGenerating}
                 rows={3}
                 placeholder="Describe the exact question format you want, e.g. &quot;4-option multiple choice, one paragraph reading passage per question&quot;"
-                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y mb-3 disabled:opacity-50"
+                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-ink placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors resize-y mb-3 disabled:opacity-50"
               />
 
-              <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
-                SAMPLE QUESTIONS TO IMITATE <span className="font-normal text-[#9ca3af]">(optional)</span>
+              <label className="text-[11px] text-ink-muted font-semibold block mb-1">
+                SAMPLE QUESTIONS TO IMITATE <span className="font-normal text-ink-subtle">(optional)</span>
               </label>
-              <textarea
+              <textarea aria-label="Sample questions to imitate"
                 value={sampleText}
                 onChange={(e) => { setSampleText(e.target.value.slice(0, MAX_SAMPLE_TEXT_CHARS)); setSampleFileName('') }}
                 disabled={isGenerating}
                 rows={3}
                 placeholder="Paste sample questions here, or upload a .txt/.csv/.md file below"
-                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y mb-2 disabled:opacity-50"
+                className="border border-[#d1d5db] rounded-lg px-3 py-2 text-xs w-full text-ink placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors resize-y mb-2 disabled:opacity-50"
               />
               <div className="mb-3">
                 <CsvDropzone
@@ -263,14 +263,14 @@ export default function NewFlashcardsPage() {
                   sampleHref=""
                 />
                 {sampleFileName && (
-                  <p className="text-[10px] text-[#6e6e73] mt-1">Loaded: {sampleFileName} ({sampleText.length.toLocaleString()} chars)</p>
+                  <p className="text-[10px] text-ink-muted mt-1">Loaded: {sampleFileName} ({sampleText.length.toLocaleString()} chars)</p>
                 )}
                 {sampleFileError && (
-                  <p className="text-[10px] text-[#800000] mt-1">{sampleFileError}</p>
+                  <p className="text-[10px] text-maroon mt-1">{sampleFileError}</p>
                 )}
               </div>
 
-              <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+              <label className="text-[11px] text-ink-muted font-semibold block mb-1">
                 HOW MANY CARDS?
               </label>
               <div className="flex gap-2 mb-3">
@@ -283,8 +283,8 @@ export default function NewFlashcardsPage() {
                       disabled={isGenerating}
                       className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
                         active
-                          ? 'bg-[#800000] text-white border-[#800000]'
-                          : 'bg-white text-[#1d1d1f] border-[#d1d5db] hover:border-[#800000]'
+                          ? 'bg-maroon text-white border-maroon'
+                          : 'bg-white text-ink border-[#d1d5db] hover:border-maroon'
                       } disabled:opacity-40 disabled:cursor-not-allowed`}
                     >
                       {n}
@@ -296,7 +296,7 @@ export default function NewFlashcardsPage() {
               <button
                 onClick={handleGenerate}
                 disabled={!canGenerate}
-                className="w-full px-4 py-2.5 bg-[#1d1d1f] text-white text-sm font-semibold rounded-full hover:bg-[#000] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full px-4 py-2.5 bg-ink text-white text-sm font-semibold rounded-full hover:bg-[#000] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -311,13 +311,13 @@ export default function NewFlashcardsPage() {
               </button>
 
               {!subject.trim() || !topic.trim() ? (
-                <p className="text-[10px] text-[#9ca3af] mt-2 text-center">
+                <p className="text-[10px] text-ink-subtle mt-2 text-center">
                   Enter Subject and Topic first.
                 </p>
               ) : null}
 
               {generateError && (
-                <p className="text-[11px] text-[#800000] font-medium mt-2">{generateError}</p>
+                <p className="text-[11px] text-maroon font-medium mt-2">{generateError}</p>
               )}
             </div>
 
@@ -331,12 +331,12 @@ export default function NewFlashcardsPage() {
             {/* Error + Submit (sticky bottom of left column) */}
             <div className="space-y-3">
               {error && (
-                <p className="text-xs text-[#800000] font-medium">{error}</p>
+                <p className="text-xs text-maroon font-medium">{error}</p>
               )}
               <button
                 onClick={handleSubmit}
                 disabled={!isValid}
-                className="w-full px-6 py-2.5 bg-[#800000] text-white text-sm font-semibold rounded-full hover:bg-[#6b0000] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full px-6 py-2.5 bg-maroon text-white text-sm font-semibold rounded-full hover:bg-[#6b0000] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Saving…' : 'Save to Knowledgebase'}
               </button>
@@ -346,10 +346,10 @@ export default function NewFlashcardsPage() {
           {/* RIGHT COLUMN — Flashcards list */}
           <div className="space-y-3 min-w-0">
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-bold text-[#800000] uppercase tracking-wider">
+              <p className="text-[11px] font-bold text-maroon uppercase tracking-wider">
                 Flashcards
               </p>
-              <span className="text-[11px] text-[#6e6e73] font-medium">
+              <span className="text-[11px] text-ink-muted font-medium">
                 {cards.length} card{cards.length === 1 ? '' : 's'}
               </span>
             </div>
@@ -360,13 +360,13 @@ export default function NewFlashcardsPage() {
                 className="bg-white border border-[#e5e7eb] rounded-2xl p-4 space-y-3"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-[#6e6e73]">
+                  <span className="text-[11px] font-semibold text-ink-muted">
                     CARD {index + 1}
                   </span>
                   {cards.length > 1 && (
                     <button
                       onClick={() => removeCard(index)}
-                      className="text-[11px] text-[#6e6e73] hover:text-[#800000] transition-colors font-medium"
+                      className="text-[11px] text-ink-muted hover:text-maroon transition-colors font-medium"
                     >
                       Remove
                     </button>
@@ -375,42 +375,42 @@ export default function NewFlashcardsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                    <label className="text-[11px] text-ink-muted font-semibold block mb-1">
                       QUESTION
                     </label>
-                    <textarea
+                    <textarea aria-label="Question"
                       value={card.question}
                       onChange={(e) => updateCard(index, 'question', e.target.value)}
                       rows={3}
                       placeholder="Enter the question"
-                      className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y"
+                      className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-ink placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors resize-y"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
+                    <label className="text-[11px] text-ink-muted font-semibold block mb-1">
                       ANSWER
                     </label>
-                    <textarea
+                    <textarea aria-label="Answer"
                       value={card.answer}
                       onChange={(e) => updateCard(index, 'answer', e.target.value)}
                       rows={3}
                       placeholder="Enter the answer"
-                      className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y"
+                      className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-ink placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors resize-y"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">
-                    EXPLANATION <span className="font-normal text-[#9ca3af]">(optional)</span>
+                  <label className="text-[11px] text-ink-muted font-semibold block mb-1">
+                    EXPLANATION <span className="font-normal text-ink-subtle">(optional)</span>
                   </label>
-                  <textarea
+                  <textarea aria-label="Explanation"
                     value={card.explanation}
                     onChange={(e) => updateCard(index, 'explanation', e.target.value)}
                     rows={2}
                     placeholder="Optional explanation or context"
-                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-[#1d1d1f] placeholder:text-[#9ca3af] focus:outline-none focus:border-[#800000] transition-colors resize-y"
+                    className="border border-[#d1d5db] rounded-lg px-3 py-2 text-sm w-full text-ink placeholder:text-ink-subtle focus:outline-none focus:border-maroon transition-colors resize-y"
                   />
                 </div>
               </div>
@@ -418,7 +418,7 @@ export default function NewFlashcardsPage() {
 
             <button
               onClick={addCard}
-              className="w-full py-2.5 border border-dashed border-[#d1d5db] rounded-xl text-xs font-semibold text-[#6e6e73] hover:border-[#800000] hover:text-[#800000] transition-colors"
+              className="w-full py-2.5 border border-dashed border-[#d1d5db] rounded-xl text-xs font-semibold text-ink-muted hover:border-maroon hover:text-maroon transition-colors"
             >
               + Add card
             </button>

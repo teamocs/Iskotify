@@ -20,11 +20,11 @@ export function Topbar({ title, showSyncButton = false, exportHref }: Props) {
         <button
           onClick={openDrawer}
           aria-label="Open menu"
-          className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[#f5f5f7] -ml-1.5"
+          className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-2 -ml-1.5"
         >
           <span className="text-xl">☰</span>
         </button>
-        <h1 className="font-heading font-bold text-[15px] md:text-[17px] text-[#1d1d1f] tracking-tight">
+        <h1 className="font-heading font-bold text-[15px] md:text-[17px] text-ink tracking-tight">
           {title}
         </h1>
       </div>

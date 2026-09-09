@@ -28,7 +28,7 @@ async function getListings(): Promise<Listing[]> {
 export default async function HomePage() {
   const listings = await getListings()
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-surface-2">
       <Nav />
       <Hero />
       <Features />
@@ -36,11 +36,11 @@ export default async function HomePage() {
       <section id="listings" className="bg-white py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Live Opportunities</p>
-            <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">Live Opportunities</p>
+            <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
               Browse Scholarships &amp; Exams
             </h2>
-            <p className="text-[#6e6e73] font-body text-base mt-3">
+            <p className="text-ink-muted font-body text-base mt-3">
               Updated weekly from official sources — filtered for Filipino students.
             </p>
           </div>
@@ -49,14 +49,14 @@ export default async function HomePage() {
       </section>
       <Testimonials />
       <FAQ />
-      <section id="early-access" className="bg-[#f5f5f7] py-20 px-6 scroll-mt-20">
+      <section id="early-access" className="bg-surface-2 py-20 px-6 scroll-mt-20">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">Android Early Access</p>
-            <h2 className="font-heading font-bold text-[#1d1d1f] text-3xl md:text-4xl leading-tight">
+            <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">Android Early Access</p>
+            <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
               Get early access
             </h2>
-            <p className="text-[#6e6e73] font-body text-base mt-3">
+            <p className="text-ink-muted font-body text-base mt-3">
               Sign up and we&apos;ll email you the Iskotify Android app to install — free, no subscription.
             </p>
           </div>

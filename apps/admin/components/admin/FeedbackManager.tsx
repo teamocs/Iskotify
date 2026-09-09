@@ -32,7 +32,7 @@ const TABS: { key: StatusTab; label: string }[] = [
 
 const PAGE_SIZE = 50
 
-const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7] disabled:opacity-40'
+const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-ink hover:bg-surface-2 disabled:opacity-40'
 
 function useDebounce(value: string, delay: number) {
   const [debounced, setDebounced] = useState(value)
@@ -45,9 +45,9 @@ function useDebounce(value: string, delay: number) {
 
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    new: 'bg-[#800000]/10 text-[#800000]',
-    reviewed: 'bg-amber-100 text-amber-800',
-    resolved: 'bg-green-100 text-green-800',
+    new: 'bg-maroon/10 text-maroon',
+    reviewed: 'bg-warning-soft text-warning-strong',
+    resolved: 'bg-success-soft text-success-strong',
   }
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -58,12 +58,12 @@ function StatusPill({ status }: { status: string }) {
 
 function Stars({ rating }: { rating: number | null }) {
   const n = typeof rating === 'number' && rating >= 1 && rating <= 5 ? Math.round(rating) : 0
-  if (!n) return <span className="text-[#aeaeb2]">—</span>
+  if (!n) return <span className="text-ink-subtle">—</span>
   return (
     <span className="whitespace-nowrap" title={`${n} of 5`}>
       <span className="text-amber-500">{'★'.repeat(n)}</span>
       <span className="text-black/15">{'★'.repeat(5 - n)}</span>
-      <span className="ml-1 text-[11px] text-[#6e6e73] align-middle">{n}/5</span>
+      <span className="ml-1 text-[11px] text-ink-muted align-middle">{n}/5</span>
     </span>
   )
 }
@@ -165,22 +165,22 @@ export function FeedbackManager() {
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         {/* Header */}
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">Feedback</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Feedback</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             {state.loading ? 'Loading…' : `${state.count} item${state.count !== 1 ? 's' : ''}`}
           </p>
         </div>
 
         {/* Tabs + Search */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-[#f5f5f7] rounded-[980px] p-1">
+          <div className="flex gap-1 bg-surface-2 rounded-[980px] p-1">
             {TABS.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
                 className={`px-4 py-1.5 rounded-[980px] text-sm font-medium transition-colors ${
-                  tab === key ? 'bg-white text-[#800000] shadow-sm' : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                  tab === key ? 'bg-white text-maroon shadow-sm' : 'text-ink-muted hover:text-ink'
                 }`}
               >
                 {label}
@@ -189,43 +189,44 @@ export function FeedbackManager() {
           </div>
           <input
             type="search"
+            aria-label="Search feedback message"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search feedback message…"
-            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
           />
         </div>
 
         {/* Errors */}
         {state.error ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{state.error}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{state.error}</p>
         ) : null}
         {actionError ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{actionError}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{actionError}</p>
         ) : null}
 
         {/* Table */}
         <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[680px]">
-              <thead className="bg-[#f5f5f7] border-b border-black/[0.08]">
+              <thead className="bg-surface-2 border-b border-black/[0.08]">
                 <tr>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Rating</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Message</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-[#6e6e73] text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Submitted</th>
-                  <th className="px-4 py-3 text-right text-[#6e6e73] text-xs font-semibold uppercase tracking-wide">Actions</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Rating</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Message</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Submitted</th>
+                  <th className="px-4 py-3 text-right text-ink-muted text-xs font-semibold uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.05]">
                 {state.loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-[#6e6e73] text-sm">Loading…</td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-sm">Loading…</td>
                   </tr>
                 ) : null}
                 {!state.loading && state.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-[#6e6e73] text-sm">No feedback found.</td>
+                    <td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-sm">No feedback found.</td>
                   </tr>
                 ) : null}
                 {state.rows.map((row) => {
@@ -233,9 +234,9 @@ export function FeedbackManager() {
                   const text = row.message || '—'
                   const needsTruncate = text.length > 120
                   return (
-                    <tr key={row.id} className="hover:bg-[#fafafa] transition-colors align-top">
+                    <tr key={row.id} className="hover:bg-surface-3 transition-colors align-top">
                       <td className="px-4 py-3"><Stars rating={row.rating} /></td>
-                      <td className="px-4 py-3 text-[#1d1d1f] max-w-[420px]">
+                      <td className="px-4 py-3 text-ink max-w-[420px]">
                         <span className="block whitespace-pre-wrap break-words">
                           {isExpanded || !needsTruncate ? text : `${text.slice(0, 120)}…`}
                         </span>
@@ -243,14 +244,14 @@ export function FeedbackManager() {
                           <button
                             type="button"
                             onClick={() => setExpanded(prev => ({ ...prev, [row.id]: !isExpanded }))}
-                            className="text-xs text-[#800000] hover:underline mt-1"
+                            className="text-xs text-maroon hover:underline mt-1"
                           >
                             {isExpanded ? 'Show less' : 'Show more'}
                           </button>
                         ) : null}
                       </td>
                       <td className="px-4 py-3"><StatusPill status={row.status} /></td>
-                      <td className="px-4 py-3 text-[#6e6e73] whitespace-nowrap">{formatDate(row.created_at)}</td>
+                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatDate(row.created_at)}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1.5 justify-end">
                           {row.status !== 'reviewed' ? (
@@ -268,7 +269,7 @@ export function FeedbackManager() {
                               <button
                                 type="button"
                                 onClick={() => deleteFeedback(row.id)}
-                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-red-600 text-white hover:bg-red-700"
+                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-danger text-white hover:bg-danger-strong"
                               >
                                 Confirm
                               </button>
@@ -280,7 +281,7 @@ export function FeedbackManager() {
                             <button
                               type="button"
                               onClick={() => setConfirmingDelete(row.id)}
-                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50"
+                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-danger/25 text-danger hover:bg-danger-soft"
                             >
                               Delete
                             </button>
@@ -297,14 +298,14 @@ export function FeedbackManager() {
 
         {/* Pagination */}
         {totalPages > 1 ? (
-          <div className="flex items-center justify-between text-sm text-[#6e6e73]">
+          <div className="flex items-center justify-between text-sm text-ink-muted">
             <span>Page {page + 1} of {totalPages} ({state.count} items)</span>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Prev
               </button>
@@ -312,7 +313,7 @@ export function FeedbackManager() {
                 type="button"
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-[#f5f5f7]"
+                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
               >
                 Next
               </button>

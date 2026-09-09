@@ -211,10 +211,10 @@ export function ListingDrawer({ listing, onClose }: Props) {
     onClose()
   }
 
-  const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
-  const labelCls = "block text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1"
+  const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
+  const labelCls = "block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1"
   const sectionCls = "pt-2"
-  const sectionTitleCls = "text-[11px] font-bold text-[#1d1d1f] uppercase tracking-wider pb-2 border-b border-black/[0.06] mb-3"
+  const sectionTitleCls = "text-[11px] font-bold text-ink uppercase tracking-wider pb-2 border-b border-black/[0.06] mb-3"
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -226,23 +226,23 @@ export function ListingDrawer({ listing, onClose }: Props) {
       />
       <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
-          <h2 className="font-heading font-bold text-lg text-[#1d1d1f]">
+          <h2 className="font-heading font-bold text-lg text-ink">
             {listing ? 'Edit Listing' : 'Add Listing'}
           </h2>
-          <button onClick={onClose} className="text-[#aeaeb2] hover:text-[#1d1d1f] text-xl">✕</button>
+          <button onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Type</label>
-              <select value={form.type} onChange={set('type')} className={inputCls}>
+              <select aria-label="Type" value={form.type} onChange={set('type')} className={inputCls}>
                 <option value="scholarship">Scholarship</option>
                 <option value="exam">Exam</option>
               </select>
             </div>
             <div>
               <label className={labelCls}>Status</label>
-              <select value={form.status} onChange={set('status')} className={inputCls}>
+              <select aria-label="Status" value={form.status} onChange={set('status')} className={inputCls}>
                 <option value="active">Active</option>
                 <option value="upcoming">Upcoming</option>
                 <option value="closed">Closed</option>
@@ -261,17 +261,17 @@ export function ListingDrawer({ listing, onClose }: Props) {
             ['grant_amount', 'Grant Amount (₱)', 'number']
           ] as [string, string, string][]).map(([field, label, type]) => (
             <div key={field}>
-              <label className={labelCls}>{label}</label>
-              <input type={type} value={(form as any)[field]} onChange={set(field)} className={inputCls} />
+              <label htmlFor={`listing-${field}`} className={labelCls}>{label}</label>
+              <input id={`listing-${field}`} type={type} value={(form as any)[field]} onChange={set(field)} className={inputCls} />
             </div>
           ))}
           <div>
             <label className={labelCls}>Description</label>
-            <textarea value={form.description} onChange={set('description')} rows={3} className={inputCls} />
+            <textarea aria-label="Description" value={form.description} onChange={set('description')} rows={3} className={inputCls} />
           </div>
           <div>
             <label className={labelCls}>Coverage</label>
-            <textarea value={form.coverage} onChange={set('coverage')} rows={2} className={inputCls} />
+            <textarea aria-label="Coverage" value={form.coverage} onChange={set('coverage')} rows={2} className={inputCls} />
           </div>
 
           {/* Scholarship details */}
@@ -280,7 +280,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
             <div className="space-y-3">
               <div>
                 <label className={labelCls}>Scope</label>
-                <select value={form.scope} onChange={set('scope')} className={inputCls}>
+                <select aria-label="Scope" value={form.scope} onChange={set('scope')} className={inputCls}>
                   <option value="national">National</option>
                   <option value="regional">Regional</option>
                   <option value="provincial">Provincial</option>
@@ -291,36 +291,36 @@ export function ListingDrawer({ listing, onClose }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Province</label>
-                  <input type="text" value={form.province as string} onChange={set('province')} className={inputCls} />
+                  <input aria-label="Province" type="text" value={form.province as string} onChange={set('province')} className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>City</label>
-                  <input type="text" value={form.city as string} onChange={set('city')} className={inputCls} />
+                  <input aria-label="City" type="text" value={form.city as string} onChange={set('city')} className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Income Ceiling (₱/yr)</label>
-                  <input type="number" min="0" value={form.income_ceiling as string} onChange={set('income_ceiling')} className={inputCls} placeholder="e.g. 400000" />
+                  <input aria-label="Income Ceiling (₱/yr)" type="number" min="0" value={form.income_ceiling as string} onChange={set('income_ceiling')} className={inputCls} placeholder="e.g. 400000" />
                 </div>
                 <div>
                   <label className={labelCls}>GWA Requirement (%)</label>
-                  <input type="number" min="0" max="100" step="0.01" value={form.gwa_requirement as string} onChange={set('gwa_requirement')} className={inputCls} placeholder="e.g. 85" />
+                  <input aria-label="GWA Requirement (%)" type="number" min="0" max="100" step="0.01" value={form.gwa_requirement as string} onChange={set('gwa_requirement')} className={inputCls} placeholder="e.g. 85" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Monthly Stipend (₱/mo)</label>
-                  <input type="number" min="0" value={form.monthly_stipend as string} onChange={set('monthly_stipend')} className={inputCls} placeholder="e.g. 7000" />
+                  <input aria-label="Monthly Stipend (₱/mo)" type="number" min="0" value={form.monthly_stipend as string} onChange={set('monthly_stipend')} className={inputCls} placeholder="e.g. 7000" />
                 </div>
                 <div>
                   <label className={labelCls}>Service Obligation (yrs)</label>
-                  <input type="number" min="0" step="1" value={form.service_obligation_years as string} onChange={set('service_obligation_years')} className={inputCls} placeholder="e.g. 2" />
+                  <input aria-label="Service Obligation (yrs)" type="number" min="0" step="1" value={form.service_obligation_years as string} onChange={set('service_obligation_years')} className={inputCls} placeholder="e.g. 2" />
                 </div>
               </div>
               <div>
                 <label className={labelCls}>Application Window</label>
-                <input type="text" value={form.application_window as string} onChange={set('application_window')} className={inputCls} placeholder="e.g. Jan 1 – Mar 31 annually" />
+                <input aria-label="Application Window" type="text" value={form.application_window as string} onChange={set('application_window')} className={inputCls} placeholder="e.g. Jan 1 – Mar 31 annually" />
               </div>
               <div className="flex items-center gap-4 pt-1">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -328,18 +328,18 @@ export function ListingDrawer({ listing, onClose }: Props) {
                     type="checkbox"
                     checked={form.is_verified as boolean}
                     onChange={setCheck('is_verified')}
-                    className="w-4 h-4 rounded accent-[#800000]"
+                    className="w-4 h-4 rounded accent-maroon"
                   />
-                  <span className="text-sm text-[#1d1d1f]">Verified</span>
+                  <span className="text-sm text-ink">Verified</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={form.has_entrance_exam as boolean}
                     onChange={setCheck('has_entrance_exam')}
-                    className="w-4 h-4 rounded accent-[#800000]"
+                    className="w-4 h-4 rounded accent-maroon"
                   />
-                  <span className="text-sm text-[#1d1d1f]">Has Entrance Exam</span>
+                  <span className="text-sm text-ink">Has Entrance Exam</span>
                 </label>
               </div>
             </div>
@@ -356,7 +356,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
                 <p className={sectionTitleCls.replace('mb-3', '').replace('border-b border-black/[0.06] pb-2', '').trim()}>
                   Scholarship Meta
                 </p>
-                <span className="text-[#aeaeb2] text-xs">{form.meta_open ? '▲ collapse' : '▼ expand'}</span>
+                <span className="text-ink-subtle text-xs">{form.meta_open ? '▲ collapse' : '▼ expand'}</span>
               </button>
               {form.meta_open && (
                 <div className="space-y-3">
@@ -365,32 +365,32 @@ export function ListingDrawer({ listing, onClose }: Props) {
                       type="checkbox"
                       checked={form.meta_huc_excluded as boolean}
                       onChange={setCheck('meta_huc_excluded')}
-                      className="w-4 h-4 rounded accent-[#800000]"
+                      className="w-4 h-4 rounded accent-maroon"
                     />
-                    <span className="text-sm text-[#1d1d1f]">HUC Excluded</span>
-                    <span className="text-[10px] text-[#aeaeb2]">(highly urbanized cities ineligible)</span>
+                    <span className="text-sm text-ink">HUC Excluded</span>
+                    <span className="text-[10px] text-ink-subtle">(highly urbanized cities ineligible)</span>
                   </label>
                   <div>
                     <label className={labelCls}>Target Year Levels (comma-separated)</label>
-                    <input
+                    <input aria-label="Target Year Levels (comma-separated)"
                       type="text"
                       value={form.meta_target_year_levels as string}
                       onChange={set('meta_target_year_levels')}
                       className={inputCls}
                       placeholder="e.g. Grade 12, Freshman"
                     />
-                    <p className="text-[10px] text-[#aeaeb2] mt-1">Stored as an array. E.g. Grade 12, Freshman</p>
+                    <p className="text-[10px] text-ink-subtle mt-1">Stored as an array. E.g. Grade 12, Freshman</p>
                   </div>
                   <div>
                     <label className={labelCls}>Other Benefits (comma-separated)</label>
-                    <input
+                    <input aria-label="Other Benefits (comma-separated)"
                       type="text"
                       value={form.meta_other_benefits as string}
                       onChange={set('meta_other_benefits')}
                       className={inputCls}
                       placeholder="e.g. Free uniform, Monthly stipend"
                     />
-                    <p className="text-[10px] text-[#aeaeb2] mt-1">Stored as an array.</p>
+                    <p className="text-[10px] text-ink-subtle mt-1">Stored as an array.</p>
                   </div>
                   <div>
                     <button
@@ -400,14 +400,14 @@ export function ListingDrawer({ listing, onClose }: Props) {
                         meta_show_raw: !(f.meta_show_raw as boolean),
                         meta_raw_error: '',
                       }))}
-                      className="text-[11px] text-[#800000] underline"
+                      className="text-[11px] text-maroon underline"
                     >
                       {form.meta_show_raw ? 'Hide Advanced JSON' : 'Advanced JSON'}
                     </button>
                     {form.meta_show_raw && (
                       <div className="mt-2">
                         <label className={labelCls}>Raw JSON (structured fields above take precedence on save)</label>
-                        <textarea
+                        <textarea aria-label="Raw JSON (structured fields above take precedence on save)"
                           value={form.meta_raw_json as string}
                           onChange={(e) => {
                             setForm(f => ({ ...f, meta_raw_json: e.target.value, meta_raw_error: '' }))
@@ -419,7 +419,7 @@ export function ListingDrawer({ listing, onClose }: Props) {
                           placeholder='{"huc_excluded": false, "target_year_levels": [], "other_benefits": []}'
                         />
                         {(form.meta_raw_error as string) && (
-                          <p className="text-xs text-red-600 mt-1">{form.meta_raw_error as string}</p>
+                          <p className="text-xs text-danger mt-1">{form.meta_raw_error as string}</p>
                         )}
                       </div>
                     )}
@@ -429,13 +429,13 @@ export function ListingDrawer({ listing, onClose }: Props) {
             </div>
           )}
 
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>}
         </form>
         <div className="px-6 py-4 border-t border-black/[0.08] flex gap-2 justify-end">
-          <button type="button" onClick={onClose} className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-[#1d1d1f] hover:bg-[#f5f5f7]">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2">
             Cancel
           </button>
-          <button onClick={handleSubmit as any} disabled={saving} className="px-5 py-2 rounded-[980px] text-sm font-medium bg-[#800000] text-white hover:bg-[#a00000] disabled:opacity-50">
+          <button onClick={handleSubmit as any} disabled={saving} className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50">
             {saving ? 'Saving…' : listing ? 'Save Changes' : 'Create Listing'}
           </button>
         </div>

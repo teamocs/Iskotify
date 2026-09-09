@@ -352,7 +352,7 @@ export default function SchoolProfileScreen() {
             {/* Free tuition */}
             {profile?.freeTuition ? (
               <View style={[s.badge, { backgroundColor: 'rgba(74,222,128,0.10)', borderColor: 'rgba(74,222,128,0.25)' }]}>
-                <Text style={[s.badgeTxt, { color: '#4ade80' }]}>Free Tuition</Text>
+                <Text style={[s.badgeTxt, { color: t.success }]}>Free Tuition</Text>
               </View>
             ) : null}
           </View>
@@ -400,7 +400,7 @@ export default function SchoolProfileScreen() {
               {profile?.freeTuition ? (
                 <View style={[s.row, { marginBottom: 0 }]}>
                   <Text style={s.rowLabel}>Free Tuition</Text>
-                  <Text style={[s.rowValue, { color: '#4ade80' }]}>Yes</Text>
+                  <Text style={[s.rowValue, { color: t.success }]}>Yes</Text>
                 </View>
               ) : null}
               {profile?.academicCalendar ? (

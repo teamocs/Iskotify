@@ -27,8 +27,8 @@ interface Props {
 
 function StatusBadge({ status }: { status: string }) {
   return status === 'published'
-    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-800">PUBLISHED</span>
-    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">DRAFT</span>
+    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-success-soft text-success-strong">PUBLISHED</span>
+    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning-strong">DRAFT</span>
 }
 
 function ListingPills({ slugs, listings }: { slugs: string[]; listings: ListingOption[] }) {
@@ -38,7 +38,7 @@ function ListingPills({ slugs, listings }: { slugs: string[]; listings: ListingO
       {slugs.map(slug => {
         const listing = listings.find(l => l.slug === slug)
         return listing ? (
-          <span key={slug} className="px-1.5 py-0.5 rounded text-[10px] bg-[#f3f4f6] text-[#6e6e73]">
+          <span key={slug} className="px-1.5 py-0.5 rounded text-[10px] bg-[#f3f4f6] text-ink-muted">
             {listing.title}
           </span>
         ) : null
@@ -178,23 +178,23 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   return (
     <div data-testid="subjects-view" className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[#6e6e73]">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-ink-muted">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</p>
         <div className="flex gap-2">
           <button
             onClick={startCreate}
-            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-ink-muted hover:bg-surface-2 transition-colors"
           >
             + New subject
           </button>
           <Link
             href="/admin/flashcards/new"
-            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-ink-muted hover:bg-surface-2 transition-colors"
           >
             + Add manually
           </Link>
           <Link
             href="/admin/upcat/import"
-            className="px-3 py-1.5 text-xs font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] transition-colors"
+            className="px-3 py-1.5 text-xs font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] transition-colors"
           >
             Import CSV
           </Link>
@@ -202,7 +202,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
       </div>
 
       {subjects.length === 0 ? (
-        <div className="text-center py-16 text-[#6e6e73] text-sm">
+        <div className="text-center py-16 text-ink-muted text-sm">
           No subjects yet. Upload a PDF or add cards manually.
         </div>
       ) : (
@@ -212,11 +212,11 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Subject</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Topics</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Cards</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Status</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Actions</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Subject</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Topics</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Cards</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Status</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,29 +224,29 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                   <React.Fragment key={subject.id}>
                     <tr className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
                       <td className="px-5 py-3">
-                        <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
+                        <p className="font-medium text-ink">{subject.name}</p>
                         <ListingPills slugs={subject.listing_slugs} listings={listings} />
                       </td>
-                      <td className="px-5 py-3 text-[#374151]">{subject.topics.length}</td>
-                      <td className="px-5 py-3 text-[#374151]">{subject.totalCards}</td>
+                      <td className="px-5 py-3 text-ink-muted">{subject.topics.length}</td>
+                      <td className="px-5 py-3 text-ink-muted">{subject.totalCards}</td>
                       <td className="px-5 py-3"><StatusBadge status={subject.overallStatus} /></td>
                       <td className="px-5 py-3">
                         <div className="flex gap-3">
                           <Link
                             href={`/admin/flashcards/subjects/${subject.id}`}
-                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                            className="text-xs text-ink-muted hover:text-ink"
                           >
                             View
                           </Link>
                           <button
                             onClick={() => startEdit(subject)}
-                            className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                            className="text-xs text-ink-muted hover:text-ink"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => startDelete(subject)}
-                            className="text-xs text-[#6e6e73] hover:text-red-600"
+                            className="text-xs text-ink-muted hover:text-danger"
                           >
                             Delete
                           </button>
@@ -255,25 +255,25 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                     </tr>
                     {deletingSubject?.id === subject.id && (
                       <tr className="border-b border-[#f3f4f6]">
-                        <td colSpan={5} className="px-5 py-3 bg-red-50 border-t border-red-100">
+                        <td colSpan={5} className="px-5 py-3 bg-danger-soft border-t border-danger/15">
                           <div className="flex items-center justify-between gap-4">
-                            <p className="text-sm text-red-700">
+                            <p className="text-sm text-danger">
                               Delete <strong>{subject.name}</strong>? This will permanently remove{' '}
                               <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
                               <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
                             </p>
                             <div className="flex items-center gap-3 flex-shrink-0">
-                              {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+                              {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
                               <button
                                 onClick={confirmDelete}
                                 disabled={saving}
-                                className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                                className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
                               >
                                 Yes, delete
                               </button>
                               <button
                                 onClick={() => { setDeletingSubject(null); setDeleteError('') }}
-                                className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                                className="text-xs text-ink-muted hover:text-ink"
                               >
                                 Cancel
                               </button>
@@ -292,8 +292,8 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
           <div className="md:hidden space-y-2">
             {subjects.map(subject => (
               <div key={subject.id} className="bg-white border border-[#e5e7eb] rounded-2xl p-4">
-                <p className="font-medium text-[#1d1d1f]">{subject.name}</p>
-                <p className="text-xs text-[#6e6e73] mt-0.5">
+                <p className="font-medium text-ink">{subject.name}</p>
+                <p className="text-xs text-ink-muted mt-0.5">
                   {subject.topics.length} {subject.topics.length !== 1 ? 'topics' : 'topic'} · {subject.totalCards} {subject.totalCards !== 1 ? 'cards' : 'card'}
                 </p>
                 <ListingPills slugs={subject.listing_slugs} listings={listings} />
@@ -301,42 +301,42 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                 <div className="flex gap-3 mt-3 pt-3 border-t border-[#f3f4f6]">
                   <Link
                     href={`/admin/flashcards/subjects/${subject.id}`}
-                    className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                    className="text-xs text-ink-muted hover:text-ink"
                   >
                     View
                   </Link>
                   <button
                     onClick={() => startEdit(subject)}
-                    className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                    className="text-xs text-ink-muted hover:text-ink"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => startDelete(subject)}
-                    className="text-xs text-[#6e6e73] hover:text-red-600"
+                    className="text-xs text-ink-muted hover:text-danger"
                   >
                     Delete
                   </button>
                 </div>
                 {deletingSubject?.id === subject.id && (
-                  <div className="mt-3 pt-3 border-t border-red-100 bg-red-50 -mx-4 -mb-4 px-4 pb-4 rounded-b-2xl">
-                    <p className="text-sm text-red-700 mb-2">
+                  <div className="mt-3 pt-3 border-t border-danger/15 bg-danger-soft -mx-4 -mb-4 px-4 pb-4 rounded-b-2xl">
+                    <p className="text-sm text-danger mb-2">
                       Delete <strong>{subject.name}</strong>? This will permanently remove{' '}
                       <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
                       <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
                     </p>
-                    {deleteError && <p className="text-xs text-red-600 mb-2">{deleteError}</p>}
+                    {deleteError && <p className="text-xs text-danger mb-2">{deleteError}</p>}
                     <div className="flex gap-3">
                       <button
                         onClick={confirmDelete}
                         disabled={saving}
-                        className="text-xs font-semibold text-red-700 hover:text-red-900 disabled:opacity-50"
+                        className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
                       >
                         Yes, delete
                       </button>
                       <button
                         onClick={() => { setDeletingSubject(null); setDeleteError('') }}
-                        className="text-xs text-[#6e6e73] hover:text-[#1d1d1f]"
+                        className="text-xs text-ink-muted hover:text-ink"
                       >
                         Cancel
                       </button>
@@ -369,22 +369,22 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
           >
-            <h2 id="edit-subject-heading" className="text-base font-semibold text-[#1d1d1f]">Edit Subject</h2>
+            <h2 id="edit-subject-heading" className="text-base font-semibold text-ink">Edit Subject</h2>
 
             <div className="space-y-1">
-              <label htmlFor="edit-subject-name" className="text-xs font-medium text-[#6e6e73]">Subject name</label>
+              <label htmlFor="edit-subject-name" className="text-xs font-medium text-ink-muted">Subject name</label>
               <input
                 id="edit-subject-name"
                 autoFocus
                 value={editName}
                 onChange={e => setEditName(e.target.value)}
-                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
               />
             </div>
 
             {scholarships.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6e6e73]">Scholarships</p>
+                <p className="text-xs font-medium text-ink-muted">Scholarships</p>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {scholarships.map(l => (
                     <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
@@ -392,10 +392,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                         type="checkbox"
                         checked={editSlugs.includes(l.slug)}
                         onChange={() => toggleSlug(l.slug)}
-                        className="accent-[#800000]"
+                        className="accent-maroon"
                       />
-                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
-                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                      <span className="text-sm text-ink">{l.title}</span>
+                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
                     </label>
                   ))}
                 </div>
@@ -404,7 +404,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
 
             {exams.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6e6e73]">Exams</p>
+                <p className="text-xs font-medium text-ink-muted">Exams</p>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {exams.map(l => (
                     <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
@@ -412,10 +412,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                         type="checkbox"
                         checked={editSlugs.includes(l.slug)}
                         onChange={() => toggleSlug(l.slug)}
-                        className="accent-[#800000]"
+                        className="accent-maroon"
                       />
-                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
-                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                      <span className="text-sm text-ink">{l.title}</span>
+                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
                     </label>
                   ))}
                 </div>
@@ -423,20 +423,20 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             )}
 
             {editError && (
-              <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">{editError}</p>
+              <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">{editError}</p>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => { setEditingSubject(null); setEditError('') }}
-                className="text-sm text-[#6e6e73] hover:text-[#1d1d1f] px-3 py-1.5"
+                className="text-sm text-ink-muted hover:text-ink px-3 py-1.5"
               >
                 Cancel
               </button>
               <button
                 onClick={saveEdit}
                 disabled={saving || !editName.trim()}
-                className="px-4 py-1.5 text-sm font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 text-sm font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
@@ -465,23 +465,23 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
           >
-            <h2 id="new-subject-heading" className="text-base font-semibold text-[#1d1d1f]">New Subject</h2>
+            <h2 id="new-subject-heading" className="text-base font-semibold text-ink">New Subject</h2>
 
             <div className="space-y-1">
-              <label htmlFor="new-subject-name" className="text-xs font-medium text-[#6e6e73]">Subject name</label>
+              <label htmlFor="new-subject-name" className="text-xs font-medium text-ink-muted">Subject name</label>
               <input
                 id="new-subject-name"
                 autoFocus
                 value={createName}
                 onChange={e => setCreateName(e.target.value)}
                 placeholder="e.g. Biology"
-                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-[#fafafa] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 focus:border-[#800000] text-[#1d1d1f]"
+                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
               />
             </div>
 
             {scholarships.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6e6e73]">Scholarships</p>
+                <p className="text-xs font-medium text-ink-muted">Scholarships</p>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {scholarships.map(l => (
                     <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
@@ -489,10 +489,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                         type="checkbox"
                         checked={createSlugs.includes(l.slug)}
                         onChange={() => toggleCreateSlug(l.slug)}
-                        className="accent-[#800000]"
+                        className="accent-maroon"
                       />
-                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
-                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                      <span className="text-sm text-ink">{l.title}</span>
+                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
                     </label>
                   ))}
                 </div>
@@ -501,7 +501,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
 
             {exams.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-[#6e6e73]">Exams</p>
+                <p className="text-xs font-medium text-ink-muted">Exams</p>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {exams.map(l => (
                     <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
@@ -509,10 +509,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
                         type="checkbox"
                         checked={createSlugs.includes(l.slug)}
                         onChange={() => toggleCreateSlug(l.slug)}
-                        className="accent-[#800000]"
+                        className="accent-maroon"
                       />
-                      <span className="text-sm text-[#1d1d1f]">{l.title}</span>
-                      {l.provider && <span className="text-xs text-[#6e6e73]">· {l.provider}</span>}
+                      <span className="text-sm text-ink">{l.title}</span>
+                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
                     </label>
                   ))}
                 </div>
@@ -520,20 +520,20 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
             )}
 
             {createError && (
-              <p className="bg-red-50 rounded-[10px] px-3 py-2 text-sm text-red-600">{createError}</p>
+              <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">{createError}</p>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => { setCreating(false); setCreateError('') }}
-                className="text-sm text-[#6e6e73] hover:text-[#1d1d1f] px-3 py-1.5"
+                className="text-sm text-ink-muted hover:text-ink px-3 py-1.5"
               >
                 Cancel
               </button>
               <button
                 onClick={createSubject}
                 disabled={saving || !createName.trim()}
-                className="px-4 py-1.5 text-sm font-semibold bg-[#800000] text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
+                className="px-4 py-1.5 text-sm font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Creating…' : 'Create'}
               </button>

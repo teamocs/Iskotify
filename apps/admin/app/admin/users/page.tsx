@@ -14,8 +14,8 @@ interface UserRow {
 }
 
 const ROLE_STYLES: Record<string, string> = {
-  admin:   'bg-[#800000]/10 text-[#800000]',
-  student: 'bg-blue-100 text-blue-800',
+  admin:   'bg-maroon/10 text-maroon',
+  student: 'bg-info-soft text-info-strong',
   user:    'bg-gray-100 text-gray-600',
 }
 
@@ -83,23 +83,23 @@ export default async function UsersPage() {
       <Topbar title="Users" />
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">Current users</h2>
-          <p className="text-[#6e6e73] text-sm mt-0.5">
+          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Current users</h2>
+          <p className="text-ink-muted text-sm mt-0.5">
             {rows.length} user{rows.length !== 1 ? 's' : ''} (excluding admin)
           </p>
         </div>
 
         {error ? (
-          <p className="text-sm text-red-600 bg-red-50 rounded-[10px] px-3 py-2">{error}</p>
+          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>
         ) : null}
 
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px]">
               <thead>
-                <tr className="bg-[#fafafa]">
+                <tr className="bg-surface-3">
                   {['Email', 'Role', 'Joined', 'Has app data'].map(h => (
-                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-[#aeaeb2] uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-semibold text-ink-subtle uppercase tracking-wider border-b border-black/[0.05] whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -108,25 +108,25 @@ export default async function UsersPage() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-black/[0.015] transition-colors">
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-[#1d1d1f]">{row.email}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] font-medium text-ink">{row.email}</td>
                     <td className="px-5 py-3 border-b border-black/[0.04]">
                       <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${ROLE_STYLES[row.role] ?? 'bg-gray-100 text-gray-600'}`}>
                         {row.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-[#6e6e73] whitespace-nowrap">{formatDate(row.created_at)}</td>
-                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-[#6e6e73]">
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[12px] text-ink-muted whitespace-nowrap">{formatDate(row.created_at)}</td>
+                    <td className="px-5 py-3 border-b border-black/[0.04] text-[13px] text-ink-muted">
                       {row.hasAppData ? (
-                        <span className="text-green-700 font-medium">Yes</span>
+                        <span className="text-success font-medium">Yes</span>
                       ) : (
-                        <span className="text-[#aeaeb2]">No</span>
+                        <span className="text-ink-subtle">No</span>
                       )}
                     </td>
                   </tr>
                 ))}
                 {rows.length === 0 && !error && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-[#aeaeb2]">
+                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-ink-subtle">
                       No users found.
                     </td>
                   </tr>

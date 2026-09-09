@@ -56,20 +56,20 @@ export default async function ReviewQueuePage() {
       <Topbar title="Distractor Review Queue" />
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
         <div>
-          <h2 className="text-[#1d1d1f] font-heading font-bold text-2xl tracking-tight">Distractor Review Queue</h2>
-          <p className="text-[#6e6e73] text-sm mt-1 max-w-3xl">
+          <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Distractor Review Queue</h2>
+          <p className="text-ink-muted text-sm mt-1 max-w-3xl">
             Curated Question Bank options aren&apos;t rewritten automatically — this list flags questions whose
             options fail cheap heuristics (a length giveaway, a near-duplicate pair, a &quot;none/all of the
             above&quot;, or a numeric outlier) so a human can fix them by hand.
           </p>
-          <p className="text-[#6e6e73] text-xs mt-2">
+          <p className="text-ink-muted text-xs mt-2">
             {flagged.length} flagged out of {scanned.length} scanned
             {scanned.length >= SCAN_LIMIT ? ` (capped at ${SCAN_LIMIT})` : ''}.
           </p>
         </div>
 
         {flagged.length === 0 ? (
-          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-6 text-center text-green-800 text-sm">
+          <div className="rounded-xl border border-success/25 bg-success-soft px-4 py-6 text-center text-success-strong text-sm">
             🎉 No flagged questions. Nothing needs review right now.
           </div>
         ) : (
@@ -77,26 +77,26 @@ export default async function ReviewQueuePage() {
             <table className="w-full text-sm border-collapse min-w-[720px]">
               <thead>
                 <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">ID</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Subject / Topic</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Question</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Options</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[#6e6e73]">Flags</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">ID</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Subject / Topic</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Question</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Options</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Flags</th>
                 </tr>
               </thead>
               <tbody>
                 {flagged.map(({ row, result }) => (
                   <tr key={row.question_id} className="border-b border-[#f3f4f6] last:border-0 align-top hover:bg-[#f9fafb]">
-                    <td className="px-4 py-3 font-mono text-xs text-[#374151] whitespace-nowrap">{row.question_id}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-ink-muted whitespace-nowrap">{row.question_id}</td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      <div className="text-[#374151]">{row.main_subject ?? '—'}</div>
-                      <div className="text-[#9ca3af]">{row.topic ?? '—'}</div>
+                      <div className="text-ink-muted">{row.main_subject ?? '—'}</div>
+                      <div className="text-ink-subtle">{row.topic ?? '—'}</div>
                     </td>
-                    <td className="px-4 py-3 text-[#1d1d1f] max-w-xs">{row.question_text}</td>
-                    <td className="px-4 py-3 text-[#374151]">
+                    <td className="px-4 py-3 text-ink max-w-xs">{row.question_text}</td>
+                    <td className="px-4 py-3 text-ink-muted">
                       <ul className="space-y-0.5">
                         {(row.options ?? []).map((opt, i) => (
-                          <li key={i} className={i === row.correct_index ? 'font-semibold text-green-700' : ''}>
+                          <li key={i} className={i === row.correct_index ? 'font-semibold text-success' : ''}>
                             {String.fromCharCode(65 + i)}. {opt}
                           </li>
                         ))}
@@ -107,7 +107,7 @@ export default async function ReviewQueuePage() {
                         {result.flags.map(flag => (
                           <span
                             key={flag}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800"
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning-strong"
                           >
                             {FLAG_LABELS[flag]}
                           </span>

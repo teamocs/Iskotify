@@ -58,7 +58,7 @@ export default async function SubjectDetailPage({
           ]} />
           <AddTopicButton subjectId={id} />
         </div>
-        <p className="text-sm text-[#6e6e73]">{topics.length} topic{topics.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-ink-muted">{topics.length} topic{topics.length !== 1 ? 's' : ''}</p>
         <SubjectCardsView subjectId={id} subjectName={subject.name} topics={topicsWithCount} defaultOpenTopicId={defaultOpenTopicId} />
       </div>
     </>

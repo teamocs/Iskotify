@@ -58,6 +58,9 @@ function NoteCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityLabel={note.title || 'Untitled note'}
+      accessibilityHint="Double tap to open. Long press to select."
       style={({ pressed }) => [
         {
           backgroundColor: bg,
@@ -207,8 +210,8 @@ export default function NotesScreen() {
     cardWrap: { width: '48%' },
     empty: { paddingVertical: 48, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
-    fab: { position: 'absolute', bottom: insets.bottom + 40, right: spacing.xxl, width: 64, height: 64, borderRadius: radius.pill, backgroundColor: '#800000', alignItems: 'center', justifyContent: 'center', boxShadow: t.shadowMd },
-    fabTxt: { color: '#fff', fontSize: 32, lineHeight: 36, marginTop: -2 },
+    fab: { position: 'absolute', bottom: insets.bottom + 40, right: spacing.xxl, width: 64, height: 64, borderRadius: radius.pill, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', boxShadow: t.shadowMd },
+    fabTxt: { color: t.textInverse, fontSize: 32, lineHeight: 36, marginTop: -2 },
     // Selection bar
     selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.md), gap: spacing.sm },
     selCount: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
@@ -256,18 +259,24 @@ export default function NotesScreen() {
               <Pressable
                 style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
                 onPress={() => router.push('/notes/archive' as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Archived notes"
               >
                 <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
                 onPress={() => router.push('/notes/trash' as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Deleted notes"
               >
                 <Lineicons icon={Trash3Outlined} size={18} color={t.textSecondary} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
                 onPress={() => router.push('/notes/labels' as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Labels"
               >
                 <Lineicons icon={Bookmark1Outlined} size={18} color={t.textSecondary} />
               </Pressable>
@@ -313,6 +322,9 @@ export default function NotesScreen() {
             style={({ pressed }) => [s.fab, pressed ? s.pressed : null]}
             onPress={() => setFabSheetOpen(true)}
             onLongPress={() => void handleCreate('text')}
+            accessibilityRole="button"
+            accessibilityLabel="New note"
+            accessibilityHint="Long press to create a text note straight away"
           >
             <Text style={s.fabTxt}>+</Text>
           </Pressable>
@@ -322,16 +334,16 @@ export default function NotesScreen() {
         {selected.size > 0 ? (
           <View style={s.selBar}>
             <Text style={s.selCount}>{selected.size} selected</Text>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkPin}>
+            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkPin} accessibilityRole="button" accessibilityLabel="Pin selected notes">
               <Lineicons icon={MapPin5Outlined} size={18} color={t.textSecondary} />
             </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkArchive}>
+            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkArchive} accessibilityRole="button" accessibilityLabel="Archive selected notes">
               <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
             </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, s.selBtnDanger, pressed ? s.pressed : null]} onPress={bulkDelete}>
-              <Lineicons icon={Trash3Outlined} size={18} color="#f87171" />
+            <Pressable style={({ pressed }) => [s.selBtn, s.selBtnDanger, pressed ? s.pressed : null]} onPress={bulkDelete} accessibilityRole="button" accessibilityLabel="Delete selected notes">
+              <Lineicons icon={Trash3Outlined} size={18} color={t.danger} />
             </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={clearSelection}>
+            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={clearSelection} accessibilityRole="button" accessibilityLabel="Clear selection">
               <Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} />
             </Pressable>
           </View>
@@ -345,14 +357,19 @@ export default function NotesScreen() {
           onRequestClose={() => setFabSheetOpen(false)}
           statusBarTranslucent
         >
-          <Pressable style={s.backdrop} onPress={() => setFabSheetOpen(false)} />
+          <Pressable
+            style={s.backdrop}
+            onPress={() => setFabSheetOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
           <View style={s.sheet}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>New Note</Text>
 
-            <Pressable style={({ pressed }) => [s.sheetOption, pressed ? s.pressed : null]} onPress={() => void handleCreate('text')}>
+            <Pressable style={({ pressed }) => [s.sheetOption, pressed ? s.pressed : null]} onPress={() => void handleCreate('text')} accessibilityRole="button" accessibilityLabel="Text note, write freely in a rich text note">
               <View style={s.sheetIconWrap}>
-                <Lineicons icon={Pencil1Outlined} size={20} color="#800000" />
+                <Lineicons icon={Pencil1Outlined} size={20} color={t.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.sheetOptionLabel}>Text Note</Text>
@@ -360,9 +377,9 @@ export default function NotesScreen() {
               </View>
             </Pressable>
 
-            <Pressable style={({ pressed }) => [s.sheetOption, { borderBottomWidth: 0 }, pressed ? s.pressed : null]} onPress={() => void handleCreate('checklist')}>
+            <Pressable style={({ pressed }) => [s.sheetOption, { borderBottomWidth: 0 }, pressed ? s.pressed : null]} onPress={() => void handleCreate('checklist')} accessibilityRole="button" accessibilityLabel="Checklist, create a to-do or checklist note">
               <View style={s.sheetIconWrap}>
-                <Lineicons icon={CheckSquare2Outlined} size={20} color="#800000" />
+                <Lineicons icon={CheckSquare2Outlined} size={20} color={t.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.sheetOptionLabel}>Checklist</Text>
@@ -370,7 +387,7 @@ export default function NotesScreen() {
               </View>
             </Pressable>
 
-            <Pressable style={({ pressed }) => [s.cancelBtn, pressed ? s.pressed : null]} onPress={() => setFabSheetOpen(false)}>
+            <Pressable style={({ pressed }) => [s.cancelBtn, pressed ? s.pressed : null]} onPress={() => setFabSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Cancel">
               <Text style={s.cancelTxt}>Cancel</Text>
             </Pressable>
           </View>

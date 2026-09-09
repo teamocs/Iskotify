@@ -76,19 +76,19 @@ export default async function ListingsPage() {
   ])
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-surface-2">
       <Nav />
 
       {/* Page hero */}
       <section className="bg-white border-b border-black/[0.06] py-14 px-6">
         <div className="max-w-6xl mx-auto text-center">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-[#800000] mb-3">
+          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">
             Explore Iskotify
           </p>
-          <h1 className="font-heading font-extrabold text-[#1d1d1f] text-4xl md:text-5xl leading-tight mb-4">
+          <h1 className="font-heading font-extrabold text-ink text-4xl md:text-5xl leading-tight mb-4">
             Lists
           </h1>
-          <p className="text-[#6e6e73] font-body text-base max-w-xl mx-auto">
+          <p className="text-ink-muted font-body text-base max-w-xl mx-auto">
             Universities, scholarships, courses &amp; career destinations — everything you can
             explore in the Iskotify app.
           </p>

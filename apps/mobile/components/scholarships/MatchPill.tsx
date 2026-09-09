@@ -7,16 +7,16 @@ interface MatchPillProps {
 }
 
 export function MatchPill({ status }: MatchPillProps) {
-  const { typo } = useTheme()
+  const { theme: t, typo } = useTheme()
 
   if (status === 'unknown') return null
 
   const config =
     status === 'eligible'
-      ? { label: '✓ Eligible', bg: 'rgba(34,197,94,0.13)', border: 'rgba(34,197,94,0.30)', color: '#16a34a' }
+      ? { label: '✓ Eligible', bg: t.successSurface, border: t.successSurface, color: t.success }
       : status === 'maybe'
-      ? { label: 'Maybe', bg: 'rgba(251,191,36,0.13)', border: 'rgba(251,191,36,0.35)', color: '#b45309' }
-      : { label: 'Not eligible', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.25)', color: '#b91c1c' }
+      ? { label: 'Maybe', bg: t.warningSurface, border: t.warningSurface, color: t.warning }
+      : { label: 'Not eligible', bg: t.dangerSurface, border: t.dangerSurface, color: t.danger }
 
   return (
     <View style={[s.pill, { backgroundColor: config.bg, borderColor: config.border }]}>

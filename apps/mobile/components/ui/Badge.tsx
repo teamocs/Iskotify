@@ -1,29 +1,34 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing } from '../../theme/tokens'
+import { radius, spacing, type Theme } from '../../theme/tokens'
 
 type Tone = 'accent' | 'neutral' | 'success' | 'warning' | 'danger'
 
-const TONES: Record<Tone, { bg: string; fg: string; border: string }> = {
-  accent:  { bg: 'rgba(128,0,0,0.12)',  fg: '', border: 'rgba(128,0,0,0.28)' },
-  neutral: { bg: 'rgba(128,128,128,0.14)', fg: '', border: 'rgba(128,128,128,0.28)' },
-  success: { bg: 'rgba(34,197,94,0.14)', fg: '#16a34a', border: 'rgba(34,197,94,0.30)' },
-  warning: { bg: 'rgba(245,158,11,0.14)', fg: '#b45309', border: 'rgba(245,158,11,0.30)' },
-  danger:  { bg: 'rgba(239,68,68,0.14)', fg: '#dc2626', border: 'rgba(239,68,68,0.30)' },
+/*
+ * Tones name theme keys rather than literal colours. The previous literals were
+ * the dark palette's values, so a success badge rendered mint-on-white in light
+ * mode (1.7:1). Resolving against the live theme is what makes the badge switch.
+ */
+const TONES: Record<Tone, { bg: keyof Theme; fg: keyof Theme; border: keyof Theme }> = {
+  accent:  { bg: 'accentSurface',  fg: 'accentText', border: 'border' },
+  neutral: { bg: 'surface2',       fg: 'textSecondary', border: 'divider' },
+  success: { bg: 'successSurface', fg: 'success', border: 'successSurface' },
+  warning: { bg: 'warningSurface', fg: 'warning', border: 'warningSurface' },
+  danger:  { bg: 'dangerSurface',  fg: 'danger',  border: 'dangerSurface' },
 }
 
 /** Small pill for tags/counts/status (design system §4). */
 export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }) {
   const { theme: t, typo } = useTheme()
   const c = TONES[tone]
-  const fg = c.fg || t.accentText
+  const fg = t[c.fg]
   return (
     <View
       style={{
         alignSelf: 'flex-start',
-        backgroundColor: c.bg,
+        backgroundColor: t[c.bg],
         borderWidth: 1,
-        borderColor: c.border,
+        borderColor: t[c.border],
         borderRadius: radius.pill,
         paddingHorizontal: spacing.sm,
         paddingVertical: 2,

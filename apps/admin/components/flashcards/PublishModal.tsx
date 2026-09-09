@@ -96,17 +96,17 @@ export function PublishModal({
         onClick={e => e.stopPropagation()}
       >
         <div className="p-6 border-b border-black/[0.06]">
-          <h3 className="text-[#1d1d1f] font-heading font-bold text-xl tracking-tight">{title}</h3>
-          <p className="text-[#6e6e73] text-sm mt-1">{description}</p>
+          <h3 className="text-ink font-heading font-bold text-xl tracking-tight">{title}</h3>
+          <p className="text-ink-muted text-sm mt-1">{description}</p>
         </div>
 
         <div className="p-6 space-y-4">
           <div>
-            <div className="text-[#6e6e73] text-xs font-semibold uppercase tracking-wider mb-2">
+            <div className="text-ink-muted text-xs font-semibold uppercase tracking-wider mb-2">
               Tag to exams/scholarships
             </div>
             {listings.length === 0 ? (
-              <div className="text-[#6e6e73] text-sm">Loading listings…</div>
+              <div className="text-ink-muted text-sm">Loading listings…</div>
             ) : (
               <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
                 {listings.map(l => {
@@ -118,8 +118,8 @@ export function PublishModal({
                       disabled={publishing}
                       className={`px-3 py-1.5 rounded-[980px] text-xs font-medium border transition-colors
                         ${on
-                          ? 'bg-[#800000] text-white border-[#800000] shadow-sm'
-                          : 'bg-white text-[#1d1d1f] border-black/[0.12] hover:border-[#800000]/60 hover:text-[#800000]'}
+                          ? 'bg-maroon text-white border-maroon shadow-sm'
+                          : 'bg-white text-ink border-black/[0.12] hover:border-maroon/60 hover:text-maroon'}
                         ${publishing ? 'opacity-50 cursor-not-allowed' : ''}
                       `}
                     >
@@ -133,13 +133,13 @@ export function PublishModal({
 
           {progress && (
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-[#6e6e73]">
+              <div className="flex justify-between text-xs text-ink-muted">
                 <span>Publishing…</span>
                 <span className="tabular-nums">{progress.done}/{progress.total}</span>
               </div>
               <div className="w-full h-1.5 bg-black/[0.08] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#800000] transition-all"
+                  className="h-full bg-maroon transition-all"
                   style={{ width: `${(progress.done / progress.total) * 100}%` }}
                 />
               </div>
@@ -147,7 +147,7 @@ export function PublishModal({
           )}
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">
+            <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">
               {error}
             </div>
           )}
@@ -157,7 +157,7 @@ export function PublishModal({
           <button
             onClick={onClose}
             disabled={publishing}
-            className="px-4 py-2 rounded-[980px] text-sm font-medium text-[#1d1d1f] hover:bg-black/[0.05] transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-[980px] text-sm font-medium text-ink hover:bg-black/[0.05] transition-colors disabled:opacity-50"
           >
             {progress?.done === progress?.total && progress ? 'Close' : 'Cancel'}
           </button>
@@ -166,8 +166,8 @@ export function PublishModal({
             disabled={selectedSlugs.size === 0 || publishing || topicIds.length === 0}
             className={`px-5 py-2 rounded-[980px] text-sm font-semibold transition-colors shadow-sm
               ${selectedSlugs.size > 0 && !publishing && topicIds.length > 0
-                ? 'bg-green-700 text-white hover:bg-green-800'
-                : 'bg-[#f5f5f7] text-[#6e6e73] cursor-not-allowed'}
+                ? 'bg-success text-white hover:bg-success-strong'
+                : 'bg-surface-2 text-ink-muted cursor-not-allowed'}
             `}
           >
             {publishing

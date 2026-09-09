@@ -87,17 +87,17 @@ export function GenerateMoreModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
         <div>
-          <h2 className="text-lg font-bold text-[#1d1d1f]">Generate more cards with AI</h2>
-          <p className="text-xs text-[#6e6e73] mt-1">
+          <h2 className="text-lg font-bold text-ink">Generate more cards with AI</h2>
+          <p className="text-xs text-ink-muted mt-1">
             Topic: <strong>{topicName}</strong> · Subject: <strong>{subjectName}</strong>
           </p>
-          <p className="text-xs text-[#6e6e73] mt-1">
+          <p className="text-xs text-ink-muted mt-1">
             {existingQuestions.length} existing cards — Gemini will avoid duplicates.
           </p>
         </div>
 
         <div>
-          <label className="text-[11px] text-[#6e6e73] font-semibold block mb-1">HOW MANY?</label>
+          <label className="text-[11px] text-ink-muted font-semibold block mb-1">HOW MANY?</label>
           <div className="flex gap-2">
             {[5, 10, 15, 20].map(n => {
               const active = count === n
@@ -108,8 +108,8 @@ export function GenerateMoreModal({
                   disabled={isGenerating}
                   className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
                     active
-                      ? 'bg-[#800000] text-white border-[#800000]'
-                      : 'bg-white text-[#1d1d1f] border-[#d1d5db] hover:border-[#800000]'
+                      ? 'bg-maroon text-white border-maroon'
+                      : 'bg-white text-ink border-[#d1d5db] hover:border-maroon'
                   } disabled:opacity-40`}
                 >
                   {n}
@@ -119,20 +119,20 @@ export function GenerateMoreModal({
           </div>
         </div>
 
-        {error && <p className="text-xs text-[#800000] font-medium">{error}</p>}
+        {error && <p className="text-xs text-maroon font-medium">{error}</p>}
 
         <div className="flex gap-2 pt-2">
           <button
             onClick={onClose}
             disabled={isGenerating}
-            className="flex-1 px-4 py-2 border border-[#d1d5db] rounded-full text-sm font-semibold text-[#6e6e73] hover:bg-[#f5f5f7] disabled:opacity-40"
+            className="flex-1 px-4 py-2 border border-[#d1d5db] rounded-full text-sm font-semibold text-ink-muted hover:bg-surface-2 disabled:opacity-40"
           >
             Cancel
           </button>
           <button
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="flex-1 px-4 py-2 bg-[#1d1d1f] text-white text-sm font-semibold rounded-full hover:bg-black disabled:opacity-40 flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2 bg-ink text-white text-sm font-semibold rounded-full hover:bg-black disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {isGenerating ? (
               <>

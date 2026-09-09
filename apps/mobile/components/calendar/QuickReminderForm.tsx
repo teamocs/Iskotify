@@ -59,7 +59,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
     btnSecondary: { backgroundColor: 'transparent', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 980 },
     btnSecondaryTxt: { color: t.textSecondary, fontSize: typo.sm, fontWeight: '600' },
     btnPrimary: { backgroundColor: t.accent, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 980 },
-    btnPrimaryTxt: { color: '#fff', fontSize: typo.sm, fontWeight: '700' },
+    btnPrimaryTxt: { color: t.textInverse, fontSize: typo.sm, fontWeight: '700' },
     btnDisabled: { opacity: 0.4 },
   }), [t, typo])
 

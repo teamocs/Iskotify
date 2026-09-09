@@ -49,10 +49,10 @@ function FormatTable({ config }: { config: DataTableConfig }) {
   return (
     <div className="overflow-x-auto rounded-[12px] border border-black/[0.06]">
       <table className="w-full text-sm min-w-[520px]">
-        <thead className="bg-[#fafafa] border-b border-black/[0.06]">
+        <thead className="bg-surface-3 border-b border-black/[0.06]">
           <tr>
             {['Column', 'Type', 'Required', 'Notes'].map(h => (
-              <th key={h} className="text-left px-3 py-2 text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider">{h}</th>
+              <th key={h} className="text-left px-3 py-2 text-[11px] font-semibold text-ink-subtle uppercase tracking-wider">{h}</th>
             ))}
           </tr>
         </thead>
@@ -63,10 +63,10 @@ function FormatTable({ config }: { config: DataTableConfig }) {
             const required = name === config.idColumn || !!col?.required
             return (
               <tr key={name}>
-                <td className="px-3 py-1.5 font-mono text-[12px] text-[#1d1d1f]">{name}</td>
-                <td className="px-3 py-1.5 text-[#6e6e73]">{TYPE_LABEL[type]}</td>
-                <td className="px-3 py-1.5 text-[#6e6e73]">{required ? 'Yes' : ''}</td>
-                <td className="px-3 py-1.5 text-[#6e6e73] text-[12px]">{col ? colNote(col, config) : ''}</td>
+                <td className="px-3 py-1.5 font-mono text-[12px] text-ink">{name}</td>
+                <td className="px-3 py-1.5 text-ink-muted">{TYPE_LABEL[type]}</td>
+                <td className="px-3 py-1.5 text-ink-muted">{required ? 'Yes' : ''}</td>
+                <td className="px-3 py-1.5 text-ink-muted text-[12px]">{col ? colNote(col, config) : ''}</td>
               </tr>
             )
           })}
@@ -85,12 +85,12 @@ export default function GuidePage() {
 
           {/* Intro */}
           <section className="space-y-3">
-            <h2 className="text-[#1d1d1f] font-heading font-bold text-2xl tracking-tight">Admin Console Guide</h2>
-            <p className="text-[#3a3a3c] text-sm leading-relaxed">
+            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Admin Console Guide</h2>
+            <p className="text-ink-muted text-sm leading-relaxed">
               This console manages all the data the Iskotify mobile &amp; web apps read. Most data lives in
               the <strong>Data</strong> sections of the sidebar, each backed by a uniform editor with the same controls.
             </p>
-            <div className="rounded-[12px] border border-black/[0.06] bg-[#fafafa] p-4 space-y-2 text-sm text-[#3a3a3c]">
+            <div className="rounded-[12px] border border-black/[0.06] bg-surface-3 p-4 space-y-2 text-sm text-ink-muted">
               <p><strong>Add / Edit / Delete:</strong> click <strong>+ New</strong> to add a row, or click any row to open its editor drawer; the drawer also has a <strong>Delete this row</strong> action.</p>
               <p><strong>Search &amp; pages:</strong> the search box filters by the table’s key columns; long tables paginate 50 rows at a time.</p>
               <p><strong>Export:</strong> <strong>⬇ CSV</strong> (spreadsheet-friendly) or <strong>⬇ JSON</strong> (exact copy). Export streams <em>all</em> rows, not just the current page.</p>
@@ -101,8 +101,8 @@ export default function GuidePage() {
 
           {/* Formats */}
           <section className="space-y-3">
-            <h3 className="text-[#1d1d1f] font-heading font-bold text-lg">Import / export formats</h3>
-            <ul className="list-disc list-inside text-sm text-[#3a3a3c] space-y-1.5">
+            <h3 className="text-ink font-heading font-bold text-lg">Import / export formats</h3>
+            <ul className="list-disc list-inside text-sm text-ink-muted space-y-1.5">
               <li><strong>CSV</strong> uses the same column headers shown in each table’s reference below. The easiest way to start is to <strong>Export CSV</strong>, edit in a spreadsheet, then <strong>Import</strong> the same file.</li>
               <li><strong>Array columns</strong> (type “JSON array”, e.g. <code>known_for_courses</code>) are written as JSON text inside one cell — <code>[&quot;Nursing&quot;,&quot;Biology&quot;]</code>. On import you can also use a simple <code>semicolon;separated;list</code>.</li>
               <li><strong>Booleans</strong> are <code>true</code> / <code>false</code> (a blank cell counts as false).</li>
@@ -113,8 +113,8 @@ export default function GuidePage() {
 
           {/* Special importers */}
           <section className="space-y-3">
-            <h3 className="text-[#1d1d1f] font-heading font-bold text-lg">Specialized editors</h3>
-            <ul className="list-disc list-inside text-sm text-[#3a3a3c] space-y-1.5">
+            <h3 className="text-ink font-heading font-bold text-lg">Specialized editors</h3>
+            <ul className="list-disc list-inside text-sm text-ink-muted space-y-1.5">
               <li><strong>UPCAT question bank</strong> (Knowledgebase → Import CSV): use the authoring sheet with <code>option_a…option_d</code> + a letter <code>answer</code>. This is different from a raw table export — don’t mix the two shapes.</li>
               <li><strong>Flashcards, Exam Blueprints, Listings</strong> have their own purpose-built editors in the sidebar; their underlying tables are not in the generic Data sections.</li>
               <li><strong>Passages vs. questions:</strong> reading passages live in <code>upcat_passages</code> (a Data table). The questions that reference them are managed by the UPCAT importer.</li>
@@ -125,16 +125,16 @@ export default function GuidePage() {
           {GROUPS.map(group => (
             <section key={group.title} className="space-y-4">
               <div>
-                <h3 className="text-[#1d1d1f] font-heading font-bold text-lg">{group.title}</h3>
-                <p className="text-[#6e6e73] text-sm mt-0.5">{group.blurb}</p>
+                <h3 className="text-ink font-heading font-bold text-lg">{group.title}</h3>
+                <p className="text-ink-muted text-sm mt-0.5">{group.blurb}</p>
               </div>
               {group.tables.map(table => {
                 const config = DATA_TABLE_MAP[table]
                 if (!config) return null
                 return (
                   <div key={table} id={table} className="scroll-mt-16 space-y-2">
-                    <h4 className="text-[#1d1d1f] font-semibold text-[15px]">{config.label} <span className="font-mono text-[12px] text-[#aeaeb2]">({table})</span></h4>
-                    {config.helpText && <p className="text-[13px] text-[#6e6e73] leading-relaxed">{config.helpText}</p>}
+                    <h4 className="text-ink font-semibold text-[15px]">{config.label} <span className="font-mono text-[12px] text-ink-subtle">({table})</span></h4>
+                    {config.helpText && <p className="text-[13px] text-ink-muted leading-relaxed">{config.helpText}</p>}
                     <FormatTable config={config} />
                   </div>
                 )

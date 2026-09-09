@@ -21,7 +21,7 @@ const GRID = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'
 
 function MagnifierIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-[#86868b]">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-ink-subtle">
       <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
       <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
@@ -38,7 +38,7 @@ function ClearIcon() {
 
 function CapIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-[#800000]">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-maroon">
       <path d="M12 4 2 9l10 5 8-4v5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M6 11.5V16c0 .9 2.7 2.5 6 2.5s6-1.6 6-2.5v-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -47,7 +47,7 @@ function CapIcon() {
 
 function GlobeIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-[#800000]">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-maroon">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
       <path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
@@ -66,7 +66,7 @@ function ExternalIcon() {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <p className="col-span-full text-center text-[#6e6e73] font-body text-sm py-16">{message}</p>
+    <p className="col-span-full text-center text-ink-muted font-body text-sm py-16">{message}</p>
   )
 }
 
@@ -83,13 +83,13 @@ function SectionIntro({
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-      <p className="text-[#6e6e73] font-body text-sm">{text}</p>
+      <p className="text-ink-muted font-body text-sm">{text}</p>
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={ariaLabel}
-        className="inline-flex items-center justify-center gap-1.5 self-start sm:self-auto rounded-full border border-[#800000] text-[#800000] px-4 py-2 text-xs font-semibold font-body hover:bg-[#800000] hover:text-white transition-colors"
+        className="inline-flex items-center justify-center gap-1.5 self-start sm:self-auto rounded-full border border-maroon text-maroon px-4 py-2 text-xs font-semibold font-body hover:bg-maroon hover:text-white transition-colors"
       >
         {cta}
         <ExternalIcon />
@@ -191,8 +191,8 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
               onClick={() => changeTab(tt.key)}
               className={`flex-shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold font-body transition-colors ${
                 active
-                  ? 'bg-[#800000] text-white'
-                  : 'bg-[#f3f4f6] text-[#374151] hover:bg-[#e5e7eb]'
+                  ? 'bg-maroon text-white'
+                  : 'bg-[#f3f4f6] text-ink-muted hover:bg-[#e5e7eb]'
               }`}
             >
               {tt.label} ({tt.count})
@@ -210,14 +210,14 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
           aria-label={placeholder}
-          className="flex-1 bg-transparent text-sm text-[#1d1d1f] font-body outline-none placeholder:text-[#86868b]"
+          className="flex-1 bg-transparent text-sm text-ink font-body outline-none placeholder:text-ink-subtle"
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery('')}
             aria-label="Clear search"
-            className="flex-shrink-0 text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+            className="flex-shrink-0 text-ink-subtle hover:text-ink transition-colors"
           >
             <ClearIcon />
           </button>
@@ -263,13 +263,13 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
                   key={c.courseId}
                   className="bg-white border border-black/[0.06] rounded-2xl p-5 flex flex-col gap-3 shadow-[0_2px_16px_rgba(0,0,0,0.04)]"
                 >
-                  <div className="flex-shrink-0 w-9 h-9 rounded-[10px] bg-[#800000]/10 flex items-center justify-center">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-[10px] bg-maroon/10 flex items-center justify-center">
                     <CapIcon />
                   </div>
-                  <h3 className="font-heading font-bold text-[15px] text-[#1d1d1f] leading-snug line-clamp-2">
+                  <h3 className="font-heading font-bold text-[15px] text-ink leading-snug line-clamp-2">
                     {c.name}
                   </h3>
-                  <span className="self-start rounded-full bg-[#fef2f2] text-[#800000] px-2.5 py-1 text-[11px] font-semibold font-body">
+                  <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-[11px] font-semibold font-body">
                     {c.cluster}
                   </span>
                 </div>
@@ -296,19 +296,19 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
                   key={d.code}
                   className="bg-white border border-black/[0.06] rounded-2xl p-5 flex flex-col gap-3 shadow-[0_2px_16px_rgba(0,0,0,0.04)]"
                 >
-                  <div className="flex-shrink-0 w-9 h-9 rounded-[10px] bg-[#800000]/10 flex items-center justify-center">
+                  <div className="flex-shrink-0 w-9 h-9 rounded-[10px] bg-maroon/10 flex items-center justify-center">
                     <GlobeIcon />
                   </div>
                   <div>
-                    <h3 className="font-heading font-bold text-[15px] text-[#1d1d1f] leading-snug">
+                    <h3 className="font-heading font-bold text-[15px] text-ink leading-snug">
                       {d.name}
                     </h3>
                     {d.region && (
-                      <p className="text-[12px] text-[#6e6e73] font-body mt-0.5">{d.region}</p>
+                      <p className="text-[12px] text-ink-muted font-body mt-0.5">{d.region}</p>
                     )}
                   </div>
                   {d.courseCount > 0 && (
-                    <span className="self-start rounded-full bg-[#fef2f2] text-[#800000] px-2.5 py-1 text-[11px] font-semibold font-body">
+                    <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-[11px] font-semibold font-body">
                       {d.courseCount} course{d.courseCount === 1 ? '' : 's'} in demand
                     </span>
                   )}

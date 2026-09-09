@@ -29,9 +29,9 @@ export default async function ListingsPage() {
   function syncHealth() {
     if (!lastSyncTime) return { label: 'Never synced', accent: 'text-gray-400' }
     const hrs = (Date.now() - new Date(lastSyncTime).getTime()) / 3600_000
-    if (hrs < 12) return { label: 'Healthy', accent: 'text-green-600' }
-    if (hrs < 24) return { label: 'Stale', accent: 'text-amber-600' }
-    return { label: 'Very stale', accent: 'text-red-600' }
+    if (hrs < 12) return { label: 'Healthy', accent: 'text-success' }
+    if (hrs < 24) return { label: 'Stale', accent: 'text-warning' }
+    return { label: 'Very stale', accent: 'text-danger' }
   }
 
   const health = syncHealth()

@@ -129,7 +129,7 @@ export default function SettingsScreen() {
     segBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 7, alignItems: 'center' as const },
     segBtnOn: { backgroundColor: t.accent },
     segTxt: { fontSize: typo.xs, fontWeight: '600' as const, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    segTxtOn: { color: '#fff' },
+    segTxtOn: { color: t.textInverse },
     notifRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
     notifLabel: { fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
     notifSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },

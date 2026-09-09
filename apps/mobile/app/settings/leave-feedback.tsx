@@ -6,6 +6,8 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -61,19 +63,21 @@ export default function LeaveFeedbackScreen() {
     starsRow: { flexDirection: 'row' as const, gap: spacing.xs, marginBottom: spacing.lg },
     starBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
     star: { fontSize: 30, lineHeight: 34, color: t.textTertiary },
-    starOn: { color: '#fbbf24' },
+    starOn: { color: t.warning },
     input: { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', minHeight: 120, textAlignVertical: 'top' as const, borderCurve: 'continuous' as const, marginBottom: spacing.lg },
-    errorText: { fontSize: typo.xs, color: '#f87171', fontFamily: 'Lexend_400Regular', marginBottom: spacing.md, lineHeight: typo.xs * 1.5 },
+    errorText: { fontSize: typo.xs, color: t.danger, fontFamily: 'Lexend_400Regular', marginBottom: spacing.md, lineHeight: typo.xs * 1.5 },
     submitBtn: { backgroundColor: t.accent, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' as const, justifyContent: 'center' as const, minHeight: 48, borderCurve: 'continuous' as const },
-    submitTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#ffffff' },
-    successTitle: { fontSize: typo.base, fontWeight: '700' as const, color: '#4ade80', fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
+    submitTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
+    successTitle: { fontSize: typo.base, fontWeight: '700' as const, color: t.success, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
     successBody: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: typo.sm * 1.6 },
     doneBtn: { backgroundColor: t.accent, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' as const, marginTop: spacing.md, minHeight: 48, justifyContent: 'center' as const, borderCurve: 'continuous' as const },
-    doneTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#ffffff' },
+    doneTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
   }), [t, typo])
 
   return (
     <SafeAreaView style={s.root}>
+      {/* iOS needs an explicit inset; Android's adjustResize already lifts the view. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <WebTopSpacer />
       <View style={s.backRow}>
         <Pressable
@@ -164,6 +168,7 @@ export default function LeaveFeedbackScreen() {
           </>
         )}
       </ScreenScroll>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }

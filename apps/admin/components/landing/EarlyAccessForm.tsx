@@ -41,8 +41,8 @@ export function EarlyAccessForm() {
   }
 
   const inputClass =
-    'w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-body text-[#1d1d1f] placeholder:text-[#a1a1a6] focus:border-[#800000] focus:outline-none focus:ring-2 focus:ring-[#800000]/20 transition-colors'
-  const labelClass = 'block text-xs font-body font-semibold text-[#1d1d1f] mb-1.5'
+    'w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-body text-ink placeholder:text-ink-subtle focus:border-maroon focus:outline-none focus:ring-2 focus:ring-maroon/20 transition-colors'
+  const labelClass = 'block text-xs font-body font-semibold text-ink mb-1.5'
 
   if (status === 'success') {
     return (
@@ -50,14 +50,14 @@ export function EarlyAccessForm() {
         <div
           role="status"
           aria-live="polite"
-          className="rounded-2xl border border-[#800000]/20 bg-[#800000]/[0.05] px-6 py-8 text-center"
+          className="rounded-2xl border border-maroon/20 bg-maroon/[0.05] px-6 py-8 text-center"
         >
           <span className="text-3xl" aria-hidden="true">🎉</span>
-          <h3 className="font-heading font-bold text-[#1d1d1f] text-xl mt-3 mb-2">
+          <h3 className="font-heading font-bold text-ink text-xl mt-3 mb-2">
             You&apos;re on the list!
           </h3>
-          <p className="text-[#6e6e73] font-body text-sm leading-relaxed">
-            We&apos;ll email your Android APK to <span className="font-semibold text-[#1d1d1f]">{email}</span>.
+          <p className="text-ink-muted font-body text-sm leading-relaxed">
+            We&apos;ll email your Android APK to <span className="font-semibold text-ink">{email}</span>.
             Keep an eye on your inbox (and spam folder, just in case).
           </p>
         </div>
@@ -68,8 +68,8 @@ export function EarlyAccessForm() {
   return (
     <div className="max-w-md mx-auto">
       {/* Explanatory copy */}
-      <p className="text-[#6e6e73] font-body text-sm leading-relaxed mb-6 text-center">
-        Iskotify is in <span className="font-semibold text-[#1d1d1f]">free early access</span> for Android.
+      <p className="text-ink-muted font-body text-sm leading-relaxed mb-6 text-center">
+        Iskotify is in <span className="font-semibold text-ink">free early access</span> for Android.
         We&apos;ll email you the app (APK) to install — before we launch on the Google Play Store.
       </p>
 
@@ -94,7 +94,7 @@ export function EarlyAccessForm() {
 
         <div>
           <label htmlFor="ea-email" className={labelClass}>
-            Email <span className="text-[#800000]">*</span>
+            Email <span className="text-maroon">*</span>
           </label>
           <input
             id="ea-email"
@@ -112,7 +112,7 @@ export function EarlyAccessForm() {
 
         <div>
           <label htmlFor="ea-school" className={labelClass}>
-            School <span className="font-normal text-[#a1a1a6]">(optional)</span>
+            School <span className="font-normal text-ink-subtle">(optional)</span>
           </label>
           <input
             id="ea-school"
@@ -129,7 +129,7 @@ export function EarlyAccessForm() {
 
         <div>
           <label htmlFor="ea-grade-level" className={labelClass}>
-            Grade level <span className="font-normal text-[#a1a1a6]">(optional)</span>
+            Grade level <span className="font-normal text-ink-subtle">(optional)</span>
           </label>
           <input
             id="ea-grade-level"
@@ -144,7 +144,7 @@ export function EarlyAccessForm() {
         </div>
 
         {status === 'error' && (
-          <p role="alert" aria-live="assertive" className="text-sm font-body text-[#800000]">
+          <p role="alert" aria-live="assertive" className="text-sm font-body text-maroon">
             {errorMsg}
           </p>
         )}
@@ -153,12 +153,12 @@ export function EarlyAccessForm() {
           type="submit"
           disabled={submitting}
           aria-busy={submitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#800000] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#a00000] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-maroon px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-maroon-light disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? 'Requesting…' : 'Request early access'}
         </button>
 
-        <p className="text-center text-xs font-body text-[#a1a1a6]">
+        <p className="text-center text-xs font-body text-ink-subtle">
           Free · No subscription · We&apos;ll only email you about your early-access access.
         </p>
       </form>
