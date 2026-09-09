@@ -192,13 +192,19 @@ grep -o '\.text-ink-subtle{[^}]*}' .next/static/css/*.css
 # Native
 cd apps/mobile && npx tsc --noEmit && npx jest
 
-# Mechanical UI anti-pattern scan (web only)
-node <impeccable>/scripts/detect.mjs --json apps/admin/app apps/admin/components
+# Mechanical UI anti-pattern scan (web only; native has no equivalent).
+# Impeccable >= 4.3 ships a compiled binary and no longer has scripts/detect.mjs.
+# Findings print to stderr; stdout carries --json.
+~/.agents/skills/impeccable/scripts/impeccable detect apps/admin/app apps/admin/components
 ```
 
 A Tailwind class that does not resolve to a token **fails silently** — Tailwind
 emits nothing and the element simply has no colour. Grepping the built CSS is the
 only way to be sure a new token class landed.
+
+The detector checks anti-patterns (dated easing, overused fonts, and similar). It
+does **not** check contrast — it read `#aeaeb2` on white without complaint. A clean
+detector run says nothing about whether a colour is legible; compute the ratio.
 
 `npx next build` fails at prerender without Supabase credentials in
 `apps/admin/.env.local`. `✓ Compiled successfully` plus a clean type check is the
