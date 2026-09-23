@@ -33,7 +33,7 @@ describe('/api/kb/drive-sync', () => {
     mockSync.mockReset()
     mockSync.mockResolvedValue(SUMMARY)
     vi.stubEnv('CRON_SECRET', 'cron-secret-value')
-    vi.stubEnv('KB_DRIVE_FOLDER_ID', '1QYhBX6SE1B8VwxgPya2xe7MPLpu3YpvB')
+    vi.stubEnv('KB_DRIVE_FOLDER_ID', 'test-folder-id-0000000000')
     mockRequireAdmin.mockResolvedValue({ error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) })
   })
 
@@ -58,7 +58,7 @@ describe('/api/kb/drive-sync', () => {
     expect(await res.json()).toEqual(SUMMARY)
     const [db, , , opts] = mockSync.mock.calls[0]!
     expect(db).toBe(serviceClient)
-    expect(opts).toMatchObject({ rootId: '1QYhBX6SE1B8VwxgPya2xe7MPLpu3YpvB', deadline: expect.any(Number) })
+    expect(opts).toMatchObject({ rootId: 'test-folder-id-0000000000', deadline: expect.any(Number) })
   })
 
   it('runs the sync for an admin session (POST from the Sync now button)', async () => {
