@@ -47,6 +47,14 @@ jest.mock('../../../../hooks/useRecordAttempts', () => ({
   useRecordAttempts: () => ({ recordAttempts: mockRecordAttempts }),
 }))
 
+// Post-session Estimated Admission Score delta (Task 5) — only wired for the
+// 'upcat' blueprint slug. Mocked the same way as subtest.test.tsx so this file
+// doesn't need to simulate the settings/attempts/cutoffs query chain.
+const mockLoadSnapshot = jest.fn()
+jest.mock('../../../../hooks/useAdmissionEstimate', () => ({
+  loadAdmissionEstimateSnapshot: (...args: unknown[]) => mockLoadSnapshot(...args),
+}))
+
 const mockGetExamBlueprint = jest.fn()
 const mockGetQuestionsByCategory = jest.fn()
 const mockGetAllPassages = jest.fn()
@@ -94,6 +102,8 @@ describe('BlueprintExam', () => {
     mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q1, Q2]]]))
     mockGetAllPassages.mockResolvedValue([])
     mockGetTargetCourseClusters.mockResolvedValue([])
+    mockLoadSnapshot.mockReset()
+    mockLoadSnapshot.mockResolvedValue({ status: 'not-ready', readiness: null, result: null })
 
     // buildBlueprintExam shuffles its section pool (utils/examBuilder.ts). Pin
     // Math.random so the 2-item pool always reverses to [Q2, Q1] — makes the
@@ -168,5 +178,51 @@ describe('BlueprintExam', () => {
     expect(warnSpy).toHaveBeenCalledWith('[exam/[slug]] recordAttempts failed:', expect.any(Error))
 
     warnSpy.mockRestore()
+  })
+
+  it('shows the Estimated Admission Score delta after finishing the "upcat" blueprint mock when already ready before', async () => {
+    mockSearchParams = { slug: 'upcat' }
+    mockGetExamBlueprint.mockResolvedValue({ ...BLUEPRINT, slug: 'upcat' })
+    mockLoadSnapshot
+      .mockResolvedValueOnce({ status: 'ready', readiness: null, result: { point: 2.40, low: 2.20, high: 2.60 } }) // before
+      .mockResolvedValueOnce({ status: 'ready', readiness: null, result: { point: 2.33, low: 2.13, high: 2.53 } }) // after
+
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+    fireEvent.press(screen.getByText('Full Mock'))
+
+    await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(await screen.findByText('Estimated Admission Score 2.40 → 2.33, lower is better')).toBeTruthy()
+  })
+
+  it('does not compute a delta for non-upcat blueprints', async () => {
+    // slug stays 'test-mock' (default) — loadAdmissionEstimateSnapshot must not be called.
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+    fireEvent.press(screen.getByText('Full Mock'))
+
+    await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(mockLoadSnapshot).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Estimated Admission Score/)).toBeNull()
   })
 })

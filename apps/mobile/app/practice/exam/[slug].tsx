@@ -6,6 +6,8 @@ import { useDb } from '../../../hooks/useDb'
 import { subscribe } from '../../../services/queryCache'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
+import { loadAdmissionEstimateSnapshot, type AdmissionEstimateSnapshot } from '../../../hooks/useAdmissionEstimate'
+import { estimateDeltaMessage } from '../../../utils/estimateDelta'
 import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
 import {
   buildBlueprintExam, buildStudySprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
@@ -157,6 +159,9 @@ export default function BlueprintExam() {
   const [reported, setReported] = useState<Record<number, boolean>>({})
   const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
+  // Post-session Estimated Admission Score delta — UPCAT-only (the estimator
+  // is UPCAT-specific); null for every other blueprint slug.
+  const [scoreDelta, setScoreDelta] = useState<string | null>(null)
 
   // Countdown timer. endTime is an absolute timestamp so the clock stays accurate even
   // if the interval drifts. The total timer always runs; per-section timers run when
@@ -289,6 +294,19 @@ export default function BlueprintExam() {
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
+
+    // Post-session delta — UPCAT only. Snapshot before this session's
+    // attempts are written; best-effort, must never block reaching results.
+    const isUpcat = slug === 'upcat'
+    let beforeEstimate: AdmissionEstimateSnapshot | null = null
+    if (isUpcat) {
+      try {
+        beforeEstimate = await loadAdmissionEstimateSnapshot(db)
+      } catch (err) {
+        console.warn('[exam/[slug]] pre-session estimate snapshot failed:', err)
+      }
+    }
+
     if (blueprint) {
       // Group raw correct/total by section for the gamification record.
       const bySection = new Map<string, { correct: number; total: number }>()
@@ -337,6 +355,16 @@ export default function BlueprintExam() {
         })
       }
     }
+
+    if (isUpcat) {
+      try {
+        const afterEstimate = await loadAdmissionEstimateSnapshot(db)
+        setScoreDelta(estimateDeltaMessage(beforeEstimate, afterEstimate))
+      } catch (err) {
+        console.warn('[exam/[slug]] post-session estimate snapshot failed:', err)
+      }
+    }
+
     setPhase('results')
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
@@ -534,6 +562,12 @@ export default function BlueprintExam() {
             <Text style={s.bandBlurb}>{pb.blurb}</Text>
             <Text style={s.bandDisclaimer}>Estimated percentile (not a normed score)</Text>
           </View>
+
+          {scoreDelta ? (
+            <View style={s.deltaCard}>
+              <Text style={s.deltaText}>{scoreDelta}</Text>
+            </View>
+          ) : null}
 
           <Text style={s.sectionLbl}>Per-section</Text>
           {Array.from(bySection.entries()).map(([name, b]) => (
@@ -813,6 +847,11 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     scoreVerdict: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     scoreSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
     scorePenalty: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, marginTop: 6, fontFamily: 'Lexend_600SemiBold' },
+    deltaCard: {
+      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.border, borderRadius: 12,
+      borderCurve: 'continuous', padding: spacing.md, marginBottom: 18, alignItems: 'center',
+    },
+    deltaText: { fontSize: typo.sm, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold', textAlign: 'center' },
     sectionLbl: {
       fontSize: typo.sm, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8,
       marginBottom: 8, marginTop: 8, fontFamily: 'Lexend_600SemiBold',

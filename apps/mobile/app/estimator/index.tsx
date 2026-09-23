@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -9,142 +9,95 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { router, useFocusEffect } from 'expo-router'
-import { useDb } from '../../hooks/useDb'
+import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { getSettings, updateSettings } from '../../services/settings'
-import { computeHsGwa, isTargetCampusFar } from '../../utils/estimatorInputs'
-import { rollingSubtestAverages } from '../../utils/subtestRolling'
-import { practiceSessions } from '../../db/schema'
-import { supabase } from '../../services/supabase'
+import { spacing, radius } from '../../theme/tokens'
+import { useAdmissionEstimate } from '../../hooks/useAdmissionEstimate'
+import { MIN_ANSWERS, type SubtestKey } from '../../utils/subtestReadiness'
+import type { CampusStatus } from '../../utils/admissionEstimate'
+import { Badge } from '../../components/ui/Badge'
 import {
   ScoreDisclaimerModal,
   ScoreDisclaimerNotice,
 } from '../../components/estimator/ScoreDisclaimerModal'
 
-// ── RPC response shape ────────────────────────────────────────────────────────
+// Display order + the exact subtest label utils/upcatExam.ts's SUBTESTS and the
+// drill route (app/practice/upcat/[subtest].tsx) expect.
+const SUBTEST_ROWS: { key: SubtestKey; label: string }[] = [
+  { key: 'math', label: 'Mathematics' },
+  { key: 'reading', label: 'Reading Comprehension' },
+  { key: 'language', label: 'Language Proficiency' },
+  { key: 'science', label: 'Science' },
+]
 
-interface EeasResult {
-  palugit: number
-  pabigat: number
+const STATUS_GROUPS: CampusStatus[] = ['Likely', 'Possible', 'Unlikely']
+const STATUS_TONE: Record<CampusStatus, 'success' | 'warning' | 'neutral'> = {
+  Likely: 'success',
+  Possible: 'warning',
+  Unlikely: 'neutral',
 }
 
-interface CampusRow {
-  campus: string
-  cutoff: number
-  isEstimate: boolean
-  year: number | null
-  status: 'Likely' | 'Possible' | 'Unlikely'
-  gap: number
-}
-
-interface EstimateResult {
-  point: number
-  low: number
-  high: number
-  eeas: EeasResult
-  campuses: CampusRow[]
-}
-
-// ── Range Bar ─────────────────────────────────────────────────────────────────
+// ── Range bar (lower is better; the point sits inside the low–high band) ──────
 
 function RangeBar({
   point,
   low,
   high,
   t,
+  typo,
 }: {
   point: number
   low: number
   high: number
   t: ReturnType<typeof useTheme>['theme']
+  typo: ReturnType<typeof useTheme>['typo']
 }) {
-  // 1.0 = best, 5.0 = worst (lower is better)
   const MIN = 1.0
   const MAX = 5.0
   const span = MAX - MIN
-
-  const pctLow = Math.max(0, Math.min(1, (low - MIN) / span))
-  const pctHigh = Math.max(0, Math.min(1, (high - MIN) / span))
-  const pctPoint = Math.max(0, Math.min(1, (point - MIN) / span))
+  const pct = (v: number) => Math.max(0, Math.min(1, (v - MIN) / span))
 
   return (
     <View>
       <Text
-        style={{
-          fontFamily: 'Outfit_700Bold',
-          fontSize: 18,
-          color: t.textPrimary,
-          marginBottom: 6,
-        }}
+        style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.xl, color: t.textPrimary, marginBottom: 4 }}
+        maxFontSizeMultiplier={1.6}
       >
-        {point.toFixed(2)}{' '}
-        <Text
-          style={{
-            fontFamily: 'Lexend_400Regular',
-            fontSize: 13,
-            color: t.textSecondary,
-          }}
-        >
-          (range {low.toFixed(2)}–{high.toFixed(2)})
-        </Text>
+        {point.toFixed(2)}
+      </Text>
+      <Text
+        style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: 10 }}
+        maxFontSizeMultiplier={1.6}
+      >
+        Range {low.toFixed(2)}–{high.toFixed(2)} · lower is better
       </Text>
 
-      {/* Bar track */}
       <View
         style={{
-          height: 12,
-          backgroundColor: t.surface2,
-          borderRadius: 8,
-          marginVertical: 6,
-          position: 'relative',
-          overflow: 'hidden',
+          height: 12, backgroundColor: t.surface2, borderRadius: radius.sm,
+          marginVertical: spacing.xs, overflow: 'hidden',
         }}
       >
-        {/* Shaded band */}
         <View
           style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: `${pctLow * 100}%`,
-            width: `${(pctHigh - pctLow) * 100}%`,
-            backgroundColor: 'rgba(128,0,0,0.32)',
+            position: 'absolute', top: 0, bottom: 0,
+            left: `${pct(low) * 100}%`, width: `${(pct(high) - pct(low)) * 100}%`,
+            backgroundColor: t.accentSurface,
           }}
         />
-        {/* Point marker */}
         <View
           style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: `${pctPoint * 100}%`,
-            width: 3,
-            backgroundColor: '#831626',
-            borderRadius: 2,
-            transform: [{ translateX: -1.5 }],
+            position: 'absolute', top: 0, bottom: 0, left: `${pct(point) * 100}%`,
+            width: 3, backgroundColor: t.accent, borderRadius: 2, transform: [{ translateX: -1.5 }],
           }}
         />
       </View>
 
-      {/* Labels */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text
-          style={{
-            fontFamily: 'Lexend_400Regular',
-            fontSize: 11,
-            color: t.textTertiary,
-          }}
-        >
+        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }} maxFontSizeMultiplier={1.6}>
           1.00 (best)
         </Text>
-        <Text
-          style={{
-            fontFamily: 'Lexend_400Regular',
-            fontSize: 11,
-            color: t.textTertiary,
-          }}
-        >
+        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }} maxFontSizeMultiplier={1.6}>
           5.00 (worst)
         </Text>
       </View>
@@ -152,61 +105,11 @@ function RangeBar({
   )
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────────
-
-/** Normalize the RPC's lowercase status to the capitalized UI union. */
-function capitalizeStatus(raw: string | null | undefined): CampusRow['status'] {
-  switch (String(raw ?? '').toLowerCase()) {
-    case 'likely': return 'Likely'
-    case 'possible': return 'Possible'
-    default: return 'Unlikely'
-  }
-}
-
-function StatusBadge({ status }: { status: CampusRow['status'] }) {
-  const config =
-    status === 'Likely'
-      ? { bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.32)', color: '#4ade80' }
-      : status === 'Possible'
-        ? { bg: 'rgba(245,158,11,0.14)', border: 'rgba(245,158,11,0.32)', color: '#fbbf24' }
-        : { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.45)' }
-
-  return (
-    <View
-      style={{
-        backgroundColor: config.bg,
-        borderWidth: 1,
-        borderColor: config.border,
-        borderRadius: 8,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        alignSelf: 'flex-start',
-      }}
-    >
-      <Text
-        style={{
-          fontFamily: 'Lexend_600SemiBold',
-          fontSize: 11,
-          color: config.color,
-        }}
-      >
-        {status}
-      </Text>
-    </View>
-  )
-}
-
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function EstimatorScreen() {
-  const db = useDb()
   const { theme: t, typo } = useTheme()
-
-  const [showDisclaimer, setShowDisclaimer] = useState(false)
-  const [gradesReady, setGradesReady] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<EstimateResult | null>(null)
+  const { status, readiness, result, acknowledgeDisclaimer } = useAdmissionEstimate()
 
   const s = useMemo(
     () =>
@@ -215,280 +118,92 @@ export default function EstimatorScreen() {
         header: {
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingTop: 8,
-          paddingBottom: 12,
+          paddingHorizontal: spacing.xl,
+          paddingTop: spacing.sm,
+          paddingBottom: spacing.md,
           borderBottomWidth: 1,
           borderBottomColor: t.border,
         },
-        backBtn: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-          color: t.textTertiary,
-          marginRight: 12,
-        },
-        title: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.h3,
-          color: t.textPrimary,
-          flex: 1,
-        },
-        content: {
-          paddingHorizontal: 16,
-          paddingTop: 16,
-          paddingBottom: 60,
-        },
+        backBtn: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginRight: spacing.md },
+        title: { fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 },
+        content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 60 },
         card: {
-          backgroundColor: t.surface,
-          borderWidth: 1,
-          borderColor: t.border,
-          borderRadius: 18,
-          padding: 16,
-          marginBottom: 12,
+          backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
+          borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.md,
         },
-        cardTitle: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.base,
-          color: t.textPrimary,
-          marginBottom: 12,
-        },
-        sectionLabel: {
-          fontFamily: 'Lexend_600SemiBold',
-          fontSize: typo.xs,
-          color: t.textTertiary,
-          textTransform: 'uppercase',
-          letterSpacing: 1,
-          marginBottom: 8,
-        },
-        chip: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          borderWidth: 1,
-          borderRadius: 8,
-          paddingHorizontal: 10,
-          paddingVertical: 6,
-          alignSelf: 'flex-start',
-          marginBottom: 6,
-        },
-        chipText: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-        },
+        cardTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textPrimary, marginBottom: spacing.md },
         campusRow: {
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          paddingVertical: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: t.border,
-          gap: 8,
+          flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+          paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: t.border, gap: spacing.sm,
         },
-        campusName: {
-          fontFamily: 'Outfit_600SemiBold',
-          fontSize: typo.sm,
-          color: t.textPrimary,
-          flex: 1,
-          flexShrink: 1,
+        campusName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary, flex: 1, flexShrink: 1 },
+        campusMeta: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginTop: 2 },
+        subtestRow: {
+          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+          paddingVertical: spacing.sm - 2,
         },
-        campusCutoff: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.xs,
-          color: t.textTertiary,
-          marginTop: 2,
+        subtestName: { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textSecondary },
+        subtestPct: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textPrimary },
+        unlockRow: {
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+          paddingVertical: spacing.sm, gap: spacing.sm,
         },
-        campusGap: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.xs,
-          color: t.textTertiary,
-          marginTop: 4,
+        unlockLabel: { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textPrimary, flex: 1 },
+        unlockBtn: {
+          minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md,
+          borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.accentSurface,
         },
-        emptyTitle: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.xl,
-          color: t.textPrimary,
-          marginBottom: 8,
-        },
-        emptySubtitle: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-          color: t.textSecondary,
-          marginBottom: 24,
-          lineHeight: 20,
-        },
+        unlockBtnTxt: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.accentText },
+        emptyTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.xl, color: t.textPrimary, marginBottom: spacing.sm },
+        emptySubtitle: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 20 },
         primaryBtn: {
-          backgroundColor: 'rgba(128,0,0,0.82)',
-          borderRadius: 14,
-          paddingVertical: 13,
-          alignItems: 'center',
+          minHeight: 48, backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous',
+          paddingVertical: spacing.md, alignItems: 'center', justifyContent: 'center',
         },
-        primaryBtnText: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.base,
-          color: '#fff',
-        },
-        editLink: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-          color: t.accentText,
-          textDecorationLine: 'underline',
-          marginTop: 4,
-        },
-        errorText: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-          color: t.textSecondary,
-          marginBottom: 16,
-          lineHeight: 20,
-        },
+        primaryBtnText: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
+        editLink: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.accentText, textDecorationLine: 'underline', marginTop: spacing.xs, minHeight: 44, textAlignVertical: 'center' },
+        eeasLine: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.xs, lineHeight: 19 },
       }),
     [t, typo],
   )
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const notReadyRows = readiness
+    ? SUBTEST_ROWS.filter(row => readiness[row.key].needed > 0)
+    : []
 
-    try {
-      const settings = await getSettings(db)
-
-      // ── Disclaimer gate ────────────────────────────────────────────────────
-      if (!settings.scoreDisclaimerAck) {
-        setShowDisclaimer(true)
-        setLoading(false)
-        return
-      }
-
-      // ── Grades check ──────────────────────────────────────────────────────
-      const hsGWA = computeHsGwa({
-        g8: settings.hsGwaG8,
-        g9: settings.hsGwaG9,
-        g10: settings.hsGwaG10,
-        g11: settings.hsGwaG11,
-      })
-
-      if (hsGWA == null) {
-        setGradesReady(false)
-        setLoading(false)
-        return
-      }
-
-      setGradesReady(true)
-
-      // ── Rolling subtest averages from local sessions ───────────────────────
-      const rawSessions = await db.select().from(practiceSessions)
-      const sessions = rawSessions.map((row) => ({
-        subtest: row.subtest ?? '',
-        score: row.score,
-        total: row.total,
-        completedAt: row.completedAt,
-      }))
-      const { math, reading, language, science } = rollingSubtestAverages(sessions)
-
-      // ── Build RPC payload ─────────────────────────────────────────────────
-      type Payload = {
-        hsGWA: number
-        schoolType?: string
-        isIndigenous?: boolean
-        targetCampusFar?: boolean
-        math?: number
-        reading?: number
-        language?: number
-        science?: number
-      }
-
-      const payload: Payload = {
-        hsGWA,
-      }
-      if (settings.schoolType) payload.schoolType = settings.schoolType
-      if (settings.isIndigenous != null) payload.isIndigenous = settings.isIndigenous
-      payload.targetCampusFar = isTargetCampusFar(
-        settings.targetCampus ?? undefined,
-        settings.province ?? undefined,
-      )
-      // Only send subtest values when non-null — RPC uses baseline for missing
-      if (math != null) payload.math = math
-      if (reading != null) payload.reading = reading
-      if (language != null) payload.language = language
-      if (science != null) payload.science = science
-
-      // ── Call RPC ─────────────────────────────────────────────────────────
-      const { data, error: rpcError } = await supabase.rpc('estimate_admission_score', {
-        payload,
-      })
-
-      if (rpcError) {
-        setError("Couldn't reach the server — connect to get your estimate.")
-        setLoading(false)
-        return
-      }
-
-      // RPC returns lowercase status ('likely' | 'possible' | 'unlikely'); normalize
-      // to the capitalized union the UI renders/compares against.
-      const raw = data as Omit<EstimateResult, 'campuses'> & { campuses?: Array<Omit<CampusRow, 'status'> & { status: string }> }
-      const normalized: EstimateResult = {
-        ...raw,
-        campuses: (raw?.campuses ?? []).map(c => ({ ...c, status: capitalizeStatus(c.status) })),
-      }
-      setResult(normalized)
-    } catch {
-      setError("Couldn't reach the server — connect to get your estimate.")
-    } finally {
-      setLoading(false)
-    }
-  }, [db])
-
-  useFocusEffect(
-    useCallback(() => {
-      void load()
-    }, [load]),
-  )
-
-  // ── Disclaimer acknowledge ─────────────────────────────────────────────────
-
-  async function handleAcknowledge() {
-    await updateSettings(db, { scoreDisclaimerAck: true })
-    setShowDisclaimer(false)
-    void load()
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────
+  const groupedCampuses = result
+    ? STATUS_GROUPS.map(group => ({ group, rows: result.campuses.filter(c => c.status === group) })).filter(g => g.rows.length > 0)
+    : []
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      {/* Non-dismissable disclaimer modal — blocks until acknowledged */}
       <ScoreDisclaimerModal
-        visible={showDisclaimer}
-        onAcknowledge={() => void handleAcknowledge()}
+        visible={status === 'disclaimer'}
+        onAcknowledge={() => void acknowledgeDisclaimer()}
       />
 
-      {/* Header */}
       <View style={s.header}>
         <TouchableOpacity
           onPress={() => router.back()}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
-          <Text style={s.backBtn}>← Back</Text>
+          <Text style={s.backBtn} maxFontSizeMultiplier={1.6}>← Back</Text>
         </TouchableOpacity>
-        <Text style={s.title}>Admission Score Estimator</Text>
+        <Text style={s.title} maxFontSizeMultiplier={1.4}>Admission Score Estimator</Text>
       </View>
 
-      {loading ? (
+      {status === 'loading' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color={t.textPrimary} />
         </View>
-      ) : !gradesReady ? (
-        /* Empty state — no grades yet */
-        <View
-          style={{
-            flex: 1,
-            paddingHorizontal: 32,
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={s.emptyTitle}>No grades yet</Text>
-          <Text style={s.emptySubtitle}>
-            Add your Grade 8–11 GWA to see your estimated admission score.
+      ) : status === 'no-grades' ? (
+        <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
+          <ScoreDisclaimerNotice />
+          <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>No grades yet</Text>
+          <Text style={s.emptySubtitle} maxFontSizeMultiplier={1.6}>
+            Add your Grade 8–11 GWA to see your Estimated Admission Score, based on historical cutoffs.
           </Text>
           <Pressable
             style={s.primaryBtn}
@@ -496,131 +211,117 @@ export default function EstimatorScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add your grades"
           >
-            <Text style={s.primaryBtnText}>Add your grades</Text>
+            <Text style={s.primaryBtnText} maxFontSizeMultiplier={1.4}>Add your grades</Text>
           </Pressable>
-          <TouchableOpacity onPress={() => router.push('/estimator/gwa')} style={{ marginTop: 16, alignSelf: 'center' }}>
-            <Text style={s.editLink}>Open GWA calculator →</Text>
+        </View>
+      ) : status === 'not-ready' ? (
+        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+          <ScoreDisclaimerNotice />
+          <View style={s.card}>
+            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Practice to unlock your estimate</Text>
+            <Text style={[s.emptySubtitle, { marginBottom: spacing.sm }]} maxFontSizeMultiplier={1.6}>
+              Your Estimated Admission Score unlocks once you've answered at least {MIN_ANSWERS} questions
+              in each UPCAT subtest.
+            </Text>
+            {notReadyRows.map(row => {
+              const r = readiness![row.key]
+              return (
+                <View key={row.key} style={s.unlockRow}>
+                  <Text style={s.unlockLabel} maxFontSizeMultiplier={1.6}>
+                    {row.label}: {r.answered} of {MIN_ANSWERS} questions
+                  </Text>
+                  <Pressable
+                    style={s.unlockBtn}
+                    onPress={() => router.push(`/practice/upcat/${row.label}?mode=quick` as never)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Practice ${row.label}`}
+                  >
+                    <Text style={s.unlockBtnTxt} maxFontSizeMultiplier={1.4}>Practice</Text>
+                  </Pressable>
+                </View>
+              )
+            })}
+          </View>
+          <TouchableOpacity onPress={() => router.push('/estimator/grades')} accessibilityRole="button" accessibilityLabel="Edit grades">
+            <Text style={s.editLink} maxFontSizeMultiplier={1.6}>Edit grades →</Text>
           </TouchableOpacity>
-        </View>
-      ) : error ? (
-        /* Offline / server error state */
-        <View
-          style={{
-            flex: 1,
-            paddingHorizontal: 32,
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={s.emptyTitle}>Estimate unavailable</Text>
-          <Text style={s.errorText}>{error}</Text>
-          <Pressable
-            style={s.primaryBtn}
-            onPress={() => void load()}
-            accessibilityRole="button"
-            accessibilityLabel="Retry"
-          >
-            <Text style={s.primaryBtnText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : result ? (
-        /* Main results view */
-        <ScrollView
-          contentContainerStyle={s.content}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Permanent disclaimer notice */}
+        </ScrollView>
+      ) : status === 'ready' && result && readiness ? (
+        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
           <ScoreDisclaimerNotice />
 
-          {/* Estimated score + range bar */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Estimated Admission Score</Text>
-            <RangeBar point={result.point} low={result.low} high={result.high} t={t} />
+            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Estimated Admission Score</Text>
+            <Text style={[s.eeasLine, { marginBottom: spacing.sm }]} maxFontSizeMultiplier={1.6}>
+              Computed on this device, based on historical cutoffs — not your official UPG.
+            </Text>
+            <RangeBar point={result.point} low={result.low} high={result.high} t={t} typo={typo} />
           </View>
 
-          {/* EEAS breakdown */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>EEAS Adjustments</Text>
-
-            {/* Palugit (bonus — lower is better, so palugit subtracts) */}
-            <View
-              style={[
-                s.chip,
-                result.eeas.palugit > 0
-                  ? { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.28)' }
-                  : { backgroundColor: t.surface2, borderColor: t.border },
-              ]}
-            >
-              <Text
-                style={[
-                  s.chipText,
-                  { color: result.eeas.palugit > 0 ? '#4ade80' : t.textTertiary },
-                ]}
-              >
-                {result.eeas.palugit > 0
-                  ? `Palugit: −0.05 applied`
-                  : `Palugit: not eligible`}
-              </Text>
-            </View>
-
-            {/* Pabigat (penalty — adds to score, worse) */}
-            <View
-              style={[
-                s.chip,
-                result.eeas.pabigat > 0
-                  ? { backgroundColor: 'rgba(245,158,11,0.10)', borderColor: 'rgba(245,158,11,0.28)' }
-                  : { backgroundColor: t.surface2, borderColor: t.border },
-              ]}
-            >
-              <Text
-                style={[
-                  s.chipText,
-                  { color: result.eeas.pabigat > 0 ? '#fbbf24' : t.textTertiary },
-                ]}
-              >
-                {result.eeas.pabigat > 0
-                  ? `Pabigat: +0.05 (geographic adjustment — exact value is not publicly available)`
-                  : `Pabigat: not applicable`}
-              </Text>
-            </View>
-          </View>
-
-          {/* Per-campus breakdown */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Per-Campus Outlook</Text>
-            {result.campuses.map((row, idx) => (
-              <View
-                key={row.campus}
-                style={[
-                  s.campusRow,
-                  idx === result.campuses.length - 1 && { borderBottomWidth: 0 },
-                ]}
-              >
-                <View style={{ flex: 1, flexShrink: 1 }}>
-                  <Text style={s.campusName}>{row.campus}</Text>
-                  <Text style={s.campusCutoff}>
-                    Cutoff: {row.cutoff.toFixed(2)}
-                    {row.year != null ? ` (${row.year} estimate)` : (row.isEstimate ? ' (estimate)' : '')}
-                  </Text>
-                  {row.gap !== 0 ? (
-                    <Text style={s.campusGap}>
-                      Gap: {row.gap > 0 ? '+' : ''}
-                      {row.gap.toFixed(2)}
-                    </Text>
-                  ) : null}
-                </View>
-                <StatusBadge status={row.status} />
+            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Your Subtest Scores</Text>
+            {SUBTEST_ROWS.map(row => (
+              <View key={row.key} style={s.subtestRow}>
+                <Text style={s.subtestName} maxFontSizeMultiplier={1.6}>{row.label}</Text>
+                <Text style={s.subtestPct} maxFontSizeMultiplier={1.4}>{readiness[row.key].percent}%</Text>
               </View>
             ))}
           </View>
 
-          {/* Edit grades + GWA calculator links */}
-          <TouchableOpacity onPress={() => router.push('/estimator/grades')}>
-            <Text style={s.editLink}>Edit grades →</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/estimator/gwa')}>
-            <Text style={s.editLink}>Open GWA calculator →</Text>
+          {(result.eeas.palugit > 0 || result.eeas.pabigat > 0) ? (
+            <View style={s.card}>
+              <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>EEAS Adjustment</Text>
+              {result.eeas.palugit > 0 ? (
+                <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
+                  Palugit (public-school / Indigenous Peoples bonus): −{result.eeas.palugit.toFixed(2)}
+                </Text>
+              ) : null}
+              {result.eeas.pabigat > 0 ? (
+                <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
+                  Pabigat (distant target-campus adjustment): +{result.eeas.pabigat.toFixed(2)}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={s.card}>
+            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Per-Campus Outlook</Text>
+            {groupedCampuses.map(({ group, rows }) => (
+              <View key={group}>
+                <View style={{ marginTop: spacing.sm }}>
+                  <Badge label={group} tone={STATUS_TONE[group]} />
+                </View>
+                {rows.map((row, idx) => (
+                  <View
+                    key={`${row.campus}-${row.program ?? ''}`}
+                    style={[s.campusRow, idx === rows.length - 1 && { borderBottomWidth: 0 }]}
+                  >
+                    <View style={{ flex: 1, flexShrink: 1 }}>
+                      <Text style={s.campusName} maxFontSizeMultiplier={1.6}>
+                        {row.campus}{row.program ? ` – ${row.program}` : ''}
+                      </Text>
+                      <Text style={s.campusMeta} maxFontSizeMultiplier={1.6}>
+                        Cutoff: {row.cutoff.toFixed(2)}{row.year != null ? ` (${row.year})` : ''}{row.isEstimate ? ' · estimate' : ''}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity onPress={() => router.push('/estimator/grades')} accessibilityRole="button" accessibilityLabel="Edit grades">
+            <Text style={s.editLink} maxFontSizeMultiplier={1.6}>Edit grades →</Text>
           </TouchableOpacity>
         </ScrollView>
+      ) : status === 'error' ? (
+        <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
+          <ScoreDisclaimerNotice />
+          <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>Estimate unavailable</Text>
+          <Text style={s.emptySubtitle} maxFontSizeMultiplier={1.6}>
+            Something went wrong loading your local data. Try again.
+          </Text>
+        </View>
       ) : null}
     </SafeAreaView>
   )

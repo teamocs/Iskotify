@@ -169,7 +169,7 @@ export default function EstimatorGradesScreen() {
   const errorTextStyle = {
     fontFamily: 'Lexend_400Regular' as const,
     fontSize: typo.sm,
-    color: '#f87171',
+    color: t.danger,
     marginTop: 4,
   }
 
@@ -214,7 +214,7 @@ export default function EstimatorGradesScreen() {
           onPress={() => void handleSave()}
           disabled={saving}
           style={{
-            backgroundColor: saving ? t.surface2 : 'rgba(128,0,0,0.82)',
+            backgroundColor: saving ? t.surface2 : t.accentStrong,
             borderRadius: 12,
             paddingVertical: 8,
             paddingHorizontal: 16,
@@ -223,7 +223,7 @@ export default function EstimatorGradesScreen() {
           {saving ? (
             <ActivityIndicator color={t.textPrimary} size="small" />
           ) : (
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: '#fff' }}>Save</Text>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.textInverse }}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -242,7 +242,7 @@ export default function EstimatorGradesScreen() {
         {/* Grade 8 (optional) */}
         <Text style={labelStyle}>Grade 8 GWA <Text style={{ color: t.textTertiary }}>(optional)</Text></Text>
         <TextInput
-          style={[inputStyle, g8Error ? { borderColor: '#f87171' } : {}]}
+          style={[inputStyle, g8Error ? { borderColor: t.danger } : {}]}
           placeholder="e.g. 88.5"
           placeholderTextColor={t.textTertiary}
           value={g8Text}
@@ -255,7 +255,7 @@ export default function EstimatorGradesScreen() {
         {/* Grade 9 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 9 GWA</Text>
         <TextInput
-          style={[inputStyle, g9Error ? { borderColor: '#f87171' } : {}]}
+          style={[inputStyle, g9Error ? { borderColor: t.danger } : {}]}
           placeholder="e.g. 90.0"
           placeholderTextColor={t.textTertiary}
           value={g9Text}
@@ -268,7 +268,7 @@ export default function EstimatorGradesScreen() {
         {/* Grade 10 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 10 GWA</Text>
         <TextInput
-          style={[inputStyle, g10Error ? { borderColor: '#f87171' } : {}]}
+          style={[inputStyle, g10Error ? { borderColor: t.danger } : {}]}
           placeholder="e.g. 91.5"
           placeholderTextColor={t.textTertiary}
           value={g10Text}
@@ -281,7 +281,7 @@ export default function EstimatorGradesScreen() {
         {/* Grade 11 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 11 GWA</Text>
         <TextInput
-          style={[inputStyle, g11Error ? { borderColor: '#f87171' } : {}]}
+          style={[inputStyle, g11Error ? { borderColor: t.danger } : {}]}
           placeholder="e.g. 92.0"
           placeholderTextColor={t.textTertiary}
           value={g11Text}
@@ -304,15 +304,15 @@ export default function EstimatorGradesScreen() {
                   paddingVertical: 9,
                   paddingHorizontal: 14,
                   borderRadius: 20,
-                  backgroundColor: active ? '#831626' : t.surface2,
+                  backgroundColor: active ? t.accent : t.surface2,
                   borderWidth: 1,
-                  borderColor: active ? '#831626' : t.border,
+                  borderColor: active ? t.accent : t.border,
                 }}
               >
                 <Text style={{
                   fontFamily: 'Lexend_500Medium',
                   fontSize: typo.sm,
-                  color: active ? '#fff' : t.textSecondary,
+                  color: active ? t.textInverse : t.textSecondary,
                 }}>
                   {opt.label}
                 </Text>
@@ -345,8 +345,8 @@ export default function EstimatorGradesScreen() {
           <Switch
             value={isIndigenous}
             onValueChange={setIsIndigenous}
-            trackColor={{ false: t.border, true: 'rgba(128,0,0,0.60)' }}
-            thumbColor={isIndigenous ? '#831626' : t.surface2}
+            trackColor={{ false: t.border, true: t.accentStrong }}
+            thumbColor={isIndigenous ? t.accent : t.surface2}
           />
         </View>
 
@@ -362,9 +362,9 @@ export default function EstimatorGradesScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: active ? 'rgba(128,0,0,0.12)' : t.surface,
+                  backgroundColor: active ? t.accentSurface : t.surface,
                   borderWidth: active ? 2 : 1,
-                  borderColor: active ? '#831626' : t.border,
+                  borderColor: active ? t.accent : t.border,
                   borderRadius: 14,
                   paddingHorizontal: 16,
                   paddingVertical: 13,
@@ -376,8 +376,8 @@ export default function EstimatorGradesScreen() {
                   height: 20,
                   borderRadius: 10,
                   borderWidth: active ? 6 : 2,
-                  borderColor: active ? '#831626' : t.border,
-                  backgroundColor: active ? '#fff' : 'transparent',
+                  borderColor: active ? t.accent : t.border,
+                  backgroundColor: active ? t.textInverse : 'transparent',
                 }} />
                 <Text style={{
                   fontFamily: active ? 'Outfit_600SemiBold' : 'Lexend_400Regular',
@@ -401,7 +401,7 @@ export default function EstimatorGradesScreen() {
           disabled={saving}
           style={{
             marginTop: 32,
-            backgroundColor: saving ? t.surface2 : 'rgba(128,0,0,0.82)',
+            backgroundColor: saving ? t.surface2 : t.accentStrong,
             borderRadius: 16,
             paddingVertical: 15,
             alignItems: 'center',
@@ -410,7 +410,7 @@ export default function EstimatorGradesScreen() {
           {saving ? (
             <ActivityIndicator color={t.textPrimary} size="small" />
           ) : (
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: '#fff' }}>
+            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse }}>
               Save
             </Text>
           )}

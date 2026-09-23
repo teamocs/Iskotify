@@ -1,217 +1,148 @@
 import React from 'react'
-import { render, screen, act } from '@testing-library/react-native'
+import { render, screen, fireEvent } from '@testing-library/react-native'
 import EstimatorScreen from '../index'
+import { useAdmissionEstimate } from '../../../hooks/useAdmissionEstimate'
 
-// ── expo-router ──────────────────────────────────────────────────────────────
-// useFocusEffect must be mocked as a useEffect equivalent so that the callback
-// fires after render (inside the effect phase), not synchronously during render.
-// Calling setState synchronously during render triggers "Too many re-renders".
-jest.mock('expo-router', () => {
-  const { useEffect } = require('react')
-  return {
-    router: { push: jest.fn(), back: jest.fn() },
-    useFocusEffect: (cb: () => (() => void) | void) => useEffect(cb, []),
-  }
-})
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn(), back: jest.fn() },
+}))
 
-// ── safe-area ────────────────────────────────────────────────────────────────
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }))
 
-// ── supabase ─────────────────────────────────────────────────────────────────
-const mockRpc = jest.fn()
-jest.mock('../../../services/supabase', () => ({
-  supabase: { rpc: (...args: any[]) => mockRpc(...args) },
-}))
+jest.mock('../../../hooks/useAdmissionEstimate')
+const mockUseAdmissionEstimate = useAdmissionEstimate as jest.Mock
 
-// ── settings ─────────────────────────────────────────────────────────────────
-const mockGetSettings = jest.fn()
-const mockUpdateSettings = jest.fn()
-jest.mock('../../../services/settings', () => ({
-  getSettings: (...args: any[]) => mockGetSettings(...args),
-  updateSettings: (...args: any[]) => mockUpdateSettings(...args),
-}))
-
-// ── useDb ────────────────────────────────────────────────────────────────────
-// IMPORTANT: useDb() must return a *stable* object reference across renders.
-// If a new object is returned each render, the `db` dep inside `useCallback`
-// changes every render → `load` changes → useFocusEffect fires → infinite loop.
-// The factory creates one db instance (and one mockSelect fn) that persist for
-// the whole test file. mockSelect is accessed via jest.requireMock in tests.
-jest.mock('../../../hooks/useDb', () => {
-  const mockSelect = jest.fn()
-  const db = { select: () => mockSelect() }
-  return { useDb: () => db, __mockSelect: mockSelect }
-})
-
-// ── disclaimer components ─────────────────────────────────────────────────────
 jest.mock('../../../components/estimator/ScoreDisclaimerModal', () => ({
-  ScoreDisclaimerModal: ({ visible }: any) =>
-    visible ? null : null,
+  ScoreDisclaimerModal: ({ visible }: any) => {
+    const { Text } = require('react-native')
+    return visible ? <Text>Score Estimate Disclaimer</Text> : null
+  },
   ScoreDisclaimerNotice: () => {
     const { Text } = require('react-native')
     return <Text>Unofficial estimate — verify at upcat.up.edu.ph</Text>
   },
 }))
 
-// ── sample data ───────────────────────────────────────────────────────────────
-
-const SAMPLE_SETTINGS = {
-  hsGwaG8: 90,
-  hsGwaG9: 91,
-  hsGwaG10: 92,
-  hsGwaG11: 93,
-  schoolType: 'public_general',
-  isIndigenous: false,
-  targetCampus: 'UP Diliman',
-  province: 'Metro Manila',
-  scoreDisclaimerAck: true,
-}
-
-// NOTE: the estimate_admission_score RPC returns LOWERCASE status strings
-// ('likely' | 'possible' | 'unlikely'). The screen normalizes them to the
-// capitalized union the badges render — these fixtures use the real lowercase
-// values so the badge assertions below are a genuine regression test.
-const SAMPLE_RPC_RESULT = {
-  point: 2.25,
-  low: 2.00,
-  high: 2.50,
-  eeas: { palugit: 0, pabigat: 0 },
+const READY_RESULT = {
+  point: 2.352,
+  low: 2.152,
+  high: 2.552,
+  eeas: { palugit: 0.05, pabigat: 0, eligiblePalugit: true },
   campuses: [
-    {
-      campus: 'UP Diliman',
-      cutoff: 2.10,
-      isEstimate: true,
-      year: 2025,
-      status: 'possible',
-      gap: 0.15,
-    },
-    {
-      campus: 'UP Los Baños',
-      cutoff: 2.50,
-      isEstimate: false,
-      year: null,
-      status: 'likely',
-      gap: -0.25,
-    },
+    { campus: 'UP Diliman', program: 'BS Computer Science', cutoff: 1.55, year: 2025, isEstimate: false, status: 'Unlikely', gap: 0.8 },
+    { campus: 'UP Diliman', program: null, cutoff: 2.174, year: 2019, isEstimate: true, status: 'Possible', gap: 0.178 },
+    { campus: 'UP Baguio', program: null, cutoff: 2.6, year: 2019, isEstimate: true, status: 'Likely', gap: -0.25 },
   ],
 }
 
+const READY_READINESS = {
+  math: { percent: 65, answered: 30, needed: 0 },
+  reading: { percent: 70, answered: 25, needed: 0 },
+  language: { percent: 72, answered: 22, needed: 0 },
+  science: { percent: 60, answered: 20, needed: 0 },
+  ready: true,
+}
+
+const NOT_READY_READINESS = {
+  math: { percent: null, answered: 5, needed: 15 },
+  reading: { percent: null, answered: 0, needed: 20 },
+  language: { percent: 80, answered: 20, needed: 0 },
+  science: { percent: null, answered: 12, needed: 8 },
+  ready: false,
+}
+
+function mockState(overrides: Partial<ReturnType<typeof useAdmissionEstimate>>) {
+  mockUseAdmissionEstimate.mockReturnValue({
+    status: 'loading',
+    readiness: null,
+    result: null,
+    acknowledgeDisclaimer: jest.fn(),
+    reload: jest.fn(),
+    ...overrides,
+  })
+}
+
 describe('EstimatorScreen', () => {
-  // Access the stable mockSelect exposed by the useDb factory.
-  // jest.requireMock is evaluated at test-run time (after hoisting), so this is safe.
-  let mockSelect: jest.Mock
-  beforeEach(() => {
-    mockSelect = (jest.requireMock('../../../hooks/useDb') as any).__mockSelect
-    jest.clearAllMocks()
+  beforeEach(() => jest.clearAllMocks())
 
-    mockGetSettings.mockResolvedValue(SAMPLE_SETTINGS)
-
-    // Mock local session query: select().from(practiceSessions) → []
-    mockSelect.mockReturnValue({
-      from: jest.fn().mockResolvedValue([]),
-    })
-
-    mockRpc.mockResolvedValue({ data: SAMPLE_RPC_RESULT, error: null })
+  it('renders the screen title', () => {
+    mockState({ status: 'loading' })
+    render(<EstimatorScreen />)
+    expect(screen.getByText(/Admission Score Estimator/i)).toBeTruthy()
   })
 
-  it('renders the screen title', async () => {
+  it('shows the disclaimer modal when not yet acknowledged', () => {
+    mockState({ status: 'disclaimer' })
     render(<EstimatorScreen />)
-    // Header title is rendered immediately before async load completes
-    expect(screen.getByText('Admission Score Estimator')).toBeTruthy()
+    expect(screen.getByText('Score Estimate Disclaimer')).toBeTruthy()
   })
 
-  it('shows the range bar with point estimate after RPC resolves', async () => {
+  it('prompts to add grades when there are no grades yet', () => {
+    mockState({ status: 'no-grades' })
     render(<EstimatorScreen />)
-    // findByText waits for async state updates
-    expect(await screen.findByText(/2\.25/)).toBeTruthy()
-    expect(await screen.findByText(/range 2\.00–2\.50/)).toBeTruthy()
+    expect(screen.getByText(/No grades yet/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /add your grades/i })).toBeTruthy()
   })
 
-  it('renders per-campus rows', async () => {
+  it('shows a practice-to-unlock card per subtest when not ready, with a link into each drill', () => {
+    mockState({ status: 'not-ready', readiness: NOT_READY_READINESS as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText('UP Diliman')).toBeTruthy()
-    expect(await screen.findByText('UP Los Baños')).toBeTruthy()
+    expect(screen.getByText(/Practice to unlock/i)).toBeTruthy()
+    expect(screen.getByText(/Science: 12 of 20 questions/i)).toBeTruthy()
+    expect(screen.getByText(/Mathematics: 5 of 20 questions/i)).toBeTruthy()
+    // Language is already ready — should not show a "needed" row for it.
+    expect(screen.queryByText(/Language Proficiency: 20 of 20/i)).toBeNull()
   })
 
-  it('renders Possible status badge for UP Diliman', async () => {
+  it('shows the low–high range with the point estimate marked when ready, saying lower is better', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText('Possible')).toBeTruthy()
+    expect(screen.getByText(/2\.35/)).toBeTruthy()
+    expect(screen.getByText(/2\.15/)).toBeTruthy()
+    expect(screen.getByText(/2\.55/)).toBeTruthy()
+    expect(screen.getByText(/lower is better/i)).toBeTruthy()
   })
 
-  it('renders Likely status badge for UP Los Baños', async () => {
+  it('shows the four subtest percentages when ready', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText('Likely')).toBeTruthy()
+    expect(screen.getByText(/65%/)).toBeTruthy()
+    expect(screen.getByText(/70%/)).toBeTruthy()
+    expect(screen.getByText(/72%/)).toBeTruthy()
+    expect(screen.getByText(/60%/)).toBeTruthy()
   })
 
-  it('shows palugit not eligible when palugit=0', async () => {
+  it('shows the EEAS adjustment line when a palugit or pabigat applies', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText(/Palugit: not eligible/)).toBeTruthy()
+    expect(screen.getByText(/palugit/i)).toBeTruthy()
   })
 
-  it('shows pabigat not applicable when pabigat=0', async () => {
+  it('groups campuses by Likely / Possible / Unlikely, shows cutoff + year, program name, and marks estimates', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText(/Pabigat: not applicable/)).toBeTruthy()
+    expect(screen.getByText('Likely')).toBeTruthy()
+    expect(screen.getByText('Possible')).toBeTruthy()
+    expect(screen.getByText('Unlikely')).toBeTruthy()
+    expect(screen.getByText(/BS Computer Science/)).toBeTruthy()
+    expect(screen.getAllByText(/2019/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/estimate/i).length).toBeGreaterThan(0)
   })
 
-  it('renders edit grades link', async () => {
+  it('keeps the inline disclaimer notice visible in every non-modal state', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText(/Edit grades/)).toBeTruthy()
+    expect(screen.getByText(/Unofficial estimate/)).toBeTruthy()
   })
 
-  it('shows empty state when no grades are set', async () => {
-    mockGetSettings.mockResolvedValue({
-      ...SAMPLE_SETTINGS,
-      hsGwaG8: null,
-      hsGwaG9: null,
-      hsGwaG10: null,
-      hsGwaG11: null,
-    })
+  it('links to /estimator/grades to add or edit grades', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
-    expect(await screen.findByText('No grades yet')).toBeTruthy()
-    expect(await screen.findByText(/Add your Grade 8–11 GWA/)).toBeTruthy()
-  })
-
-  it('shows offline error state when RPC fails', async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: 'Network error' } })
-    render(<EstimatorScreen />)
-    expect(await screen.findByText(/Couldn't reach the server/)).toBeTruthy()
-    expect(await screen.findByText('Retry')).toBeTruthy()
-  })
-
-  it('shows EEAS palugit chip when palugit > 0', async () => {
-    mockRpc.mockResolvedValue({
-      data: {
-        ...SAMPLE_RPC_RESULT,
-        eeas: { palugit: 1, pabigat: 0 },
-      },
-      error: null,
-    })
-    render(<EstimatorScreen />)
-    expect(await screen.findByText(/Palugit: −0\.05 applied/)).toBeTruthy()
-  })
-
-  it('shows EEAS pabigat chip when pabigat > 0', async () => {
-    mockRpc.mockResolvedValue({
-      data: {
-        ...SAMPLE_RPC_RESULT,
-        eeas: { palugit: 0, pabigat: 1 },
-      },
-      error: null,
-    })
-    render(<EstimatorScreen />)
-    expect(await screen.findByText(/Pabigat: \+0\.05/)).toBeTruthy()
-  })
-
-  it('passes correct payload to RPC', async () => {
-    render(<EstimatorScreen />)
-    await screen.findByText(/2\.25/)
-    expect(mockRpc).toHaveBeenCalledWith('estimate_admission_score', {
-      payload: expect.objectContaining({
-        hsGWA: expect.any(Number),
-      }),
-    })
+    fireEvent.press(screen.getByText(/Edit grades/i))
+    const { router } = require('expo-router')
+    expect(router.push).toHaveBeenCalledWith('/estimator/grades')
   })
 })

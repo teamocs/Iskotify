@@ -12,6 +12,7 @@ import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
+import { AdmissionEstimateCard } from '../../components/home/AdmissionEstimateCard'
 import { SubjectPreparednessGrid } from '../../components/home/SubjectPreparednessGrid'
 import { RecommendedScholarships } from '../../components/home/RecommendedScholarships'
 import { NewsAndDates } from '../../components/home/NewsAndDates'
@@ -409,6 +410,11 @@ export default function HomeScreen() {
             listingAccuracy={listingAccuracy}
             onAddListing={addListing}
           />
+
+          {/* (2b) Estimated Admission Score — compact entry into /estimator */}
+          <View style={{ marginTop: spacing.lg }}>
+            <AdmissionEstimateCard />
+          </View>
 
           {/* (3) Subject preparedness — 2×3 grid */}
           <SubjectPreparednessGrid

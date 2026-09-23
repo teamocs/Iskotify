@@ -88,6 +88,21 @@ jest.mock('../../../hooks/useHomeCatalog', () => ({
   useHomeCatalog: () => mockUseHomeCatalog(),
 }))
 
+// AdmissionEstimateCard reads this hook directly — mocked here the same way
+// as the other Home data hooks above, so Home's own tests never exercise the
+// on-device settings/attempts/cutoffs pipeline.
+const mockUseAdmissionEstimate = jest.fn()
+jest.mock('../../../hooks/useAdmissionEstimate', () => ({
+  useAdmissionEstimate: () => mockUseAdmissionEstimate(),
+}))
+const emptyAdmissionEstimate = {
+  status: 'no-grades' as const,
+  readiness: null,
+  result: null,
+  acknowledgeDisclaimer: jest.fn(),
+  reload: jest.fn(),
+}
+
 jest.mock('../../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({ sessionCount: 0, streak: 0 }),
 }))
@@ -163,6 +178,7 @@ describe('HomeScreen', () => {
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     mockUseStudyPlan.mockReturnValue(emptyStudyPlan)
+    mockUseAdmissionEstimate.mockReturnValue(emptyAdmissionEstimate)
     mockAddListing.mockClear()
     mockTopicBest.value = []
     mockSubjectBest.value = []
@@ -629,5 +645,13 @@ describe('HomeScreen', () => {
     expect(idx('Explore')).toBeGreaterThan(idx('Subject preparedness'))
     expect(idx('Recommended Scholarships')).toBeGreaterThan(idx('Explore'))
     expect(idx('News & Dates')).toBeGreaterThan(idx('Recommended Scholarships'))
+  })
+
+  it('shows the Estimated Admission Score card and opens the estimator on tap', () => {
+    const { router } = require('expo-router')
+    render(<HomeScreen />)
+    expect(screen.getByText('Estimated Admission Score')).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: /estimated admission score/i }))
+    expect(router.push).toHaveBeenCalledWith('/estimator')
   })
 })
