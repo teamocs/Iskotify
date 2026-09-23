@@ -132,4 +132,29 @@ describe('importUpcatCore', () => {
     expect(inserted.questions.find((q: any) => q.question_id === 'M1').skill_category).toBe('Mathematics')
     expect(inserted.questions.find((q: any) => q.question_id === 'A1').skill_category).toBe('Abstract/Non-Verbal Reasoning')
   })
+
+  it('still rejects non-UPCAT subtests by default, but accepts them when the caller allows them', async () => {
+    const { client } = makeMockClient()
+    const gi = row({ question_id: 'GI1', subtest: 'General Information' })
+    await expect(importUpcatCore(client as any, [gi])).rejects.toThrow(/Invalid subtest/)
+    const { client: c2, inserted } = makeMockClient()
+    await importUpcatCore(c2 as any, [gi], { allowedSubtests: ['General Information'] })
+    expect(inserted.questions[0].subtest).toBe('General Information')
+  })
+
+  it('drops a blank trailing option so 3-option questions store 3 options', async () => {
+    const { client, inserted } = makeMockClient()
+    await importUpcatCore(client as any, [row({ option_d: '', correct_answer: 'A' })])
+    expect(inserted.questions[0].options).toEqual(['a', 'b', 'c'])
+  })
+
+  it('persists image fields when the row carries them, and omits them otherwise', async () => {
+    const { client, inserted } = makeMockClient()
+    await importUpcatCore(client as any, [
+      row({ question_id: 'S1', has_visual: 'yes', image_url: 'https://cdn/x.png', image_alt: 'Circuit', image_width: 640, image_height: 480 }),
+      row({ question_id: 'S2' }),
+    ])
+    expect(inserted.questions[0]).toMatchObject({ has_visual: true, image_url: 'https://cdn/x.png', image_alt: 'Circuit', image_width: 640, image_height: 480 })
+    expect('image_url' in inserted.questions[1]).toBe(false)
+  })
 })
