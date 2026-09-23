@@ -7,6 +7,7 @@ import { useDb } from '../../../hooks/useDb'
 import { savedDecks as savedDecksTable, flashcards as flashcardsTable } from '../../../db/schema'
 import { parseTopicIds } from '../../../hooks/useSavedDecks'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -106,6 +107,10 @@ export default function DeckQuizScreen() {
             aiEnhancedAt: flashcardsTable.aiEnhancedAt,
             optionExplanations: flashcardsTable.optionExplanations,
             strategyTip: flashcardsTable.strategyTip,
+            imageUrl: flashcardsTable.imageUrl,
+            imageAlt: flashcardsTable.imageAlt,
+            imageWidth: flashcardsTable.imageWidth,
+            imageHeight: flashcardsTable.imageHeight,
           })
           .from(flashcardsTable)
           .where(inArray(flashcardsTable.topicId, topicIds))
@@ -135,6 +140,7 @@ export default function DeckQuizScreen() {
         strategyTip: row.strategyTip ?? null,
       }))
       const parsed = buildQuizQuestions(shuffle(rawCards))
+      prefetchSessionImages(parsed) // fire-and-forget; never blocks session start
       setAllQuestions(parsed)
       setPhase(parsed.length === 0 ? 'empty' : 'chooser')
 

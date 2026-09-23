@@ -615,7 +615,11 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       ai_enhanced_at INTEGER,
       status TEXT NOT NULL DEFAULT 'published',
       option_explanations TEXT NOT NULL DEFAULT '[]',
-      strategy_tip TEXT NOT NULL DEFAULT ''
+      strategy_tip TEXT NOT NULL DEFAULT '',
+      image_url TEXT,
+      image_alt TEXT,
+      image_width INTEGER,
+      image_height INTEGER
     );
     CREATE TABLE listings (
       id TEXT PRIMARY KEY NOT NULL,
@@ -760,7 +764,11 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       skill_category TEXT,
       remote_updated_at INTEGER,
       option_explanations TEXT NOT NULL DEFAULT '[]',
-      strategy_tip TEXT NOT NULL DEFAULT ''
+      strategy_tip TEXT NOT NULL DEFAULT '',
+      image_url TEXT,
+      image_alt TEXT,
+      image_width INTEGER,
+      image_height INTEGER
     );
     CREATE TABLE IF NOT EXISTS upcat_facts (
       id TEXT PRIMARY KEY NOT NULL,
@@ -1269,6 +1277,170 @@ describe('syncOnLaunch upcat write (real SQLite)', () => {
     const pRow = raw.prepare('SELECT * FROM upcat_passages WHERE set_id = ?').get('set-1') as any
     expect(pRow).toBeTruthy()
     expect(pRow.passage_text).toBe('Once upon a time…')
+  })
+})
+
+describe('syncOnLaunch question media (real SQLite)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  it('pulls image_url/image_alt/image_width/image_height into local upcat_questions', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const passageRow = { set_id: 'set-1', subtest: 'Reading Comprehension', passage_text: 'Once upon a time…' }
+    const questionRow = {
+      question_id: 'q-1', subtest: 'Reading Comprehension',
+      main_subject: null, topic: null, subtopic: null,
+      question_format: null, cognitive_level: null, difficulty: null, curriculum_alignment: null,
+      question_text: 'Which diagram shows a series circuit?',
+      options: ['a', 'b', 'c', 'd'], correct_index: 2, explanation: 'Because c.',
+      set_id: null, set_position: null, has_visual: true, status: 'published',
+      image_url: 'https://x.supabase.co/storage/v1/object/public/question-media/q-1.png',
+      image_alt: 'Series circuit with two resistors',
+      image_width: 800, image_height: 600,
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+
+    supabaseMock.from.mockImplementation(makeSupabaseForUpcat(questionRow, passageRow))
+
+    await syncOnLaunch(db as any)
+
+    const qRow = raw.prepare('SELECT * FROM upcat_questions WHERE question_id = ?').get('q-1') as any
+    expect(qRow).toBeTruthy()
+    expect(qRow.image_url).toBe('https://x.supabase.co/storage/v1/object/public/question-media/q-1.png')
+    expect(qRow.image_alt).toBe('Series circuit with two resistors')
+    expect(qRow.image_width).toBe(800)
+    expect(qRow.image_height).toBe(600)
+  })
+
+  it('pulls image_url/image_alt/image_width/image_height into local flashcards', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const cardRow = makeCardRow({
+      image_url: 'https://x.supabase.co/storage/v1/object/public/question-media/card-1.png',
+      image_alt: 'Comic panel sequence',
+      image_width: 1024,
+      image_height: 768,
+    })
+    supabaseMock.from.mockImplementation(makeSupabaseForCards(cardRow))
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM flashcards WHERE id = ?').get('card-1') as any
+    expect(row).toBeTruthy()
+    expect(row.image_url).toBe('https://x.supabase.co/storage/v1/object/public/question-media/card-1.png')
+    expect(row.image_alt).toBe('Comic panel sequence')
+    expect(row.image_width).toBe(1024)
+    expect(row.image_height).toBe(768)
+  })
+
+  it('retries upcat_questions with the legacy column list when Supabase rejects the image columns (42703, migration 054 not yet applied)', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const passageRow = { set_id: 'set-1', subtest: 'Reading Comprehension', passage_text: 'Once upon a time…' }
+    const questionRow = {
+      question_id: 'q-1', subtest: 'Reading Comprehension',
+      main_subject: null, topic: null, subtopic: null,
+      question_format: null, cognitive_level: null, difficulty: null, curriculum_alignment: null,
+      question_text: 'What is the main idea?', options: ['a', 'b', 'c', 'd'], correct_index: 2,
+      explanation: 'Because c.', set_id: 'set-1', set_position: 1, has_visual: false, status: 'published',
+      updated_at: '2026-06-01T00:00:00Z',
+    }
+
+    let rangeCalls = 0
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === 'upcat_questions') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          gt: jest.fn().mockReturnThis(),
+          order: jest.fn().mockReturnThis(),
+          range: jest.fn().mockImplementation(() => {
+            rangeCalls += 1
+            if (rangeCalls === 1) {
+              return Promise.resolve({
+                data: null,
+                error: { code: '42703', message: 'column upcat_questions.image_url does not exist' },
+              })
+            }
+            return Promise.resolve({ data: [questionRow] })
+          }),
+        }
+      }
+      if (table === 'upcat_passages') {
+        const resolved = Promise.resolve({ data: [passageRow] })
+        return { select: jest.fn().mockReturnThis(), then: (resolve: any, reject: any) => resolved.then(resolve, reject) }
+      }
+      if (table === 'upcat_facts') {
+        return { select: jest.fn().mockReturnThis(), gt: jest.fn().mockResolvedValue({ data: [] }) }
+      }
+      const emptyResolved = Promise.resolve({ data: [] })
+      return {
+        select: jest.fn().mockReturnThis(), contains: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
+        then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+      }
+    })
+
+    await syncOnLaunch(db as any)
+
+    // Fell back and still wrote the row (with no image fields, since the
+    // legacy-column response never carried them) instead of aborting sync.
+    const qRow = raw.prepare('SELECT * FROM upcat_questions WHERE question_id = ?').get('q-1') as any
+    expect(qRow).toBeTruthy()
+    expect(qRow.question_text).toBe('What is the main idea?')
+    expect(qRow.image_url).toBeNull()
+    expect(rangeCalls).toBe(2)
+  })
+
+  it('retries flashcards with the legacy column list when Supabase rejects the image columns (42703, migration 054 not yet applied)', async () => {
+    const raw = makeRawFlashcardDb()
+    const db = makeSyncTestDb(raw)
+
+    const cardRow = makeCardRow()
+
+    let rangeCalls = 0
+    supabaseMock.from.mockImplementation((table: string) => {
+      if (table === 'flashcards') {
+        return {
+          select: jest.fn().mockReturnThis(),
+          contains: jest.fn().mockReturnThis(),
+          gt: jest.fn().mockReturnThis(),
+          order: jest.fn().mockReturnThis(),
+          range: jest.fn().mockImplementation(() => {
+            rangeCalls += 1
+            if (rangeCalls === 1) {
+              return Promise.resolve({
+                data: null,
+                error: { code: '42703', message: 'column flashcards.image_url does not exist' },
+              })
+            }
+            return Promise.resolve({ data: [cardRow] })
+          }),
+        }
+      }
+      const emptyResolved = Promise.resolve({ data: [] })
+      return {
+        select: jest.fn().mockReturnThis(), contains: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(),
+        gt: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(), range: jest.fn().mockResolvedValue({ data: [] }),
+        then: (resolve: any, reject: any) => emptyResolved.then(resolve, reject),
+      }
+    })
+
+    await syncOnLaunch(db as any)
+
+    const row = raw.prepare('SELECT * FROM flashcards WHERE id = ?').get('card-1') as any
+    expect(row).toBeTruthy()
+    expect(row.question).toBe('Q?')
+    expect(row.image_url).toBeNull()
+    expect(rangeCalls).toBe(2)
   })
 })
 
@@ -2118,5 +2290,17 @@ describe('Task 3.5 — status=draft flashcards excluded from aggregates', () => 
       // and published card had correct=1, which means accuracy=100% → not weak — that's fine
       expect(t1Stat).toBeUndefined()
     }
+  })
+})
+
+import { isColumnMissingError } from '../sync'
+
+describe('isColumnMissingError', () => {
+  it('matches only a missing-column failure, so other errors are not masked by the legacy retry', () => {
+    expect(isColumnMissingError({ code: '42703', message: 'column upcat_questions.image_url does not exist' })).toBe(true)
+    expect(isColumnMissingError({ message: 'column flashcards.image_alt does not exist' })).toBe(true)
+    expect(isColumnMissingError({ code: '42P01', message: 'relation "public.upcat_questions" does not exist' })).toBe(false)
+    expect(isColumnMissingError({ message: 'function project_x() does not exist' })).toBe(false)
+    expect(isColumnMissingError(null)).toBe(false)
   })
 })

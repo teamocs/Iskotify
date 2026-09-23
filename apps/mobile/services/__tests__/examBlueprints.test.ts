@@ -126,6 +126,45 @@ describe('getQuestionsByCategory', () => {
     expect(q.mainSubject).toBeNull()
     expect(q.topic).toBeNull()
   })
+
+  it('maps image_url/image_alt/image_width/image_height into the returned question', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values({
+      questionId: 'img-1', subtest: 'Science', skillCategory: 'Science',
+      questionText: 'Which diagram shows mitosis?',
+      options: JSON.stringify(['A', 'B', 'C', 'D']), correctIndex: 0, explanation: '',
+      hasVisual: true,
+      imageUrl: 'https://x.supabase.co/storage/v1/object/public/question-media/img-1.png',
+      imageAlt: 'Mitosis phases diagram',
+      imageWidth: 640, imageHeight: 480,
+    })
+    const map = await getQuestionsByCategory(db, ['Science'])
+    const q = map.get('Science')![0]!
+    expect(q.imageUrl).toBe('https://x.supabase.co/storage/v1/object/public/question-media/img-1.png')
+    expect(q.imageAlt).toBe('Mitosis phases diagram')
+    expect(q.imageWidth).toBe(640)
+    expect(q.imageHeight).toBe(480)
+  })
+
+  it('excludes a question with has_visual=true and no image_url (figure required but missing)', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values([
+      {
+        questionId: 'broken-1', subtest: 'Science', skillCategory: 'Science',
+        questionText: 'Refer to the diagram.',
+        options: JSON.stringify(['A', 'B', 'C', 'D']), correctIndex: 0, explanation: '',
+        hasVisual: true, imageUrl: null,
+      },
+      {
+        questionId: 'ok-1', subtest: 'Science', skillCategory: 'Science',
+        questionText: 'H2O is what?',
+        options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '',
+      },
+    ])
+    const map = await getQuestionsByCategory(db, ['Science'])
+    const ids = (map.get('Science') ?? []).map(q => q.questionId)
+    expect(ids).toEqual(['ok-1'])
+  })
 })
 
 describe('getTargetCourseClusters', () => {

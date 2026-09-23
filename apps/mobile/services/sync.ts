@@ -54,6 +54,82 @@ async function fetchAllPaginated<T = Record<string, unknown>>(
   return out
 }
 
+// ── Question-media column fallback ──────────────────────────────────────────
+// image_url/image_alt/image_width/image_height on upcat_questions/flashcards
+// are added by Supabase migration 054, which — per this repo's convention —
+// is applied MANUALLY (pasted into the SQL editor), not by this app. Until
+// that happens, a SELECT naming these columns makes PostgREST reject the
+// WHOLE query (42703 "column ... does not exist"), which would otherwise take
+// down ALL question/flashcard sync. Detect that specific failure and retry
+// once with the legacy (pre-image) column list so sync degrades to "no
+// figures yet" instead of breaking entirely.
+export function isColumnMissingError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { code?: unknown; message?: unknown }
+  // Only an undefined *column* — a missing table or function must surface, not
+  // be retried away with the legacy column list.
+  return e.code === '42703' || (typeof e.message === 'string' && /\bcolumn\b.*does not exist/i.test(e.message))
+}
+
+const UPCAT_QUESTIONS_BASE_COLUMNS =
+  'question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,option_explanations,strategy_tip'
+const QUESTION_MEDIA_COLUMNS = 'image_url,image_alt,image_width,image_height'
+const UPCAT_QUESTIONS_COLUMNS = `${UPCAT_QUESTIONS_BASE_COLUMNS},${QUESTION_MEDIA_COLUMNS},updated_at`
+const UPCAT_QUESTIONS_COLUMNS_LEGACY = `${UPCAT_QUESTIONS_BASE_COLUMNS},updated_at`
+
+/** Paginated upcat_questions pull with the column-missing fallback above. */
+async function fetchUpcatQuestionsRows(since: string): Promise<any[]> {
+  const run = (columns: string) => fetchAllPaginated((from, to) => supabase.from('upcat_questions')
+    .select(columns)
+    .gt('updated_at', since)
+    .order('question_id')
+    .range(from, to))
+  try {
+    return await run(UPCAT_QUESTIONS_COLUMNS)
+  } catch (err) {
+    if (!isColumnMissingError(err)) throw err
+    console.warn('[sync] upcat_questions: image columns not migrated yet on Supabase — retrying with the legacy column list', err)
+    return await run(UPCAT_QUESTIONS_COLUMNS_LEGACY)
+  }
+}
+
+const FLASHCARDS_BASE_COLUMNS =
+  'id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,option_explanations,strategy_tip'
+const FLASHCARDS_COLUMNS = `${FLASHCARDS_BASE_COLUMNS},${QUESTION_MEDIA_COLUMNS},updated_at`
+const FLASHCARDS_COLUMNS_LEGACY = `${FLASHCARDS_BASE_COLUMNS},updated_at`
+
+/**
+ * Per-slug paginated flashcards pull (deduped by id) with the column-missing
+ * fallback above. Empty contentSlugs short-circuits to [] exactly like the
+ * previous inline `contentSlugs.length === 0 ? [] : …` guard.
+ */
+async function fetchFlashcardsForSlugs(contentSlugs: string[], since: string): Promise<any[]> {
+  const run = async (columns: string): Promise<any[]> => {
+    if (contentSlugs.length === 0) return []
+    const cardResults = await Promise.all(
+      contentSlugs.map(slug =>
+        fetchAllPaginated((from, to) => supabase.from('flashcards')
+          .select(columns)
+          .contains('listing_slugs', [slug])
+          .gt('updated_at', since)
+          .order('id')
+          .range(from, to)))
+    )
+    const seen = new Set<string>()
+    return cardResults.flat().filter((r: any) => {
+      if (seen.has(r.id)) return false
+      seen.add(r.id); return true
+    })
+  }
+  try {
+    return await run(FLASHCARDS_COLUMNS)
+  } catch (err) {
+    if (!isColumnMissingError(err)) throw err
+    console.warn('[sync] flashcards: image columns not migrated yet on Supabase — retrying with the legacy column list', err)
+    return await run(FLASHCARDS_COLUMNS_LEGACY)
+  }
+}
+
 export async function syncPrimaryListing(db: DrizzleClient): Promise<void> {
   const rows = await db
     .select({ listingSlug: focusListings.listingSlug })
@@ -330,11 +406,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     const [upcatPassagesRes, upcatQuestionsRows, upcatFactsRes, upcatCutoffsRes] = await Promise.all([
       // Full pull: upcat_passages has no updated_at cursor (immutable reference data, ~23 rows). TODO: add updated_at + incremental cursor if passage volume grows across exam years.
       supabase.from('upcat_passages').select('set_id,subtest,passage_text'),
-      fetchAllPaginated((from, to) => supabase.from('upcat_questions')
-        .select('question_id,subtest,main_subject,topic,subtopic,question_format,cognitive_level,difficulty,curriculum_alignment,question_text,options,correct_index,explanation,set_id,set_position,has_visual,status,skill_category,option_explanations,strategy_tip,updated_at')
-        .gt('updated_at', since)
-        .order('question_id')
-        .range(from, to)),
+      fetchUpcatQuestionsRows(since),
       supabase.from('upcat_facts')
         .select('id,topic,question,answer,source,valid_year,updated_at')
         .gt('updated_at', since),
@@ -415,22 +487,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // Skipped entirely for focus-less sessions; the catalog above still synced.
     // Uses contentSlugs (school: mapped to general-cet) so school-focus users
     // actually receive their review deck.
-    const cardResults = contentSlugs.length === 0 ? [] : await Promise.all(
-      contentSlugs.map(slug =>
-        fetchAllPaginated((from, to) => supabase.from('flashcards')
-          .select('id,topic_id,question,answer,explanation,listing_slugs,options,correct_answer_index,ai_options,ai_correct_index,ai_explanation,ai_enhanced_at,status,option_explanations,strategy_tip,updated_at')
-          .contains('listing_slugs', [slug])
-          .gt('updated_at', since)
-          .order('id')
-          .range(from, to))
-      )
-    )
-
-    const seen = new Set<string>()
-    const allCards = cardResults.flat().filter(r => {
-      if (seen.has(r.id)) return false
-      seen.add(r.id); return true
-    })
+    const allCards = await fetchFlashcardsForSlugs(contentSlugs, since)
 
     // ── Tx 1: listings + admissions_updates ──────────────────────────────────
     // (Cursor write is intentionally LAST so an interrupted sync re-pulls next launch)
@@ -509,6 +566,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
           status: (row as any).status ?? 'published',
           optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
           strategyTip: (row as any).strategy_tip ?? '',
+          // Absent entirely on the legacy-column fallback (pre-migration-054
+          // Supabase) — ?? null degrades to "no figure" rather than throwing.
+          imageUrl: (row as any).image_url ?? null,
+          imageAlt: (row as any).image_alt ?? null,
+          imageWidth: (row as any).image_width ?? null,
+          imageHeight: (row as any).image_height ?? null,
         }
 
         // Only include ai_* fields when Supabase actually has them. This preserves
@@ -552,6 +615,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         skillCategory: row.skill_category ?? null,
         optionExplanations: JSON.stringify((row as any).option_explanations ?? []),
         strategyTip: (row as any).strategy_tip ?? '',
+        // Absent entirely on the legacy-column fallback (pre-migration-054
+        // Supabase) — ?? null degrades to "no figure" rather than throwing.
+        imageUrl: (row as any).image_url ?? null,
+        imageAlt: (row as any).image_alt ?? null,
+        imageWidth: (row as any).image_width ?? null,
+        imageHeight: (row as any).image_height ?? null,
         remoteUpdatedAt: new Date(row.updated_at).getTime(),
       })), upcatQuestions.questionId)
 

@@ -335,4 +335,68 @@ describe('buildQuizQuestions', () => {
       expect(q!.optionExplanations).toBeUndefined()
     })
   })
+
+  describe('3-option admin-stored questions (projected from upcat_questions)', () => {
+    it('uses stored options as-is when there are only 3 (not padded/discarded)', () => {
+      const c: RawCard = {
+        id: 't1', question: 'Which of these is a prime number?', answer: '7',
+        options: ['4', '6', '7'], correctAnswerIndex: 2,
+        explanation: '',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toHaveLength(3)
+      expect(new Set(q!.options)).toEqual(new Set(['4', '6', '7']))
+      expect(q!.options[q!.answerIndex]).toBe('7')
+    })
+
+    it('still falls through to placeholders when options has fewer than 2 entries', () => {
+      const c: RawCard = {
+        id: 't2', question: 'Q?', answer: 'Correct',
+        options: ['OnlyOne'], correctAnswerIndex: 0,
+        explanation: '',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.options).toHaveLength(4)
+      expect(q!.options[q!.answerIndex]).toBe('Correct')
+    })
+  })
+
+  describe('image fields (question-media)', () => {
+    it('carries imageUrl/imageAlt/imageWidth/imageHeight through the admin-options branch', () => {
+      const c: RawCard = {
+        id: 'img1', question: 'Which diagram shows a series circuit?', answer: 'A',
+        options: ['A', 'B', 'C', 'D'], correctAnswerIndex: 0,
+        explanation: '',
+        imageUrl: 'https://x.supabase.co/storage/v1/object/public/question-media/img1.png',
+        imageAlt: 'Series circuit diagram',
+        imageWidth: 800,
+        imageHeight: 600,
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.imageUrl).toBe('https://x.supabase.co/storage/v1/object/public/question-media/img1.png')
+      expect(q!.imageAlt).toBe('Series circuit diagram')
+      expect(q!.imageWidth).toBe(800)
+      expect(q!.imageHeight).toBe(600)
+    })
+
+    it('carries image fields through the placeholder-fallback branch too', () => {
+      const c: RawCard = {
+        id: 'img2', question: 'What is X?', answer: 'Y', explanation: '',
+        imageUrl: 'https://x.supabase.co/storage/v1/object/public/question-media/img2.png',
+        imageAlt: 'A chart',
+      }
+      const [q] = buildQuizQuestions([c])
+      expect(q!.imageUrl).toBe('https://x.supabase.co/storage/v1/object/public/question-media/img2.png')
+      expect(q!.imageAlt).toBe('A chart')
+    })
+
+    it('defaults image fields to null when absent (no crash, undefined not required)', () => {
+      const c = card({ options: ['A', 'B', 'C', 'D'], correctAnswerIndex: 0 })
+      const [q] = buildQuizQuestions([c])
+      expect(q!.imageUrl).toBeNull()
+      expect(q!.imageAlt).toBeNull()
+      expect(q!.imageWidth).toBeNull()
+      expect(q!.imageHeight).toBeNull()
+    })
+  })
 })

@@ -38,6 +38,31 @@ describe('buildBlueprintExam', () => {
     const built = buildBlueprintExam(bp(), pools, [])
     expect(built.runnable[0]!.questions).toHaveLength(2)
   })
+
+  it('excludes questions with has_visual=true and no image_url (figure required but missing)', () => {
+    const good = q('Mathematics', 3)
+    const missingFigure: RawUpcatQuestion = {
+      questionId: 'Mathematics-broken', subtest: 'Mathematics', questionText: 'See diagram',
+      options: ['a', 'b', 'c', 'd'], correctIndex: 0, explanation: '', setId: null, setPosition: null,
+      hasVisual: true, imageUrl: null,
+    }
+    const pools = new Map([['Mathematics', [...good, missingFigure]]])
+    const built = buildBlueprintExam(bp({ sections: [{ id: 'x:1', name: 'Math', skillCategory: 'Mathematics', itemCount: 4, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 }] }), pools, [])
+    expect(built.runnable[0]!.questions.map(x => x.questionId)).not.toContain('Mathematics-broken')
+    expect(built.runnable[0]!.available).toBe(3)
+  })
+
+  it('treats a section as comingSoon when every question in its pool is missing a required figure', () => {
+    const missingFigure: RawUpcatQuestion = {
+      questionId: 'Mathematics-broken', subtest: 'Mathematics', questionText: 'See diagram',
+      options: ['a', 'b', 'c', 'd'], correctIndex: 0, explanation: '', setId: null, setPosition: null,
+      hasVisual: true, imageUrl: null,
+    }
+    const pools = new Map([['Mathematics', [missingFigure]]])
+    const built = buildBlueprintExam(bp(), pools, [])
+    expect(built.runnable.map(s => s.section.name)).not.toContain('Math')
+    expect(built.comingSoon.map(s => s.name)).toContain('Math')
+  })
 })
 
 // ---------------------------------------------------------------------------

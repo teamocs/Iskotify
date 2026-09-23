@@ -1,5 +1,6 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
+import { KbDriveSyncPanel, type KbDriveFile } from '@/components/admin/KbDriveSyncPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,11 +17,17 @@ export default async function SyncPage() {
     .select('*')
     .order('created_at', { ascending: false })
     .limit(100)
+  // Missing table (migration 055 not applied yet) just renders the empty state.
+  const { data: kbFiles } = await db
+    .from('kb_drive_files')
+    .select('drive_file_id, name, path, status, dialect, rows_total, rows_imported, rows_missing_media, rows_drafted, message, imported_at, published_at, updated_at')
+    .order('name')
 
   return (
     <>
       <Topbar title="Sync Logs" />
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
+        <KbDriveSyncPanel files={(kbFiles ?? []) as KbDriveFile[]} />
         <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
           <table className="w-full">
             <thead>

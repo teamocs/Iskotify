@@ -72,4 +72,21 @@ describe('QuestionCard', () => {
     expect(node.props.maxFontSizeMultiplier).toBeGreaterThan(0)
     expect(node.props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.8)
   })
+
+  it('renders the question figure between the stem and the report row when imageUrl is given', () => {
+    render(
+      <QuestionCard
+        questionText="Q"
+        onReport={jest.fn()}
+        imageUrl="https://example.com/circuit.png"
+        imageAlt="Series circuit"
+      />,
+    )
+    expect(screen.getByLabelText('Series circuit')).toBeTruthy()
+  })
+
+  it('renders no figure when imageUrl is absent', () => {
+    render(<QuestionCard questionText="Q" />)
+    expect(screen.queryByLabelText('Question figure')).toBeNull()
+  })
 })

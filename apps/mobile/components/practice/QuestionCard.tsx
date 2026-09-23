@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { PassagePanel } from '../upcat/PassagePanel'
+import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 
@@ -18,6 +19,13 @@ export interface QuestionCardProps {
    * engine has no report flow).
    */
   onReport?: () => void
+  /** Question-media (diagram/infographic/comic-panel/chart) — rendered via
+   *  QuestionFigure just below the card, between the stem and the caller's
+   *  OptionList. Renders nothing when absent. */
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 /**
@@ -26,7 +34,10 @@ export interface QuestionCardProps {
  * on screen — large, generous line-height — with an optional passage slot above it
  * and an optional report-a-question row below it.
  */
-export function QuestionCard({ questionText, passageText, subjectTag, reported, onReport }: QuestionCardProps) {
+export function QuestionCard({
+  questionText, passageText, subjectTag, reported, onReport,
+  imageUrl, imageAlt, imageWidth, imageHeight,
+}: QuestionCardProps) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
@@ -50,6 +61,7 @@ export function QuestionCard({ questionText, passageText, subjectTag, reported, 
           </View>
         ) : null}
       </View>
+      <QuestionFigure imageUrl={imageUrl} imageAlt={imageAlt} imageWidth={imageWidth} imageHeight={imageHeight} />
     </>
   )
 }

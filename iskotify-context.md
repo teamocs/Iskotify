@@ -42,7 +42,7 @@ local SQLite and syncs incrementally on an `updated_at` cursor (`apps/mobile/ser
 * **Catalog tables** (read-only on device): `listings`, `flashcards`, `upcat_questions`, `exam_blueprints`, `tertiary_schools`, `university_profiles`, `career_*`, `admissions_updates`.
 * **User data** rides a single `user_app_data` row per user — one named `jsonb` column per synced local table (`user_progress`, `practice_sessions`, `question_attempts`, `flashcard_srs`, `study_plan_items`, `settings`, …). Adding a synced table therefore requires an `ALTER TABLE user_app_data ADD COLUMN` migration, not just a local schema change.
 * **Local schema migrations** live in the `MIGRATIONS` array in `apps/mobile/db/client.ts`. That list is **append-only** and re-executes in full on every launch (each statement is individually idempotent and error-tolerant) — never reorder or remove entries.
-* **Supabase migrations are applied manually** by pasting the SQL files in `supabase/migrations/` into the Supabase SQL editor, in numeric order. Latest applied: `052`.
+* **Supabase migrations are applied manually** by pasting the SQL files in `supabase/migrations/` into the Supabase SQL editor, in numeric order. Latest applied: `052`. Written and awaiting manual apply: `053`–`055` (question figures + Drive sync ledger); the admin and mobile code tolerate them being absent.
 
 ## 4. Mobile App Structure
 
@@ -57,6 +57,7 @@ local SQLite and syncs incrementally on an `updated_at` cursor (`apps/mobile/ser
 * **Spaced repetition** — SM-2-lite scheduling in `apps/mobile/utils/srs.ts`, graded from correctness plus response time, persisted in `flashcard_srs`.
 * **Study plan** — a pure, deterministic generator (`apps/mobile/utils/studyPlan.ts`) produces each day's tasks from due-review counts, weak subjects, and days remaining until the student's focused exam.
 * **Answer explanations** — per-option "why this is wrong" rationales plus strategy tips, rendered by the shared `components/practice/ReviewCard.tsx`. A database trigger clears them whenever a question's options change, so a stale rationale can never be shown against a changed option.
+* **Question figures** — `upcat_questions` and `flashcards` carry an optional `image_url` (public `question-media` bucket) with alt text and intrinsic size. `components/practice/QuestionFigure.tsx` renders it in every Q&A surface (mock exams, drills, diagnostic, study sprint, the flashcard quiz, onboarding) with tap-to-zoom and an expo-image disk cache; session builders prefetch a session's figures so a started exam works offline. A question with `has_visual` but no `image_url` is never served.
 
 ## 5. On-device AI (no chat)
 
@@ -75,6 +76,7 @@ explanations, and strategy tips. That pipeline is live and unrelated to the reti
 
 * **Listings** — synced from a master Google Sheet (`apps/admin/app/api/sheets/sync/`) plus direct CRUD.
 * **Question bank & flashcards** — CSV import (`lib/upcat/importUpcatCore.ts`, `lib/csv/importCsvCore.ts`), subject/topic management, and AI generation with admin-supplied format notes or sample questions.
+* **Drive question-bank sync** — `lib/kb/` pulls question files from the team's Google Drive folder (`KB_DRIVE_FOLDER_ID`, same service account as the Sheets sync) daily via Vercel Cron or on demand from `/admin/sync`. The file name picks the pool (`lib/kb/fileRules.ts`), the header row picks the column layout (`lib/kb/dialects.ts`), figures next to the CSV are uploaded once to `question-media`, and everything lands as drafts tracked in `kb_drive_files`. An admin publishes per file; publishing holds back questions with a missing figure, fewer than 4 options, or a live duplicate, then re-runs the flashcard projection.
 * **Distractor quality** — a "hard mode" bulk regeneration and a heuristic review queue that flags weak option sets for human review rather than rewriting curated content automatically.
 * **Exam blueprints** — per-exam section/timing configuration that drives the mobile mock engine.
 * **Distribution** — early-access lead capture and APK-by-email tooling. Note: the early-access *lockout gate* was removed on 2026-08-06 and the app is open to everyone; this remaining tooling is lead capture and build distribution only.

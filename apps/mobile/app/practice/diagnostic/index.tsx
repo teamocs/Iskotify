@@ -11,6 +11,7 @@ import {
   resolveDiagnosticSubtests, buildDiagnosticQuestions, scoreDiagnostic,
   buildDiagnosticSessionParams, weakestSubject, SECONDS_PER_QUESTION, QUESTIONS_PER_SUBTEST,
 } from '../../../utils/diagnosticExam'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import type { PreAssessQuestion } from '../../../data/preAssessment'
@@ -105,9 +106,15 @@ export default function DiagnosticExam() {
           setId: upcatQuestions.setId,
           optionExplanations: upcatQuestions.optionExplanations,
           strategyTip: upcatQuestions.strategyTip,
+          hasVisual: upcatQuestions.hasVisual,
+          imageUrl: upcatQuestions.imageUrl,
+          imageAlt: upcatQuestions.imageAlt,
+          imageWidth: upcatQuestions.imageWidth,
+          imageHeight: upcatQuestions.imageHeight,
         }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
         const subtests = resolveDiagnosticSubtests(subjectParam)
         const built = buildDiagnosticQuestions(rows, subtests, QUESTIONS_PER_SUBTEST)
+        prefetchSessionImages(built) // fire-and-forget; never blocks session start
         setQuestions(built)
         if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
         setPhase(built.length ? 'exam' : 'results')
@@ -233,6 +240,10 @@ export default function DiagnosticExam() {
                   explanation={q.explanation}
                   optionExplanations={q.optionExplanations}
                   strategyTip={q.strategyTip}
+                  imageUrl={q.imageUrl}
+                  imageAlt={q.imageAlt}
+                  imageWidth={q.imageWidth}
+                  imageHeight={q.imageHeight}
                 />
               ))}
             </>
@@ -285,7 +296,14 @@ export default function DiagnosticExam() {
         contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
-        <QuestionCard questionText={q.stem} subjectTag={q.subject} />
+        <QuestionCard
+          questionText={q.stem}
+          subjectTag={q.subject}
+          imageUrl={q.imageUrl}
+          imageAlt={q.imageAlt}
+          imageWidth={q.imageWidth}
+          imageHeight={q.imageHeight}
+        />
       </ScrollView>
 
       {/* Fixed options zone: capped at 42% of the window so the question pane keeps

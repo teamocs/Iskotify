@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 
@@ -19,6 +20,12 @@ export interface ReviewCardProps {
   optionExplanations?: (string | null)[] | null
   /** Short formula/mnemonic/pacing tip. Rendered as a chip only when present. */
   strategyTip?: string | null
+  /** Question-media (diagram/infographic/comic-panel/chart) — rendered via
+   *  QuestionFigure just below the stem. Renders nothing when absent. */
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 /**
@@ -31,6 +38,7 @@ export interface ReviewCardProps {
  */
 export function ReviewCard({
   index, questionText, options, correctIndex, selectedIndex, explanation, optionExplanations, strategyTip,
+  imageUrl, imageAlt, imageWidth, imageHeight,
 }: ReviewCardProps) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
@@ -46,6 +54,8 @@ export function ReviewCard({
       <Text style={s.qText} maxFontSizeMultiplier={1.5}>
         Q{index}. {questionText}
       </Text>
+
+      <QuestionFigure imageUrl={imageUrl} imageAlt={imageAlt} imageWidth={imageWidth} imageHeight={imageHeight} />
 
       <View style={s.optsWrap}>
         {options.map((o, oi) => {

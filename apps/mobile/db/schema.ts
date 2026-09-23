@@ -34,6 +34,13 @@ export const flashcards = sqliteTable('flashcards', {
   // pattern as `options`/`listingSlugs` above.
   optionExplanations: text('option_explanations').notNull().default('[]'),
   strategyTip: text('strategy_tip').notNull().default(''),
+  // Question-media (diagrams/infographics/comic panels/charts): public Supabase
+  // Storage URL + caption + intrinsic pixel size (nullable — may be unknown).
+  // Mirrors the nullable columns Supabase migration 054 adds.
+  imageUrl: text('image_url'),
+  imageAlt: text('image_alt'),
+  imageWidth: integer('image_width'),
+  imageHeight: integer('image_height'),
 }, (t) => [
   index('flashcards_topic_id_idx').on(t.topicId),
 ])
@@ -271,6 +278,14 @@ export const upcatQuestions = sqliteTable('upcat_questions', {
   // correct index. Same text-storing-JSON pattern as `options` above.
   optionExplanations: text('option_explanations').notNull().default('[]'),
   strategyTip: text('strategy_tip').notNull().default(''),
+  // Question-media: public Supabase Storage URL + caption + intrinsic pixel
+  // size (nullable — may be unknown). Mirrors Supabase migration 054.
+  // hasVisual=true AND imageUrl=null means "figure required but missing" —
+  // such questions must be excluded from every exam/quiz builder.
+  imageUrl: text('image_url'),
+  imageAlt: text('image_alt'),
+  imageWidth: integer('image_width'),
+  imageHeight: integer('image_height'),
 }, (t) => [
   index('upcat_questions_subtest_idx').on(t.subtest),
   index('upcat_questions_set_idx').on(t.setId),

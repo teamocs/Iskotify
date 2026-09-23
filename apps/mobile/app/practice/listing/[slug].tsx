@@ -6,6 +6,7 @@ import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
 import { eq } from 'drizzle-orm'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -102,6 +103,10 @@ export default function ListingQuizScreen() {
           aiEnhancedAt: flashcardsTable.aiEnhancedAt,
           optionExplanations: flashcardsTable.optionExplanations,
           strategyTip: flashcardsTable.strategyTip,
+          imageUrl: flashcardsTable.imageUrl,
+          imageAlt: flashcardsTable.imageAlt,
+          imageWidth: flashcardsTable.imageWidth,
+          imageHeight: flashcardsTable.imageHeight,
         }).from(flashcardsTable)
       }
 
@@ -166,6 +171,7 @@ export default function ListingQuizScreen() {
         strategyTip: row.strategyTip ?? null,
       }))
       const parsed = buildQuizQuestions(rawCards)
+      prefetchSessionImages(parsed) // fire-and-forget; never blocks session start
       setAllQuestions(parsed)
       setPhase(parsed.length === 0 ? 'empty' : 'chooser')
 

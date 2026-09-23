@@ -30,6 +30,10 @@ export const darkTheme = {
   // Elevation — boxShadow strings (new-arch, cross-platform). Dark uses deeper black.
   shadowSm:      '0px 1px 3px rgba(0,0,0,0.40)',
   shadowMd:      '0px 6px 18px rgba(0,0,0,0.48)',
+  // Full-screen media viewer (figure zoom). Dark in both themes so the image is
+  // the only bright thing on screen; controls on it use textInverse.
+  scrim:         'rgba(0,0,0,0.92)',
+  scrimControl:  'rgba(255,255,255,0.15)',
 }
 
 export const lightTheme = {
@@ -58,6 +62,8 @@ export const lightTheme = {
   // Elevation — soft maroon-tinted shadows for the warm light palette.
   shadowSm:      '0px 1px 3px rgba(128,0,0,0.08)',
   shadowMd:      '0px 8px 24px rgba(128,0,0,0.12)',
+  scrim:         'rgba(0,0,0,0.92)',
+  scrimControl:  'rgba(255,255,255,0.15)',
 }
 
 export const statusColors = {

@@ -1,4 +1,4 @@
-import { buildExam, scoreExam, SUBTESTS, type RawUpcatQuestion, type RawUpcatPassage } from '../upcatExam'
+import { buildExam, scoreExam, SUBTESTS, isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage } from '../upcatExam'
 
 function q(p: Partial<RawUpcatQuestion>): RawUpcatQuestion {
   return {
@@ -59,6 +59,41 @@ describe('buildExam', () => {
     const passages: RawUpcatPassage[] = [{ setId: 'PASS-1', subtest: 'Reading Comprehension', passageText: 'Passage' }]
     const out = buildExam(qs, passages, { subtest: 'Reading Comprehension', mode: 'full' })
     expect(out.map(x => x.questionId)).toEqual(['L0', 'R0', 'R1', 'L1'])
+  })
+})
+
+describe('isMissingRequiredFigure', () => {
+  it('is true when hasVisual is true and imageUrl is null/undefined/empty', () => {
+    expect(isMissingRequiredFigure({ hasVisual: true, imageUrl: null })).toBe(true)
+    expect(isMissingRequiredFigure({ hasVisual: true, imageUrl: undefined })).toBe(true)
+    expect(isMissingRequiredFigure({ hasVisual: true, imageUrl: '' })).toBe(true)
+  })
+
+  it('is false when hasVisual is true and imageUrl is present', () => {
+    expect(isMissingRequiredFigure({ hasVisual: true, imageUrl: 'https://x/y.png' })).toBe(false)
+  })
+
+  it('is false when hasVisual is false, regardless of imageUrl', () => {
+    expect(isMissingRequiredFigure({ hasVisual: false, imageUrl: null })).toBe(false)
+    expect(isMissingRequiredFigure({})).toBe(false)
+  })
+})
+
+describe('buildExam — question-media exclusion', () => {
+  it('excludes a question with has_visual=true and no image_url (figure required but missing)', () => {
+    const qs = [
+      q({ questionId: 'M001', hasVisual: true, imageUrl: null }),
+      q({ questionId: 'M002', hasVisual: false }),
+      q({ questionId: 'M003', hasVisual: true, imageUrl: 'https://x/fig.png' }),
+    ]
+    const out = buildExam(qs, [], { subtest: 'Mathematics', mode: 'full' })
+    expect(out.map(x => x.questionId)).toEqual(['M002', 'M003'])
+  })
+
+  it('never serves a fully-excluded exam as non-empty (all questions missing required figures)', () => {
+    const qs = [q({ questionId: 'M001', hasVisual: true, imageUrl: null })]
+    const out = buildExam(qs, [], { subtest: 'Mathematics', mode: 'full' })
+    expect(out).toHaveLength(0)
   })
 })
 
