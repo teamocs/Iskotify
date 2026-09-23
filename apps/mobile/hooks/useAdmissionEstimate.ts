@@ -4,14 +4,24 @@
 // exactly one place that turns local settings + question_attempts +
 // upcat_cutoffs into an estimate. Fully on-device: no network call.
 import { useCallback, useEffect, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { useDb } from './useDb'
 import { getSettings, updateSettings } from '../services/settings'
 import { questionAttempts, upcatCutoffs } from '../db/schema'
+import { subscribe } from '../services/queryCache'
 import { computeHsGwa, isTargetCampusFar } from '../utils/estimatorInputs'
-import { subtestReadiness, type Readiness } from '../utils/subtestReadiness'
+import { subtestReadiness, UPCAT_SUBTEST_LABELS, type Readiness } from '../utils/subtestReadiness'
 import { estimateAdmissionScore, type EstimateResult, type CutoffRow } from '../utils/admissionEstimate'
 import type { EstimateCardStatus } from '../utils/estimateSummary'
+
+// question_attempts holds up to 5,000 rows (utils/attemptRetention.ts), and
+// this pipeline runs on every card/screen mount plus twice per session
+// submit — so it reads only the 3 columns it needs, for the 4 UPCAT subtests.
+// No global row cap: a burst of practice in one subtest must not push the
+// others' latest answers out of their window (subtestReadiness keeps the
+// latest WINDOW per subtest itself).
 
 export interface AdmissionEstimateSnapshot {
   status: EstimateCardStatus
@@ -39,7 +49,10 @@ export async function loadAdmissionEstimateSnapshot(db: DrizzleClient): Promise<
     return { status: 'no-grades', readiness: null, result: null }
   }
 
-  const attemptRows = await db.select().from(questionAttempts)
+  const attemptRows = await db
+    .select({ subtest: questionAttempts.subtest, correct: questionAttempts.correct, answeredAt: questionAttempts.answeredAt })
+    .from(questionAttempts)
+    .where(inArray(questionAttempts.subtest, UPCAT_SUBTEST_LABELS))
   const readiness = subtestReadiness(attemptRows.map(a => ({
     subtest: a.subtest,
     correct: a.correct,
@@ -83,7 +96,6 @@ const INITIAL: AdmissionEstimateSnapshot = { status: 'loading', readiness: null,
 export function useAdmissionEstimate(): AdmissionEstimateState {
   const db = useDb()
   const [snapshot, setSnapshot] = useState<AdmissionEstimateSnapshot>(INITIAL)
-  const [reloadKey, setReloadKey] = useState(0)
 
   const load = useCallback(async () => {
     setSnapshot(prev => ({ ...prev, status: 'loading' }))
@@ -94,18 +106,31 @@ export function useAdmissionEstimate(): AdmissionEstimateState {
       console.warn('[useAdmissionEstimate] load error:', e)
       setSnapshot({ status: 'error', readiness: null, result: null })
     }
-    // reloadKey is an intentional re-run trigger, not itself read in the body.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, reloadKey])
+  }, [db])
 
-  useEffect(() => { void load() }, [load])
+  // Reload whenever the Home/Practice tab (or the estimator screen) regains
+  // focus — both stay mounted across tab switches, so without this a card
+  // shown right after a practice session keeps showing the pre-session
+  // estimate (mirrors useHomeCatalog.ts / useStudyPlan.ts / useHomeStats.ts).
+  useFocusEffect(useCallback(() => { void load() }, [load]))
+
+  // A completed session elsewhere invalidates 'home:'/'practice:' (see
+  // hooks/useRecordSession.ts) — reload so the estimate reflects the new
+  // attempts even when this hook's own consumer isn't the one that just
+  // regained focus (e.g. the Home card while Practice is invalidated, or
+  // vice versa, since the card is mounted on both tabs independently).
+  useEffect(() => {
+    const unsubHome = subscribe('home:', () => { void load() })
+    const unsubPractice = subscribe('practice:', () => { void load() })
+    return () => { unsubHome(); unsubPractice() }
+  }, [load])
 
   const acknowledgeDisclaimer = useCallback(async () => {
     await updateSettings(db, { scoreDisclaimerAck: true })
-    setReloadKey(k => k + 1)
-  }, [db])
+    await load()
+  }, [db, load])
 
-  const reload = useCallback(() => setReloadKey(k => k + 1), [])
+  const reload = useCallback(() => { void load() }, [load])
 
   return { ...snapshot, acknowledgeDisclaimer, reload }
 }

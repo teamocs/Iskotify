@@ -132,6 +132,14 @@ describe('EstimatorScreen', () => {
     expect(screen.getAllByText(/estimate/i).length).toBeGreaterThan(0)
   })
 
+  it('gives each campus row an accessibility label combining campus/program, status, cutoff, year and "estimate"', () => {
+    mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+    render(<EstimatorScreen />)
+    expect(screen.getByLabelText('UP Diliman – BS Computer Science, Unlikely, cutoff 1.55 (2025)')).toBeTruthy()
+    expect(screen.getByLabelText('UP Diliman, Possible, cutoff 2.17 (2019), estimate')).toBeTruthy()
+    expect(screen.getByLabelText('UP Baguio, Likely, cutoff 2.60 (2019), estimate')).toBeTruthy()
+  })
+
   it('keeps the inline disclaimer notice visible in every non-modal state', () => {
     mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)

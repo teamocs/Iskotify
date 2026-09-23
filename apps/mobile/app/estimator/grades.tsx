@@ -14,7 +14,7 @@ import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
 import { getSettings, updateSettings } from '../../services/settings'
-import { validateGwa } from '../../utils/estimatorInputs'
+import { validateGwa, gwaFailingWarning } from '../../utils/estimatorInputs'
 
 // ── School type options ───────────────────────────────────────────────────────
 const SCHOOL_TYPE_OPTIONS: { label: string; value: string }[] = [
@@ -55,6 +55,15 @@ function validateGwaText(text: string): string | null {
   const result = validateGwa(n)
   if (result === null) return 'Must be between 0 and 100.'
   return null
+}
+
+/** Non-blocking "this looks like a typo" notice — never withholds saving. */
+function warningForGwaText(text: string): string | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  const n = parseFloat(trimmed)
+  if (!isFinite(n)) return null
+  return gwaFailingWarning(n)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -173,6 +182,20 @@ export default function EstimatorGradesScreen() {
     marginTop: 4,
   }
 
+  // Non-blocking notice (Finding 5): 0 < GWA < 60 is almost always a typo —
+  // DepEd's passing mark is 60 — but it's a value validateGwa() still accepts,
+  // so this never withholds saving. Only shown when there's no blocking error.
+  const warningTextStyle = {
+    fontFamily: 'Lexend_400Regular' as const,
+    fontSize: typo.sm,
+    color: t.warning,
+    marginTop: 4,
+  }
+  const g8Warning = g8Error ? null : warningForGwaText(g8Text)
+  const g9Warning = g9Error ? null : warningForGwaText(g9Text)
+  const g10Warning = g10Error ? null : warningForGwaText(g10Text)
+  const g11Warning = g11Error ? null : warningForGwaText(g11Text)
+
   const sectionHeadStyle = {
     fontFamily: 'Lexend_600SemiBold' as const,
     fontSize: typo.xs,
@@ -251,6 +274,7 @@ export default function EstimatorGradesScreen() {
           returnKeyType="next"
         />
         {g8Error ? <Text style={errorTextStyle}>{g8Error}</Text> : null}
+        {g8Warning ? <Text style={warningTextStyle}>{g8Warning}</Text> : null}
 
         {/* Grade 9 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 9 GWA</Text>
@@ -264,6 +288,7 @@ export default function EstimatorGradesScreen() {
           returnKeyType="next"
         />
         {g9Error ? <Text style={errorTextStyle}>{g9Error}</Text> : null}
+        {g9Warning ? <Text style={warningTextStyle}>{g9Warning}</Text> : null}
 
         {/* Grade 10 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 10 GWA</Text>
@@ -277,6 +302,7 @@ export default function EstimatorGradesScreen() {
           returnKeyType="next"
         />
         {g10Error ? <Text style={errorTextStyle}>{g10Error}</Text> : null}
+        {g10Warning ? <Text style={warningTextStyle}>{g10Warning}</Text> : null}
 
         {/* Grade 11 */}
         <Text style={[labelStyle, { marginTop: 16 }]}>Grade 11 GWA</Text>
@@ -290,6 +316,7 @@ export default function EstimatorGradesScreen() {
           returnKeyType="done"
         />
         {g11Error ? <Text style={errorTextStyle}>{g11Error}</Text> : null}
+        {g11Warning ? <Text style={warningTextStyle}>{g11Warning}</Text> : null}
 
         {/* ── School Type ── */}
         <Text style={sectionHeadStyle}>School Type</Text>
@@ -299,8 +326,11 @@ export default function EstimatorGradesScreen() {
             return (
               <TouchableOpacity
                 key={opt.value}
+                testID={`school-type-chip-${opt.value}`}
                 onPress={() => setSchoolType(prev => prev === opt.value ? null : opt.value)}
                 style={{
+                  minHeight: 44,
+                  justifyContent: 'center',
                   paddingVertical: 9,
                   paddingHorizontal: 14,
                   borderRadius: 20,

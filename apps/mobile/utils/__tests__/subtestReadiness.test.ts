@@ -1,4 +1,4 @@
-import { subtestReadiness, MIN_ANSWERS, WINDOW } from '../subtestReadiness'
+import { subtestReadiness, MIN_ANSWERS, WINDOW, UPCAT_SUBTEST_LABELS } from '../subtestReadiness'
 
 function attempts(subtest: string, correctFlags: boolean[], start = 1000) {
   return correctFlags.map((correct, i) => ({ subtest, correct, answeredAt: start + i }))
@@ -36,6 +36,12 @@ describe('subtestReadiness', () => {
     const r = subtestReadiness([...recent, ...old]) // order-independent
     expect(r.math.percent).toBe(100)
     expect(r.math.answered).toBe(WINDOW)
+  })
+
+  it('exports the four UPCAT subtest labels for callers that need to pre-filter a query', () => {
+    expect(UPCAT_SUBTEST_LABELS.slice().sort()).toEqual(
+      ['Language Proficiency', 'Mathematics', 'Reading Comprehension', 'Science'].sort(),
+    )
   })
 
   it('ignores attempts with no or a non-UPCAT subtest', () => {

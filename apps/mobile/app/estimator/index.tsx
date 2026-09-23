@@ -14,7 +14,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { useAdmissionEstimate } from '../../hooks/useAdmissionEstimate'
 import { MIN_ANSWERS, type SubtestKey } from '../../utils/subtestReadiness'
-import type { CampusStatus } from '../../utils/admissionEstimate'
+import { campusAccessibilityLabel, type CampusStatus } from '../../utils/admissionEstimate'
 import { Badge } from '../../components/ui/Badge'
 import {
   ScoreDisclaimerModal,
@@ -295,6 +295,8 @@ export default function EstimatorScreen() {
                   <View
                     key={`${row.campus}-${row.program ?? ''}`}
                     style={[s.campusRow, idx === rows.length - 1 && { borderBottomWidth: 0 }]}
+                    accessible
+                    accessibilityLabel={campusAccessibilityLabel(row)}
                   >
                     <View style={{ flex: 1, flexShrink: 1 }}>
                       <Text style={s.campusName} maxFontSizeMultiplier={1.6}>

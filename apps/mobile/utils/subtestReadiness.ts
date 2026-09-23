@@ -16,6 +16,14 @@ const SUBTESTS: Record<string, SubtestKey> = {
   'Science': 'science',
 }
 
+/**
+ * The four UPCAT subtest labels as stored in question_attempts.subtest — the
+ * single source of truth for any caller that needs to pre-filter a query to
+ * just these (e.g. hooks/useAdmissionEstimate.ts bounding its attempts scan
+ * to avoid loading up to 5,000 unrelated rows).
+ */
+export const UPCAT_SUBTEST_LABELS: string[] = Object.keys(SUBTESTS)
+
 export interface SubtestScore {
   /** Percent correct over the latest WINDOW answers, or null until MIN_ANSWERS. */
   percent: number | null

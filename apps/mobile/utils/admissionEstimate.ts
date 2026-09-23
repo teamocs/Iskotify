@@ -105,3 +105,17 @@ export function estimateAdmissionScore(input: EstimateInput, cutoffs: CutoffRow[
     campuses,
   }
 }
+
+/**
+ * A11y (review finding): the per-campus status was only announced via the
+ * Likely/Possible/Unlikely group header, so a screen-reader user landing
+ * directly on a row heard nothing about its outcome. This combines every
+ * fact the row's own text renders (campus/program, status, cutoff, year,
+ * "estimate") into one accessibilityLabel for the row itself.
+ */
+export function campusAccessibilityLabel(row: CampusResult): string {
+  const name = row.program ? `${row.campus} – ${row.program}` : row.campus
+  const yearPart = row.year != null ? ` (${row.year})` : ''
+  const estimatePart = row.isEstimate ? ', estimate' : ''
+  return `${name}, ${row.status}, cutoff ${row.cutoff.toFixed(2)}${yearPart}${estimatePart}`
+}

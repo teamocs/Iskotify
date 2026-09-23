@@ -158,6 +158,15 @@ export function validateGwa(n: number): number | null {
   return n
 }
 
+// --- gwaFailingWarning ---
+// Non-blocking: a GWA of 0 < n < 60 is very likely a typo (DepEd's passing
+// mark is 60), but it's still a value validateGwa() accepts, so this never
+// blocks saving — callers show it as an inline notice only.
+export function gwaFailingWarning(n: number): string | null {
+  if (!isFinite(n) || n <= 0 || n >= 60) return null
+  return 'Below 60 is a failing grade in DepEd — check for a typo.'
+}
+
 // --- isTargetCampusFar ---
 export function isTargetCampusFar(campus?: string, region?: string): boolean {
   if (!campus || !region) return false

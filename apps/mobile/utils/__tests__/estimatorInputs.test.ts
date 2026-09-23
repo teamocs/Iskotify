@@ -1,4 +1,4 @@
-import { computeHsGwa, isTargetCampusFar, validateGwa } from '../estimatorInputs'
+import { computeHsGwa, isTargetCampusFar, validateGwa, gwaFailingWarning } from '../estimatorInputs'
 
 describe('computeHsGwa', () => {
   it('averages provided grades, skipping null/undefined', () => {
@@ -14,6 +14,24 @@ describe('validateGwa', () => {
   it('returns the number in 0-100 else null', () => {
     expect(validateGwa(88)).toBe(88); expect(validateGwa(150)).toBeNull()
     expect(validateGwa(-1)).toBeNull(); expect(validateGwa(NaN)).toBeNull()
+  })
+})
+describe('gwaFailingWarning', () => {
+  it('warns for a grade between 0 and 60 (exclusive of 0) — a DepEd failing mark', () => {
+    expect(gwaFailingWarning(45)).toMatch(/Below 60 is a failing grade in DepEd/i)
+    expect(gwaFailingWarning(59.9)).toMatch(/Below 60 is a failing grade in DepEd/i)
+  })
+  it('does not warn at or above 60', () => {
+    expect(gwaFailingWarning(60)).toBeNull()
+    expect(gwaFailingWarning(75)).toBeNull()
+    expect(gwaFailingWarning(100)).toBeNull()
+  })
+  it('does not warn at exactly 0 (treated as unset, not a typo signal)', () => {
+    expect(gwaFailingWarning(0)).toBeNull()
+  })
+  it('does not warn for negative or non-finite values (validateGwa already rejects those)', () => {
+    expect(gwaFailingWarning(-5)).toBeNull()
+    expect(gwaFailingWarning(NaN)).toBeNull()
   })
 })
 describe('isTargetCampusFar', () => {

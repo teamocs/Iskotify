@@ -1,4 +1,4 @@
-import { estimateAdmissionScore, type CutoffRow } from '../admissionEstimate'
+import { estimateAdmissionScore, campusAccessibilityLabel, type CutoffRow, type CampusResult } from '../admissionEstimate'
 
 // Campus-level cutoffs as seeded in production (2019 estimates) plus one
 // program-level row, mirroring upcat_cutoffs.
@@ -70,5 +70,31 @@ describe('estimateAdmissionScore', () => {
     const lo = estimateAdmissionScore({ hsGWA: 90, math: 50, reading: 55, language: 60, science: 50 }, [])
     const hi = estimateAdmissionScore({ hsGWA: 90, math: 70, reading: 75, language: 80, science: 70 }, [])
     expect(hi.point).toBeLessThan(lo.point)
+  })
+})
+
+// Finding 4 (a11y review): status must not be announced only via a group
+// header — each campus row needs its own label combining campus/program,
+// status, cutoff, year, and "estimate".
+describe('campusAccessibilityLabel', () => {
+  const base: CampusResult = {
+    campus: 'UP Diliman', program: null, cutoff: 2.174, year: 2019, isEstimate: true,
+    status: 'Possible', gap: 0.178,
+  }
+
+  it('combines campus, status, cutoff, and year', () => {
+    expect(campusAccessibilityLabel(base)).toBe('UP Diliman, Possible, cutoff 2.17 (2019), estimate')
+  })
+
+  it('includes the program name when present', () => {
+    expect(campusAccessibilityLabel({
+      ...base, program: 'BS Computer Science', cutoff: 1.55, year: 2025, isEstimate: false, status: 'Unlikely',
+    })).toBe('UP Diliman – BS Computer Science, Unlikely, cutoff 1.55 (2025)')
+  })
+
+  it('omits the year and "estimate" when not applicable', () => {
+    expect(campusAccessibilityLabel({
+      ...base, year: null, isEstimate: false, status: 'Likely',
+    })).toBe('UP Diliman, Likely, cutoff 2.17')
   })
 })
