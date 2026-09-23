@@ -7,6 +7,8 @@ import { useDb } from '../../../hooks/useDb'
 import { upcatQuestions, upcatPassages } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
+import { loadAdmissionEstimateSnapshot, type AdmissionEstimateSnapshot } from '../../../hooks/useAdmissionEstimate'
+import { estimateDeltaMessage } from '../../../utils/estimateDelta'
 import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
@@ -47,6 +49,9 @@ export default function UpcatExam() {
   // Question-report state: which indexes were reported + which index the modal is open for.
   const [reported, setReported] = useState<Record<number, boolean>>({})
   const [reportIdx, setReportIdx] = useState<number | null>(null)
+  // Post-session Estimated Admission Score delta (only set when the student
+  // was already "ready" — four subtests unlocked — both before and after).
+  const [scoreDelta, setScoreDelta] = useState<string | null>(null)
   const startRef = useState(() => Date.now())[0]
   // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
   // an absolute timestamp so the clock stays accurate even if the interval drifts.
@@ -139,6 +144,16 @@ export default function UpcatExam() {
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const result = scoreExam(scored)
 
+    // Post-session delta: snapshot the on-device estimate before this
+    // session's attempts are written. Best-effort — must never block
+    // reaching results, same convention as the telemetry insert below.
+    let beforeEstimate: AdmissionEstimateSnapshot | null = null
+    try {
+      beforeEstimate = await loadAdmissionEstimateSnapshot(db)
+    } catch (err) {
+      console.warn('[practice/upcat/[subtest]] pre-session estimate snapshot failed:', err)
+    }
+
     // Task D: per-question attempt rows, written before recordSession so
     // they're committed before recordSession's fire-and-forget backup push.
     const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
@@ -177,6 +192,17 @@ export default function UpcatExam() {
         subtest: st,
       })
     }
+
+    // Post-session delta: snapshot again now that this session's attempts are
+    // recorded, and show the change only if the student was already ready
+    // before (otherwise there is no prior estimate to compare against).
+    try {
+      const afterEstimate = await loadAdmissionEstimateSnapshot(db)
+      setScoreDelta(estimateDeltaMessage(beforeEstimate, afterEstimate))
+    } catch (err) {
+      console.warn('[practice/upcat/[subtest]] post-session estimate snapshot failed:', err)
+    }
+
     setPhase('results')
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
@@ -222,6 +248,12 @@ export default function UpcatExam() {
               {res.overall.correct}/{res.overall.total} correct
             </Text>
           </View>
+
+          {scoreDelta ? (
+            <View style={s.deltaCard}>
+              <Text style={s.deltaText}>{scoreDelta}</Text>
+            </View>
+          ) : null}
 
           <Text style={s.sectionLbl}>Per-subtest</Text>
           {Object.entries(res.bySubtest).map(([st, b]) => (
@@ -485,6 +517,23 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       color: t.textTertiary,
       marginTop: 2,
       fontFamily: 'Lexend_400Regular',
+    },
+    deltaCard: {
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 12,
+      borderCurve: 'continuous',
+      padding: spacing.md,
+      marginBottom: 18,
+      alignItems: 'center',
+    },
+    deltaText: {
+      fontSize: typo.sm,
+      fontWeight: '600',
+      color: t.accentText,
+      fontFamily: 'Lexend_600SemiBold',
+      textAlign: 'center',
     },
     sectionLbl: {
       fontSize: typo.sm,

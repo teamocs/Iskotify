@@ -25,6 +25,7 @@ import type { ReadinessTone } from '../../utils/readinessTone'
 import { subjectsToImprove } from '../../utils/subjectsToImprove'
 import { subjectColor } from '../../utils/subjectColors'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
+import { AdmissionEstimateCard } from '../../components/home/AdmissionEstimateCard'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
@@ -1079,6 +1080,9 @@ export default function PracticeScreen() {
             </View>
           </View>
         ) : null}
+
+        {/* (6.5) Estimated Admission Score — compact entry, next to the UPCAT mock tools */}
+        <AdmissionEstimateCard />
 
         {/* (7) Mock Exams section */}
         {blueprints.length > 0 ? (

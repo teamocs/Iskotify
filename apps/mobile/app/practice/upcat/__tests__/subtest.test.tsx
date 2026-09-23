@@ -42,6 +42,16 @@ jest.mock('../../../../hooks/useRecordAttempts', () => ({
   useRecordAttempts: () => ({ recordAttempts: mockRecordAttempts }),
 }))
 
+// Post-session delta (Task 5): the screen snapshots the on-device estimate
+// before and after writing this session's attempts, via the same pipeline
+// hooks/useAdmissionEstimate.ts exposes for the results screen. Mocked here
+// so this file doesn't need to simulate the full settings/attempts/cutoffs
+// query chain — that pipeline has its own tests in useAdmissionEstimate.test.ts.
+const mockLoadSnapshot = jest.fn()
+jest.mock('../../../../hooks/useAdmissionEstimate', () => ({
+  loadAdmissionEstimateSnapshot: (...args: unknown[]) => mockLoadSnapshot(...args),
+}))
+
 let mockQuestionRows: any[] = []
 let mockPassageRows: any[] = []
 
@@ -80,6 +90,9 @@ describe('UpcatExam', () => {
     mockSearchParams = {}
     mockQuestionRows = []
     mockPassageRows = []
+    mockLoadSnapshot.mockReset()
+    // Default: not ready either before or after — no prior estimate to compare.
+    mockLoadSnapshot.mockResolvedValue({ status: 'not-ready', readiness: null, result: null })
   })
 
   it('writes a question_attempts row per question (with topic) on submit (Task D)', async () => {
@@ -161,5 +174,45 @@ describe('UpcatExam', () => {
     expect(warnSpy).toHaveBeenCalledWith('[practice/upcat/[subtest]] recordAttempts failed:', expect.any(Error))
 
     warnSpy.mockRestore()
+  })
+
+  it('shows the Estimated Admission Score delta when the student was already ready before the session', async () => {
+    mockLoadSnapshot
+      .mockResolvedValueOnce({ status: 'ready', readiness: null, result: { point: 2.35, low: 2.15, high: 2.55 } }) // before
+      .mockResolvedValueOnce({ status: 'ready', readiness: null, result: { point: 2.31, low: 2.11, high: 2.51 } }) // after
+
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(await screen.findByText('Estimated Admission Score 2.35 → 2.31, lower is better')).toBeTruthy()
+  })
+
+  it('shows no delta when the student was not ready before the session', async () => {
+    mockLoadSnapshot
+      .mockResolvedValueOnce({ status: 'not-ready', readiness: null, result: null }) // before
+      .mockResolvedValueOnce({ status: 'ready', readiness: null, result: { point: 2.31, low: 2.11, high: 2.51 } }) // after
+
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+    await act(async () => {
+      fireEvent.press(screen.getByText('Submit'))
+    })
+
+    expect(screen.queryByText(/Estimated Admission Score/)).toBeNull()
   })
 })

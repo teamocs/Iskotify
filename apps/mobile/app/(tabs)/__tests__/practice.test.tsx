@@ -92,6 +92,20 @@ jest.mock('../../../services/queryCache', () => ({
   subscribe: jest.fn(() => jest.fn()),
 }))
 
+// The Estimated Admission Score entry reads this hook directly — mocked here
+// the same way as this screen's other data hooks above.
+const mockUseAdmissionEstimate = jest.fn()
+jest.mock('../../../hooks/useAdmissionEstimate', () => ({
+  useAdmissionEstimate: () => mockUseAdmissionEstimate(),
+}))
+const emptyAdmissionEstimate = {
+  status: 'no-grades' as const,
+  readiness: null,
+  result: null,
+  acknowledgeDisclaimer: jest.fn(),
+  reload: jest.fn(),
+}
+
 const { router } = require('expo-router')
 
 const emptyPracticeData = {
@@ -123,6 +137,7 @@ describe('PracticeScreen', () => {
     // Reset shared focus listings array
     mockFocusListings.splice(0, mockFocusListings.length)
     mockDecks.splice(0, mockDecks.length)
+    mockUseAdmissionEstimate.mockReturnValue(emptyAdmissionEstimate)
   })
 
   it('renders the Exams title', () => {
@@ -323,6 +338,13 @@ describe('PracticeScreen', () => {
     render(<PracticeScreen />)
     await act(async () => {})
     expect(screen.queryByText('Mock Exams')).toBeNull()
+  })
+
+  it('shows the Estimated Admission Score entry near the UPCAT tools and opens the estimator on tap', () => {
+    render(<PracticeScreen />)
+    expect(screen.getByText('Estimated Admission Score')).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: /estimated admission score/i }))
+    expect(router.push).toHaveBeenCalledWith('/estimator')
   })
 
   it('renders at most 4 mock exam cards', async () => {
