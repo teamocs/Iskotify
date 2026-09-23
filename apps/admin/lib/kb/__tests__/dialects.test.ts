@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { detectDialect, convertRecords } from '../dialects'
 import { resolveFileRule } from '../fileRules'
 
+function convert(name: string, dialect: Parameters<typeof convertRecords>[1], records: Record<string, string>[]) {
+  return convertRecords(ruleFor(name), dialect, records, name)
+}
+
 function ruleFor(name: string) {
   const r = resolveFileRule(name)
   if (r?.kind !== 'import') throw new Error(`no import rule for ${name}`)
@@ -27,7 +31,7 @@ describe('detectDialect', () => {
 
 describe('convertRecords', () => {
   it('converts the UPCAT layout, namespacing ids by file and keeping drafts', () => {
-    const { rows, rejected } = convertRecords(ruleFor('UPCAT-Math-500-Questions.csv'), 'abcd-letter', [
+    const { rows, rejected } = convert('UPCAT-Math-500-Questions.csv', 'abcd-letter', [
       { ID: 'UPCAT-MATH-001', Topic: 'Algebra', Subtopic: 'Ratio', Difficulty: 'Average', Question: 'If x:y = 1:4, x+y:x?', A: '1:5', B: '5:1', C: '4:5', D: '5:4', Answer: 'B', Solution: 'Let x = k.' },
     ])
     expect(rejected).toEqual([])
@@ -40,7 +44,7 @@ describe('convertRecords', () => {
   })
 
   it('carries figure references and uses the caption as alt text', () => {
-    const { rows } = convertRecords(ruleFor('UPCAT-Science-600-Questions.csv'), 'abcd-letter', [
+    const { rows } = convert('UPCAT-Science-600-Questions.csv', 'abcd-letter', [
       { ID: 'UPCAT-SCI-003', Topic: 'Physics', Subtopic: 'Series circuits', Difficulty: 'Average', HasFigure: 'yes', FigureFile: 'diagrams/circuit_3.png', FigureCaption: 'Series circuit with 3 cells', Question: 'Which is correct?', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'C', Solution: 's' },
     ])
     expect(rows[0]).toMatchObject({ has_visual: 'yes', figure_file: 'diagrams/circuit_3.png', figure_caption: 'Series circuit with 3 cells' })
@@ -48,7 +52,7 @@ describe('convertRecords', () => {
 
   it('groups reading questions under a namespaced passage with 1-based positions', () => {
     const base = { Topic: 'Reading Comprehension - Prose passage', StimulusTitle: 'The Sleep Audit', StimulusType: 'Feature article', Language: 'English', SkillTested: 'Main idea', Difficulty: 'Average', HasFigure: 'No', FigureFile: '', FigureCaption: '', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'A', Solution: 's' }
-    const { rows } = convertRecords(ruleFor('UPCAT-Reading-500-Questions.csv'), 'reading-stimulus', [
+    const { rows } = convert('UPCAT-Reading-500-Questions.csv', 'reading-stimulus', [
       { ...base, ID: 'RC001', StimulusID: 'EN01', Passage: 'Students slept 5h40m.', Question: 'Main idea?' },
       { ...base, ID: 'RC002', StimulusID: 'EN01', Passage: 'Students slept 5h40m.', Question: 'Tone?' },
     ])
@@ -58,7 +62,7 @@ describe('convertRecords', () => {
   })
 
   it('does not link a figure-only stimulus to a passage (no passage row would exist for the FK)', () => {
-    const { rows } = convertRecords(ruleFor('UPCAT-Reading-500-Questions.csv'), 'reading-stimulus', [
+    const { rows } = convert('UPCAT-Reading-500-Questions.csv', 'reading-stimulus', [
       { ID: 'RC200', Topic: 'Reading Comprehension - Data display', StimulusID: 'VA01', StimulusTitle: 'Infographic', StimulusType: 'Infographic', Language: 'English', SkillTested: 'Reading data', Difficulty: 'Easy', HasFigure: 'Yes', FigureFile: 'figures/va01.png', FigureCaption: 'Daily time use', Passage: '', Question: 'Average screen time?', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'D', Solution: 's' },
     ])
     expect(rows[0].set_id).toBe('')
@@ -66,7 +70,7 @@ describe('convertRecords', () => {
   })
 
   it('parses "A - answer text" correct answers and tags the skill category', () => {
-    const { rows } = convertRecords(ruleFor('ACET_General_Knowledge_500Q_Set2.csv'), 'option-letter', [
+    const { rows } = convert('ACET_General_Knowledge_500Q_Set2.csv', 'option-letter', [
       { 'No.': '1', Category: 'Philippine Constitution', Question: 'Q?', 'Option A': 'x', 'Option B': 'y', 'Option C': 'z', 'Option D': 'w', 'Correct Answer': 'A - x', Explanation: 'e' },
     ])
     expect(rows[0]).toMatchObject({
@@ -76,7 +80,7 @@ describe('convertRecords', () => {
   })
 
   it('parses 1-4 correct options and keeps 3-option questions (blank 4th option)', () => {
-    const { rows, rejected } = convertRecords(ruleFor('USTET_Mental Ability_500_Batch2.csv'), 'option-numeric', [
+    const { rows, rejected } = convert('USTET_Mental Ability_500_Batch2.csv', 'option-numeric', [
       { id: '1', category: 'Number Sequence', question: '2, 4, 6, ?', option_1: '11', option_2: '8', option_3: '14', option_4: '10', correct_option: '2', explanation: '+2' },
       { id: '2', category: 'Syllogism / Logical Reasoning', question: 'All A are B...', option_1: 'True', option_2: 'False', option_3: 'Uncertain', option_4: '', correct_option: '1', explanation: 'e' },
     ])
@@ -86,7 +90,7 @@ describe('convertRecords', () => {
   })
 
   it('rejects rows with no question, fewer than 3 options, or an answer pointing at a blank option', () => {
-    const { rows, rejected } = convertRecords(ruleFor('UPCAT-Math-500-Questions.csv'), 'abcd-letter', [
+    const { rows, rejected } = convert('UPCAT-Math-500-Questions.csv', 'abcd-letter', [
       { ID: 'M1', Topic: 't', Subtopic: '', Difficulty: '', Question: '', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'A', Solution: '' },
       { ID: 'M2', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: 'b', C: '', D: '', Answer: 'A', Solution: '' },
       { ID: 'M3', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: 'b', C: 'c', D: '', Answer: 'D', Solution: '' },

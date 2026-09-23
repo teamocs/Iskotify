@@ -9,15 +9,27 @@ export interface RawUpcatRow {
   question_text: string; option_a: string; option_b: string; option_c: string; option_d: string
   correct_answer: string; explanation: string; status: string
   skill_category?: string
+  // Figure metadata (Drive sync). Only written when present on the row, so the
+  // CSV route never clears a figure that a Drive sync attached.
+  image_url?: string | null; image_alt?: string | null
+  image_width?: number | null; image_height?: number | null
 }
 
 export interface ImportUpcatResult { passages: number; questions: number; duplicatesDrafted: number }
+
+export interface ImportUpcatOptions {
+  // Subtests accepted in addition to VALID_SUBTESTS. The CSV route keeps the
+  // UPCAT-only default; the Drive sync also allows the blueprint-engine pools
+  // ('General Information', 'Mental Ability') that feed ACET/USTET sections via
+  // skill_category.
+  allowedSubtests?: readonly string[]
+}
 
 // Content fingerprint for duplicate detection. Compares question text AND options
 // (NOT text alone) — many legitimate questions share a generic stem ("Choose the
 // correctly spelled word.", "What is the main idea of the passage?") but differ in
 // their options, so a text-only check would wrongly flag them.
-function contentKey(text: string, options: string[]): string {
+export function contentKey(text: string, options: string[]): string {
   const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
   return norm(text) + ' ||| ' + options.map(norm).join(' | ')
 }
@@ -38,10 +50,15 @@ const SUBTEST_CATEGORY: Record<string, string> = {
   'Reading Comprehension': 'Reading Comprehension',
 }
 
-export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[]): Promise<ImportUpcatResult> {
+export async function importUpcatCore(
+  client: SupabaseClient,
+  rows: RawUpcatRow[],
+  opts: ImportUpcatOptions = {},
+): Promise<ImportUpcatResult> {
   // 0. Validate subtests up-front (clear, all-at-once error) so a typo can't
   //    silently hide a whole batch from the mobile exam builder.
-  const valid = new Set<string>(VALID_SUBTESTS)
+  const allowed = [...VALID_SUBTESTS, ...(opts.allowedSubtests ?? [])]
+  const valid = new Set<string>(allowed)
   const badSubtests = new Map<string, string>() // subtest value -> first offending question_id
   for (const r of rows) {
     const st = cleanImportedText(r.subtest)
@@ -50,7 +67,7 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
   if (badSubtests.size > 0) {
     const detail = [...badSubtests.entries()].map(([s, qid]) => `"${s}" (e.g. ${qid})`).join(', ')
     throw new Error(
-      `Invalid subtest value(s): ${detail}. Allowed: ${VALID_SUBTESTS.join(', ')}.`,
+      `Invalid subtest value(s): ${detail}. Allowed: ${allowed.join(', ')}.`,
     )
   }
 
@@ -72,6 +89,16 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
   // 2. Build question rows
   const questionRows = rows.map((r) => {
     const setId = cleanImportedText(r.set_id)
+    // A blank 4th option means a 3-option item (e.g. True/False/Uncertain
+    // syllogisms) — store 3 options rather than an empty answer button.
+    const options = [r.option_a, r.option_b, r.option_c, r.option_d].map(o => cleanImportedText(o))
+    while (options.length > 0 && options[options.length - 1] === '') options.pop()
+    const media = r.image_url === undefined ? {} : {
+      image_url: r.image_url ?? null,
+      image_alt: r.image_alt ?? null,
+      image_width: r.image_width ?? null,
+      image_height: r.image_height ?? null,
+    }
     return {
       question_id: cleanImportedText(r.question_id),
       subtest: cleanImportedText(r.subtest),
@@ -84,13 +111,14 @@ export async function importUpcatCore(client: SupabaseClient, rows: RawUpcatRow[
       curriculum_alignment: cleanImportedText(r.curriculum_alignment) || null,
       skill_category: cleanImportedText(r.skill_category) || SUBTEST_CATEGORY[cleanImportedText(r.subtest)] || null,
       question_text: cleanImportedText(r.question_text),
-      options: [r.option_a, r.option_b, r.option_c, r.option_d].map(o => cleanImportedText(o)),
+      options,
       correct_index: letterToIndex(r.correct_answer),
       explanation: cleanImportedText(r.explanation),
       set_id: setId || null,
       set_position: (() => { const sp = parseInt(cleanImportedText(r.set_position), 10); return Number.isNaN(sp) ? null : sp })(),
       has_visual: cleanImportedText(r.has_visual).toLowerCase() === 'yes',
       status: cleanImportedText(r.status).toLowerCase() === 'approved' ? 'published' : 'draft',
+      ...media,
     }
   })
 
