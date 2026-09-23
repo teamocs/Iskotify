@@ -71,6 +71,13 @@ export async function importUpcatCore(
     )
   }
 
+  // A bulk upsert writes the union of the rows' keys, so a row that omits the
+  // image fields would have them nulled when batched with rows that set them.
+  const withMedia = rows.filter(r => r.image_url !== undefined).length
+  if (withMedia > 0 && withMedia < rows.length) {
+    throw new Error('importUpcatCore: image fields must be set on every row of a batch or on none')
+  }
+
   // 1. Collect distinct passages (first non-empty passage_text per set_id)
   const passages = new Map<string, { set_id: string; subtest: string; passage_text: string }>()
   for (const r of rows) {

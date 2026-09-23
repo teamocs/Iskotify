@@ -12,7 +12,7 @@ import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { importUpcatCore } from '../upcat/importUpcatCore'
 import { cleanImportedText } from '../csv/cleaners'
-import { resolveFileRule, KB_EXTRA_SUBTESTS } from './fileRules'
+import { resolveFileRule, fileKeyOf, KB_EXTRA_SUBTESTS } from './fileRules'
 import { detectDialect, convertRecords, type KbRow } from './dialects'
 import { readImageSize, mimeForExt } from './imageSize'
 
@@ -122,6 +122,14 @@ export async function syncDriveFolder(
   if (ledgerErr) throw new Error(`kb_drive_files read failed: ${ledgerErr.message}`)
   const ledger = new Map(((ledgerData ?? []) as LedgerRow[]).map(r => [r.drive_file_id, r]))
 
+  // Question ids are namespaced by file name, so two listed files with the same
+  // name would overwrite each other's questions. Hold both until one is renamed.
+  const byKey = new Map<string, DriveEntry[]>()
+  for (const e of candidates) {
+    const k = fileKeyOf(e.name)
+    byKey.set(k, [...(byKey.get(k) ?? []), e])
+  }
+
   const todo = candidates.filter(e => {
     if (isUnchanged(e, ledger.get(e.id))) { summary.unchanged++; return false }
     return true
@@ -159,6 +167,13 @@ export async function syncDriveFolder(
         summary.skipped.push(outcome)
         continue
       }
+      const twins = (byKey.get(fileKeyOf(e.name)) ?? []).filter(o => o.id !== e.id)
+      if (twins.length > 0) {
+        outcome.message = `Another file has the same name (${twins.map(o => `${o.path}/${o.name}`).join(', ')}); their question ids would collide. Rename or remove one.`
+        await record({ status: 'needs_mapping', message: outcome.message })
+        summary.needsMapping.push(outcome)
+        continue
+      }
       if (!isCsv(e) && e.mimeType !== SHEET_MIME) {
         outcome.message = 'Unsupported file type — save it as CSV or as a Google Sheet to import it.'
         await record({ status: 'skipped', message: outcome.message })
@@ -187,13 +202,19 @@ export async function syncDriveFolder(
 
       const { rows, rejected } = convertRecords(rule, dialect, parsed.data, e.name)
       const missing = await attachFigures(rows, e, images, figureCache, drive, media)
-      await carryOverPublished(db, rows)
+      const redrafted = await carryOverPublished(db, rows)
 
       for (let c = 0; c < rows.length; c += IMPORT_CHUNK) {
         await importUpcatCore(db, rows.slice(c, c + IMPORT_CHUNK), { allowedSubtests: KB_EXTRA_SUBTESTS })
       }
+      if (redrafted > 0) {
+        // Pull the flashcard copies of the re-drafted questions out of the quiz too.
+        const { error } = await db.rpc('project_question_bank_to_flashcards')
+        if (error) throw new Error(`flashcard projection failed: ${error.message}`)
+      }
 
       const notes = [
+        redrafted ? `${redrafted} live question(s) changed in the sheet and went back to draft — review and publish again` : '',
         rejected.length ? `${rejected.length} row(s) rejected: ${rejected.slice(0, 5).map(r => `${r.localId} (${r.reason})`).join('; ')}` : '',
         missing.length ? `${missing.length} missing figure(s): ${[...new Set(missing)].slice(0, 5).join(', ')}` : '',
       ].filter(Boolean)
@@ -274,9 +295,10 @@ async function attachFigures(
 /**
  * A changed file is re-imported whole. Questions whose content is identical to
  * what is already published stay published ('Approved' → published in
- * importUpcatCore); new or edited ones land as drafts for review.
+ * importUpcatCore); new or edited ones land as drafts for review. Returns how
+ * many live questions an edit sends back to draft.
  */
-async function carryOverPublished(db: SupabaseClient, rows: KbRow[]): Promise<void> {
+async function carryOverPublished(db: SupabaseClient, rows: KbRow[]): Promise<number> {
   const ids = rows.map(r => r.question_id)
   const live = new Map<string, { question_text: string; options: string[]; correct_index: number; image_url: string | null }>()
   for (let i = 0; i < ids.length; i += 200) {
@@ -287,8 +309,9 @@ async function carryOverPublished(db: SupabaseClient, rows: KbRow[]): Promise<vo
     if (error) throw new Error(`upcat_questions read failed: ${error.message}`)
     for (const q of (data ?? []) as any[]) if (q.status === 'published') live.set(q.question_id, q)
   }
-  if (live.size === 0) return
+  if (live.size === 0) return 0
 
+  let redrafted = 0
   for (const row of rows) {
     const cur = live.get(row.question_id)
     if (!cur) continue
@@ -300,5 +323,7 @@ async function carryOverPublished(db: SupabaseClient, rows: KbRow[]): Promise<vo
       LETTERS.indexOf(row.correct_answer) === cur.correct_index &&
       (row.image_url ?? null) === (cur.image_url ?? null)
     if (same) row.status = 'Approved'
+    else redrafted++
   }
+  return redrafted
 }

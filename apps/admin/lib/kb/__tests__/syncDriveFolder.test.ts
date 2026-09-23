@@ -131,6 +131,34 @@ describe('syncDriveFolder', () => {
     expect(rows('upcat_questions')).toEqual([])
   })
 
+  it('holds back same-named files (their question ids would collide) instead of overwriting one with the other', async () => {
+    const { db, rows } = fakeDb()
+    const drive = gateway(
+      [
+        entry({ id: 'a', name: 'UPCAT-Math-500-Questions.csv' }),
+        entry({ id: 'b', name: 'UPCAT-Math-500-Questions.csv', path: 'Iskotify Questions/old' }),
+      ],
+      { a: MATH_CSV, b: MATH_CSV },
+    )
+    const res = await syncDriveFolder(db as any, drive, mediaStore(), { rootId: 'root' })
+    expect(res.needsMapping.map(o => o.driveFileId).sort()).toEqual(['a', 'b'])
+    expect(res.needsMapping[0]!.message).toMatch(/same name/i)
+    expect(rows('upcat_questions')).toEqual([])
+  })
+
+  it('says how many live questions were re-drafted by an edit and re-runs the flashcard projection', async () => {
+    const { db, rpcCalls } = fakeDb({
+      kb_drive_files: [{ drive_file_id: 'f1', md5_checksum: 'old', status: 'imported' }],
+      upcat_questions: [
+        { question_id: 'upcat-math-500-questions:UPCAT-MATH-002', question_text: 'Old wording?', options: ['a', 'b', 'c', 'd'], correct_index: 0, status: 'published', image_url: null },
+      ],
+    })
+    const drive = gateway([entry({ id: 'f1', name: 'UPCAT-Math-500-Questions.csv' })], { f1: MATH_CSV })
+    const res = await syncDriveFolder(db as any, drive, mediaStore(), { rootId: 'root' })
+    expect(res.imported[0]!.message).toMatch(/1 live question\(s\) changed/)
+    expect(rpcCalls).toEqual(['project_question_bank_to_flashcards'])
+  })
+
   it('records a download failure as an error and keeps going', async () => {
     const { db, rows } = fakeDb()
     const drive = gateway(

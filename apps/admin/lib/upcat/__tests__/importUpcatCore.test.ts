@@ -152,9 +152,17 @@ describe('importUpcatCore', () => {
     const { client, inserted } = makeMockClient()
     await importUpcatCore(client as any, [
       row({ question_id: 'S1', has_visual: 'yes', image_url: 'https://cdn/x.png', image_alt: 'Circuit', image_width: 640, image_height: 480 }),
-      row({ question_id: 'S2' }),
     ])
+    await importUpcatCore(client as any, [row({ question_id: 'S2', question_text: 'Other?' })])
     expect(inserted.questions[0]).toMatchObject({ has_visual: true, image_url: 'https://cdn/x.png', image_alt: 'Circuit', image_width: 640, image_height: 480 })
     expect('image_url' in inserted.questions[1]).toBe(false)
+  })
+
+  it('refuses a batch that mixes rows with and without image fields (a bulk upsert would null the gaps)', async () => {
+    const { client } = makeMockClient()
+    await expect(importUpcatCore(client as any, [
+      row({ question_id: 'S1', image_url: 'https://cdn/x.png' }),
+      row({ question_id: 'S2', question_text: 'Other?' }),
+    ])).rejects.toThrow(/image fields/)
   })
 })
