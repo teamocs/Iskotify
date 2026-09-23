@@ -52,4 +52,22 @@ describe('QuestionFigure', () => {
     fireEvent.press(screen.getByLabelText('Close figure'))
     expect(screen.queryByLabelText('Close figure')).toBeNull()
   })
+
+  it('gives the zoomed figure the caption as its accessible name', () => {
+    render(<QuestionFigure imageUrl="https://example.com/circuit.png" imageAlt="Series circuit" />)
+    fireEvent.press(screen.getByLabelText('Series circuit'))
+    expect(screen.getByLabelText('Series circuit, enlarged')).toBeTruthy()
+  })
+
+  // The exam pagers reuse one QuestionCard (no key) as the student moves on, so
+  // a failed figure must not stick to the next question's figure.
+  it('retries loading when the question (imageUrl) changes after a failure', () => {
+    const { rerender } = render(<QuestionFigure imageUrl="https://example.com/a.png" imageAlt="A" />)
+    fireEvent(screen.getByTestId('question-figure-image'), 'error')
+    expect(screen.getByText('Figure unavailable offline')).toBeTruthy()
+
+    rerender(<QuestionFigure imageUrl="https://example.com/b.png" imageAlt="B" />)
+    expect(screen.queryByText('Figure unavailable offline')).toBeNull()
+    expect(screen.getByTestId('question-figure-image')).toBeTruthy()
+  })
 })

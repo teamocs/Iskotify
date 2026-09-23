@@ -63,10 +63,12 @@ async function fetchAllPaginated<T = Record<string, unknown>>(
 // down ALL question/flashcard sync. Detect that specific failure and retry
 // once with the legacy (pre-image) column list so sync degrades to "no
 // figures yet" instead of breaking entirely.
-function isColumnMissingError(error: unknown): boolean {
+export function isColumnMissingError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const e = error as { code?: unknown; message?: unknown }
-  return e.code === '42703' || (typeof e.message === 'string' && e.message.includes('does not exist'))
+  // Only an undefined *column* — a missing table or function must surface, not
+  // be retried away with the legacy column list.
+  return e.code === '42703' || (typeof e.message === 'string' && /\bcolumn\b.*does not exist/i.test(e.message))
 }
 
 const UPCAT_QUESTIONS_BASE_COLUMNS =

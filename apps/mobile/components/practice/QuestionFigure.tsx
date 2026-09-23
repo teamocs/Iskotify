@@ -25,13 +25,19 @@ const FALLBACK_ASPECT_RATIO = 4 / 3
  * expo-image so a previously-viewed figure keeps working offline; tapping opens a
  * full-screen zoom modal. Renders nothing when the question carries no image.
  */
-export function QuestionFigure({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFigureProps) {
+export function QuestionFigure(props: QuestionFigureProps) {
+  if (!props.imageUrl) return null
+  // Keyed by URL: the exam pagers reuse one QuestionCard as the student moves
+  // on, so a failed load (or an open zoom) must not carry over to the next
+  // question's figure.
+  return <FigureView key={props.imageUrl} {...props} imageUrl={props.imageUrl} />
+}
+
+function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFigureProps & { imageUrl: string }) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
   const [zoomOpen, setZoomOpen] = useState(false)
   const [failed, setFailed] = useState(false)
-
-  if (!imageUrl) return null
 
   const aspectRatio = imageWidth && imageHeight ? imageWidth / imageHeight : FALLBACK_ASPECT_RATIO
   const label = imageAlt?.trim() || 'Question figure'
@@ -72,7 +78,7 @@ export function QuestionFigure({ imageUrl, imageAlt, imageWidth, imageHeight }: 
         statusBarTranslucent
         onRequestClose={() => setZoomOpen(false)}
       >
-        <View style={s.zoomOverlay}>
+        <View style={s.zoomOverlay} accessibilityViewIsModal accessibilityLabel="Figure viewer">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close figure"
@@ -83,6 +89,8 @@ export function QuestionFigure({ imageUrl, imageAlt, imageWidth, imageHeight }: 
             <Text style={s.zoomCloseTxt}>✕</Text>
           </Pressable>
           <Image
+            accessible
+            accessibilityLabel={`${label}, enlarged`}
             source={{ uri: imageUrl }}
             style={s.zoomImage}
             contentFit="contain"
@@ -132,7 +140,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     },
     zoomOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.92)',
+      backgroundColor: t.scrim,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -143,12 +151,12 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: 'rgba(255,255,255,0.15)',
+      backgroundColor: t.scrimControl,
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1,
     },
-    zoomCloseTxt: { color: '#ffffff', fontSize: 20, fontWeight: '600' },
+    zoomCloseTxt: { color: t.textInverse, fontSize: 20, fontWeight: '600' },
     zoomImage: { width: '100%', height: '80%' },
   })
 }

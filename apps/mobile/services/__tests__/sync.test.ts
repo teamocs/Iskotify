@@ -2292,3 +2292,15 @@ describe('Task 3.5 — status=draft flashcards excluded from aggregates', () => 
     }
   })
 })
+
+import { isColumnMissingError } from '../sync'
+
+describe('isColumnMissingError', () => {
+  it('matches only a missing-column failure, so other errors are not masked by the legacy retry', () => {
+    expect(isColumnMissingError({ code: '42703', message: 'column upcat_questions.image_url does not exist' })).toBe(true)
+    expect(isColumnMissingError({ message: 'column flashcards.image_alt does not exist' })).toBe(true)
+    expect(isColumnMissingError({ code: '42P01', message: 'relation "public.upcat_questions" does not exist' })).toBe(false)
+    expect(isColumnMissingError({ message: 'function project_x() does not exist' })).toBe(false)
+    expect(isColumnMissingError(null)).toBe(false)
+  })
+})
