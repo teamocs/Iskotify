@@ -56,7 +56,7 @@ describe('/api/kb/drive-sync', () => {
     const res = await GET(req('Bearer cron-secret-value'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual(SUMMARY)
-    const [db, , , opts] = mockSync.mock.calls[0]
+    const [db, , , opts] = mockSync.mock.calls[0]!
     expect(db).toBe(serviceClient)
     expect(opts).toMatchObject({ rootId: '1QYhBX6SE1B8VwxgPya2xe7MPLpu3YpvB', deadline: expect.any(Number) })
   })

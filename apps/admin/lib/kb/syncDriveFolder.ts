@@ -130,7 +130,7 @@ export async function syncDriveFolder(
       summary.remaining = todo.length - i
       break
     }
-    const e = todo[i]
+    const e = todo[i]!
     const base = {
       drive_file_id: e.id, name: e.name, path: e.path, mime_type: e.mimeType,
       md5_checksum: e.md5Checksum ?? null, drive_modified_at: e.modifiedTime ?? null,

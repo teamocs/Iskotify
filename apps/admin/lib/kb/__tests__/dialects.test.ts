@@ -57,7 +57,7 @@ describe('convertRecords', () => {
       { ...base, ID: 'RC002', StimulusID: 'EN01', Passage: 'Students slept 5h40m.', Question: 'Tone?' },
     ])
     expect(rows.map(r => [r.set_id, r.set_position])).toEqual([['upcat-reading-500-questions:EN01', '1'], ['upcat-reading-500-questions:EN01', '2']])
-    expect(rows[0].passage_text).toBe('The Sleep Audit\n\nStudents slept 5h40m.')
+    expect(rows[0]!.passage_text).toBe('The Sleep Audit\n\nStudents slept 5h40m.')
     expect(rows[0]).toMatchObject({ topic: 'Prose passage', subtopic: 'Main idea', question_format: 'Feature article' })
   })
 
@@ -65,8 +65,8 @@ describe('convertRecords', () => {
     const { rows } = convert('UPCAT-Reading-500-Questions.csv', 'reading-stimulus', [
       { ID: 'RC200', Topic: 'Reading Comprehension - Data display', StimulusID: 'VA01', StimulusTitle: 'Infographic', StimulusType: 'Infographic', Language: 'English', SkillTested: 'Reading data', Difficulty: 'Easy', HasFigure: 'Yes', FigureFile: 'figures/va01.png', FigureCaption: 'Daily time use', Passage: '', Question: 'Average screen time?', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'D', Solution: 's' },
     ])
-    expect(rows[0].set_id).toBe('')
-    expect(rows[0].has_visual).toBe('yes')
+    expect(rows[0]!.set_id).toBe('')
+    expect(rows[0]!.has_visual).toBe('yes')
   })
 
   it('parses "A - answer text" correct answers and tags the skill category', () => {

@@ -52,10 +52,10 @@ function answerLetter(raw: string, numeric: boolean): string {
   const s = raw.trim()
   if (numeric) {
     const n = Number.parseInt(s, 10)
-    return n >= 1 && n <= 4 ? LETTERS[n - 1] : ''
+    return n >= 1 && n <= 4 ? (LETTERS[n - 1] ?? '') : ''
   }
   const m = /^([A-Da-d])(?:$|[\s.)\-:])/.exec(s)
-  return m ? m[1].toUpperCase() : ''
+  return m?.[1] ? m[1].toUpperCase() : ''
 }
 
 const yes = (v: string) => /^y(es)?$/i.test(v.trim())
@@ -150,7 +150,7 @@ export function convertRecords(
       set_position: setPosition,
       passage_text: passage,
       question_text: question,
-      option_a: options[0], option_b: options[1], option_c: options[2], option_d: options[3],
+      option_a: options[0] ?? '', option_b: options[1] ?? '', option_c: options[2] ?? '', option_d: options[3] ?? '',
       correct_answer: letter,
       explanation: get('Solution', 'Explanation'),
       status: '', // drafts: an admin publishes per file after review

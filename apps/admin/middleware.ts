@@ -11,6 +11,7 @@ const OPERATOR_ENDPOINTS = [
   '/api/flashcards/sanitize-legacy',
   '/api/places/school-search',  // mobile-accessible
   '/api/search/listings',       // mobile-accessible (hybrid exam/scholarship AI search)
+  '/api/kb/drive-sync',         // Vercel Cron (Bearer CRON_SECRET) or admin session — checked in the route
 ]
 
 // Public endpoints that need NO admin session — matched EXACTLY (not startsWith),

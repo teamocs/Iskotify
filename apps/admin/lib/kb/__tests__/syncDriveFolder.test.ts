@@ -32,9 +32,9 @@ function gateway(entries: DriveEntry[], texts: Record<string, string>, bytes: Re
     listTree: vi.fn(async () => entries),
     downloadText: vi.fn(async (e: DriveEntry) => {
       if (!(e.id in texts)) throw new Error(`boom ${e.id}`)
-      return texts[e.id]
+      return texts[e.id]!
     }),
-    downloadBytes: vi.fn(async (e: DriveEntry) => bytes[e.id]),
+    downloadBytes: vi.fn(async (e: DriveEntry) => bytes[e.id]!),
   }
   return drive
 }
@@ -76,8 +76,8 @@ describe('syncDriveFolder', () => {
     const res = await syncDriveFolder(db as any, drive, media, { rootId: 'root' })
 
     expect(media.upload).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(media.upload).mock.calls[0][0]).toMatch(/^[0-9a-f]{64}\.png$/)
-    expect(vi.mocked(media.upload).mock.calls[0][2]).toBe('image/png')
+    expect(vi.mocked(media.upload).mock.calls[0]![0]).toMatch(/^[0-9a-f]{64}\.png$/)
+    expect(vi.mocked(media.upload).mock.calls[0]![2]).toBe('image/png')
 
     const q = Object.fromEntries(rows('upcat_questions').map(r => [r.question_id.split(':')[1], r]))
     expect(q['UPCAT-SCI-001']).toMatchObject({ has_visual: false, image_url: null })

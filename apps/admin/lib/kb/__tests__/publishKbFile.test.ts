@@ -28,7 +28,7 @@ describe('publishKbFile', () => {
     const status = Object.fromEntries(rows('upcat_questions').map(r => [r.question_id, r.status]))
     expect(status).toMatchObject({ 'k:1': 'published', 'k:2': 'draft', 'k:3': 'published', 'k:4': 'draft', 'k:5': 'draft', 'k:6': 'published' })
     expect(rpcCalls).toEqual(['project_question_bank_to_flashcards'])
-    expect(rows('kb_drive_files')[0].published_at).toEqual(expect.any(String))
+    expect(rows('kb_drive_files')[0]!.published_at).toEqual(expect.any(String))
   })
 
   it('throws for an unknown file', async () => {
