@@ -32,10 +32,13 @@ const MIME: Record<string, string> = {
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
-  svg: 'image/svg+xml',
 }
 
-/** Content type for an allowed figure file (matches the question-media bucket). */
+/**
+ * Content type for an allowed figure file (matches the question-media bucket).
+ * Raster only: the bucket is public, and an SVG can carry script that runs if
+ * its URL is ever opened directly.
+ */
 export function mimeForExt(path: string): string | null {
   const ext = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase()
   return (ext && MIME[ext]) || null

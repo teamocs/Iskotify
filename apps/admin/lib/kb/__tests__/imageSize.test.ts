@@ -40,7 +40,8 @@ describe('mimeForExt', () => {
   it('maps allowed figure extensions and rejects others', () => {
     expect(mimeForExt('diagrams/circuit_3.png')).toBe('image/png')
     expect(mimeForExt('a.JPG')).toBe('image/jpeg')
-    expect(mimeForExt('a.svg')).toBe('image/svg+xml')
+    // SVG can carry script and the bucket is public — raster only.
+    expect(mimeForExt('a.svg')).toBeNull()
     expect(mimeForExt('a.exe')).toBeNull()
   })
 })

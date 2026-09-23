@@ -120,6 +120,17 @@ describe('syncDriveFolder', () => {
     expect(drive.downloadText).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
   })
 
+  it('skips a file whose downloaded text exceeds the size cap (native Sheets report no size)', async () => {
+    const { db, rows } = fakeDb()
+    const drive = gateway(
+      [entry({ id: 's1', name: 'UPCAT-Math-500-Questions', mimeType: 'application/vnd.google-apps.spreadsheet', md5Checksum: null })],
+      { s1: MATH_CSV },
+    )
+    const res = await syncDriveFolder(db as any, drive, mediaStore(), { rootId: 'root', maxSheetBytes: 64 })
+    expect(res.skipped).toEqual([expect.objectContaining({ driveFileId: 's1', message: expect.stringMatching(/larger than/) })])
+    expect(rows('upcat_questions')).toEqual([])
+  })
+
   it('records a download failure as an error and keeps going', async () => {
     const { db, rows } = fakeDb()
     const drive = gateway(

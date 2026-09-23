@@ -69,6 +69,15 @@ describe('/api/kb/drive-sync', () => {
     expect(mockSync).toHaveBeenCalledTimes(1)
   })
 
+  it('does not accept an admin session on GET (no cross-site GET-triggered syncs)', async () => {
+    mockRequireAdmin.mockResolvedValue({ supabase: serviceClient })
+    const { GET } = await load()
+    const res = await GET(req())
+    expect(res.status).toBe(401)
+    expect(mockRequireAdmin).not.toHaveBeenCalled()
+    expect(mockSync).not.toHaveBeenCalled()
+  })
+
   it('returns 500 when the Drive folder is not configured', async () => {
     vi.stubEnv('KB_DRIVE_FOLDER_ID', '')
     const { GET } = await load()

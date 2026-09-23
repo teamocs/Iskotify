@@ -24,14 +24,18 @@ function isCron(req: NextRequest): boolean {
   return got.length === want.length && timingSafeEqual(got, want)
 }
 
-async function run(req: NextRequest) {
+// GET is the cron path only. An admin session is accepted on POST alone, so a
+// link or <img> loaded in a signed-in admin's browser cannot trigger a sync.
+async function run(req: NextRequest, allowSession: boolean) {
   let db: ReturnType<typeof createServerClient>
   if (isCron(req)) {
     db = createServerClient()
-  } else {
+  } else if (allowSession) {
     const gate = await requireAdmin()
     if ('error' in gate && gate.error) return gate.error
     db = gate.supabase!
+  } else {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const rootId = process.env.KB_DRIVE_FOLDER_ID
@@ -51,5 +55,5 @@ async function run(req: NextRequest) {
   }
 }
 
-export const GET = run
-export const POST = run
+export const GET = (req: NextRequest) => run(req, false)
+export const POST = (req: NextRequest) => run(req, true)

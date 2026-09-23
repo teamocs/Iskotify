@@ -21,6 +21,12 @@ ALTER TABLE flashcards ADD COLUMN IF NOT EXISTS image_alt text;
 ALTER TABLE flashcards ADD COLUMN IF NOT EXISTS image_width int;
 ALTER TABLE flashcards ADD COLUMN IF NOT EXISTS image_height int;
 
+-- Publishing a Drive file scans every published question for duplicates
+-- (apps/admin/lib/kb/publishKbFile.ts); idx_upcat_questions_subtest leads with
+-- subtest, so it cannot serve a status-only filter.
+CREATE INDEX IF NOT EXISTS idx_upcat_questions_published
+  ON upcat_questions (question_id) WHERE status = 'published';
+
 -- ── Storage: public bucket for question figures ───────────────────────────────
 -- public = true so the app (including the offline-cached web build) can load a
 -- figure straight from its public URL. Writes happen only through the admin
@@ -33,7 +39,8 @@ VALUES (
   'question-media',
   true,
   5242880, -- 5 MB
-  ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']
+  -- Raster only: no SVG, which can carry script in a public bucket.
+  ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -123,6 +130,16 @@ BEGIN
         image_width = EXCLUDED.image_width,
         image_height = EXCLUDED.image_height,
         updated_at = now();
+
+  -- 4. Sweep: a projected card whose source question is no longer eligible
+  --    (unpublished, or its figure went missing) must leave the quiz too.
+  --    Only cards whose ext_id is a question_id are touched.
+  UPDATE flashcards f
+  SET status = 'draft', updated_at = now()
+  FROM upcat_questions q
+  WHERE f.ext_id = q.question_id
+    AND f.status = 'published'
+    AND (q.status <> 'published' OR (q.has_visual AND q.image_url IS NULL));
 
   SELECT count(*) INTO v_subjects FROM flashcard_subjects;
   SELECT count(*) INTO v_topics FROM flashcard_topics WHERE ext_id LIKE 'qb:%';

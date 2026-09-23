@@ -43,6 +43,8 @@ export interface SyncOptions {
   /** Epoch ms after which no new file is started (the current one finishes). */
   deadline?: number
   now?: () => number
+  /** Cap on a question file's downloaded size (default 10 MB). */
+  maxSheetBytes?: number
 }
 
 export interface FileOutcome {
@@ -77,6 +79,7 @@ interface LedgerRow {
   status: string
 }
 
+const formatMb = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`
 const isImage = (e: DriveEntry) => e.mimeType.startsWith('image/')
 const isCsv = (e: DriveEntry) => e.mimeType === 'text/csv' || /\.csv$/i.test(e.name)
 
@@ -106,6 +109,7 @@ export async function syncDriveFolder(
   opts: SyncOptions,
 ): Promise<SyncSummary> {
   const now = opts.now ?? Date.now
+  const maxSheetBytes = opts.maxSheetBytes ?? MAX_SHEET_BYTES
   const summary: SyncSummary = { imported: [], skipped: [], needsMapping: [], errors: [], unchanged: 0, remaining: 0 }
 
   const entries = await drive.listTree(opts.rootId)
@@ -161,14 +165,16 @@ export async function syncDriveFolder(
         summary.skipped.push(outcome)
         continue
       }
-      if ((e.size ?? 0) > MAX_SHEET_BYTES) {
-        outcome.message = `File is larger than ${MAX_SHEET_BYTES / 1024 / 1024} MB — split it into smaller files.`
+      const tooLarge = async () => {
+        outcome.message = `File is larger than ${formatMb(maxSheetBytes)} — split it into smaller files.`
         await record({ status: 'skipped', message: outcome.message })
         summary.skipped.push(outcome)
-        continue
       }
+      if ((e.size ?? 0) > maxSheetBytes) { await tooLarge(); continue }
 
       const text = await drive.downloadText(e)
+      // Native Google Sheets report no size in the listing, so check the export too.
+      if (Buffer.byteLength(text, 'utf8') > maxSheetBytes) { await tooLarge(); continue }
       const parsed = Papa.parse<Record<string, string>>(text.replace(/^﻿/, ''), { header: true, skipEmptyLines: 'greedy' })
       const headers = parsed.meta.fields ?? []
       const dialect = detectDialect(headers)
