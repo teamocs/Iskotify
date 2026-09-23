@@ -10,6 +10,11 @@ export interface PreAssessQuestion {
   /** Index-aligned with `options`; null at answerIndex. Task E — omitted (undefined) for bundled static questions, which have none. */
   optionExplanations?: (string | null)[]
   strategyTip?: string
+  /** Question-media — omitted (undefined) for bundled static questions, which have none. */
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 export const PRE_ASSESS_QUESTIONS: PreAssessQuestion[] = [

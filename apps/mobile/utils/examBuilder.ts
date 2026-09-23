@@ -1,5 +1,5 @@
 import type { ExamBlueprint, BlueprintSection } from '../services/examBlueprints'
-import type { RawUpcatQuestion, RawUpcatPassage, ExamQuestion } from './upcatExam'
+import { isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage, type ExamQuestion } from './upcatExam'
 
 // ---------------------------------------------------------------------------
 // Section chip state (B2)
@@ -51,7 +51,11 @@ export function buildBlueprintExam(
   const runnable: BuiltSection[] = []
   const comingSoon: BlueprintSection[] = []
   for (const section of [...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
-    const pool = questionsByCategory.get(section.skillCategory) ?? []
+    // Exclude questions whose required figure is missing (has_visual=true,
+    // image_url=null) — a student must never see "refer to the diagram" with
+    // no diagram. Filtered here (not just at the getQuestionsByCategory source)
+    // so this holds regardless of how questionsByCategory was produced.
+    const pool = (questionsByCategory.get(section.skillCategory) ?? []).filter(q => !isMissingRequiredFigure(q))
     if (pool.length === 0) { comingSoon.push(section); continue }
     const target = itemCountFor ? itemCountFor(section) : section.itemCount
     const picked = shuffle(pool).slice(0, Math.max(1, target))

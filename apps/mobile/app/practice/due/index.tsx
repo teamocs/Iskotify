@@ -6,6 +6,7 @@ import { inArray } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable } from '../../../db/schema'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -75,6 +76,10 @@ export default function DueReviewScreen() {
           aiEnhancedAt: flashcardsTable.aiEnhancedAt,
           optionExplanations: flashcardsTable.optionExplanations,
           strategyTip: flashcardsTable.strategyTip,
+          imageUrl: flashcardsTable.imageUrl,
+          imageAlt: flashcardsTable.imageAlt,
+          imageWidth: flashcardsTable.imageWidth,
+          imageHeight: flashcardsTable.imageHeight,
         }).from(flashcardsTable).where(inArray(flashcardsTable.id, ids))
       }
 
@@ -102,6 +107,7 @@ export default function DueReviewScreen() {
       }))
       const parsed = buildQuizQuestions(rawCards)
       const ordered = pickQuestions(parsed, 'due', dueAtById)
+      prefetchSessionImages(ordered) // fire-and-forget; never blocks session start
       setExamQuestions(ordered)
       setPhase(ordered.length === 0 ? 'empty' : 'exam')
     }

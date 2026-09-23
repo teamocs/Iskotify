@@ -14,6 +14,7 @@ import {
 } from '../../../utils/examBuilder'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { SectionGrid } from '../../../components/practice/SectionGrid'
@@ -113,6 +114,10 @@ function ReviewAccordion({ reviewSections, questions, answers, styles: s }: Revi
                       explanation={q.explanation}
                       optionExplanations={q.optionExplanations}
                       strategyTip={q.strategyTip}
+                      imageUrl={q.imageUrl}
+                      imageAlt={q.imageAlt}
+                      imageWidth={q.imageWidth}
+                      imageHeight={q.imageHeight}
                     />
                   )
                 })}
@@ -223,6 +228,7 @@ export default function BlueprintExam() {
       const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setExamMode('full')
       setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
+      prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start
       if (flat.length) examLoadedRef.current = true
       setPhase(flat.length ? 'prestart' : 'empty')
     } catch {
@@ -261,6 +267,7 @@ export default function BlueprintExam() {
       const sprintBuilt = buildStudySprintExam(blueprint, poolsRef.current, passagesRef.current, STUDY_SPRINT_MINUTES)
       const flat: FlatQuestion[] = sprintBuilt.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setBuilt(sprintBuilt); setQuestions(flat)
+      prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start
       setIdx(0); setFloorIdx(0)
       setEndTime(now + STUDY_SPRINT_MINUTES * 60_000)
       setPhase('exam')
@@ -655,6 +662,10 @@ export default function BlueprintExam() {
           passageText={q.passageText}
           reported={reported[idx]}
           onReport={() => setReportIdx(idx)}
+          imageUrl={q.imageUrl}
+          imageAlt={q.imageAlt}
+          imageWidth={q.imageWidth}
+          imageHeight={q.imageHeight}
         />
       </ScrollView>
 

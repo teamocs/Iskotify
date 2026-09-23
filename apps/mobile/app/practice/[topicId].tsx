@@ -7,6 +7,7 @@ import { useDb } from '../../hooks/useDb'
 import { subscribe } from '../../services/queryCache'
 import { flashcards as flashcardsTable, topics } from '../../db/schema'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../utils/mcDistractors'
+import { prefetchSessionImages } from '../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
@@ -103,6 +104,10 @@ export default function QuizScreen() {
         aiEnhancedAt: flashcardsTable.aiEnhancedAt,
         optionExplanations: flashcardsTable.optionExplanations,
         strategyTip: flashcardsTable.strategyTip,
+        imageUrl: flashcardsTable.imageUrl,
+        imageAlt: flashcardsTable.imageAlt,
+        imageWidth: flashcardsTable.imageWidth,
+        imageHeight: flashcardsTable.imageHeight,
       }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId))
     }
 
@@ -131,6 +136,7 @@ export default function QuizScreen() {
       strategyTip: row.strategyTip ?? null,
     }))
     const parsed = buildQuizQuestions(shuffle(rawCards))
+    prefetchSessionImages(parsed) // fire-and-forget; never blocks session start
     setAllQuestions(parsed)
     if (parsed.length > 0) loadedRef.current = true
     setPhase(parsed.length === 0 ? 'empty' : 'chooser')

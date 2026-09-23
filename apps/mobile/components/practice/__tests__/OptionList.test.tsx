@@ -57,4 +57,19 @@ describe('OptionList', () => {
     expect(node.props.maxFontSizeMultiplier).toBeGreaterThan(0)
     expect(node.props.maxFontSizeMultiplier).toBeLessThanOrEqual(1.8)
   })
+
+  // Some imported questions carry only 3 options (a blank 4th option is
+  // dropped by the CSV importer). OptionList must render exactly as many
+  // chips as it's given — no crash, no phantom 4th "D" button.
+  it('renders exactly 3 chips (A-C) for a 3-option question, with no crash and no 4th button', () => {
+    const { getAllByRole } = render(
+      <OptionList options={['Manila', 'Cebu', 'Davao']} selectedIndex={undefined} onSelect={jest.fn()} />,
+    )
+    const buttons = getAllByRole('button')
+    expect(buttons).toHaveLength(3)
+    expect(screen.getByText('A')).toBeTruthy()
+    expect(screen.getByText('B')).toBeTruthy()
+    expect(screen.getByText('C')).toBeTruthy()
+    expect(screen.queryByText('D')).toBeNull()
+  })
 })

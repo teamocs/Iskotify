@@ -9,12 +9,31 @@ export interface RawUpcatQuestion {
   optionExplanations?: (string | null)[] | null
   /** Optional short formula/mnemonic/pacing tip. Task E. */
   strategyTip?: string | null
+  /** Whether the source material references a figure the student must see. */
+  hasVisual?: boolean
+  /** Question-media: public Supabase Storage URL + caption + intrinsic pixel size.
+   *  hasVisual=true AND imageUrl=null means "figure required but missing" — every
+   *  exam/quiz builder must exclude such questions (see buildExam/buildBlueprintExam). */
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 export interface RawUpcatPassage { setId: string; subtest: string; passageText: string }
 export interface ExamQuestion extends RawUpcatQuestion { passageText: string | null }
 
 const QUICK_TARGET = 15
 const QUICK_MAX = 20
+
+/**
+ * True when a question refers to a figure the student needs but we don't have
+ * (has_visual=true AND image_url is null/empty) — per the server contract,
+ * such a question must never be served in any exam/quiz session (a student
+ * must never see "refer to the diagram" with no diagram).
+ */
+export function isMissingRequiredFigure(q: Pick<RawUpcatQuestion, 'hasVisual' | 'imageUrl'>): boolean {
+  return !!q.hasVisual && !q.imageUrl
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -28,7 +47,7 @@ export function buildExam(
   opts: { subtest: Subtest; mode: 'quick' | 'full' },
 ): ExamQuestion[] {
   const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
-  const inSubtest = questions.filter(q => q.subtest === opts.subtest)
+  const inSubtest = questions.filter(q => q.subtest === opts.subtest && !isMissingRequiredFigure(q))
 
   const setGroups = new Map<string, RawUpcatQuestion[]>()
   for (const q of inSubtest) {

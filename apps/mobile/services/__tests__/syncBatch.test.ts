@@ -39,7 +39,11 @@ function makeDb() {
       ai_enhanced_at INTEGER,
       status TEXT NOT NULL DEFAULT 'published',
       option_explanations TEXT NOT NULL DEFAULT '[]',
-      strategy_tip TEXT NOT NULL DEFAULT ''
+      strategy_tip TEXT NOT NULL DEFAULT '',
+      image_url TEXT,
+      image_alt TEXT,
+      image_width INTEGER,
+      image_height INTEGER
     );
     CREATE TABLE university_profiles (
       school_id TEXT PRIMARY KEY NOT NULL,

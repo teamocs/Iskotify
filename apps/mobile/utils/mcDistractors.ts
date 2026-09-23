@@ -22,6 +22,12 @@ export interface RawCard {
   optionExplanations?: (string | null)[] | null
   /** Optional short formula/mnemonic/pacing tip. Task E. */
   strategyTip?: string | null
+  /** Question-media (diagram/infographic/comic-panel/chart), independent of which
+   *  options branch below is chosen — carried straight through to QuizQuestion. */
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 export interface QuizQuestion {
@@ -33,6 +39,10 @@ export interface QuizQuestion {
   /** Index-aligned with `options` above (post-shuffle); null at answerIndex. Task E. */
   optionExplanations?: (string | null)[]
   strategyTip?: string
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 // Generic, topic-agnostic placeholders used when a card has no admin-set
@@ -106,6 +116,14 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
   return cards.map(card => {
     const explanation = card.aiExplanation ?? card.explanation
     const strategyTip = card.strategyTip?.trim() || undefined
+    // Independent of which options branch below fires — a card's figure isn't
+    // tied to whether its options came from AI/admin/embedded/placeholder.
+    const imageFields = {
+      imageUrl: card.imageUrl ?? null,
+      imageAlt: card.imageAlt ?? null,
+      imageWidth: card.imageWidth ?? null,
+      imageHeight: card.imageHeight ?? null,
+    }
 
     // Priority 1: AI-generated options
     if (
@@ -127,15 +145,24 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
           explanation,
           optionExplanations: aux,
           strategyTip,
+          ...imageFields,
         }
       }
     }
 
-    // Priority 2: admin-stored options
+    // Priority 2: admin-stored options. Unlike aiOptions above (Gemini-generated,
+    // always exactly 4 by construction — a different length there means bad AI
+    // data, so it falls through), admin/imported options are legitimately
+    // variable-length: the CSV importer drops a blank 4th option, and questions
+    // projected from the question bank (project_question_bank_to_flashcards)
+    // can carry 3-option upcat_questions as-is. Requiring >= 2 (so there's at
+    // least one distractor) keeps those real options instead of discarding them
+    // for FALLBACKS placeholders. OptionList/QuestionCard/ReviewCard already
+    // render any options.length correctly.
     if (
-      card.options && card.options.length === 4 &&
+      card.options && card.options.length >= 2 &&
       card.correctAnswerIndex != null &&
-      card.correctAnswerIndex >= 0 && card.correctAnswerIndex <= 3
+      card.correctAnswerIndex >= 0 && card.correctAnswerIndex < card.options.length
     ) {
       {
         const { options, correctIndex, aux } = shuffleWithIndex(card.options, card.correctAnswerIndex, card.optionExplanations)
@@ -147,6 +174,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
           explanation,
           optionExplanations: aux,
           strategyTip,
+          ...imageFields,
         }
       }
     }
@@ -155,7 +183,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
     const embedded = parseEmbedded(card)
     if (embedded) {
       const { options, correctIndex } = shuffleWithIndex(embedded.options, embedded.answerIndex)
-      return { ...embedded, options, answerIndex: correctIndex, explanation }
+      return { ...embedded, options, answerIndex: correctIndex, explanation, ...imageFields }
     }
 
     // Priority 4: safe placeholder distractors
@@ -176,6 +204,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       options: all,
       answerIndex: Math.max(0, all.indexOf(correct)),
       explanation,
+      ...imageFields,
     }
   })
 }

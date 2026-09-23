@@ -202,4 +202,56 @@ describe('ReviewCard', () => {
     expect(src).toMatch(/optRowWrong:.*borderColor:\s*t\.danger/)
     expect(src).toMatch(/tipChip:[\s\S]*?borderColor:\s*t\.warning/)
   })
+
+  it('renders the question figure below the stem when imageUrl is given', () => {
+    render(
+      <ReviewCard
+        index={1}
+        questionText="Q?"
+        options={OPTIONS}
+        correctIndex={0}
+        selectedIndex={0}
+        explanation="exp"
+        imageUrl="https://example.com/circuit.png"
+        imageAlt="Series circuit"
+      />,
+    )
+    expect(screen.getByLabelText('Series circuit')).toBeTruthy()
+  })
+
+  // Some imported questions carry only 3 options (blank 4th option dropped by
+  // the CSV importer / projected as-is from a 3-option upcat_questions row).
+  // ReviewCard must render exactly as many rows as given — no crash, no
+  // phantom 4th "D" row.
+  it('renders exactly 3 option rows for a 3-option question, with no crash and no D row', () => {
+    render(
+      <ReviewCard
+        index={1}
+        questionText="Q?"
+        options={['Manila', 'Cebu', 'Davao']}
+        correctIndex={2}
+        selectedIndex={0}
+        explanation="Davao is correct."
+      />,
+    )
+    expect(screen.getByText('Manila')).toBeTruthy()
+    expect(screen.getByText('Cebu')).toBeTruthy()
+    expect(screen.getByText('Davao')).toBeTruthy()
+    expect(screen.getByText('C')).toBeTruthy()
+    expect(screen.queryByText('D')).toBeNull()
+  })
+
+  it('renders no figure when imageUrl is absent', () => {
+    render(
+      <ReviewCard
+        index={1}
+        questionText="Q?"
+        options={OPTIONS}
+        correctIndex={0}
+        selectedIndex={0}
+        explanation="exp"
+      />,
+    )
+    expect(screen.queryByLabelText('Question figure')).toBeNull()
+  })
 })

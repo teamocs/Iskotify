@@ -576,6 +576,20 @@ export const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS study_plan_items_plan_date_idx ON study_plan_items (plan_date)`,
   `ALTER TABLE user_settings ADD COLUMN daily_reminder_hour INTEGER NOT NULL DEFAULT 9`,
   `ALTER TABLE user_settings ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1`,
+
+  // ── Question media: images on upcat_questions + flashcards ─────────────────
+  // Nullable everywhere — mirrors Supabase migration 054 (question-media bucket).
+  // On upcat_questions, has_visual=true AND image_url IS NULL means "figure
+  // required but missing"; every exam/quiz builder excludes such rows (a
+  // student must never see "refer to the figure" with no figure).
+  `ALTER TABLE upcat_questions ADD COLUMN image_url TEXT`,
+  `ALTER TABLE upcat_questions ADD COLUMN image_alt TEXT`,
+  `ALTER TABLE upcat_questions ADD COLUMN image_width INTEGER`,
+  `ALTER TABLE upcat_questions ADD COLUMN image_height INTEGER`,
+  `ALTER TABLE flashcards ADD COLUMN image_url TEXT`,
+  `ALTER TABLE flashcards ADD COLUMN image_alt TEXT`,
+  `ALTER TABLE flashcards ADD COLUMN image_width INTEGER`,
+  `ALTER TABLE flashcards ADD COLUMN image_height INTEGER`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

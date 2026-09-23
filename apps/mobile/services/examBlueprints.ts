@@ -1,7 +1,7 @@
 import { eq, asc, and, inArray } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages, userSettings, careerCourses } from '../db/schema'
-import type { RawUpcatQuestion, RawUpcatPassage } from '../utils/upcatExam'
+import { isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage } from '../utils/upcatExam'
 
 export interface BlueprintSection {
   id: string; name: string; skillCategory: string; itemCount: number
@@ -85,15 +85,26 @@ export async function getQuestionsByCategory(db: DrizzleClient, categories: stri
     .where(and(inArray(upcatQuestions.skillCategory, categories), eq(upcatQuestions.status, 'published')))
   for (const r of rows) {
     const cat = r.skillCategory ?? ''
-    if (!map.has(cat)) map.set(cat, [])
-    map.get(cat)!.push({
+    const question: RawUpcatQuestion = {
       questionId: r.questionId, subtest: r.subtest, questionText: r.questionText,
       options: parseOptions(r.options), correctIndex: r.correctIndex, explanation: r.explanation,
       setId: r.setId, setPosition: r.setPosition,
       mainSubject: r.mainSubject ?? null, topic: r.topic ?? null,
       optionExplanations: parseOptions(r.optionExplanations) as (string | null)[],
       strategyTip: r.strategyTip ?? null,
-    })
+      hasVisual: !!r.hasVisual,
+      imageUrl: r.imageUrl ?? null,
+      imageAlt: r.imageAlt ?? null,
+      imageWidth: r.imageWidth ?? null,
+      imageHeight: r.imageHeight ?? null,
+    }
+    // A student must never see "refer to the diagram" with no diagram —
+    // exclude here at the source too (buildBlueprintExam/buildStudySprintExam
+    // filter again defensively, but every caller of getQuestionsByCategory
+    // should get an already-clean pool).
+    if (isMissingRequiredFigure(question)) continue
+    if (!map.has(cat)) map.set(cat, [])
+    map.get(cat)!.push(question)
   }
   return map
 }

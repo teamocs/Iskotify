@@ -28,3 +28,17 @@ jest.mock('expo-navigation-bar', () => ({
   setBehaviorAsync: jest.fn().mockResolvedValue(undefined),
   getVisibilityAsync: jest.fn().mockResolvedValue('visible'),
 }))
+
+// expo-image: no native module under jest — shim with a plain RN Image host
+// component (same props surface: source/style/onError/accessibility*) and a
+// jest.fn() static `prefetch` so offline-prefetch tests can assert calls
+// without real network/disk I/O.
+jest.mock('expo-image', () => {
+  const React = require('react')
+  const RN = require('react-native')
+  const ExpoImage = React.forwardRef((props: any, ref: any) =>
+    React.createElement(RN.Image, { ...props, ref }))
+  ExpoImage.displayName = 'ExpoImage'
+  ExpoImage.prefetch = jest.fn().mockResolvedValue(true)
+  return { Image: ExpoImage }
+})

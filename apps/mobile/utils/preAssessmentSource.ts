@@ -1,4 +1,5 @@
 import type { PreAssessQuestion } from '../data/preAssessment'
+import { isMissingRequiredFigure } from './upcatExam'
 
 // Local upcat_questions row shape (subset used to build a pre-assessment).
 export interface UpcatLocalRow {
@@ -12,6 +13,11 @@ export interface UpcatLocalRow {
   /** JSON-encoded (string|null)[], index-aligned with `options`. Task E. */
   optionExplanations?: string | null
   strategyTip?: string | null
+  hasVisual?: boolean | null
+  imageUrl?: string | null
+  imageAlt?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
 }
 
 function parseOptions(json: string): string[] {
@@ -60,6 +66,7 @@ export function buildPreAssessFromUpcat(
   for (const r of rows) {
     if (r.setId) continue // skip passage-linked questions (need a passage panel)
     if (!wanted.has(r.subtest)) continue
+    if (isMissingRequiredFigure({ hasVisual: !!r.hasVisual, imageUrl: r.imageUrl ?? null })) continue
     const opts = parseOptions(r.options)
     if (opts.length < 2) continue
     if (r.correctIndex < 0 || r.correctIndex >= opts.length) continue
@@ -81,6 +88,10 @@ export function buildPreAssessFromUpcat(
         explanation: r.explanation ?? '',
         optionExplanations: r.optionExplanations ? parseOptionExplanations(r.optionExplanations) : undefined,
         strategyTip: r.strategyTip || undefined,
+        imageUrl: r.imageUrl ?? null,
+        imageAlt: r.imageAlt ?? null,
+        imageWidth: r.imageWidth ?? null,
+        imageHeight: r.imageHeight ?? null,
       })
     }
   }

@@ -30,6 +30,8 @@ import {
 } from '../utils/targetExams'
 import { schoolFocusSlug, isSchoolFocusSlug } from '../utils/focusSlug'
 import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
+import { prefetchSessionImages } from '../utils/prefetchQuestionImages'
+import { QuestionFigure } from '../components/practice/QuestionFigure'
 import { canonicalizeRegion } from '../utils/region'
 
 function parseJsonArray(s: string | null | undefined): string[] {
@@ -453,9 +455,17 @@ export default function OnboardingScreen() {
         correctIndex: upcatQuestions.correctIndex,
         explanation: upcatQuestions.explanation,
         setId: upcatQuestions.setId,
+        hasVisual: upcatQuestions.hasVisual,
+        imageUrl: upcatQuestions.imageUrl,
+        imageAlt: upcatQuestions.imageAlt,
+        imageWidth: upcatQuestions.imageWidth,
+        imageHeight: upcatQuestions.imageHeight,
       }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
       const built = buildPreAssessFromUpcat(rows, [...PRE_ASSESS_SUBTESTS], 3)
-      if (built.length >= 3) setPreAssessQuestions(built)
+      if (built.length >= 3) {
+        setPreAssessQuestions(built)
+        prefetchSessionImages(built) // fire-and-forget; never blocks session start
+      }
     } catch (e) {
       console.warn('[onboarding] pre-assessment build error:', e)
     }
@@ -1200,6 +1210,8 @@ export default function OnboardingScreen() {
           <Text style={assessStyle.questionLabel}>{q.subject.toUpperCase()}</Text>
           <Text style={assessStyle.questionText}>{q.stem}</Text>
         </View>
+
+        <QuestionFigure imageUrl={q.imageUrl} imageAlt={q.imageAlt} imageWidth={q.imageWidth} imageHeight={q.imageHeight} />
 
         <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
           {q.options.map((opt, i) => (

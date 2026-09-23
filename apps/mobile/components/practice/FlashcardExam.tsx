@@ -198,6 +198,10 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               explanation={q.explanation}
               optionExplanations={q.optionExplanations}
               strategyTip={q.strategyTip}
+              imageUrl={q.imageUrl}
+              imageAlt={q.imageAlt}
+              imageWidth={q.imageWidth}
+              imageHeight={q.imageHeight}
             />
           ))}
 
@@ -283,6 +287,10 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           questionText={q.stem}
           reported={reported[idx]}
           onReport={() => setReportIdx(idx)}
+          imageUrl={q.imageUrl}
+          imageAlt={q.imageAlt}
+          imageWidth={q.imageWidth}
+          imageHeight={q.imageHeight}
         />
         <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
       </ScrollView>

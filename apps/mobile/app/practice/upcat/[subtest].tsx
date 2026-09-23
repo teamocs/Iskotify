@@ -8,6 +8,7 @@ import { upcatQuestions, upcatPassages } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
+import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
@@ -108,6 +109,11 @@ export default function UpcatExam() {
           topic: r.topic ?? null,
           optionExplanations: parseOptions(r.optionExplanations) as (string | null)[],
           strategyTip: r.strategyTip ?? null,
+          hasVisual: !!r.hasVisual,
+          imageUrl: r.imageUrl ?? null,
+          imageAlt: r.imageAlt ?? null,
+          imageWidth: r.imageWidth ?? null,
+          imageHeight: r.imageHeight ?? null,
         }))
         const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
         const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
@@ -115,6 +121,7 @@ export default function UpcatExam() {
           buildExam(parsed, passages, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
         )
         setQuestions(built)
+        prefetchSessionImages(built) // fire-and-forget; never blocks session start
         if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
         setPhase(built.length ? 'exam' : 'results')
       } catch {
@@ -238,6 +245,10 @@ export default function UpcatExam() {
               explanation={q.explanation}
               optionExplanations={q.optionExplanations}
               strategyTip={q.strategyTip}
+              imageUrl={q.imageUrl}
+              imageAlt={q.imageAlt}
+              imageWidth={q.imageWidth}
+              imageHeight={q.imageHeight}
             />
           ))}
 
@@ -299,6 +310,10 @@ export default function UpcatExam() {
           passageText={q.passageText}
           reported={reported[idx]}
           onReport={() => setReportIdx(idx)}
+          imageUrl={q.imageUrl}
+          imageAlt={q.imageAlt}
+          imageWidth={q.imageWidth}
+          imageHeight={q.imageHeight}
         />
       </ScrollView>
 

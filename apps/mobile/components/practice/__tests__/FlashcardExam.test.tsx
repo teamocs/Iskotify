@@ -127,6 +127,15 @@ describe('FlashcardExam', () => {
     expect(screen.getByText('Next')).toBeTruthy()
   })
 
+  it('14. renders the question figure on the exam screen when the question carries an image', () => {
+    const withImage: QuizQuestion[] = [
+      { ...QUESTIONS[0]!, imageUrl: 'https://example.com/circuit.png', imageAlt: 'Series circuit' },
+      ...QUESTIONS.slice(1),
+    ]
+    render(<FlashcardExam {...DEFAULT_PROPS} questions={withImage} />)
+    expect(screen.getByLabelText('Series circuit')).toBeTruthy()
+  })
+
   it('2. pressing Next advances to Q2', () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 
