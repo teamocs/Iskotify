@@ -7,9 +7,9 @@ vi.mock('@/app/admin/actions', () => ({ triggerSync: vi.fn() }))
 import { SyncNowButton } from '../SyncNowButton'
 
 describe('SyncNowButton', () => {
-  it('renders the "Sync Now" label, not disabled in the initial state', () => {
+  it('renders the "Sync now" label, not disabled in the initial state', () => {
     const html = renderToStaticMarkup(React.createElement(SyncNowButton))
-    expect(html).toContain('Sync Now')
+    expect(html).toContain('Sync now')
     expect(html).not.toContain('disabled=""')
     expect(html).not.toContain(' disabled>')
   })

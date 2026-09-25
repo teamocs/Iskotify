@@ -2,7 +2,11 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/admin/sync',
+  useSearchParams: () => new URLSearchParams(''),
+}))
 
 import { KbDriveSyncPanel, type KbDriveFile } from '../KbDriveSyncPanel'
 
@@ -21,8 +25,10 @@ describe('KbDriveSyncPanel', () => {
   it('lists imported files with question and missing-figure counts and a publish action', () => {
     const html = render([file({})])
     expect(html).toContain('UPCAT-Science-600-Questions.csv')
-    expect(html).toContain('600 questions')
-    expect(html).toContain('152 missing figures')
+    // Now a table: counts sit under "Questions" / "Missing figures" headers.
+    expect(html).toContain('Questions')
+    expect(html).toMatch(/>600</)
+    expect(html).toMatch(/>152 missing</)
     expect(html).toContain('Publish drafts')
   })
 
@@ -45,6 +51,13 @@ describe('KbDriveSyncPanel', () => {
   it('shows when a file was last published', () => {
     const html = render([file({ published_at: '2026-09-25T03:00:00Z' })])
     expect(html).toMatch(/Published/)
+  })
+
+  it('is a table with a status filter and badges in words', () => {
+    const html = render([file({}), file({ drive_file_id: 'u1', name: 'random.csv', status: 'needs_mapping', rows_imported: 0, rows_missing_media: 0 })])
+    expect(html).toContain('<table')
+    expect(html).toMatch(/<label[^>]*>Status<\/label>/)
+    expect(html).toContain('Imported')
   })
 
   it('has a Sync now control and a setup hint when nothing has synced yet', () => {

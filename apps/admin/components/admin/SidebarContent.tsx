@@ -5,110 +5,39 @@ import { useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { notifyError } from '@/lib/toast'
-
-const NAV: { section: string; items: { href: string; icon: string; label: string; disabled?: boolean }[] }[] = [
-  {
-    section: 'LISTINGS',
-    items: [
-      { href: '/admin/listings', icon: '📋', label: 'All Listings' },
-      { href: '/admin/listings/courses', icon: '🎓', label: 'Course Tags' },
-    ],
-  },
-  {
-    section: 'UPDATES',
-    items: [{ href: '/admin/updates', icon: '📣', label: 'Admissions Updates' }],
-  },
-  {
-    section: 'SYNC',
-    items: [{ href: '/admin/sync', icon: '📄', label: 'Sync Logs' }],
-  },
-  {
-    section: 'KNOWLEDGEBASE',
-    items: [
-      { href: '/admin/flashcards', icon: '🃏', label: 'Knowledgebase' },
-      { href: '/admin/upcat/import', icon: '📥', label: 'Import CSV' },
-      { href: '/admin/flashcards/drafts', icon: '📝', label: 'Drafts' },
-      { href: '/admin/upcat/review-queue', icon: '🔍', label: 'Distractor Review Queue' },
-      { href: '/admin/exam-blueprints', icon: '🧭', label: 'Exam Blueprints' },
-    ],
-  },
-  {
-    section: 'MODERATION',
-    items: [
-      { href: '/admin/reports', icon: '🚩', label: 'Reported Questions' },
-      { href: '/admin/app-reports', icon: '🐞', label: 'Bug Reports' },
-      { href: '/admin/feedback', icon: '💬', label: 'Feedback' },
-      { href: '/admin/date-contributions', icon: '🗓️', label: 'Date Corrections' },
-    ],
-  },
-  {
-    section: 'USERS',
-    items: [
-      { href: '/admin/early-access', icon: '✉️', label: 'Early Access' },
-      { href: '/admin/users', icon: '👤', label: 'Users' },
-    ],
-  },
-  {
-    section: 'ANALYTICS',
-    items: [
-      { href: '/admin/analytics', icon: '📊', label: 'Analytics' },
-    ],
-  },
-  {
-    section: 'DATA · COURSES & CAREERS',
-    items: [
-      { href: '/admin/data/career_courses', icon: '📚', label: 'Career Courses' },
-      { href: '/admin/data/career_facts', icon: '💡', label: 'Career Facts' },
-      { href: '/admin/data/ai_career_impact', icon: '🤖', label: 'AI Career Impact' },
-      { href: '/admin/data/career_destinations', icon: '✈️', label: 'Career Destinations' },
-      { href: '/admin/data/career_countries', icon: '🌏', label: 'Career Countries' },
-      { href: '/admin/data/career_programs', icon: '🎓', label: 'Career Programs' },
-      { href: '/admin/data/course_taxonomy_map', icon: '🔗', label: 'Course Taxonomy Map' },
-    ],
-  },
-  {
-    section: 'DATA · UNIVERSITIES & RANKINGS',
-    items: [
-      { href: '/admin/data/tertiary_schools', icon: '🏫', label: 'Tertiary Schools' },
-      { href: '/admin/data/university_profiles', icon: '🏛️', label: 'University Profiles' },
-      { href: '/admin/data/course_school_rankings', icon: '🏆', label: 'Course Rankings' },
-      { href: '/admin/data/course_school_quality', icon: '⭐', label: 'Course Quality' },
-      { href: '/admin/data/bar_results', icon: '⚖️', label: 'Bar Results' },
-    ],
-  },
-  {
-    section: 'DATA · EXAMS & KNOWLEDGE',
-    items: [
-      { href: '/admin/data/upcat_cutoffs', icon: '📊', label: 'UPCAT Cutoffs' },
-      { href: '/admin/data/upcat_facts', icon: '❓', label: 'UPCAT Facts' },
-      { href: '/admin/data/upcat_passages', icon: '📖', label: 'UPCAT Passages' },
-      { href: '/admin/data/exam_skill_categories', icon: '🏷️', label: 'Skill Categories' },
-      { href: '/admin/data/exam_blueprint_sections', icon: '🧩', label: 'Blueprint Sections' },
-      { href: '/admin/data/exam_course_notes', icon: '🗒️', label: 'Blueprint Notes' },
-    ],
-  },
-  {
-    section: 'DATA · OPERATIONS',
-    items: [
-      { href: '/admin/data/admissions_updates', icon: '🗓️', label: 'Admissions Updates (table)' },
-    ],
-  },
-  {
-    section: 'HELP',
-    items: [
-      { href: '/admin/guide', icon: '📘', label: 'User Guide' },
-    ],
-  },
-]
+import { Icon } from '@/components/ui/Icon'
+import { HOME_ITEM, NAV_GROUPS, allNavHrefs, findActiveHref, type NavItem } from '@/lib/nav/adminNav'
 
 interface Props {
   userEmail: string
   onItemClick?: () => void
 }
 
+// Focus on the dark sidebar uses sidebar-ink: the global maroon ring is ~1.5:1 here.
+const FOCUS = 'focus-visible:outline-sidebar-ink'
+
+function NavLink({ item, active, onClick }: { item: NavItem; active: boolean; onClick?: () => void }) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-ui transition-colors ${FOCUS} ${
+        active
+          ? 'bg-sidebar-active font-medium text-sidebar-ink'
+          : 'text-sidebar-ink-muted hover:bg-sidebar-hover hover:text-sidebar-ink'
+      }`}
+    >
+      <Icon name={item.icon} />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  )
+}
+
 export function SidebarContent({ userEmail, onItemClick }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+  const activeHref = findActiveHref(pathname ?? '', allNavHrefs())
 
   const supabase = useMemo(
     () => createBrowserClient(
@@ -136,60 +65,44 @@ export function SidebarContent({ userEmail, onItemClick }: Props) {
 
   return (
     <>
-      <div className="px-4 py-5 border-b border-white/[0.07]">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="w-2 h-2 rounded-full bg-maroon shadow-[0_0_8px_rgba(128,0,0,0.6)]" />
-          <span className="font-heading font-extrabold text-white text-[1.05rem] tracking-tight">Iskotify</span>
-        </div>
-        <p className="text-[10px] text-white/30 font-medium tracking-widest uppercase pl-0.5">Admin Console</p>
+      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-sidebar-line px-4">
+        <span aria-hidden="true" className="h-2 w-2 rounded-full bg-maroon-light" />
+        <span className="font-heading text-base font-bold tracking-tight text-sidebar-ink">Iskotify</span>
+        <span className="text-xs text-sidebar-ink-muted">Admin</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2">
-        {NAV.map(({ section, items }) => (
-          <div key={section} className="px-2 py-2 border-b border-white/[0.05]">
-            <p className="text-[9px] font-semibold tracking-[0.1em] uppercase text-white/25 px-2 mb-1">{section}</p>
-            {items.map(({ href, icon, label, disabled }) => {
-              const active = !disabled && (pathname === href || pathname.startsWith(href + '?'))
-              return (
-                <Link
-                  key={href}
-                  href={disabled ? '#' : href}
-                  onClick={disabled ? undefined : onItemClick}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 transition-colors text-sm ${
-                    disabled
-                      ? 'opacity-30 cursor-not-allowed text-white/70'
-                      : active
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-white/70 hover:bg-white/[0.06]'
-                  }`}
-                >
-                  <span className="text-base w-5 text-center">{icon}</span>
-                  <span className="flex-1">{label}</span>
-                </Link>
-              )
-            })}
-          </div>
+      <nav aria-label="Admin" className="flex-1 overflow-y-auto px-2 py-3">
+        <NavLink item={HOME_ITEM} active={activeHref === HOME_ITEM.href} onClick={onItemClick} />
+        {NAV_GROUPS.map(group => (
+          <section key={group.id} aria-labelledby={`nav-${group.id}`} className="mt-4">
+            <h2 id={`nav-${group.id}`} className="px-2.5 pb-1 text-xs font-semibold text-sidebar-ink-muted">{group.label}</h2>
+            <ul className="space-y-px">
+              {group.items.map(item => (
+                <li key={item.href}>
+                  <NavLink item={item} active={activeHref === item.href} onClick={onItemClick} />
+                </li>
+              ))}
+            </ul>
+          </section>
         ))}
       </nav>
 
-      <div className="px-4 py-4 border-t border-white/[0.07]">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-maroon flex items-center justify-center text-white text-[10px] font-bold font-heading flex-shrink-0">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-white/80 font-medium truncate">{userEmail}</p>
-            <p className="text-[9px] text-white/35">Super Admin</p>
-          </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="text-white/30 hover:text-white/70 text-xs transition-colors"
-            title="Sign out"
-          >
-            ↩
-          </button>
+      <div className="flex shrink-0 items-center gap-2 border-t border-sidebar-line px-3 py-3">
+        <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-maroon font-heading text-xs font-bold text-ink-inverse">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium text-sidebar-ink" title={userEmail}>{userEmail}</p>
+          <p className="text-xs text-sidebar-ink-muted">Admin</p>
         </div>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className={`flex h-8 items-center gap-1.5 rounded-sm px-2 text-xs text-sidebar-ink-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-ink ${FOCUS}`}
+        >
+          <Icon name="logout" size={14} />
+          Sign out
+        </button>
       </div>
     </>
   )

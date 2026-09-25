@@ -3,6 +3,10 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Badge, type BadgeTone } from '@/components/ui/Badge'
+import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 
 // One row of the kb_drive_files ledger (supabase/migrations/055).
 export interface KbDriveFile {
@@ -21,14 +25,22 @@ export interface KbDriveFile {
   updated_at: string
 }
 
-const STATUS: Record<KbDriveFile['status'], { label: string; cls: string }> = {
-  imported:      { label: 'Imported',      cls: 'bg-success-soft text-success-strong' },
-  needs_mapping: { label: 'Needs mapping', cls: 'bg-warning-soft text-warning-strong' },
-  skipped:       { label: 'Skipped',       cls: 'bg-surface-3 text-ink-muted' },
-  error:         { label: 'Error',         cls: 'bg-danger-soft text-danger-strong' },
+const STATUS: Record<KbDriveFile['status'], { label: string; tone: BadgeTone }> = {
+  imported:      { label: 'Imported',      tone: 'success' },
+  needs_mapping: { label: 'Needs mapping', tone: 'warning' },
+  skipped:       { label: 'Skipped',       tone: 'neutral' },
+  error:         { label: 'Error',         tone: 'danger' },
+}
+
+const STATUS_FILTER: FilterDef<KbDriveFile> = {
+  id: 'status',
+  label: 'Status',
+  options: Object.entries(STATUS).map(([value, s]) => ({ value, label: s.label })),
+  predicate: (f, v) => f.status === v,
 }
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+const dateSort = (iso: string | null) => (iso ? new Date(iso) : null)
 
 export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
   const router = useRouter()
@@ -95,85 +107,80 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
     }
   }
 
-  return (
-    <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-black/[0.05]">
-        <div>
-          <h2 className="font-heading font-bold text-[15px] text-ink">Question bank (Google Drive)</h2>
-          <p className="text-[11px] text-ink-subtle">
-            Syncs daily at 2:00 AM. New questions arrive as drafts — review, then publish each file.
-          </p>
+  const columns: Column<KbDriveFile>[] = [
+    {
+      id: 'name',
+      header: 'File',
+      sortValue: f => f.name,
+      searchValue: f => `${f.name} ${f.path} ${f.message ?? ''}`,
+      cell: f => (
+        <div className="min-w-[14rem] max-w-md">
+          <span className="block font-medium text-ink break-all">{f.name}</span>
+          {f.message && <span className="block text-xs text-ink-muted break-words">{f.message}</span>}
         </div>
-        <button
-          type="button"
-          onClick={syncNow}
-          disabled={syncing}
-          aria-busy={syncing}
-          className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-maroon text-white hover:bg-maroon-light transition-colors disabled:opacity-60 shadow-sm"
-        >
-          {syncing ? 'Syncing…' : 'Sync now'}
-        </button>
-      </div>
+      ),
+    },
+    { id: 'status', header: 'Status', sortValue: f => STATUS[f.status].label, cell: f => <Badge tone={STATUS[f.status].tone}>{STATUS[f.status].label}</Badge> },
+    { id: 'questions', header: 'Questions', align: 'right', sortValue: f => f.rows_imported, cell: f => (f.status === 'imported' ? f.rows_imported : '—') },
+    {
+      id: 'missing',
+      header: 'Missing figures',
+      sortValue: f => f.rows_missing_media,
+      cell: f =>
+        f.status === 'imported' && f.rows_missing_media > 0 ? (
+          <span className="whitespace-nowrap">
+            <span className="font-medium text-warning-strong">{f.rows_missing_media} missing</span>
+            {' · '}
+            <a
+              href={`/api/kb/missing-figures?driveFileId=${encodeURIComponent(f.drive_file_id)}`}
+              className="font-medium text-maroon underline underline-offset-2 hover:no-underline"
+            >
+              Download list
+            </a>
+          </span>
+        ) : (
+          <span className="text-ink-muted">—</span>
+        ),
+    },
+    { id: 'synced', header: 'Last synced', sortValue: f => dateSort(f.imported_at), cell: f => <span className="whitespace-nowrap text-ink-muted">{f.imported_at ? fmt(f.imported_at) : '—'}</span> },
+    { id: 'published', header: 'Published', sortValue: f => dateSort(f.published_at), cell: f => <span className="whitespace-nowrap text-ink-muted">{f.published_at ? `Published ${fmt(f.published_at)}` : 'Not yet'}</span> },
+    {
+      id: 'actions',
+      header: 'Actions',
+      hideHeader: true,
+      align: 'right',
+      cell: f =>
+        f.status === 'imported' && f.rows_imported > 0 ? (
+          <Button size="sm" loading={publishing === f.drive_file_id} disabled={publishing !== null} onClick={() => publish(f)}>
+            {publishing === f.drive_file_id ? 'Publishing…' : 'Publish drafts'}
+          </Button>
+        ) : null,
+    },
+  ]
 
-      <p role="status" aria-live="polite" className={notice ? `px-5 py-2 text-[12px] font-medium ${notice.ok ? 'text-success-strong' : 'text-danger-strong'}` : 'sr-only'}>
+  return (
+    <Card
+      id="drive-question-bank"
+      title="Drive question bank"
+      description="Syncs daily at 2:00 AM. New questions arrive as drafts — review, then publish each file."
+      actions={<Button variant="primary" size="sm" icon="refresh" loading={syncing} onClick={syncNow}>{syncing ? 'Syncing…' : 'Sync now'}</Button>}
+      flush
+      className="scroll-mt-16"
+    >
+      <p role="status" aria-live="polite" className={notice ? `px-4 py-2 text-ui font-medium border-b border-subtle ${notice.ok ? 'text-success-strong' : 'text-danger-strong'}` : 'sr-only'}>
         {notice?.msg ?? ''}
       </p>
-
-      {files.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-ink-subtle">
-          Nothing synced yet. Share the Drive folder with the service account, set KB_DRIVE_FOLDER_ID, then click Sync now.
-        </p>
-      ) : (
-        <ul>
-          {files.map(f => {
-            const s = STATUS[f.status]
-            const canPublish = f.status === 'imported' && f.rows_imported > 0
-            return (
-              <li key={f.drive_file_id} className="flex flex-wrap items-start gap-3 px-5 py-3 border-b border-black/[0.04] last:border-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-medium text-ink break-all">{f.name}</span>
-                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${s.cls}`}>{s.label}</span>
-                  </div>
-                  <p className="mt-0.5 text-[12px] text-ink-muted">
-                    {f.status === 'imported' && (
-                      <>
-                        {f.rows_imported} questions
-                        {f.rows_missing_media > 0 && (
-                          <>
-                            {' · '}<span className="text-warning-strong">{f.rows_missing_media} missing figures</span>
-                            {' · '}
-                            <a
-                              href={`/api/kb/missing-figures?driveFileId=${encodeURIComponent(f.drive_file_id)}`}
-                              className="text-maroon font-medium underline underline-offset-2 hover:no-underline"
-                            >
-                              Download list
-                            </a>
-                          </>
-                        )}
-                        {f.imported_at && <> · synced {fmt(f.imported_at)}</>}
-                        {f.published_at && <> · Published {fmt(f.published_at)}</>}
-                      </>
-                    )}
-                  </p>
-                  {f.message && <p className="mt-0.5 text-[11px] text-ink-subtle break-words">{f.message}</p>}
-                </div>
-                {canPublish && (
-                  <button
-                    type="button"
-                    onClick={() => publish(f)}
-                    disabled={publishing !== null}
-                    aria-busy={publishing === f.drive_file_id}
-                    className="rounded-[980px] px-3 py-1 text-[12px] font-medium border border-maroon text-maroon hover:bg-maroon hover:text-white transition-colors disabled:opacity-60"
-                  >
-                    {publishing === f.drive_file_id ? 'Publishing…' : 'Publish drafts'}
-                  </button>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
+      <DataTable
+        label="Drive files"
+        rows={files}
+        columns={columns}
+        rowKey={f => f.drive_file_id}
+        filters={[STATUS_FILTER]}
+        paramPrefix="kb_"
+        searchPlaceholder="Search file names"
+        emptyTitle="Nothing synced yet"
+        emptyDescription="Share the Drive folder with the service account, set KB_DRIVE_FOLDER_ID, then click Sync now."
+      />
+    </Card>
   )
 }
