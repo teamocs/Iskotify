@@ -9,6 +9,7 @@ import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
+import { invalidate } from '../services/queryCache'
 import { runEnhancement } from '../hooks/useAiEnhancement'
 import { capture } from '../lib/analytics'
 import {
@@ -347,6 +348,7 @@ export default function OnboardingScreen() {
     void db.insert(userSettings)
       .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
       .onConflictDoUpdate({ target: userSettings.id, set: patch })
+      .then(() => invalidate('settings:')) // refresh the cached header name
       .catch((e: unknown) => console.warn('[onboarding] step 1 persist error:', e))
   }
 
@@ -388,6 +390,7 @@ export default function OnboardingScreen() {
         target: userSettings.id,
         set: { selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields },
       })
+      invalidate('settings:') // refresh the cached header name
       setSelectedSlug(primarySlug)
     } catch (e) {
       console.error('[onboarding] step 2 settings persist error:', e)

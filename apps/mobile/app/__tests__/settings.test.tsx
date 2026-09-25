@@ -62,6 +62,13 @@ jest.mock('../../hooks/useDb', () => ({
 }))
 
 
+/** Nearest host View above a node (`.parent` is the composite wrapper). */
+function hostViewAbove(node: any) {
+  let n = node.parent
+  while (n && n.type !== 'View') n = n.parent
+  return n
+}
+
 describe('SettingsScreen', () => {
   it('renders Settings title', () => {
     render(<SettingsScreen />)
@@ -71,6 +78,14 @@ describe('SettingsScreen', () => {
   it('renders the app version badge', () => {
     render(<SettingsScreen />)
     expect(screen.getByText('v1.2.3')).toBeTruthy()
+  })
+
+  it('the version badge draws a visible border (border token, not the fill token)', () => {
+    const { StyleSheet } = require('react-native')
+    render(<SettingsScreen />)
+    const badge = StyleSheet.flatten(hostViewAbove(screen.getByText('Iskotify')).props.style)
+    expect(badge.borderWidth).toBe(1)
+    expect(badge.borderColor).not.toBe(badge.backgroundColor)
   })
 
   it('renders App section rows', () => {

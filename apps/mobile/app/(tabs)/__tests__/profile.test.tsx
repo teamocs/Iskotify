@@ -146,6 +146,13 @@ describe('ProfileScreen — empty DB', () => {
   })
 })
 
+/** Nearest host View above a node (`.parent` is the composite wrapper). */
+function hostViewAbove(node: any) {
+  let n = node.parent
+  while (n && n.type !== 'View') n = n.parent
+  return n
+}
+
 describe('ProfileScreen — with user data', () => {
   beforeEach(() => {
     const { useDb } = require('../../../hooks/useDb')
@@ -186,6 +193,15 @@ describe('ProfileScreen — with user data', () => {
       expect(screen.getByText('Signed in')).toBeTruthy()
       expect(screen.getByText('maria@gmail.com')).toBeTruthy()
     })
+  })
+
+  it('the Signed in badge draws a visible border (border token, not the fill token)', async () => {
+    const { StyleSheet } = require('react-native')
+    render(<ProfileScreen />)
+    const label = await screen.findByText('Signed in')
+    const badge = StyleSheet.flatten(hostViewAbove(label).props.style)
+    expect(badge.borderWidth).toBe(1)
+    expect(badge.borderColor).not.toBe(badge.backgroundColor)
   })
 })
 

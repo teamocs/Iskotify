@@ -248,7 +248,7 @@ export default function ProfileScreen() {
     googleBadge:   { backgroundColor: t.textPrimary, borderRadius: radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
     googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
     googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successSurface, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
+    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successBorder, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
     signedInText:  { fontSize: typo.xs, fontWeight: '600', color: t.success, fontFamily: 'Lexend_600SemiBold' },
     secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },

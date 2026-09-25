@@ -4,6 +4,7 @@ import { CloudRefreshClockwiseOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { Button } from './Button'
+import { decorative } from './a11y'
 
 interface Props {
   title?: string
@@ -29,8 +30,7 @@ export function ErrorState({
       style={{ alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg, gap: spacing.md }}
     >
       <View
-        importantForAccessibility="no-hide-descendants"
-        accessibilityElementsHidden
+        {...decorative}
         style={{
           width: 56, height: 56, borderRadius: radius.pill, backgroundColor: t.warningSurface,
           alignItems: 'center', justifyContent: 'center',

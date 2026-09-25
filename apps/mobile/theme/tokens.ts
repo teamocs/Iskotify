@@ -13,7 +13,7 @@ export const darkTheme = {
   border:        'rgba(255,255,255,0.14)',
   textPrimary:   '#ffffff',
   textSecondary: 'rgba(255,255,255,0.72)',  // was 0.62 → ~5.5:1
-  textTertiary:  'rgba(255,255,255,0.52)',  // was 0.38 (≈2:1, failed) → ~3.4:1
+  textTertiary:  'rgba(255,255,255,0.52)',  // was 0.38 (≈2:1, failed) → ≈5.47:1 on bg (4.87:1 on surfaceRaised)
   accent:        '#800000',
   accentText:    '#fca5a5',
   accentSurface: 'rgba(128,0,0,0.22)',

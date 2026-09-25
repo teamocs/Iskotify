@@ -3,6 +3,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from './a11y'
 
 /** Static tag. Not a control — use FilterChip for anything tappable. */
 export function Chip({ label, leading }: { label: string; leading?: React.ReactNode }) {
@@ -21,7 +22,7 @@ export function Chip({ label, leading }: { label: string; leading?: React.ReactN
       }}
     >
       {leading}
-      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.4}>{label}</Text>
+      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={2}>{label}</Text>
     </View>
   )
 }
@@ -49,35 +50,51 @@ export function FilterChip({ label, selected, onPress, mode = 'single', role, ac
   const a11yState = a11yRole === 'checkbox' ? { checked: selected } : { selected }
   const fg = selected ? t.accentText : t.textSecondary
 
+  // react-native-web only lets Space activate role="button"; checkbox, radio
+  // and tab must toggle on Space too (Enter is already handled by RNW).
+  const onKeyDown = (e: { key?: string; repeat?: boolean; preventDefault?: () => void }) => {
+    if (e.key !== ' ' && e.key !== 'Spacebar') return
+    e.preventDefault?.() // keep the page from scrolling
+    if (!e.repeat) onPress()
+  }
+  const webKeys = { onKeyDown } as Record<string, unknown>
+
   return (
     <Pressable
       onPress={onPress}
+      {...webKeys}
       testID={testID}
       accessibilityRole={a11yRole}
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={a11yState}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.xs,
-        minHeight: 44,
-        paddingHorizontal: spacing.lg,
-        borderRadius: radius.pill,
-        borderWidth: 1,
-        borderColor: selected ? t.accentBorder : t.border,
-        backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : t.surface,
-      })}
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            minHeight: 44,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.pill,
+            borderWidth: 1,
+            borderColor: selected ? t.accentBorder : t.border,
+            backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : t.surface,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
     >
       {selected && a11yRole !== 'tab' ? (
-        <View testID="filter-chip-check" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <View testID="filter-chip-check" {...decorative}>
           <Lineicons icon={CheckOutlined} size={14} color={fg} />
         </View>
       ) : null}
       <Text
         style={[textStyle('label', fg), { fontFamily: selected ? fonts.bodySemi : fonts.bodyMedium }]}
         numberOfLines={1}
-        maxFontSizeMultiplier={1.4}
+        maxFontSizeMultiplier={2}
       >
         {label}
       </Text>

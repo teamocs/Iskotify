@@ -3,6 +3,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from './a11y'
 
 interface Props {
   title: string
@@ -35,19 +36,19 @@ export function ListRow({
   const content = (
     <>
       {leading ? (
-        <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ flexShrink: 0 }}>
+        <View {...decorative} style={{ flexShrink: 0 }}>
           {leading}
         </View>
       ) : null}
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.4}>{title}</Text>
+        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={2}>{title}</Text>
         {subtitle ? (
-          <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={2} maxFontSizeMultiplier={1.4}>{subtitle}</Text>
+          <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={2} maxFontSizeMultiplier={2}>{subtitle}</Text>
         ) : null}
       </View>
       {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
       {chevron ? (
-        <View testID="list-row-chevron" style={{ transform: [{ scaleX: -1 }] }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <View testID="list-row-chevron" style={{ transform: [{ scaleX: -1 }] }} {...decorative}>
           <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textTertiary} />
         </View>
       ) : null}
@@ -76,7 +77,15 @@ export function ListRow({
       accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => [rowStyle, pressed ? { backgroundColor: t.surface2 } : null, disabled ? { opacity: 0.5 } : null]}
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          rowStyle,
+          pressed ? { backgroundColor: t.surface2 } : null,
+          disabled ? { opacity: 0.5 } : null,
+          focusRing(t.focusRing, focused),
+        ]
+      }}
     >
       {content}
     </Pressable>

@@ -1,6 +1,7 @@
 import { Pressable, Text, ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle, type Theme } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from './a11y'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -60,7 +61,9 @@ export function Button({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inactive, busy: !!loading }}
-      style={({ pressed }) => [
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
         {
           minHeight: HEIGHT[size],
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
@@ -76,15 +79,17 @@ export function Button({
           borderColor: c.border ? t[c.border] : transparent,
           opacity: inactive && !loading ? 0.5 : 1,
         },
+        focusRing(t.focusRing, focused),
         style,
-      ]}
+      ]
+      }}
     >
       {loading
         ? <ActivityIndicator color={fg} size="small" />
-        : icon ? <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>{icon}</View> : null}
+        : icon ? <View {...decorative}>{icon}</View> : null}
       <Text
         style={textStyle(size === 'sm' ? 'label' : 'button', fg)}
-        maxFontSizeMultiplier={1.4}
+        maxFontSizeMultiplier={2}
         numberOfLines={2}
       >
         {label}

@@ -505,7 +505,6 @@ export default function ExploreScreen() {
         </View>
       </Pressable>
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchStatusMap, getPriority, blueprintSlugs, listingMockBest, listingAccuracy, s, t, scholarColor])
 
   const renderListingItem = useCallback(({ item }: { item: ListingRow }) => renderCard(item), [renderCard])
@@ -528,7 +527,6 @@ export default function ExploreScreen() {
       )
     }
     return null
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, recommended, userRegion, s, renderCard])
 
   // Universities tab: pin the focusable entrance exams (the slug-backed listings)
@@ -554,7 +552,6 @@ export default function ExploreScreen() {
         </View>
       </>
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, typeListings, s, renderCard])
 
   // When a query is active, a results header sits above the matches summarising
@@ -584,7 +581,6 @@ export default function ExploreScreen() {
         <SectionHeader title={`Top scholarships matching "${truncateQuery(q)}"`} subtitle={subtitle} />
       </View>
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, listingData, matchStatusMap, profile, s])
 
   const scholarshipBanner = tab === 'scholarships' && !query.trim() && scholarshipProfileIncomplete({

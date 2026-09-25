@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
 import { pullUserData, pushUserData } from '../../services/sync'
 import { useDb } from '../../hooks/useDb'
+import { invalidate } from '../../services/queryCache'
 import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { eq } from 'drizzle-orm'
@@ -153,6 +154,7 @@ export default function AuthCallback() {
               target: userSettings.id,
               set: { googleId: user.id, email: user.email ?? '', fullName: nameToUse },
             })
+          invalidate('settings:') // refresh the cached header name
 
           // Restore vs back up: if this account already has a cloud backup, this is a
           // returning login (possibly a new device) → restore it. If it has NO backup

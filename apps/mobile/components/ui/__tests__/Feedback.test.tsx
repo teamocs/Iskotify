@@ -60,11 +60,24 @@ describe('Skeleton', () => {
     jest.restoreAllMocks()
   })
 
-  it('is announced as loading', () => {
+  it('is silent by default, so a group of bars does not announce "Loading" per bar', () => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false)
-    render(<Skeleton />)
-    const el = screen.getByLabelText('Loading')
-    expect(el.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }))
+    render(<><Skeleton /><Skeleton /><Skeleton /></>)
+    expect(screen.queryAllByLabelText('Loading')).toHaveLength(0)
+  })
+
+  it('announces loading (busy) only when marked accessible — the one group/container', () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false)
+    render(<><Skeleton accessible /><Skeleton /></>)
+    const els = screen.getAllByLabelText('Loading')
+    expect(els).toHaveLength(1)
+    expect(els[0]!.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }))
+  })
+
+  it('accepts a custom label when accessible', () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false)
+    render(<Skeleton accessible label="Loading your exams" />)
+    expect(screen.getByLabelText('Loading your exams')).toBeTruthy()
   })
 
   it('does not animate when the OS asks for reduced motion', async () => {

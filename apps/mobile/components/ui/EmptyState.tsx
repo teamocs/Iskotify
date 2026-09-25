@@ -2,6 +2,7 @@ import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { Button } from './Button'
+import { decorative } from './a11y'
 
 interface Props {
   /** A Lineicons element (or brand artwork). Decorative. */
@@ -20,8 +21,7 @@ export function EmptyState({ icon, title, body, actionLabel, onAction }: Props) 
     <View style={{ alignItems: 'center', paddingVertical: spacing.xxxl, paddingHorizontal: spacing.lg, gap: spacing.md }}>
       {icon ? (
         <View
-          importantForAccessibility="no-hide-descendants"
-          accessibilityElementsHidden
+          {...decorative}
           style={{
             width: 56, height: 56, borderRadius: radius.pill, backgroundColor: t.surface2,
             alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,

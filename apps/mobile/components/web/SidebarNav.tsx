@@ -6,7 +6,9 @@
  * aria-current="page". Profile (avatar + name) and Settings sit at the bottom.
  *
  * Hover: react-native-web exposes `hovered` in the Pressable style function.
- * Focus rings: RN-Web's default focus-visible outline is kept.
+ * Focus rings: a 2px focusRing outline on keyboard focus (see ui/a11y).
+ * The current link is marked with aria-current="page" only — aria-selected is
+ * not valid on a link.
  */
 // RN Image is fine for a tiny bundled asset.
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
@@ -19,6 +21,7 @@ import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
 import { Avatar } from '../ui/Avatar'
 import { useProfileName } from '../../hooks/useProfileName'
+import { focusRing, type WebPressableState } from '../ui/a11y'
 
 const SIDEBAR_WIDTH = 248
 
@@ -42,11 +45,10 @@ function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
       onPress={onPress}
       accessibilityRole="link"
       accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
       {...(active ? CURRENT_PAGE : null)}
       style={(state) => {
-        const { hovered, pressed } = state as { hovered?: boolean; pressed: boolean }
-        return {
+        const { hovered, pressed, focused } = state as WebPressableState
+        return [{
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.md,
@@ -56,7 +58,7 @@ function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
           borderCurve: 'continuous',
           backgroundColor: active ? t.accentSurface : hovered ? t.surface2 : 'transparent',
           opacity: pressed ? 0.75 : 1,
-        }
+        }, focusRing(t.focusRing, focused)]
       }}
     >
       {leading}

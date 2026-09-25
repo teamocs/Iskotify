@@ -3,6 +3,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius } from '../../theme/tokens'
+import { decorative } from './a11y'
 
 /** "Juan Dela Cruz" → "JC" (first + last word), "maria" → "M". */
 export function initialsFor(name: string | null | undefined): string {
@@ -41,8 +42,7 @@ export function Avatar({ name, size = 36, onPress, accessibilityLabel, accessibi
         alignItems: 'center',
         justifyContent: 'center',
       }}
-      importantForAccessibility="no-hide-descendants"
-      accessibilityElementsHidden
+      {...decorative}
     >
       {initials ? (
         <Text

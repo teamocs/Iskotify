@@ -46,11 +46,23 @@ describe('SidebarNav', () => {
     expect(screen.getByTestId('sidebar-nav').props.role).toBe('navigation')
   })
 
-  it('marks the current destination with aria-current="page" (and selected for native AT)', () => {
+  it('marks the current destination with aria-current="page" only (no aria-selected on a link)', () => {
     render(<SidebarNav />)
     expect(link('Today').props['aria-current']).toBe('page')
-    expect(link('Today').props.accessibilityState).toEqual(expect.objectContaining({ selected: true }))
+    expect(link('Today').props.accessibilityState?.selected).toBeUndefined()
     expect(link('Practice').props['aria-current']).toBeUndefined()
+  })
+
+  it('draws a keyboard focus ring with the focusRing token', () => {
+    const { StyleSheet } = require('react-native')
+    render(<SidebarNav />)
+    const p = screen.UNSAFE_root.findAll((n: any) => typeof n.type !== 'string' && typeof n.props.style === 'function' && n.props.accessibilityLabel === 'Practice')[0]!
+    const ring = StyleSheet.flatten(p.props.style({ pressed: false, focused: true, hovered: false }))
+    expect(ring.outlineColor).toBe('#fca5a5')
+    expect(ring.outlineWidth).toBeGreaterThanOrEqual(2)
+    expect(ring.outlineOffset).toBeGreaterThanOrEqual(2)
+    const idle = StyleSheet.flatten(p.props.style({ pressed: false, focused: false, hovered: false }))
+    expect(idle.outlineWidth ?? 0).toBe(0)
   })
 
   it('treats legacy /updates as Explore', () => {

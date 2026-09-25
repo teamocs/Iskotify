@@ -6,6 +6,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../theme/ThemeContext'
 import { fonts, layout, radius, spacing, textStyle } from '../theme/tokens'
 import { useSafeInsets } from '../hooks/useSafeInsets'
+import { focusRing, type WebPressableState } from './ui/a11y'
 import { TAB_DESTINATIONS, destinationForRoute, type Destination } from './navigation/destinations'
 
 function NavItem({ dest, isFocused, onPress }: { dest: Destination; isFocused: boolean; onPress: () => void }) {
@@ -17,14 +18,20 @@ function NavItem({ dest, isFocused, onPress }: { dest: Destination; isFocused: b
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
       accessibilityLabel={dest.label}
-      style={({ pressed }) => ({
-        flex: 1,
-        minHeight: 48,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 2,
-        opacity: pressed ? 0.7 : 1,
-      })}
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          {
+            flex: 1,
+            minHeight: 48,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            opacity: pressed ? 0.7 : 1,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
     >
       {/* Active indicator: a pill behind the icon, so selection is shape + weight + colour. */}
       <View
@@ -42,7 +49,7 @@ function NavItem({ dest, isFocused, onPress }: { dest: Destination; isFocused: b
       <Text
         style={[textStyle('label', color), { fontFamily: isFocused ? fonts.heading : fonts.bodyMedium }]}
         numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
+        maxFontSizeMultiplier={2}
       >
         {dest.label}
       </Text>
@@ -69,7 +76,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         left: 0,
         right: 0,
         bottom: 0,
-        height: layout.tabBarHeight + insets.bottom,
+        // minHeight, not height: labels scale to 2×, and the bar grows with them.
+        minHeight: layout.tabBarHeight + insets.bottom,
         paddingBottom: insets.bottom,
         backgroundColor: t.tabBar,
         borderTopWidth: 1,

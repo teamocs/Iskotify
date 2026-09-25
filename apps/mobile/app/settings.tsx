@@ -111,7 +111,7 @@ export default function SettingsScreen() {
     backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
     backArrow: { color: t.textSecondary, fontSize: typography.h3, lineHeight: 32 },
     pageTitle: { fontSize: typo.h2, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentSurface, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
+    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
     versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: t.accentText, fontFamily: 'Outfit_700Bold' },
     versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
     versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },

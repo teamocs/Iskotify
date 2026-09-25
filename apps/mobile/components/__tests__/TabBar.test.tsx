@@ -25,6 +25,13 @@ function makeProps(activeName: string) {
   } as any
 }
 
+/** Nearest host View above a node (`.parent` is the composite wrapper). */
+function hostViewAbove(node: any) {
+  let n = node.parent
+  while (n && n.type !== 'View') n = n.parent
+  return n
+}
+
 describe('TabBar', () => {
   it('shows exactly the four destinations, in order', () => {
     render(<TabBar {...makeProps('index')} />)
@@ -65,6 +72,24 @@ describe('TabBar', () => {
       const flat = StyleSheet.flatten(typeof style === 'function' ? style({ pressed: false }) : style)
       expect(flat.minHeight).toBeGreaterThanOrEqual(44)
     }
+  })
+
+  it('draws a keyboard focus ring with the focusRing token', () => {
+    render(<TabBar {...makeProps('index')} />)
+    const p = screen.UNSAFE_root.findAll((n: any) => typeof n.type !== 'string' && typeof n.props.style === 'function' && n.props.accessibilityLabel === 'Practice')[0]!
+    const ring = StyleSheet.flatten(p.props.style({ pressed: false, focused: true }))
+    expect(ring.outlineColor).toBe('#fca5a5')
+    expect(ring.outlineWidth).toBeGreaterThanOrEqual(2)
+    expect(ring.outlineOffset).toBeGreaterThanOrEqual(2)
+    expect(StyleSheet.flatten(p.props.style({ pressed: false, focused: false })).outlineWidth ?? 0).toBe(0)
+  })
+
+  it('tab labels can grow to 200% and the bar grows with them (minHeight, not height)', () => {
+    render(<TabBar {...makeProps('index')} />)
+    expect(screen.getByText('Today').props.maxFontSizeMultiplier).toBe(2)
+    const bar = StyleSheet.flatten(hostViewAbove(screen.getByTestId('tab-bar-tablist')).props.style)
+    expect(bar.height).toBeUndefined()
+    expect(bar.minHeight).toBeGreaterThanOrEqual(64)
   })
 
   it('navigates to an unfocused tab and emits tabPress', () => {
