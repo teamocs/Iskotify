@@ -10,6 +10,15 @@ jest.mock('../useDb', () => ({ useDb: () => mockDb }))
 jest.mock('../../services/queryCache', () => ({
   cachedQuery: (_k: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher(),
   invalidate: jest.fn(),
+  subscribe: (prefix: string, fn: () => void) => {
+    mockListeners.push({ prefix, fn })
+    return () => { mockListeners.splice(mockListeners.findIndex(l => l.fn === fn), 1) }
+  },
+}))
+const mockListeners: Array<{ prefix: string; fn: () => void }> = []
+const mockFocus = { cb: null as null | (() => void) }
+jest.mock('expo-router', () => ({
+  useFocusEffect: (cb: () => void) => { mockFocus.cb = cb },
 }))
 
 const mockTopicBest = { value: [] as Array<{ topicId: string; bestPct: number }>, fail: false }
@@ -32,6 +41,8 @@ beforeEach(() => {
   mockTopicBest.value = []
   mockTopicBest.fail = false
   mockSubjectBest.value = []
+  mockListeners.length = 0
+  mockFocus.cb = null
 })
 
 describe('useSubjectReadiness', () => {
@@ -63,5 +74,25 @@ describe('useSubjectReadiness', () => {
     expect(result.current.error).toBe(false)
     expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(55)
     warn.mockRestore()
+  })
+
+  it('reloads when a finished session invalidates home: (Progress tab stays mounted)', async () => {
+    mockTopicBest.value = [{ topicId: 't1', bestPct: 40 }]
+    const { result } = renderHook(() => useSubjectReadiness())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(mockListeners.some(l => l.prefix === 'home:')).toBe(true)
+    mockTopicBest.value = [{ topicId: 't1', bestPct: 75 }]
+    await act(async () => { mockListeners.forEach(l => l.fn()) })
+    await waitFor(() => expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(75))
+  })
+
+  it('reloads when the screen regains focus', async () => {
+    mockTopicBest.value = [{ topicId: 't1', bestPct: 40 }]
+    const { result } = renderHook(() => useSubjectReadiness())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(mockFocus.cb).not.toBeNull()
+    mockTopicBest.value = [{ topicId: 't1', bestPct: 60 }]
+    await act(async () => { mockFocus.cb?.() })
+    await waitFor(() => expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(60))
   })
 })

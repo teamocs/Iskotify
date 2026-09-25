@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useDb } from './useDb'
 import { usePracticeData } from './usePracticeData'
-import { cachedQuery, invalidate } from '../services/queryCache'
+import { useFocusEffect } from 'expo-router'
+import { cachedQuery, invalidate, subscribe } from '../services/queryCache'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../services/homeAggregates'
 import { subjectPreparedness, type SubjectPreparednessEntry } from '../utils/subjectPreparedness'
 
@@ -57,6 +58,11 @@ export function useSubjectReadiness(): SubjectReadiness {
     void load()
     return () => { mounted.current = false }
   }, [load])
+
+  // Progress stays mounted across tab switches: reload when a finished
+  // session invalidates 'home:' and whenever the tab regains focus.
+  useEffect(() => subscribe('home:', () => { void load() }), [load])
+  useFocusEffect(useCallback(() => { void load() }, [load]))
 
   const refresh = useCallback(async () => {
     invalidate(CACHE_KEY)

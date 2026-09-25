@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { listings as listingsTable, careerCourses } from '../db/schema'
@@ -81,6 +81,12 @@ export function useHomeCatalog(): HomeCatalog {
   const [region, setRegion] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -133,6 +139,7 @@ export function useHomeCatalog(): HomeCatalog {
       }
 
       const mockBest = new Map(data.mockBestRows.map(r => [r.listingSlug, r.bestPct]))
+      if (!isMountedRef.current) return
 
       setExamListings(exams)
       setScholarshipListings(scholarships)
@@ -151,9 +158,9 @@ export function useHomeCatalog(): HomeCatalog {
       setError(false)
     } catch (e) {
       console.warn('[useHomeCatalog] load failed:', e)
-      setError(true)
+      if (isMountedRef.current) setError(true)
     } finally {
-      setLoaded(true)
+      if (isMountedRef.current) setLoaded(true)
     }
   }, [db])
 

@@ -241,7 +241,7 @@ export default function ScholarshipInfoScreen() {
                   </Pressable>
                 </View>
               ) : null}
-              <View style={{ maxHeight: 220, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', overflow: 'hidden' }}>
+              <View accessibilityRole="radiogroup" accessibilityLabel="Province" style={{ maxHeight: 220, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', overflow: 'hidden' }}>
                 <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
                   {filteredProvinces.map(p => {
                     const selected = province === p
