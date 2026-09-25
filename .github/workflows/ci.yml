@@ -1,0 +1,45 @@
+# CI — gates every pull request into master (the deploy branch) and re-checks
+# master after merge. Vercel builds previews/deploys separately; this workflow
+# is the correctness gate: type-check and tests for every workspace.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Type-check & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      # Version comes from package.json "packageManager".
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm turbo run type-check
+
+      - name: Test
+        run: pnpm turbo run test
+        env:
+          CI: 'true'

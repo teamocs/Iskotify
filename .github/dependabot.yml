@@ -1,0 +1,29 @@
+# Weekly, grouped dependency updates so they arrive as a few reviewable PRs
+# (each gated by CI) instead of a stream of single-package bumps. Expo SDK and
+# React Native versions are pinned by the SDK, so majors for those are ignored
+# here and upgraded deliberately with `npx expo install --fix`.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: expo
+        update-types: [version-update:semver-major]
+      - dependency-name: react-native
+        update-types: [version-update:semver-major]
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
