@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet, AccessibilityInfo, Platform, findNodeHandle } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, textStyle } from '../../theme/tokens'
 import { confirmAction } from '../../utils/confirmAction'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
+import { useSafeInsets } from '../../hooks/useSafeInsets'
+import { sheetPresentation } from '../ui/Sheet'
+import { Button } from '../ui/Button'
+import { decorative } from '../ui/a11y'
+import { QuestionGrid } from './QuestionGrid'
+import { SectionGrid, type SectionGridSection } from './SectionGrid'
 
 interface ExamReviewSheetProps {
   visible: boolean
@@ -14,6 +22,11 @@ interface ExamReviewSheetProps {
   onJump: (idx: number) => void
   onClose: () => void
   onSubmit: () => void
+  /** Optional section jumper (mock runner) — moved here from the exam header in M2. */
+  sections?: SectionGridSection[]
+  onJumpSection?: (start: number) => void
+  /** Questions before this index are locked by an expired section timer. */
+  floorIdx?: number
 }
 
 /**
@@ -23,21 +36,38 @@ interface ExamReviewSheetProps {
  * submit behind an explicit confirmation that names the unanswered count.
  * Shared by every timed runner (mock exam, UPCAT subtest, diagnostic,
  * flashcard quiz) so "never submits directly" holds everywhere at once.
+ *
+ * Redesign M2: tokens only, a bottom sheet on phones and a centred dialog from
+ * medium widths (same rule as the Sheet primitive), 48pt question cells with
+ * non-colour state marks, and an optional section jumper.
  */
 export function ExamReviewSheet({
   visible, total, currentIdx, answeredIdxs, flaggedIdxs, onJump, onClose, onSubmit,
+  sections, onJumpSection, floorIdx = 0,
 }: ExamReviewSheetProps) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  const { theme: t } = useTheme()
+  const bp = useBreakpoint()
+  const reduced = useReducedMotion()
+  const insets = useSafeInsets()
+  const bottom = sheetPresentation(bp) === 'bottom'
   const titleRef = useRef<Text>(null)
 
   // Review finding #4: move accessibility focus onto the title every time the
   // sheet opens — otherwise a screen reader user's focus stays wherever it
   // was on the exam screen behind this full-screen modal.
-  // Native only: react-native-web's findNodeHandle throws, which unmounted the
-  // whole app when the sheet opened. On web, RNW's Modal moves focus in itself.
+  // Native: findNodeHandle + setAccessibilityFocus. On web, findNodeHandle
+  // THROWS (it took the whole app down when this sheet opened), and RNW's
+  // ModalFocusTrap focuses the first focusable descendant (a question cell),
+  // skipping the title and summary. So on web the title is programmatically
+  // focusable (tabIndex -1) and focused directly; the ref is the DOM node
+  // there. This effect runs after the trap's (child effects run first), so the
+  // title wins, and the trap leaves it alone because it sits inside the modal.
   useEffect(() => {
-    if (!visible || Platform.OS === 'web') return
+    if (!visible) return
+    if (Platform.OS === 'web') {
+      titleRef.current?.focus()
+      return
+    }
     const handle = findNodeHandle(titleRef.current)
     AccessibilityInfo.setAccessibilityFocus(handle ?? 0)
   }, [visible])
@@ -58,103 +88,85 @@ export function ExamReviewSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <View style={s.sheet} accessibilityViewIsModal>
-          <View style={s.handle} />
+    <Modal visible={visible} transparent animationType={reduced ? 'none' : 'fade'} statusBarTranslucent onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: bottom ? 'flex-end' : 'center',
+          alignItems: bottom ? 'stretch' : 'center',
+          padding: bottom ? 0 : spacing.xxl,
+        }}
+      >
+        <View
+          accessibilityViewIsModal
+          style={{
+            zIndex: 1,
+            width: '100%',
+            maxWidth: bottom ? undefined : 560,
+            maxHeight: bottom ? '88%' : '85%',
+            backgroundColor: t.surfaceRaised,
+            borderTopLeftRadius: radius.xxl,
+            borderTopRightRadius: radius.xxl,
+            borderBottomLeftRadius: bottom ? 0 : radius.xxl,
+            borderBottomRightRadius: bottom ? 0 : radius.xxl,
+            borderCurve: 'continuous',
+            paddingHorizontal: spacing.xl,
+            paddingTop: bottom ? spacing.sm : spacing.xl,
+            paddingBottom: (bottom ? insets.bottom : 0) + spacing.xl,
+            boxShadow: t.shadowMd,
+          }}
+        >
+          {bottom ? (
+            <View
+              {...decorative}
+              style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: radius.pill, backgroundColor: t.divider, marginBottom: spacing.md }}
+            />
+          ) : null}
           <Text
             ref={titleRef}
-            style={s.title}
+            style={textStyle('headline', t.textPrimary)}
             accessibilityRole="header"
             maxFontSizeMultiplier={1.4}
+            // RN's Text types omit tabIndex; RNW forwards it to the DOM.
+            {...(Platform.OS === 'web' ? ({ tabIndex: -1 } as object) : null)}
           >
             Review your answers
           </Text>
-          <Text style={s.summary} maxFontSizeMultiplier={1.4}>{summary}</Text>
+          <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: 2, marginBottom: spacing.lg }]} maxFontSizeMultiplier={1.4}>
+            {summary}
+          </Text>
 
-          <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>
-            {Array.from({ length: total }, (_, i) => {
-              const answered = answeredIdxs.has(i)
-              const flagged = !!flaggedIdxs?.has(i)
-              const current = i === currentIdx
-              const label = `Question ${i + 1}, ${answered ? 'answered' : 'unanswered'}${flagged ? ', flagged' : ''}`
-              return (
-                <Pressable
-                  key={i}
-                  style={[s.cell, answered && s.cellAnswered, flagged && s.cellFlagged, current && s.cellCurrent]}
-                  onPress={() => { onJump(i); onClose() }}
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                >
-                  <Text style={[s.cellTxt, answered && s.cellTxtAnswered]}>{i + 1}</Text>
-                </Pressable>
-              )
-            })}
+          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
+            {sections && sections.length > 1 && onJumpSection ? (
+              <View style={{ gap: spacing.sm }}>
+                <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.4}>Sections</Text>
+                <SectionGrid sections={sections} onJump={start => { onJumpSection(start); onClose() }} />
+              </View>
+            ) : null}
+            <QuestionGrid
+              total={total}
+              currentIdx={currentIdx}
+              answeredIdxs={answeredIdxs}
+              flaggedIdxs={flaggedIdxs}
+              floorIdx={floorIdx}
+              onPressCell={i => { onJump(i); onClose() }}
+            />
           </ScrollView>
 
-          <View style={s.btnRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back to exam"
-              style={s.ghostBtn}
-              onPress={onClose}
-            >
-              <Text style={s.ghostTxt}>Back to exam</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Submit exam"
-              style={s.submitBtn}
-              onPress={requestSubmit}
-            >
-              <Text style={s.submitTxt}>Submit exam</Text>
-            </Pressable>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg }}>
+            <Button label="Back to exam" variant="secondary" onPress={onClose} />
+            <Button label="Submit exam" onPress={requestSubmit} style={{ flexGrow: 1 }} />
           </View>
         </View>
+        <Pressable
+          onPress={onClose}
+          accessible={false}
+          focusable={false}
+          tabIndex={-1}
+          {...decorative}
+          style={[StyleSheet.absoluteFill, { backgroundColor: t.backdrop }]}
+        />
       </View>
     </Modal>
   )
-}
-
-function makeStyles(
-  t: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['theme'],
-  typo: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['typo'],
-) {
-  return StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    sheet: {
-      backgroundColor: t.bg,
-      borderTopLeftRadius: radius.xl,
-      borderTopRightRadius: radius.xl,
-      borderCurve: 'continuous',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.xl,
-      maxHeight: '80%',
-    },
-    handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginVertical: spacing.sm },
-    title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    summary: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 2, marginBottom: spacing.md },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: spacing.sm },
-    cell: {
-      width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous',
-      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2,
-    },
-    cellAnswered: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    cellFlagged: { borderColor: t.warningStrong, borderWidth: 2 },
-    cellCurrent: { borderColor: t.accentText, borderWidth: 2 },
-    cellTxt: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    cellTxtAnswered: { color: t.accentText },
-    btnRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-    ghostBtn: {
-      minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderCurve: 'continuous',
-      borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center',
-    },
-    ghostTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    submitBtn: {
-      flex: 1, minHeight: 44, borderRadius: radius.md, borderCurve: 'continuous',
-      backgroundColor: t.accentStrong, alignItems: 'center', justifyContent: 'center',
-    },
-    submitTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-  })
 }

@@ -1,1220 +1,479 @@
-import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react'
-import {
-  StyleSheet, View, Text, Pressable,
-  Modal, TextInput, Alert, FlatList,
-  RefreshControl, Platform,
-} from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { TabHeader } from '../../components/TabHeader'
-import { webContentStyle } from '../../components/ui/webMaxWidth'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { View, Text, Pressable, RefreshControl } from 'react-native'
 import { router } from 'expo-router'
-import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import {
+  Search1Outlined, Calculator1Outlined, Notebook1Outlined, ClipboardOutlined,
+  FileQuestionOutlined, Books2Outlined,
+} from '@lineiconshq/free-icons'
+import { TabHeader } from '../../components/TabHeader'
+import { usePracticeData, type TopicRow } from '../../hooks/usePracticeData'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { useDb } from '../../hooks/useDb'
+import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
+import { useExamRunPersistence } from '../../hooks/useExamRunPersistence'
 import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
 import { cachedQuery, invalidate, subscribe } from '../../services/queryCache'
-import {
-  getTopicBestSessionPercentages,
-  getSubjectSessionPercentages,
-  getListingMockBest,
-} from '../../services/homeAggregates'
+import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
 import { getDueCounts, type DueCounts } from '../../services/srsAggregates'
-import { orderBlueprintsForUser } from '../../utils/examBuilder'
-import { readinessTone } from '../../utils/readinessTone'
-import type { ReadinessTone } from '../../utils/readinessTone'
-import { subjectsToImprove } from '../../utils/subjectsToImprove'
-import { subjectColor } from '../../utils/subjectColors'
-import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
-import { AdmissionEstimateCard } from '../../components/home/AdmissionEstimateCard'
-import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
-import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, typography } from '../../theme/tokens'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { Card } from '../../components/ui/Card'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { InfoBanner } from '../../components/ui/InfoBanner'
-import { ListCard } from '../../components/ui/ListCard'
-import { LoadingState } from '../../components/ui/LoadingState'
-import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
-import { useAnalytics } from '../../hooks/useAnalytics'
-import { useBreakpoint, gridItemWidth, pagePadding } from '../../hooks/useBreakpoint'
-import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch } from '../../services/sync'
+import { orderBlueprintsForUser } from '../../utils/examBuilder'
+import { subjectsToImprove } from '../../utils/subjectsToImprove'
+import { runKeyFor } from '../../utils/examRunPersistence'
+import { pickNextPractice, nextPracticeCopy, type NextPracticeInput } from '../../utils/nextPracticeAction'
+import { useTheme } from '../../theme/ThemeContext'
+import { radius, spacing, textStyle } from '../../theme/tokens'
+import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { ListRow } from '../../components/ui/ListRow'
+import { StatNumber } from '../../components/ui/StatNumber'
+import { Badge } from '../../components/ui/Badge'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
+import { focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { NextStepCard } from '../../components/practice/NextStepCard'
+import { DeckRow } from '../../components/practice/DeckRow'
+import { PracticeSearchSheet, NewDeckSheet, type SearchEntry } from '../../components/practice/PracticeSheets'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { confirmAction } from '../../utils/confirmAction'
 
-// ── Strength colours ──────────────────────────────────────────────────────────
+// Practice tab — redesign M2, direction C ("One Next Step").
+// Order of the page answers "what do I practise now?" before anything else:
+//   1. Next step   — ONE action, the tab's only maroon button
+//   2. Mock exams  — up to 4, focus exams first
+//   3. Subjects    — A–Z, readiness as a number
+//   4. Your decks  — saved topic bundles, with due counts
+//   5. Tools       — Estimated Admission Score, Notes, Requirements
+// Readiness grids and My Focus live on Today/Progress now (no duplication).
 
-// Everything resolves from theme tokens so it re-themes. Text on a status tint
-// uses the *Strong token (DESIGN.md: the DEFAULT status colour on its own 10%
-// tint falls under 4.5:1 in light mode). Borders are decorative here, so they
-// take the tint itself: calm, and never the only signal (the label says it).
-function useStrengthColor(strength: Strength) {
+type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error' }
+
+type InProgressRun = { slug: string; title: string; answered: number; total: number; updatedAt: number }
+
+const CACHE_KEYS = ['practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list'] as const
+
+function minutes(n: number): string {
+  return n < 60 ? `${n} min` : `${Math.round((n / 60) * 10) / 10} h`
+}
+
+/** A bordered group for ListRows (hairline dividers, no nested cards). */
+function RowGroup({ children }: { children: React.ReactNode }) {
   const { theme: t } = useTheme()
-  switch (strength) {
-    case 'New':
-      return { bg: t.accentSurface, border: t.accentSurface, text: t.accentText, iconBg: t.accentSurface, iconColor: t.accentText }
-    case 'Weak':
-      return { bg: t.dangerSurface, border: t.dangerSurface, text: t.dangerStrong, iconBg: t.dangerSurface, iconColor: t.dangerStrong }
-    case 'Review':
-      return { bg: t.warningSurface, border: t.warningSurface, text: t.warningStrong, iconBg: t.warningSurface, iconColor: t.warningStrong }
-    case 'Strong':
-      return { bg: t.successSurface, border: t.successSurface, text: t.successStrong, iconBg: t.successSurface, iconColor: t.successStrong }
-  }
-}
-
-// ── Recommended card (2-col grid) ────────────────────────────────────────────
-
-type RcStyles = { card: object; badge: object; badgeTxt: object; name: object; sub: object; grid: object; cardWrap: object }
-function RecommendedCard({ row, rc }: { row: TopicRow; rc: RcStyles }) {
-  const c = useStrengthColor(row.strength)
+  const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean)
   return (
-    <Pressable
-      style={({ pressed }) => [rc.card, pressed && { opacity: 0.8 }]}
-      onPress={() => router.push(`/practice/${row.topic.id}`)}
-      accessibilityRole="button"
-      // card fills its 48% wrapper — no fixed width here
-    >
-      <View style={[rc.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
-        <Text style={[rc.badgeTxt, { color: c.text }]}>{row.strength}</Text>
-      </View>
-      <Text style={rc.name} numberOfLines={2}>{row.topic.name}</Text>
-      <Text style={rc.sub}>{row.cardCount} cards</Text>
-    </Pressable>
-  )
-}
-
-// ── Deck card ─────────────────────────────────────────────────────────────────
-
-function DeckCard({
-  deck,
-  totalCards,
-  dueCount,
-  onDelete,
-}: {
-  deck: SavedDeck
-  totalCards: number
-  /** Cards from this deck's topics currently due for SRS review (Task H). */
-  dueCount: number
-  onDelete: () => void
-}) {
-  const { theme: t, typo } = useTheme()
-
-  function handleLongPress() {
-    Alert.alert('Delete Deck', `Delete "${deck.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onDelete },
-    ])
-  }
-
-  return (
-    <View style={{ marginBottom: spacing.sm }}>
-      <ListCard
-        icon={<Text style={{ fontSize: typography.base }}>🗂️</Text>}
-        title={deck.name}
-        subtitle={`${deck.topicIds.length} topic${deck.topicIds.length !== 1 ? 's' : ''} · ${totalCards} cards`}
-        onPress={() => router.push(`/practice/deck/${deck.id}`)}
-        onLongPress={handleLongPress}
-        trailing={dueCount > 0 ? (
-          <View style={{
-            backgroundColor: t.warningSurface, borderRadius: radius.sm, borderCurve: 'continuous',
-            paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2,
-          }}>
-            <Text
-              style={{ fontSize: typo.xs, fontWeight: '700', color: t.warning, fontFamily: 'Lexend_600SemiBold' }}
-              maxFontSizeMultiplier={1.4}
-            >
-              {dueCount} due
-            </Text>
-          </View>
-        ) : undefined}
-      />
+    <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' }}>
+      {items.map((child, i) => (
+        <View key={i} style={i === 0 ? undefined : { borderTopWidth: 1, borderTopColor: t.divider }}>{child}</View>
+      ))}
     </View>
   )
 }
 
-// ── Create Deck Modal ─────────────────────────────────────────────────────────
-
-type MStyles = { overlay: object; sheet: object; headerRow: object; title: object; closeBtn: object; label: object; input: object; btn: object; btnFlex: object; btnDisabled: object; btnTxt: object; topicList: object; topicRow: object; topicRowOn: object; checkbox: object; checkboxOn: object; checkmark: object; topicName: object; topicSub: object; footerRow: object; backBtn: object; backTxt: object; searchBar: object; searchBarTxt: object; resultRow: object; resultType: object; resultName: object; resultEmpty: object; subjectHeader: object }
-
-// Deck-creation topic picker item: a subject header (Task H item 5 — group
-// browsing by the existing subject→topic taxonomy) or a selectable topic row,
-// flattened into one FlatList data array so the list stays virtualized.
-type PickerItem =
-  | { kind: 'header'; key: string; subjectName: string }
-  | { kind: 'topic'; key: string; row: TopicRow }
-
-function buildPickerItems(subjects: Array<{ id: string; name: string }>, topicRows: TopicRow[]): PickerItem[] {
-  const topicRowById = new Map(topicRows.map(r => [r.topic.id, r]))
-  const groups = groupTopicsBySubject(
-    {
-      topics: topicRows.map(r => ({ id: r.topic.id, name: r.topic.name, subjectId: r.topic.subjectId, accuracy: r.accuracy })),
-      subjects,
-    },
-    (topic) => topicRowById.get(topic.id)!,
-    undefined,
-    'alpha', // browsing context (picking topics to bundle into a deck), not a study-priority ranking
-  )
-  const items: PickerItem[] = []
-  for (const group of groups) {
-    items.push({ kind: 'header', key: `h:${group.subjectId}`, subjectName: group.subjectName })
-    for (const row of group.rows) items.push({ kind: 'topic', key: row.topic.id, row })
-  }
-  return items
-}
-
-// Memoized row for the deck-topic FlatList — keeps renderItem cheap so a row only
-// re-renders when its own selected state changes.
-const TopicSelectRow = memo(function TopicSelectRow({
-  id, name, cardCount, selected, onToggle, m,
-}: {
-  id: string; name: string; cardCount: number; selected: boolean
-  onToggle: (id: string) => void; m: MStyles
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [m.topicRow, selected && m.topicRowOn, pressed && { opacity: 0.8 }]}
-      onPress={() => onToggle(id)}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected }}
-    >
-      <View style={[m.checkbox, selected && m.checkboxOn]}>
-        {selected ? <Text style={m.checkmark}>✓</Text> : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={m.topicName} numberOfLines={1}>{name}</Text>
-        <Text style={m.topicSub}>{cardCount} cards</Text>
-      </View>
-    </Pressable>
-  )
-})
-
-function CreateDeckModal({
-  visible,
-  subjects,
-  topicRows,
-  onClose,
-  onCreate,
-  m,
-}: {
-  visible: boolean
-  subjects: Array<{ id: string; name: string }>
-  topicRows: TopicRow[]
-  onClose: () => void
-  onCreate: (name: string, topicIds: string[]) => Promise<void>
-  m: MStyles
-}) {
+function RowIcon({ icon }: { icon: Parameters<typeof Lineicons>[0]['icon'] }) {
   const { theme: t } = useTheme()
-  const insets = useSafeAreaInsets()
-  const [name, setName] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [step, setStep] = useState<1 | 2>(1)
-  const [saving, setSaving] = useState(false)
-
-  function reset() {
-    setName(''); setSelected(new Set()); setStep(1); setSaving(false)
-  }
-  function handleClose() { reset(); onClose() }
-
-  const toggleTopic = useCallback((id: string) => {
-    setSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }, [])
-
-  const pickerItems = useMemo(() => buildPickerItems(subjects, topicRows), [subjects, topicRows])
-
-  const renderItem = useCallback(({ item }: { item: PickerItem }) => {
-    if (item.kind === 'header') {
-      return <Text style={m.subjectHeader} maxFontSizeMultiplier={1.4}>{item.subjectName}</Text>
-    }
-    return (
-      <TopicSelectRow
-        id={item.row.topic.id}
-        name={item.row.topic.name}
-        cardCount={item.row.cardCount}
-        selected={selected.has(item.row.topic.id)}
-        onToggle={toggleTopic}
-        m={m}
-      />
-    )
-  }, [selected, toggleTopic, m])
-
-  async function handleCreate() {
-    if (!name.trim() || selected.size === 0) return
-    setSaving(true)
-    try { await onCreate(name.trim(), Array.from(selected)); reset(); onClose() }
-    finally { setSaving(false) }
-  }
-
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={m.overlay}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={{ width: '100%' }}
-        >
-        <View style={[m.sheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
-          <View style={m.headerRow}>
-            <Text style={m.title}>New Deck</Text>
-            <Pressable onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close" style={({ pressed }) => pressed && { opacity: 0.7 }}>
-              <Text style={m.closeBtn}>✕</Text>
-            </Pressable>
-          </View>
-
-          {step === 1 ? (
-            <>
-              <Text style={m.label}>Deck name</Text>
-              <TextInput
-                style={m.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. UPCAT Science Finals"
-                placeholderTextColor={t.textTertiary}
-                autoFocus
-                returnKeyType="next"
-                onSubmitEditing={() => { if (name.trim()) setStep(2) }}
-              />
-              <Pressable
-                style={({ pressed }) => [m.btn, !name.trim() && m.btnDisabled, pressed && { opacity: 0.7 }]}
-                disabled={!name.trim()}
-                onPress={() => setStep(2)}
-                accessibilityRole="button"
-              >
-                <Text style={m.btnTxt}>Next: Pick Topics →</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={m.label}>Select topics  ({selected.size} chosen)</Text>
-              <FlatList
-                style={m.topicList}
-                data={pickerItems}
-                extraData={selected}
-                keyExtractor={(item) => item.key}
-                showsVerticalScrollIndicator={false}
-                renderItem={renderItem}
-              />
-              <View style={m.footerRow}>
-                <Pressable style={({ pressed }) => [m.backBtn, pressed && { opacity: 0.7 }]} onPress={() => setStep(1)} accessibilityRole="button">
-                  <Text style={m.backTxt}>← Back</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [m.btn, m.btnFlex, (selected.size === 0 || saving) && m.btnDisabled, pressed && { opacity: 0.7 }]}
-                  disabled={selected.size === 0 || saving}
-                  onPress={handleCreate}
-                  accessibilityRole="button"
-                >
-                  <Text style={m.btnTxt}>{saving ? 'Saving…' : 'Create Deck'}</Text>
-                </Pressable>
-              </View>
-            </>
-          )}
-        </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+    <View style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
+      <Lineicons icon={icon} size={18} color={t.accentText} />
+    </View>
   )
 }
 
-// ── Search Modal (subjects · topics · mock exams) ─────────────────────────────
-
-type SearchResult = { key: string; type: string; name: string; onPress: () => void }
-
-function SearchModal({
-  visible,
-  subjects,
-  topicRows,
-  blueprints,
-  onClose,
-  m,
-}: {
-  visible: boolean
-  subjects: Array<{ id: string; name: string }>
-  topicRows: TopicRow[]
-  blueprints: PublishedBlueprint[]
-  onClose: () => void
-  m: MStyles
-}) {
-  const { theme: t } = useTheme()
-  const insets = useSafeAreaInsets()
-  const [query, setQuery] = useState('')
-
-  function handleClose() { setQuery(''); onClose() }
-
-  // Flatten all searchable entries once per data change.
-  const allEntries = useMemo<SearchResult[]>(() => {
-    const entries: SearchResult[] = []
-    for (const s of subjects) {
-      entries.push({ key: `subject:${s.id}`, type: 'Subject', name: s.name, onPress: () => router.push(`/subjects/${s.id}`) })
-    }
-    for (const row of topicRows) {
-      entries.push({ key: `topic:${row.topic.id}`, type: 'Topic', name: row.topic.name, onPress: () => router.push(`/practice/${row.topic.id}`) })
-    }
-    for (const bp of blueprints) {
-      entries.push({ key: `mock:${bp.slug}`, type: 'Mock exam', name: `${bp.acronym} · ${bp.name}`, onPress: () => router.push(`/practice/exam/${bp.slug}`) })
-    }
-    return entries
-  }, [subjects, topicRows, blueprints])
-
-  const results = useMemo<SearchResult[]>(() => {
-    const q = query.trim().toLowerCase()
-    if (q === '') return []
-    return allEntries.filter(e => e.name.toLowerCase().includes(q)).slice(0, 30)
-  }, [query, allEntries])
-
-  const handleResultPress = useCallback((result: SearchResult) => {
-    setQuery('')
-    onClose()
-    result.onPress()
-  }, [onClose])
-
-  const renderResult = useCallback(({ item }: { item: SearchResult }) => (
-    <Pressable
-      style={({ pressed }) => [m.resultRow, pressed && { opacity: 0.7 }]}
-      onPress={() => handleResultPress(item)}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.type}: ${item.name}`}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={m.resultName} numberOfLines={1} maxFontSizeMultiplier={1.4}>{item.name}</Text>
-        <Text style={m.resultType} maxFontSizeMultiplier={1.4}>{item.type}</Text>
-      </View>
-    </Pressable>
-  ), [m, handleResultPress])
-
+function SkeletonRows({ label, count = 3 }: { label: string; count?: number }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={m.overlay}>
-        <Pressable
-          style={{ flex: 1 }}
-          onPress={handleClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close search"
-        />
-        <KeyboardAvoidingView behavior="padding" style={{ width: '100%' }}>
-          <View style={[m.sheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
-            <View style={m.headerRow}>
-              <Text style={m.title}>Search</Text>
-              <Pressable onPress={handleClose} accessibilityRole="button" accessibilityLabel="Close" style={({ pressed }) => pressed && { opacity: 0.7 }}>
-                <Text style={m.closeBtn}>✕</Text>
-              </Pressable>
-            </View>
-            <TextInput
-              style={m.input}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search subjects, topics, or mock exams"
-              placeholderTextColor={t.textTertiary}
-              autoFocus
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            {query.trim() === '' ? (
-              <Text style={m.resultEmpty} maxFontSizeMultiplier={1.4}>
-                Type to search your subjects, topics, and mock exams
-              </Text>
-            ) : results.length > 0 ? (
-              <FlatList
-                style={m.topicList}
-                data={results}
-                keyExtractor={(item) => item.key}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                renderItem={renderResult}
-              />
-            ) : (
-              <Text style={m.resultEmpty} maxFontSizeMultiplier={1.4}>
-                No matches found
-              </Text>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+    <View accessible accessibilityLabel={label} accessibilityState={{ busy: true }} style={{ gap: spacing.sm }}>
+      {Array.from({ length: count }, (_, i) => <Skeleton key={i} height={56} radius={radius.lg} />)}
+    </View>
   )
-}
-
-// ── Main screen ───────────────────────────────────────────────────────────────
-
-// Styles factory (module-level) — keeps PracticeScreen's body small; memoized by
-// the screen on (theme, typo, breakpoint).
-function makeStyles(
-  t: ReturnType<typeof useTheme>['theme'],
-  typo: ReturnType<typeof useTheme>['typo'],
-  bp: import('../../hooks/useBreakpoint').Breakpoint,
-) {
-  return {
-    s: StyleSheet.create({
-      root: { flex: 1, backgroundColor: t.bg },
-      header: { paddingHorizontal: spacing.lg },
-      // AI Study Feedback
-      aiFeedbackCard: { gap: spacing.xs / 2 },
-      aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-      aiFeedbackIcon: { fontSize: typo.base },
-      aiFeedbackTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      aiFeedbackPrompt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
-      aiFeedbackItem: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs / 2 },
-      aiFeedbackEmpty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-      // Collapsed row (shared for AI feedback + study tools)
-      collapsedRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        backgroundColor: t.surface,
-        borderWidth: 1,
-        borderColor: t.border,
-        borderRadius: radius.xl,
-        borderCurve: 'continuous',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm + 2,
-      },
-      collapsedIcon: { fontSize: typo.base, width: 22, textAlign: 'center' },
-      collapsedLabel: { flex: 1, fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-      collapsedSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      collapsedChevron: { fontSize: typo.md, color: t.textTertiary },
-      secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-      secTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
-      addBtn: { width: 28, height: 28, backgroundColor: t.accentStrong, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-      addBtnTxt: { color: t.textInverse, fontSize: typo.base, lineHeight: 18, fontWeight: '700' },
-      list: { gap: spacing.xl },
-      empty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: spacing.sm },
-      // Search bar (opens the search modal)
-      searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        backgroundColor: t.surface,
-        borderWidth: 1,
-        borderColor: t.border,
-        borderRadius: radius.lg,
-        borderCurve: 'continuous',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm + 2,
-      },
-      searchBarTxt: { flex: 1, fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      // "Review due cards" row (Task H) — warning-toned to read as "needs attention"
-      // (same tone the strength/readiness system already uses for Review-level items).
-      dueRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        backgroundColor: t.warningSurface,
-        borderWidth: 1,
-        borderColor: t.warningBorder,
-        borderRadius: radius.lg,
-        borderCurve: 'continuous',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm + 4,
-      },
-      dueIconWrap: {
-        width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous',
-        backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center',
-      },
-      dueIcon: { fontSize: typo.md },
-      dueTitle: { fontSize: typo.base, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      dueSub: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-      dueChevron: { fontSize: typo.lg, color: t.warningStrong },
-    }),
-    rc: StyleSheet.create({
-      grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-      cardWrap: { width: gridItemWidth(bp) },
-      card: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
-      badge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.xs / 2, alignSelf: 'flex-start', marginBottom: spacing.sm },
-      badgeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-      name: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: spacing.xs, lineHeight: 16 },
-      sub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      // Mock Exam card base (pressed opacity stays in the function-form style array)
-      mockCard: { flex: 1, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', boxShadow: t.shadowSm, padding: spacing.md },
-      mockCardTitle: { fontSize: typo.md, fontWeight: '700', fontFamily: 'Outfit_700Bold', color: t.textPrimary, marginBottom: spacing.xs },
-      mockCardName: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xs },
-      mockCardMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    }),
-    // Readiness card (subject readiness + My Focus) — horizontal progress fill
-    // clipped to the rounded corners, content above via zIndex.
-    rd: StyleSheet.create({
-      card: {
-        position: 'relative',
-        overflow: 'hidden',
-        flex: 1,
-        backgroundColor: t.surface,
-        borderWidth: 1,
-        borderColor: t.border,
-        borderRadius: radius.lg,
-        borderCurve: 'continuous',
-        boxShadow: t.shadowSm,
-        padding: spacing.md,
-        minHeight: 84,
-        justifyContent: 'space-between',
-      },
-      fill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
-      content: { position: 'relative', zIndex: 1, flex: 1, justifyContent: 'space-between' },
-      topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm - 2 },
-      dot: { width: 10, height: 10, borderRadius: 5 },
-      badge: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Lexend_600SemiBold' },
-      name: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, lineHeight: 17, fontFamily: 'Outfit_700Bold', marginTop: spacing.xs / 2 },
-      pct: { fontSize: typo.lg, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -0.3, marginTop: spacing.xs / 2 },
-      // dashed ghost "+ Add" card spanning the grid item width
-      addCard: {
-        minHeight: 84,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.sm,
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderColor: t.border,
-        borderRadius: radius.lg,
-        borderCurve: 'continuous',
-        padding: spacing.md,
-      },
-      addTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', textAlign: 'center' },
-    }),
-    m: StyleSheet.create({
-      overlay: { flex: 1, backgroundColor: t.backdrop, justifyContent: 'flex-end' },
-      sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, borderCurve: 'continuous', padding: spacing.xl, paddingBottom: spacing.xxxl, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
-      headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-      title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-      closeBtn: { color: t.textTertiary, fontSize: typo.base, padding: spacing.xs },
-      label: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm - 2, fontFamily: 'Lexend_600SemiBold' },
-      input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.lg - 2, paddingVertical: spacing.md - 1, fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.lg - 2 },
-      btn: { backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous', minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, alignItems: 'center' },
-      btnFlex: { flex: 1 },
-      btnDisabled: { opacity: 0.4 },
-      btnTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-      topicList: { maxHeight: 320, marginBottom: spacing.lg - 2 },
-      topicRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle },
-      topicRowOn: { backgroundColor: t.accentSurface, borderRadius: radius.sm, borderCurve: 'continuous', paddingHorizontal: spacing.sm - 2 },
-      checkbox: { width: 22, height: 22, borderRadius: radius.sm - 4, borderCurve: 'continuous', borderWidth: 1.5, borderColor: t.textTertiary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-      checkboxOn: { backgroundColor: t.accent, borderColor: t.accent },
-      checkmark: { color: t.textInverse, fontSize: typo.xs, fontWeight: '700' },
-      topicName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-      topicSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      // Subject group header in the deck-creation topic picker (Task H item 5).
-      subjectHeader: {
-        fontSize: typo.xs,
-        fontWeight: '700',
-        color: t.textTertiary,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        fontFamily: 'Lexend_600SemiBold',
-        paddingTop: spacing.md,
-        paddingBottom: spacing.xs,
-        paddingHorizontal: spacing.xs / 2,
-      },
-      footerRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-      backBtn: { minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.sm },
-      backTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-      // Search result row
-      searchBar: {},
-      searchBarTxt: {},
-      resultRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs / 2, borderBottomWidth: 1, borderColor: t.surfaceSubtle, minHeight: 48 },
-      resultName: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-      resultType: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 },
-      resultEmpty: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', paddingVertical: spacing.xl },
-    }),
-  }
 }
 
 export default function PracticeScreen() {
-  const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh, loaded } = usePracticeData()
-  const { decks, createDeck, deleteDeck } = useSavedDecks()
-  const [modalVisible, setModalVisible] = useState(false)
-  const [searchVisible, setSearchVisible] = useState(false)
-
-  // Progressive-disclosure state
-  const [aiFeedbackExpanded, setAiFeedbackExpanded] = useState(false)
-  const [studyToolsExpanded, setStudyToolsExpanded] = useState(false)
-
-  // Overall analytics — still feeds AI Study Feedback (weakest subjects).
-  const overallAnalytics = useAnalytics('overall')
-
+  const { theme: t } = useTheme()
   const db = useDb()
+  const bp = useBreakpoint()
+  const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh, loaded } = usePracticeData()
+  const { focusListings } = useFocusListings()
+  const { decks, createDeck, deleteDeck } = useSavedDecks()
+  const { loadRun } = useExamRunPersistence()
 
-  // ── Sync / loading (web-only) ─────────────────────────────────────────────
-  const sync = useSyncStatus()
-  // `loaded` comes from usePracticeData — true once its load has run at least
-  // once (success or error), so we can tell an as-yet-unloaded screen from a
-  // genuinely-empty one. (Watching subjects.length can't: it starts [].)
-  const showLoading = Platform.OS === 'web' && (!loaded || (sync.isSyncing && !sync.firstSyncDone))
-
-  // ── Readiness maps (SESSION-based, mirrors Home) ─────────────────────────────
-  // Bumped by onRefresh (after invalidating the cache) to force fresh re-fetches.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [deckOpen, setDeckOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
-  // Subject readiness: per-topic review bests + subject-level mock bests.
-  const [sessionReadiness, setSessionReadiness] = useState<{
-    perTopicBest: Map<string, number>
-    subjectBest: Map<string, number>
-  }>(() => ({ perTopicBest: new Map(), subjectBest: new Map() }))
+  // ── Data ─────────────────────────────────────────────────────────────────
+  // Each section owns its load state so one failure never blanks the page.
+
+  const [readiness, setReadiness] = useState<Load<{ perTopicBest: Map<string, number>; subjectBest: Map<string, number> }>>({ status: 'loading' })
+  const [readinessTry, setReadinessTry] = useState(0)
   useEffect(() => {
     let cancelled = false
-    void (async () => {
-      try {
-        const [topicBest, subjectBest] = await cachedQuery(
-          'practice:sessionReadiness',
-          30_000,
-          () => Promise.all([
-            getTopicBestSessionPercentages(db),
-            getSubjectSessionPercentages(db),
-          ]),
-        )
-        if (!cancelled) {
-          setSessionReadiness({
+    setReadiness({ status: 'loading' })
+    cachedQuery('practice:sessionReadiness', 30_000, () => Promise.all([
+      getTopicBestSessionPercentages(db),
+      getSubjectSessionPercentages(db),
+    ])).then(([topicBest, subjectBest]) => {
+      if (!cancelled) {
+        setReadiness({
+          status: 'ready',
+          data: {
             perTopicBest: new Map(topicBest.map(r => [r.topicId, r.bestPct])),
             subjectBest: new Map(subjectBest.map(r => [r.subject, r.bestPct])),
-          })
-        }
-      } catch (e) {
-        console.warn('[practice/sessionReadiness] load failed:', e)
+          },
+        })
       }
-    })()
+    }).catch(e => {
+      console.warn('[practice/sessionReadiness] load failed:', e)
+      if (!cancelled) setReadiness({ status: 'error' })
+    })
     return () => { cancelled = true }
-  }, [db, reloadKey])
+  }, [db, reloadKey, readinessTry])
 
-  // My Focus readiness: per-listing best overall MOCK-exam attempt %.
-  const [mockBestBySlug, setMockBestBySlug] = useState<Map<string, number>>(() => new Map())
+  // Due counts feed the next step and deck badges; a failure just hides them.
+  const [dueCounts, setDueCounts] = useState<DueCounts | null>(null)
   useEffect(() => {
     let cancelled = false
-    void (async () => {
-      try {
-        const rows = await cachedQuery('practice:mockReadiness', 30_000, () => getListingMockBest(db))
-        if (!cancelled) {
-          setMockBestBySlug(new Map(rows.map(r => [r.listingSlug, r.bestPct])))
-        }
-      } catch (e) {
-        console.warn('[practice/mockReadiness] load failed:', e)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [db, reloadKey])
-
-  // Task H: SRS due-card counts (total + per-topic, for deck badges + the
-  // "Review due cards" row). Same cachedQuery/reloadKey convention as the
-  // readiness maps above.
-  const [dueCounts, setDueCounts] = useState<DueCounts>(() => ({ total: 0, byTopic: {} }))
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const counts = await cachedQuery('practice:dueCounts', 30_000, () => getDueCounts(db))
-        if (!cancelled) setDueCounts(counts)
-      } catch (e) {
+    cachedQuery('practice:dueCounts', 30_000, () => getDueCounts(db))
+      .then(c => { if (!cancelled) setDueCounts(c) })
+      .catch(e => {
         console.warn('[practice/dueCounts] load failed:', e)
-      }
-    })()
+        if (!cancelled) setDueCounts({ total: 0, byTopic: {} })
+      })
     return () => { cancelled = true }
   }, [db, reloadKey])
 
-  const [refreshing, setRefreshing] = useState(false)
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    // Drop the cached readiness maps and re-trigger their effects for fresh data.
-    invalidate('practice:sessionReadiness')
-    invalidate('practice:mockReadiness')
-    invalidate('practice:dueCounts')
-    setReloadKey(k => k + 1)
-    try { await refresh() } finally { setRefreshing(false) }
-  }, [refresh])
+  const [blueprints, setBlueprints] = useState<Load<PublishedBlueprint[]>>({ status: 'loading' })
+  const [blueprintsTry, setBlueprintsTry] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    function pull() {
+      return cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db))
+        .then(data => { if (!cancelled) setBlueprints({ status: 'ready', data }) })
+        .catch(e => {
+          console.warn('[practice/blueprints] load failed:', e)
+          if (!cancelled) setBlueprints({ status: 'error' })
+        })
+    }
+    setBlueprints({ status: 'loading' })
+    void pull()
+    // Re-pull after a sync invalidates the practice cache.
+    const unsub = subscribe('practice:blueprints:', () => { void pull() })
+    return () => { cancelled = true; unsub() }
+  }, [db, reloadKey, blueprintsTry])
 
-  // Web-only refresh: full sync then invalidate + re-load, separate from the
-  // native pull-to-refresh onRefresh which does NOT call syncOnLaunch.
-  const webRefresh = useCallback(async () => {
-    if (refreshing || sync.isSyncing) return
+  const focusSlugs = useMemo(() => focusListings.map(f => f.slug), [focusListings])
+  const orderedBlueprints = useMemo(
+    () => (blueprints.status === 'ready' ? orderBlueprintsForUser(blueprints.data, focusSlugs) : []),
+    [blueprints, focusSlugs],
+  )
+  const focusBlueprint = useMemo(
+    () => orderedBlueprints.find(b => focusSlugs.includes(b.slug)) ?? null,
+    [orderedBlueprints, focusSlugs],
+  )
+
+  // Unfinished runs of ANY published mock. The most recently saved one takes
+  // priority over everything else in the next step; every one gets an
+  // "In progress" badge on its row.
+  const [inProgress, setInProgress] = useState<Map<string, InProgressRun> | undefined>(undefined)
+  const blueprintSlugsKey = orderedBlueprints.map(b => b.slug).join('|')
+  useEffect(() => {
+    if (blueprints.status === 'loading') return
+    if (orderedBlueprints.length === 0) { setInProgress(new Map()); return }
+    let cancelled = false
+    Promise.all(orderedBlueprints.map(b =>
+      loadRun(runKeyFor('exam', b.slug))
+        .then(run => (run && run.questionIds.length > 0
+          ? {
+            slug: b.slug,
+            title: b.acronym,
+            answered: Object.keys(run.answers ?? {}).length,
+            total: run.questionIds.length,
+            updatedAt: run.updatedAt ?? 0,
+          }
+          : null))
+        .catch(() => null),
+    )).then(runs => {
+      if (cancelled) return
+      setInProgress(new Map(runs.filter((r): r is InProgressRun => r !== null).map(r => [r.slug, r])))
+    })
+    return () => { cancelled = true }
+    // loadRun is a fresh closure per render (thin hook wrapper); the slugs are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blueprints.status, blueprintSlugsKey, reloadKey])
+
+  const resume = useMemo<NextPracticeInput['resume'] | undefined>(() => {
+    if (inProgress === undefined) return undefined
+    let latest: InProgressRun | null = null
+    for (const r of inProgress.values()) {
+      if (!latest || r.updatedAt > latest.updatedAt) latest = r
+    }
+    return latest ? { slug: latest.slug, title: latest.title, answered: latest.answered, total: latest.total } : null
+  }, [inProgress])
+
+  // Weakest practised topic in the first focus exam's scope (all topics when no focus).
+  const weakTopic = useMemo(() => {
+    const scope = focusSlugs[0] ? new Set(topicIdsByListingSlug[focusSlugs[0]] ?? []) : null
+    const pool = topicRows.filter(r => r.strength === 'Weak' && (!scope || scope.size === 0 || scope.has(r.topic.id)))
+    pool.sort((a, b) => (a.accuracy ?? 101) - (b.accuracy ?? 101))
+    const w: TopicRow | undefined = pool[0]
+    return w ? { id: w.topic.id, name: w.topic.name } : null
+  }, [topicRows, topicIdsByListingSlug, focusSlugs])
+
+  const nextCopy = useMemo(() => {
+    if (dueCounts === null || resume === undefined || blueprints.status === 'loading') return null
+    return nextPracticeCopy(pickNextPractice({
+      resume,
+      dueCount: dueCounts.total,
+      weakTopic,
+      focusMock: focusBlueprint
+        ? { slug: focusBlueprint.slug, title: focusBlueprint.acronym, items: focusBlueprint.totalItems, minutes: focusBlueprint.totalTimeMinutes }
+        : null,
+    }))
+  }, [dueCounts, resume, blueprints.status, weakTopic, focusBlueprint])
+
+  // Subjects A–Z with session-based readiness (same maths as Subject details).
+  const subjectRows = useMemo(() => {
+    if (readiness.status !== 'ready') return []
+    const pctById = new Map(
+      subjectsToImprove(topicRows, subjects, readiness.data.perTopicBest, readiness.data.subjectBest).map(m => [m.id, m.pct]),
+    )
+    const topicCount = new Map<string, number>()
+    const practised = new Set<string>()
+    for (const r of topicRows) {
+      topicCount.set(r.topic.subjectId, (topicCount.get(r.topic.subjectId) ?? 0) + 1)
+      if (r.strength !== 'New' || readiness.data.perTopicBest.has(r.topic.id)) practised.add(r.topic.subjectId)
+    }
+    return subjects
+      .filter(s => (topicCount.get(s.id) ?? 0) > 0)
+      .map(s => ({
+        id: s.id,
+        name: s.name,
+        topics: topicCount.get(s.id) ?? 0,
+        pct: practised.has(s.id) || readiness.data.subjectBest.has(s.name) ? (pctById.get(s.id) ?? null) : null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [readiness, topicRows, subjects])
+
+  const searchEntries = useMemo<SearchEntry[]>(() => [
+    ...subjects.map(s => ({ key: `subject:${s.id}`, type: 'Subject' as const, name: s.name, href: `/subjects/${s.id}` })),
+    ...topicRows.map(r => ({ key: `topic:${r.topic.id}`, type: 'Topic' as const, name: r.topic.name, href: `/practice/${r.topic.id}` })),
+    ...orderedBlueprints.map(b => ({ key: `mock:${b.slug}`, type: 'Mock exam' as const, name: `${b.acronym} · ${b.name}`, href: `/practice/exam/${b.slug}` })),
+  ], [subjects, topicRows, orderedBlueprints])
+
+  // ── Refresh ──────────────────────────────────────────────────────────────
+  const [refreshing, setRefreshing] = useState(false)
+  const reloadAll = useCallback(async (withSync: boolean) => {
+    if (refreshing) return
     setRefreshing(true)
     try {
-      await syncOnLaunch(db)
-      invalidate('practice:sessionReadiness')
-      invalidate('practice:mockReadiness')
-      invalidate('practice:dueCounts')
+      if (withSync) await syncOnLaunch(db)
+      CACHE_KEYS.forEach(k => invalidate(k))
       setReloadKey(k => k + 1)
       await refresh()
     } catch (e) {
-      console.warn('[practice] webRefresh error:', e)
+      console.warn('[practice] refresh failed:', e)
     } finally {
       setRefreshing(false)
     }
-  }, [db, refresh, refreshing, sync.isSyncing])
+  }, [db, refresh, refreshing])
 
-  const { theme: t, typo } = useTheme()
-  // Web-only adaptive grids: native tablets (iPad etc.) keep the phone 2-col
-  // layout — the native app's rendering must not change with viewport width.
-  const bpRaw = useBreakpoint()
-  const bp = Platform.OS === 'web' ? bpRaw : 'compact'
-
-  // Stable element for the ScrollView refreshControl prop. RN's refreshControl
-  // requires a JSX element (no component/render-prop form), so memoize it to avoid
-  // handing the ScrollView a brand-new element on every render.
   const refreshCtl = useMemo(() => (
     <RefreshControl
       refreshing={refreshing}
-      onRefresh={onRefresh}
+      onRefresh={() => { void reloadAll(false) }}
       tintColor={t.accent}
       colors={[t.accent]}
       progressBackgroundColor={t.surface}
     />
-  ), [refreshing, onRefresh, t.accent, t.surface])
+  ), [refreshing, reloadAll, t.accent, t.surface])
 
-  const { s, rc, rd, m } = useMemo(() => makeStyles(t, typo, bp), [t, typo, bp])
+  const deckTotal = (d: SavedDeck) => d.topicIds.reduce((n, id) => n + (cardCountByTopic[id] ?? 0), 0)
+  const deckDue = (d: SavedDeck) => d.topicIds.reduce((n, id) => n + (dueCounts?.byTopic[id] ?? 0), 0)
 
-  const { focusListings: focusListingsList } = useFocusListings()
+  const go = (href: string) => router.push(href as never)
 
-  // Published blueprints — fetched on mount and re-pulled whenever the cache
-  // key is invalidated (e.g. after a sync that fires invalidate('practice:')).
-  const [blueprints, setBlueprints] = useState<PublishedBlueprint[]>([])
-  useEffect(() => {
-    let cancelled = false
-    function pull() {
-      return cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db)).then(result => {
-        if (!cancelled) setBlueprints(result)
-      })
-    }
-    void pull()
-    const unsub = subscribe('practice:blueprints:', () => { void pull() })
-    return () => { cancelled = true; unsub() }
-  }, [db])
+  // ── Sections ─────────────────────────────────────────────────────────────
 
-  // Focus slugs drive the blueprint ordering (focus-first).
-  const focusSlugs = useMemo(() => focusListingsList.map(f => f.slug), [focusListingsList])
-
-  // Blueprints ordered by focus-first, then displayOrder
-  const orderedBlueprints = useMemo(
-    () => orderBlueprintsForUser(blueprints, focusSlugs),
-    [blueprints, focusSlugs]
+  const mocksSection = (
+    <View testID="practice-mocks">
+      <SectionHeader
+        title="Mock exams"
+        subtitle="Timed, full-length practice"
+        actionLabel={blueprints.status === 'ready' && blueprints.data.length > 0 ? 'See all' : undefined}
+        onAction={() => go('/practice/exam')}
+      />
+      {blueprints.status === 'loading' ? (
+        <SkeletonRows label="Loading mock exams" count={2} />
+      ) : blueprints.status === 'error' ? (
+        <ErrorState title="Couldn't load mock exams" onRetry={() => setBlueprintsTry(n => n + 1)} />
+      ) : orderedBlueprints.length === 0 ? (
+        <EmptyState
+          icon={<Lineicons icon={FileQuestionOutlined} size={24} color={t.textSecondary} />}
+          title="No mock exams yet"
+          body="Mock exams appear here once they are published for your exams."
+        />
+      ) : (
+        <RowGroup>
+          {orderedBlueprints.slice(0, 4).map(b => {
+            const running = inProgress?.has(b.slug) ?? false
+            return (
+              <ListRow
+                key={b.slug}
+                title={b.acronym}
+                subtitle={`${b.name} · ${b.totalItems} items · ${minutes(b.totalTimeMinutes)}`}
+                accessibilityLabel={`${b.acronym}, ${b.name}, ${b.totalItems} items, ${minutes(b.totalTimeMinutes)}${running ? ', in progress' : ''}`}
+                trailing={running ? <Badge label="In progress" tone="accent" /> : undefined}
+                onPress={() => go(`/practice/exam/${b.slug}`)}
+              />
+            )
+          })}
+        </RowGroup>
+      )}
+    </View>
   )
 
-  // Recommended is driven by the FIRST focus listing (cards no longer set an
-  // active slug — they navigate to the new chooser instead).
-  const effectiveFocusSlug = focusListingsList[0]?.slug || ''
-
-  const activeTopicIds = useMemo(
-    () => new Set(topicIdsByListingSlug[effectiveFocusSlug] ?? []),
-    [topicIdsByListingSlug, effectiveFocusSlug]
+  const subjectsSection = (
+    <View testID="practice-subjects">
+      <SectionHeader title="Subjects" subtitle="Drill topic by topic" />
+      {!loaded || readiness.status === 'loading' ? (
+        <SkeletonRows label="Loading subjects" />
+      ) : readiness.status === 'error' ? (
+        <ErrorState title="Couldn't load your subjects" onRetry={() => setReadinessTry(n => n + 1)} />
+      ) : subjectRows.length === 0 ? (
+        <EmptyState
+          icon={<Lineicons icon={Books2Outlined} size={24} color={t.textSecondary} />}
+          title="No subjects on this device yet"
+          body="Choose an exam in Explore and its subjects download here for offline practice."
+          actionLabel="Choose an exam"
+          onAction={() => go('/(tabs)/explore')}
+        />
+      ) : (
+        <RowGroup>
+          {subjectRows.map(s => {
+            const topics = `${s.topics} topic${s.topics === 1 ? '' : 's'}`
+            return (
+              <ListRow
+                key={s.id}
+                title={s.name}
+                subtitle={topics}
+                accessibilityLabel={`${s.name}, ${topics}, ${s.pct == null ? 'not practised yet' : `ready ${s.pct}%`}`}
+                trailing={<StatNumber value={s.pct == null ? '–' : `${s.pct}%`} label={s.pct == null ? 'New' : 'Ready'} />}
+                onPress={() => go(`/subjects/${s.id}`)}
+              />
+            )
+          })}
+        </RowGroup>
+      )}
+    </View>
   )
 
-  const activeRecommended = useMemo(
-    () => topicRows
-      .filter(r => activeTopicIds.has(r.topic.id))
-      .sort((a, b) =>
-        ({ New: 0, Weak: 1, Review: 2, Strong: 3 }[a.strength] ?? 0) -
-        ({ New: 0, Weak: 1, Review: 2, Strong: 3 }[b.strength] ?? 0)
-      )
-      .slice(0, 5),
-    [topicRows, activeTopicIds]
+  const decksSection = (
+    <View testID="practice-decks">
+      <SectionHeader title="Your decks" actionLabel="New deck" onAction={() => setDeckOpen(true)} />
+      {decks.length === 0 ? (
+        <Text style={[textStyle('bodySm', t.textSecondary), { paddingVertical: spacing.sm }]} maxFontSizeMultiplier={1.8}>
+          Bundle topics into a deck to review them together. Tap New deck to make one.
+        </Text>
+      ) : (
+        <RowGroup>
+          {decks.map(d => {
+            const n = d.topicIds.length
+            return (
+              <DeckRow
+                key={d.id}
+                name={d.name}
+                subtitle={`${n} topic${n === 1 ? '' : 's'} · ${deckTotal(d)} cards`}
+                dueCount={deckDue(d)}
+                onOpen={() => go(`/practice/deck/${d.id}`)}
+                onDelete={() => confirmAction('Delete deck?', `“${d.name}” will be removed. Your progress on its cards is kept.`, 'Delete', () => { void deleteDeck(d.id) }, { destructive: true })}
+              />
+            )
+          })}
+        </RowGroup>
+      )}
+    </View>
   )
 
-  const activeListing = useMemo(  // kept for Recommended section label
-    () => focusListingsList.find(r => r.slug === effectiveFocusSlug),
-    [focusListingsList, effectiveFocusSlug]
+  const toolsSection = (
+    <View testID="practice-tools">
+      <SectionHeader title="Tools" />
+      <RowGroup>
+        <ListRow
+          leading={<RowIcon icon={Calculator1Outlined} />}
+          title="Estimated Admission Score"
+          subtitle="An estimate based on historical cutoffs"
+          onPress={() => go('/estimator')}
+        />
+        <ListRow leading={<RowIcon icon={Notebook1Outlined} />} title="Notes" subtitle="Your study notes and reminders" onPress={() => go('/notes')} />
+        <ListRow
+          leading={<RowIcon icon={ClipboardOutlined} />}
+          title="Requirements"
+          subtitle="Documents for your focus exams and scholarships"
+          onPress={() => go('/requirements')}
+        />
+      </RowGroup>
+    </View>
   )
 
-  const deckCardCount = useCallback(
-    (deck: SavedDeck) => deck.topicIds.reduce((sum, tid) => sum + (cardCountByTopic[tid] ?? 0), 0),
-    [cardCountByTopic]
+  const searchButton = (
+    <Pressable
+      onPress={() => setSearchOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Search practice"
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <Lineicons icon={Search1Outlined} size={22} color={t.textSecondary} />
+    </Pressable>
   )
 
-  // Task H: sum a deck's per-topic due counts — same reduce shape as deckCardCount.
-  const deckDueCount = useCallback(
-    (deck: SavedDeck) => deck.topicIds.reduce((sum, tid) => sum + (dueCounts.byTopic[tid] ?? 0), 0),
-    [dueCounts]
+  const primary = (
+    <View style={{ gap: spacing.xxl }}>
+      <NextStepCard copy={nextCopy} onAction={go} />
+      {mocksSection}
+      {subjectsSection}
+    </View>
   )
-
-  // Per-subject readiness (lowest first) for the Subject readiness grid —
-  // SESSION-based, consistent with Home + Subject Details.
-  const subjectReadiness = useMemo(
-    () => subjectsToImprove(topicRows, subjects, sessionReadiness.perTopicBest, sessionReadiness.subjectBest),
-    [topicRows, subjects, sessionReadiness],
+  const secondary = (
+    <View style={{ gap: spacing.xxl }}>
+      {decksSection}
+      {toolsSection}
+    </View>
   )
-
-  // Readiness tone → token mapping for the progress bars (mirrors Home).
-  // fill = subtle surface tint (text stays ≥4.5:1 over it); pct = solid level color.
-  // 'none' (not practiced): no fill, em-dash in tertiary text.
-  const toneTokens = useCallback((tone: ReadinessTone): { fill: string | null; pct: string } => {
-    switch (tone) {
-      case 'strong': return { fill: t.successSurface, pct: t.success }
-      case 'fair':   return { fill: t.warningSurface, pct: t.warning }
-      case 'weak':   return { fill: t.dangerSurface,  pct: t.danger }
-      default:       return { fill: null,             pct: t.textTertiary }
-    }
-  }, [t])
-
-  // AI feedback: weakest subjects from overall topicMastery (bottom by accuracy)
-  const weakSubjectsFeedback = useMemo(() => {
-    const { topicMastery } = overallAnalytics
-    if (topicMastery.length === 0) return null
-    return [...topicMastery]
-      .sort((a, b) => a.accuracy - b.accuracy)
-      .slice(0, 3)
-  }, [overallAnalytics])
-
-  // Build collapsed AI feedback summary label
-  const aiFeedbackSummary = useMemo(() => {
-    if (!weakSubjectsFeedback || weakSubjectsFeedback.length === 0) return 'No data yet'
-    return `Weak: ${weakSubjectsFeedback.map(i => i.label).join(', ')}`
-  }, [weakSubjectsFeedback])
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      {/* (1) Header — the old "Exams" tab is Practice (redesign M1) */}
-      <View style={[s.header, { paddingHorizontal: pagePadding(bpRaw) }]}>
-        {/* Same centered column as the ScreenScroll body below, so they align. */}
-        <View style={webContentStyle(bpRaw)}>
+    <>
+      <Screen
+        tabBarInset
+        width={bp === 'expanded' ? 'wide' : 'reading'}
+        refreshControl={refreshCtl}
+        header={(
           <TabHeader
             title="Practice"
-            actions={<WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />}
+            subtitle="Mocks, drills and review"
+            actions={(
+              <>
+                {searchButton}
+                <WebRefreshButton onRefresh={() => reloadAll(true)} refreshing={refreshing} />
+              </>
+            )}
           />
-        </View>
-      </View>
-
-      <ScreenScroll
-        tabBarInset
-        contentContainerStyle={s.list}
-        refreshControl={refreshCtl}
+        )}
       >
-        {/* (1.5) Review due cards — Task H: prominent top placement, only when cards are due */}
-        {dueCounts.total > 0 ? (
-          <Pressable
-            style={({ pressed }) => [s.dueRow, pressed && { opacity: 0.85 }]}
-            onPress={() => router.push('/practice/due')}
-            accessibilityRole="button"
-            accessibilityLabel={`Review ${dueCounts.total} due card${dueCounts.total !== 1 ? 's' : ''}`}
-          >
-            <View style={s.dueIconWrap}>
-              <Text style={s.dueIcon} maxFontSizeMultiplier={1.4}>🔁</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.dueTitle} maxFontSizeMultiplier={1.4}>Review due cards</Text>
-              <Text style={s.dueSub} maxFontSizeMultiplier={1.4}>
-                {dueCounts.total} card{dueCounts.total !== 1 ? 's' : ''} ready for spaced review
-              </Text>
-            </View>
-            <Text style={s.dueChevron} maxFontSizeMultiplier={1.4}>›</Text>
-          </Pressable>
-        ) : null}
-
-        {/* (2) Search — full-width bar opening the search modal (top, under header) */}
-        <View>
-          <Pressable
-            style={({ pressed }) => [s.searchBar, pressed && { opacity: 0.8 }]}
-            onPress={() => setSearchVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Search subjects, topics, or mock exams"
-          >
-            <Text maxFontSizeMultiplier={1.4}>🔍</Text>
-            <Text style={s.searchBarTxt} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-              Search subjects, topics, or mock exams
-            </Text>
-          </Pressable>
+        <View style={{ paddingTop: spacing.sm }}>
+          <TwoColumn primary={primary} secondary={secondary} />
         </View>
+      </Screen>
 
-        {/* (3) AI Study Feedback — COLLAPSED to 2-line summary row, expands inline */}
-        <View>
-          {aiFeedbackExpanded ? (
-            <Card elevated style={s.aiFeedbackCard}>
-              <View style={s.aiFeedbackHeader}>
-                <Text style={s.aiFeedbackIcon}>📊</Text>
-                <Text style={s.aiFeedbackTitle}>AI Study Feedback</Text>
-                <Pressable
-                  onPress={() => setAiFeedbackExpanded(false)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Collapse AI Study Feedback"
-                  style={{ marginLeft: 'auto' }}
-                >
-                  <Text style={{ fontSize: typography.md, color: t.textTertiary }}>‹</Text>
-                </Pressable>
-              </View>
-              {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
-                <>
-                  <Text style={s.aiFeedbackPrompt}>Focus on:</Text>
-                  {weakSubjectsFeedback.map((item) => (
-                    <Text key={item.label} style={s.aiFeedbackItem}>
-                      · {item.label} ({item.accuracy}%)
-                    </Text>
-                  ))}
-                </>
-              ) : (
-                <Text style={s.aiFeedbackEmpty}>
-                  Take a few quizzes to unlock your personalized study tips.
-                </Text>
-              )}
-            </Card>
-          ) : (
-            <Pressable
-              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
-              onPress={() => setAiFeedbackExpanded(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Expand AI Study Feedback"
-              accessibilityState={{ expanded: false }}
-              testID="ai-feedback-collapsed"
-            >
-              <Text style={s.collapsedIcon}>📊</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.collapsedLabel}>AI Study Feedback</Text>
-                <Text style={s.collapsedSub} numberOfLines={1}>{aiFeedbackSummary}</Text>
-              </View>
-              <Text style={s.collapsedChevron}>›</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* (4) Subject readiness — per-subject readiness grid (lowest first) */}
-        <View>
-          <SectionHeader
-            title="Subject readiness"
-            subtitle="Tap a subject to see your topic readiness"
-          />
-          {subjectReadiness.length > 0 ? (
-            <View style={rc.grid}>
-              {subjectReadiness.map(subject => {
-                const tone = readinessTone(subject.pct)
-                const { fill, pct: pctColor } = toneTokens(tone)
-                const fillPct = Math.max(0, Math.min(100, subject.pct))
-                return (
-                  <View key={subject.id} style={rc.cardWrap}>
-                    <Pressable
-                      style={({ pressed }) => [rd.card, pressed && { opacity: 0.8 }]}
-                      onPress={() => router.push(`/subjects/${subject.id}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={subject.name}
-                    >
-                      {fill != null ? (
-                        <View style={[rd.fill, { width: `${fillPct}%`, backgroundColor: fill }]} />
-                      ) : null}
-                      <View style={rd.content}>
-                        <View style={rd.topRow}>
-                          <View style={[rd.dot, { backgroundColor: subjectColor(subject.id).accent }]} />
-                          <Text style={rd.name} numberOfLines={2} maxFontSizeMultiplier={1.4}>{subject.name}</Text>
-                        </View>
-                        <Text style={[rd.pct, { color: pctColor }]} maxFontSizeMultiplier={1.4}>{subject.pct}%</Text>
-                      </View>
-                    </Pressable>
-                  </View>
-                )
-              })}
-            </View>
-          ) : showLoading ? (
-            <LoadingState label="Loading…" />
-          ) : (
-            <Text style={s.empty} maxFontSizeMultiplier={1.4}>
-              Practice to see your subject readiness here
-            </Text>
-          )}
-        </View>
-
-        {/* (5) My Focus — per-target mock-exam readiness grid */}
-        <View>
-          <SectionHeader title="My Focus" subtitle="Your mock-exam readiness per target" />
-          {focusListingsList.length > 0 ? (
-            <View style={rc.grid}>
-              {focusListingsList.map(row => {
-                const best = mockBestBySlug.get(row.slug) ?? null
-                const tone = readinessTone(best)
-                const { fill, pct: pctColor } = toneTokens(tone)
-                const fillPct = best != null ? Math.max(0, Math.min(100, best)) : 0
-                const pctLabel = best != null ? `${best}%` : '—'
-                return (
-                  <View key={row.slug} style={rc.cardWrap}>
-                    <Pressable
-                      style={({ pressed }) => [rd.card, pressed && { opacity: 0.8 }]}
-                      onPress={() => router.push(`/practice/start/${row.slug}`)}
-                      accessibilityRole="button"
-                      accessibilityLabel={row.title}
-                    >
-                      {fill != null ? (
-                        <View style={[rd.fill, { width: `${fillPct}%`, backgroundColor: fill }]} />
-                      ) : null}
-                      <View style={rd.content}>
-                        <View style={rd.topRow}>
-                          <Text style={rd.badge} maxFontSizeMultiplier={1.4}>
-                            #{row.priority} · {row.type === 'exam' ? 'Exam' : 'Scholar'}
-                          </Text>
-                        </View>
-                        <Text style={rd.name} numberOfLines={2} maxFontSizeMultiplier={1.4}>{row.title}</Text>
-                        <Text style={[rd.pct, { color: pctColor }]} maxFontSizeMultiplier={1.4}>{pctLabel}</Text>
-                      </View>
-                    </Pressable>
-                  </View>
-                )
-              })}
-              {/* Add-more-targets ghost card — additive action distinct from focus cards */}
-              <View style={rc.cardWrap}>
-                <Pressable
-                  style={({ pressed }) => [rd.addCard, pressed && { opacity: 0.7 }]}
-                  onPress={() => router.push('/(tabs)/explore')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add exam or scholarship"
-                >
-                  <Text style={rd.addTxt} maxFontSizeMultiplier={1.4}>＋ Add exam or scholarship</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <InfoBanner
-              icon={<Text style={{ fontSize: typography.base }}>🎯</Text>}
-              message="Add an exam or scholarship from Explore"
-              actionLabel="Explore"
-              onAction={() => router.push('/(tabs)/explore')}
-              tone="neutral"
-            />
-          )}
-        </View>
-
-        {/* (6) Recommended 2-col grid — "what next" */}
-        {activeRecommended.length > 0 ? (
-          <View>
-            <View style={s.secRow}>
-              <Text style={s.secTitle}>Recommended</Text>
-              <Text style={s.secSub}>{activeListing?.title ?? ''}</Text>
-            </View>
-            <View style={rc.grid}>
-              {activeRecommended.slice(0, 4).map(row => (
-                <View key={row.topic.id} style={rc.cardWrap}>
-                  <RecommendedCard row={row} rc={rc} />
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* (6.5) Estimated Admission Score — compact entry, next to the UPCAT mock tools */}
-        <AdmissionEstimateCard />
-
-        {/* (7) Mock Exams section */}
-        {blueprints.length > 0 ? (
-          <View>
-            <SectionHeader
-              title="Mock Exams"
-              actionLabel="See all"
-              onAction={() => router.push('/practice/exam')}
-            />
-            <View style={rc.grid}>
-              {orderedBlueprints.slice(0, 4).map(blueprint => (
-                <View key={blueprint.slug} style={rc.cardWrap}>
-                  <Pressable
-                    style={({ pressed }) => [rc.mockCard, pressed && { opacity: 0.8 }]}
-                    onPress={() => router.push(`/practice/exam/${blueprint.slug}`)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={rc.mockCardTitle}>
-                      {blueprint.acronym}
-                    </Text>
-                    <Text numberOfLines={1} style={rc.mockCardName}>
-                      {blueprint.name}
-                    </Text>
-                    <Text maxFontSizeMultiplier={1.4} style={rc.mockCardMeta}>
-                      {blueprint.totalItems} items · {Math.round(blueprint.totalTimeMinutes / 60 * 10) / 10}h
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* (8) Saved Decks — ONLY when non-empty; SectionHeader with + always shown for create access */}
-        <View>
-          <View style={s.secRow}>
-            <Text style={s.secTitle}>Saved Decks</Text>
-            <Pressable
-              style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => setModalVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Create deck"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Text style={s.addBtnTxt}>＋</Text>
-            </Pressable>
-          </View>
-          {decks.length > 0 ? (
-            <View>
-              {decks.map(deck => (
-                <DeckCard
-                  key={deck.id}
-                  deck={deck}
-                  totalCards={deckCardCount(deck)}
-                  dueCount={deckDueCount(deck)}
-                  onDelete={() => deleteDeck(deck.id)}
-                />
-              ))}
-            </View>
-          ) : null}
-        </View>
-
-        {/* (9) Study tools — collapsed "Study tools" row expanding inline to links */}
-        <View>
-          {studyToolsExpanded ? (
-            <View>
-              <View style={[s.secRow, { marginBottom: spacing.sm }]}>
-                <Text style={s.secTitle}>Study Tools</Text>
-                <Pressable
-                  onPress={() => setStudyToolsExpanded(false)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Collapse study tools"
-                >
-                  <Text style={{ fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>Show less ‹</Text>
-                </Pressable>
-              </View>
-              <View style={{ gap: spacing.sm }}>
-                <ListCard
-                  icon={<Text style={{ fontSize: typography.base }}>✅</Text>}
-                  iconBg={t.successSurface}
-                  title="Requirements"
-                  subtitle="Track requirements for your focus exams & scholarships"
-                  onPress={() => router.push('/requirements')}
-                />
-                <ListCard
-                  icon={<Text style={{ fontSize: typography.base }}>📝</Text>}
-                  iconBg={t.accentSurface}
-                  title="Notes"
-                  subtitle="Your study notes & reminders"
-                  onPress={() => router.push('/notes')}
-                />
-              </View>
-            </View>
-          ) : (
-            <Pressable
-              style={({ pressed }) => [s.collapsedRow, pressed && { opacity: 0.8 }]}
-              onPress={() => setStudyToolsExpanded(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Expand Study Tools"
-              accessibilityState={{ expanded: false }}
-              testID="study-tools-collapsed"
-            >
-              <Text style={s.collapsedIcon}>🛠️</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.collapsedLabel}>Study Tools</Text>
-                <Text style={s.collapsedSub}>Requirements · Notes</Text>
-              </View>
-              <Text style={s.collapsedChevron}>›</Text>
-            </Pressable>
-          )}
-        </View>
-
-      </ScreenScroll>
-
-      <CreateDeckModal
-        visible={modalVisible}
-        subjects={subjects}
-        topicRows={topicRows}
-        onClose={() => setModalVisible(false)}
-        onCreate={createDeck}
-        m={m}
-      />
-
-      <SearchModal
-        visible={searchVisible}
-        subjects={subjects}
-        topicRows={topicRows}
-        blueprints={blueprints}
-        onClose={() => setSearchVisible(false)}
-        m={m}
-      />
-    </SafeAreaView>
+      <PracticeSearchSheet visible={searchOpen} entries={searchEntries} onClose={() => setSearchOpen(false)} onOpen={go} />
+      <NewDeckSheet visible={deckOpen} subjects={subjects} topicRows={topicRows} onClose={() => setDeckOpen(false)} onCreate={createDeck} />
+    </>
   )
 }
+

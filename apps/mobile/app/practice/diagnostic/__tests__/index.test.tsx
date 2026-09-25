@@ -178,7 +178,7 @@ describe('DiagnosticExam', () => {
     warnSpy.mockRestore()
   })
 
-  it('selecting an option exposes accessibilityState={{selected:true}} on that option only', async () => {
+  it('selecting an option marks that option, and only that one, as the checked radio', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [
       { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
@@ -188,10 +188,8 @@ describe('DiagnosticExam', () => {
 
     fireEvent.press(screen.getByText('b'))
 
-    const optionButtons = screen.getAllByRole('button').filter(b => b.props.accessibilityState?.selected !== undefined)
-    expect(optionButtons).toHaveLength(4)
-    const selected = optionButtons.filter(b => b.props.accessibilityState?.selected === true)
-    expect(selected).toHaveLength(1)
+    expect(screen.getAllByRole('radio')).toHaveLength(4)
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
   })
 
   it('"Back to Home" routes to the tabs root', async () => {
@@ -334,7 +332,7 @@ describe('DiagnosticExam', () => {
 
     // idx 2 pointed at S3; after compaction ([S1, S3]) S3 sits at index 1.
     await waitFor(() => expect(screen.getByText('Sci Q3')).toBeTruthy())
-    expect(screen.getByRole('button', { name: 'c' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.getByRole('radio', { name: 'c', checked: true })).toBeTruthy()
   })
 
   // Review finding #2 (HIGH): submit() stays in phase 'exam' through its
@@ -393,4 +391,22 @@ describe('DiagnosticExam', () => {
     await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
     expect(mockClearRun).toHaveBeenCalledWith('diagnostic:Science')
   })
+
+  // Redesign M2: the diagnostic's overall percent is neutral (same ink at any
+  // score) — it used to turn green/red by readiness tone, a pass/fail cue.
+  it.each([['a', '100%'], ['b', '0%']])('shows the overall percent in neutral ink (answer %s → %s)', async (pick, pct) => {
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+    fireEvent.press(screen.getByText(pick))
+    await reviewAndConfirmSubmit(alertSpy)
+    await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+    const node = screen.getAllByText(pct)[0]! // the overall figure renders first
+    const flat = Object.assign({}, ...[node.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.color).toBe('#ffffff') // theme mock textPrimary — never success/danger
+  })
 })
+

@@ -1,66 +1,93 @@
-import { useMemo } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
+import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
-const LETTERS = ['A', 'B', 'C', 'D'] as const
+const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
 
 export interface OptionListProps {
   options: string[]
   /** Index of the currently-selected option, or undefined if none picked yet. */
   selectedIndex: number | undefined
   onSelect: (index: number) => void
+  /** Ignore presses (e.g. while an exam is being submitted). */
+  disabled?: boolean
 }
 
 /**
- * Shared option-chip list for all four practice-exam engines. Deliberately
- * subordinate to QuestionCard: compact letter chips, tighter padding, smaller
- * text — the question stays the dominant element on screen.
+ * Answer choices for every practice engine. Each choice is a full-width row at
+ * least 48 tall (Android's target). The selected choice is told apart three
+ * ways, never by colour alone: a thicker outline, a filled letter badge, and a
+ * check mark at the end — plus radio semantics (`aria-checked`) for assistive
+ * tech. The aria-* prop, not the nested accessibilityState, because
+ * react-native-web 0.21 drops accessibilityState before it reaches the DOM.
+ *
+ * A fixed 2pt border on every row (tinted only when selected) keeps the rows
+ * from shifting by a pixel when the selection moves.
  */
-export function OptionList({ options, selectedIndex, onSelect }: OptionListProps) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+export function OptionList({ options, selectedIndex, onSelect, disabled = false }: OptionListProps) {
+  const { theme: t } = useTheme()
 
   return (
-    <View style={s.opts}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Answer choices" style={{ gap: spacing.sm }}>
       {options.map((o, oi) => {
         const selected = selectedIndex === oi
         return (
           <Pressable
             key={oi}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            style={[s.opt, selected && s.optOn]}
-            onPress={() => onSelect(oi)}
+            accessibilityRole="radio"
+            aria-checked={selected}
+            onPress={() => { if (!disabled) onSelect(oi) }}
+            style={(state) => {
+              const { pressed, focused } = state as WebPressableState
+              return [
+                {
+                  minHeight: 56,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.md,
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  borderWidth: 2,
+                  borderColor: selected ? t.accentText : t.border,
+                  backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : t.surface,
+                },
+                focusRing(t.focusRing, focused),
+              ]
+            }}
           >
-            <View style={[s.optLetter, selected && s.optLetterOn]}>
+            <View
+              style={{
+                width: 32, height: 32, borderRadius: radius.pill, flexShrink: 0,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: selected ? t.accent : t.surface2,
+              }}
+            >
               <Text
-                style={[s.optLetterTxt, selected && { color: t.textInverse }]}
+                style={[textStyle('label', selected ? t.textInverse : t.textSecondary), { fontFamily: fonts.heading }]}
                 maxFontSizeMultiplier={1.3}
               >
-                {LETTERS[oi]}
+                {LETTERS[oi] ?? String(oi + 1)}
               </Text>
             </View>
-            <Text style={s.optTxt} maxFontSizeMultiplier={1.5}>{o}</Text>
+            <Text
+              style={[textStyle('body', t.textPrimary), { flex: 1 }, selected ? { fontFamily: fonts.bodyMedium } : null]}
+              maxFontSizeMultiplier={1.6}
+            >
+              {o}
+            </Text>
+            {selected ? (
+              <View testID="option-selected-mark" {...decorative} style={{ flexShrink: 0 }}>
+                <Lineicons icon={CheckCircle1Outlined} size={22} color={t.accentText} />
+              </View>
+            ) : null}
           </Pressable>
         )
       })}
     </View>
   )
-}
-
-function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<typeof useTheme>['typo']) {
-  return StyleSheet.create({
-    opts: { gap: 8, paddingHorizontal: 14 },
-    opt: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: t.surface, borderWidth: 1.5,
-      borderColor: t.border, borderRadius: 16, borderCurve: 'continuous', paddingVertical: 9, paddingHorizontal: 13,
-    },
-    optOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    optLetter: { width: 24, height: 24, borderRadius: 8, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' },
-    optLetterOn: { backgroundColor: t.accent },
-    optLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
-    // Subordinate to the question text: smaller than typo.md, generous (≥1.35×) line-height.
-    optTxt: { flex: 1, fontSize: 15, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: 21 },
-  })
 }

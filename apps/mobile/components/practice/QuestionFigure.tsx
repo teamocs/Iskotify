@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, textStyle } from '../../theme/tokens'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ExpandArrow1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
+import { decorative } from '../ui/a11y'
 
 export interface QuestionFigureProps {
   /** Public Supabase Storage URL. Absent/null → component renders nothing. */
@@ -34,8 +38,9 @@ export function QuestionFigure(props: QuestionFigureProps) {
 }
 
 function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFigureProps & { imageUrl: string }) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  const { theme: t } = useTheme()
+  const reduced = useReducedMotion()
+  const s = useMemo(() => makeStyles(t), [t])
   const [zoomOpen, setZoomOpen] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -58,6 +63,7 @@ function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFig
       <Pressable
         accessibilityRole="image"
         accessibilityLabel={label}
+        accessibilityHint="Opens the figure full screen"
         onPress={() => setZoomOpen(true)}
         style={s.wrap}
       >
@@ -69,12 +75,15 @@ function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFig
           cachePolicy="disk"
           onError={() => setFailed(true)}
         />
+        <View {...decorative} style={s.zoomBadge}>
+          <Lineicons icon={ExpandArrow1Outlined} size={16} color={t.textInverse} />
+        </View>
       </Pressable>
 
       <Modal
         visible={zoomOpen}
         transparent
-        animationType="fade"
+        animationType={reduced ? 'none' : 'fade'}
         statusBarTranslucent
         onRequestClose={() => setZoomOpen(false)}
       >
@@ -86,7 +95,7 @@ function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFig
             style={s.zoomClose}
             onPress={() => setZoomOpen(false)}
           >
-            <Text style={s.zoomCloseTxt}>✕</Text>
+            <Lineicons icon={XmarkOutlined} size={20} color={t.textInverse} />
           </Pressable>
           <Image
             accessible
@@ -102,19 +111,18 @@ function FigureView({ imageUrl, imageAlt, imageWidth, imageHeight }: QuestionFig
   )
 }
 
-function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<typeof useTheme>['typo']) {
+function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     wrap: {
-      marginHorizontal: 14,
       marginBottom: spacing.md,
       borderRadius: radius.md,
       borderCurve: 'continuous',
       overflow: 'hidden',
+      alignSelf: 'stretch',
       backgroundColor: t.surface2,
     },
     image: { width: '100%' },
     placeholder: {
-      marginHorizontal: 14,
       marginBottom: spacing.md,
       borderRadius: radius.md,
       borderCurve: 'continuous',
@@ -126,17 +134,11 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       padding: spacing.md,
       gap: 4,
     },
-    placeholderCaption: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
-      textAlign: 'center',
-    },
-    placeholderNote: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
-      textAlign: 'center',
+    placeholderCaption: { ...textStyle('bodySm', t.textSecondary), textAlign: 'center' },
+    placeholderNote: { ...textStyle('caption', t.textTertiary), textAlign: 'center' },
+    zoomBadge: {
+      position: 'absolute', right: spacing.sm, bottom: spacing.sm, width: 32, height: 32,
+      borderRadius: radius.pill, backgroundColor: t.scrim, alignItems: 'center', justifyContent: 'center',
     },
     zoomOverlay: {
       flex: 1,
@@ -150,13 +152,12 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       right: 20,
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: radius.pill,
       backgroundColor: t.scrimControl,
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1,
     },
-    zoomCloseTxt: { color: t.textInverse, fontSize: 20, fontWeight: '600' },
     zoomImage: { width: '100%', height: '80%' },
   })
 }

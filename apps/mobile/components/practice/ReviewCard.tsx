@@ -2,6 +2,9 @@ import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Bulb2Outlined } from '@lineiconshq/free-icons'
+import { decorative } from '../ui/a11y'
 import { spacing, radius } from '../../theme/tokens'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
@@ -110,8 +113,11 @@ export function ReviewCard({
       ) : null}
 
       {tip ? (
-        <View style={s.tipChip}>
-          <Text style={s.tipTxt} maxFontSizeMultiplier={1.5}>💡 {tip}</Text>
+        <View style={s.tipChip} accessible accessibilityLabel={`Strategy tip: ${tip}`}>
+          <View {...decorative} style={{ paddingTop: 2 }}>
+            <Lineicons icon={Bulb2Outlined} size={16} color={t.warningStrong} />
+          </View>
+          <Text style={[s.tipTxt, { flex: 1 }]} maxFontSizeMultiplier={1.5}>{tip}</Text>
         </View>
       ) : null}
     </View>
@@ -168,9 +174,9 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     wrongLetter: { fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
     tipChip: {
       flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: t.warningSurface, borderWidth: 1,
-      borderColor: t.warning, borderRadius: radius.pill, paddingHorizontal: spacing.md,
-      paddingVertical: 6, marginTop: spacing.sm,
+      borderColor: t.warningBorder, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm, marginTop: spacing.sm, gap: spacing.sm,
     },
-    tipTxt: { fontSize: typo.sm, color: t.warning, fontWeight: '600', fontFamily: 'Lexend_600SemiBold', lineHeight: Math.round(typo.sm * 1.4) },
+    tipTxt: { fontSize: typo.sm, color: t.warningStrong, fontWeight: '600', fontFamily: 'Lexend_600SemiBold', lineHeight: Math.round(typo.sm * 1.4) },
   })
 }

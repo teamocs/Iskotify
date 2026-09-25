@@ -10,6 +10,9 @@ import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../../../utils/focusSl
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, Pencil1Outlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../../components/ui/a11y'
 import { spacing, radius } from '../../../theme/tokens'
 
 // ── Screen: the exam "chooser" ──────────────────────────────────────────────────
@@ -36,10 +39,8 @@ export default function PracticeStartScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
     backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     content: { alignItems: 'center', paddingHorizontal: spacing.xxxl, paddingTop: 48, paddingBottom: spacing.xxxl },
-    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
-    iconTxt: { fontSize: 36 },
+    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
     title: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
     sub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xxl, textAlign: 'center' },
     choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, width: '100%', marginBottom: spacing.md },
@@ -77,12 +78,12 @@ export default function PracticeStartScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Text style={s.backArrow}>‹</Text>
+          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={[s.content, webWidth]} showsVerticalScrollIndicator={false}>
-        <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
+        <View style={s.icon} {...decorative}><Lineicons icon={Pencil1Outlined} size={32} color={t.accentText} /></View>
         <Text style={s.title} maxFontSizeMultiplier={1.4}>{listingTitle}</Text>
         <Text style={s.sub} maxFontSizeMultiplier={1.4}>Choose how you want to prepare</Text>
 

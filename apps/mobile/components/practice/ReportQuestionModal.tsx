@@ -107,7 +107,7 @@ function makeStyles(
   typo: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['typo'],
 ) {
   return StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    overlay: { flex: 1, backgroundColor: t.backdrop, justifyContent: 'flex-end' },
     sheet: {
       backgroundColor: t.bg,
       borderTopLeftRadius: radius.xl,
@@ -174,7 +174,7 @@ function makeStyles(
       minHeight: 44,
       borderRadius: radius.md,
       borderCurve: 'continuous',
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       alignItems: 'center',
       justifyContent: 'center',
     },

@@ -13,6 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckOutlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../components/ui/a11y'
 import { getSettings, updateSettings } from '../../services/settings'
 import { validateGwa, gwaFailingWarning } from '../../utils/estimatorInputs'
 
@@ -418,7 +421,7 @@ export default function EstimatorGradesScreen() {
                   {campus}
                 </Text>
                 {active ? (
-                  <Text style={{ fontSize: 14, color: t.accentText }}>✓</Text>
+                  <View {...decorative}><Lineicons icon={CheckOutlined} size={16} color={t.accentText} /></View>
                 ) : null}
               </TouchableOpacity>
             )

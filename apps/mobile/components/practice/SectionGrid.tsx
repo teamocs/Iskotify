@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 export interface SectionGridSection {
   name: string
@@ -13,67 +15,72 @@ export interface SectionGridSection {
 interface Props {
   sections: SectionGridSection[]
   onJump: (start: number) => void
+  /** One section per row (side panel) instead of the 2-/3-up grid. */
+  stacked?: boolean
 }
 
 /**
- * Fixed section-navigation grid for the mock-exam runner. Replaces the old
- * horizontally scrolling chip row: every section is always visible as a compact
- * card sized proportionally to the screen (2-up for ≤4 sections, 3-up for 5+),
- * so the block never shifts layout between questions.
+ * Section navigation for the mock-exam runner. Every section is always visible
+ * (no sideways scroll), so the block never shifts between questions. The
+ * active section is marked by a check and heavier label as well as its tint.
+ * Sections locked by a section timer are disabled and announced as such.
  */
-export function SectionGrid({ sections, onJump }: Props) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
+export function SectionGrid({ sections, onJump, stacked = false }: Props) {
+  const { theme: t } = useTheme()
   if (sections.length <= 1) return null
 
-  const basis = sections.length <= 4 ? '48%' : '31%'
+  const basis = stacked ? '100%' : sections.length <= 4 ? '48%' : '31%'
 
   return (
-    <View style={s.grid}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
       {sections.map(sec => (
         <Pressable
           key={sec.name}
-          style={[s.card, { flexBasis: basis }, sec.active && s.cardActive, sec.disabled && s.cardDisabled]}
           disabled={sec.disabled}
           accessibilityRole="button"
           accessibilityState={{ selected: sec.active, disabled: sec.disabled }}
           onPress={() => onJump(sec.start)}
+          style={(state) => {
+            const { pressed, focused } = state as WebPressableState
+            return [
+              {
+                flexBasis: basis,
+                flexGrow: 1,
+                minHeight: 44,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: stacked ? 'flex-start' : 'center',
+                gap: spacing.xs,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                borderRadius: radius.sm,
+                borderCurve: 'continuous',
+                borderWidth: 1,
+                borderColor: sec.active ? t.accentBorder : t.border,
+                backgroundColor: sec.active ? t.accentSurface : pressed ? t.surface2 : t.surface,
+                opacity: sec.disabled ? 0.45 : 1,
+              },
+              focusRing(t.focusRing, focused),
+            ]
+          }}
         >
-          <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={[s.cardTxt, sec.active && s.cardTxtActive]}>
+          {sec.active ? (
+            <View {...decorative}>
+              <Lineicons icon={CheckOutlined} size={14} color={t.accentText} />
+            </View>
+          ) : null}
+          <Text
+            numberOfLines={2}
+            maxFontSizeMultiplier={1.5}
+            style={[
+              textStyle('label', sec.active ? t.accentText : t.textSecondary),
+              { fontFamily: sec.active ? fonts.bodySemi : fonts.bodyMedium, flexShrink: 1 },
+            ]}
+          >
             {sec.name}
           </Text>
         </Pressable>
       ))}
     </View>
   )
-}
-
-function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<typeof useTheme>['typo']) {
-  return StyleSheet.create({
-    grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.sm,
-      paddingHorizontal: 14,
-      paddingVertical: spacing.xs,
-    },
-    card: {
-      flexGrow: 1,
-      minHeight: 44,
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      paddingVertical: 10,
-      paddingHorizontal: spacing.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cardActive: { backgroundColor: 'rgba(128,0,0,0.82)', borderColor: 'transparent' },
-    cardDisabled: { opacity: 0.4 },
-    cardTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    cardTxtActive: { color: t.textInverse },
-  })
 }

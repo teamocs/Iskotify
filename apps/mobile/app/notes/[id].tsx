@@ -16,8 +16,10 @@ import {
   CheckOutlined,
   XmarkOutlined,
   Alarm1Outlined,
+  PlusOutlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { noteInk } from '../../utils/noteInk'
 import { useDb } from '../../hooks/useDb'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { NOTE_COLORS, parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
@@ -187,8 +189,9 @@ export default function NoteEditorScreen() {
   }, [id, db, title])
 
   const bgColor = color ? NOTE_COLORS[color] : t.bg
-  const textCol = color ? '#2d0a0a' : t.textPrimary
-  const subCol = color ? 'rgba(45,10,10,0.55)' : t.textSecondary
+  const ink = noteInk(t, !!color)
+  const textCol = ink.text
+  const subCol = ink.sub
   const now = Date.now()
   const hasActiveReminder = reminderAt != null && reminderAt > now
 
@@ -198,23 +201,23 @@ export default function NoteEditorScreen() {
     backBtn: { padding: 8 },
     backTxt: { fontSize: typo.lg, color: textCol },
     titleInput: { flex: 1, fontSize: typo.lg, fontWeight: '700', color: textCol, fontFamily: 'Outfit_700Bold' },
-    reminderBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: 6, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: hasActiveReminder ? 'rgba(128,0,0,0.08)' : 'transparent', borderRadius: 10, borderWidth: hasActiveReminder ? 1 : 0, borderColor: 'rgba(128,0,0,0.2)', alignSelf: 'flex-start' },
+    reminderBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: 6, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: hasActiveReminder ? t.accentSurface : 'transparent', borderRadius: 10, borderWidth: hasActiveReminder ? 1 : 0, borderColor: t.accentBorder, alignSelf: 'flex-start' },
     reminderBadgeTxt: { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_500Medium' },
     contentInput: { flex: 1, fontSize: typo.sm, color: textCol, fontFamily: 'Lexend_400Regular', lineHeight: 20, textAlignVertical: 'top', paddingHorizontal: 16, paddingBottom: 16, minHeight: 200 },
     checkRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: 10 },
     checkBox: { width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: textCol, alignItems: 'center', justifyContent: 'center' },
-    checkMark: { fontSize: 13, color: textCol },
+    checkMark: { fontSize: typo.sm, color: textCol },
     checkInput: { flex: 1, fontSize: typo.sm, color: textCol, fontFamily: 'Lexend_400Regular' },
     checkedText: { textDecorationLine: 'line-through', color: subCol },
     addItemBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
     addItemTxt: { fontSize: typo.sm, color: subCol, fontFamily: 'Lexend_400Regular' },
-    toolbar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: color ? 'rgba(0,0,0,0.1)' : t.border, paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
+    toolbar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: ink.hairline, paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
     colorRow: { flexDirection: 'row', gap: 6, flex: 1 },
     colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2 },
     toolBtn: { padding: 10, borderRadius: 10 },
-    toolBtnActive: { backgroundColor: 'rgba(128,0,0,0.1)' },
+    toolBtnActive: { backgroundColor: t.accentSurface },
     // Sheet shared styles
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+    backdrop: { flex: 1, backgroundColor: t.backdrop },
     sheet: { backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Math.max(32, insets.bottom + 16), paddingTop: 12 },
     sheetHandle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 16 },
@@ -231,9 +234,9 @@ export default function NoteEditorScreen() {
     reminderOptIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
     reminderOptLabel: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
     reminderOptSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-    clearReminderBtn: { marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 14, backgroundColor: 'rgba(248,113,113,0.08)', borderWidth: 1, borderColor: 'rgba(248,113,113,0.3)', alignItems: 'center' },
-    clearReminderTxt: { fontSize: typo.sm, color: t.danger, fontFamily: 'Lexend_500Medium' },
-  }), [t, typo, bgColor, textCol, subCol, color, insets, hasActiveReminder])
+    clearReminderBtn: { marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 14, backgroundColor: t.dangerSurface, borderWidth: 1, borderColor: t.dangerBorder, alignItems: 'center' },
+    clearReminderTxt: { fontSize: typo.sm, color: t.dangerStrong, fontFamily: 'Lexend_500Medium' },
+  }), [t, typo, bgColor, textCol, subCol, ink.hairline, insets, hasActiveReminder])
 
   const unchecked = checkItems.filter(ci => !ci.isChecked)
   const checked = checkItems.filter(ci => ci.isChecked)
@@ -300,7 +303,7 @@ export default function NoteEditorScreen() {
                 </View>
               ))}
               <TouchableOpacity style={s.addItemBtn} onPress={addCheckItem} accessibilityRole="button" accessibilityLabel="Add item">
-                <Text style={{ color: subCol, fontSize: 20 }}>+</Text>
+                <Lineicons icon={PlusOutlined} size={18} color={subCol} />
                 <Text style={s.addItemTxt}>Add item</Text>
               </TouchableOpacity>
               {checked.length > 0 && (
@@ -335,7 +338,7 @@ export default function NoteEditorScreen() {
                   style={[
                     s.colorDot,
                     { backgroundColor: key ? NOTE_COLORS[key] : t.surface },
-                    { borderColor: color === key ? t.accent : (key ? 'rgba(0,0,0,0.2)' : t.border) },
+                    { borderColor: color === key ? t.accent : (key ? noteInk(t, true).hairline : t.border) },
                   ]}
                   onPress={() => setColor(key)}
                   accessibilityRole="radio"
@@ -388,7 +391,7 @@ export default function NoteEditorScreen() {
                 <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)} accessibilityRole="checkbox" accessibilityLabel={label.name} accessibilityState={{ checked: assignedIds.indexOf(label.id) !== -1 }}>
                   <Text style={s.labelName}>{label.name}</Text>
                   <View style={[s.checkCircle, on ? s.checkCircleOn : s.checkCircleOff]}>
-                    {on && <Lineicons icon={CheckOutlined} size={12} color="#fff" />}
+                    {on && <Lineicons icon={CheckOutlined} size={12} color={t.textInverse} />}
                   </View>
                 </TouchableOpacity>
               )

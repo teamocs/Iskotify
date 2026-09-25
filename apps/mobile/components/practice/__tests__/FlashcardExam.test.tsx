@@ -413,7 +413,7 @@ describe('FlashcardExam', () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 
     // Open the report modal from Q1
-    fireEvent.press(screen.getByText('⚐ Report'))
+    fireEvent.press(screen.getByRole('button', { name: 'Report this question' }))
     expect(screen.getByText('Report this question')).toBeTruthy()
 
     // No report submitted yet
@@ -434,20 +434,17 @@ describe('FlashcardExam', () => {
     })
 
     // The reported state replaces the report button for this question
-    expect(screen.getByText('Reported ✓')).toBeTruthy()
-    expect(screen.queryByText('⚐ Report')).toBeNull()
+    expect(screen.getByText('Reported')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Report this question' })).toBeNull()
   })
 
-  it('8. selecting an option exposes accessibilityState={{selected:true}} on that option only', () => {
+  it('8. selecting an option marks that option, and only that one, as the checked radio', () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 
     fireEvent.press(screen.getByText('4'))
 
-    const buttons = screen.getAllByRole('button')
-    const optionButtons = buttons.filter(b => b.props.accessibilityState?.selected !== undefined)
-    expect(optionButtons).toHaveLength(4)
-    const selected = optionButtons.filter(b => b.props.accessibilityState?.selected === true)
-    expect(selected).toHaveLength(1)
+    expect(screen.getAllByRole('radio')).toHaveLength(4)
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
   })
 
   // ── Fix 2: last-question safety ────────────────────────────────────────────
@@ -487,13 +484,13 @@ describe('FlashcardExam', () => {
     const { submitQuestionReport } = require('../../../services/questionReports')
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 
-    fireEvent.press(screen.getByText('⚐ Report'))
+    fireEvent.press(screen.getByRole('button', { name: 'Report this question' }))
     await act(async () => {
       fireEvent.press(screen.getByText('Cancel'))
     })
 
     expect(submitQuestionReport).not.toHaveBeenCalled()
-    expect(screen.getByText('⚐ Report')).toBeTruthy()
-    expect(screen.queryByText('Reported ✓')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Report this question' })).toBeTruthy()
+    expect(screen.queryByText('Reported')).toBeNull()
   })
 })

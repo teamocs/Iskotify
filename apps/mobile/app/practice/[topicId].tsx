@@ -11,6 +11,9 @@ import { prefetchSessionImages } from '../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../hooks/useAiEnhancement'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Pencil1Outlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../components/ui/a11y'
 import { spacing, radius } from '../../theme/tokens'
 import { pickQuestions, dedupeByStem } from '../../utils/flashcardExam'
 import { getDueFlashcards } from '../../services/srsAggregates'
@@ -67,8 +70,7 @@ export default function QuizScreen() {
     emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
     emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: spacing.xxl },
     chooserContent: { alignItems: 'center' as const, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxxl, paddingBottom: spacing.xxxl },
-    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.35)', borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
-    iconTxt: { fontSize: 40 },
+    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
     title: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
     sub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.xxl, textAlign: 'center' },
     choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, width: '100%', marginBottom: spacing.md },
@@ -76,7 +78,7 @@ export default function QuizScreen() {
     choiceSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     // "Due today" chooser option (Task H) — warning-toned, same convention as
     // the practice-tab "Review due cards" row.
-    dueChoiceCard: { backgroundColor: t.warningSurface, borderColor: 'rgba(251,191,36,0.35)' },
+    dueChoiceCard: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
     dueChoiceTitle: { color: t.warning },
     ghostBtn: { paddingVertical: spacing.md, width: '100%', alignItems: 'center' },
     ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
@@ -233,7 +235,7 @@ export default function QuizScreen() {
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
       <ScrollView contentContainerStyle={[s.chooserContent, webWidth]} showsVerticalScrollIndicator={false}>
-        <View style={s.icon}><Text style={s.iconTxt}>🎯</Text></View>
+        <View style={s.icon} {...decorative}><Lineicons icon={Pencil1Outlined} size={32} color={t.accentText} /></View>
         <Text style={s.title}>{topicName}</Text>
         <Text style={s.sub}>{dedupedQuestions.length} cards available</Text>
 

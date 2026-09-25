@@ -203,4 +203,45 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     const names = screen.getAllByTestId('topic-name').map(n => n.props.children)
     expect(names).toEqual(['Geometry', 'Trigonometry', 'Algebra'])
   })
+
+  // ── Redesign M2: every data state, and neutral readiness ────────────────────
+  describe('redesign M2 states', () => {
+    it('shows skeletons (announced once) while topics load', () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue({ select: () => ({ from: () => ({ where: () => ({ limit: () => new Promise(() => {}) }) }) }) })
+      setBest([])
+      render(<SubjectDetailsScreen />)
+      expect(screen.getByLabelText('Loading topics')).toBeTruthy()
+    })
+
+    it('shows a retryable error when the subject fails to load', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const { useDb } = require('../../../hooks/useDb')
+      // Every query fails until the student taps Try again; then a healthy db answers.
+      const reject = () => Promise.reject(new Error('db'))
+      // A lazy thenable: rejects only when awaited, so no stray unhandled rejection.
+      const failing = { from: () => ({ where: () => ({ limit: reject, then: (ok: any, bad: any) => reject().then(ok, bad) }) }) }
+      let current: any = { select: () => failing }
+      useDb.mockReturnValue({ select: (...a: any[]) => current.select(...a) })
+      setBest([{ topicId: 't1', bestPct: 80 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText("Couldn't load this subject")).toBeTruthy())
+      current = makeDb(SUBJECT, TOPICS)
+      fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      warn.mockRestore()
+    })
+
+    it('draws readiness in one neutral ink whatever the score', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([{ topicId: 't1', bestPct: 90 }, { topicId: 't2', bestPct: 20 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('90%')).toBeTruthy())
+      const ink = (txt: string) => Object.assign({}, ...[screen.getByText(txt).props.style].flat(Infinity).filter(Boolean)).color
+      expect(ink('90%')).toBe(ink('20%'))
+      expect(screen.getAllByRole('progressbar').length).toBe(2)
+    })
+  })
 })
+

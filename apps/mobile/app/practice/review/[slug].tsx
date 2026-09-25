@@ -13,6 +13,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { useTheme } from '../../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, Book1Outlined } from '@lineiconshq/free-icons'
 import { spacing } from '../../../theme/tokens'
 
 // Maps a topic strength to a design-system Badge tone (mirrors practice.tsx).
@@ -27,7 +29,7 @@ function TopicCard({ row }: { row: TopicRow }) {
   return (
     <View style={{ marginBottom: spacing.sm }}>
       <ListCard
-        icon={<Text style={{ color: t.accentText, fontSize: 15 }}>📖</Text>}
+        icon={<Lineicons icon={Book1Outlined} size={18} color={t.accentText} />}
         title={row.topic.name}
         subtitle={`${row.cardCount} cards`}
         trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
@@ -53,7 +55,6 @@ export default function PracticeReviewScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
     backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     subHint: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
     body: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
@@ -121,7 +122,7 @@ export default function PracticeReviewScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Text style={s.backArrow}>‹</Text>
+          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>{listingTitle}</Text>
       </View>

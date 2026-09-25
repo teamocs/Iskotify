@@ -1,13 +1,18 @@
 import React from 'react'
-import { render, screen, fireEvent, act } from '@testing-library/react-native'
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react-native'
+import { Alert } from 'react-native'
 import PracticeScreen from '../practice'
+
+// Redesign M2 (direction C, "One Next Step"): Practice leads with ONE next
+// practice action, then Mock exams, Subjects, Your decks and Tools as flat
+// lists. Readiness grids, My Focus and AI feedback moved out (Today and
+// Progress own them).
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: jest.fn(),
 }))
 
-// Header avatar reads the student's name; keep it out of the db mock.
 jest.mock('../../../hooks/useProfileName', () => ({
   useProfileName: () => 'Ana Reyes',
 }))
@@ -18,98 +23,56 @@ jest.mock('react-native-safe-area-context', () => ({
 }))
 
 const mockUsePracticeData = jest.fn()
-
 jest.mock('../../../hooks/usePracticeData', () => ({
   usePracticeData: () => mockUsePracticeData(),
 }))
 
 const mockFocusListings: any[] = []
 jest.mock('../../../hooks/useFocusListings', () => ({
-  useFocusListings: () => ({
-    focusListings: mockFocusListings,
-    addListing: jest.fn(),
-    removeListing: jest.fn(),
-    moveListing: jest.fn(),
-    isInFocus: jest.fn().mockReturnValue(false),
-    getPriority: jest.fn().mockReturnValue(null),
-  }),
+  useFocusListings: () => ({ focusListings: mockFocusListings }),
 }))
 
 const mockDecks: any[] = []
+const mockCreateDeck = jest.fn().mockResolvedValue(undefined)
+const mockDeleteDeck = jest.fn().mockResolvedValue(undefined)
 jest.mock('../../../hooks/useSavedDecks', () => ({
-  useSavedDecks: () => ({
-    decks: mockDecks,
-    createDeck: jest.fn(),
-    deleteDeck: jest.fn(),
-  }),
+  useSavedDecks: () => ({ decks: mockDecks, createDeck: mockCreateDeck, deleteDeck: (...a: any[]) => mockDeleteDeck(...a) }),
 }))
 
-jest.mock('../../../hooks/useAnalytics', () => ({
-  useAnalytics: () => ({
-    sessionCount: 0,
-    avgAccuracy: null,
-    streak: 0,
-    weeklyData: [],
-    topicMastery: [],
-    recentSessions: [],
-    isLoading: false,
-    refresh: jest.fn(),
-  }),
-}))
-
-// Mock useDb so the screen does not require a real DrizzleProvider.
-// IMPORTANT: return a STABLE singleton — the screen's readiness effects depend on
-// `db`, so a fresh object every render would change the effect's deps each render
-// and spin a re-render loop (state set to a new Map each pass never bails out).
 jest.mock('../../../hooks/useDb', () => {
   const db = {}
   return { useDb: () => db }
 })
 
-// Mock the SQL aggregates so the readiness effects don't hit a real DB. cachedQuery
-// (mocked below) calls the fetcher directly, which calls these.
-// getListingMockBest is a capturable, per-test-seedable mock (the `mock` prefix makes
-// it hoist-safe inside the jest.mock factory) so tests can drive the My Focus % readiness.
-const mockGetListingMockBest = jest.fn()
+const mockGetTopicBest = jest.fn()
 jest.mock('../../../services/homeAggregates', () => ({
-  getTopicBestSessionPercentages: jest.fn().mockResolvedValue([]),
+  getTopicBestSessionPercentages: (...a: any[]) => mockGetTopicBest(...a),
   getSubjectSessionPercentages: jest.fn().mockResolvedValue([]),
-  getListingMockBest: (...args: any[]) => mockGetListingMockBest(...args),
 }))
 
-// Task H: due-count aggregate — seedable per test, defaults to "nothing due".
 const mockGetDueCounts = jest.fn()
 jest.mock('../../../services/srsAggregates', () => ({
   getDueCounts: (...args: any[]) => mockGetDueCounts(...args),
 }))
 
-// Mock listPublishedBlueprints — tests override this via mockListPublishedBlueprints
-const mockListPublishedBlueprints = jest.fn().mockResolvedValue([])
+const mockListPublishedBlueprints = jest.fn()
 jest.mock('../../../services/examBlueprints', () => ({
   ...jest.requireActual('../../../services/examBlueprints'),
   listPublishedBlueprints: (...args: any[]) => mockListPublishedBlueprints(...args),
 }))
 
-// Mock queryCache so cachedQuery just calls the fetcher directly (no TTL/SWR in tests)
+const mockLoadRun = jest.fn()
+jest.mock('../../../hooks/useExamRunPersistence', () => ({
+  useExamRunPersistence: () => ({ loadRun: (...a: any[]) => mockLoadRun(...a), saveRun: jest.fn(), clearRun: jest.fn() }),
+}))
+
 jest.mock('../../../services/queryCache', () => ({
   cachedQuery: async (_key: string, _ttl: number, fetcher: () => Promise<any>) => fetcher(),
   invalidate: jest.fn(),
   subscribe: jest.fn(() => jest.fn()),
 }))
 
-// The Estimated Admission Score entry reads this hook directly — mocked here
-// the same way as this screen's other data hooks above.
-const mockUseAdmissionEstimate = jest.fn()
-jest.mock('../../../hooks/useAdmissionEstimate', () => ({
-  useAdmissionEstimate: () => mockUseAdmissionEstimate(),
-}))
-const emptyAdmissionEstimate = {
-  status: 'no-grades' as const,
-  readiness: null,
-  result: null,
-  acknowledgeDisclaimer: jest.fn(),
-  reload: jest.fn(),
-}
+jest.mock('../../../services/sync', () => ({ syncOnLaunch: jest.fn() }))
 
 const { router } = require('expo-router')
 
@@ -120,345 +83,346 @@ const emptyPracticeData = {
   totalCards: 0,
   cardCountByTopic: {},
   topicIdsByListingSlug: {},
+  refresh: jest.fn(),
+  loaded: true,
 }
 
-describe('PracticeScreen', () => {
-  // Drain any microtask-queued state updates (e.g. cachedQuery resolving) so React
-  // doesn't warn "not wrapped in act" between tests.
-  afterEach(async () => {
-    await act(async () => {})
-  })
+const UPCAT = { slug: 'upcat', name: 'UP College Admission Test', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 150 }
+const ACET = { slug: 'acet', name: 'Ateneo College Entrance Test', acronym: 'ACET', totalItems: 120, totalTimeMinutes: 120 }
+
+async function renderSettled() {
+  render(<PracticeScreen />)
+  await act(async () => {})
+}
+
+describe('PracticeScreen (redesign M2)', () => {
+  afterEach(async () => { await act(async () => {}) })
 
   beforeEach(() => {
-    mockListPublishedBlueprints.mockClear()
     router.push.mockClear()
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
-    mockListPublishedBlueprints.mockResolvedValue([])
-    // Reset the My Focus mock-readiness aggregate (default: nothing practiced)
-    mockGetListingMockBest.mockReset()
-    mockGetListingMockBest.mockResolvedValue([])
-    mockGetDueCounts.mockReset()
-    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
-    // Reset shared focus listings array
-    mockFocusListings.splice(0, mockFocusListings.length)
-    mockDecks.splice(0, mockDecks.length)
-    mockUseAdmissionEstimate.mockReturnValue(emptyAdmissionEstimate)
+    mockListPublishedBlueprints.mockReset().mockResolvedValue([])
+    mockGetDueCounts.mockReset().mockResolvedValue({ total: 0, byTopic: {} })
+    mockGetTopicBest.mockReset().mockResolvedValue([])
+    mockLoadRun.mockReset().mockResolvedValue(null)
+    mockCreateDeck.mockClear()
+    mockFocusListings.splice(0)
+    mockDecks.splice(0)
   })
 
-  it('renders the Practice title (the old "Exams" tab is now Practice)', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByRole('header', { name: 'Practice' })).toBeTruthy()
-    expect(screen.queryByText('Exams')).toBeNull()
+  describe('header', () => {
+    it('is titled Practice with the Profile avatar', async () => {
+      await renderSettled()
+      expect(screen.getByRole('header', { name: 'Practice' })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Profile' }))
+      expect(router.push).toHaveBeenCalledWith('/profile')
+    })
+
+    it('opens search in a sheet and finds subjects, topics and mock exams', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's1', name: 'Algebra' }],
+        topicRows: [{ topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak', cardCount: 12, lastPracticedAt: null, accuracy: null }],
+      })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT])
+      await renderSettled()
+      fireEvent.press(screen.getByRole('button', { name: 'Search practice' }))
+      const input = screen.getByPlaceholderText('Search subjects, topics, or mock exams')
+      expect(screen.getByText(/Type to search/)).toBeTruthy()
+      fireEvent.changeText(input, 'linear')
+      fireEvent.press(screen.getByRole('button', { name: 'Topic: Linear Equations' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/t1')
+    })
+
+    it('says so when search finds nothing', async () => {
+      await renderSettled()
+      fireEvent.press(screen.getByRole('button', { name: 'Search practice' }))
+      fireEvent.changeText(screen.getByPlaceholderText('Search subjects, topics, or mock exams'), 'zzz')
+      expect(screen.getByText('No matches for “zzz”')).toBeTruthy()
+    })
   })
 
-  it('has a Profile avatar in the header that opens /profile', () => {
-    render(<PracticeScreen />)
-    fireEvent.press(screen.getByRole('button', { name: 'Profile' }))
-    expect(router.push).toHaveBeenCalledWith('/profile')
+  describe('next step', () => {
+    it('offers the diagnostic to a brand-new student', async () => {
+      await renderSettled()
+      expect(screen.getByRole('header', { name: 'Find your starting point' })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Take the diagnostic' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
+    })
+
+    it('leads with due cards when any are due', async () => {
+      mockGetDueCounts.mockResolvedValue({ total: 7, byTopic: { t1: 7 } })
+      await renderSettled()
+      expect(screen.getByRole('header', { name: 'Review 7 due cards' })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Start review' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/due')
+    })
+
+    it('drills the weakest focus topic when nothing is due', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's1', name: 'Math' }],
+        topicRows: [
+          { topic: { id: 't1', name: 'Fractions', subjectId: 's1' }, strength: 'Weak', cardCount: 5, lastPracticedAt: 1, accuracy: 30 },
+          { topic: { id: 't2', name: 'Ratios', subjectId: 's1' }, strength: 'Strong', cardCount: 5, lastPracticedAt: 1, accuracy: 90 },
+        ],
+        topicIdsByListingSlug: { upcat: ['t1', 't2'] },
+      })
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      await renderSettled()
+      expect(screen.getByRole('header', { name: 'Drill Fractions' })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Start drill' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/t1')
+    })
+
+    it('suggests the focus exam mock when there is no weak topic', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([ACET, UPCAT])
+      await renderSettled()
+      expect(screen.getByRole('header', { name: 'Take a UPCAT mock' })).toBeTruthy()
+    })
+
+    it('resumes an unfinished focus mock first', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT])
+      mockGetDueCounts.mockResolvedValue({ total: 4, byTopic: {} })
+      mockLoadRun.mockImplementation(async (key: string) => key === 'exam:upcat'
+        ? { runKey: key, questionIds: ['a', 'b', 'c'], answers: { 0: 1, 1: 2 } }
+        : null)
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Finish your UPCAT mock' })).toBeTruthy())
+      expect(screen.getByText('2 of 3 answered. Your answers and timer were saved.')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Resume mock' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
+    })
+
+    // Review finding (MEDIUM): resume detection only looked at the focus mock,
+    // so an unfinished run of any other published mock was invisible here.
+    it('resumes an unfinished run of a non-focus mock', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => key === 'exam:acet'
+        ? { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1 }, updatedAt: 1000 }
+        : null)
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Finish your ACET mock' })).toBeTruthy())
+      expect(screen.getByText('1 of 2 answered. Your answers and timer were saved.')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Resume mock' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/acet')
+    })
+
+    it('resumes the most recently updated run when several mocks are unfinished', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => {
+        if (key === 'exam:upcat') return { runKey: key, questionIds: ['a', 'b', 'c'], answers: { 0: 1 }, updatedAt: 1000 }
+        if (key === 'exam:acet') return { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1, 1: 0 }, updatedAt: 5000 }
+        return null
+      })
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Finish your ACET mock' })).toBeTruthy())
+      expect(mockLoadRun).toHaveBeenCalledWith('exam:upcat')
+      expect(mockLoadRun).toHaveBeenCalledWith('exam:acet')
+    })
+
+    it('ignores empty saved runs', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([ACET])
+      mockLoadRun.mockResolvedValue({ runKey: 'exam:acet', questionIds: [], answers: {}, updatedAt: 1 })
+      await renderSettled()
+      expect(screen.queryByRole('header', { name: 'Finish your ACET mock' })).toBeNull()
+      expect(within(screen.getByTestId('practice-mocks')).queryByText('In progress')).toBeNull()
+    })
   })
 
-  it('renders the Subject readiness section header', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('Subject readiness')).toBeTruthy()
+  describe('mock exams', () => {
+    it('lists up to four mock exams, focus exams first, with a See all', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([
+        ACET, UPCAT,
+        { slug: 'ustet', name: 'UST', acronym: 'USTET', totalItems: 100, totalTimeMinutes: 120 },
+        { slug: 'dcat', name: 'DLSU', acronym: 'DCAT', totalItems: 80, totalTimeMinutes: 90 },
+        { slug: 'extra', name: 'Extra', acronym: 'EXTRA', totalItems: 60, totalTimeMinutes: 60 },
+      ])
+      await renderSettled()
+      const section = screen.getByTestId('practice-mocks')
+      const rows = within(section).getAllByRole('button').filter(b => /items/.test(b.props.accessibilityLabel ?? ''))
+      expect(rows).toHaveLength(4)
+      expect(rows[0]!.props.accessibilityLabel).toMatch(/^UPCAT/)
+      expect(within(section).queryByText('EXTRA')).toBeNull()
+      fireEvent.press(within(section).getByRole('button', { name: 'See all' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam')
+    })
+
+    it('badges every mock row that has an unfinished run as "In progress"', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => key === 'exam:acet'
+        ? { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1 }, updatedAt: 1000 }
+        : null)
+      await renderSettled()
+      const section = screen.getByTestId('practice-mocks')
+      await waitFor(() => expect(within(section).getAllByText('In progress')).toHaveLength(1))
+      expect(within(section).getByRole('button', { name: /^ACET, .*, in progress$/ })).toBeTruthy()
+      expect(within(section).getByRole('button', { name: /^UPCAT, / }).props.accessibilityLabel).not.toMatch(/in progress/)
+    })
+
+    it('opens a mock from its row', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT])
+      await renderSettled()
+      fireEvent.press(within(screen.getByTestId('practice-mocks')).getByText('UPCAT'))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
+    })
+
+    it('shows an empty state when no mock is published yet', async () => {
+      await renderSettled()
+      expect(within(screen.getByTestId('practice-mocks')).getByText('No mock exams yet')).toBeTruthy()
+    })
+
+    it('shows a retryable error when mocks fail to load', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      mockListPublishedBlueprints.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([UPCAT])
+      await renderSettled()
+      const section = screen.getByTestId('practice-mocks')
+      expect(within(section).getByText("Couldn't load mock exams")).toBeTruthy()
+      fireEvent.press(within(section).getByRole('button', { name: 'Try again' }))
+      await act(async () => {})
+      expect(within(screen.getByTestId('practice-mocks')).getByText('UPCAT')).toBeTruthy()
+      warn.mockRestore()
+    })
+
+    it('shows skeletons (announced once) while mocks load', async () => {
+      mockListPublishedBlueprints.mockReturnValue(new Promise(() => {}))
+      render(<PracticeScreen />)
+      expect(within(screen.getByTestId('practice-mocks')).getByLabelText('Loading mock exams')).toBeTruthy()
+    })
   })
 
-  it('renders the subject-readiness empty state when no subjects', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText(/Practice to see your subject readiness/)).toBeTruthy()
-  })
-
-  it('renders a subject-readiness card when subjects/topics are present', async () => {
-    mockUsePracticeData.mockReturnValue({
+  describe('subjects', () => {
+    const data = {
       ...emptyPracticeData,
-      subjects: [{ id: 's1', name: 'Algebra' }],
+      subjects: [{ id: 's2', name: 'Science' }, { id: 's1', name: 'Algebra' }],
       topicRows: [
-        { topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak' as const, cardCount: 12, lastPracticedAt: null, accuracy: null },
+        { topic: { id: 't1', name: 'Linear', subjectId: 's1' }, strength: 'Review', cardCount: 12, lastPracticedAt: null, accuracy: null },
+        { topic: { id: 't3', name: 'Quadratics', subjectId: 's1' }, strength: 'Review', cardCount: 4, lastPracticedAt: null, accuracy: null },
+        { topic: { id: 't2', name: 'Cells', subjectId: 's2' }, strength: 'New', cardCount: 3, lastPracticedAt: null, accuracy: null },
       ],
+    }
+
+    it('lists subjects A–Z with topic count and readiness as a number', async () => {
+      mockUsePracticeData.mockReturnValue(data)
+      mockGetTopicBest.mockResolvedValue([{ topicId: 't1', bestPct: 80 }, { topicId: 't3', bestPct: 60 }])
+      await renderSettled()
+      const section = screen.getByTestId('practice-subjects')
+      const rows = within(section).getAllByRole('button')
+      expect(rows[0]!.props.accessibilityLabel).toBe('Algebra, 2 topics, ready 70%')
+      expect(rows[1]!.props.accessibilityLabel).toBe('Science, 1 topic, not practised yet')
+      fireEvent.press(rows[0]!)
+      expect(router.push).toHaveBeenCalledWith('/subjects/s1')
     })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('Algebra')).toBeTruthy()
-  })
 
-  it('does not render the removed stats header row', () => {
-    render(<PracticeScreen />)
-    expect(screen.queryByText('Accuracy')).toBeNull()
-    expect(screen.queryByText('Streak')).toBeNull()
-    expect(screen.queryByText('Exams taken')).toBeNull()
-  })
-
-  it('does not render the removed Subjects accordion section', () => {
-    render(<PracticeScreen />)
-    expect(screen.queryByText('Subjects')).toBeNull()
-  })
-
-  it('renders the search bar', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('Search subjects, topics, or mock exams')).toBeTruthy()
-  })
-
-  it('opens the search modal and shows seeded subject / topic / mock results', async () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's1', name: 'Algebra' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak' as const, cardCount: 12, lastPracticedAt: null, accuracy: null },
-      ],
+    it('shows skeletons until practice data has loaded', async () => {
+      mockUsePracticeData.mockReturnValue({ ...emptyPracticeData, loaded: false })
+      await renderSettled()
+      expect(within(screen.getByTestId('practice-subjects')).getByLabelText('Loading subjects')).toBeTruthy()
     })
-    mockListPublishedBlueprints.mockResolvedValue([
-      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
-    ])
-    render(<PracticeScreen />)
-    await act(async () => {})
 
-    // Open modal via the search bar
-    fireEvent.press(screen.getByText('Search subjects, topics, or mock exams'))
-
-    // Empty-query prompt is shown
-    expect(screen.getByText(/Type to search/)).toBeTruthy()
-
-    // Find the TextInput (placeholder) and type a query that matches a subject.
-    // "Algebra" also appears as a Subject readiness card behind the modal, so the
-    // search result makes it appear an ADDITIONAL time (≥2 total).
-    const input = screen.getByPlaceholderText('Search subjects, topics, or mock exams')
-    fireEvent.changeText(input, 'algebra')
-    expect(screen.getAllByText('Algebra').length).toBeGreaterThanOrEqual(2)
-
-    // A topic query — "Linear Equations" is only a search result (no topic cards
-    // in this layout), so it appears exactly once.
-    fireEvent.changeText(input, 'linear')
-    expect(screen.getByText('Linear Equations')).toBeTruthy()
-
-    // A mock-exam query — result row label is "UPCAT · UPCAT".
-    fireEvent.changeText(input, 'upcat')
-    expect(screen.getByText('UPCAT · UPCAT')).toBeTruthy()
-  })
-
-  it('tapping a search result navigates and closes the modal', async () => {
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's1', name: 'Algebra' }],
+    it('shows an empty state that points to Explore when there are no subjects', async () => {
+      await renderSettled()
+      const section = screen.getByTestId('practice-subjects')
+      expect(within(section).getByText('No subjects on this device yet')).toBeTruthy()
+      fireEvent.press(within(section).getByRole('button', { name: 'Choose an exam' }))
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
     })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    fireEvent.press(screen.getByText('Search subjects, topics, or mock exams'))
-    const input = screen.getByPlaceholderText('Search subjects, topics, or mock exams')
-    fireEvent.changeText(input, 'algebra')
-    fireEvent.press(screen.getByText('Algebra'))
-    expect(router.push).toHaveBeenCalledWith('/subjects/s1')
-  })
 
-  it('AI Study Feedback is collapsed by default — shows collapsed row', () => {
-    render(<PracticeScreen />)
-    // The collapsed row title is visible
-    expect(screen.getAllByText('AI Study Feedback').length).toBeGreaterThanOrEqual(1)
-    // The collapsed testID is present
-    expect(screen.getByTestId('ai-feedback-collapsed')).toBeTruthy()
-  })
-
-  it('AI Study Feedback expands on press', () => {
-    render(<PracticeScreen />)
-    const collapsed = screen.getByTestId('ai-feedback-collapsed')
-    fireEvent.press(collapsed)
-    // After expand, the full card is shown with the no-data prompt
-    expect(screen.getByText(/Take a few quizzes/)).toBeTruthy()
-  })
-
-  it('Study Tools is collapsed by default — shows collapsed row', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByTestId('study-tools-collapsed')).toBeTruthy()
-    expect(screen.getByText('Study Tools')).toBeTruthy()
-  })
-
-  it('Study Tools expands to Requirements + Notes — GWA Calculator removed', () => {
-    render(<PracticeScreen />)
-    const collapsed = screen.getByTestId('study-tools-collapsed')
-    fireEvent.press(collapsed)
-    // Kept cards present
-    expect(screen.getByText('Notes')).toBeTruthy()
-    expect(screen.getByText('Requirements')).toBeTruthy()
-    // Removed cards absent
-    expect(screen.queryByText('GWA Calculator')).toBeNull()
-    expect(screen.queryByText('AI Chat')).toBeNull()
-  })
-
-  it('collapsed Study Tools subtitle shows Requirements · Notes only', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('Requirements · Notes')).toBeTruthy()
-  })
-
-  it('Saved Decks section header always shown (create deck reachable)', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('Saved Decks')).toBeTruthy()
-  })
-
-  it('Saved Decks empty placeholder is not shown when decks are empty', () => {
-    render(<PracticeScreen />)
-    // The old "No decks yet. Tap ＋ to create one." placeholder is removed
-    expect(screen.queryByText(/No decks yet/)).toBeNull()
-  })
-
-  it('does not render Quick Start or Full Review Deck', () => {
-    render(<PracticeScreen />)
-    expect(screen.queryByText('Quick Start')).toBeNull()
-    expect(screen.queryByText('Full Review Deck')).toBeNull()
-    expect(screen.queryByText('Weak Topics Only')).toBeNull()
-  })
-
-  it('Recommended section renders at most 4 items (grid slices to 4)', async () => {
-    // 5 focus topics — all Strong; sorted by strength they stay in array order,
-    // so StrongFive (5th) must be sliced off by the recommended grid's slice(0,4).
-    // The Subjects accordion is gone, so StrongFive must not appear at all.
-    mockUsePracticeData.mockReturnValue({
-      ...emptyPracticeData,
-      subjects: [{ id: 's1', name: 'Science' }],
-      topicRows: [
-        { topic: { id: 't1', name: 'StrongOne', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 5, lastPracticedAt: null, accuracy: null },
-        { topic: { id: 't2', name: 'StrongTwo', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 3, lastPracticedAt: null, accuracy: null },
-        { topic: { id: 't3', name: 'StrongThree', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 8, lastPracticedAt: null, accuracy: null },
-        { topic: { id: 't4', name: 'StrongFour', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 6, lastPracticedAt: null, accuracy: null },
-        { topic: { id: 't5', name: 'StrongFive', subjectId: 's1' }, strength: 'Strong' as const, cardCount: 4, lastPracticedAt: null, accuracy: null },
-      ],
-      topicIdsByListingSlug: { 'upcat': ['t1', 't2', 't3', 't4', 't5'] },
+    it('shows a retryable error when readiness fails to load', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      mockUsePracticeData.mockReturnValue(data)
+      mockGetTopicBest.mockRejectedValueOnce(new Error('db'))
+      await renderSettled()
+      const section = screen.getByTestId('practice-subjects')
+      expect(within(section).getByText("Couldn't load your subjects")).toBeTruthy()
+      fireEvent.press(within(section).getByRole('button', { name: 'Try again' }))
+      await act(async () => {})
+      expect(within(screen.getByTestId('practice-subjects')).getByText('Algebra')).toBeTruthy()
+      warn.mockRestore()
     })
-    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length, {
-      slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam',
+  })
+
+  describe('decks', () => {
+    it('lists saved decks with a due count, and opens one', async () => {
+      mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1', 't2'], createdAt: 0 })
+      mockGetDueCounts.mockResolvedValue({ total: 5, byTopic: { t1: 3, t2: 2 } })
+      await renderSettled()
+      const section = screen.getByTestId('practice-decks')
+      expect(within(section).getByText('My Deck')).toBeTruthy()
+      expect(within(section).getByText('5 due')).toBeTruthy()
+      fireEvent.press(within(section).getByText('My Deck'))
+      expect(router.push).toHaveBeenCalledWith('/practice/deck/deck1')
     })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    // The recommended grid slices to 4. All 5 share equal strength, so array order
-    // is preserved; StrongFive (5th) is sliced off and — with no accordion — should
-    // not appear anywhere on the screen.
-    expect(screen.queryByText('StrongFive')).toBeNull()
-    // The first four DO render in the Recommended grid.
-    expect(screen.getByText('StrongOne')).toBeTruthy()
+
+    it('deletes a deck only after confirming', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+      mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1'], createdAt: 0 })
+      await renderSettled()
+      fireEvent.press(screen.getByRole('button', { name: 'Delete My Deck' }))
+      expect(mockDeleteDeck).not.toHaveBeenCalled()
+      const buttons = alertSpy.mock.calls[0]![2] as { text: string; onPress?: () => void }[]
+      await act(async () => { buttons.find(b => b.text === 'Delete')!.onPress!() })
+      expect(mockDeleteDeck).toHaveBeenCalledWith('deck1')
+      alertSpy.mockRestore()
+    })
+
+    it('shows no due badge on a deck with nothing due', async () => {
+      mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1'], createdAt: 0 })
+      await renderSettled()
+      expect(within(screen.getByTestId('practice-decks')).queryByText(/due$/)).toBeNull()
+    })
+
+    it('explains decks when there are none, with a way to make one', async () => {
+      await renderSettled()
+      const section = screen.getByTestId('practice-decks')
+      expect(within(section).getByText(/Bundle topics into a deck/)).toBeTruthy()
+    })
+
+    it('creates a deck in a two-step sheet', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's1', name: 'Algebra' }],
+        topicRows: [{ topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, strength: 'Weak', cardCount: 12, lastPracticedAt: null, accuracy: null }],
+      })
+      await renderSettled()
+      fireEvent.press(screen.getByRole('button', { name: 'New deck' }))
+      fireEvent.changeText(screen.getByPlaceholderText('e.g. UPCAT Science finals'), 'Finals')
+      fireEvent.press(screen.getByRole('button', { name: 'Next: pick topics' }))
+      fireEvent.press(screen.getByRole('checkbox', { name: 'Linear Equations, 12 cards' }))
+      await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Create deck' })) })
+      expect(mockCreateDeck).toHaveBeenCalledWith('Finals', ['t1'])
+    })
   })
 
-  it('Mock Exams section header and See all renders when blueprints exist', async () => {
-    mockListPublishedBlueprints.mockResolvedValue([
-      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
-      { slug: 'acet', name: 'ACET', acronym: 'ACET', totalItems: 120, totalTimeMinutes: 120 },
-    ])
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('Mock Exams')).toBeTruthy()
-    expect(screen.getByText('See all')).toBeTruthy()
+  describe('tools', () => {
+    it.each([
+      ['Estimated Admission Score', '/estimator'],
+      ['Notes', '/notes'],
+      ['Requirements', '/requirements'],
+    ])('opens %s', async (name, href) => {
+      await renderSettled()
+      fireEvent.press(within(screen.getByTestId('practice-tools')).getByText(name))
+      expect(router.push).toHaveBeenCalledWith(href)
+    })
+
+    it('frames the admission score as an estimate', async () => {
+      await renderSettled()
+      expect(within(screen.getByTestId('practice-tools')).getByText(/based on historical cutoffs/)).toBeTruthy()
+    })
   })
 
-  it('Mock Exams section is hidden when no blueprints', async () => {
-    mockListPublishedBlueprints.mockResolvedValue([])
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.queryByText('Mock Exams')).toBeNull()
-  })
-
-  it('shows the Estimated Admission Score entry near the UPCAT tools and opens the estimator on tap', () => {
-    render(<PracticeScreen />)
-    expect(screen.getByText('Estimated Admission Score')).toBeTruthy()
-    fireEvent.press(screen.getByRole('button', { name: /estimated admission score/i }))
-    expect(router.push).toHaveBeenCalledWith('/estimator')
-  })
-
-  it('renders at most 4 mock exam cards', async () => {
-    mockListPublishedBlueprints.mockResolvedValue([
-      { slug: 'upcat', name: 'University of the Philippines', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 180 },
-      { slug: 'acet', name: 'Ateneo', acronym: 'ACET', totalItems: 120, totalTimeMinutes: 120 },
-      { slug: 'ustet', name: 'UST', acronym: 'USTET', totalItems: 100, totalTimeMinutes: 120 },
-      { slug: 'dcat', name: 'DLSU', acronym: 'DCAT', totalItems: 80, totalTimeMinutes: 90 },
-      { slug: 'extra', name: 'Extra', acronym: 'EXTRA', totalItems: 60, totalTimeMinutes: 60 },
-    ])
-    render(<PracticeScreen />)
-    await act(async () => {})
-    // All 4 acronyms should be shown; the 5th should not
-    expect(screen.getByText('UPCAT')).toBeTruthy()
-    expect(screen.getByText('ACET')).toBeTruthy()
-    expect(screen.getByText('USTET')).toBeTruthy()
-    expect(screen.getByText('DCAT')).toBeTruthy()
-    expect(screen.queryByText('EXTRA')).toBeNull()
-  })
-
-  it('My Focus empty banner navigates to Explore', () => {
-    render(<PracticeScreen />)
-    // No focus listings → empty banner with an "Explore" action
-    fireEvent.press(screen.getByText('Explore'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
-  })
-
-  it('My Focus card navigates to the start chooser (no inline Review button)', async () => {
-    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
-      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
-    )
-    render(<PracticeScreen />)
-    await act(async () => {})
-    // The inline Review button is gone.
-    expect(screen.queryByText('Review')).toBeNull()
-    // Tapping the card navigates to the new start chooser.
-    fireEvent.press(screen.getByText('UPCAT 2025'))
-    expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
-  })
-
-  it('My Focus card shows the mock-exam readiness % from getListingMockBest', async () => {
-    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
-      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' },
-    )
-    mockGetListingMockBest.mockResolvedValue([{ listingSlug: 'upcat', bestPct: 72 }])
-    render(<PracticeScreen />)
-    await act(async () => {})
-    // The readiness % for the seeded focus listing renders on its My Focus card.
-    expect(screen.getByText('72%')).toBeTruthy()
-  })
-
-  it('My Focus "Add exam or scholarship" ghost card navigates to Explore', async () => {
-    ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
-      { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
-    )
-    render(<PracticeScreen />)
-    await act(async () => {})
-    fireEvent.press(screen.getByText('＋ Add exam or scholarship'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
-  })
-
-  // ── Task H: due queue surfaces ──────────────────────────────────────────────
-
-  it('does not render the "Review due cards" row when nothing is due', async () => {
-    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.queryByText('Review due cards')).toBeNull()
-  })
-
-  it('renders a prominent "Review due cards" row with the count when cards are due, and navigates to /practice/due', async () => {
-    mockGetDueCounts.mockResolvedValue({ total: 7, byTopic: { t1: 7 } })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('Review due cards')).toBeTruthy()
-    expect(screen.getByText('7 cards ready for spaced review')).toBeTruthy()
-    fireEvent.press(screen.getByText('Review due cards'))
-    expect(router.push).toHaveBeenCalledWith('/practice/due')
-  })
-
-  it('singular-izes the due-cards subtitle for exactly 1 due card', async () => {
-    mockGetDueCounts.mockResolvedValue({ total: 1, byTopic: { t1: 1 } })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('1 card ready for spaced review')).toBeTruthy()
-  })
-
-  it('shows a "N due" badge on a Saved Deck whose topics have due cards', async () => {
-    mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1', 't2'], createdAt: 0 })
-    mockGetDueCounts.mockResolvedValue({ total: 5, byTopic: { t1: 3, t2: 2 } })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('My Deck')).toBeTruthy()
-    expect(screen.getByText('5 due')).toBeTruthy()
-  })
-
-  it('does not show a due badge on a Saved Deck with no due cards', async () => {
-    mockDecks.push({ id: 'deck1', name: 'My Deck', topicIds: ['t1'], createdAt: 0 })
-    mockGetDueCounts.mockResolvedValue({ total: 0, byTopic: {} })
-    render(<PracticeScreen />)
-    await act(async () => {})
-    expect(screen.getByText('My Deck')).toBeTruthy()
-    expect(screen.queryByText(/due$/)).toBeNull()
+  describe('focus and duplication', () => {
+    it('has exactly one primary next-step action and no duplicated readiness blocks', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      await renderSettled()
+      for (const gone of ['Subject readiness', 'My Focus', 'AI Study Feedback', 'Recommended']) {
+        expect(screen.queryByText(gone)).toBeNull()
+      }
+    })
   })
 })

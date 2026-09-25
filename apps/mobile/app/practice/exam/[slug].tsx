@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronDownOutlined, ChevronUpOutlined, ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../../hooks/useDb'
 import { subscribe } from '../../../services/queryCache'
 import { useRecordSession } from '../../../hooks/useRecordSession'
@@ -17,38 +19,47 @@ import {
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
+import { subtestBreakdown } from '../../../utils/subtestBreakdown'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
-import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
-import { SectionGrid } from '../../../components/practice/SectionGrid'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
 import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
+import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
+import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
+import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
+import { Screen } from '../../../components/ui/Screen'
+import { Button } from '../../../components/ui/Button'
+import { StatNumber } from '../../../components/ui/StatNumber'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { Skeleton } from '../../../components/ui/Skeleton'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { ErrorState } from '../../../components/ui/ErrorState'
+import { decorative, focusRing, type WebPressableState } from '../../../components/ui/a11y'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius } from '../../../theme/tokens'
+import { spacing, radius, textStyle } from '../../../theme/tokens'
+import { useBreakpoint, pagePadding, contentMaxWidth } from '../../../hooks/useBreakpoint'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
-type Phase = 'loading' | 'prestart' | 'empty' | 'exam' | 'results'
+type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
 
 /** A flattened exam question that remembers which section it belongs to. */
 interface FlatQuestion { q: ExamQuestion; sectionName: string }
 
-function fmtTime(totalSecs: number): string {
-  const h = Math.floor(totalSecs / 3600)
-  const m = Math.floor((totalSecs % 3600) / 60)
-  const sec = totalSecs % 60
-  const mm = String(m).padStart(2, '0')
-  const ss = String(sec).padStart(2, '0')
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+/** The reading column: direction C keeps the question at a readable measure on any screen. */
+const READING = contentMaxWidth('reading')
+
+function minutesLabel(minutes: number): { value: string; unit: string } {
+  if (minutes < 60) return { value: String(minutes), unit: 'min' }
+  return { value: String(Math.round((minutes / 60) * 10) / 10), unit: 'h' }
 }
 
 /** Section boundary: the flat index where this runnable section begins, plus its time budget. */
@@ -68,6 +79,50 @@ function computeBounds(built: BuiltExam, timing: ScaledBlueprintTiming | null): 
   return bounds
 }
 
+/** A plain back control for the non-exam phases (the exam itself uses Leave). */
+function BackButton({ label = 'Back' }: { label?: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <Pressable
+      onPress={() => router.back()}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          {
+            width: 44, height: 44, minWidth: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: pressed ? t.surface2 : 'transparent', marginLeft: -spacing.sm,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <Lineicons icon={ChevronLeftOutlined} size={22} color={t.textSecondary} />
+    </Pressable>
+  )
+}
+
+/** A neutral bordered block (notes, cut-off context). Border only — no shadow. */
+function Panel({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'warning' }) {
+  const { theme: t } = useTheme()
+  return (
+    <View
+      style={{
+        backgroundColor: tone === 'warning' ? t.warningSurface : t.surface,
+        borderWidth: 1,
+        borderColor: tone === 'warning' ? t.warningBorder : t.border,
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        padding: spacing.lg,
+        gap: spacing.xs,
+      }}
+    >
+      {children}
+    </View>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Wave 3b: Review accordion — collapsed sections, wrong-answers-first
 // ---------------------------------------------------------------------------
@@ -76,13 +131,13 @@ interface ReviewAccordionProps {
   reviewSections: ReviewSection[]
   questions: FlatQuestion[]
   answers: Record<number, number>
-  styles: ReturnType<typeof makeStyles>
   /** Fix 3: "Review mistakes" is the results screen's primary action — it expands
    *  every section at once instead of making the student open each one by hand. */
   initiallyExpanded?: boolean
 }
 
-function ReviewAccordion({ reviewSections, questions, answers, styles: s, initiallyExpanded }: ReviewAccordionProps) {
+function ReviewAccordion({ reviewSections, questions, answers, initiallyExpanded }: ReviewAccordionProps) {
+  const { theme: t } = useTheme()
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
     initiallyExpanded ? Object.fromEntries(reviewSections.map(sec => [sec.sectionName, true])) : {},
   )
@@ -92,27 +147,48 @@ function ReviewAccordion({ reviewSections, questions, answers, styles: s, initia
   }
 
   return (
-    <View>
+    <View style={{ gap: spacing.sm }}>
       {reviewSections.map(sec => {
         const isOpen = !!expanded[sec.sectionName]
-        const secPct = sec.total > 0 ? Math.round((sec.correct / sec.total) * 100) : 0
+        const toReview = sec.total - sec.correct
+        const reviewLine = toReview === 0 ? 'All correct' : `${toReview} to review`
         return (
-          <View key={sec.sectionName} style={s.reviewSectionWrap}>
+          <View
+            key={sec.sectionName}
+            style={{
+              backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
+              borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden',
+            }}
+          >
             <Pressable
-              style={s.reviewSectionHeader}
               onPress={() => toggle(sec.sectionName)}
               accessibilityRole="button"
-              accessibilityState={{ expanded: isOpen }}
-              hitSlop={8}
+              accessibilityLabel={`${sec.sectionName}, ${reviewLine}`}
+              aria-expanded={isOpen}
+              style={(state) => {
+                const { pressed, focused } = state as WebPressableState
+                return [
+                  {
+                    minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+                    backgroundColor: pressed ? t.surface2 : 'transparent',
+                  },
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
             >
-              <View style={s.reviewSectionHeaderLeft}>
-                <Text style={s.reviewSectionName}>{sec.sectionName}</Text>
-                <Text style={s.reviewSectionCount}>{sec.correct}/{sec.total} correct · {secPct}%</Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{sec.sectionName}</Text>
+                <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+                  {reviewLine}
+                </Text>
               </View>
-              <Text style={s.reviewSectionChevron}>{isOpen ? '▲' : '▼'}</Text>
+              <View {...decorative}>
+                <Lineicons icon={isOpen ? ChevronUpOutlined : ChevronDownOutlined} size={18} color={t.textSecondary} />
+              </View>
             </Pressable>
             {isOpen ? (
-              <View style={s.reviewSectionBody}>
+              <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
                 {sec.questionRefs.map(ref => {
                   const fq = questions[ref.flatIndex]
                   if (!fq) return null
@@ -147,7 +223,10 @@ function ReviewAccordion({ reviewSections, questions, answers, styles: s, initia
 export default function BlueprintExam() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  const bp = useBreakpoint()
+  const expanded = bp === 'expanded'
+  const gutter = pagePadding(bp)
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
@@ -208,8 +287,6 @@ export default function BlueprintExam() {
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
   const { height: winH } = useWindowDimensions()
-  // Web-only max-width centering for the vertical scroll zones (null on native/sm).
-  const webWidth = useWebContentWidth()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -263,9 +340,11 @@ export default function BlueprintExam() {
       prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start
       if (flat.length) examLoadedRef.current = true
       setPhase(flat.length ? 'prestart' : 'empty')
-    } catch {
-      // Unexpected failure: show the empty/back screen rather than hang on loading.
-      setPhase('empty')
+    } catch (err) {
+      // Redesign M2: a load failure is its own retryable state, never shown as
+      // "no questions yet" (DESIGN.md: a failed query is not an empty list).
+      console.warn('[exam/[slug]] load failed:', err)
+      setPhase('error')
     }
   }, [db, slug])
 
@@ -378,8 +457,6 @@ export default function BlueprintExam() {
     const unsub = subscribe('practice:', () => { if (!examLoadedRef.current) void loadExam() })
     return unsub
   }, [loadExam])
-
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   const visibleNotes = useMemo(
     () => blueprint ? filterCourseNotesByClusters(blueprint.courseNotes, courseClusters) : [],
@@ -542,122 +619,161 @@ export default function BlueprintExam() {
     return () => clearInterval(id)
   }, [phase, sectionBlocked, sectionEndTime, sectionIdx, bounds])
 
+  // ── Redesign M2: render ───────────────────────────────────────────────────
+  // Every phase keeps one primary (maroon) action. The exam phase is a focus
+  // mode: one slim header, the question in a reading column no wider than 720,
+  // a fixed options zone, a fixed footer, and — on expanded widths only — the
+  // question navigator as a side panel.
+
   if (phase === 'loading') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loading}>Loading exam…</Text>
-      </SafeAreaView>
+      <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
+        <View accessible accessibilityLabel="Loading mock exam" accessibilityState={{ busy: true }} style={{ gap: spacing.md, paddingTop: spacing.md }}>
+          <Skeleton width="60%" height={32} />
+          <View style={{ flexDirection: 'row', gap: spacing.xxl }}>
+            <Skeleton width={72} height={40} />
+            <Skeleton width={72} height={40} />
+          </View>
+          <Skeleton height={56} radius={radius.lg} />
+          <Skeleton height={56} radius={radius.lg} />
+          <Skeleton height={56} radius={radius.lg} />
+        </View>
+      </Screen>
+    )
+  }
+
+  if (phase === 'error') {
+    return (
+      <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
+        <ErrorState
+          title="Couldn't load this mock exam"
+          body="Check your connection, then try again. Any exam you started is still saved."
+          onRetry={() => { setPhase('loading'); void loadExam() }}
+        />
+      </Screen>
     )
   }
 
   if (phase === 'empty') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
-          <Text style={s.emptyTitle}>{blueprint?.name ?? 'Mock Exam'}</Text>
-          <Text style={s.emptyBody}>This exam's questions are being authored — check back soon.</Text>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
-            <Text style={s.ghostTxt}>← Back</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+      <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
+        <EmptyState
+          title="This mock isn't ready yet"
+          body={`${blueprint?.name ?? 'This mock exam'}'s questions are still being written. Check back soon, or practise a subject in the meantime.`}
+          actionLabel="Back to mock exams"
+          onAction={() => router.back()}
+        />
+      </Screen>
     )
   }
 
   if (phase === 'prestart' && blueprint && built) {
-    const hours = Math.round((blueprint.totalTimeMinutes / 60) * 10) / 10
+    const declared = minutesLabel(blueprint.totalTimeMinutes)
     const scaledMinutes = timing?.totalMinutes ?? blueprint.totalTimeMinutes
-    const scaledHours = Math.round((scaledMinutes / 60) * 10) / 10
+    const scaled = minutesLabel(scaledMinutes)
     const isScaled = scaledMinutes !== blueprint.totalTimeMinutes
     const runnableNames = new Set(built.runnable.map(b => b.section.name))
+    const noItems = built.totalQuestions === 0
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
-            <Text style={s.back}>‹</Text>
-          </Pressable>
-          <Text style={s.topTitle} numberOfLines={1}>{blueprint.name}</Text>
-        </View>
-        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
-          <View style={s.metaCard}>
-            <Text style={s.metaBig}>{blueprint.totalItems} items · {hours}h</Text>
-            <Text style={s.metaSub}>{built.totalQuestions} items available now</Text>
+      <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
+        <View style={{ gap: spacing.xxl, paddingTop: spacing.xs }}>
+          <View style={{ gap: spacing.lg }}>
+            <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
+              {blueprint.name}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xxxl }}>
+              <StatNumber value={blueprint.totalItems} label="Items" />
+              <StatNumber value={declared.value} unit={declared.unit} label="Time" />
+              {built.totalQuestions !== blueprint.totalItems ? (
+                <StatNumber value={built.totalQuestions} label="Ready now" />
+              ) : null}
+            </View>
             {isScaled ? (
-              <Text style={s.metaSub}>Full Mock timer today: {scaledHours}h (scaled to available items)</Text>
+              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+                Today&apos;s Full Mock timer is {scaled.value} {scaled.unit}, scaled to the items available now.
+              </Text>
             ) : null}
           </View>
 
           {blueprint.mechanicsNote ? (
-            <View style={s.noteCard}>
-              <Text style={s.noteTxt}>{blueprint.mechanicsNote}</Text>
-            </View>
+            <Panel>
+              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.mechanicsNote}</Text>
+            </Panel>
           ) : null}
 
           {blueprint.hasGuessingPenalty ? (
-            <View style={s.warnCard}>
-              <Text style={s.warnTitle}>⚠ Guessing penalty</Text>
-              <Text style={s.warnTxt}>
-                Wrong answers deduct {blueprint.guessingPenalty}; blanks are 0. Only answer when reasonably sure.
+            <Panel tone="warning">
+              <Text style={textStyle('titleSm', t.warningStrong)} maxFontSizeMultiplier={1.6}>Guessing penalty</Text>
+              <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+                Wrong answers deduct {blueprint.guessingPenalty}; blanks are 0. Answer when you are reasonably sure.
               </Text>
+            </Panel>
+          ) : null}
+
+          <View>
+            <SectionHeader title="Structure" />
+            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
+              {[...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((sec, i) => {
+                const live = runnableNames.has(sec.name)
+                const secMinutes = timing?.sectionMinutes.get(sec.id) ?? sec.timeMinutes
+                return (
+                  <View
+                    key={sec.id}
+                    style={{
+                      minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md,
+                      paddingVertical: spacing.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider,
+                    }}
+                  >
+                    <Text style={[textStyle('body', live ? t.textPrimary : t.textSecondary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{sec.name}</Text>
+                    <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.6}>
+                      {live ? `${sec.itemCount} items${sectionBlocked && secMinutes ? ` · ${secMinutes} min` : ''}` : 'Coming soon'}
+                    </Text>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+
+          {visibleNotes.length ? (
+            <View>
+              <SectionHeader
+                title={courseClusters.length > 0 && visibleNotes.length < blueprint.courseNotes.length ? 'Cut-offs for your courses' : 'Course cut-offs'}
+                subtitle="Historical figures for context, not a prediction"
+              />
+              <View style={{ gap: spacing.sm }}>
+                {visibleNotes.map((cn, i) => (
+                  <Panel key={`${cn.courseCluster}-${i}`}>
+                    <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
+                    <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
+                  </Panel>
+                ))}
+              </View>
             </View>
           ) : null}
 
-          <Text style={s.sectionLbl}>Structure</Text>
-          {[...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder).map(sec => {
-            const live = runnableNames.has(sec.name)
-            const secMinutes = timing?.sectionMinutes.get(sec.id) ?? sec.timeMinutes
-            return (
-              <View key={sec.id} style={[s.structRow, !live && s.structRowSoon]}>
-                <Text style={[s.structName, !live && s.structSoonTxt]}>{sec.name}</Text>
-                <Text style={[s.structCount, !live && s.structSoonTxt]}>
-                  {live ? `${sec.itemCount} items${sectionBlocked && secMinutes ? ` · ${secMinutes}m` : ''}` : 'Content coming soon'}
-                </Text>
-              </View>
-            )
-          })}
-
-          {visibleNotes.length ? (
-            <>
-              <Text style={s.sectionLbl}>
-                {courseClusters.length > 0 && visibleNotes.length < blueprint.courseNotes.length
-                  ? 'Cut-offs for your courses'
-                  : 'Course cut-offs'}
-              </Text>
-              {visibleNotes.map((cn, i) => (
-                <View key={`${cn.courseCluster}-${i}`} style={s.courseNote}>
-                  <Text style={s.courseCluster}>{cn.courseCluster}</Text>
-                  <Text style={s.courseNoteTxt}>{cn.note}</Text>
-                </View>
-              ))}
-            </>
-          ) : null}
-
-          {resumeAvailable ? (
-            <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={resumeExam}>
-              <Text style={s.primaryBtnTxt}>Resume where you left off</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            style={[resumeAvailable ? s.sprintBtn : s.primaryBtn, built.totalQuestions === 0 && s.footDisabled]}
-            disabled={built.totalQuestions === 0}
-            onPress={() => startExam('full')}
-          >
-            <Text style={resumeAvailable ? s.sprintBtnTxt : s.primaryBtnTxt}>Full Mock</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={[s.sprintBtn, built.totalQuestions === 0 && s.footDisabled]}
-            disabled={built.totalQuestions === 0}
-            onPress={() => startExam('sprint')}
-          >
-            <Text style={s.sprintBtnTxt}>Study Sprint · {STUDY_SPRINT_MINUTES} min</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <View style={{ gap: spacing.sm }}>
+            {resumeAvailable ? (
+              <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
+            ) : null}
+            <Button
+              label="Full Mock"
+              variant={resumeAvailable ? 'secondary' : 'primary'}
+              size={resumeAvailable ? 'md' : 'lg'}
+              fullWidth
+              disabled={noItems}
+              onPress={() => startExam('full')}
+              accessibilityHint={resumeAvailable ? 'Starts a new attempt instead of resuming' : undefined}
+            />
+            <Button
+              label={`Study Sprint · ${STUDY_SPRINT_MINUTES} min`}
+              variant="secondary"
+              fullWidth
+              disabled={noItems}
+              onPress={() => startExam('sprint')}
+            />
+          </View>
+        </View>
+      </Screen>
     )
   }
 
@@ -668,83 +784,82 @@ export default function BlueprintExam() {
     const score = scoreBlueprintExam(total, correct, wrong, blueprint.hasGuessingPenalty, blueprint.guessingPenalty)
     const pct = total ? Math.round((correct / total) * 100) : 0
 
-    // Per-section raw breakdown.
-    const bySection = new Map<string, { correct: number; total: number }>()
-    questions.forEach((fq, i) => {
-      const cur = bySection.get(fq.sectionName) ?? { correct: 0, total: 0 }
-      cur.total++
-      if (answers[i] === fq.q.correctIndex) cur.correct++
-      bySection.set(fq.sectionName, cur)
-    })
+    // Per-subtest raw breakdown (neutral; see ResultsBreakdown).
+    const rows = subtestBreakdown(questions, answers)
 
     // Wave 3b: grouped review sections with wrong-first ordering
     const correctIndexes = questions.map(fq => fq.q.correctIndex)
     const reviewSections = groupReviewBySection(questions, answers, correctIndexes)
 
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
+      <Screen>
+        <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
+          {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
+          <View style={{ gap: spacing.xs }}>
+            <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
+              Tapos na! Mock complete.
+            </Text>
+            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+              Here is how {blueprint.name} went. Every mock shows you what to practise next.
+            </Text>
+          </View>
+
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring,
               no percentile, no cut-off verdict. */}
-          <ResultsScoreCard pct={pct} correct={correct} total={total} />
-          {blueprint.hasGuessingPenalty ? (
-            <Text style={s.scorePenalty}>Penalty-adjusted: {Math.round(score.adjusted * 100) / 100}</Text>
-          ) : null}
-
-          {scoreDelta ? (
-            <View style={s.deltaCard}>
-              <Text style={s.deltaText}>{scoreDelta}</Text>
-            </View>
-          ) : null}
-
-          <Text style={s.sectionLbl}>Per-section</Text>
-          {Array.from(bySection.entries()).map(([name, b]) => (
-            <View key={name} style={s.subtestRow}>
-              <Text style={s.subtestName}>{name}</Text>
-              <Text style={s.subtestScore}>
-                {b.correct}/{b.total} · {Math.round((b.correct / b.total) * 100)}%
+          <View style={{ gap: spacing.sm }}>
+            <ResultsScoreCard pct={pct} correct={correct} total={total} />
+            {blueprint.hasGuessingPenalty ? (
+              <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={1.6}>
+                Penalty-adjusted: {Math.round(score.adjusted * 100) / 100}
               </Text>
-            </View>
-          ))}
+            ) : null}
+            {scoreDelta ? (
+              <Panel>
+                <Text style={[textStyle('bodySm', t.textPrimary), { textAlign: 'center' }]} maxFontSizeMultiplier={1.6}>{scoreDelta}</Text>
+              </Panel>
+            ) : null}
+          </View>
+
+          <ResultsBreakdown rows={rows} />
 
           {visibleNotes.length > 0 ? (
-            <>
-              <Text style={s.sectionLbl}>Course cut-off context</Text>
-              {visibleNotes.map((cn, i) => (
-                <View key={`note-${cn.courseCluster}-${i}`} style={s.courseNote}>
-                  <Text style={s.courseCluster}>{cn.courseCluster}</Text>
-                  <Text style={s.courseNoteTxt}>{cn.note}</Text>
-                </View>
-              ))}
-            </>
+            <View>
+              <SectionHeader title="Course cut-off context" subtitle="Historical figures for context, not a prediction" />
+              <View style={{ gap: spacing.sm }}>
+                {visibleNotes.map((cn, i) => (
+                  <Panel key={`note-${cn.courseCluster}-${i}`}>
+                    <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{cn.courseCluster}</Text>
+                    <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{cn.note}</Text>
+                  </Panel>
+                ))}
+              </View>
+            </View>
           ) : null}
 
           {/* Wave 3b: Review grouped by section, collapsed accordion, wrong-answers-first */}
-          <Text style={s.sectionLbl}>Review</Text>
-          <ReviewAccordion
-            key={reviewMistakesTapped ? 'expanded' : 'collapsed'}
-            reviewSections={reviewSections}
-            questions={questions}
-            answers={answers}
-            styles={s}
-            initiallyExpanded={reviewMistakesTapped}
-          />
+          <View>
+            <SectionHeader title="Review" subtitle="Mistakes first, with explanations" />
+            <ReviewAccordion
+              key={reviewMistakesTapped ? 'expanded' : 'collapsed'}
+              reviewSections={reviewSections}
+              questions={questions}
+              answers={answers}
+              initiallyExpanded={reviewMistakesTapped}
+            />
+          </View>
 
-          {blueprint.scoringNote ? <Text style={s.footnote}>{blueprint.scoringNote}</Text> : null}
+          {blueprint.scoringNote ? (
+            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{blueprint.scoringNote}</Text>
+          ) : null}
 
           {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
-          <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={() => setReviewMistakesTapped(true)}>
-            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace(`/practice/exam/${slug}`)}>
-            <Text style={s.ghostTxt}>Retake exam</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace('/practice/exam')}>
-            <Text style={s.ghostTxt}>← Back to exams</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <View style={{ gap: spacing.sm }}>
+            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            <Button label="Retake exam" variant="secondary" fullWidth onPress={() => router.replace(`/practice/exam/${slug}`)} />
+            <Button label="Back to exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/exam')} />
+          </View>
+        </View>
+      </Screen>
     )
   }
 
@@ -752,127 +867,132 @@ export default function BlueprintExam() {
   const fq = questions[idx]
   if (!fq) {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loading}>Loading exam…</Text>
-      </SafeAreaView>
+      <Screen>
+        <View accessible accessibilityLabel="Loading question" accessibilityState={{ busy: true }} style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
+          <Skeleton height={28} />
+          <Skeleton width="70%" height={28} />
+        </View>
+      </Screen>
     )
   }
   const q = fq.q
   const sel = answers[idx]
   const answeredIdxs = new Set(Object.keys(answers).map(Number))
+  const flaggedIdxs = new Set(Object.keys(reported).map(Number))
   const isLast = idx === questions.length - 1
   const canGoBack = idx > floorIdx
+  const jump = (i: number) => { if (!submitting && i >= floorIdx) setIdx(i) }
+  const jumpSection = (start: number) => { if (!submitting) setIdx(Math.max(start, floorIdx)) }
+  const subjectTag = [q.mainSubject || fq.sectionName, q.topic].filter(Boolean).join(' · ')
+  const column = { width: '100%' as const, maxWidth: READING, alignSelf: 'center' as const, paddingHorizontal: gutter }
+  const options = (
+    <OptionList
+      options={q.options}
+      selectedIndex={sel}
+      disabled={submitting}
+      onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+    />
+  )
 
   return (
-    <SafeAreaView style={s.root}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
-          <Text style={s.back}>‹</Text>
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>
-          {sectionBlocked ? fq.sectionName : (blueprint?.name ?? 'Mock Exam')}
-        </Text>
-        {sectionBlocked ? (
-          <View style={[s.timerPill, sectionRemaining <= 60 && s.timerPillLow]}>
-            <Text style={[s.timerTxt, sectionRemaining <= 60 && s.timerTxtLow]}>⏱ {fmtTime(sectionRemaining)}</Text>
-          </View>
-        ) : null}
-        <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
-          <Text style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>{sectionBlocked ? 'Σ ' : '⏱ '}{fmtTime(remaining)}</Text>
-        </View>
-        <Text style={s.counter}>{idx + 1}/{questions.length}</Text>
-      </View>
+      <ExamFocusHeader
+        title={sectionBlocked ? fq.sectionName : (blueprint?.acronym || blueprint?.name || 'Mock Exam')}
+        position={idx + 1}
+        total={questions.length}
+        answered={answeredIdxs.size}
+        remaining={remaining}
+        sectionRemaining={sectionBlocked ? sectionRemaining : null}
+        onLeave={() => router.back()}
+        onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+      />
 
-      <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }} />
-
-      <SectionGrid sections={sectionChips} onJump={start => { if (!submitting) setIdx(Math.max(start, floorIdx)) }} />
-
-      {/* Subject/topic bar lives in the fixed header zone with a fixed min height so it
-          never mounts/unmounts (and never shifts layout) between questions. */}
-      <View style={s.subjectBar}>
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.4} style={s.subjectBarText}>
-          {fq.q.mainSubject || fq.sectionName ? (
-            <Text style={s.subjectBold}>{fq.q.mainSubject ? fq.q.mainSubject : fq.sectionName}</Text>
-          ) : (
-            <Text style={s.subjectBold}>{''}</Text>
-          )}
-          {fq.q.topic ? <Text style={s.subjectTopic}>{` · ${fq.q.topic}`}</Text> : null}
-        </Text>
-      </View>
-
-      {/* Middle pane: passage + question text scroll; options live in their own fixed
-          zone below so they never jump as question/passage length changes. */}
-      <ScrollView
-        ref={qPaneRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
-        showsVerticalScrollIndicator={false}
-      >
-        <QuestionCard
-          questionText={q.questionText}
-          passageText={q.passageText}
-          reported={reported[idx]}
-          onReport={() => setReportIdx(idx)}
-          imageUrl={q.imageUrl}
-          imageAlt={q.imageAlt}
-          imageWidth={q.imageWidth}
-          imageHeight={q.imageHeight}
-        />
-      </ScrollView>
-
-      {/* Fixed options zone: capped at 42% of the window so the question pane keeps
-          the majority of the viewport; very long option lists scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <OptionList
-          options={q.options}
-          selectedIndex={sel}
-          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
-        />
-      </ScrollView>
-
-      <View style={s.footer}>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => setIdx(i => Math.max(floorIdx, i - 1))}
-          disabled={!canGoBack || submitting}
-        >
-          <Text style={[s.footGhostTxt, (!canGoBack || submitting) && { opacity: 0.3 }]}>Back</Text>
-        </Pressable>
-        {isLast ? (
-          // Fix 2: the last question never submits directly anymore — it opens
-          // a review sheet listing every question's answered/unanswered state,
-          // with an explicit "Submit exam" confirmation inside it.
-          <Pressable
-            accessibilityRole="button"
-            style={[s.footBtnPrimary, submitting && s.footDisabled]}
-            disabled={submitting}
-            onPress={() => setReviewOpen(true)}
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {/* Middle pane: passage + question scroll; options live in their own fixed
+              zone below so they never jump as question/passage length changes. */}
+          <ScrollView
+            ref={qPaneRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing.lg }}
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={s.footPrimaryTxt}>Review & submit</Text>
-          </Pressable>
-        ) : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              style={s.footBtnGhost}
-              onPress={() => setIdx(i => i + 1)}
-              disabled={submitting}
-            >
-              <Text style={s.footGhostTxt}>Skip</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
-              disabled={sel === undefined || submitting}
-              onPress={() => setIdx(i => i + 1)}
-            >
-              <Text style={s.footPrimaryTxt}>Next</Text>
-            </Pressable>
-          </>
-        )}
+            <View testID="exam-reading-column" style={column}>
+              <QuestionCard
+                questionText={q.questionText}
+                passageText={q.passageText}
+                subjectTag={subjectTag || undefined}
+                reported={reported[idx]}
+                onReport={() => setReportIdx(idx)}
+                imageUrl={q.imageUrl}
+                imageAlt={q.imageAlt}
+                imageWidth={q.imageWidth}
+                imageHeight={q.imageHeight}
+              />
+              {/* Desktop: options follow the question in the reading column. */}
+              {expanded ? <View style={{ marginTop: spacing.xl }}>{options}</View> : null}
+            </View>
+          </ScrollView>
+
+          {/* Phones/tablets: a fixed options zone, capped at 42% of the window so the
+              question pane keeps the majority of the viewport and the options never
+              jump between questions; very long option lists scroll inside it. */}
+          {expanded ? null : (
+          <ScrollView
+            style={{ flexGrow: 0, maxHeight: winH * 0.42 }}
+            contentContainerStyle={{ paddingVertical: spacing.sm }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={column}>{options}</View>
+          </ScrollView>
+          )}
+
+          <View style={{ borderTopWidth: 1, borderTopColor: t.divider, backgroundColor: t.bg }}>
+            <View style={[column, { flexDirection: 'row', gap: spacing.sm, paddingVertical: spacing.md }]}>
+              <Button
+                label="Back"
+                variant="secondary"
+                disabled={!canGoBack || submitting}
+                onPress={() => setIdx(i => Math.max(floorIdx, i - 1))}
+              />
+              {isLast ? (
+                // Fix 2: the last question never submits directly anymore — it opens
+                // a review sheet listing every question's answered/unanswered state,
+                // with an explicit "Submit exam" confirmation inside it.
+                <Button
+                  label="Review & submit"
+                  disabled={submitting}
+                  onPress={() => setReviewOpen(true)}
+                  style={{ flex: 1 }}
+                />
+              ) : (
+                <>
+                  <Button label="Skip" variant="ghost" disabled={submitting} onPress={() => setIdx(i => i + 1)} />
+                  <Button
+                    label="Next"
+                    disabled={sel === undefined || submitting}
+                    onPress={() => setIdx(i => i + 1)}
+                    style={{ flex: 1 }}
+                  />
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {expanded ? (
+          <QuestionNavPanel
+            total={questions.length}
+            currentIdx={idx}
+            answeredIdxs={answeredIdxs}
+            flaggedIdxs={flaggedIdxs}
+            floorIdx={floorIdx}
+            onJump={jump}
+            sections={sectionChips}
+            onJumpSection={jumpSection}
+          />
+        ) : null}
       </View>
 
       <ExamReviewSheet
@@ -880,8 +1000,11 @@ export default function BlueprintExam() {
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
-        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
-        onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }}
+        flaggedIdxs={flaggedIdxs}
+        floorIdx={floorIdx}
+        sections={sectionChips}
+        onJumpSection={jumpSection}
+        onJump={jump}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />
@@ -908,113 +1031,4 @@ export default function BlueprintExam() {
       />
     </SafeAreaView>
   )
-}
-
-function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['theme'], typo: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['typo']) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    loading: { color: t.textTertiary, textAlign: 'center', marginTop: 80, fontFamily: 'Lexend_400Regular' },
-    emptyTitle: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginTop: 40, marginBottom: 10, textAlign: 'center' },
-    emptyBody: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 22 },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 8 },
-    back: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    counter: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    timerPill: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
-    timerPillLow: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.35)' },
-    timerTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold', fontVariant: ['tabular-nums'] },
-    timerTxtLow: { color: t.danger },
-    metaCard: {
-      backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
-      padding: 18, marginBottom: spacing.md, alignItems: 'center',
-    },
-    metaBig: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    metaSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 4, fontFamily: 'Lexend_400Regular' },
-    noteCard: {
-      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 14, borderCurve: 'continuous',
-      padding: 14, marginBottom: spacing.md,
-    },
-    noteTxt: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 20, fontFamily: 'Lexend_400Regular' },
-    warnCard: {
-      backgroundColor: t.dangerSurface, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
-      borderRadius: 14, borderCurve: 'continuous', padding: 14, marginBottom: spacing.md,
-    },
-    warnTitle: { fontSize: typo.sm, fontWeight: '700', color: t.danger, fontFamily: 'Outfit_700Bold', marginBottom: 4 },
-    warnTxt: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 20, fontFamily: 'Lexend_400Regular' },
-    structRow: {
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      backgroundColor: t.surface, borderWidth: 1, borderColor: t.divider, borderRadius: 12, borderCurve: 'continuous',
-      padding: spacing.md, marginBottom: 6,
-    },
-    structRowSoon: { backgroundColor: t.surface2, opacity: 0.6 },
-    structName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
-    structCount: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    structSoonTxt: { color: t.textTertiary, fontStyle: 'italic' },
-    courseNote: {
-      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 12, borderCurve: 'continuous',
-      padding: spacing.md, marginBottom: 6,
-    },
-    courseCluster: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
-    courseNoteTxt: { fontSize: typo.xs, color: t.textSecondary, marginTop: 2, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    // B1: subject/topic bar — fixed min height so the header zone never shifts
-    subjectBar: { paddingHorizontal: 14, marginBottom: spacing.xs, minHeight: 22, justifyContent: 'center' },
-    subjectBarText: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    subjectBold: { color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm },
-    subjectTopic: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm },
-    footer: {
-      flexDirection: 'row', gap: spacing.sm, padding: 14,
-      backgroundColor: t.bg, borderTopWidth: 1, borderColor: t.border,
-    },
-    footBtnGhost: {
-      paddingVertical: 13, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderCurve: 'continuous',
-      borderWidth: 1, borderColor: t.border,
-    },
-    footGhostTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    footBtnPrimary: {
-      flex: 1, paddingVertical: 13, borderRadius: radius.md, borderCurve: 'continuous',
-      backgroundColor: 'rgba(128,0,0,0.85)', alignItems: 'center',
-    },
-    footDisabled: { opacity: 0.4 },
-    footPrimaryTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-    scorePenalty: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, marginTop: 6, fontFamily: 'Lexend_600SemiBold' },
-    deltaCard: {
-      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.border, borderRadius: 12,
-      borderCurve: 'continuous', padding: spacing.md, marginBottom: 18, alignItems: 'center',
-    },
-    deltaText: { fontSize: typo.sm, fontWeight: '600', color: t.accentText, fontFamily: 'Lexend_600SemiBold', textAlign: 'center' },
-    sectionLbl: {
-      fontSize: typo.sm, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8,
-      marginBottom: 8, marginTop: 8, fontFamily: 'Lexend_600SemiBold',
-    },
-    subtestRow: {
-      flexDirection: 'row', justifyContent: 'space-between', backgroundColor: t.surface2, borderWidth: 1,
-      borderColor: t.divider, borderRadius: 12, borderCurve: 'continuous', padding: spacing.md, marginBottom: 6,
-    },
-    subtestName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
-    subtestScore: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
-    // Wave 3b: review section accordion styles
-    reviewSectionWrap: {
-      backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-      borderRadius: 14, borderCurve: 'continuous', marginBottom: 8, overflow: 'hidden',
-    },
-    reviewSectionHeader: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: 14, minHeight: 44,
-    },
-    reviewSectionHeaderLeft: { flex: 1, gap: 2 },
-    reviewSectionName: { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
-    reviewSectionCount: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    reviewSectionChevron: { fontSize: 12, color: t.textTertiary, marginLeft: 8 },
-    reviewSectionBody: { paddingHorizontal: 10, paddingBottom: 10 },
-    footnote: { fontSize: typo.xs, color: t.textTertiary, marginTop: 10, marginBottom: 4, lineHeight: 17, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-    primaryBtn: { backgroundColor: 'rgba(128,0,0,0.85)', borderRadius: 16, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center', marginTop: spacing.sm },
-    primaryBtnTxt: { color: t.textInverse, fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
-    sprintBtn: {
-      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accent, borderRadius: 16, borderCurve: 'continuous',
-      paddingVertical: 14, alignItems: 'center', marginTop: spacing.sm,
-    },
-    sprintBtnTxt: { color: t.accentText, fontWeight: '700', fontSize: typo.md, fontFamily: 'Outfit_700Bold' },
-    ghostBtn: { paddingVertical: 12, alignItems: 'center' },
-    ghostTxt: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular' },
-  })
 }

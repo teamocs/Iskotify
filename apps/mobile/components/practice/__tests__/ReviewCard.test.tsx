@@ -119,7 +119,7 @@ describe('ReviewCard', () => {
         strategyTip="Eliminate obviously wrong answers first."
       />,
     )
-    expect(screen.getByText('💡 Eliminate obviously wrong answers first.')).toBeTruthy()
+    expect(screen.getByLabelText('Strategy tip: Eliminate obviously wrong answers first.')).toBeTruthy()
 
     rerender(
       <ReviewCard
@@ -131,7 +131,7 @@ describe('ReviewCard', () => {
         explanation="exp"
       />,
     )
-    expect(screen.queryByText(/💡/)).toBeNull()
+    expect(screen.queryByLabelText(/^Strategy tip/)).toBeNull()
   })
 
   it('caps question and explanation text font scaling (maxFontSizeMultiplier)', () => {

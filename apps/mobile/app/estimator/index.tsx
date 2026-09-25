@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,10 @@ import { useAdmissionEstimate } from '../../hooks/useAdmissionEstimate'
 import { MIN_ANSWERS, type SubtestKey } from '../../utils/subtestReadiness'
 import { campusAccessibilityLabel, type CampusStatus } from '../../utils/admissionEstimate'
 import { Badge } from '../../components/ui/Badge'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import {
   ScoreDisclaimerModal,
   ScoreDisclaimerNotice,
@@ -109,7 +112,7 @@ function RangeBar({
 
 export default function EstimatorScreen() {
   const { theme: t, typo } = useTheme()
-  const { status, readiness, result, acknowledgeDisclaimer } = useAdmissionEstimate()
+  const { status, readiness, result, acknowledgeDisclaimer, reload } = useAdmissionEstimate()
 
   const s = useMemo(
     () =>
@@ -189,14 +192,24 @@ export default function EstimatorScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Text style={s.backBtn} maxFontSizeMultiplier={1.6}>← Back</Text>
+          <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Lineicons icon={ChevronLeftOutlined} size={18} color={t.textSecondary} />
+            <Text style={s.backBtn} maxFontSizeMultiplier={1.6}>Back</Text>
+          </View>
         </TouchableOpacity>
-        <Text style={s.title} maxFontSizeMultiplier={1.4}>Admission Score Estimator</Text>
+        <Text style={s.title} accessibilityRole="header" maxFontSizeMultiplier={1.4}>Estimated Admission Score</Text>
       </View>
 
       {status === 'loading' ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={t.textPrimary} />
+        <View
+          accessible
+          accessibilityLabel="Loading your estimate"
+          accessibilityState={{ busy: true }}
+          style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}
+        >
+          <Skeleton height={120} radius={radius.lg} />
+          <Skeleton height={72} radius={radius.lg} />
+          <Skeleton height={72} radius={radius.lg} />
         </View>
       ) : status === 'no-grades' ? (
         <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
@@ -270,7 +283,10 @@ export default function EstimatorScreen() {
 
           {(result.eeas.palugit > 0 || result.eeas.pabigat > 0) ? (
             <View style={s.card}>
-              <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>EEAS Adjustment</Text>
+              <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Adjustments to your estimate</Text>
+              <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
+                A lower score is better, so a bonus subtracts and a distance adjustment adds.
+              </Text>
               {result.eeas.palugit > 0 ? (
                 <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
                   Palugit (public-school / Indigenous Peoples bonus): −{result.eeas.palugit.toFixed(2)}
@@ -319,10 +335,11 @@ export default function EstimatorScreen() {
       ) : status === 'error' ? (
         <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
           <ScoreDisclaimerNotice />
-          <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>Estimate unavailable</Text>
-          <Text style={s.emptySubtitle} maxFontSizeMultiplier={1.6}>
-            Something went wrong loading your local data. Try again.
-          </Text>
+          <ErrorState
+            title="Estimate unavailable"
+            body="Your grades and practice answers are still saved on this device. Try loading them again."
+            onRetry={reload}
+          />
         </View>
       ) : null}
     </SafeAreaView>

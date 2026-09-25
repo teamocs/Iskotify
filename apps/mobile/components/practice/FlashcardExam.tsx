@@ -15,6 +15,8 @@ import { ReviewCard } from './ReviewCard'
 import { ExamReviewSheet } from './ExamReviewSheet'
 import { ResultsScoreCard } from './ResultsScoreCard'
 import { useTheme } from '../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../utils/attemptTiming'
@@ -242,14 +244,14 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           </Pressable>
 
           <Pressable
-            style={[s.primaryBtn, { marginTop: 8, backgroundColor: 'rgba(0,0,128,0.75)' }]}
+            style={[s.primaryBtn, { marginTop: spacing.sm, backgroundColor: t.surface, borderWidth: 1, borderColor: t.accentBorder }]}
             accessibilityRole="button"
             accessibilityLabel={`Share your score of ${pct} percent`}
             onPress={() =>
-              void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify! 🎓` })
+              void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify!` })
             }
           >
-            <Text style={s.primaryBtnTxt}>Share score</Text>
+            <Text style={[s.primaryBtnTxt, { color: t.accentText }]}>Share score</Text>
           </Pressable>
 
           <Pressable
@@ -280,7 +282,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           accessibilityRole="button"
           accessibilityLabel="Exit exam"
         >
-          <Text style={s.back}>‹</Text>
+          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
           {title}
@@ -297,7 +299,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
         onJump={setIdx}
       />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingTop: spacing.lg, paddingBottom: 120, paddingHorizontal: spacing.lg, gap: spacing.lg }} showsVerticalScrollIndicator={false}>
         <QuestionCard
           questionText={q.stem}
           reported={reported[idx]}
@@ -395,7 +397,6 @@ function makeStyles(
       paddingVertical: 8,
       gap: 8,
     },
-    back: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle: {
       flex: 1,
       fontSize: typo.md,
@@ -438,7 +439,7 @@ function makeStyles(
       flex: 1,
       paddingVertical: 13,
       borderRadius: 14,
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       alignItems: 'center',
     },
     footDisabled: { opacity: 0.4 },
@@ -459,7 +460,7 @@ function makeStyles(
       fontFamily: 'Lexend_600SemiBold',
     },
     primaryBtn: {
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       borderRadius: 16,
       paddingVertical: 14,
       alignItems: 'center',

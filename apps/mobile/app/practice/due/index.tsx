@@ -10,6 +10,9 @@ import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../../components/ui/a11y'
 import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
@@ -47,8 +50,7 @@ export default function DueReviewScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
     emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxxl },
-    icon: { width: 72, height: 72, backgroundColor: t.warningSurface, borderWidth: 1, borderColor: 'rgba(251,191,36,0.35)', borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
-    iconTxt: { fontSize: 36 },
+    icon: { width: 72, height: 72, backgroundColor: t.warningSurface, borderWidth: 1, borderColor: t.warningBorder, borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
     emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
     emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: spacing.xxl },
     ghostBtn: { paddingVertical: spacing.md, alignItems: 'center' },
@@ -146,7 +148,7 @@ export default function DueReviewScreen() {
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
         <View style={s.emptyWrap}>
-          <View style={s.icon}><Text style={s.iconTxt}>🎉</Text></View>
+          <View style={s.icon} {...decorative}><Lineicons icon={CheckCircle1Outlined} size={32} color={t.warningStrong} /></View>
           <Text style={s.emptyTitle}>All caught up!</Text>
           <Text style={s.emptySub}>No cards are due for review right now.</Text>
           <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
