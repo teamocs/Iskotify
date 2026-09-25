@@ -37,7 +37,7 @@
     "expo-image": "~3.0.11",
     "expo-linking": "~8.0.12",
     "expo-localization": "~17.0.9",
-    "expo-navigation-bar": "~5.0.10",
+    "expo-navigation-bar": "~57.0.2",
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.24",
     "expo-screen-capture": "~8.0.9",
