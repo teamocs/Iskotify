@@ -198,7 +198,7 @@ describe('GET /api/admin/reports', () => {
   it('sanitizes q before building .or() — structural chars stripped', async () => {
     adminUser()
     const { GET } = await import('../route')
-    const malicious = encodeURIComponent('%,verified.eq.true,(')
+    const malicious = encodeURIComponent('%,verified.eq.true,(a_c')
     const res = await GET(makeListReq(`?q=${malicious}`))
     expect(res.status).toBe(200)
     expect(capturedOrArg).toBeDefined()
@@ -206,7 +206,7 @@ describe('GET /api/admin/reports', () => {
     expect(ilikeParts.length).toBeGreaterThan(0)
     for (const part of ilikeParts) {
       const inner = part.slice(1, -1)
-      expect(inner).not.toMatch(/[%,():.\\*]/)
+      expect(inner).not.toMatch(/[%,():.\\*_]/)
     }
   })
 

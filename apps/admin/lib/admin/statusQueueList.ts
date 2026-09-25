@@ -44,7 +44,7 @@ export function parseQueueQuery(params: URLSearchParams, spec: QueueSpec): Parse
   }
 
   // Strip the characters that are structural in PostgREST's .or() syntax.
-  const search = (params.get('q') ?? '').trim().replace(/[(),.*:\\%]/g, ' ').trim()
+  const search = (params.get('q') ?? '').trim().replace(/[(),.*:\\%_]/g, ' ').trim()
 
   return { ok: true, value: { page, limit, sortColumn, ascending: dir === 'asc', conditions, search } }
 }
