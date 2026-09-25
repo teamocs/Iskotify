@@ -34,7 +34,7 @@
     "expo-device": "~8.0.10",
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "~19.0.23",
-    "expo-image": "~3.0.11",
+    "expo-image": "~57.0.5",
     "expo-linking": "~8.0.12",
     "expo-localization": "~17.0.9",
     "expo-navigation-bar": "~5.0.10",
