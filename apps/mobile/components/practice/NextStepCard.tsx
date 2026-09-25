@@ -2,7 +2,7 @@ import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { Button } from '../ui/Button'
-import { QuietSkeleton as Skeleton } from './QuietSkeleton'
+import { Skeleton } from '../ui/Skeleton'
 import type { NextPracticeCopy } from '../../utils/nextPracticeAction'
 
 interface Props {
