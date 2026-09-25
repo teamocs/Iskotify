@@ -12,6 +12,8 @@ import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
 import { ReviewCard } from './ReviewCard'
+import { ExamReviewSheet } from './ExamReviewSheet'
+import { ResultsScoreCard } from './ResultsScoreCard'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
@@ -47,6 +49,11 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // Which question index the report modal is open for (null = closed).
   const [reportIdx, setReportIdx] = useState<number | null>(null)
   const startRef = useState(() => Date.now())[0]
+  // Fix 2: last-question review sheet (never submits directly).
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Fix 3: "Review mistakes" scrolls the results screen down to the Review section.
+  const resultsScrollRef = useRef<ScrollView>(null)
+  const reviewYRef = useRef(0)
 
   // Task D: per-question timing + attempt sessionKey. Unlike the routed exam
   // screens (which remount on retake via router.replace), FlashcardExam is a
@@ -175,18 +182,16 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
     return (
       <SafeAreaView style={s.root}>
         <ScrollView
+          ref={resultsScrollRef}
           contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
-            <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
-            <Text style={s.scoreSub}>
-              {score}/{questions.length} correct
-            </Text>
-          </View>
+          {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
+          <ResultsScoreCard pct={pct} correct={score} total={questions.length} />
 
-          <Text style={s.sectionLbl}>Review</Text>
+          <View onLayout={e => { reviewYRef.current = e.nativeEvent.layout.y }}>
+            <Text style={s.sectionLbl}>Review</Text>
+          </View>
           {questions.map((q, i) => (
             <ReviewCard
               key={q.id ?? i}
@@ -205,8 +210,18 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
             />
           ))}
 
+          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
           <Pressable
             style={s.primaryBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Review mistakes"
+            onPress={() => resultsScrollRef.current?.scrollTo({ y: reviewYRef.current, animated: true })}
+          >
+            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
+          </Pressable>
+
+          <Pressable
+            style={s.ghostBtn}
             accessibilityRole="button"
             accessibilityLabel="Retake exam"
             onPress={() => {
@@ -223,7 +238,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               submittedRef.current = false
             }}
           >
-            <Text style={s.primaryBtnTxt}>Retake exam</Text>
+            <Text style={s.ghostTxt}>Retake exam</Text>
           </Pressable>
 
           <Pressable
@@ -306,25 +321,51 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
         >
           <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
-        <Pressable
-          style={s.footBtnGhost}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-          accessibilityRole="button"
-          accessibilityLabel={isLast ? 'Review answers' : 'Skip this question'}
-        >
-          <Text style={s.footGhostTxt}>{isLast ? 'Review' : 'Skip'}</Text>
-        </Pressable>
-        <Pressable
-          style={[s.footBtnPrimary, sel === undefined && !isLast && s.footDisabled]}
-          disabled={sel === undefined && !isLast}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-          accessibilityRole="button"
-          accessibilityLabel={isLast ? 'Submit exam' : 'Next question'}
-          accessibilityState={{ disabled: sel === undefined && !isLast }}
-        >
-          <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
-        </Pressable>
+        {isLast ? (
+          // Fix 2: the last question never submits directly anymore — it
+          // opens a review sheet with an explicit, confirmed "Submit exam".
+          <Pressable
+            style={s.footBtnPrimary}
+            onPress={() => setReviewOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Review answers before submitting"
+          >
+            <Text style={s.footPrimaryTxt}>Review & submit</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              style={s.footBtnGhost}
+              onPress={() => setIdx(i => i + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Skip this question"
+            >
+              <Text style={s.footGhostTxt}>Skip</Text>
+            </Pressable>
+            <Pressable
+              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
+              disabled={sel === undefined}
+              onPress={() => setIdx(i => i + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Next question"
+              accessibilityState={{ disabled: sel === undefined }}
+            >
+              <Text style={s.footPrimaryTxt}>Next</Text>
+            </Pressable>
+          </>
+        )}
       </View>
+
+      <ExamReviewSheet
+        visible={reviewOpen}
+        total={questions.length}
+        currentIdx={idx}
+        answeredIdxs={answeredIdxs}
+        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
+        onJump={setIdx}
+        onClose={() => setReviewOpen(false)}
+        onSubmit={() => { setReviewOpen(false); void submit() }}
+      />
 
       <ReportQuestionModal
         visible={reportIdx !== null}
@@ -406,34 +447,6 @@ function makeStyles(
       fontWeight: '700',
       color: t.textInverse,
       fontFamily: 'Outfit_700Bold',
-    },
-    scoreCard: {
-      borderRadius: 24,
-      padding: 22,
-      marginBottom: 18,
-      borderWidth: 1,
-      alignItems: 'center',
-    },
-    pass: {
-      backgroundColor: t.successSurface,
-      borderColor: 'rgba(34,197,94,0.25)',
-    },
-    fail: {
-      backgroundColor: t.dangerSurface,
-      borderColor: 'rgba(239,68,68,0.20)',
-    },
-    scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    scoreVerdict: {
-      fontSize: typo.lg,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    scoreSub: {
-      fontSize: typo.sm,
-      color: t.textTertiary,
-      marginTop: 2,
-      fontFamily: 'Lexend_400Regular',
     },
     sectionLbl: {
       fontSize: typo.sm,

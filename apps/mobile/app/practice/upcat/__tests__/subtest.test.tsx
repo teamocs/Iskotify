@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
+import { Alert } from 'react-native'
 import UpcatExam from '../[subtest]'
 
 // ---------------------------------------------------------------------------
@@ -8,10 +9,15 @@ import UpcatExam from '../[subtest]'
 
 const mockPush = jest.fn()
 const mockReplace = jest.fn()
+const mockRouterBack = jest.fn()
 let mockSearchParams: { subtest?: string; mode?: string } = {}
 
 jest.mock('expo-router', () => ({
-  router: { push: (...a: unknown[]) => mockPush(...a), replace: (...a: unknown[]) => mockReplace(...a), back: () => {} },
+  router: {
+    push: (...a: unknown[]) => mockPush(...a),
+    replace: (...a: unknown[]) => mockReplace(...a),
+    back: (...a: unknown[]) => mockRouterBack(...a),
+  },
   useLocalSearchParams: () => mockSearchParams,
 }))
 
@@ -52,6 +58,20 @@ jest.mock('../../../../hooks/useAdmissionEstimate', () => ({
   loadAdmissionEstimateSnapshot: (...args: unknown[]) => mockLoadSnapshot(...args),
 }))
 
+// Fix 1 — leave-confirmation + resume persistence. Behaviorally covered by
+// their own unit tests; here we only observe how the screen calls them.
+const mockUsePreventLeave = jest.fn()
+jest.mock('../../../../hooks/usePreventLeave', () => ({
+  usePreventLeave: (...a: unknown[]) => mockUsePreventLeave(...a),
+}))
+
+const mockSaveRun = jest.fn().mockResolvedValue(undefined)
+const mockLoadRun = jest.fn().mockResolvedValue(null)
+const mockClearRun = jest.fn().mockResolvedValue(undefined)
+jest.mock('../../../../hooks/useExamRunPersistence', () => ({
+  useExamRunPersistence: () => ({ saveRun: mockSaveRun, loadRun: mockLoadRun, clearRun: mockClearRun }),
+}))
+
 let mockQuestionRows: any[] = []
 let mockPassageRows: any[] = []
 
@@ -80,20 +100,42 @@ jest.mock('../../../../hooks/useDb', () => {
   return { useDb: () => db }
 })
 
+/** Fix 2: the last question opens a review sheet instead of submitting
+ *  directly — drives that flow through to an actual submit() call. */
+async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
+  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+  const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+  const buttons = call[2] as { text: string; onPress?: () => void }[]
+  await act(async () => {
+    buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+  })
+}
+
 describe('UpcatExam', () => {
+  let alertSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.useRealTimers()
     mockPush.mockReset()
     mockReplace.mockReset()
+    mockRouterBack.mockClear()
     mockRecordSession.mockClear()
     mockRecordAttempts.mockClear()
+    mockUsePreventLeave.mockClear()
+    mockSaveRun.mockClear()
+    mockLoadRun.mockClear().mockResolvedValue(null)
+    mockClearRun.mockClear()
     mockSearchParams = {}
     mockQuestionRows = []
     mockPassageRows = []
     mockLoadSnapshot.mockReset()
     // Default: not ready either before or after — no prior estimate to compare.
     mockLoadSnapshot.mockResolvedValue({ status: 'not-ready', readiness: null, result: null })
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
   })
+
+  afterEach(() => alertSpy.mockRestore())
 
   it('writes a question_attempts row per question (with topic) on submit (Task D)', async () => {
     mockSearchParams = { subtest: 'Mathematics' }
@@ -111,9 +153,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
     fireEvent.press(screen.getByText('4')) // correct (index 3)
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
     const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
@@ -143,9 +183,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
 
     fireEvent.press(screen.getByText('1')) // wrong (correct is index 1)
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
     expect(rows[0]).toMatchObject({ selectedIndex: 0, correctIndex: 1, correct: false, topic: null })
@@ -164,9 +202,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     // Reached results despite the telemetry insert rejecting — not stranded
     // behind the double-submit guard.
@@ -189,9 +225,7 @@ describe('UpcatExam', () => {
     render(<UpcatExam />)
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(await screen.findByText('Estimated Admission Score 2.35 → 2.31, lower is better')).toBeTruthy()
   })
@@ -209,10 +243,210 @@ describe('UpcatExam', () => {
     render(<UpcatExam />)
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(screen.queryByText(/Estimated Admission Score/)).toBeNull()
+  })
+
+  // ── Fix 2: last-question safety ────────────────────────────────────────────
+  it('Fix 2: the sole/last question never submits directly — it opens a review sheet', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    expect(screen.queryByText('Submit')).toBeNull()
+    fireEvent.press(screen.getByText('Review & submit'))
+
+    expect(mockRecordAttempts).not.toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
+  })
+
+  // ── Fix 3: neutral results ──────────────────────────────────────────────────
+  it('Fix 3: results never show pass/fail verdict copy, and "Review mistakes" leads', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('1')) // wrong
+    await reviewAndConfirmSubmit(alertSpy)
+
+    const tree = JSON.stringify(screen.toJSON()).toLowerCase()
+    expect(tree).not.toContain('great work')
+    expect(tree).not.toContain('keep practicing')
+    expect(screen.getByText('Review mistakes')).toBeTruthy()
+    expect(screen.getByText('Retake exam')).toBeTruthy()
+  })
+
+  // ── Fix 1: leave-confirmation + persistence ────────────────────────────────
+  it('Fix 1: guards leaving mid-exam and lets router.back() through once confirmed', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+
+    expect(mockUsePreventLeave).toHaveBeenLastCalledWith(true, expect.any(Function))
+    const onAttemptLeave = mockUsePreventLeave.mock.calls[mockUsePreventLeave.mock.calls.length - 1]![1] as () => void
+    act(() => onAttemptLeave())
+
+    expect(alertSpy).toHaveBeenCalledWith('Leave the exam?', 'Your progress is saved.', expect.any(Array))
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+    await act(async () => { buttons.find(b => b.text === 'Leave')!.onPress!() })
+    await waitFor(() => expect(mockRouterBack).toHaveBeenCalled())
+  })
+
+  it('Fix 1: persists answers/position as the student answers questions', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    const lastCall = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
+    expect(lastCall).toMatchObject({
+      runKey: 'upcat:Mathematics:full',
+      kind: 'upcat',
+      answers: { 0: 1 },
+      questionIds: ['Q1'],
+    })
+  })
+
+  it('Fix 1: clears the saved run on submit', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+    await reviewAndConfirmSubmit(alertSpy)
+
+    expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
+  })
+
+  it('Fix 1: offers a resume prompt when a saved run exists, and restores it', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+      { questionId: 'Q2', subtest: 'Mathematics', questionText: '2+2?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 3, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    mockLoadRun.mockResolvedValue({
+      runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+      questionIds: ['Q2', 'Q1'], sectionNames: ['Mathematics', 'Mathematics'],
+      answers: { 0: 3 }, idx: 1, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+    fireEvent.press(screen.getByText('Resume where you left off'))
+
+    // Resumed straight into the saved position (idx 1 of [Q2, Q1] -> "1+1?").
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+  })
+
+  // Review finding #1 (HIGH): reorderByIds compacts away a vanished question —
+  // answers/idx keyed by the ORIGINAL saved order must be remapped or they
+  // land on the wrong question.
+  it('restores answers onto the right questions when a question was removed from the pool since saving', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+      // Q2 has since been removed from the bank — only Q1 and Q3 remain.
+      { questionId: 'Q3', subtest: 'Mathematics', questionText: '5+5?', options: JSON.stringify(['9', '10', '11', '12']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    mockLoadRun.mockResolvedValue({
+      runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+      questionIds: ['Q1', 'Q2', 'Q3'], sectionNames: ['Mathematics', 'Mathematics', 'Mathematics'],
+      answers: { 0: 1, 1: 2, 2: 3 }, // Q1 -> '2', Q2 -> vanishes, Q3 -> '12'
+      idx: 2, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+    fireEvent.press(screen.getByText('Resume where you left off'))
+
+    // idx 2 pointed at Q3; after compaction ([Q1, Q3]) Q3 sits at index 1.
+    await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
+    expect(screen.getByRole('button', { name: '12' }).props.accessibilityState.selected).toBe(true)
+
+    fireEvent.press(screen.getByText('Back'))
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    expect(screen.getByRole('button', { name: '2' }).props.accessibilityState.selected).toBe(true)
+  })
+
+  // Review finding #2 (HIGH): submit() stays in phase 'exam' through its
+  // awaits — a state change during that window would re-trigger the save
+  // effect and resurrect the just-cleared run.
+  it('never re-saves the run once submit has started, even if state changes mid-submit', async () => {
+    let resolveAttempts!: () => void
+    mockRecordAttempts.mockImplementationOnce(
+      () => new Promise<void>(resolve => { resolveAttempts = () => resolve(undefined) }),
+    )
+
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+    const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+    const buttons = call[2] as { text: string; onPress?: () => void }[]
+
+    await act(async () => {
+      buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+    })
+    const saveCallsAtSubmitStart = mockSaveRun.mock.calls.length
+    expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
+
+    fireEvent.press(screen.getByText('1')) // would flip the answer if not disabled
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+
+    await act(async () => { resolveAttempts() })
+    await waitFor(() => expect(screen.getByText('Per-subtest')).toBeTruthy())
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+  })
+
+  it('Fix 1: "Start over" discards the saved run and builds a fresh sample', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    mockLoadRun.mockResolvedValue({
+      runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+      questionIds: ['Q1'], sectionNames: ['Mathematics'],
+      answers: { 0: 2 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+    fireEvent.press(screen.getByText('Start over'))
+
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
+    // Fresh start — the previously-saved answer must not carry over.
+    expect(screen.getByTestId('qnav')).toHaveTextContent('Q1/1')
   })
 })

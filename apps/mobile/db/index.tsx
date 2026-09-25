@@ -5,7 +5,7 @@ import { createDrizzleClient, type DrizzleClient } from './client'
 import { registerWebPersist } from './webPersist'
 
 // Re-export so callers can import from the canonical db entry point on native.
-export { scheduleWebPersist } from './webPersist'
+export { scheduleWebPersist, flushWebPersist } from './webPersist'
 
 export const DrizzleContext = createContext<DrizzleClient | null>(null)
 
@@ -33,8 +33,9 @@ function WebDrizzleProvider({ children }: { children: React.ReactNode }) {
         const { openWebDatabase, makeIndexedDbStore } = await import('./web/openWebDatabase')
         const handle = await openWebDatabase(makeIndexedDbStore())
         if (cancelled) return
-        // Register the scheduler so services can call scheduleWebPersist()
-        registerWebPersist(handle.schedulePersist)
+        // Register the scheduler (+ finding #3's immediate flush) so services/
+        // hooks can call scheduleWebPersist()/flushWebPersist().
+        registerWebPersist(handle.schedulePersist, handle.flush)
         setDb(handle.db as unknown as DrizzleClient)
       } catch (err) {
         console.error('[DrizzleProvider] web db init failed:', err)

@@ -590,6 +590,26 @@ export const MIGRATIONS = [
   `ALTER TABLE flashcards ADD COLUMN image_alt TEXT`,
   `ALTER TABLE flashcards ADD COLUMN image_width INTEGER`,
   `ALTER TABLE flashcards ADD COLUMN image_height INTEGER`,
+
+  // ── Exam safety Fix 1: in-progress run persistence (mock/subtest/diagnostic) ──
+  // One row per in-progress timed run — see db/schema.ts's examRuns for the
+  // column-by-column rationale. Survives app kill/backgrounding; deleted on submit.
+  `CREATE TABLE IF NOT EXISTS exam_runs (
+    run_key TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL,
+    slug TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL DEFAULT '',
+    question_ids TEXT NOT NULL DEFAULT '[]',
+    section_names TEXT NOT NULL DEFAULT '[]',
+    answers TEXT NOT NULL DEFAULT '{}',
+    idx INTEGER NOT NULL DEFAULT 0,
+    section_idx INTEGER NOT NULL DEFAULT 0,
+    floor_idx INTEGER NOT NULL DEFAULT 0,
+    end_time INTEGER,
+    section_end_time INTEGER,
+    started_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

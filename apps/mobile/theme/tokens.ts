@@ -24,6 +24,20 @@ export const darkTheme = {
   dangerSurface: 'rgba(248,113,113,0.16)',
   warning:       '#fbbf24',
   warningSurface:'rgba(251,191,36,0.16)',
+  // `*Strong` — DESIGN.md's "strong" role: text/icons sitting ON that status's
+  // own `*Surface` tint (never on a plain surface — use the DEFAULT color there).
+  // Dark theme's tints blend a light/saturated status color over a DARK bg
+  // (#1a1a2e), so the blended tint stays dark — the DEFAULT color already
+  // clears 4.5:1 against it, measured here (relative-luminance, WCAG formula):
+  //   successStrong #4ade80 on successSurface-over-bg (~#22393B): 7.02:1
+  //   dangerStrong  #f87171 on dangerSurface-over-bg  (~#3E2839): 4.84:1
+  //   warningStrong #fbbf24 on warningSurface-over-bg (~#3E342C): 7.26:1
+  // (This is the light-theme-only bug DESIGN.md's audit found: a *fill* of
+  // raw `warning` behind white text is still ~1.7:1 — that's fixed by using
+  // `accentStrong` as the fill instead, not by this token.)
+  successStrong: '#4ade80',
+  dangerStrong:  '#f87171',
+  warningStrong: '#fbbf24',
   tabBar:        'rgba(26,26,46,0.92)',
   divider:       'rgba(255,255,255,0.20)',
   surfaceSubtle: 'rgba(255,255,255,0.05)',
@@ -56,6 +70,19 @@ export const lightTheme = {
   dangerSurface: 'rgba(185,28,28,0.10)',
   warning:       '#b45309',
   warningSurface:'rgba(180,83,9,0.10)',
+  // `*Strong` — text/icons on that status's OWN tint (see darkTheme's comment
+  // for the role). Light theme's tints blend a saturated color at only 10%
+  // over a near-white bg, so the DEFAULT color falls short here — each is
+  // darkened until it clears 4.5:1 against its own blended *Surface tint
+  // (measured, WCAG relative-luminance formula; mirrors the web preset's
+  // `-strong` shades in DESIGN.md):
+  //   successStrong #166534 on successSurface-over-bg (~#E6E8E2): 5.77:1
+  //   dangerStrong  #991b1b on dangerSurface-over-bg  (~#F6DEDE): 6.50:1
+  //   warningStrong #92400e on warningSurface-over-bg (~#F6E4DD): 5.74:1
+  // (The base `warning` #b45309 measures only ~4.08:1 here — under AA.)
+  successStrong: '#166534',
+  dangerStrong:  '#991b1b',
+  warningStrong: '#92400e',
   tabBar:        'rgba(253,244,244,0.92)',
   divider:       'rgba(128,0,0,0.14)',
   surfaceSubtle: 'rgba(128,0,0,0.05)',

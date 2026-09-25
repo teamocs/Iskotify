@@ -144,6 +144,12 @@ export interface WebDatabaseHandle {
   persistNow(): Promise<void>
   /** Schedule a persist ~2s from now (debounced). Call after any write. */
   schedulePersist(): void
+  /**
+   * Review finding #3 — cancels any pending debounced schedule and persists
+   * immediately. Used by the exam screens' beforeunload handler so a debounce
+   * window can't drop the last answer on tab close.
+   */
+  flush(): Promise<void>
 }
 
 /**
@@ -253,6 +259,16 @@ export async function openWebDatabase(
     }, 2000)
   }
 
+  // Review finding #3: cancel any pending debounce and persist right away —
+  // used from beforeunload, where there's no time left to wait ~2s.
+  async function flush(): Promise<void> {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+    await persistNow()
+  }
+
   // Flush on tab-close / navigation / reload (browser only). visibilitychange
   // covers tab switches and backgrounding; pagehide additionally covers reloads
   // and bfcache eviction, which visibilitychange can miss — without it a hard
@@ -269,5 +285,5 @@ export async function openWebDatabase(
     window.addEventListener('pagehide', () => { void persistNow() })
   }
 
-  return { db, persistNow, schedulePersist }
+  return { db, persistNow, schedulePersist, flush }
 }

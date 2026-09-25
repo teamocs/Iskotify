@@ -624,3 +624,28 @@ export const examCourseNotes = sqliteTable('exam_course_notes', {
   displayOrder: integer('display_order').notNull().default(0),
   remoteUpdatedAt: integer('remote_updated_at'),
 }, (t) => [index('exam_course_notes_slug_idx').on(t.blueprintSlug)])
+
+// ── Exam safety Fix 1: in-progress mock/subtest/diagnostic run persistence ───
+// One row per in-progress timed run, keyed by a stable runKey (e.g.
+// 'exam:upcat', 'upcat:all:full', 'diagnostic:Science') — see
+// utils/examRunPersistence.ts's runKeyFor(). Written on every answer while
+// the run is in progress, deleted on submit. questionIds/sectionNames/answers
+// are JSON-encoded text (same pattern as flashcards.options etc.) so a run
+// can be reconstructed by re-fetching the current question pool and
+// reordering by id — see reorderByIds()/reconstructBuiltExamFromRun().
+export const examRuns = sqliteTable('exam_runs', {
+  runKey: text('run_key').primaryKey(),
+  kind: text('kind').notNull(), // 'exam' | 'upcat' | 'diagnostic'
+  slug: text('slug').notNull().default(''),
+  mode: text('mode').notNull().default(''),
+  questionIds: text('question_ids').notNull().default('[]'),
+  sectionNames: text('section_names').notNull().default('[]'),
+  answers: text('answers').notNull().default('{}'),
+  idx: integer('idx').notNull().default(0),
+  sectionIdx: integer('section_idx').notNull().default(0),
+  floorIdx: integer('floor_idx').notNull().default(0),
+  endTime: integer('end_time'),
+  sectionEndTime: integer('section_end_time'),
+  startedAt: integer('started_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})

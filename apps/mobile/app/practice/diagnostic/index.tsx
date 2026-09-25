@@ -27,8 +27,16 @@ import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius, type Theme } from '../../../theme/tokens'
+import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
+import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
+import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
+import { confirmAction } from '../../../utils/confirmAction'
+import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
+import { buildPreAssessFromUpcat, type UpcatLocalRow } from '../../../utils/preAssessmentSource'
+import { PRE_ASSESS_QUESTIONS } from '../../../data/preAssessment'
 
-type Phase = 'loading' | 'exam' | 'results'
+type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
 
 const TONE_TO_BADGE: Record<ReadinessTone, 'success' | 'warning' | 'danger' | 'neutral'> = {
   strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
@@ -57,12 +65,24 @@ export default function DiagnosticExam() {
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
+  const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [questions, setQuestions] = useState<PreAssessQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const startRef = useState(() => Date.now())[0]
+  // Fix 2: last-question review sheet (never submits directly).
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Fix 1: leave-confirmation + resume-in-progress-run state.
+  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  // Review finding #2: disables exam inputs while submit() is in flight (see
+  // exam/[slug].tsx's submitting flag for the full rationale).
+  const [submitting, setSubmitting] = useState(false)
+  const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
+  const bankRowsRef = useRef<UpcatLocalRow[]>([])
+  const subtestsRef = useRef<string[]>([])
+  const runKey = runKeyFor('diagnostic', subjectParam ?? 'all')
 
   // Countdown timer (60s/question). Auto-submits at zero. endTime is an absolute
   // timestamp so the clock stays accurate even if the interval drifts.
@@ -93,6 +113,15 @@ export default function DiagnosticExam() {
     }
   }, [idx])
 
+  /** Builds a brand-new sample from the already-fetched bank rows and arms the timer. */
+  function buildFreshExam() {
+    const built = buildDiagnosticQuestions(bankRowsRef.current, subtestsRef.current, QUESTIONS_PER_SUBTEST)
+    prefetchSessionImages(built) // fire-and-forget; never blocks session start
+    setQuestions(built)
+    if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
+    setPhase(built.length ? 'exam' : 'results')
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -112,24 +141,110 @@ export default function DiagnosticExam() {
           imageWidth: upcatQuestions.imageWidth,
           imageHeight: upcatQuestions.imageHeight,
         }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
-        const subtests = resolveDiagnosticSubtests(subjectParam)
-        const built = buildDiagnosticQuestions(rows, subtests, QUESTIONS_PER_SUBTEST)
-        prefetchSessionImages(built) // fire-and-forget; never blocks session start
-        setQuestions(built)
-        if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
-        setPhase(built.length ? 'exam' : 'results')
+        bankRowsRef.current = rows
+        subtestsRef.current = resolveDiagnosticSubtests(subjectParam)
+
+        // Fix 1: a saved in-progress run pre-empts starting a brand-new sample.
+        const run = await loadRun(runKey)
+        if (run && run.questionIds.length > 0) {
+          savedRunRef.current = run
+          setPhase('resume-prompt')
+          return
+        }
+
+        buildFreshExam()
       } catch {
         // Unexpected failure: show results (empty) rather than hang on loading
         setPhase('results')
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, subjectParam])
+
+  /** Fix 1: rebuild the exact previously-sampled question set from the saved
+   *  run's ids. The diagnostic's question pool mixes bank rows (real
+   *  question ids) and the bundled static set (data/preAssessment.ts) — build
+   *  as close to an exhaustive candidate pool as possible (a very high
+   *  per-subtest cap) plus the whole bundle, then reorder/filter by the saved
+   *  ids. A previously-served bank question that fell outside this pool is
+   *  silently dropped (see utils/examRunPersistence.ts's reorderByIds) —
+   *  resuming with slightly fewer questions is safer than resuming with a
+   *  missing/stale one. */
+  function resumeExam() {
+    const run = savedRunRef.current
+    if (!run) return
+    const exhaustivePool = buildPreAssessFromUpcat(bankRowsRef.current, subtestsRef.current, 9999)
+    const candidatePool = [...exhaustivePool, ...PRE_ASSESS_QUESTIONS]
+    const ordered = reorderByIds<PreAssessQuestion, 'id'>(candidatePool, run.questionIds, 'id')
+    if (ordered.length === 0) {
+      void clearRun(run.runKey)
+      buildFreshExam()
+      return
+    }
+    setQuestions(ordered)
+    // Review finding #1: remap answers/idx through the surviving id order —
+    // reorderByIds() compacted away vanished questions.
+    const newIds = ordered.map(q => q.id)
+    setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
+    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
+    setEndTime(run.endTime)
+    setPhase('exam')
+  }
+
+  function startOver() {
+    if (savedRunRef.current) void clearRun(savedRunRef.current.runKey)
+    savedRunRef.current = null
+    buildFreshExam()
+  }
+
+  // Fix 1: persist answers/position/timer on every change while in progress.
+  // Review finding #2: gated on submittedRef too — see exam/[slug].tsx's
+  // save effect comment for the full rationale.
+  useEffect(() => {
+    if (phase !== 'exam' || questions.length === 0 || submittedRef.current) return
+    void saveRun({
+      runKey,
+      kind: 'diagnostic',
+      slug: subjectParam ?? 'all',
+      mode: '',
+      questionIds: questions.map(q => q.id),
+      sectionNames: questions.map(q => q.subject),
+      answers,
+      idx,
+      sectionIdx: 0,
+      floorIdx: 0,
+      endTime,
+      sectionEndTime: null,
+      startedAt: startRef,
+    }).catch(err => console.warn('[practice/diagnostic] saveRun failed:', err))
+  }, [phase, runKey, subjectParam, questions, answers, idx, endTime, startRef, saveRun])
+
+  // Fix 1: leave-confirmation.
+  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+    confirmAction(
+      'Leave the exam?',
+      'Your progress is saved.',
+      'Leave',
+      () => setLeaveConfirmed(true),
+      { cancelLabel: 'Stay', destructive: true },
+    )
+  })
+  useEffect(() => {
+    if (leaveConfirmed) router.back()
+  }, [leaveConfirmed])
+  // Review finding #3: web-only tab-close warning + immediate persist flush.
+  useBeforeUnloadWarning(phase === 'exam')
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   async function submit() {
     if (submittedRef.current) return // guard against double-submit (timer + tap)
     submittedRef.current = true
+    setSubmitting(true) // Review finding #2: disable exam inputs immediately
+
+    // Fix 1: run finished — stop offering "Resume" for a completed attempt.
+    void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
+
     const score = scoreDiagnostic(questions, answers)
 
     // Task D: per-question attempt rows, written before recordSession so
@@ -184,6 +299,20 @@ export default function DiagnosticExam() {
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
         <Text style={s.loading}>Loading diagnostic…</Text>
+      </SafeAreaView>
+    )
+  }
+
+  if (phase === 'resume-prompt') {
+    return (
+      <SafeAreaView style={s.root}>
+        <WebTopSpacer />
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}>
+          <Text style={s.title}>Resume where you left off?</Text>
+          <Text style={s.emptyTxt}>You have an in-progress diagnostic. Your answers and timer were saved.</Text>
+          <PillButton label="Resume where you left off" variant="primary" fullWidth onPress={resumeExam} />
+          <PillButton label="Start over" variant="secondary" fullWidth onPress={startOver} />
+        </View>
       </SafeAreaView>
     )
   }
@@ -276,7 +405,7 @@ export default function DiagnosticExam() {
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
       <View style={s.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
@@ -313,7 +442,11 @@ export default function DiagnosticExam() {
         contentContainerStyle={webWidth ?? undefined}
         showsVerticalScrollIndicator={false}
       >
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
       </ScrollView>
 
       <View style={s.footer}>
@@ -321,26 +454,51 @@ export default function DiagnosticExam() {
           accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0}
+          disabled={idx === 0 || submitting}
         >
-          <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
+          <Text style={[s.footGhostTxt, (idx === 0 || submitting) && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footGhostTxt}>{isLast ? 'Finish' : 'Skip'}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-          disabled={sel === undefined}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
-        </Pressable>
+        {isLast ? (
+          // Fix 2: the last question never submits directly anymore.
+          <Pressable
+            accessibilityRole="button"
+            style={[s.footBtnPrimary, submitting && s.footDisabled]}
+            disabled={submitting}
+            onPress={() => setReviewOpen(true)}
+          >
+            <Text style={s.footPrimaryTxt}>Review & submit</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={s.footBtnGhost}
+              onPress={() => setIdx(i => i + 1)}
+              disabled={submitting}
+            >
+              <Text style={s.footGhostTxt}>Skip</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
+              disabled={sel === undefined || submitting}
+              onPress={() => setIdx(i => i + 1)}
+            >
+              <Text style={s.footPrimaryTxt}>Next</Text>
+            </Pressable>
+          </>
+        )}
       </View>
+
+      <ExamReviewSheet
+        visible={reviewOpen}
+        total={questions.length}
+        currentIdx={idx}
+        answeredIdxs={new Set(Object.keys(answers).map(Number))}
+        onJump={i => { if (!submitting) setIdx(i) }}
+        onClose={() => setReviewOpen(false)}
+        onSubmit={() => { setReviewOpen(false); void submit() }}
+      />
     </SafeAreaView>
   )
 }

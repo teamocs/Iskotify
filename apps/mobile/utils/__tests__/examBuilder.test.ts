@@ -1,5 +1,5 @@
 import {
-  buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
+  buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, scoreBand,
   groupReviewBySection, sectionChipState, orderBlueprintsForUser,
   scaleExamTimeMinutes, scaleSectionTimeMinutes, scaleBlueprintTiming,
   computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES,
@@ -235,17 +235,23 @@ describe('filterCourseNotesByClusters', () => {
   })
 })
 
-describe('estimatePercentileBand', () => {
+// Fix 3 (exam safety): estimatePercentileBand's `percentile` field was raw %
+// correct dressed up as a percentile — it drove "Below cut-off (need Nth)"
+// verdict pills that look like a normed qualification score but aren't.
+// scoreBand() keeps only the descriptive, non-judgemental band + blurb.
+describe('scoreBand', () => {
   it('clamps and labels tiers', () => {
-    expect(estimatePercentileBand(95).band).toBe('Top tier')
-    expect(estimatePercentileBand(80).band).toBe('Competitive')
-    expect(estimatePercentileBand(60).band).toBe('Developing')
-    expect(estimatePercentileBand(20).band).toBe('Foundational')
+    expect(scoreBand(95).band).toBe('Top tier')
+    expect(scoreBand(80).band).toBe('Competitive')
+    expect(scoreBand(60).band).toBe('Developing')
+    expect(scoreBand(20).band).toBe('Foundational')
   })
-  it('returns a percentile equal to the clamped raw pct', () => {
-    expect(estimatePercentileBand(73).percentile).toBe(73)
-    expect(estimatePercentileBand(150).percentile).toBe(99)
-    expect(estimatePercentileBand(-5).percentile).toBe(1)
+  it('handles out-of-range pct without throwing (clamped internally, no percentile exposed)', () => {
+    expect(scoreBand(150).band).toBe('Top tier')
+    expect(scoreBand(-5).band).toBe('Foundational')
+  })
+  it('never exposes a percentile field', () => {
+    expect(scoreBand(73)).not.toHaveProperty('percentile')
   })
 })
 

@@ -231,7 +231,7 @@ describe('computeMockAttemptHistory', () => {
     expect(computeMockAttemptHistory([])).toEqual([])
   })
 
-  it('groups multi-section mock rows into one attempt per start time and applies estimatePercentileBand', () => {
+  it('groups multi-section mock rows into one attempt per start time and applies scoreBand (Fix 3: no percentile field)', () => {
     const startTime = 1_700_000_000_000
     const durationSecs = 3600
     const completedAt = startTime + durationSecs * 1000
@@ -242,8 +242,8 @@ describe('computeMockAttemptHistory', () => {
     const history = computeMockAttemptHistory(sessions)
     expect(history).toHaveLength(1)
     expect(history[0]!.pct).toBe(Math.round(((18 + 16) / 40) * 100)) // 85%
-    expect(history[0]!.percentile).toBe(85)
     expect(history[0]!.band).toBe('Competitive')
+    expect(history[0]).not.toHaveProperty('percentile')
   })
 
   it('excludes topic-review sessions (topicId non-empty) — only full mock sentinel rows count', () => {

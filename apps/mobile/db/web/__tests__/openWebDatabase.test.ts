@@ -188,6 +188,29 @@ describe('openWebDatabase', () => {
     jest.useRealTimers()
   }, 20000)
 
+  // Review finding #3 (MEDIUM): the beforeunload handler needs a way to
+  // force an immediate save that also cancels any pending debounced one —
+  // otherwise a flush right before a scheduled debounce fires could still
+  // race with (or be followed by) a redundant second save.
+  it('flush cancels a pending debounced schedule and saves immediately', async () => {
+    jest.useFakeTimers()
+    const store = makeMemoryStore()
+    const saveSpy = jest.spyOn(store, 'save')
+    const h = await openWebDatabase(store, initSqlJs)
+
+    h.schedulePersist()
+    expect(saveSpy).not.toHaveBeenCalled()
+
+    await h.flush()
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+
+    // The debounced timer must have been cancelled — advancing past its
+    // 2s window must not fire a second, redundant save.
+    await jest.runAllTimersAsync()
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+    jest.useRealTimers()
+  }, 20000)
+
   it('persistNow saves bytes that can be reloaded', async () => {
     const store = makeMemoryStore()
     const h = await openWebDatabase(store, initSqlJs)

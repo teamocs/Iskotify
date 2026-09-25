@@ -1,4 +1,8 @@
 module.exports = {
+  // Full exam-flow tests (prestart → answer every question → review → submit
+  // → results) run ~4-5s locally and exceeded Jest's 5s default on the shared
+  // CI runner. 20s is the ceiling for any single test, not a target.
+  testTimeout: 20000,
   projects: [
     {
       displayName: 'services',

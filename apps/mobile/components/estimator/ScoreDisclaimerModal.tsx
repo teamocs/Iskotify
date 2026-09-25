@@ -61,12 +61,12 @@ export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimer
         },
         warningIcon: {
           fontSize: typo.base,
-          color: t.warning,
+          color: t.warningStrong,
         },
         warningBadgeText: {
           fontFamily: 'Lexend_500Medium',
           fontSize: typo.xs,
-          color: t.warning,
+          color: t.warningStrong, // text ON warningSurface — use the strong role, not the DEFAULT one (DESIGN.md)
           letterSpacing: 0.5,
           textTransform: 'uppercase',
         },
@@ -106,7 +106,11 @@ export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimer
           backgroundColor: t.bg,
         },
         ackBtn: {
-          backgroundColor: t.warning,
+          // Was `t.warning` — white/textInverse text directly on the raw
+          // warning fill measures ≈1.7:1 in dark (WCAG AA failure, Sept 2026
+          // audit). accentStrong is an opaque maroon fill; textInverse
+          // already clears AA on it elsewhere in the app.
+          backgroundColor: t.accentStrong,
           borderRadius: 14,
           paddingVertical: 16,
           alignItems: 'center',
@@ -196,13 +200,13 @@ export function ScoreDisclaimerNotice() {
         },
         icon: {
           fontSize: typo.sm,
-          color: t.warning,
+          color: t.warningStrong,
         },
         text: {
           flex: 1,
           fontFamily: 'Lexend_400Regular',
           fontSize: typo.xs,
-          color: t.warning,
+          color: t.warningStrong, // text ON warningSurface — strong role, not DEFAULT (DESIGN.md)
           lineHeight: 16,
         },
       }),

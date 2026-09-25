@@ -8,9 +8,9 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import { loadAdmissionEstimateSnapshot, type AdmissionEstimateSnapshot } from '../../../hooks/useAdmissionEstimate'
 import { estimateDeltaMessage } from '../../../utils/estimateDelta'
-import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint } from '../../../services/examBlueprints'
+import { getExamBlueprint, getQuestionsByCategory, getAllPassages, getTargetCourseClusters, type ExamBlueprint, type BlueprintSection } from '../../../services/examBlueprints'
 import {
-  buildBlueprintExam, buildStudySprintExam, scoreBlueprintExam, filterCourseNotesByClusters, estimatePercentileBand,
+  buildBlueprintExam, buildStudySprintExam, scoreBlueprintExam, filterCourseNotesByClusters,
   groupReviewBySection, sectionChipState, scaleBlueprintTiming, STUDY_SPRINT_MINUTES,
   type BuiltExam, type ReviewSection, type ScaledBlueprintTiming,
 } from '../../../utils/examBuilder'
@@ -24,11 +24,18 @@ import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
 import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
+import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
+import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
+import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
+import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
+import { confirmAction } from '../../../utils/confirmAction'
+import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'exam' | 'results'
 
@@ -70,10 +77,15 @@ interface ReviewAccordionProps {
   questions: FlatQuestion[]
   answers: Record<number, number>
   styles: ReturnType<typeof makeStyles>
+  /** Fix 3: "Review mistakes" is the results screen's primary action — it expands
+   *  every section at once instead of making the student open each one by hand. */
+  initiallyExpanded?: boolean
 }
 
-function ReviewAccordion({ reviewSections, questions, answers, styles: s }: ReviewAccordionProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+function ReviewAccordion({ reviewSections, questions, answers, styles: s, initiallyExpanded }: ReviewAccordionProps) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    initiallyExpanded ? Object.fromEntries(reviewSections.map(sec => [sec.sectionName, true])) : {},
+  )
 
   function toggle(name: string) {
     setExpanded(prev => ({ ...prev, [name]: !prev[name] }))
@@ -138,6 +150,7 @@ export default function BlueprintExam() {
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
+  const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [blueprint, setBlueprint] = useState<ExamBlueprint | null>(null)
@@ -162,6 +175,20 @@ export default function BlueprintExam() {
   // Post-session Estimated Admission Score delta — UPCAT-only (the estimator
   // is UPCAT-specific); null for every other blueprint slug.
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
+  // Fix 2: last-question review sheet (never submits directly).
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Fix 3: "Review mistakes" expands every review section at once.
+  const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
+  // Fix 1: leave-confirmation + resume-in-progress-run state.
+  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  const [resumeAvailable, setResumeAvailable] = useState(false)
+  const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
+  // Review finding #2: true from the first synchronous line of submit()
+  // until the screen leaves 'exam' phase — disables exam inputs so a tap
+  // during submit()'s awaits can't change answers/idx and re-trigger the
+  // persistence effect below (which also re-checks submittedRef itself, as
+  // a second line of defense against anything that isn't gated by this).
+  const [submitting, setSubmitting] = useState(false)
 
   // Countdown timer. endTime is an absolute timestamp so the clock stays accurate even
   // if the interval drifts. The total timer always runs; per-section timers run when
@@ -244,6 +271,106 @@ export default function BlueprintExam() {
 
   useEffect(() => { void loadExam() }, [loadExam])
 
+  // Fix 1: once the exam is loaded (prestart), check for a saved in-progress
+  // run for this blueprint so the prestart screen can offer "Resume".
+  useEffect(() => {
+    if (phase !== 'prestart' || !slug) return
+    let cancelled = false
+    void loadRun(runKeyFor('exam', slug)).then(run => {
+      if (cancelled) return
+      if (run && run.questionIds.length > 0) {
+        savedRunRef.current = run
+        setResumeAvailable(true)
+      }
+    })
+    return () => { cancelled = true }
+  }, [phase, slug, loadRun])
+
+  // Fix 1: persist answers/position/timers on every change while the run is
+  // in progress — cleared on submit (see submit()). Best-effort: a save
+  // failure must never interrupt the exam.
+  // Review finding #2: also gated on submittedRef — submit() stays in phase
+  // 'exam' through its awaits, so without this check a state change during
+  // that window (blocked at the input layer by `submitting`, but checked
+  // here too as a second line of defense) would re-insert the row right
+  // after clearRun() fired, resurrecting a finished run as in-progress.
+  useEffect(() => {
+    if (phase !== 'exam' || !slug || questions.length === 0 || submittedRef.current) return
+    void saveRun({
+      runKey: runKeyFor('exam', slug),
+      kind: 'exam',
+      slug,
+      mode: examMode,
+      questionIds: questions.map(fq => fq.q.questionId),
+      sectionNames: questions.map(fq => fq.sectionName),
+      answers,
+      idx,
+      sectionIdx,
+      floorIdx,
+      endTime,
+      sectionEndTime,
+      startedAt: startRef,
+    }).catch(err => console.warn('[exam/[slug]] saveRun failed:', err))
+  }, [phase, slug, examMode, questions, answers, idx, sectionIdx, floorIdx, endTime, sectionEndTime, startRef, saveRun])
+
+  // Fix 1: leave-confirmation — guards the back gesture, the Android hardware
+  // back button, and the explicit ‹ button (all the same "remove this screen"
+  // action) behind a confirmation while a run is in progress.
+  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+    confirmAction(
+      'Leave the exam?',
+      'Your progress is saved.',
+      'Leave',
+      () => setLeaveConfirmed(true),
+      { cancelLabel: 'Stay', destructive: true },
+    )
+  })
+  useEffect(() => {
+    if (leaveConfirmed) router.back()
+  }, [leaveConfirmed])
+  // Review finding #3: web-only tab-close warning + immediate persist flush.
+  useBeforeUnloadWarning(phase === 'exam')
+
+  /** Fix 1: rebuild the exact previously-sampled question set from the saved
+   *  run's question ids (re-fetching the current pool + passages, already
+   *  loaded by loadExam), then jump straight into 'exam' with the saved
+   *  answers/position/timers restored. Absolute timestamps mean the existing
+   *  countdown effects below correctly auto-advance/auto-submit any section
+   *  that fully expired while the app was closed — no special-casing needed. */
+  function resumeExam() {
+    const run = savedRunRef.current
+    if (!blueprint || !run) return
+    const allRaw = Array.from(poolsRef.current.values()).flat()
+    const orderedRaw = reorderByIds<RawUpcatQuestion, 'questionId'>(allRaw, run.questionIds, 'questionId')
+    if (orderedRaw.length === 0) {
+      // Nothing left to resume (e.g. every sampled question was unpublished since).
+      void clearRun(run.runKey)
+      setResumeAvailable(false)
+      return
+    }
+    const passageById = new Map(passagesRef.current.map(p => [p.setId, p.passageText]))
+    const sectionByQuestionId = new Map(run.questionIds.map((id, i) => [id, run.sectionNames[i] ?? '']))
+    const flat: FlatQuestion[] = orderedRaw.map(q => ({
+      q: { ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null },
+      sectionName: sectionByQuestionId.get(q.questionId) ?? '',
+    }))
+    setBuilt(reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, flat))
+    setExamMode(run.mode === 'sprint' ? 'sprint' : 'full')
+    setQuestions(flat)
+    // Review finding #1: reorderByIds compacts away vanished questions, so
+    // answers/idx/floorIdx saved against the ORIGINAL id order must be
+    // remapped through the surviving order — not applied at their old
+    // positions, which would land on the wrong question.
+    const newIds = flat.map(fq => fq.q.questionId)
+    setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
+    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
+    setFloorIdx(remapSingleIndex(run.questionIds, newIds, run.floorIdx))
+    setSectionIdx(run.sectionIdx)
+    setEndTime(run.endTime)
+    setSectionEndTime(run.sectionEndTime)
+    setPhase('exam')
+  }
+
   // Web: if the screen loaded before the fire-and-forget catalog sync delivered
   // blueprints/questions, it would be stuck on 'empty'. Re-load when the practice
   // cache refreshes (post-sync), but only while still empty — never mid-exam.
@@ -294,6 +421,17 @@ export default function BlueprintExam() {
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
+    // Review finding #2: disable exam inputs immediately — closes the window
+    // where a tap during submit()'s awaits could change answers/idx and
+    // re-trigger the (now also submittedRef-gated) persistence effect.
+    setSubmitting(true)
+
+    // Fix 1: the run is finished — clear the saved in-progress state so the
+    // prestart screen stops offering "Resume" for a completed attempt.
+    // Best-effort: must never block reaching results. Runs after submittedRef
+    // is already true, so the save effect above will no-op even if something
+    // still manages to change state before results render.
+    if (slug) void clearRun(runKeyFor('exam', slug)).catch(err => console.warn('[exam/[slug]] clearRun failed:', err))
 
     // Post-session delta — UPCAT only. Snapshot before this session's
     // attempts are written; best-effort, must never block reaching results.
@@ -497,13 +635,18 @@ export default function BlueprintExam() {
             </>
           ) : null}
 
+          {resumeAvailable ? (
+            <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={resumeExam}>
+              <Text style={s.primaryBtnTxt}>Resume where you left off</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
-            style={[s.primaryBtn, built.totalQuestions === 0 && s.footDisabled]}
+            style={[resumeAvailable ? s.sprintBtn : s.primaryBtn, built.totalQuestions === 0 && s.footDisabled]}
             disabled={built.totalQuestions === 0}
             onPress={() => startExam('full')}
           >
-            <Text style={s.primaryBtnTxt}>Full Mock</Text>
+            <Text style={resumeAvailable ? s.sprintBtnTxt : s.primaryBtnTxt}>Full Mock</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -524,7 +667,6 @@ export default function BlueprintExam() {
     const total = questions.length
     const score = scoreBlueprintExam(total, correct, wrong, blueprint.hasGuessingPenalty, blueprint.guessingPenalty)
     const pct = total ? Math.round((correct / total) * 100) : 0
-    const pb = estimatePercentileBand(pct)
 
     // Per-section raw breakdown.
     const bySection = new Map<string, { correct: number; total: number }>()
@@ -535,10 +677,6 @@ export default function BlueprintExam() {
       bySection.set(fq.sectionName, cur)
     })
 
-    // Cut-off notes that have a minPercentile (for verdict) or just a note.
-    const notesWithCutoff = visibleNotes.filter(n => n.minPercentile != null)
-    const notesWithoutCutoff = visibleNotes.filter(n => n.minPercentile == null)
-
     // Wave 3b: grouped review sections with wrong-first ordering
     const correctIndexes = questions.map(fq => fq.q.correctIndex)
     const reviewSections = groupReviewBySection(questions, answers, correctIndexes)
@@ -547,21 +685,12 @@ export default function BlueprintExam() {
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
         <ScrollView contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]} showsVerticalScrollIndicator={false}>
-          <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
-            <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
-            <Text style={s.scoreSub}>{correct}/{total} correct</Text>
-            {blueprint.hasGuessingPenalty ? (
-              <Text style={s.scorePenalty}>Penalty-adjusted: {Math.round(score.adjusted * 100) / 100}</Text>
-            ) : null}
-          </View>
-
-          <View style={s.bandCard}>
-            <Text style={s.bandPct}>est. ~{pb.percentile}th</Text>
-            <Text style={s.bandLabel}>{pb.band}</Text>
-            <Text style={s.bandBlurb}>{pb.blurb}</Text>
-            <Text style={s.bandDisclaimer}>Estimated percentile (not a normed score)</Text>
-          </View>
+          {/* Fix 3: one neutral card regardless of score — no pass/fail colouring,
+              no percentile, no cut-off verdict. */}
+          <ResultsScoreCard pct={pct} correct={correct} total={total} />
+          {blueprint.hasGuessingPenalty ? (
+            <Text style={s.scorePenalty}>Penalty-adjusted: {Math.round(score.adjusted * 100) / 100}</Text>
+          ) : null}
 
           {scoreDelta ? (
             <View style={s.deltaCard}>
@@ -581,24 +710,8 @@ export default function BlueprintExam() {
 
           {visibleNotes.length > 0 ? (
             <>
-              <Text style={s.sectionLbl}>Course cut-offs</Text>
-              {notesWithCutoff.map((cn, i) => {
-                const onTrack = pb.percentile >= (cn.minPercentile ?? 0)
-                return (
-                  <View key={`cutoff-${cn.courseCluster}-${i}`} style={s.courseNote}>
-                    <View style={s.cutoffRow}>
-                      <Text style={s.courseCluster}>{cn.courseCluster}</Text>
-                      <View style={[s.verdictPill, onTrack ? s.verdictOn : s.verdictOff]}>
-                        <Text style={[s.verdictTxt, onTrack ? s.verdictTxtOn : s.verdictTxtOff]}>
-                          {onTrack ? '✓ On track (est.)' : `Below cut-off (need ${cn.minPercentile}th)`}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={s.courseNoteTxt}>{cn.note}</Text>
-                  </View>
-                )
-              })}
-              {notesWithoutCutoff.map((cn, i) => (
+              <Text style={s.sectionLbl}>Course cut-off context</Text>
+              {visibleNotes.map((cn, i) => (
                 <View key={`note-${cn.courseCluster}-${i}`} style={s.courseNote}>
                   <Text style={s.courseCluster}>{cn.courseCluster}</Text>
                   <Text style={s.courseNoteTxt}>{cn.note}</Text>
@@ -610,16 +723,22 @@ export default function BlueprintExam() {
           {/* Wave 3b: Review grouped by section, collapsed accordion, wrong-answers-first */}
           <Text style={s.sectionLbl}>Review</Text>
           <ReviewAccordion
+            key={reviewMistakesTapped ? 'expanded' : 'collapsed'}
             reviewSections={reviewSections}
             questions={questions}
             answers={answers}
             styles={s}
+            initiallyExpanded={reviewMistakesTapped}
           />
 
           {blueprint.scoringNote ? <Text style={s.footnote}>{blueprint.scoringNote}</Text> : null}
 
-          <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={() => router.replace(`/practice/exam/${slug}`)}>
-            <Text style={s.primaryBtnTxt}>Retake exam</Text>
+          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
+          <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={() => setReviewMistakesTapped(true)}>
+            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace(`/practice/exam/${slug}`)}>
+            <Text style={s.ghostTxt}>Retake exam</Text>
           </Pressable>
           <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace('/practice/exam')}>
             <Text style={s.ghostTxt}>← Back to exams</Text>
@@ -649,7 +768,7 @@ export default function BlueprintExam() {
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
       <View style={s.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
@@ -666,9 +785,9 @@ export default function BlueprintExam() {
         <Text style={s.counter}>{idx + 1}/{questions.length}</Text>
       </View>
 
-      <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (i >= floorIdx) setIdx(i) }} />
+      <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }} />
 
-      <SectionGrid sections={sectionChips} onJump={start => setIdx(Math.max(start, floorIdx))} />
+      <SectionGrid sections={sectionChips} onJump={start => { if (!submitting) setIdx(Math.max(start, floorIdx)) }} />
 
       {/* Subject/topic bar lives in the fixed header zone with a fixed min height so it
           never mounts/unmounts (and never shifts layout) between questions. */}
@@ -706,7 +825,11 @@ export default function BlueprintExam() {
       {/* Fixed options zone: capped at 42% of the window so the question pane keeps
           the majority of the viewport; very long option lists scroll inside this zone. */}
       <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
       </ScrollView>
 
       <View style={s.footer}>
@@ -714,26 +837,54 @@ export default function BlueprintExam() {
           accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(floorIdx, i - 1))}
-          disabled={!canGoBack}
+          disabled={!canGoBack || submitting}
         >
-          <Text style={[s.footGhostTxt, !canGoBack && { opacity: 0.3 }]}>Back</Text>
+          <Text style={[s.footGhostTxt, (!canGoBack || submitting) && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footGhostTxt}>{isLast ? 'Review' : 'Skip'}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-          disabled={sel === undefined}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
-        </Pressable>
+        {isLast ? (
+          // Fix 2: the last question never submits directly anymore — it opens
+          // a review sheet listing every question's answered/unanswered state,
+          // with an explicit "Submit exam" confirmation inside it.
+          <Pressable
+            accessibilityRole="button"
+            style={[s.footBtnPrimary, submitting && s.footDisabled]}
+            disabled={submitting}
+            onPress={() => setReviewOpen(true)}
+          >
+            <Text style={s.footPrimaryTxt}>Review & submit</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={s.footBtnGhost}
+              onPress={() => setIdx(i => i + 1)}
+              disabled={submitting}
+            >
+              <Text style={s.footGhostTxt}>Skip</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
+              disabled={sel === undefined || submitting}
+              onPress={() => setIdx(i => i + 1)}
+            >
+              <Text style={s.footPrimaryTxt}>Next</Text>
+            </Pressable>
+          </>
+        )}
       </View>
+
+      <ExamReviewSheet
+        visible={reviewOpen}
+        total={questions.length}
+        currentIdx={idx}
+        answeredIdxs={answeredIdxs}
+        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
+        onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }}
+        onClose={() => setReviewOpen(false)}
+        onSubmit={() => { setReviewOpen(false); void submit() }}
+      />
 
       <ReportQuestionModal
         visible={reportIdx !== null}
@@ -825,27 +976,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
     },
     footDisabled: { opacity: 0.4 },
     footPrimaryTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-    bandCard: {
-      backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 20, borderCurve: 'continuous',
-      padding: 18, marginBottom: spacing.md, alignItems: 'center',
-    },
-    bandPct: { fontSize: 36, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
-    bandLabel: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginTop: 2 },
-    bandBlurb: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 4, textAlign: 'center', lineHeight: 20 },
-    bandDisclaimer: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 6, fontStyle: 'italic' },
-    cutoffRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-    verdictPill: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1 },
-    verdictOn: { backgroundColor: t.successSurface, borderColor: 'rgba(34,197,94,0.30)' },
-    verdictOff: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.25)' },
-    verdictTxt: { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
-    verdictTxtOn: { color: t.success },
-    verdictTxtOff: { color: t.danger },
-    scoreCard: { borderRadius: 24, borderCurve: 'continuous', padding: 22, marginBottom: 18, borderWidth: 1, alignItems: 'center' },
-    pass: { backgroundColor: t.successSurface, borderColor: 'rgba(34,197,94,0.25)' },
-    fail: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.20)' },
-    scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    scoreVerdict: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    scoreSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 2, fontFamily: 'Lexend_400Regular' },
     scorePenalty: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, marginTop: 6, fontFamily: 'Lexend_600SemiBold' },
     deltaCard: {
       backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.border, borderRadius: 12,

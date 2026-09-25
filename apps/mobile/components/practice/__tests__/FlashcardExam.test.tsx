@@ -1,8 +1,22 @@
 import React from 'react'
 import { render, fireEvent, screen, act } from '@testing-library/react-native'
-import { Share } from 'react-native'
+import { Share, Alert } from 'react-native'
 import { FlashcardExam } from '../FlashcardExam'
 import type { QuizQuestion } from '../../../utils/mcDistractors'
+
+/** Fix 2: the last question opens a review sheet instead of submitting
+ *  directly — drives that flow through to an actual submit() call, the same
+ *  way a student who taps through the confirmation would. */
+async function reviewAndConfirmSubmit() {
+  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+  const alertSpy = Alert.alert as jest.Mock
+  const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+  const buttons = call[2] as { text: string; onPress?: () => void }[]
+  await act(async () => {
+    buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+  })
+}
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +58,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }))
 
 jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' } as any)
+jest.spyOn(Alert, 'alert').mockImplementation(() => {})
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -159,12 +174,10 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Manila'))
     fireEvent.press(screen.getByText('Next'))
 
-    // Q3 — answer correctly (index 1 = "Blue"); last question → Submit button
+    // Q3 — answer correctly (index 1 = "Blue"); last question → review sheet
     fireEvent.press(screen.getByText('Blue'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     // Results screen: score 3/3 = 100%
     expect(screen.getByText('100%')).toBeTruthy()
@@ -184,9 +197,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Red'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
     const attemptRows = mockRecordAttempts.mock.calls[0]![0] as any[]
@@ -213,9 +224,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Red')) // wrong
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     expect(mockRecordSrs).toHaveBeenCalledTimes(1)
     const srsRows = mockRecordSrs.mock.calls[0]![0] as any[]
@@ -237,9 +246,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     // Submit still completed — results screen rendered, recordSession still fired.
     expect(screen.getByText('100%')).toBeTruthy()
@@ -260,9 +267,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Manila'))
     fireEvent.press(screen.getByText('Next'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     const attemptRows = mockRecordAttempts.mock.calls[0]![0] as any[]
     expect(attemptRows[0]).toMatchObject({ selectedIndex: null, correct: false })
@@ -285,9 +290,7 @@ describe('FlashcardExam', () => {
     tick(); fireEvent.press(screen.getByText('Next'))
     tick(); fireEvent.press(screen.getByText('Blue'))
     tick()
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
     const firstCall = mockRecordAttempts.mock.calls[0]![0] as any[]
     const firstSessionKey = firstCall[0].sessionKey
 
@@ -302,9 +305,7 @@ describe('FlashcardExam', () => {
     tick(); fireEvent.press(screen.getByText('Next'))
     tick(); fireEvent.press(screen.getByText('Blue'))
     tick()
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     expect(mockRecordAttempts).toHaveBeenCalledTimes(2)
     const secondCall = mockRecordAttempts.mock.calls[1]![0] as any[]
@@ -330,9 +331,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     expect(screen.getByText('100%')).toBeTruthy()
     expect(warnSpy).toHaveBeenCalledWith('[FlashcardExam] recordAttempts failed:', expect.any(Error))
@@ -340,7 +339,7 @@ describe('FlashcardExam', () => {
     warnSpy.mockRestore()
   })
 
-  it('finding #2: the submittedRef guard blocks a rapid re-tap of Submit from double-inserting attempt/progress rows', async () => {
+  it('finding #2: the submittedRef guard blocks a rapid re-tap of the confirmed submit from double-inserting attempt/progress rows', async () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
 
     fireEvent.press(screen.getByText('4'))
@@ -349,9 +348,14 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
 
+    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+    const alertSpy = Alert.alert as jest.Mock
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+    const confirmSubmit = buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!
     await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-      fireEvent.press(screen.getByText('Submit')) // rapid re-tap before the first submit() settles
+      confirmSubmit() // rapid re-tap before the first submit() settles
+      confirmSubmit()
     })
 
     expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
@@ -367,9 +371,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Manila'))
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     // On results — press Retake
     await act(async () => {
@@ -390,9 +392,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Manila'))
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit()
 
     await act(async () => {
       fireEvent.press(screen.getByText('Share score'))
@@ -448,6 +448,39 @@ describe('FlashcardExam', () => {
     expect(optionButtons).toHaveLength(4)
     const selected = optionButtons.filter(b => b.props.accessibilityState?.selected === true)
     expect(selected).toHaveLength(1)
+  })
+
+  // ── Fix 2: last-question safety ────────────────────────────────────────────
+  it('Fix 2: the last question never submits directly — it opens a review sheet', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+
+    expect(screen.queryByText('Submit')).toBeNull()
+    fireEvent.press(screen.getByText('Review & submit'))
+
+    expect(mockRecordAttempts).not.toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
+  })
+
+  // ── Fix 3: neutral results ──────────────────────────────────────────────────
+  it('Fix 3: results never show pass/fail verdict copy, and "Review mistakes" leads', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Red')) // wrong
+    await reviewAndConfirmSubmit()
+
+    const tree = JSON.stringify(screen.toJSON()).toLowerCase()
+    expect(tree).not.toContain('great work')
+    expect(tree).not.toContain('keep practicing')
+    expect(screen.getByText('Review mistakes')).toBeTruthy()
+    expect(screen.getByText('Retake exam')).toBeTruthy()
   })
 
   it('7. cancelling the report modal does not submit and keeps the report button', async () => {

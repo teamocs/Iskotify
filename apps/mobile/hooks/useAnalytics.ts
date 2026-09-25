@@ -9,7 +9,7 @@ import { computeStreakFromDays, localDayOffsetMs } from './useHomeStats'
 import {
   computeAvgTimePerQuestion, computeMostMissedTopics, resolveMissedTopicLabels,
   computeAccuracyTrend, computeMockAttemptHistory,
-  type AvgTimeResult, type ResolvedMissedTopic, type TrendPoint, type MockAttemptPercentile,
+  type AvgTimeResult, type ResolvedMissedTopic, type TrendPoint, type MockAttemptScore,
 } from '../services/analyticsAggregates'
 
 export interface WeeklyBar {
@@ -48,8 +48,8 @@ export interface AnalyticsData {
   mostMissedTopics: ResolvedMissedTopic[]
   /** Task G: 8-week accuracy trend — a longer window than weeklyData's fixed 7 days. */
   accuracyTrend: TrendPoint[]
-  /** Task G: percentile-band history across full mock-exam attempts, oldest first. */
-  mockAttemptHistory: MockAttemptPercentile[]
+  /** Score-band history across full mock-exam attempts, oldest first (Fix 3: no percentile). */
+  mockAttemptHistory: MockAttemptScore[]
   isLoading: boolean
   refresh: () => Promise<void>
 }
