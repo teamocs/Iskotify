@@ -112,7 +112,7 @@ export function RequirementsChecklist({ listingSlug, requirements, onAcquiredCou
             style={[s.row, isLast && s.rowLast]}
             onPress={() => { void onToggle(i) }}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: isAcquired }}
+            aria-checked={isAcquired}
             accessibilityLabel={req}
           >
             <View style={[s.checkbox, isAcquired && s.checkboxAcquired]}>

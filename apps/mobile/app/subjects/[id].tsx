@@ -207,7 +207,7 @@ export default function SubjectDetailsScreen() {
   return (
     <Screen scroll={false} header={header}>
       {state.status === 'loading' ? (
-        <View accessible accessibilityLabel="Loading topics" accessibilityState={{ busy: true }} style={{ gap: spacing.sm, paddingTop: spacing.md }}>
+        <View accessible accessibilityLabel="Loading topics" aria-busy style={{ gap: spacing.sm, paddingTop: spacing.md }}>
           {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
         </View>
       ) : state.status === 'error' ? (

@@ -51,7 +51,7 @@ export function Skeleton({ width = '100%', height = 16, radius = radii.sm, acces
   return (
     <Animated.View
       {...(accessible
-        ? { accessible: true, accessibilityLabel: label, accessibilityState: { busy: true } }
+        ? { accessible: true, accessibilityLabel: label, 'aria-busy': true }
         : decorative)}
       style={{ width, height, borderRadius: radius, backgroundColor: t.surface2, opacity }}
     />

@@ -13,6 +13,7 @@ import { SectionHeader } from '../SectionHeader'
 import { ProgressBar } from '../ProgressBar'
 import { StatNumber } from '../StatNumber'
 import { Avatar, initialsFor } from '../Avatar'
+import { aria } from '../../../test-utils/aria'
 
 describe('Card', () => {
   it('is a plain container by default (not announced as a button)', () => {
@@ -82,11 +83,11 @@ describe('Chip / FilterChip', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('single-select FilterChip is a radio exposing selected', () => {
+  it('single-select FilterChip is a radio exposing checked', () => {
     const onPress = jest.fn()
     render(<FilterChip label="Scholarships" selected onPress={onPress} />)
     const chip = screen.getByRole('radio', { name: 'Scholarships' })
-    expect(chip.props.accessibilityState).toEqual(expect.objectContaining({ selected: true }))
+    expect(aria(chip, 'aria-checked')).toBe(true)
     fireEvent.press(chip)
     expect(onPress).toHaveBeenCalled()
   })
@@ -94,13 +95,13 @@ describe('Chip / FilterChip', () => {
   it('multi-select FilterChip is a checkbox exposing checked', () => {
     render(<FilterChip label="NCR" mode="multiple" selected={false} onPress={() => {}} />)
     const chip = screen.getByRole('checkbox', { name: 'NCR' })
-    expect(chip.props.accessibilityState).toEqual(expect.objectContaining({ checked: false }))
+    expect(aria(chip, 'aria-checked')).toBe(false)
   })
 
   it('can act as a tab inside a tablist', () => {
     render(<FilterChip label="News & dates" role="tab" selected onPress={() => {}} />)
     const tab = screen.getByRole('tab', { name: 'News & dates' })
-    expect(tab.props.accessibilityState).toEqual(expect.objectContaining({ selected: true }))
+    expect(aria(tab, 'aria-selected')).toBe(true)
   })
 
   it('selected state is never colour-only: a check glyph marks it', () => {

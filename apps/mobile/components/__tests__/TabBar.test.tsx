@@ -8,6 +8,7 @@ import { StyleSheet } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { TabBar } from '../TabBar'
 import { activeDestination, TAB_DESTINATIONS } from '../navigation/destinations'
+import { aria } from '../../test-utils/aria'
 
 const ROUTE_NAMES = ['index', 'practice', 'explore', 'progress', 'listings', 'updates', 'analytics', 'profile']
 
@@ -50,12 +51,8 @@ describe('TabBar', () => {
     render(<TabBar {...makeProps('explore')} />)
     // A container View is not itself focusable, so assert the role prop directly.
     expect(screen.getByTestId('tab-bar-tablist').props.accessibilityRole).toBe('tablist')
-    expect(screen.getByRole('tab', { name: 'Explore' }).props.accessibilityState).toEqual(
-      expect.objectContaining({ selected: true }),
-    )
-    expect(screen.getByRole('tab', { name: 'Today' }).props.accessibilityState).toEqual(
-      expect.objectContaining({ selected: false }),
-    )
+    expect(aria(screen.getByRole('tab', { name: 'Explore' }), 'aria-selected')).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Today' }), 'aria-selected')).toBe(false)
   })
 
   it('tab labels respect the 12pt floor', () => {
@@ -102,9 +99,7 @@ describe('TabBar', () => {
 
   it('highlights Explore while a legacy Lists/Updates route is (briefly) focused', () => {
     render(<TabBar {...makeProps('updates')} />)
-    expect(screen.getByRole('tab', { name: 'Explore' }).props.accessibilityState).toEqual(
-      expect.objectContaining({ selected: true }),
-    )
+    expect(aria(screen.getByRole('tab', { name: 'Explore' }), 'aria-selected')).toBe(true)
   })
 })
 

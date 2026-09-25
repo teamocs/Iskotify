@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react-native'
 import { Button } from '../Button'
 import { AppButton } from '../AppButton'
 import { PillButton } from '../PillButton'
+import { aria } from '../../../test-utils/aria'
 
 const flat = (el: { props: { style: unknown } }) => {
   const style = el.props.style
@@ -33,7 +34,7 @@ describe('Button', () => {
     const onPress = jest.fn()
     render(<Button label="Submit" disabled onPress={onPress} />)
     const btn = screen.getByRole('button')
-    expect(btn.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }))
+    expect(aria(btn, 'aria-disabled')).toBe(true)
     fireEvent.press(btn)
     expect(onPress).not.toHaveBeenCalled()
   })
@@ -42,7 +43,8 @@ describe('Button', () => {
     const onPress = jest.fn()
     render(<Button label="Saving" loading onPress={onPress} />)
     const btn = screen.getByRole('button', { name: 'Saving' })
-    expect(btn.props.accessibilityState).toEqual(expect.objectContaining({ busy: true, disabled: true }))
+    expect(aria(btn, 'aria-busy')).toBe(true)
+    expect(aria(btn, 'aria-disabled')).toBe(true)
     fireEvent.press(btn)
     expect(onPress).not.toHaveBeenCalled()
   })

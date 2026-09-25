@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react-native'
 import HomeScreen from '../index'
+import { aria } from '../../../test-utils/aria'
 
 // Redesign M2 (direction C, "One Next Step"): Today answers "what should I do
 // now?" first — one hero next step with the screen's only primary action —
@@ -299,7 +300,7 @@ describe('Today', () => {
       render(<HomeScreen />)
       expect(screen.getByRole('header', { name: "Today's plan" })).toBeTruthy()
       const done = screen.getByRole('checkbox', { name: 'Review 3 due flashcards' })
-      expect(done.props.accessibilityState).toMatchObject({ checked: true })
+      expect(aria(done, 'aria-checked')).toBe(true)
       fireEvent.press(screen.getByRole('checkbox', { name: 'Practice Algebra' }))
       expect(markComplete).toHaveBeenCalledWith(2)
     })

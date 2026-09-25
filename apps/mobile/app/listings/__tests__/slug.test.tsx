@@ -2,6 +2,7 @@ import React from 'react'
 import { Linking } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import ListingDetailScreen from '../[slug]'
+import { aria } from '../../../test-utils/aria'
 
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
@@ -228,7 +229,7 @@ describe('ListingDetailScreen — exam', () => {
   it('About is a collapsed disclosure that reveals the description', async () => {
     render(<ListingDetailScreen />)
     const about = await screen.findByRole('button', { name: 'About' })
-    expect(about.props.accessibilityState).toEqual({ expanded: false })
+    expect(aria(about, 'aria-expanded')).toBe(false)
     expect(screen.queryByText(BASE_EXAM_LISTING.description)).toBeNull()
     fireEvent.press(about)
     expect(screen.getByText(BASE_EXAM_LISTING.description)).toBeTruthy()
@@ -237,9 +238,9 @@ describe('ListingDetailScreen — exam', () => {
   it('Coverage is a collapsed disclosure', async () => {
     render(<ListingDetailScreen />)
     const cov = await screen.findByRole('button', { name: 'Coverage' })
-    expect(cov.props.accessibilityState).toEqual({ expanded: false })
+    expect(aria(cov, 'aria-expanded')).toBe(false)
     fireEvent.press(cov)
-    expect(screen.getByRole('button', { name: 'Coverage' }).props.accessibilityState).toEqual({ expanded: true })
+    expect(screen.getByRole('button', { name: 'Coverage', expanded: true })).toBeTruthy()
   })
 
   it('renders no emoji or glyph icons', async () => {

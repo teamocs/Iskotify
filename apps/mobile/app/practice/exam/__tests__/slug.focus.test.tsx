@@ -231,7 +231,6 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
       const header = () => screen.UNSAFE_getAllByProps({ accessibilityLabel: 'Math, 1 to review' })
         .find(n => typeof n.type !== 'string')!
       expect(header().props['aria-expanded']).toBe(false)
-      expect(header().props.accessibilityState).toBeUndefined()
       expect(screen.getByRole('button', { name: 'Math, 1 to review', expanded: false })).toBeTruthy()
 
       fireEvent.press(screen.getByRole('button', { name: 'Math, 1 to review' }))

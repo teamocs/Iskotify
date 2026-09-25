@@ -204,7 +204,7 @@ export default function EstimatorScreen() {
         <View
           accessible
           accessibilityLabel="Loading your estimate"
-          accessibilityState={{ busy: true }}
+          aria-busy
           style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}
         >
           <Skeleton height={120} radius={radius.lg} />

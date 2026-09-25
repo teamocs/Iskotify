@@ -151,8 +151,8 @@ function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: str
                 <Pressable
                   key={f.key}
                   onPress={() => setField(f.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
+                  accessibilityRole="radio"
+                  aria-checked={selected}
                   accessibilityLabel={f.label}
                   style={({ pressed }) => [
                     s.fieldChip,
@@ -236,7 +236,7 @@ function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: str
               onPress={() => void handleSubmit()}
               disabled={!canSubmit}
               accessibilityRole="button"
-              accessibilityState={{ disabled: !canSubmit }}
+              aria-disabled={!canSubmit}
               accessibilityLabel="Submit suggestion"
               style={({ pressed }) => [
                 s.submitBtn,

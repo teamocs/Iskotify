@@ -68,10 +68,8 @@ describe('WebRefreshButton — web', () => {
     const onRefresh = jest.fn()
     render(<WebRefreshButton onRefresh={onRefresh} refreshing={true} />)
     const btn = screen.getByRole('button', { name: /refresh data/i })
-    // Pressable exposes disabled via accessibilityState OR via props.disabled
-    // depending on RNTL version. Check either path:
-    const isDisabled = btn.props.accessibilityState?.disabled === true || btn.props.disabled === true
-    expect(isDisabled).toBe(true)
+    expect(aria(btn, 'aria-disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: /refresh data/i, disabled: true })).toBeTruthy()
   })
 
   it('does NOT call onRefresh when not refreshing and pressed', () => {

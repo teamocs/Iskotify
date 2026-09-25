@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { QuestionNavPanel } from '../QuestionNavPanel'
+import { aria } from '../../../test-utils/aria'
 
 const base = {
   total: 6,
@@ -20,11 +21,12 @@ describe('QuestionNavPanel (desktop side panel)', () => {
     expect(screen.getByText('2 of 6 answered')).toBeTruthy()
   })
 
-  it('names every cell by number and state, and marks the current one selected', () => {
+  it('names every cell by number and state, and names the current one "current question"', () => {
     render(<QuestionNavPanel {...base} />)
     expect(screen.getByLabelText('Question 1, answered')).toBeTruthy()
     expect(screen.getByLabelText('Question 5, unanswered, flagged')).toBeTruthy()
-    expect(screen.getByLabelText('Question 3, unanswered').props.accessibilityState).toMatchObject({ selected: true })
+    expect(screen.getByLabelText('Question 3, unanswered, current question')).toBeTruthy()
+    expect(screen.getAllByLabelText(/current question/)).toHaveLength(1)
   })
 
   it('gives every cell at least a 44pt target', () => {
@@ -49,7 +51,7 @@ describe('QuestionNavPanel (desktop side panel)', () => {
   it('disables questions in a locked (expired) section', () => {
     render(<QuestionNavPanel {...base} floorIdx={2} />)
     const locked = screen.getByLabelText('Question 1, answered')
-    expect(locked.props.accessibilityState).toMatchObject({ disabled: true })
+    expect(aria(locked, 'aria-disabled')).toBe(true)
     fireEvent.press(locked)
     expect(base.onJump).not.toHaveBeenCalled()
   })
@@ -62,17 +64,18 @@ describe('QuestionNavPanel (desktop side panel)', () => {
     const cellProps = (label: string) =>
       screen.UNSAFE_getAllByProps({ accessibilityLabel: label }).find(n => typeof n.type !== 'string')!.props
 
-    it('marks the current cell with aria-selected, not accessibilityState', () => {
+    // aria-selected is invalid on role="button" (browser screen readers
+    // ignore it), so "current" lives in the name, same as SectionGrid.
+    it('does not put aria-selected on button cells', () => {
       render(<QuestionNavPanel {...base} />)
-      expect(cellProps('Question 3, unanswered')['aria-selected']).toBe(true)
-      expect(cellProps('Question 4, unanswered')['aria-selected']).toBe(false)
-      expect(cellProps('Question 3, unanswered').accessibilityState).toBeUndefined()
+      expect(cellProps('Question 3, unanswered, current question')['aria-selected']).toBeUndefined()
+      expect(cellProps('Question 4, unanswered')['aria-selected']).toBeUndefined()
     })
 
     it('marks locked cells with aria-disabled', () => {
       render(<QuestionNavPanel {...base} floorIdx={2} />)
       expect(cellProps('Question 1, answered')['aria-disabled']).toBe(true)
-      expect(cellProps('Question 3, unanswered')['aria-disabled']).toBe(false)
+      expect(cellProps('Question 3, unanswered, current question')['aria-disabled']).toBe(false)
     })
   })
 })

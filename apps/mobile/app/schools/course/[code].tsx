@@ -298,7 +298,7 @@ export default function CourseSchoolsScreen() {
         <View
           accessible
           accessibilityLabel="Loading rankings"
-          accessibilityState={{ busy: true }}
+          aria-busy
           style={[{ gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm }, webWidth]}
         >
           <Skeleton width="70%" height={28} />

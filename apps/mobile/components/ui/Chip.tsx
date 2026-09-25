@@ -34,7 +34,7 @@ interface FilterChipProps {
   /**
    * `single` (default) → radio semantics (one of a group);
    * `multiple` → checkbox semantics. DESIGN.md: selection is exposed through
-   * accessibilityState, never colour alone.
+   * aria-checked / aria-selected, never colour alone.
    */
   mode?: 'single' | 'multiple'
   /** Use 'tab' when the chip row switches sections (inside a tablist). */
@@ -47,7 +47,6 @@ interface FilterChipProps {
 export function FilterChip({ label, selected, onPress, mode = 'single', role, accessibilityHint, testID }: FilterChipProps) {
   const { theme: t } = useTheme()
   const a11yRole = role ?? (mode === 'multiple' ? 'checkbox' : 'radio')
-  const a11yState = a11yRole === 'checkbox' ? { checked: selected } : { selected }
   const fg = selected ? t.accentText : t.textSecondary
 
   // react-native-web only lets Space activate role="button"; checkbox, radio
@@ -67,8 +66,8 @@ export function FilterChip({ label, selected, onPress, mode = 'single', role, ac
       accessibilityRole={a11yRole}
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={a11yState}
-      // Web: react-native-web ignores accessibilityState, so state rides on aria-*.
+      // State rides on aria-*: react-native-web maps it to the DOM, native folds
+      // it into accessibility state. Checkbox/radio are checked, tab is selected.
       {...(a11yRole === 'checkbox' || a11yRole === 'radio' ? { 'aria-checked': selected } : { 'aria-selected': selected })}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState

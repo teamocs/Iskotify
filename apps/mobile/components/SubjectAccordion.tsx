@@ -83,7 +83,7 @@ export function SubjectAccordion<T>({
               style={styles.header}
               onPress={() => toggle(group.subjectId)}
               accessibilityRole="button"
-              accessibilityState={{ expanded: isOpen }}
+              aria-expanded={isOpen}
             >
               <Text style={styles.chevron}>{isOpen ? '▼' : '▶'}</Text>
               <Text style={styles.name}>{group.subjectName}</Text>

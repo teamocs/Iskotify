@@ -44,7 +44,7 @@ export function ExamPassage({ passage }: { passage: string }) {
           onPress={() => setExpanded(e => !e)}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Hide passage' : 'Show passage'}
-          accessibilityState={{ expanded }}
+          aria-expanded={expanded}
           style={(s) => { const { pressed, focused } = s as WebPressableState; return control(pressed, focused) }}
         >
           <View {...decorative}>
