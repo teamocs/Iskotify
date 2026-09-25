@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Modal, View, Text, Pressable, ScrollView, StyleSheet, AccessibilityInfo, findNodeHandle } from 'react-native'
+import { Modal, View, Text, Pressable, ScrollView, StyleSheet, AccessibilityInfo, Platform, findNodeHandle } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { confirmAction } from '../../utils/confirmAction'
@@ -34,8 +34,10 @@ export function ExamReviewSheet({
   // Review finding #4: move accessibility focus onto the title every time the
   // sheet opens — otherwise a screen reader user's focus stays wherever it
   // was on the exam screen behind this full-screen modal.
+  // Native only: react-native-web's findNodeHandle throws, which unmounted the
+  // whole app when the sheet opened. On web, RNW's Modal moves focus in itself.
   useEffect(() => {
-    if (!visible) return
+    if (!visible || Platform.OS === 'web') return
     const handle = findNodeHandle(titleRef.current)
     AccessibilityInfo.setAccessibilityFocus(handle ?? 0)
   }, [visible])
