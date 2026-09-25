@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 import { NewsFeed as UpdatesScreen } from '../../../components/explore/NewsFeed'
 
 jest.mock('expo-router', () => ({
@@ -146,6 +146,40 @@ describe('UpdatesScreen', () => {
     await waitFor(() => expect(db.select).toHaveBeenCalledTimes(1))
     rerender(<UpdatesScreen refreshKey={1} />)
     await waitFor(() => expect(db.select).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps the refreshed feed when the older load resolves after it', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const loads: ((rows: any[]) => void)[] = []
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => new Promise<any[]>(resolve => { loads.push(resolve) })),
+      })),
+    })
+    const { rerender } = render(<UpdatesScreen refreshKey={0} />)
+    rerender(<UpdatesScreen refreshKey={1} />)
+    await waitFor(() => expect(loads).toHaveLength(2))
+    await act(async () => { loads[1]!([URGENT_ROW]) })
+    await act(async () => { loads[0]!([INFO_ROW]) })
+    expect(screen.getByText('UPCAT Application Now Open')).toBeTruthy()
+    expect(screen.queryByText('USTET Results Released')).toBeNull()
+  })
+
+  it('ignores a load that resolves after the feed unmounts', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const loads: ((rows: any[]) => void)[] = []
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => new Promise<any[]>(resolve => { loads.push(resolve) })),
+      })),
+    })
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const view = render(<UpdatesScreen />)
+    await waitFor(() => expect(loads).toHaveLength(1))
+    view.unmount()
+    await act(async () => { loads[0]!([URGENT_ROW]) })
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
   })
 
   it('renders the Results Tracker card', async () => {

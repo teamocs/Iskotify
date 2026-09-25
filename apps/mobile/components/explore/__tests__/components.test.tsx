@@ -1,5 +1,5 @@
 import React from 'react'
-import { Text, FlatList } from 'react-native'
+import { Text, FlatList, Linking, Platform } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
@@ -141,10 +141,33 @@ describe('Disclosure', () => {
 })
 
 describe('LinkRow', () => {
-  it('is a link, named for where it goes', () => {
-    const onPress = jest.fn()
-    render(<LinkRow label="Official website" onPress={onPress} />)
-    fireEvent.press(screen.getByRole('link', { name: 'Official website, opens in your browser' }))
-    expect(onPress).toHaveBeenCalled()
+  const originalOS = Platform.OS
+  // jest-expo's Linking.openURL is already a jest.fn, so spyOn hands back that
+  // same mock: clear its calls between tests, not just restore it.
+  afterEach(() => {
+    Platform.OS = originalOS
+    jest.clearAllMocks()
+    jest.restoreAllMocks()
+  })
+
+  it('is a link, named for where it goes, that opens the URL on native', () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never)
+    render(<LinkRow label="Official website" url="https://up.edu.ph" />)
+    const link = screen.getByRole('link', { name: 'Official website, opens in your browser' })
+    expect(link.props.href).toBeUndefined()
+    fireEvent.press(link)
+    expect(open).toHaveBeenCalledWith('https://up.edu.ph')
+  })
+
+  it('on web is a real anchor: href, new tab, no opener', () => {
+    Platform.OS = 'web'
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never)
+    render(<LinkRow label="Official website" url="https://up.edu.ph" />)
+    const link = screen.getByRole('link', { name: 'Official website, opens in your browser' })
+    expect(link.props.href).toBe('https://up.edu.ph')
+    expect(link.props.hrefAttrs).toEqual({ target: '_blank', rel: 'noopener noreferrer' })
+    // The browser follows the href itself; no scripted open on top of it.
+    fireEvent.press(link)
+    expect(open).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { View, Text, Linking } from 'react-native'
+import { View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -409,9 +409,9 @@ export default function SchoolProfileScreen() {
       {hasLinks ? (
         <View style={{ borderTopWidth: 1, borderTopColor: t.divider, paddingTop: spacing.md }}>
           <SectionHeader title="Links" />
-          {profile?.websiteUrl ? <LinkRow label="Official website" onPress={() => { void Linking.openURL(profile.websiteUrl!) }} /> : null}
-          {profile?.applicationPortalUrl ? <LinkRow label="Application portal" onPress={() => { void Linking.openURL(profile.applicationPortalUrl!) }} /> : null}
-          {profile?.facebookUrl ? <LinkRow label="Facebook page" onPress={() => { void Linking.openURL(profile.facebookUrl!) }} /> : null}
+          {profile?.websiteUrl ? <LinkRow label="Official website" url={profile.websiteUrl} /> : null}
+          {profile?.applicationPortalUrl ? <LinkRow label="Application portal" url={profile.applicationPortalUrl} /> : null}
+          {profile?.facebookUrl ? <LinkRow label="Facebook page" url={profile.facebookUrl} /> : null}
         </View>
       ) : null}
       {lowConfidence ? (

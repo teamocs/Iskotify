@@ -1,6 +1,6 @@
 import React from 'react'
 import { FlatList } from 'react-native'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 import ListsScreen from '../explore'
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -33,18 +33,46 @@ jest.mock('../../../hooks/useBreakpoint', () => {
 const mockTabParam: { value?: string } = { value: undefined }
 const mockSectionParam: { value?: string } = { value: undefined }
 
+// The URL as an external store, so a test can make router.setParams feed the
+// new value back into useLocalSearchParams in the same mounted tree (as the
+// real router does). setParams itself is a no-op unless a test wires it up.
+const mockUrl = {
+  listeners: new Set<() => void>(),
+  snap: null as null | { tab?: string; section?: string },
+  get() {
+    const s = this.snap
+    if (!s || s.tab !== mockTabParam.value || s.section !== mockSectionParam.value) {
+      this.snap = { tab: mockTabParam.value, section: mockSectionParam.value }
+    }
+    return this.snap!
+  },
+  subscribe(l: () => void) { mockUrl.listeners.add(l); return () => { mockUrl.listeners.delete(l) } },
+  write(p: { tab?: string; section?: string }) {
+    if ('tab' in p) mockTabParam.value = p.tab
+    if ('section' in p) mockSectionParam.value = p.section
+    mockUrl.listeners.forEach(l => l())
+  },
+}
+
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), setParams: jest.fn(), replace: jest.fn() },
   // Like the real hook: run on focus (mount) and when the callback changes —
   // not on every render.
   useFocusEffect: (cb: any) => require('react').useEffect(cb, [cb]),
-  useLocalSearchParams: jest.fn(() => ({ tab: mockTabParam.value, section: mockSectionParam.value })),
+  useLocalSearchParams: () => require('react').useSyncExternalStore(
+    (l: () => void) => mockUrl.subscribe(l),
+    () => mockUrl.get(),
+  ),
 }))
+
+// Counts News & dates mounts (a section flip-flop remounts it).
+const mockNewsMounts = { n: 0 }
 
 // The News & dates section is covered by newsFeed.test.tsx; stub it here.
 jest.mock('../../../components/explore/NewsFeed', () => ({
   NewsFeed: () => {
     const { Text } = require('react-native')
+    require('react').useEffect(() => { mockNewsMounts.n += 1 }, [])
     return <Text>NEWS_FEED_STUB</Text>
   },
 }))
@@ -135,6 +163,8 @@ describe('ListsScreen', () => {
   beforeEach(() => {
     mockTabParam.value = undefined
     mockSectionParam.value = undefined
+    mockNewsMounts.n = 0
+    require('expo-router').router.setParams.mockReset()
     mockBp.value = 'compact'
     mockSync.value = { isSyncing: false, firstSyncDone: true }
     const { useDb } = require('../../../hooks/useDb')
@@ -564,6 +594,87 @@ describe('ListsScreen', () => {
     mockSectionParam.value = 'news'
     render(<ListsScreen />)
     expect(router.setParams).not.toHaveBeenCalled()
+  })
+
+  // setParams feeds the value back into useLocalSearchParams in the same tree,
+  // like expo-router. The echo must not re-apply the section: no remount, no
+  // second reset of the search, no second destinations load.
+  it('the URL echo of a section switch is not re-applied (no ping-pong)', async () => {
+    const { router } = require('expo-router')
+    const { cachedQuery } = require('../../../services/queryCache')
+    router.setParams.mockImplementation((p: { section?: string; tab?: string }) => mockUrl.write(p))
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('tab', { name: 'News & dates' }))
+    fireEvent.press(screen.getByRole('tab', { name: 'Destinations' }))
+    await waitFor(() => expect(cachedQuery).toHaveBeenCalledTimes(1))
+    fireEvent.press(screen.getByRole('tab', { name: 'Courses' }))
+    fireEvent.changeText(screen.getByLabelText('Filter courses'), 'nur')
+    await act(async () => {})
+
+    expect(mockSectionParam.value).toBe('courses')
+    expect(router.setParams).toHaveBeenCalledTimes(3)
+    expect(mockNewsMounts.n).toBe(1)
+    expect(cachedQuery).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.getByLabelText('Filter courses').props.value).toBe('nur')
+  })
+
+  it('a late URL echo of an earlier switch does not flip the section back', async () => {
+    const { router } = require('expo-router')
+    const { cachedQuery } = require('../../../services/queryCache')
+    // The router applies each setParams on a later render, after the student
+    // has already tapped the next section.
+    const echoes: (() => void)[] = []
+    router.setParams.mockImplementation((p: { section?: string; tab?: string }) => { echoes.push(() => mockUrl.write(p)) })
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('tab', { name: 'Destinations' }))
+    fireEvent.press(screen.getByRole('tab', { name: 'News & dates' }))
+    fireEvent.press(screen.getByRole('tab', { name: 'Courses' }))
+    fireEvent.changeText(screen.getByLabelText('Filter courses'), 'nur')
+    for (const echo of echoes) await act(async () => { echo() })
+
+    expect(mockSectionParam.value).toBe('courses')
+    expect(mockNewsMounts.n).toBe(1)
+    expect(cachedQuery).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.getByLabelText('Filter courses').props.value).toBe('nur')
+  })
+
+  it('still follows a genuine URL change made elsewhere (deep link while open)', async () => {
+    render(<ListsScreen />)
+    await act(async () => { mockUrl.write({ section: 'destinations' }) })
+    expect(screen.getByRole('tab', { name: 'Destinations' }).props.accessibilityState.selected).toBe(true)
+  })
+
+  it('applies only the latest catalog load when an older one resolves later', async () => {
+    const { listings } = require('../../../db/schema')
+    const { useDb } = require('../../../hooks/useDb')
+    const loads: ((rows: any[]) => void)[] = []
+    const db = makeDb()
+    const stock = makeDb()
+    // The listings read waits on the test; every other table answers as usual.
+    db.select = jest.fn(() => ({
+      from: jest.fn((table: unknown) => (table === listings
+        ? { then: (ok: any, fail: any) => new Promise<any[]>(resolve => { loads.push(resolve) }).then(ok, fail) }
+        : stock.select().from())),
+    })) as any
+    useDb.mockReturnValue(db)
+    const grant = (id: string, title: string) => ({
+      id, slug: id, title, type: 'scholarship', examDate: null, region: 'National', provider: 'X', targetCourses: '[]',
+    })
+    mockSync.value = { isSyncing: true, firstSyncDone: false }
+    mockSectionParam.value = 'scholarships'
+    const view = render(<ListsScreen />)
+    await waitFor(() => expect(loads).toHaveLength(1))
+    // A sync settles while the focus load is still in flight: a second load starts.
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
+    view.rerender(<ListsScreen />)
+    await waitFor(() => expect(loads).toHaveLength(2))
+    await act(async () => { loads[1]!([grant('new', 'Fresh Grant')]) })
+    expect(await screen.findByText('Fresh Grant')).toBeTruthy()
+    await act(async () => { loads[0]!([grant('old', 'Stale Grant')]) })
+    expect(screen.getByText('Fresh Grant')).toBeTruthy()
+    expect(screen.queryByText('Stale Grant')).toBeNull()
   })
 
   it('names the search field for the section it searches', () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Linking } from 'react-native'
+import { StyleSheet, View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -387,7 +387,7 @@ export default function CourseCareerDetailScreen() {
                   {prog.immigrationOutcome ? <Text style={s.progBody} maxFontSizeMultiplier={1.6}>Immigration outcome: {prog.immigrationOutcome}</Text> : null}
                   {prog.slots ? <Text style={s.progBody} maxFontSizeMultiplier={1.6}>Slots: {prog.slots}</Text> : null}
                   {prog.notes ? <Text style={s.progBody} maxFontSizeMultiplier={1.6}>{prog.notes}</Text> : null}
-                  {prog.website ? <LinkRow label="Official site" onPress={() => { void Linking.openURL(prog.website!) }} /> : null}
+                  {prog.website ? <LinkRow label="Official site" url={prog.website} /> : null}
                 </Card>
               ))}
             </View>

@@ -314,6 +314,22 @@ describe('ListingDetailScreen — scholarship', () => {
     expect(open).toHaveBeenCalledWith('https://sei.dost.gov.ph')
   })
 
+  it('on web the apply action is a real anchor (middle-click, copy link, links list)', async () => {
+    const { Platform } = require('react-native')
+    const originalOS = Platform.OS
+    Platform.OS = 'web'
+    try {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb({ ...BASE_SCHOLARSHIP_LISTING, externalUrl: 'https://sei.dost.gov.ph' }))
+      render(<ListingDetailScreen />)
+      const apply = await screen.findByRole('link', { name: 'Apply on the official site' })
+      expect(apply.props.href).toBe('https://sei.dost.gov.ph')
+      expect(apply.props.hrefAttrs).toEqual({ target: '_blank', rel: 'noopener noreferrer' })
+    } finally {
+      Platform.OS = originalOS
+    }
+  })
+
   it('has no exam-only actions', async () => {
     render(<ListingDetailScreen />)
     await screen.findByRole('button', { name: 'Add to Focus' })

@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native'
 import SchoolsDirectoryScreen from '../schools/index'
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,11 @@ const mockDb = (rows: any[] = []) => ({
 jest.mock('../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
+
+// Sync status under test (idle by default); flipping isSyncing true → false
+// makes the directory re-read (useSyncSettled).
+const mockSync: { value: { isSyncing: boolean; firstSyncDone: boolean } } = { value: { isSyncing: false, firstSyncDone: true } }
+jest.mock('../../hooks/useSyncStatus', () => ({ useSyncStatus: () => mockSync.value }))
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +68,7 @@ function makeSchool(overrides?: Partial<{
 
 describe('SchoolsDirectoryScreen', () => {
   beforeEach(() => {
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
     const { useDb } = require('../../hooks/useDb')
     useDb.mockReturnValue(mockDb())
   })
@@ -239,6 +245,57 @@ describe('SchoolsDirectoryScreen', () => {
     fireEvent.press(screen.getByRole('checkbox', { name: 'Free tuition' }))
     fireEvent.press(await screen.findByRole('button', { name: 'Clear filters' }))
     expect(await screen.findByText('Private U')).toBeTruthy()
+  })
+
+  it('the type filter is a radio group with an "All types" choice, like Region', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([
+      makeSchool({ id: 's', name: 'State U', type: 'State University', isSuc: true }),
+      makeSchool({ id: 'p', name: 'Private U', type: 'Private', isSuc: false, isLuc: false, freeTuition: false }),
+    ]))
+    render(<SchoolsDirectoryScreen />)
+    await screen.findByText('Private U')
+    const checked = (name: string) => screen.getByRole('radio', { name }).props.accessibilityState?.selected
+    expect(checked('All types')).toBe(true)
+
+    fireEvent.press(screen.getByRole('radio', { name: 'SUC' }))
+    expect(checked('SUC')).toBe(true)
+    expect(checked('All types')).toBe(false)
+    expect(screen.queryByText('Private U')).toBeNull()
+
+    // Re-selecting the checked radio keeps it checked (radios do not toggle off).
+    fireEvent.press(screen.getByRole('radio', { name: 'SUC' }))
+    expect(checked('SUC')).toBe(true)
+    expect(screen.queryByText('Private U')).toBeNull()
+
+    fireEvent.press(screen.getByRole('radio', { name: 'All types' }))
+    expect(checked('All types')).toBe(true)
+    expect(checked('SUC')).toBe(false)
+    expect(await screen.findByText('Private U')).toBeTruthy()
+  })
+
+  it('applies only the latest load when an older one resolves later', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    const loads: ((rows: any[]) => void)[] = []
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          leftJoin: jest.fn(() => new Promise<any[]>(resolve => { loads.push(resolve) })),
+        })),
+      })),
+    })
+    mockSync.value = { isSyncing: true, firstSyncDone: false }
+    const view = render(<SchoolsDirectoryScreen />)
+    expect(loads).toHaveLength(1)
+    // A sync settles while the first read is still in flight: a second read starts.
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
+    view.rerender(<SchoolsDirectoryScreen />)
+    await waitFor(() => expect(loads).toHaveLength(2))
+    // The newer read lands first; the older one resolves afterwards with stale rows.
+    await act(async () => { loads[1]!([makeSchool({ id: 'new', name: 'Fresh School' })]) })
+    await act(async () => { loads[0]!([makeSchool({ id: 'old', name: 'Stale School' })]) })
+    expect(screen.getByText('Fresh School')).toBeTruthy()
+    expect(screen.queryByText('Stale School')).toBeNull()
   })
 
   it('a school card is one labelled button that opens the school', async () => {

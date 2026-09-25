@@ -4,10 +4,12 @@ import { ArrowAngularTopRightOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { externalLinkProps } from './externalLink'
 
 interface Props {
   label: string
-  onPress: () => void
+  /** Where the link goes: a real anchor on web, Linking.openURL on native. */
+  url: string
   /** Secondary line, e.g. the domain. */
   detail?: string
   /** Spoken name when the visible label needs context (e.g. which exam). */
@@ -15,14 +17,15 @@ interface Props {
 }
 
 /**
- * An outbound link as a full-width 48pt row: link role, a drawn "opens
- * elsewhere" arrow, and a spoken name that says it leaves the app.
+ * An outbound link as a full-width 48pt row: link role (a real <a href> on
+ * web), a drawn "opens elsewhere" arrow, and a spoken name that says it
+ * leaves the app.
  */
-export function LinkRow({ label, onPress, detail, accessibilityLabel }: Props) {
+export function LinkRow({ label, url, detail, accessibilityLabel }: Props) {
   const { theme: t } = useTheme()
   return (
     <Pressable
-      onPress={onPress}
+      {...externalLinkProps(url)}
       accessibilityRole="link"
       accessibilityLabel={accessibilityLabel ?? `${label}, opens in your browser`}
       accessibilityHint={accessibilityLabel ? 'Opens in your browser' : undefined}

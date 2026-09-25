@@ -122,6 +122,9 @@ export function SchoolsDirectory({
   const [selType, setSelType] = useState<SchoolTypeBucket | null>(null)
   const [freeTuitionOnly, setFreeTuitionOnly] = useState(false)
 
+  // Request sequencing: each run's `alive` flag is cleared by the next run's
+  // cleanup (retry, sync settled, new db) and on unmount, so only the newest
+  // read is ever applied.
   useEffect(() => {
     let alive = true
     setStatus(prev => (prev === 'ready' ? prev : 'loading'))
@@ -233,14 +236,12 @@ export function SchoolsDirectory({
           selected={freeTuitionOnly}
           onPress={() => setFreeTuitionOnly(v => !v)}
         />
+        {/* One-of-a-group, like Region: "All types" is the way back, so a
+            checked radio stays checked when tapped again. */}
         <View accessibilityRole="radiogroup" accessibilityLabel="School type" style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <FilterChip label="All types" selected={selType === null} onPress={() => setSelType(null)} />
           {types.map(tp => (
-            <FilterChip
-              key={tp}
-              label={tp}
-              selected={selType === tp}
-              onPress={() => setSelType(prev => (prev === tp ? null : tp))}
-            />
+            <FilterChip key={tp} label={tp} selected={selType === tp} onPress={() => setSelType(tp)} />
           ))}
         </View>
       </ScrollView>

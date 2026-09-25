@@ -31,6 +31,7 @@ import { useHomeStats } from '../../hooks/useHomeStats'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import type { QuickReminderPayload } from '../calendar/QuickReminderForm'
 import type { BadgeSpec } from './exploreModel'
+import { useLatestRequest } from './useLatestRequest'
 
 // ── Severity ───────────────────────────────────────────────────────────────────
 
@@ -253,9 +254,14 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
 
   // ── Admissions feed ───────────────────────────────────────────────────────────
 
+  // Mount, header refresh and retry can overlap: apply only the newest read,
+  // and nothing after unmount.
+  const beginLoad = useLatestRequest()
   const loadFeed = useCallback(async () => {
+    const isCurrent = beginLoad()
     try {
       const rows = await db.select().from(admissionsUpdates)
+      if (!isCurrent()) return
       setItems(rows.map((r): FeedItem => {
         let sources: { label?: string; url: string }[] = []
         try {
@@ -279,10 +285,11 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
       }))
       setStatus('ready')
     } catch (e) {
+      if (!isCurrent()) return
       console.warn('[news] feed load failed:', e)
       setStatus('error')
     }
-  }, [db])
+  }, [db, beginLoad])
 
   useEffect(() => { void loadFeed() }, [loadFeed])
 

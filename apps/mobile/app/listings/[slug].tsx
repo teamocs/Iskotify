@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { View, Text, Pressable, Linking } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -28,6 +28,7 @@ import { decorative, focusRing, type WebPressableState } from '../../components/
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { Disclosure } from '../../components/explore/Disclosure'
 import { LinkRow } from '../../components/explore/LinkRow'
+import { externalLinkProps } from '../../components/explore/externalLink'
 import { daysUntilDate, fmtLongDate, matchBadge } from '../../components/explore/exploreModel'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
@@ -105,14 +106,14 @@ function Bullet({ children, color }: { children: string; color: string }) {
 
 /**
  * The page's one maroon action when it leaves the app (apply on the official
- * site). Mirrors Button's primary variant, but with the link role — the
- * shared Button always announces as a button.
+ * site). Mirrors Button's primary variant, but as a link: a real <a href> on
+ * web (the shared Button always announces as a button).
  */
 function PrimaryLinkButton({ label, url }: { label: string; url: string }) {
   const { theme: t } = useTheme()
   return (
     <Pressable
-      onPress={() => { void Linking.openURL(url) }}
+      {...externalLinkProps(url)}
       accessibilityRole="link"
       accessibilityLabel={label}
       accessibilityHint="Opens in your browser"
@@ -501,7 +502,7 @@ export default function ListingDetailScreen() {
           </Text>
         </View>
         {listing.externalUrl && isExam ? (
-          <LinkRow label="Official website" onPress={() => { void Linking.openURL(listing.externalUrl) }} />
+          <LinkRow label="Official website" url={listing.externalUrl} />
         ) : null}
       </View>
     </View>

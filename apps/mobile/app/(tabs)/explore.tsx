@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { View, Text, RefreshControl, Platform } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -49,6 +49,7 @@ import type { CountryWithCount } from '../../utils/destinationCountries'
 import type { CourseTabOption } from '../../utils/courseTabs'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { useSyncSettled } from '../../components/explore/useSyncSettled'
+import { useLatestRequest } from '../../components/explore/useLatestRequest'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -155,7 +156,13 @@ const renderCountry = (c: CountryWithCount) => (
 
 export default function ExploreScreen() {
   const db = useDb()
-  const { getPriority } = useFocusListings()
+  const { focusListings } = useFocusListings()
+  // Focus priority by slug, stable while the Focus list is, so renderExam is
+  // not re-created on every render (the hook's getPriority is).
+  const focusPriority = useMemo(
+    () => new Map(focusListings.map(f => [f.slug, f.priority])),
+    [focusListings],
+  )
   const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
   const bp = useBreakpoint()
@@ -192,26 +199,48 @@ export default function ExploreScreen() {
   const [aiLoading, setAiLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // ?section= (or legacy ?tab=) → section. Keyed on the param only: it applies
-  // on a deep link, a web refresh or a new push, and our own setParams below
-  // round-trips to the section already showing.
+  // The section showing, readable from effects keyed on the URL alone.
+  const tabRef = useRef(tab)
+  // Sections we wrote to the URL whose echo has not come back yet, oldest first.
+  const pendingEchoes = useRef<Tab[]>([])
+
+  /** Show a section with a fresh search. False when it is already showing. */
+  const showSection = useCallback((next: Tab): boolean => {
+    if (tabRef.current === next) return false
+    tabRef.current = next
+    setTab(next)
+    setQuery('')
+    setAiResults(null)
+    return true
+  }, [])
+
+  // ?section= (or legacy ?tab=) → section, for a deep link, a web refresh or a
+  // new push. The router applies our own setParams on a later render, so the
+  // param can lag: after two quick taps it echoes the first section while the
+  // second is showing. Echoes of our writes are consumed, never re-applied;
+  // only a value we did not write moves the section.
   useEffect(() => {
     const parsed = parseExploreSection(tabParam)
     if (!parsed) return
-    setTab(prev => {
-      if (prev === parsed) return prev
-      setQuery('')
-      setAiResults(null)
-      return parsed
-    })
-  }, [tabParam])
+    const echoAt = pendingEchoes.current.indexOf(parsed)
+    if (echoAt !== -1) {
+      pendingEchoes.current = pendingEchoes.current.slice(echoAt + 1)
+      return
+    }
+    pendingEchoes.current = []
+    showSection(parsed)
+  }, [tabParam, showSection])
 
   // ── Courses (shared hook) ─────────────────────────────────────────────────
   const { targetOptions: courseTargetOptions, allOptions: courseAllOptions, loading: courseLoading } = useCourseTabOptions()
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
+  // Focus, sync settled, pull-to-refresh and retry can overlap: apply only the
+  // newest read, and nothing after unmount.
+  const beginListingsLoad = useLatestRequest()
   const loadListings = useCallback(async () => {
+    const isCurrent = beginListingsLoad()
     try {
       const [rows, settings, ccRows, bpSlugs, mockBestRows, accuracyRows] = await Promise.all([
         db.select({
@@ -228,6 +257,7 @@ export default function ExploreScreen() {
         getListingMockBest(db),
         getListingAccuracy(db),
       ])
+      if (!isCurrent()) return
       setListingMockBest(new Map(mockBestRows.map(r => [r.listingSlug, r.bestPct])))
       setListingAccuracy(Object.fromEntries(
         accuracyRows.filter(r => r.total > 0).map(r => [r.listingSlug, Math.round((r.ok / r.total) * 100)]),
@@ -257,10 +287,11 @@ export default function ExploreScreen() {
       })
       setListStatus('ready')
     } catch (e) {
+      if (!isCurrent()) return
       console.warn('[explore] listings load failed:', e)
       setListStatus('error')
     }
-  }, [db])
+  }, [db, beginListingsLoad])
 
   const retryListings = useCallback(() => {
     setListStatus('loading')
@@ -388,13 +419,14 @@ export default function ExploreScreen() {
   const clearQuery = useCallback(() => onChangeQuery(''), [onChangeQuery])
 
   // A section switch writes ?section= (dropping a legacy ?tab=), so a web
-  // refresh, a bookmark or a shared link reopens the same section.
+  // refresh, a bookmark or a shared link reopens the same section. setParams
+  // replaces the current entry rather than pushing one: sections behave like
+  // tabs, so Back leaves Explore instead of stepping through every section.
   const onChangeTab = useCallback((next: Tab) => {
-    setTab(next)
-    setQuery('')
-    setAiResults(null)
+    if (!showSection(next)) return
+    pendingEchoes.current.push(next)
     router.setParams({ section: next, tab: undefined })
-  }, [])
+  }, [showSection])
 
   const filteredCourseTargets = useMemo<CourseTabOption[]>(() => {
     const q = query.trim().toLowerCase()
@@ -416,7 +448,7 @@ export default function ExploreScreen() {
   const renderExam = useCallback((l: ListingRow) => {
     const hasMock = blueprintSlugs.has(l.slug)
     const readiness = hasMock ? (listingMockBest.get(l.slug) ?? listingAccuracy[l.slug] ?? null) : null
-    const p = getPriority(l.slug)
+    const p = focusPriority.get(l.slug) ?? null
     const badges: BadgeSpec[] = []
     const soon = dateUrgency(l.examDate)
     if (soon) badges.push(soon)
@@ -438,7 +470,7 @@ export default function ExploreScreen() {
         accessibilityHint="Opens the exam: dates, requirements and mock practice"
       />
     )
-  }, [blueprintSlugs, listingMockBest, listingAccuracy, getPriority])
+  }, [blueprintSlugs, listingMockBest, listingAccuracy, focusPriority])
 
   const renderScholarship = useCallback((l: ListingRow) => {
     const badges: BadgeSpec[] = []

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { View, Text, Linking } from 'react-native'
+import { View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
@@ -72,7 +72,7 @@ function WatchCard({ w, onRemove }: { w: WatchedExam; onRemove: (slug: string) =
         <LinkRow
           label="Check results on the official site"
           accessibilityLabel={`Check ${name} results on the official site`}
-          onPress={() => { void Linking.openURL(w.externalUrl!) }}
+          url={w.externalUrl}
         />
       ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
