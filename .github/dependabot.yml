@@ -1,7 +1,8 @@
 # Weekly, grouped dependency updates so they arrive as a few reviewable PRs
 # (each gated by CI) instead of a stream of single-package bumps. Expo SDK and
 # React Native versions are pinned by the SDK, so majors for those are ignored
-# here and upgraded deliberately with `npx expo install --fix`.
+# here and upgraded deliberately with `npx expo install --fix`; React and
+# React Native are pinned by the SDK too (root package.json overrides).
 version: 2
 updates:
   - package-ecosystem: npm
@@ -14,13 +15,23 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      - dependency-name: expo
+      # Expo SDK-locked packages move together with the SDK via
+      # `npx expo install --fix`, never one by one (Dependabot proposed
+      # SDK-57 versions for an SDK-54 app, and a grouped bump broke CI).
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "jest-expo"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-*/*"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      # Framework majors are planned upgrades, not automatic bumps.
+      - dependency-name: "next"
         update-types: [version-update:semver-major]
-      - dependency-name: react-native
-        update-types: [version-update:semver-major]
-      - dependency-name: react
-        update-types: [version-update:semver-major]
-      - dependency-name: react-dom
+      - dependency-name: "eslint-config-next"
         update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
