@@ -54,6 +54,9 @@ interface CourseData {
   ai: AiRow | null
 }
 
+// Stable empty list while loading, so `visible` below is not recomputed every render.
+const NO_RANKINGS: RankingRow[] = []
+
 // First page size + how many more rows reveal each time the list nears its end.
 // The whole course is read once from local SQLite (fast, indexed on course_tab),
 // but rows are RENDERED progressively so a 300-school course (e.g. Accountancy)
@@ -212,7 +215,7 @@ export default function CourseSchoolsScreen() {
   // Web-only max-width centering for the rankings list (null on native/sm).
   const webWidth = useWebContentWidth()
 
-  const rankings = data?.rankings ?? []
+  const rankings = data?.rankings ?? NO_RANKINGS
   const taxonomy = data?.taxonomy ?? null
   const aiRow = data?.ai ?? null
   const courseLabel = taxonomy?.label ?? code

@@ -254,7 +254,7 @@ export function SchoolsDirectory({
         {/* bounded: ~17 PH regions; a horizontal chip rail does not need virtualisation */}
         <View accessibilityRole="radiogroup" accessibilityLabel="Region" style={{ flexDirection: 'row', gap: spacing.sm }}>
           <FilterChip label="All regions" selected={selRegion === null} onPress={() => setSelRegion(null)} />
-          {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
+          {/* react-doctor-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
           {regions.map(r => (
             <FilterChip key={r} label={r} selected={selRegion === r} onPress={() => setSelRegion(r)} />
           ))}

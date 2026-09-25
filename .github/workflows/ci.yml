@@ -39,9 +39,13 @@ jobs:
       - name: Type-check
         run: pnpm turbo run type-check
 
-      # Admin only: the mobile app's `lint` script is `tsc --noEmit`, already run above.
+      # ESLint per app. Not `turbo run lint`: packages/ui and packages/utils alias
+      # `lint` to `tsc --noEmit`, which the type-check step already covers.
       - name: Lint (admin)
         run: pnpm --filter @iskotify/admin lint
+
+      - name: Lint (mobile)
+        run: pnpm --filter @iskotify/mobile lint
 
       - name: Test
         run: pnpm turbo run test

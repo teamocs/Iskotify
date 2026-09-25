@@ -1,7 +1,7 @@
 import { View, Text, Pressable, Platform } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 // Type-only import for the custom tabBar prop; the app uses expo-router Tabs (JS navigator) by design.
-// eslint-disable-next-line react-doctor/rn-no-non-native-navigator
+// react-doctor-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../theme/ThemeContext'
 import { fonts, layout, radius, spacing, textStyle } from '../theme/tokens'

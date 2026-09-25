@@ -21,7 +21,6 @@ const localStorageMock = {
 /** Re-require supabase.ts with Platform.OS set to the given value. */
 function requireSupabaseWithPlatform(os: 'ios' | 'android' | 'web') {
   // Mutate the cached mock so supabase.ts sees the right OS when it runs.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const rn = require('react-native')
   rn.Platform.OS = os
 
@@ -33,7 +32,6 @@ function requireSupabaseWithPlatform(os: 'ios' | 'android' | 'web') {
     delete (global as any).window
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   return require('../supabase')
 }
 
@@ -44,7 +42,6 @@ describe('supabase client', () => {
     jest.resetModules()
     delete (global as any).window
     // Reset Platform.OS back to native default
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('react-native').Platform.OS = 'ios'
   })
 
@@ -80,14 +77,12 @@ describe('web localStorage storage adapter', () => {
     Object.keys(localStorageStore).forEach(k => delete localStorageStore[k])
 
     ;(global as any).window = { localStorage: localStorageMock }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const rn = require('react-native')
     rn.Platform.OS = 'web'
 
     // Re-require with web platform so the module picks up the web storage branch.
     jest.resetModules()
     ;(global as any).window = { localStorage: localStorageMock }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('react-native').Platform.OS = 'web'
 
     // Extract the web storage object by reaching into the module.
@@ -98,7 +93,6 @@ describe('web localStorage storage adapter', () => {
   afterEach(() => {
     jest.resetModules()
     delete (global as any).window
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('react-native').Platform.OS = 'ios'
   })
 
@@ -140,14 +134,12 @@ describe('web localStorage storage adapter error resilience', () => {
       removeItem: jest.fn(() => { throw new Error('SecurityError') }),
     }
     ;(global as any).window = { localStorage: throwingLocalStorage }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('react-native').Platform.OS = 'web'
   })
 
   afterEach(() => {
     jest.resetModules()
     delete (global as any).window
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('react-native').Platform.OS = 'ios'
   })
 

@@ -31,7 +31,7 @@ function parseCourses(raw: string | null | undefined): CourseOption[] {
 // cache, loading flag, modal visibility, search text) — not an interdependent
 // state machine, and `toggle` fires an async persist inside the setState updater,
 // so a reducer would add risk for no benefit.
-// eslint-disable-next-line react-doctor/prefer-useReducer
+// react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function TargetCoursesCard() {
   const db = useDb()
   const { theme: t, typo } = useTheme()

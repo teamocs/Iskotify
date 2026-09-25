@@ -26,7 +26,6 @@ describe('onboarding persistence — real CREATE_SQL + MIGRATIONS sequence', () 
   it('user_settings has the onboarding columns after the migration sequence', () => {
     const raw = makeRealRaw()
     const cols = (raw.prepare(`PRAGMA table_info(user_settings)`).all() as { name: string }[]).map(c => c.name)
-    // eslint-disable-next-line no-console
     console.log('user_settings columns:', cols.join(', '))
     expect(cols).toContain('school_region')
     expect(cols).toContain('target_exams')

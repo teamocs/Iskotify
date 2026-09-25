@@ -1,5 +1,5 @@
 // RN Image is fine for the tiny bundled app icon.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image, Platform, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
@@ -10,8 +10,8 @@ import { heading } from '../ui/a11y'
 export const TAGLINE = 'Para sa mga Iskolar ng Bayan'
 
 // Native: keep the focused field and the submit button above the keyboard.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const NativeKAV: React.ComponentType<{ behavior: 'padding'; style?: object; children: React.ReactNode }> | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native-only module; a static import would pull it into the web bundle
   Platform.OS === 'web' ? null : require('react-native-keyboard-controller').KeyboardAvoidingView
 
 /** App icon + wordmark (the page's h1) + the approved tagline. */

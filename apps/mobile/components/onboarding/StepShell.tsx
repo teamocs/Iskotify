@@ -15,8 +15,8 @@ import { stepPosition, type StepId } from './flow'
 
 // Native: lift the sticky Continue above the software keyboard. Web needs
 // nothing (the browser resizes the viewport).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const NativeKAV: React.ComponentType<{ behavior: 'padding'; style?: object; children: React.ReactNode }> | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native-only module; a static import would pull it into the web bundle
   Platform.OS === 'web' ? null : require('react-native-keyboard-controller').KeyboardAvoidingView
 
 /** Onboarding column: narrower than the 720 reading width, one question needs little room. */
