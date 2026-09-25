@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef } from 'react'
+import { useId, useRef } from 'react'
+import { useFocusTrap } from '@/components/ui/useFocusTrap'
 
 interface Props {
   message: string
@@ -17,45 +18,13 @@ export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'De
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const restoreFocusTo = useRef<HTMLElement | null>(null)
 
   // Move focus to the (non-destructive) cancel button on open, and hand it
   // back to whatever opened the dialog on close — same pattern as
   // MobileSidebar, which is the in-repo reference implementation.
-  useEffect(() => {
-    restoreFocusTo.current = document.activeElement as HTMLElement | null
-    cancelRef.current?.focus()
-    return () => {
-      restoreFocusTo.current?.focus?.()
-      restoreFocusTo.current = null
-    }
-  }, [])
-
-  // Escape closes (cancels); Tab is trapped inside the dialog since the page
-  // behind it is still in the DOM.
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onCancel(); return }
-      if (e.key !== 'Tab') return
-      const panel = panelRef.current
-      if (!panel) return
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (!first || !last) return
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [onCancel])
+  // Shared modal contract: focus Cancel on open, trap Tab, Escape cancels,
+  // restore focus on close — and only while this dialog is the topmost overlay.
+  useFocusTrap({ active: true, containerRef: panelRef, onEscape: onCancel, initialFocusRef: cancelRef })
 
   const confirmCls = tone === 'danger'
     ? 'bg-danger text-white hover:bg-danger-strong'

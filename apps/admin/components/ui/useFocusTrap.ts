@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, type RefObject } from 'react'
+import { pushTrap, popTrap, isTopTrap } from './trapStack'
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -36,15 +37,20 @@ export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }
   const restoreTo = useRef<HTMLElement | null>(null)
   const onEscapeRef = useRef(onEscape)
   onEscapeRef.current = onEscape
+  const id = useRef(Symbol('focus-trap'))
 
   useEffect(() => {
     if (!active) return
+    const trapId = id.current
+    pushTrap(trapId)
     restoreTo.current = document.activeElement as HTMLElement | null
     const container = containerRef.current
     const first = container?.querySelector<HTMLElement>(FOCUSABLE)
     ;(initialFocusRef?.current ?? first ?? container)?.focus()
 
     function handleKey(e: KeyboardEvent) {
+      // Only the topmost overlay owns the keyboard (see trapStack.ts).
+      if (!isTopTrap(trapId)) return
       if (e.key === 'Escape') { e.stopPropagation(); onEscapeRef.current(); return }
       if (e.key !== 'Tab' || !containerRef.current) return
       const items = Array.from(containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
@@ -54,6 +60,7 @@ export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }
     window.addEventListener('keydown', handleKey)
     return () => {
       window.removeEventListener('keydown', handleKey)
+      popTrap(trapId)
       restoreTo.current?.focus?.()
       restoreTo.current = null
     }
