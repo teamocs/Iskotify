@@ -610,6 +610,12 @@ export const MIGRATIONS = [
     started_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+
+  // ── Onboarding resume: furthest step reached ───────────────────────────────
+  // A StepId ('name' … 'check') or 'done'. Optional steps can't be judged by an
+  // empty answer (skipping is valid), so resume reads this marker. Device-local:
+  // pullUserData doesn't restore it (a restored profile already has a focus).
+  `ALTER TABLE user_settings ADD COLUMN onboarding_step TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

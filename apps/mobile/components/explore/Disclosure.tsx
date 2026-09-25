@@ -32,6 +32,8 @@ export function Disclosure({ title, preview, defaultExpanded = false, children }
         accessibilityLabel={title}
         accessibilityHint={preview && !expanded ? preview : undefined}
         accessibilityState={{ expanded }}
+        // react-native-web ignores accessibilityState; aria-expanded reaches the DOM.
+        aria-expanded={expanded}
         style={(state) => {
           const { pressed, focused } = state as WebPressableState
           return [

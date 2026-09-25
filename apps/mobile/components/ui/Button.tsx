@@ -61,6 +61,10 @@ export function Button({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inactive, busy: !!loading }}
+      // react-native-web 0.21 ignores accessibilityState; aria-* reaches the DOM
+      // (and RN 0.81 reads it natively too).
+      aria-disabled={inactive}
+      aria-busy={!!loading}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
         return [

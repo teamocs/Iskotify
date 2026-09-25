@@ -11,6 +11,13 @@ import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { decorative } from './a11y'
 
+// Native keyboard avoidance: react-native-keyboard-controller's version tracks
+// the IME frame-by-frame on Android (where adjustResize does not reach inside a
+// Modal window) and iOS alike. Web needs none: the browser resizes the viewport.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const NativeKeyboardAvoidingView: React.ComponentType<{ behavior: 'padding'; style?: object; children: React.ReactNode }> | null =
+  Platform.OS === 'web' ? null : require('react-native-keyboard-controller').KeyboardAvoidingView
+
 /** Bottom sheet on phones (thumb reach); a centered dialog from medium up. */
 export function sheetPresentation(bp: Breakpoint): 'bottom' | 'dialog' {
   return bp === 'compact' ? 'bottom' : 'dialog'
@@ -68,6 +75,7 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
       statusBarTranslucent
       aria-labelledby={titleId}
     >
+      <KeyboardShell>
       <View
         style={{
           flex: 1,
@@ -142,6 +150,13 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
           style={[StyleSheet.absoluteFill, { backgroundColor: t.backdrop }]}
         />
       </View>
+      </KeyboardShell>
     </Modal>
   )
+}
+
+/** Lifts the sheet above the software keyboard on native so its inputs stay visible. */
+function KeyboardShell({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === 'web' || !NativeKeyboardAvoidingView) return <>{children}</>
+  return <NativeKeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>{children}</NativeKeyboardAvoidingView>
 }

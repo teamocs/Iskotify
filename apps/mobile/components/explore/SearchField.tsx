@@ -41,7 +41,7 @@ export function SearchField({ value, onChangeText, onSubmit, placeholder, access
         borderRadius: radius.md,
         borderCurve: 'continuous',
         borderWidth: focused ? 2 : 1,
-        borderColor: focused ? t.focusRing : t.border,
+        borderColor: focused ? t.focusRing : t.inputBorder,
         backgroundColor: t.surface,
       }}
     >

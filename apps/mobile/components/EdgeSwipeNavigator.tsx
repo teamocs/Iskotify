@@ -19,7 +19,12 @@ const NOTES_PATH = '/notes'
 const SWIPE_DISTANCE = 50
 const SWIPE_VELOCITY = 300
 
-export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) {
+/**
+ * `enabled` turns the swipe off without changing the tree (the tab layout keeps
+ * one navigator mounted across breakpoints; beside the desktop sidebar a
+ * horizontal drag should select text, not change tabs).
+ */
+export function EdgeSwipeNavigator({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   const pathname = usePathname()
 
   // Read the live pathname from a ref so `navigateTo` and the Pan gesture stay
@@ -50,6 +55,7 @@ export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) 
 
   const pan = useMemo(() =>
     Gesture.Pan()
+      .enabled(enabled)
       .activeOffsetX([-15, 15])
       .failOffsetY([-15, 15])
       .onEnd((e) => {
@@ -59,7 +65,7 @@ export function EdgeSwipeNavigator({ children }: { children: React.ReactNode }) 
         if (swipeLeft) runOnJS(navigateTo)('left')
         else if (swipeRight) runOnJS(navigateTo)('right')
       }),
-  [navigateTo])
+  [navigateTo, enabled])
 
   return (
     <GestureDetector gesture={pan}>

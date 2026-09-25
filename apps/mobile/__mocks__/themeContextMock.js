@@ -35,6 +35,7 @@ const darkTheme = {
   surfaceRaised: '#2c2c3f',
   backdrop: 'rgba(0,0,0,0.60)',
   focusRing: '#fca5a5',
+  inputBorder: '#8a8aa0',
 }
 
 const typography = { xs: 11, sm: 13, base: 16, md: 17, lg: 20, xl: 22, h3: 26, h2: 30, h1: 36, display: 48 }

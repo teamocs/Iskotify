@@ -121,6 +121,9 @@ export const userSettings = sqliteTable('user_settings', {
   // the notificationsEnabled master switch.
   dailyReminderHour: integer('daily_reminder_hour').notNull().default(9),
   weeklySummaryEnabled: integer('weekly_summary_enabled', { mode: 'boolean' }).notNull().default(true),
+  // Furthest onboarding step reached (a StepId, or 'done'); '' = no marker yet.
+  // Drives resume past skipped optional steps — see components/onboarding/flow.ts.
+  onboardingStep: text('onboarding_step').notNull().default(''),
 })
 
 export const userProgress = sqliteTable('user_progress', {

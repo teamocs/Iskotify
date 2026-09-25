@@ -43,3 +43,13 @@ export function focusRing(color: string, focused: boolean | undefined): ViewStyl
 
 /** Pressable style-function state, including the web-only fields RN's types omit. */
 export type WebPressableState = { pressed: boolean; hovered?: boolean; focused?: boolean }
+
+/**
+ * Heading semantics for a Text: `accessibilityRole="header"` for TalkBack /
+ * VoiceOver, and `aria-level` so react-native-web renders a real <h1>…<h6>
+ * (it maps role "heading" + aria-level to hN; without a level every heading
+ * becomes an h1). Spread onto a <Text>: `<Text {...heading(2)}>`.
+ */
+export function heading(level: 1 | 2 | 3 | 4): { accessibilityRole: 'header'; 'aria-level': number } {
+  return { accessibilityRole: 'header', 'aria-level': level }
+}

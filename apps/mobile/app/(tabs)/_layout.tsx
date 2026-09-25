@@ -42,37 +42,31 @@ export default function TabLayout() {
     void syncOnLaunch(db)
   }, [db])
 
-  if (isDesktopWeb) {
-    // Desktop web: persistent sidebar beside the content; no bottom bar.
-    // The 1040 cap keeps screens that render their own FlatList (and headers
-    // outside a scroll view) from stretching edge to edge on wide monitors;
-    // <Screen> narrows reading screens further to 720.
-    return (
+  // ONE navigator for every width. Crossing the 1024 breakpoint (a desktop
+  // browser being resized) only swaps the chrome — bottom bar vs sidebar — and
+  // never the tree above <Tabs>. Two separate trees used to remount the
+  // navigator and every tab screen, and the remounted screens' useFocusEffect
+  // loads never fired, so they sat on skeletons until a reload. Every wrapper
+  // below renders at every width; conditional children keep their slot (null)
+  // so React reconciles the same <Tabs> instance.
+  return (
+    <EdgeSwipeNavigator enabled={!isDesktopWeb}>
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.bg }}>
-        <SidebarNav />
+        {isDesktopWeb ? <SidebarNav /> : null}
         <View style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
-          <View style={{ flex: 1, width: '100%', maxWidth: 1040 }}>
+          {/* Desktop: the 1040 cap keeps screens that render their own FlatList
+              (and headers outside a scroll view) from stretching edge to edge on
+              wide monitors; <Screen> narrows reading screens further to 720. */}
+          <View style={{ flex: 1, width: '100%', maxWidth: isDesktopWeb ? 1040 : undefined }}>
             <SyncErrorBanner onRetry={handleRetry} />
-            <Tabs tabBar={() => null} screenOptions={{ headerShown: false, animation: 'none' }}>
+            <Tabs
+              tabBar={isDesktopWeb ? () => null : (props) => <TabBar {...props} />}
+              screenOptions={{ headerShown: false, animation: isDesktopWeb ? 'none' : 'shift' }}
+            >
               {TAB_SCREENS}
             </Tabs>
           </View>
         </View>
-      </View>
-    )
-  }
-
-  // Phones, tablets and mid-width web: bottom navigation bar.
-  return (
-    <EdgeSwipeNavigator>
-      <View style={{ flex: 1 }}>
-        <SyncErrorBanner onRetry={handleRetry} />
-        <Tabs
-          tabBar={(props) => <TabBar {...props} />}
-          screenOptions={{ headerShown: false, animation: 'shift' }}
-        >
-          {TAB_SCREENS}
-        </Tabs>
       </View>
     </EdgeSwipeNavigator>
   )

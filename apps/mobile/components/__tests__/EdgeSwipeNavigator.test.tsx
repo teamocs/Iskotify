@@ -15,6 +15,7 @@ jest.mock('expo-router', () => ({
 }))
 
 const mockPanBuilder = {
+  enabled: jest.fn().mockReturnThis(),
   activeOffsetX: jest.fn().mockReturnThis(),
   failOffsetY: jest.fn().mockReturnThis(),
   onEnd: jest.fn().mockReturnThis(),
@@ -43,6 +44,7 @@ describe('EdgeSwipeNavigator', () => {
     mockNavigate.mockClear()
     mockBack.mockClear()
     ;(Gesture.Pan as jest.Mock).mockClear()
+    mockPanBuilder.enabled.mockClear()
     mockPanBuilder.activeOffsetX.mockClear()
     mockPanBuilder.failOffsetY.mockClear()
     mockPanBuilder.onEnd.mockClear()
@@ -53,6 +55,14 @@ describe('EdgeSwipeNavigator', () => {
     const { getByText } = render(
       <EdgeSwipeNavigator><Text>child</Text></EdgeSwipeNavigator>
     )
+    expect(getByText('child')).toBeTruthy()
+  })
+
+  it('is enabled by default and can be switched off without unmounting children', () => {
+    const { rerender, getByText } = render(<EdgeSwipeNavigator><Text>child</Text></EdgeSwipeNavigator>)
+    expect(mockPanBuilder.enabled).toHaveBeenLastCalledWith(true)
+    rerender(<EdgeSwipeNavigator enabled={false}><Text>child</Text></EdgeSwipeNavigator>)
+    expect(mockPanBuilder.enabled).toHaveBeenLastCalledWith(false)
     expect(getByText('child')).toBeTruthy()
   })
 

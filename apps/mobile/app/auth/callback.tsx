@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser'
 import { useEffect } from 'react'
-import { Platform, View, ActivityIndicator } from 'react-native'
+import { Platform, View, Text, ActivityIndicator } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
 import { pullUserData, pushUserData } from '../../services/sync'
@@ -8,6 +8,7 @@ import { useDb } from '../../hooks/useDb'
 import { invalidate } from '../../services/queryCache'
 import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, textStyle } from '../../theme/tokens'
 import { eq } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
 import { webEntryTarget } from '../../utils/webEntryTarget'
@@ -200,8 +201,9 @@ export default function AuthCallback() {
         router.replace('/onboarding')  // new account or incomplete onboarding
       } catch (e) {
         console.error('[auth/callback] error:', e)
-        // On web, send to sign-in rather than landing (which doesn't exist on web).
-        router.replace(Platform.OS === 'web' ? '/auth/sign-in' : '/landing')
+        // On web, send to sign-in rather than landing (which doesn't exist on web),
+        // with a reason, so the student sees why they are back there.
+        router.replace(Platform.OS === 'web' ? '/auth/sign-in?error=link' : '/landing')
       }
     }
 
@@ -209,9 +211,18 @@ export default function AuthCallback() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, db])
 
+  // Say what is happening instead of a bare spinner; the live region lets a
+  // screen reader hear it without moving focus.
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
-      <ActivityIndicator size="large" color="#831626" />
+    <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing.xxl }}>
+      <ActivityIndicator size="large" color={t.accentText} />
+      <Text
+        accessibilityLiveRegion="polite"
+        aria-live="polite"
+        style={textStyle('body', t.textSecondary)}
+      >
+        Signing you in…
+      </Text>
     </View>
   )
 }

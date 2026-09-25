@@ -76,12 +76,15 @@ export function ListRow({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: !!disabled }}
+      aria-disabled={!!disabled}
       style={(state) => {
-        const { pressed, focused } = state as WebPressableState
+        const { pressed, hovered, focused } = state as WebPressableState
+        // Web hover (react-native-web reports `hovered`) is a lighter tint than
+        // press, so pointer users see the row is live before they click.
+        const fill = disabled ? null : pressed ? t.surface2 : hovered ? t.surfaceSubtle : null
         return [
           rowStyle,
-          pressed ? { backgroundColor: t.surface2 } : null,
+          fill ? { backgroundColor: fill } : null,
           disabled ? { opacity: 0.5 } : null,
           focusRing(t.focusRing, focused),
         ]

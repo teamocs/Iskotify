@@ -1,35 +1,24 @@
 /**
  * app/auth/sign-in.tsx — Web-first auth screen (email/password + Google).
  *
- * Routed to on web when no Supabase session exists (_layout web gate).
- * The file is safe to bundle on native but will never be navigated to
- * on native (native uses landing.tsx + Google OAuth flow).
+ * Routed to on web when no Supabase session exists (_layout web gate), so it
+ * is the web build's first impression: brand, the approved tagline, and one
+ * primary action. Safe to bundle on native, which never navigates here
+ * (native uses landing.tsx + the Google OAuth flow).
  *
- * WIG compliance:
- *  - Labels are Pressable (tap to focus corresponding input via ref).
- *  - Autocomplete attrs set correctly (email / current-password / new-password).
- *  - Inline errors shown near each field.
- *  - Submit disabled only DURING the async request (shows spinner).
- *  - No paste-blocking.
- *  - focus-visible styles via RN-Web Pressable hovered/focused state.
- *  - All touch targets >= 44pt.
- *  - maxFontSizeMultiplier 1.4 on dense bits.
+ * Forms: every field has a visible label that is also its accessible name,
+ * the right autocomplete / textContentType for password managers, inline
+ * errors that say how to fix the problem (announced, and aria-invalid on the
+ * field), and a 44pt show/hide password toggle. Submit is disabled only while
+ * the request runs and announces aria-busy.
  */
 import { useState, useRef, useCallback } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  ScrollView,
-  Platform,
-  StyleSheet,
-  Image,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, TextInput, Pressable } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { useGoogleOneTap } from '../../hooks/useGoogleOneTap'
 import {
   signInWithEmail,
@@ -39,47 +28,33 @@ import {
   isValidEmail,
   isValidPassword,
 } from '../../services/webAuth'
+import { AuthLayout, BrandBlock, StatusPanel } from '../../components/auth/AuthLayout'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 
 type Mode = 'sign-in' | 'sign-up'
 
-// ── Field error label ─────────────────────────────────────────────────────────
-
-function FieldError({ message }: { message: string }) {
-  const { theme: t } = useTheme()
-  if (!message) return null
-  return (
-    <Text
-      style={{ color: t.danger, fontSize: 12, fontFamily: 'Lexend_400Regular', marginTop: 4 }}
-      accessibilityRole="alert"
-      maxFontSizeMultiplier={1.4}
-    >
-      {message}
-    </Text>
-  )
+// Why the student was sent back here (set by /auth/callback on failure).
+const RETURN_REASONS: Record<string, string> = {
+  link: "That sign-in link didn't work or has expired. Please sign in again.",
 }
-
-// ── Divider with label ────────────────────────────────────────────────────────
 
 function Divider({ label }: { label: string }) {
   const { theme: t } = useTheme()
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
       <View style={{ flex: 1, height: 1, backgroundColor: t.divider }} />
-      <Text
-        style={{ fontSize: 12, fontFamily: 'Lexend_400Regular', color: t.textTertiary }}
-        maxFontSizeMultiplier={1.4}
-      >
-        {label}
-      </Text>
+      <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{label}</Text>
       <View style={{ flex: 1, height: 1, backgroundColor: t.divider }} />
     </View>
   )
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
-
 export default function SignInScreen() {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  const params = useLocalSearchParams<{ error?: string }>() ?? {}
+  const returnReason = params.error ? RETURN_REASONS[params.error] ?? null : null
 
   // Activate Google One Tap when env var is set and no session exists.
   useGoogleOneTap()
@@ -87,90 +62,23 @@ export default function SignInScreen() {
   const [mode, setMode] = useState<Mode>('sign-in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Field-level inline errors
   const [emailError, setEmailError] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [formError, setFormError] = useState('')  // general submit error
+  const [formError, setFormError] = useState('')
 
-  // Stateful UI outcomes
-  const [signUpSuccess, setSignUpSuccess] = useState(false)  // "check your email" panel
-  const [resetSent, setResetSent] = useState(false)          // "check your email for reset"
+  const [signUpSuccess, setSignUpSuccess] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
 
-  const emailRef = useRef<TextInput>(null)
   const passwordRef = useRef<TextInput>(null)
-
-  const s = StyleSheet.create({
-    root:        { flex: 1, backgroundColor: t.bg },
-    scroll:      { flexGrow: 1, justifyContent: 'center' },
-    container:   { paddingHorizontal: spacing.xxl, paddingVertical: spacing.xxxl, maxWidth: 440, alignSelf: 'center', width: '100%' },
-    logo:        { width: 64, height: 64, borderRadius: radius.xl, alignSelf: 'center', marginBottom: spacing.lg },
-    appName:     { fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, textAlign: 'center', letterSpacing: -0.5 },
-    tagline:     { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.xl },
-    toggleRow:   { flexDirection: 'row', backgroundColor: t.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: t.border, padding: 3, marginBottom: spacing.xl },
-    toggleBtn:   { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
-    toggleText:  { fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm },
-    label:       { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textPrimary, marginBottom: 6, marginTop: spacing.md },
-    input:       {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: Platform.OS === 'web' ? spacing.md : spacing.md + 2,
-      fontSize: typo.base,
-      fontFamily: 'Lexend_400Regular',
-      color: t.textPrimary,
-      minHeight: 48,
-    },
-    inputError:  { borderColor: t.danger },
-    passwordRow: { position: 'relative' },
-    eyeBtn:      { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: spacing.xs, minWidth: 44, minHeight: 48 },
-    eyeText:     { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    submitBtn:   {
-      backgroundColor: t.accent,
-      borderRadius: radius.lg,
-      minHeight: 52,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: spacing.xl,
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    submitText:  { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
-    formErrorBox:{ backgroundColor: 'rgba(220,38,38,0.10)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(220,38,38,0.25)', padding: spacing.md, marginTop: spacing.md },
-    formErrorTxt:{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.danger },
-    forgotRow:   { alignItems: 'center', marginTop: spacing.md },
-    forgotText:  { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.accent },
-    googleBtn:   {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.lg,
-      minHeight: 52,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.sm,
-    },
-    googleText:  { fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary },
-    successBox:  { backgroundColor: 'rgba(34,197,94,0.10)', borderRadius: radius.md, borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', padding: spacing.lg, gap: spacing.sm },
-    successTitle:{ fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textPrimary },
-    successText: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: 20 },
-    resetInfo:   { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.success, marginTop: spacing.xs },
-  })
-
-  // ── Validation ──────────────────────────────────────────────────────────────
 
   function validateFields(): boolean {
     let valid = true
     setEmailError('')
     setPasswordError('')
     setFormError('')
-
     if (!isValidEmail(email)) {
       setEmailError('Please enter a valid email address.')
       valid = false
@@ -181,8 +89,6 @@ export default function SignInScreen() {
     }
     return valid
   }
-
-  // ── Submit ──────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(async () => {
     if (!validateFields()) return
@@ -195,10 +101,8 @@ export default function SignInScreen() {
           setFormError(result.error)
           return
         }
-        if (result.data.needsEmailConfirm) {
-          setSignUpSuccess(true)
-        }
-        // If no email confirm required, supabase.auth.onAuthStateChange fires → _layout routes.
+        if (result.data.needsEmailConfirm) setSignUpSuccess(true)
+        // Otherwise onAuthStateChange fires → _layout routes.
       } else {
         const result = await signInWithEmail(email.trim(), password)
         if (!result.ok) {
@@ -213,43 +117,32 @@ export default function SignInScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, email, password])
 
-  // ── Forgot password ─────────────────────────────────────────────────────────
-
   const handleForgotPassword = useCallback(async () => {
     if (!isValidEmail(email)) {
-      setEmailError('Enter your email above first.')
+      setEmailError('Enter your email above first, then tap Forgot password again.')
       return
     }
     setSendingReset(true)
     setResetSent(false)
     try {
       const result = await sendPasswordReset(email.trim())
-      if (result.ok) {
-        setResetSent(true)
-      } else {
-        setFormError(result.error)
-      }
+      if (result.ok) setResetSent(true)
+      else setFormError(result.error)
     } finally {
       setSendingReset(false)
     }
   }, [email])
 
-  // ── Google button ───────────────────────────────────────────────────────────
-
   const handleGoogle = useCallback(async () => {
     setLoading(true)
     try {
       const result = await signInWithGoogleWeb()
-      if (!result.ok) {
-        setFormError(result.error)
-      }
-      // OAuth redirects browser — nothing more to do here.
+      if (!result.ok) setFormError(result.error)
+      // OAuth redirects the browser — nothing more to do here.
     } finally {
       setLoading(false)
     }
   }, [])
-
-  // ── Toggle mode ─────────────────────────────────────────────────────────────
 
   function switchMode(next: Mode) {
     setMode(next)
@@ -260,258 +153,172 @@ export default function SignInScreen() {
     setResetSent(false)
   }
 
-  // ── Render: sign-up success panel ───────────────────────────────────────────
-
   if (signUpSuccess) {
     return (
-      <SafeAreaView style={s.root}>
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          <View style={s.container}>
-            <Image
-              source={require('../../assets/images/icon.png')}
-              style={s.logo}
-              accessibilityLabel="Iskotify logo"
-            />
-            <Text style={s.appName} maxFontSizeMultiplier={1.4}>Iskotify</Text>
-
-            <View style={[s.successBox, { marginTop: spacing.xl }]}>
-              <Text style={s.successTitle} maxFontSizeMultiplier={1.4}>
-                Check your email
-              </Text>
-              <Text style={s.successText} maxFontSizeMultiplier={1.4}>
-                We sent a confirmation link to{' '}
-                <Text style={{ fontFamily: 'Outfit_600SemiBold', color: t.textPrimary }}>{email}</Text>.
-                Open that link to activate your account, then come back here to sign in.
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={() => { setSignUpSuccess(false); switchMode('sign-in') }}
-              accessibilityRole="button"
-              style={({ pressed }) => [s.submitBtn, pressed ? { opacity: 0.85 } : null]}
-            >
-              <Text style={s.submitText} maxFontSizeMultiplier={1.4}>
-                I've confirmed — sign in
-              </Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+      <AuthLayout>
+        <View style={{ gap: spacing.xl }}>
+          <BrandBlock />
+          <StatusPanel tone="success" title="Check your email">
+            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+              We sent a confirmation link to{' '}
+              <Text style={{ fontFamily: fonts.bodySemi, color: t.textPrimary }}>{email}</Text>.
+              Open that link to activate your account, then come back here to sign in.
+            </Text>
+          </StatusPanel>
+          <Button
+            label="I've confirmed — sign in"
+            onPress={() => { setSignUpSuccess(false); switchMode('sign-in') }}
+            size="lg"
+            fullWidth
+          />
+        </View>
+      </AuthLayout>
     )
   }
-
-  // ── Render: main form ───────────────────────────────────────────────────────
 
   const isSignUp = mode === 'sign-up'
 
   return (
-    <SafeAreaView style={s.root}>
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={s.container}>
-          {/* Brand */}
-          <Image
-            source={require('../../assets/images/icon.png')}
-            style={s.logo}
-            accessibilityLabel="Iskotify logo"
-          />
-          <Text style={s.appName} maxFontSizeMultiplier={1.4}>Iskotify</Text>
-          <Text style={s.tagline} maxFontSizeMultiplier={1.4}>
-            Your AI-powered study companion
+    <AuthLayout>
+      <View style={{ gap: spacing.xl }}>
+        <BrandBlock />
+
+        {returnReason ? (
+          <Text accessibilityRole="alert" style={[textStyle('bodySm', t.danger), { textAlign: 'center' }]}>
+            {returnReason}
           </Text>
+        ) : null}
 
-          {/* Mode toggle */}
-          <View style={s.toggleRow} accessibilityRole="tablist">
-            {(['sign-in', 'sign-up'] as Mode[]).map((m) => {
-              const active = mode === m
-              return (
-                <Pressable
-                  key={m}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={m === 'sign-in' ? 'Sign in' : 'Create account'}
-                  onPress={() => switchMode(m)}
-                  style={({ pressed }) => [
-                    s.toggleBtn,
-                    active ? { backgroundColor: t.accent } : null,
-                    pressed && !active ? { opacity: 0.7 } : null,
-                  ]}
+        {/* Mode switch: a two-tab tablist. */}
+        <View
+          accessibilityRole="tablist"
+          style={{
+            flexDirection: 'row', backgroundColor: t.surface2, borderRadius: radius.lg,
+            borderCurve: 'continuous', padding: spacing.xs, gap: spacing.xs,
+          }}
+        >
+          {(['sign-in', 'sign-up'] as Mode[]).map((m) => {
+            const active = mode === m
+            const label = m === 'sign-in' ? 'Sign in' : 'Create account'
+            return (
+              <Pressable
+                key={m}
+                accessibilityRole="tab"
+                accessibilityLabel={label}
+                aria-selected={active}
+                onPress={() => switchMode(m)}
+                style={(state) => {
+                  const { pressed, hovered, focused } = state as WebPressableState
+                  return [{
+                    flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center',
+                    borderRadius: radius.md, borderCurve: 'continuous',
+                    backgroundColor: active ? t.surface : pressed || hovered ? t.surfaceSubtle : 'transparent',
+                    boxShadow: active ? t.shadowSm : undefined,
+                  }, focusRing(t.focusRing, focused)]
+                }}
+              >
+                <Text
+                  style={[textStyle('label', active ? t.textPrimary : t.textSecondary), { fontFamily: active ? fonts.bodySemi : fonts.bodyMedium }]}
+                  maxFontSizeMultiplier={1.6}
                 >
-                  <Text
-                    style={[s.toggleText, { color: active ? '#fff' : t.textSecondary }]}
-                    maxFontSizeMultiplier={1.4}
-                  >
-                    {m === 'sign-in' ? 'Sign in' : 'Create account'}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
+                  {label}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
 
-          {/* Email field */}
-          <Pressable
-            accessibilityRole="none"
-            onPress={() => emailRef.current?.focus()}
-          >
-            <Text style={s.label} maxFontSizeMultiplier={1.4}>Email address</Text>
-          </Pressable>
-          <TextInput
-            ref={emailRef}
+        <View style={{ gap: spacing.lg }}>
+          <Text {...heading(2)} style={textStyle('headline', t.textPrimary)}>
+            {isSignUp ? 'Create your account' : 'Welcome back'}
+          </Text>
+          <TextField
+            label="Email address"
             value={email}
             onChangeText={(v) => { setEmail(v); setEmailError('') }}
-            style={[s.input, emailError ? s.inputError : null]}
+            error={emailError || undefined}
             placeholder="you@example.com"
-            placeholderTextColor={t.textTertiary}
             autoComplete="email"
             textContentType="emailAddress"
             inputMode="email"
+            keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
-            accessibilityLabel="Email address"
-            accessibilityHint="Enter your email to sign in or create an account"
           />
-          <FieldError message={emailError} />
+          <TextField
+            ref={passwordRef}
+            label="Password"
+            value={password}
+            onChangeText={(v) => { setPassword(v); setPasswordError('') }}
+            error={passwordError || undefined}
+            hint={isSignUp ? 'At least 8 characters' : undefined}
+            placeholder={isSignUp ? 'At least 8 characters' : 'Your password'}
+            secureToggle
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            textContentType={isSignUp ? 'newPassword' : 'password'}
+            autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            returnKeyType="go"
+            onSubmitEditing={() => void handleSubmit()}
+          />
 
-          {/* Password field */}
-          <Pressable
-            accessibilityRole="none"
-            onPress={() => passwordRef.current?.focus()}
-          >
-            <Text style={s.label} maxFontSizeMultiplier={1.4}>Password</Text>
-          </Pressable>
-          <View style={s.passwordRow}>
-            <TextInput
-              ref={passwordRef}
-              value={password}
-              onChangeText={(v) => { setPassword(v); setPasswordError('') }}
-              style={[s.input, { paddingRight: 56 }, passwordError ? s.inputError : null]}
-              placeholder={isSignUp ? 'At least 8 characters' : 'Your password'}
-              placeholderTextColor={t.textTertiary}
-              secureTextEntry={!showPassword}
-              autoComplete={isSignUp ? 'new-password' : 'current-password'}
-              textContentType={isSignUp ? 'newPassword' : 'password'}
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              accessibilityLabel="Password"
-              accessibilityHint={isSignUp ? 'Choose a password with at least 8 characters' : 'Enter your password'}
-            />
-            <Pressable
-              onPress={() => setShowPassword(v => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-              style={({ pressed }) => [s.eyeBtn, pressed ? { opacity: 0.7 } : null]}
-            >
-              <Text style={s.eyeText} maxFontSizeMultiplier={1.4}>
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
-            </Pressable>
-          </View>
-          <FieldError message={passwordError} />
-
-          {/* Forgot password (sign-in mode only) */}
           {!isSignUp ? (
-            <View style={s.forgotRow}>
-              <Pressable
-                onPress={handleForgotPassword}
-                accessibilityRole="button"
+            <View style={{ alignItems: 'flex-start', marginTop: -spacing.sm }}>
+              <Button
+                label={sendingReset ? 'Sending…' : 'Forgot password?'}
                 accessibilityLabel="Forgot password"
+                variant="ghost"
+                size="sm"
+                onPress={() => void handleForgotPassword()}
                 disabled={sendingReset}
-                style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center' }, pressed ? { opacity: 0.7 } : null]}
-              >
-                <Text style={s.forgotText} maxFontSizeMultiplier={1.4}>
-                  {sendingReset ? 'Sending…' : 'Forgot password?'}
-                </Text>
-              </Pressable>
+                style={{ paddingHorizontal: spacing.sm, marginLeft: -spacing.sm }}
+              />
               {resetSent ? (
-                <Text style={s.resetInfo} maxFontSizeMultiplier={1.4}>
+                <Text accessibilityLiveRegion="polite" style={textStyle('bodySm', t.success)}>
                   Check your email for a reset link.
                 </Text>
               ) : null}
             </View>
           ) : null}
 
-          {/* General form error */}
           {formError ? (
-            <View style={s.formErrorBox}>
-              <Text style={s.formErrorTxt} accessibilityRole="alert" maxFontSizeMultiplier={1.4}>
+            <StatusPanel tone="danger" title={isSignUp ? "Couldn't create your account" : "Couldn't sign you in"}>
+              <Text accessibilityRole="alert" style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={2}>
                 {formError}
               </Text>
-            </View>
+            </StatusPanel>
           ) : null}
 
-          {/* Submit button — disabled ONLY while loading */}
-          <Pressable
-            onPress={handleSubmit}
-            disabled={loading}
-            accessibilityRole="button"
+          <Button
+            label={loading ? (isSignUp ? 'Creating account…' : 'Signing in…') : (isSignUp ? 'Create account' : 'Sign in')}
             accessibilityLabel={isSignUp ? 'Create account' : 'Sign in'}
-            accessibilityState={{ disabled: loading, busy: loading }}
-            style={({ pressed }) => [
-              s.submitBtn,
-              loading ? { opacity: 0.7 } : null,
-              pressed && !loading ? { opacity: 0.85 } : null,
-            ]}
-          >
-            {loading ? <ActivityIndicator color="#ffffff" size="small" /> : null}
-            <Text style={s.submitText} maxFontSizeMultiplier={1.4}>
-              {loading
-                ? isSignUp ? 'Creating account…' : 'Signing in…'
-                : isSignUp ? 'Create account' : 'Sign in'}
-            </Text>
-          </Pressable>
-
-          {/* Divider */}
-          <View style={{ marginVertical: spacing.xl }}>
-            <Divider label="or" />
-          </View>
-
-          {/* Google button */}
-          <Pressable
-            onPress={handleGoogle}
-            disabled={loading}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
-            style={({ pressed }) => [
-              s.googleBtn,
-              loading ? { opacity: 0.7 } : null,
-              pressed && !loading ? { opacity: 0.85 } : null,
-            ]}
-          >
-            <Text
-              style={{ fontFamily: 'Outfit_700Bold', fontSize: 18, color: t.textPrimary }}
-              maxFontSizeMultiplier={1.4}
-            >
-              G
-            </Text>
-            <Text style={s.googleText} maxFontSizeMultiplier={1.4}>
-              Continue with Google
-            </Text>
-          </Pressable>
-
-          {/* Bottom note */}
-          <Text
-            style={{
-              fontFamily: 'Lexend_400Regular',
-              fontSize: 11,
-              color: t.textTertiary,
-              textAlign: 'center',
-              marginTop: spacing.xl,
-              lineHeight: 17,
-            }}
-            maxFontSizeMultiplier={1.4}
-          >
-            By continuing you agree to use Iskotify for personal study purposes.
-          </Text>
+            onPress={() => void handleSubmit()}
+            loading={loading}
+            size="lg"
+            fullWidth
+          />
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        <Divider label="or" />
+
+        <Button
+          label="Continue with Google"
+          variant="secondary"
+          onPress={() => void handleGoogle()}
+          disabled={loading}
+          icon={<Lineicons icon={GoogleOutlined} size={18} color={t.accentText} />}
+          size="lg"
+          fullWidth
+        />
+
+        <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+          By continuing you agree to use Iskotify for personal study purposes.
+        </Text>
+      </View>
+    </AuthLayout>
   )
 }

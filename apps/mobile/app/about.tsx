@@ -1,100 +1,80 @@
-import { useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable } from 'react-native'
+import { View, Text } from 'react-native'
+// RN Image is fine for the tiny bundled app icon.
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius } from '../theme/tokens'
-import { ScreenScroll } from '../components/ui/ScreenScroll'
-import { WebTopSpacer } from '../components/ui/WebTopSpacer'
-import { Card } from '../components/ui/Card'
-import { SectionHeader } from '../components/ui/SectionHeader'
+import { radius, spacing, textStyle } from '../theme/tokens'
+import { InfoPage, InfoSection, Prose } from '../components/info/InfoPage'
+import { decorative } from '../components/ui/a11y'
+import { TAGLINE } from '../components/auth/AuthLayout'
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
-export default function AboutScreen() {
-  const { theme: t, typo } = useTheme()
+const FEATURES = [
+  'Mock exams and subject drills, with an explanation for every choice',
+  'Flashcards that come back when you are about to forget them',
+  'An Estimated Admission Score, based on historical cutoffs',
+  'Entrance exams, scholarships, schools and courses, with their deadlines',
+  'Works offline on the phone you already have',
+]
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
-    backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
-    backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
-    heroWrap: { alignItems: 'center' as const, paddingTop: spacing.xxl, paddingBottom: spacing.xxl },
-    heroIcon: { width: 80, height: 80, borderRadius: radius.lg, marginBottom: spacing.md },
-    heroName: { fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, letterSpacing: -0.4 },
-    heroBadge: { marginTop: spacing.sm, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-    heroBadgeTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.xs, color: t.accentText },
-    card: { marginBottom: spacing.md },
-    cardBody: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, lineHeight: typo.sm * 1.6 },
-    metaRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
-    metaItem: { flex: 1 },
-    metaLabel: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 2 },
-    metaValue: { fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.textPrimary },
-  }), [t, typo])
-
+function Meta({ label, value }: { label: string; value: string }) {
+  const { theme: t } = useTheme()
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.backRow}>
-        <Pressable
-          style={({ pressed }) => [s.backBtn, pressed ? { opacity: 0.6 } : null]}
-          onPress={() => router.back()}
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-      </View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: t.divider }}>
+      <Text style={textStyle('body', t.textSecondary)}>{label}</Text>
+      <Text style={textStyle('titleSm', t.textPrimary)}>{value}</Text>
+    </View>
+  )
+}
 
-      <ScreenScroll tabBarInset={false} padded>
-        <View style={s.heroWrap}>
-          <Image source={require('../assets/images/icon.png')} style={s.heroIcon} />
-          <Text style={s.heroName}>Iskotify</Text>
-          <View style={s.heroBadge}>
-            <Text style={s.heroBadgeTxt}>v{version}</Text>
-          </View>
+export default function AboutScreen() {
+  const { theme: t } = useTheme()
+  return (
+    <InfoPage
+      title="About Iskotify"
+      lead={TAGLINE}
+      above={(
+        <Image
+          source={require('../assets/images/icon.png')}
+          style={{ width: 64, height: 64, borderRadius: radius.xl, marginBottom: spacing.sm }}
+          accessibilityIgnoresInvertColors
+          accessible={false}
+        />
+      )}
+    >
+      <InfoSection title="What Iskotify is">
+        <Prose>
+          A free study companion for Filipino students preparing for UPCAT and other college entrance
+          exams. It helps you practice, find the schools and scholarships worth applying to, and keep
+          track of every deadline.
+        </Prose>
+      </InfoSection>
+
+      <InfoSection title="What you can do">
+        <View style={{ gap: spacing.sm }}>
+          {FEATURES.map(f => (
+            <View key={f} style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
+              <View {...decorative} style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: t.accentText, marginTop: 9 }} />
+              <View style={{ flex: 1 }}><Prose>{f}</Prose></View>
+            </View>
+          ))}
         </View>
+      </InfoSection>
 
-        <Card elevated style={s.card}>
-          <SectionHeader title="About" />
-          <Text style={s.cardBody}>
-            Iskotify is your ultimate UPCAT and scholarship exam companion — built to help Filipino students study smarter, track their progress, and confidently pass their college entrance tests.
-          </Text>
-        </Card>
+      <InfoSection title="Version">
+        <View>
+          <Meta label="App version" value={`v${version}`} />
+          <Meta label="Available on" value="Android and web" />
+          <Meta label="Made by" value="Team OCSPH" />
+        </View>
+      </InfoSection>
 
-        <Card elevated style={s.card}>
-          <SectionHeader title="Features" />
-          <Text style={s.cardBody}>
-            {'• Subject-by-subject practice questions\n• Spaced-repetition flashcard decks\n• Weak-area identification and coaching\n• Exam countdown and daily reminders\n• Offline-first — study without internet\n• AI-enhanced flashcards and study feedback'}
-          </Text>
-        </Card>
-
-        <Card elevated style={s.card}>
-          <SectionHeader title="Version Info" />
-          <View style={s.metaRow}>
-            <View style={s.metaItem}>
-              <Text style={s.metaLabel}>App Version</Text>
-              <Text style={s.metaValue}>v{version}</Text>
-            </View>
-            <View style={s.metaItem}>
-              <Text style={s.metaLabel}>Platform</Text>
-              <Text style={s.metaValue}>Android / iOS</Text>
-            </View>
-            <View style={s.metaItem}>
-              <Text style={s.metaLabel}>Made by</Text>
-              <Text style={s.metaValue}>Team OCSPH</Text>
-            </View>
-          </View>
-        </Card>
-
-        <Card elevated style={s.card}>
-          <SectionHeader title="Contact" />
-          <Text style={s.cardBody}>
-            For feedback, bug reports, or partnership inquiries, reach us at{'\n'}teamocsph@gmail.com
-          </Text>
-        </Card>
-      </ScreenScroll>
-    </SafeAreaView>
+      <InfoSection title="Contact">
+        <Prose>For feedback, bug reports or partnership inquiries, email us.</Prose>
+        <Prose selectable>teamocsph@gmail.com</Prose>
+      </InfoSection>
+    </InfoPage>
   )
 }
