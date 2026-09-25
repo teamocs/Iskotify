@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
+import { Alert } from 'react-native'
 import BlueprintExam from '../[slug]'
 import type { ExamBlueprint } from '../../../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
@@ -9,9 +10,10 @@ import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
 // ---------------------------------------------------------------------------
 
 let mockSearchParams: { slug?: string } = {}
+const mockRouterBack = jest.fn()
 
 jest.mock('expo-router', () => ({
-  router: { push: () => {}, replace: () => {}, back: () => {} },
+  router: { push: () => {}, replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a) },
   useLocalSearchParams: () => mockSearchParams,
 }))
 
@@ -66,6 +68,22 @@ jest.mock('../../../../services/examBlueprints', () => ({
   getTargetCourseClusters: (...a: unknown[]) => mockGetTargetCourseClusters(...a),
 }))
 
+// Fix 1 — leave-confirmation + resume persistence. Both are exercised for
+// real (behaviorally) in their own unit tests (hooks/__tests__/usePreventLeave.test.ts,
+// services/__tests__/examRuns.test.ts, utils/__tests__/examRunPersistence.test.ts);
+// here we only need to observe how the screen calls them.
+const mockUsePreventLeave = jest.fn()
+jest.mock('../../../../hooks/usePreventLeave', () => ({
+  usePreventLeave: (...a: unknown[]) => mockUsePreventLeave(...a),
+}))
+
+const mockSaveRun = jest.fn().mockResolvedValue(undefined)
+const mockLoadRun = jest.fn().mockResolvedValue(null)
+const mockClearRun = jest.fn().mockResolvedValue(undefined)
+jest.mock('../../../../hooks/useExamRunPersistence', () => ({
+  useExamRunPersistence: () => ({ saveRun: mockSaveRun, loadRun: mockLoadRun, clearRun: mockClearRun }),
+}))
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -89,13 +107,32 @@ const Q2: RawUpcatQuestion = {
   setId: null, setPosition: null, mainSubject: 'Math', topic: 'Geometry',
 }
 
+/** Fix 2: the last question opens a review sheet instead of submitting
+ *  directly — drives that flow through to an actual submit() call, the same
+ *  way a student who taps through the confirmation would. */
+async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
+  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+  const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+  const buttons = call[2] as { text: string; onPress?: () => void }[]
+  await act(async () => {
+    buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+  })
+}
+
 describe('BlueprintExam', () => {
   let randomSpy: jest.SpyInstance
+  let alertSpy: jest.SpyInstance
 
   beforeEach(() => {
     jest.useRealTimers()
     mockRecordSession.mockClear()
     mockRecordAttempts.mockClear()
+    mockRouterBack.mockClear()
+    mockUsePreventLeave.mockClear()
+    mockSaveRun.mockClear()
+    mockLoadRun.mockClear().mockResolvedValue(null)
+    mockClearRun.mockClear()
     mockSearchParams = { slug: 'test-mock' }
 
     mockGetExamBlueprint.mockResolvedValue(BLUEPRINT)
@@ -104,6 +141,7 @@ describe('BlueprintExam', () => {
     mockGetTargetCourseClusters.mockResolvedValue([])
     mockLoadSnapshot.mockReset()
     mockLoadSnapshot.mockResolvedValue({ status: 'not-ready', readiness: null, result: null })
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
 
     // buildBlueprintExam shuffles its section pool (utils/examBuilder.ts). Pin
     // Math.random so the 2-item pool always reverses to [Q2, Q1] — makes the
@@ -113,6 +151,7 @@ describe('BlueprintExam', () => {
 
   afterEach(() => {
     randomSpy.mockRestore()
+    alertSpy.mockRestore()
   })
 
   it('writes a question_attempts row per question, tagged with the section name as subtest, on submit (Task D)', async () => {
@@ -130,9 +169,7 @@ describe('BlueprintExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2')) // Q1 correct (index 1)
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(mockRecordAttempts).toHaveBeenCalledTimes(1)
     const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
@@ -168,9 +205,7 @@ describe('BlueprintExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     // Reached results despite the telemetry insert rejecting — not stranded
     // behind the double-submit guard.
@@ -198,9 +233,7 @@ describe('BlueprintExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(await screen.findByText('Estimated Admission Score 2.40 → 2.33, lower is better')).toBeTruthy()
   })
@@ -218,11 +251,174 @@ describe('BlueprintExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await act(async () => {
-      fireEvent.press(screen.getByText('Submit'))
-    })
+    await reviewAndConfirmSubmit(alertSpy)
 
     expect(mockLoadSnapshot).not.toHaveBeenCalled()
     expect(screen.queryByText(/Estimated Admission Score/)).toBeNull()
+  })
+
+  // ── Fix 2: last-question safety ────────────────────────────────────────────
+  describe('Fix 2: the last question never submits directly', () => {
+    it('opens a review sheet instead of calling submit() when the last question is reached', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+
+      // There is no button labelled "Submit" left bare on the last question.
+      expect(screen.queryByText('Submit')).toBeNull()
+      fireEvent.press(screen.getByText('Review & submit'))
+
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+      expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
+    })
+
+    it('does not submit if the review sheet is dismissed via "Back to exam"', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+
+      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(await screen.findByRole('button', { name: /back to exam/i }))
+
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+      // Still on the exam screen, not results.
+      expect(screen.getByText('1+1?')).toBeTruthy()
+    })
+  })
+
+  // ── Fix 3: neutral results ──────────────────────────────────────────────────
+  describe('Fix 3: results are neutral, no pass/fail or percentile', () => {
+    async function reachResults() {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('1')) // wrong (correct is index 3)
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('1')) // wrong (correct is index 1)
+      await reviewAndConfirmSubmit(alertSpy)
+    }
+
+    it('never renders pass/fail verdict copy or a percentile', async () => {
+      await reachResults()
+      const tree = JSON.stringify(screen.toJSON()).toLowerCase()
+      expect(tree).not.toContain('great work')
+      expect(tree).not.toContain('keep practicing')
+      expect(tree).not.toContain('below cut-off')
+      expect(tree).not.toContain('percentile')
+      expect(tree).not.toMatch(/\d+th\)/) // the old "est. ~62th" ordinal bug
+    })
+
+    it('makes "Review mistakes" the primary action and "Retake exam" secondary', async () => {
+      await reachResults()
+      expect(screen.getByText('Review mistakes')).toBeTruthy()
+      expect(screen.getByText('Retake exam')).toBeTruthy()
+    })
+  })
+
+  // ── Fix 1: leave-confirmation + persistence ────────────────────────────────
+  describe('Fix 1: leave-confirmation and in-progress persistence', () => {
+    it('guards leaving while an exam is in progress, and lets router.back() through once confirmed', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+
+      expect(mockUsePreventLeave).toHaveBeenLastCalledWith(true, expect.any(Function))
+      const onAttemptLeave = mockUsePreventLeave.mock.calls[mockUsePreventLeave.mock.calls.length - 1]![1] as () => void
+
+      act(() => onAttemptLeave())
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Leave the exam?',
+        'Your progress is saved.',
+        expect.any(Array),
+      )
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      expect(mockRouterBack).not.toHaveBeenCalled()
+      await act(async () => { buttons.find(b => b.text === 'Leave')!.onPress!() })
+      await waitFor(() => expect(mockRouterBack).toHaveBeenCalled())
+    })
+
+    it('stops guarding once results are shown', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+      await reviewAndConfirmSubmit(alertSpy)
+
+      expect(mockUsePreventLeave).toHaveBeenLastCalledWith(false, expect.any(Function))
+    })
+
+    it('persists answers/position to local storage as the student answers questions', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+
+      await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+      const lastCall = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
+      expect(lastCall).toMatchObject({
+        runKey: 'exam:test-mock',
+        kind: 'exam',
+        slug: 'test-mock',
+        answers: { 0: 3 },
+        questionIds: ['Q2', 'Q1'],
+        sectionNames: ['Math', 'Math'],
+      })
+    })
+
+    it('clears the saved run on submit', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+      await reviewAndConfirmSubmit(alertSpy)
+
+      expect(mockClearRun).toHaveBeenCalledWith('exam:test-mock')
+    })
+
+    it('offers "Resume where you left off" on the prestart screen when a saved run exists', async () => {
+      mockLoadRun.mockResolvedValue({
+        runKey: 'exam:test-mock', kind: 'exam', slug: 'test-mock', mode: 'full',
+        questionIds: ['Q2', 'Q1'], sectionNames: ['Math', 'Math'],
+        answers: { 0: 3 }, idx: 1, sectionIdx: 0, floorIdx: 0,
+        endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+      })
+
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+
+      fireEvent.press(screen.getByText('Resume where you left off'))
+
+      // Resumed straight into the saved position (idx 1 -> "1+1?") with the
+      // saved answer for question 0 already applied.
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    })
+
+    it('does not offer Resume when no saved run exists', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      expect(screen.queryByText('Resume where you left off')).toBeNull()
+    })
   })
 })

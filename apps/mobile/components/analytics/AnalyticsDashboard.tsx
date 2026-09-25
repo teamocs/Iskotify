@@ -9,7 +9,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../SubjectAccordion'
 import { TrendLineChart } from './TrendLineChart'
-import type { ResolvedMissedTopic, MockAttemptPercentile } from '../../services/analyticsAggregates'
+import type { ResolvedMissedTopic, MockAttemptScore } from '../../services/analyticsAggregates'
 
 /** Formats elapsedMs as "42s" or "1m 08s" for the Pace section. */
 function fmtDuration(ms: number): string {
@@ -99,7 +99,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
   const [trendExpanded, setTrendExpanded] = useState(false)
   const [paceExpanded, setPaceExpanded] = useState(false)
   const [mistakesExpanded, setMistakesExpanded] = useState(false)
-  const [percentileExpanded, setPercentileExpanded] = useState(false)
+  const [scoreHistoryExpanded, setScoreHistoryExpanded] = useState(false)
 
   const subjectGroups = useMemo(() => {
     function avgAccuracy(items: Array<{ accuracy?: number | null }>): number {
@@ -190,15 +190,14 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     mistakeBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0, borderWidth: 1 },
     mistakeBadgeTxt: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     mistakeChevron: { fontSize: 13, color: t.textTertiary, marginLeft: 2 },
-    // Task G: Percentile band history
-    percentileRow: {
+    // Fix 3 (exam safety): mock score history — no percentile concept, no verdict.
+    scoreHistoryRow: {
       flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8,
       borderTopWidth: 1, borderTopColor: t.surfaceSubtle,
     },
-    percentileBand: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    percentileMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-    percentileVal: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    percentileDisclaimer: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic', marginBottom: 8 },
+    scoreHistoryBand: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
+    scoreHistoryMeta: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
+    scoreHistoryVal: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
     smallEmptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingVertical: 8 },
   }), [t, typo])
 
@@ -240,9 +239,9 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
     ? `${analytics.mostMissedTopics.length} area${analytics.mostMissedTopics.length !== 1 ? 's' : ''} to review`
     : 'No mistakes tracked yet'
 
-  const latestPercentile = analytics.mockAttemptHistory[analytics.mockAttemptHistory.length - 1]
-  const percentileSummary = latestPercentile
-    ? `Latest: ${latestPercentile.band} (est. ~${latestPercentile.percentile}th)`
+  const latestMockScore = analytics.mockAttemptHistory[analytics.mockAttemptHistory.length - 1]
+  const scoreHistorySummary = latestMockScore
+    ? `Latest: ${latestMockScore.band} (${latestMockScore.pct}% raw)`
     : 'No full mock attempts yet'
 
   const content = (
@@ -482,37 +481,34 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
         ) : null}
       </View>
 
-      {/* Percentile band history — derived from full mock attempts via estimatePercentileBand, no new table */}
+      {/* Fix 3 (exam safety): mock score history — derived from full mock attempts
+          via scoreBand, no new table. No percentile, no cut-off verdict. */}
       {analytics.mockAttemptHistory.length > 0 ? (
         <View style={s.section}>
           <Pressable
             style={s.sectionHeaderRow}
-            onPress={() => setPercentileExpanded(v => !v)}
+            onPress={() => setScoreHistoryExpanded(v => !v)}
             accessibilityRole="button"
-            accessibilityState={{ expanded: percentileExpanded }}
+            accessibilityState={{ expanded: scoreHistoryExpanded }}
             hitSlop={8}
           >
             <View style={s.sectionHeaderLeft}>
-              <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Percentile Band History</Text>
-              {!percentileExpanded ? (
-                <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{percentileSummary}</Text>
+              <Text style={s.sectionTitle} maxFontSizeMultiplier={1.4}>Mock Score History</Text>
+              {!scoreHistoryExpanded ? (
+                <Text style={s.sectionSummary} maxFontSizeMultiplier={1.4}>{scoreHistorySummary}</Text>
               ) : null}
             </View>
-            <Text style={s.sectionChevron}>{percentileExpanded ? '▲' : '▼'}</Text>
+            <Text style={s.sectionChevron}>{scoreHistoryExpanded ? '▲' : '▼'}</Text>
           </Pressable>
-          {percentileExpanded ? (
+          {scoreHistoryExpanded ? (
             <View style={s.sectionBody}>
-              {/* Finding 3: match the results screen's framing (app/practice/exam/[slug].tsx) —
-                  a history view implies a track record, so the "estimated, not normed" disclaimer
-                  matters more here, not less. Shown once for the whole section, not per row. */}
-              <Text style={s.percentileDisclaimer}>Estimated percentile (not a normed score)</Text>
-              {analytics.mockAttemptHistory.slice(-8).reverse().map((mh: MockAttemptPercentile, i: number) => (
-                <View key={`${mh.listingSlug}-${mh.completedAt}`} style={[s.percentileRow, i === 0 && { borderTopWidth: 0 }]}>
+              {analytics.mockAttemptHistory.slice(-8).reverse().map((mh: MockAttemptScore, i: number) => (
+                <View key={`${mh.listingSlug}-${mh.completedAt}`} style={[s.scoreHistoryRow, i === 0 && { borderTopWidth: 0 }]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.percentileBand} numberOfLines={1}>{mh.band}</Text>
-                    <Text style={s.percentileMeta}>{fmtDate(mh.completedAt)} · {mh.pct}% raw</Text>
+                    <Text style={s.scoreHistoryBand} numberOfLines={1}>{mh.band}</Text>
+                    <Text style={s.scoreHistoryMeta}>{fmtDate(mh.completedAt)}</Text>
                   </View>
-                  <Text style={s.percentileVal} maxFontSizeMultiplier={1.4}>est. ~{mh.percentile}th</Text>
+                  <Text style={s.scoreHistoryVal} maxFontSizeMultiplier={1.4}>{mh.pct}% raw</Text>
                 </View>
               ))}
             </View>

@@ -188,18 +188,22 @@ export function filterCourseNotesByClusters<T extends { courseCluster: string }>
   })
 }
 
-export interface PercentileBand { percentile: number; band: string; blurb: string }
+export interface ScoreBand { band: string; blurb: string }
 
-/** Honest, distribution-free estimate: percentile ≈ raw % correct, clamped to [1,99].
- *  Labelled "estimated" in the UI — NOT a normed score. */
-export function estimatePercentileBand(pct: number): PercentileBand {
-  const percentile = Math.max(1, Math.min(99, Math.round(pct)))
-  let band: string, blurb: string
-  if (percentile >= 90) { band = 'Top tier'; blurb = 'On track for the most selective programs.' }
-  else if (percentile >= 75) { band = 'Competitive'; blurb = 'Strong — competitive for many programs.' }
-  else if (percentile >= 50) { band = 'Developing'; blurb = 'Building up — keep drilling weak sections.' }
-  else { band = 'Foundational'; blurb = 'Focus on fundamentals before timed mocks.' }
-  return { percentile, band, blurb }
+/**
+ * Fix 3 (exam safety): this used to be `estimatePercentileBand`, returning a
+ * `percentile` field that was really just raw % correct relabeled — it drove
+ * "Below cut-off (need Nth)" verdict pills that read like a normed
+ * qualification score. There is no percentile concept here anymore: a
+ * descriptive, non-judgemental band + blurb only, derived straight from raw
+ * % correct (clamped so extreme inputs still land on the top/bottom band).
+ */
+export function scoreBand(pct: number): ScoreBand {
+  const clamped = Math.max(0, Math.min(100, pct))
+  if (clamped >= 90) return { band: 'Top tier', blurb: 'On track for the most selective programs.' }
+  if (clamped >= 75) return { band: 'Competitive', blurb: 'Strong — competitive for many programs.' }
+  if (clamped >= 50) return { band: 'Developing', blurb: 'Building up — keep drilling weak sections.' }
+  return { band: 'Foundational', blurb: 'Focus on fundamentals before timed mocks.' }
 }
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,31 @@ describe('ScoreDisclaimerModal', () => {
     render(<ScoreDisclaimerModal visible={true} onAcknowledge={onAcknowledge} />)
     expect(onAcknowledge).not.toHaveBeenCalled()
   })
+
+  // September 2026 audit: white/textInverse text directly on `t.warning`
+  // (#fbbf24 in dark) measures ≈1.7:1 — a WCAG AA failure. The button must
+  // fill with `accentStrong` (opaque maroon, textInverse already clears
+  // AA on it elsewhere in the app) instead.
+  it('fills the acknowledge button with accentStrong, not the raw warning color', () => {
+    const { getByRole } = render(
+      <ScoreDisclaimerModal visible={true} onAcknowledge={() => {}} />,
+    )
+    const btn = getByRole('button', { name: /acknowledge disclaimer/i })
+    const flatStyle = Array.isArray(btn.props.style) ? Object.assign({}, ...btn.props.style) : btn.props.style
+    expect(flatStyle.backgroundColor).toBe('rgba(128,0,0,0.82)') // theme mock's accentStrong
+    expect(flatStyle.backgroundColor).not.toBe('#fbbf24')
+  })
+
+  it('colors the "Important Notice" badge text with warningStrong (text on warningSurface)', () => {
+    const { getByText } = render(
+      <ScoreDisclaimerModal visible={true} onAcknowledge={() => {}} />,
+    )
+    const badgeText = getByText('Important Notice')
+    const flatStyle = Array.isArray(badgeText.props.style)
+      ? Object.assign({}, ...badgeText.props.style)
+      : badgeText.props.style
+    expect(flatStyle.color).toBe('#fbbf24') // theme mock's warningStrong
+  })
 })
 
 describe('ScoreDisclaimerNotice', () => {

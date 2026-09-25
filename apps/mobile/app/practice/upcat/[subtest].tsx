@@ -9,7 +9,7 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import { loadAdmissionEstimateSnapshot, type AdmissionEstimateSnapshot } from '../../../hooks/useAdmissionEstimate'
 import { estimateDeltaMessage } from '../../../utils/estimateDelta'
-import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest } from '../../../utils/upcatExam'
+import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest, type RawUpcatQuestion } from '../../../utils/upcatExam'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
@@ -18,13 +18,19 @@ import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
 import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
+import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
+import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
 import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
+import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
+import { confirmAction } from '../../../utils/confirmAction'
+import { runKeyFor, reorderByIds } from '../../../utils/examRunPersistence'
 
-type Phase = 'loading' | 'exam' | 'results'
+type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
 
 function fmtTime(totalSecs: number): string {
   const h = Math.floor(totalSecs / 3600)
@@ -41,6 +47,7 @@ export default function UpcatExam() {
   const { theme: t, typo } = useTheme()
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
+  const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
@@ -53,6 +60,14 @@ export default function UpcatExam() {
   // was already "ready" — four subtests unlocked — both before and after).
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
   const startRef = useState(() => Date.now())[0]
+  // Fix 2: last-question review sheet (never submits directly).
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Fix 1: leave-confirmation + resume-in-progress-run state.
+  const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
+  const parsedRef = useRef<RawUpcatQuestion[]>([])
+  const rawPassagesRef = useRef<{ setId: string; subtest: string; passageText: string }[]>([])
+  const runKey = runKeyFor('upcat', subtestParam ?? 'all', mode === 'quick' ? 'quick' : 'full')
   // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
   // an absolute timestamp so the clock stays accurate even if the interval drifts.
   const SECONDS_PER_QUESTION = 60
@@ -63,6 +78,9 @@ export default function UpcatExam() {
   // Question pane (middle scroll zone) — reset to top whenever the question changes
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
+  // Fix 3: "Review mistakes" scrolls the results screen down to the Review section.
+  const resultsScrollRef = useRef<ScrollView>(null)
+  const reviewYRef = useRef(0)
   const { height: winH } = useWindowDimensions()
   // Web-only max-width centering for the vertical scroll zones (null on native/sm).
   const webWidth = useWebContentWidth()
@@ -95,6 +113,18 @@ export default function UpcatExam() {
     }
   }
 
+  /** Builds a brand-new sample from the already-fetched pool and arms the timer. */
+  function buildFreshExam() {
+    const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
+    const built = targetSubtests.flatMap(st =>
+      buildExam(parsedRef.current, rawPassagesRef.current, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
+    )
+    setQuestions(built)
+    prefetchSessionImages(built) // fire-and-forget; never blocks session start
+    if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
+    setPhase(built.length ? 'exam' : 'results')
+  }
+
   useEffect(() => {
     void (async () => {
       try {
@@ -121,26 +151,100 @@ export default function UpcatExam() {
           imageHeight: r.imageHeight ?? null,
         }))
         const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
-        const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
-        const built = targetSubtests.flatMap(st =>
-          buildExam(parsed, passages, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
-        )
-        setQuestions(built)
-        prefetchSessionImages(built) // fire-and-forget; never blocks session start
-        if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
-        setPhase(built.length ? 'exam' : 'results')
+        parsedRef.current = parsed
+        rawPassagesRef.current = passages
+
+        // Fix 1: a saved in-progress run pre-empts starting a brand-new sample —
+        // ask the student first (there's no separate prestart screen on this
+        // route, so this doubles as one).
+        const run = await loadRun(runKey)
+        if (run && run.questionIds.length > 0) {
+          savedRunRef.current = run
+          setPhase('resume-prompt')
+          return
+        }
+
+        buildFreshExam()
       } catch {
         // Unexpected failure: show results (empty) rather than hang on loading
         setPhase('results')
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, subtestParam, mode])
+
+  /** Fix 1: rebuild the exact previously-sampled question set from the saved
+   *  run's question ids, restoring answers/position/timer. The absolute-
+   *  timestamp countdown effect below correctly auto-submits if the whole
+   *  thing already expired while the app was closed. */
+  function resumeExam() {
+    const run = savedRunRef.current
+    if (!run) return
+    const ordered = reorderByIds<RawUpcatQuestion, 'questionId'>(parsedRef.current, run.questionIds, 'questionId')
+    if (ordered.length === 0) {
+      void clearRun(run.runKey)
+      buildFreshExam()
+      return
+    }
+    const passageById = new Map(rawPassagesRef.current.map(p => [p.setId, p.passageText]))
+    const built: ExamQuestion[] = ordered.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
+    setQuestions(built)
+    setAnswers(run.answers)
+    const maxIdx = built.length - 1
+    setIdx(Math.min(run.idx, maxIdx))
+    setEndTime(run.endTime)
+    setPhase('exam')
+  }
+
+  function startOver() {
+    if (savedRunRef.current) void clearRun(savedRunRef.current.runKey)
+    savedRunRef.current = null
+    buildFreshExam()
+  }
+
+  // Fix 1: persist answers/position/timer on every change while in progress.
+  useEffect(() => {
+    if (phase !== 'exam' || questions.length === 0) return
+    void saveRun({
+      runKey,
+      kind: 'upcat',
+      slug: subtestParam ?? 'all',
+      mode: mode === 'quick' ? 'quick' : 'full',
+      questionIds: questions.map(q => q.questionId),
+      sectionNames: questions.map(q => q.subtest),
+      answers,
+      idx,
+      sectionIdx: 0,
+      floorIdx: 0,
+      endTime,
+      sectionEndTime: null,
+      startedAt: startRef,
+    }).catch(err => console.warn('[practice/upcat/[subtest]] saveRun failed:', err))
+  }, [phase, runKey, subtestParam, mode, questions, answers, idx, endTime, startRef, saveRun])
+
+  // Fix 1: leave-confirmation.
+  usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
+    confirmAction(
+      'Leave the exam?',
+      'Your progress is saved.',
+      'Leave',
+      () => setLeaveConfirmed(true),
+      { cancelLabel: 'Stay', destructive: true },
+    )
+  })
+  useEffect(() => {
+    if (leaveConfirmed) router.back()
+  }, [leaveConfirmed])
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
+
+    // Fix 1: run finished — stop offering "Resume" for a completed attempt.
+    void clearRun(runKey).catch(err => console.warn('[practice/upcat/[subtest]] clearRun failed:', err))
+
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const result = scoreExam(scored)
 
@@ -230,6 +334,24 @@ export default function UpcatExam() {
     )
   }
 
+  if (phase === 'resume-prompt') {
+    return (
+      <SafeAreaView style={s.root}>
+        <WebTopSpacer />
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}>
+          <Text style={s.emptyTitle}>Resume where you left off?</Text>
+          <Text style={s.emptyBody}>You have an in-progress attempt. Your answers and timer were saved.</Text>
+          <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={resumeExam}>
+            <Text style={s.primaryBtnTxt}>Resume where you left off</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={startOver}>
+            <Text style={s.ghostTxt}>Start over</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   if (phase === 'results') {
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const res = scoreExam(scored)
@@ -238,16 +360,12 @@ export default function UpcatExam() {
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
         <ScrollView
+          ref={resultsScrollRef}
           contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[s.scoreCard, pct >= 60 ? s.pass : s.fail]}>
-            <Text style={[s.scorePct, { color: pct >= 60 ? t.success : t.accentText }]}>{pct}%</Text>
-            <Text style={s.scoreVerdict}>{pct >= 60 ? '🎉 Great work' : '📚 Keep practicing'}</Text>
-            <Text style={s.scoreSub}>
-              {res.overall.correct}/{res.overall.total} correct
-            </Text>
-          </View>
+          {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
+          <ResultsScoreCard pct={pct} correct={res.overall.correct} total={res.overall.total} />
 
           {scoreDelta ? (
             <View style={s.deltaCard}>
@@ -265,7 +383,9 @@ export default function UpcatExam() {
             </View>
           ))}
 
-          <Text style={s.sectionLbl}>Review</Text>
+          <View onLayout={e => { reviewYRef.current = e.nativeEvent.layout.y }}>
+            <Text style={s.sectionLbl}>Review</Text>
+          </View>
           {questions.map((q, i) => (
             <ReviewCard
               key={q.questionId}
@@ -284,12 +404,20 @@ export default function UpcatExam() {
             />
           ))}
 
+          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
           <Pressable
             accessibilityRole="button"
             style={s.primaryBtn}
+            onPress={() => resultsScrollRef.current?.scrollTo({ y: reviewYRef.current, animated: true })}
+          >
+            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={s.ghostBtn}
             onPress={() => router.replace(`/practice/upcat/${subtestParam}?mode=${mode}`)}
           >
-            <Text style={s.primaryBtnTxt}>Retake exam</Text>
+            <Text style={s.ghostTxt}>Retake exam</Text>
           </Pressable>
           <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace('/practice/upcat')}>
             <Text style={s.ghostTxt}>← Back to exams</Text>
@@ -308,7 +436,7 @@ export default function UpcatExam() {
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
       <View style={s.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
           <Text style={s.back}>‹</Text>
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
@@ -364,22 +492,38 @@ export default function UpcatExam() {
         >
           <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footGhostTxt}>{isLast ? 'Review' : 'Skip'}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-          disabled={sel === undefined}
-          onPress={() => (isLast ? submit() : setIdx(i => i + 1))}
-        >
-          <Text style={s.footPrimaryTxt}>{isLast ? 'Submit' : 'Next'}</Text>
-        </Pressable>
+        {isLast ? (
+          // Fix 2: the last question never submits directly anymore.
+          <Pressable accessibilityRole="button" style={s.footBtnPrimary} onPress={() => setReviewOpen(true)}>
+            <Text style={s.footPrimaryTxt}>Review & submit</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable accessibilityRole="button" style={s.footBtnGhost} onPress={() => setIdx(i => i + 1)}>
+              <Text style={s.footGhostTxt}>Skip</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
+              disabled={sel === undefined}
+              onPress={() => setIdx(i => i + 1)}
+            >
+              <Text style={s.footPrimaryTxt}>Next</Text>
+            </Pressable>
+          </>
+        )}
       </View>
+
+      <ExamReviewSheet
+        visible={reviewOpen}
+        total={questions.length}
+        currentIdx={idx}
+        answeredIdxs={answeredIdxs}
+        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
+        onJump={setIdx}
+        onClose={() => setReviewOpen(false)}
+        onSubmit={() => { setReviewOpen(false); void submit() }}
+      />
 
       <ReportQuestionModal
         visible={reportIdx !== null}
@@ -414,6 +558,8 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       marginTop: 80,
       fontFamily: 'Lexend_400Regular',
     },
+    emptyTitle: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 4, textAlign: 'center' },
+    emptyBody: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 22, marginBottom: 12 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -488,35 +634,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontWeight: '700',
       color: t.textInverse,
       fontFamily: 'Outfit_700Bold',
-    },
-    scoreCard: {
-      borderRadius: 24,
-      borderCurve: 'continuous',
-      padding: 22,
-      marginBottom: 18,
-      borderWidth: 1,
-      alignItems: 'center',
-    },
-    pass: {
-      backgroundColor: t.successSurface,
-      borderColor: 'rgba(34,197,94,0.25)',
-    },
-    fail: {
-      backgroundColor: t.dangerSurface,
-      borderColor: 'rgba(239,68,68,0.20)',
-    },
-    scorePct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    scoreVerdict: {
-      fontSize: typo.lg,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    scoreSub: {
-      fontSize: typo.sm,
-      color: t.textTertiary,
-      marginTop: 2,
-      fontFamily: 'Lexend_400Regular',
     },
     deltaCard: {
       backgroundColor: t.accentSurface,

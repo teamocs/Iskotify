@@ -31,7 +31,7 @@
  *      time/accuracy aggregates that don't need a topic.
  */
 
-import { estimatePercentileBand, type PercentileBand } from '../utils/examBuilder'
+import { scoreBand, type ScoreBand } from '../utils/examBuilder'
 
 // ── Shared input shape ───────────────────────────────────────────────────────
 
@@ -283,20 +283,23 @@ export function computeAccuracyTrend(
   return points
 }
 
-// ── Percentile band history (no new table — derived from practice_sessions) ─
+// ── Score band history (no new table — derived from practice_sessions) ──────
+// Fix 3 (exam safety): this was "percentile band history" — the "percentile"
+// was raw % correct relabeled, and fed cut-off verdict pills elsewhere. No
+// percentile concept remains; each attempt keeps only its raw pct + a
+// descriptive, non-judgemental band.
 
-export interface MockAttemptPercentile {
+export interface MockAttemptScore {
   listingSlug: string
   completedAt: number
   pct: number
-  percentile: number
   band: string
   blurb: string
 }
 
 /**
  * computeMockAttemptHistory — one entry per full mock-exam ATTEMPT (not per
- * section row), each scored through estimatePercentileBand. Mirrors
+ * section row), each scored through scoreBand. Mirrors
  * homeAggregates.ts's getListingMockBest attempt-key trick (SQL there; plain
  * JS here since useAnalytics.ts already has the full sessions array in
  * memory) — a mock attempt writes one practice_sessions row per section, all
@@ -316,7 +319,7 @@ export function computeMockAttemptHistory(
     completedAt: number
     durationSecs: number
   }>,
-): MockAttemptPercentile[] {
+): MockAttemptScore[] {
   const mockRows = sessions.filter(s => s.topicId === '' && s.subtest && s.total > 0)
 
   const grouped = new Map<string, { listingSlug: string; completedAt: number; score: number; total: number }>()
@@ -333,7 +336,7 @@ export function computeMockAttemptHistory(
   return Array.from(grouped.values())
     .map(v => {
       const pct = Math.round((v.score / v.total) * 100)
-      const band: PercentileBand = estimatePercentileBand(pct)
+      const band: ScoreBand = scoreBand(pct)
       return { listingSlug: v.listingSlug, completedAt: v.completedAt, pct, ...band }
     })
     .sort((a, b) => a.completedAt - b.completedAt)
