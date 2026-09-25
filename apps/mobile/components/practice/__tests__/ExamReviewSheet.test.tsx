@@ -117,6 +117,26 @@ describe('ExamReviewSheet', () => {
       expect(focusSpy).toHaveBeenCalledTimes(1)
     })
 
+    // Regression: react-native-web's findNodeHandle THROWS ("not supported on
+    // web"), which unmounted the whole app the moment "Review & submit" opened
+    // the sheet, so a web student could never submit a mock. On web, RNW's
+    // Modal already moves focus into the sheet.
+    it('opens on web without calling findNodeHandle (it throws there)', () => {
+      const RN = require('react-native')
+      const restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')
+      const fnh = jest.spyOn(RN, 'findNodeHandle').mockImplementation(() => {
+        throw new Error('findNodeHandle is not supported on web.')
+      })
+      try {
+        expect(() => render(<ExamReviewSheet {...baseProps} visible />)).not.toThrow()
+        expect(screen.getByText('Review your answers')).toBeTruthy()
+        expect(fnh).not.toHaveBeenCalled()
+      } finally {
+        fnh.mockRestore()
+        restoreOS.restore()
+      }
+    })
+
     it('does not steal focus while the sheet is closed', () => {
       render(<ExamReviewSheet {...baseProps} visible={false} />)
       expect(focusSpy).not.toHaveBeenCalled()
