@@ -21,6 +21,9 @@ const mockDelete = vi.fn()
 
 // Captured args for assertions
 let capturedOrArg: string | undefined
+let capturedOrArgs: string[] = []
+let capturedIlikeArgs: Array<[string, string]> = []
+let capturedIsArgs: Array<[string, unknown]> = []
 let capturedEqArgs: Array<[string, unknown]> = []
 let capturedOrderArgs: Array<[string, unknown]> = []
 let lastUpdateArg: Record<string, unknown> | undefined
@@ -39,7 +42,9 @@ function makeChain(table: string): any {
   if (table === 'app_feedback') {
     const listChain: any = {
       eq(col: string, val: unknown) { capturedEqArgs.push([col, val]); return listChain },
-      or(filter: string) { capturedOrArg = filter; return listChain },
+      or(filter: string) { capturedOrArg = filter; capturedOrArgs.push(filter); return listChain },
+      ilike(col: string, pattern: string) { capturedIlikeArgs.push([col, pattern]); return listChain },
+      is(col: string, val: unknown) { capturedIsArgs.push([col, val]); return listChain },
       order(col: string, opts: unknown) { capturedOrderArgs.push([col, opts]); return listChain },
       range(from: number, to: number) { return Promise.resolve(mockRange(from, to)) },
     }
@@ -99,6 +104,9 @@ function resetAll() {
   mockUpdate.mockReset()
   mockDelete.mockReset()
   capturedOrArg = undefined
+  capturedOrArgs = []
+  capturedIlikeArgs = []
+  capturedIsArgs = []
   capturedEqArgs = []
   capturedOrderArgs = []
   lastUpdateArg = undefined
@@ -149,7 +157,7 @@ describe('GET /api/admin/feedback', () => {
     const json = await res.json()
     expect(json.rows).toHaveLength(1)
     expect(json.count).toBe(1)
-    expect(capturedOrderArgs).toContainEqual(['created_at', { ascending: false }])
+    expect(capturedOrderArgs[0]).toEqual(['created_at', { ascending: false, nullsFirst: false }])
   })
 
   it('filters by status when a valid status is provided', async () => {
@@ -344,5 +352,70 @@ describe('DELETE /api/admin/feedback/[id]', () => {
     const { DELETE } = await import('../[id]/route')
     const res = await DELETE(makeDeleteReq('f1'), makeIdContext('f1'))
     expect(res.status).toBe(500)
+  })
+})
+
+// ── GET /api/admin/feedback — server-side sort, filters, out-of-range page ──
+
+describe('GET /api/admin/feedback — server paging', () => {
+  beforeEach(() => {
+    resetAll()
+    mockRange.mockResolvedValue({ data: [], count: 0, error: null })
+  })
+
+  it('sorts by rating, with id as tiebreaker', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    const res = await GET(makeListReq('?sort=rating&dir=asc'))
+    expect(res.status).toBe(200)
+    expect(capturedOrderArgs).toEqual([
+      ['rating', { ascending: true, nullsFirst: false }],
+      ['id', { ascending: true }],
+    ])
+  })
+
+  it('sorts "submitted" by created_at', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    await GET(makeListReq('?sort=submitted&dir=asc'))
+    expect(capturedOrderArgs[0]).toEqual(['created_at', { ascending: true, nullsFirst: false }])
+  })
+
+  it('rejects a sort column that is not allow-listed', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    const res = await GET(makeListReq('?sort=message'))
+    expect(res.status).toBe(400)
+  })
+
+  it('filters by an exact rating', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    const res = await GET(makeListReq('?rating=4'))
+    expect(res.status).toBe(200)
+    expect(capturedEqArgs).toContainEqual(['rating', 4])
+  })
+
+  it('filters feedback with no rating', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    await GET(makeListReq('?rating=none'))
+    expect(capturedIsArgs).toContainEqual(['rating', null])
+  })
+
+  it('rejects a rating outside 1–5', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    const res = await GET(makeListReq('?rating=9'))
+    expect(res.status).toBe(400)
+  })
+
+  it('answers a page past the end with no rows and outOfRange', async () => {
+    adminUser()
+    mockRange.mockResolvedValueOnce({ data: null, count: null, error: { code: 'PGRST103', message: 'Requested range not satisfiable' } })
+    const { GET } = await import('../route')
+    const res = await GET(makeListReq('?page=9'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ rows: [], count: null, outOfRange: true })
   })
 })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { errorMessage } from '@/lib/errorMessage'
 
 const REQUIRED = ['type', 'title', 'slug', 'provider', 'status', 'region'] as const
 
@@ -36,8 +37,8 @@ export async function GET() {
   try {
     const data = await fetchListings()
     return NextResponse.json(data)
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'Database error' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err, 'Database error') }, { status: 500 })
   }
 }
 

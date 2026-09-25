@@ -28,6 +28,7 @@ const view = (props: Partial<React.ComponentProps<typeof FeedbackView>> = {}) =>
   renderToStaticMarkup(
     <FeedbackView
       rows={rows}
+      total={rows.length}
       loading={false}
       error=""
       selected={[]}
@@ -60,11 +61,12 @@ describe('FeedbackView table', () => {
     expect(html).toMatch(/<label[^>]*>Rating<\/label>/)
   })
 
-  it('filters by rating from the URL', () => {
-    search = 'rating=1'
-    const html = view()
+  it('shows the page the server returned as-is, with the server total', () => {
+    search = 'rating=1&page=2'
+    const html = view({ total: 60 })
     expect(html).toContain('Too many ads')
-    expect(html).not.toContain('Love the flashcards')
+    expect(html).toContain('Love the flashcards')
+    expect(html).toContain('Showing 51–52 of 60')
   })
 
   it('renders an error banner instead of an empty table when loading fails', () => {

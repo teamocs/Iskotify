@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { Dialog } from '@/components/ui/Dialog'
@@ -20,6 +20,7 @@ export function validateTopicName(name: string): string | undefined {
 
 export function AddTopicModal({ subjectId, onClose }: Props) {
   const [name, setName] = useState('')
+  const nameRef = useRef<HTMLInputElement>(null)
   const [nameError, setNameError] = useState<string | undefined>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -62,6 +63,7 @@ export function AddTopicModal({ subjectId, onClose }: Props) {
       size="sm"
       onClose={() => { if (!saving) onClose() }}
       title="Add topic"
+      initialFocusRef={nameRef}
       onSubmit={handleSubmit}
       dirty={name !== ''}
       footer={close => (
@@ -75,7 +77,7 @@ export function AddTopicModal({ subjectId, onClose }: Props) {
         {error && <ErrorBanner title="Couldn’t add the topic" message={error} />}
         <Field label="Topic name" required error={nameError}>
           {p => (
-            <input {...p} type="text" autoFocus value={name} placeholder="e.g. Algebra basics"
+            <input {...p} ref={nameRef} type="text" value={name} placeholder="e.g. Algebra basics"
               onChange={e => setName(e.target.value)} className={controlClass} />
           )}
         </Field>

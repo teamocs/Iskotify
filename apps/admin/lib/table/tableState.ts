@@ -130,7 +130,7 @@ export function formatRange(range: PageRange, total: number): string {
 }
 
 export interface StateColumn<T> { id: string; sortValue?: (row: T) => SortValue; searchValue?: (row: T) => string }
-export interface StateFilter<T> { id: string; predicate: (row: T, value: string) => boolean }
+export interface StateFilter<T> { id: string; predicate?: (row: T, value: string) => boolean }
 
 /** Filter → search → sort → page, in that order. */
 export function applyTableState<T>(
@@ -143,7 +143,7 @@ export function applyTableState<T>(
   let out = rows.filter(row =>
     filters.every(f => {
       const v = state.filters[f.id]
-      return !v || v === 'all' || f.predicate(row, v)
+      return !v || v === 'all' || !f.predicate || f.predicate(row, v)
     }),
   )
 
@@ -184,7 +184,9 @@ export function toggleId(selected: readonly string[], id: string): string[] {
 
 /** Select-all for the visible page: add every page id, or remove them all if all were already in. */
 export function togglePage(selected: readonly string[], pageIds: readonly string[]): string[] {
-  const allIn = pageIds.length > 0 && pageIds.every(id => selected.includes(id))
-  if (allIn) return selected.filter(id => !pageIds.includes(id))
-  return [...selected, ...pageIds.filter(id => !selected.includes(id))]
+  const inSelection = new Set(selected)
+  const onPage = new Set(pageIds)
+  const allIn = pageIds.length > 0 && pageIds.every(id => inSelection.has(id))
+  if (allIn) return selected.filter(id => !onPage.has(id))
+  return [...selected, ...pageIds.filter(id => !inSelection.has(id))]
 }

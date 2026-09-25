@@ -32,7 +32,8 @@ export interface FilterDef<T> {
   options: { value: string; label: string }[]
   /** Label of the "no filter" option; defaults to "All". */
   allLabel?: string
-  predicate: (row: T, value: string) => boolean
+  /** Client-side match. Server-driven tables (`server`) leave it out: the caller's route filters. */
+  predicate?: (row: T, value: string) => boolean
 }
 
 interface DataTableProps<T> {
@@ -141,8 +142,13 @@ export function DataTable<T>({
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
   const [query, setQuery] = useState(state.q)
-  // Follow the URL when it changes underneath us (back button, a link).
-  useEffect(() => { setQuery(state.q) }, [state.q])
+  // Follow the URL when it changes underneath us (back button, a link),
+  // adjusted while rendering rather than in an effect.
+  const [urlQ, setUrlQ] = useState(state.q)
+  if (state.q !== urlQ) {
+    setUrlQ(state.q)
+    setQuery(state.q)
+  }
 
   function commit(next: TableState) {
     const qs = serializeTableState(params, next, stateOpts)
@@ -159,7 +165,9 @@ export function DataTable<T>({
   const clearAll = () => { setQuery(''); commit({ ...state, q: '', filters: {}, page: 1 }) }
   const noun = label.toLowerCase()
   const pageIds = pageRows.map(rowKey)
-  const selectedOnPage = selection ? pageIds.filter(id => selection.selected.includes(id)).length : 0
+  // Selection can span pages (server tables), so look ids up in a Set.
+  const selectedSet = new Set(selection?.selected)
+  const selectedOnPage = pageIds.filter(id => selectedSet.has(id)).length
 
   return (
     <div className="flex flex-col">
@@ -243,6 +251,9 @@ export function DataTable<T>({
         role="region"
         aria-labelledby={captionId}
         aria-busy={loading || undefined}
+        // A scrollable region must take focus so keyboard users can scroll it
+        // (WCAG 2.1.1; axe "scrollable-region-focusable").
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
         className="max-h-[70vh] overflow-auto focus-visible:outline-offset-[-2px]"
       >
@@ -307,7 +318,7 @@ export function DataTable<T>({
                 ))
               : pageRows.map(row => {
                   const id = rowKey(row)
-                  const isSelected = selection?.selected.includes(id) ?? false
+                  const isSelected = selectedSet.has(id)
                   return (
                   <tr key={id} className={`transition-colors hover:bg-surface-hover ${isSelected ? 'bg-maroon-dim' : ''}`}>
                     {selection && (

@@ -11,6 +11,7 @@ import { Field, controlClass } from '@/components/ui/Field'
 import { Button, IconButton } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { DiscardChangesDialog } from '@/components/ui/Dialog'
+import { errorMessage } from '@/lib/errorMessage'
 
 interface Blueprint {
   slug: string
@@ -109,10 +110,10 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
 
   // Unsaved edits = anything differing from what the page loaded with.
-  const initialSnapshot = useRef(JSON.stringify({ b: initialBlueprint ?? EMPTY_BLUEPRINT, s: initialSections, n: initialNotes }))
+  const [initialSnapshot] = useState(() => JSON.stringify({ b: initialBlueprint ?? EMPTY_BLUEPRINT, s: initialSections, n: initialNotes }))
   const dirty = useMemo(
-    () => JSON.stringify({ b: blueprint, s: sections, n: notes }) !== initialSnapshot.current,
-    [blueprint, sections, notes],
+    () => JSON.stringify({ b: blueprint, s: sections, n: notes }) !== initialSnapshot,
+    [blueprint, sections, notes, initialSnapshot],
   )
   const leaving = useRef(false)
 
@@ -203,8 +204,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
       leaving.current = true
       router.push(LIST_URL)
       router.refresh()
-    } catch (e: any) {
-      const message = e?.message ?? 'Save failed'
+    } catch (e) {
+      const message = errorMessage(e, 'Save failed')
       setError(message)
       notifyError(message)
     } finally {
@@ -233,8 +234,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
       leaving.current = true
       router.push(LIST_URL)
       router.refresh()
-    } catch (e: any) {
-      const message = e?.message ?? 'Delete failed'
+    } catch (e) {
+      const message = errorMessage(e, 'Delete failed')
       setError(message)
       notifyError(message)
     } finally {

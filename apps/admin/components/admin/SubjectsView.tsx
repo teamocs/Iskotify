@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import Link from 'next/link'
 import { createSubject as createSubjectRequest, updateSubject, deleteSubject } from '@/lib/admin/subjectsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
@@ -105,6 +105,7 @@ export function SubjectFormDialog({ subject, listings, onClose, onSaved }: {
   const initialName = subject?.name ?? ''
   const initialSlugs = subject?.listing_slugs ?? []
   const [name, setName] = useState(initialName)
+  const nameRef = useRef<HTMLInputElement>(null)
   const [slugs, setSlugs] = useState<string[]>(initialSlugs)
   const [nameError, setNameError] = useState<string | undefined>()
   const [serverError, setServerError] = useState('')
@@ -145,6 +146,7 @@ export function SubjectFormDialog({ subject, listings, onClose, onSaved }: {
       open
       onClose={() => { if (!saving) onClose() }}
       title={creating ? 'New subject' : 'Edit subject'}
+      initialFocusRef={nameRef}
       description="Link the scholarships and exams whose reviewers should include this subject."
       onSubmit={handleSubmit}
       dirty={name !== initialName || !sameSlugs(slugs, initialSlugs)}
@@ -161,7 +163,7 @@ export function SubjectFormDialog({ subject, listings, onClose, onSaved }: {
         {serverError && <ErrorBanner title={creating ? 'Couldn’t create the subject' : 'Couldn’t save the subject'} message={serverError} />}
         <Field label="Subject name" required error={nameError}>
           {p => (
-            <input {...p} type="text" autoFocus value={name} placeholder="e.g. Biology"
+            <input {...p} ref={nameRef} type="text" value={name} placeholder="e.g. Biology"
               onChange={e => setName(e.target.value)} className={controlClass} />
           )}
         </Field>

@@ -47,6 +47,9 @@ export const QuestionBankEditorTable = memo(function QuestionBankEditorTable({
   displayed, errorsByRow, subtests, onEdit,
 }: Props) {
   return (
+    // A scrollable region must take focus so keyboard users can scroll it
+    // (WCAG 2.1.1; axe "scrollable-region-focusable").
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
     <div role="region" aria-label="Question bank rows" tabIndex={0} className="overflow-x-auto rounded-md border border-subtle bg-surface">
       <table className="min-w-full border-separate border-spacing-0 text-ui">
         <caption className="sr-only">Question bank rows. Edit a cell to fix it; problems are listed in the last column.</caption>

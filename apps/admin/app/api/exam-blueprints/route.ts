@@ -55,7 +55,7 @@ export async function PUT(req: NextRequest) {
 
   const sections = Array.isArray(body.sections) ? body.sections : []
   if (sections.length) {
-    const rows = sections.map((s: any, i: number) => ({
+    const rows = sections.map((s: Record<string, unknown>, i: number) => ({
       id: `${slug}:${i + 1}`, blueprint_slug: slug, name: s.name ?? '', skill_category: s.skill_category ?? '',
       item_count: Number(s.item_count) || 0, time_minutes: s.time_minutes != null && s.time_minutes !== '' ? Number(s.time_minutes) : null,
       requires_spatial_logic: !!s.requires_spatial_logic, display_order: i + 1,
@@ -65,7 +65,7 @@ export async function PUT(req: NextRequest) {
   }
   const notes = Array.isArray(body.courseNotes) ? body.courseNotes : []
   if (notes.length) {
-    const rows = notes.map((n: any, i: number) => ({
+    const rows = notes.map((n: Record<string, unknown>, i: number) => ({
       id: `${slug}:note:${i + 1}`, blueprint_slug: slug, course_cluster: n.course_cluster ?? 'all',
       note: n.note ?? '', min_percentile: n.min_percentile != null && n.min_percentile !== '' ? Number(n.min_percentile) : null, display_order: i + 1,
     }))

@@ -35,6 +35,10 @@ export default async function AnalyticsPage() {
               className="block w-full border-0"
               style={{ height: '78vh' }}
               allow="fullscreen"
+              // The embed needs its own scripts and storage, and opens insights in new tabs;
+              // nothing else (no top-level navigation of the console, no forms).
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              referrerPolicy="strict-origin-when-cross-origin"
             />
           </Card>
         ) : (

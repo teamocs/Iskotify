@@ -3,9 +3,10 @@ import { revalidateTag } from 'next/cache'
 import Papa from 'papaparse'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
-import { parseCsvRow, type ValidatedRow, type RawCsvRow } from '@/lib/csv/parseCsvRow'
-import { validateCsvFile, validateHeader, checkDuplicates, EXPECTED_HEADER } from '@/lib/csv/validateCsvFile'
+import { parseCsvRow, type ValidatedRow, type RawCsvRow, type RowError } from '@/lib/csv/parseCsvRow'
+import { validateCsvFile, validateHeader, checkDuplicates } from '@/lib/csv/validateCsvFile'
 import { importCsvCore } from '@/lib/csv/importCsvCore'
+import { errorMessage } from '@/lib/errorMessage'
 
 export const runtime = 'nodejs'  // papaparse + File polyfill rely on Node runtime
 
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 6. Per-row validation
-  const rowErrors: any[] = []
+  const rowErrors: RowError[] = []
   const validated: ValidatedRow[] = []
   parsed.data.forEach((row, i) => {
     const result = parseCsvRow(row, i)
@@ -81,8 +82,8 @@ export async function POST(req: NextRequest) {
   let result
   try {
     result = await importCsvCore(supabase, validated)
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'Import failed' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err, 'Import failed') }, { status: 500 })
   }
 
   // 9. Fire async Gemini enhancement per topic (fire-and-forget)

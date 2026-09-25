@@ -9,6 +9,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
+import { APP_REPORTS_QUEUE, QUEUE_PAGE_SIZE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
 import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
@@ -45,10 +46,6 @@ const FILTERS: FilterDef<AppBugReport>[] = [
     label: 'Platform',
     allLabel: 'All platforms',
     options: [{ value: 'android', label: 'Android' }, { value: 'ios', label: 'iOS' }, { value: 'other', label: 'Other' }],
-    predicate: (r, v) => {
-      const p = (r.platform ?? '').toLowerCase()
-      return v === 'other' ? p !== 'android' && p !== 'ios' : p === v
-    },
   },
 ]
 
@@ -94,7 +91,10 @@ export function ScreenshotLightbox({ report, onClose }: { report: AppBugReport |
 // ── Table ───────────────────────────────────────────────────────────────────
 
 interface ViewProps {
+  /** The current page, as the server returned it (already searched, filtered and sorted). */
   rows: AppBugReport[]
+  /** Rows matching the current search and filters, across every page. */
+  total: number
   loading: boolean
   error: string
   selected: string[]
@@ -109,7 +109,7 @@ interface ViewProps {
   onDelete: (r: AppBugReport) => void
 }
 
-export function AppReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onViewScreenshot, onSetStatus, onDelete }: ViewProps) {
+export function AppReportsView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onViewScreenshot, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -203,8 +203,9 @@ export function AppReportsView({ rows, loading, error, selected, onSelectedChang
         rowKey={r => r.id}
         filters={FILTERS}
         searchPlaceholder="Search screen, description or version"
-        pageSize={50}
-        defaultSort={{ id: 'reported', dir: 'desc' }}
+        pageSize={QUEUE_PAGE_SIZE}
+        server={{ total }}
+        defaultSort={APP_REPORTS_QUEUE.defaultSort}
         loading={loading}
         emptyTitle="No bug reports"
         emptyDescription="Bug reports that students send from the app, with their screenshots, show up here."
@@ -224,6 +225,7 @@ export function AppReportsView({ rows, loading, error, selected, onSelectedChang
 export function AppReportsManager() {
   const queue = useStatusQueue<AppBugReport>({
     listUrl: '/api/admin/app-reports',
+    spec: APP_REPORTS_QUEUE,
     noun: { one: 'bug report', many: 'bug reports' },
     singular: 'Report',
   })
@@ -234,6 +236,7 @@ export function AppReportsManager() {
     <PageBody intro="Bugs students reported from the app. Reproduce, fix, then mark them resolved.">
       <AppReportsView
         rows={queue.rows}
+        total={queue.total}
         loading={queue.loading}
         error={queue.error}
         selected={queue.selected}

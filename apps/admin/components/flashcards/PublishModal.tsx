@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ExamTagSelector } from './ExamTagSelector'
+import { errorMessage } from '@/lib/errorMessage'
 
 interface Listing {
   slug: string
@@ -34,15 +35,31 @@ export function PublishModal({
   const [tagError, setTagError] = useState<string | undefined>(undefined)
   const [listingsError, setListingsError] = useState<string | null>(null)
 
+  // Each opening starts clean (adjusted while rendering rather than in an effect).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setError(null); setPublishing(false); setProgress(null); setSelectedSlugs([]); setTagError(undefined); setListings(null); setListingsError(null)
+    }
+  }
+
   useEffect(() => {
     if (!open) return
-    setError(null); setPublishing(false); setProgress(null); setSelectedSlugs([]); setTagError(undefined); setListings(null); setListingsError(null)
+    // A response from an earlier opening must not land in this one.
+    let cancelled = false
     fetch('/api/admin/listings')
-      .then(r => r.json())
-      .then(body => {
-        setListings(Array.isArray(body) ? body : (body.listings ?? []))
+      .then(async r => {
+        const body = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(body.error ?? `Failed to load listings (${r.status})`)
+        if (!cancelled) setListings(Array.isArray(body) ? body : (body.listings ?? []))
       })
-      .catch(e => { setListings([]); setListingsError(e?.message ?? 'Failed to load listings') })
+      .catch(e => {
+        if (cancelled) return
+        setListings([])
+        setListingsError(errorMessage(e, 'Failed to load listings'))
+      })
+    return () => { cancelled = true }
   }, [open])
 
   async function handlePublish() {
@@ -72,8 +89,8 @@ export function PublishModal({
           const body = await res.json().catch(() => ({}))
           failed.push({ topicId, message: body?.error ?? `HTTP ${res.status}` })
         }
-      } catch (e: any) {
-        failed.push({ topicId, message: e?.message ?? 'Network error' })
+      } catch (e) {
+        failed.push({ topicId, message: errorMessage(e, 'Network error') })
       }
       setProgress({ done: i + 1, total: topicIds.length })
     }
@@ -154,7 +171,7 @@ export function PublishModal({
               aria-valuenow={progress.done}
               className="h-1.5 w-full overflow-hidden rounded-pill bg-neutral-soft"
             >
-              <div className="h-full bg-maroon transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+              <div className="h-full bg-maroon transition-[width]" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
             </div>
           </div>
         )}

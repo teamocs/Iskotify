@@ -97,13 +97,16 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
 
   useEffect(() => {
     if (isOpen && cards.length === 0) {
+      // Loads the first page when the section opens; loadCards is also the
+      // user's "Load more", so its loading flag is shared rather than derived.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadCards(1)
     }
     return () => {
       abortRef.current?.abort()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // Intentionally runs only on isOpen change, not on every loadCards re-creation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   async function confirmDeleteTopic() {

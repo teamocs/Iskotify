@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Button, IconButton } from './Button'
 import { useFocusTrap } from './useFocusTrap'
@@ -29,10 +29,12 @@ export interface OverlayProps {
 
 /** Render into <body> once mounted, so no transformed ancestor can clip a fixed overlay. */
 export function useBodyPortal() {
-  const [target, setTarget] = useState<HTMLElement | null>(null)
-  useEffect(() => { setTarget(document.body) }, [])
-  return (node: ReactNode) => (target ? createPortal(node, target) : node)
+  // False on the server and during hydration, true after: no second render pass via an effect.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false)
+  return (node: ReactNode) => (mounted ? createPortal(node, document.body) : node)
 }
+
+const noopSubscribe = () => () => {}
 
 /** Body scroll stays put behind an open overlay. */
 export function useScrollLock(active: boolean) {
@@ -56,7 +58,12 @@ export function closeOrConfirm(dirty: boolean, close: () => void, ask: () => voi
  */
 export function useGuardedClose(open: boolean, dirty: boolean, onClose: () => void) {
   const [asking, setAsking] = useState(false)
-  useEffect(() => { if (!open) setAsking(false) }, [open])
+  // A closed overlay forgets a pending "discard changes?" (adjusted while rendering, not in an effect).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (!open) setAsking(false)
+  }
   useEffect(() => {
     if (!open || !dirty) return
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }

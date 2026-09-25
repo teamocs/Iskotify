@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { WeakOptionFlag } from '@/lib/heuristics/flagWeakOptions'
 import {
@@ -50,8 +50,13 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
   const [lastDismissed, setLastDismissed] = useState<ReviewItem | null>(null)
   const [editing, setEditing] = useState<ReviewItem | null>(null)
 
-  // Follow the server after router.refresh() (someone else may have dismissed or restored).
-  useEffect(() => { setDismissed(serverSignature ? serverSignature.split('\n') : []) }, [serverSignature])
+  // Follow the server after router.refresh() (someone else may have dismissed or
+  // restored), adjusted while rendering rather than in an effect.
+  const [seenSignature, setSeenSignature] = useState(serverSignature)
+  if (serverSignature !== seenSignature) {
+    setSeenSignature(serverSignature)
+    setDismissed(serverSignature ? serverSignature.split('\n') : [])
+  }
 
   const body = (item: ReviewItem) => ({ question_id: item.question_id, options_fingerprint: optionsFingerprint(item.options) })
 

@@ -211,7 +211,7 @@ export default function NewFlashcardsPage() {
         notifySuccess('Saved — AI is generating multiple-choice distractors in the background (~30s per card)')
         router.push(BACK_HREF)
       } else {
-        const body = await res.json() as { error?: string }
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
         const message = body.error ?? 'Failed to save flashcards'
         setError(message)
         notifyError(message)

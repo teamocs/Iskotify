@@ -17,13 +17,13 @@ import { Button } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { controlClass } from '@/components/ui/Field'
 import { Icon } from '@/components/ui/Icon'
+import { errorMessage } from '@/lib/errorMessage'
 
 type Row = Record<string, string>
 const PAGE_SIZE = 25
 const SERVER_ROW_CAP = 2000
 
 export default function QuestionBankImportPage() {
-  const [file, setFile] = useState<File | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
@@ -53,7 +53,7 @@ export default function QuestionBankImportPage() {
   const pageRows = displayedAll.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
 
   function handleFile(f: File) {
-    setFile(f); setError(null); setResult(null); setProjection(null); setPage(0)
+    setError(null); setResult(null); setProjection(null); setPage(0)
     if (f.size > 5 * 1024 * 1024) { setError('File too large (max 5MB)'); return }
     f.text().then(text => {
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, transformHeader: normalizeQuestionBankHeader })
@@ -116,8 +116,8 @@ export default function QuestionBankImportPage() {
       }
       setResult(body)
       notifySuccess(`Imported ${body.questions} question${body.questions === 1 ? '' : 's'} across ${body.passages} passage${body.passages === 1 ? '' : 's'}`)
-    } catch (e: any) {
-      const message = e?.message ?? 'Import failed'
+    } catch (e) {
+      const message = errorMessage(e, 'Import failed')
       setError(message)
       notifyError(message)
     } finally {
@@ -138,8 +138,8 @@ export default function QuestionBankImportPage() {
       }
       setProjection(body)
       notifySuccess(`Projected ${body.cards} cards · ${body.topics} topics · ${body.subjects} subjects`)
-    } catch (e: any) {
-      const message = e?.message ?? 'Projection failed'
+    } catch (e) {
+      const message = errorMessage(e, 'Projection failed')
       setError(message)
       notifyError(message)
     } finally {

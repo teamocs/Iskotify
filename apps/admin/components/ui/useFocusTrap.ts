@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { pushTrap, popTrap, isTopTrap } from './trapStack'
 
 const FOCUSABLE =
@@ -36,12 +36,11 @@ interface Options {
 export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }: Options) {
   const restoreTo = useRef<HTMLElement | null>(null)
   const onEscapeRef = useRef(onEscape)
-  onEscapeRef.current = onEscape
-  const id = useRef(Symbol('focus-trap'))
+  useEffect(() => { onEscapeRef.current = onEscape })
+  const [trapId] = useState(() => Symbol('focus-trap'))
 
   useEffect(() => {
     if (!active) return
-    const trapId = id.current
     pushTrap(trapId)
     restoreTo.current = document.activeElement as HTMLElement | null
     const container = containerRef.current
@@ -64,5 +63,5 @@ export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }
       restoreTo.current?.focus?.()
       restoreTo.current = null
     }
-  }, [active, containerRef, initialFocusRef])
+  }, [active, containerRef, initialFocusRef, trapId])
 }

@@ -33,6 +33,7 @@ const view = (props: Partial<React.ComponentProps<typeof ReportsView>> = {}) =>
   renderToStaticMarkup(
     <ReportsView
       rows={rows}
+      total={rows.length}
       loading={false}
       error=""
       selected={[]}
@@ -73,11 +74,13 @@ describe('ReportsView table', () => {
     expect(html).toContain('Wrong answer')
   })
 
-  it('filters by status from the URL', () => {
-    search = 'status=reviewed'
-    const html = view()
+  it('shows the page the server returned as-is: filters, search and sort run on the server', () => {
+    search = 'status=reviewed&q=zzz&sort=question'
+    const html = view({ total: 230 })
     expect(html).toContain('Solve for x')
-    expect(html).not.toContain('capital of Camarines Sur')
+    expect(html).toContain('capital of Camarines Sur')
+    expect(html).toContain('Showing 1–2 of 230')
+    expect(html).toContain('Page 1 of 5')
   })
 
   it('makes the question text the row’s primary action and labels row actions', () => {
@@ -97,7 +100,7 @@ describe('ReportsView table', () => {
   })
 
   it('says what would be here when there are no reports', () => {
-    const html = view({ rows: [] })
+    const html = view({ rows: [], total: 0 })
     expect(html).toContain('No reported questions')
   })
 })

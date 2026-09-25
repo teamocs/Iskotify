@@ -19,27 +19,32 @@ type Topic = {
 export default async function FlashcardsPage() {
   const db = createServerClient()
 
-  const { data: subjectsRaw, error: subjectsError } = await db
-    .from('flashcard_subjects')
-    .select(`
-      id,
-      name,
-      listing_slugs,
-      flashcard_topics (
+  // Independent reads: run them together.
+  const [
+    { data: subjectsRaw, error: subjectsError },
+    { data: listingsRaw, error: listingsError },
+  ] = await Promise.all([
+    db
+      .from('flashcard_subjects')
+      .select(`
         id,
         name,
-        status,
-        flashcards (id, status)
-      )
-    `)
-    .order('name')
-
-  const { data: listingsRaw, error: listingsError } = await db
-    .from('listings')
-    .select('id, slug, title, provider, type')
-    .in('status', ['active', 'upcoming'])
-    .order('type')
-    .order('title')
+        listing_slugs,
+        flashcard_topics (
+          id,
+          name,
+          status,
+          flashcards (id, status)
+        )
+      `)
+      .order('name'),
+    db
+      .from('listings')
+      .select('id, slug, title, provider, type')
+      .in('status', ['active', 'upcoming'])
+      .order('type')
+      .order('title'),
+  ])
 
   const subjects = (subjectsRaw ?? []).map(subject => {
     const topics = (subject.flashcard_topics ?? []) as Topic[]

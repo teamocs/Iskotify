@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { errorMessage } from '@/lib/errorMessage'
 
 interface Topic {
   id: string
@@ -48,8 +49,8 @@ export default function ReviewPage() {
         if (aborted) return
         setTopic(topicBody)
         setCards(cardsBody)
-      } catch (e: any) {
-        if (!aborted) setError(e?.message ?? 'Failed to load')
+      } catch (e) {
+        if (!aborted) setError(errorMessage(e, 'Failed to load'))
       } finally {
         if (!aborted) setLoading(false)
       }

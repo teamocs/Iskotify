@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Dialog } from '@/components/ui/Dialog'
 import { Field, controlClass } from '@/components/ui/Field'
 import { Button } from '@/components/ui/Button'
@@ -30,16 +30,18 @@ export const isCardDirty = (a: CardValues, b: CardValues) =>
 const textareaClass = `${controlClass} h-auto py-2 resize-y`
 
 /** The three card fields, wired to their labels and errors. */
-export function CardFields({ values, errors, onChange }: {
+export function CardFields({ values, errors, onChange, questionRef }: {
   values: CardValues
   errors: CardErrors
   onChange: (next: CardValues) => void
+  /** Pass to the dialog's initialFocusRef so it opens on the question. */
+  questionRef?: RefObject<HTMLTextAreaElement | null>
 }) {
   return (
     <div className="space-y-3">
       <Field label="Question" required error={errors.question}>
         {p => (
-          <textarea {...p} autoFocus rows={3} value={values.question} placeholder="e.g. What is the quadratic formula?"
+          <textarea {...p} ref={questionRef} rows={3} value={values.question} placeholder="e.g. What is the quadratic formula?"
             onChange={e => onChange({ ...values, question: e.target.value })} className={textareaClass} />
         )}
       </Field>
@@ -74,6 +76,7 @@ export function EditCardDialog({ card, onClose, onSaved }: {
 }) {
   const initial: CardValues = { question: card.question, answer: card.answer, explanation: card.explanation ?? '' }
   const [values, setValues] = useState(initial)
+  const questionRef = useRef<HTMLTextAreaElement>(null)
   const [errors, setErrors] = useState<CardErrors>({})
   const [serverError, setServerError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -108,6 +111,7 @@ export function EditCardDialog({ card, onClose, onSaved }: {
       open
       onClose={() => { if (!saving) onClose() }}
       title="Edit card"
+      initialFocusRef={questionRef}
       onSubmit={handleSubmit}
       dirty={isCardDirty(values, initial)}
       footer={close => (
@@ -119,7 +123,7 @@ export function EditCardDialog({ card, onClose, onSaved }: {
     >
       <div className="space-y-3">
         {serverError && <ErrorBanner title="Couldn’t save the card" message={serverError} />}
-        <CardFields values={values} errors={errors} onChange={setValues} />
+        <CardFields values={values} errors={errors} onChange={setValues} questionRef={questionRef} />
       </div>
     </Dialog>
   )

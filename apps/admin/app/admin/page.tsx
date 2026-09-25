@@ -18,6 +18,8 @@ export default async function AdminHomePage() {
   return (
     <>
       <Topbar title="Home" />
+      {/* Server component: rendered once per request, so reading the clock here is intended. */}
+      {/* eslint-disable-next-line react-hooks/purity */}
       <InboxView counts={counts} now={Date.now()} />
     </>
   )

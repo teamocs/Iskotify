@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog } from '@/components/ui/Dialog'
 import { Field, controlClass } from '@/components/ui/Field'
@@ -18,6 +18,7 @@ export function RenameTopicDialog({ topicId, currentName, onClose }: {
 }) {
   const router = useRouter()
   const [name, setName] = useState(currentName)
+  const nameRef = useRef<HTMLInputElement>(null)
   const [nameError, setNameError] = useState<string | undefined>()
   const [serverError, setServerError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,6 +54,7 @@ export function RenameTopicDialog({ topicId, currentName, onClose }: {
       size="sm"
       onClose={() => { if (!saving) onClose() }}
       title="Rename topic"
+      initialFocusRef={nameRef}
       onSubmit={handleSubmit}
       dirty={name !== currentName}
       footer={close => (
@@ -66,7 +68,7 @@ export function RenameTopicDialog({ topicId, currentName, onClose }: {
         {serverError && <ErrorBanner title="Couldn’t rename the topic" message={serverError} />}
         <Field label="Topic name" required error={nameError}>
           {p => (
-            <input {...p} type="text" autoFocus value={name}
+            <input {...p} ref={nameRef} type="text" value={name}
               onChange={e => setName(e.target.value)} className={controlClass} />
           )}
         </Field>

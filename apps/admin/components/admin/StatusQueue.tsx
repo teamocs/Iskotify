@@ -1,14 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import type { FilterDef } from '@/components/ui/DataTable'
 import { notifyError, notifySuccess } from '@/lib/toast'
-import {
-  REVIEW_STATUSES, REVIEW_STATUS_LABEL, bulkMessage, fetchAllPages, patchStatuses, type ReviewStatus,
-} from '@/lib/admin/bulkStatus'
+import { parseTableState, type TableState } from '@/lib/table/tableState'
+import { useDebounce } from '@/lib/useDebounce'
+import { REVIEW_STATUSES, REVIEW_STATUS_LABEL, runBulkStatus, type ReviewStatus } from '@/lib/admin/bulkStatus'
+import { queueTableOptions, type QueueSpec } from '@/lib/admin/queueSpecs'
+import { createRequestGuard, loadQueuePage } from '@/lib/admin/queueClient'
 
 /*
  * Pieces shared by the three triage queues (reported questions, bug reports,
@@ -28,7 +30,6 @@ export function statusFilter<T extends { status: ReviewStatus }>(): FilterDef<T>
     label: 'Status',
     allLabel: 'Any status',
     options: REVIEW_STATUSES.map(s => ({ value: s, label: REVIEW_STATUS_LABEL[s] })),
-    predicate: (row, v) => row.status === v,
   }
 }
 
@@ -67,43 +68,55 @@ export function ClampText({ text, max = 120 }: { text: string; max?: number }) {
 interface QueueOptions {
   /** List endpoint, e.g. /api/admin/reports */
   listUrl: string
+  /** The queue's sorts and filters, shared with its route. */
+  spec: QueueSpec
   noun: { one: string; many: string }
   /** Capitalised noun for single-row toasts ("Report marked resolved"). */
   singular: string
 }
 
 /**
- * Loads a whole queue, then applies status changes and deletes through the
- * per-item route (`${listUrl}/${id}`). After a change it re-reads the queue and
- * refreshes the server components (sidebar/inbox counts).
+ * Loads the page of a queue that the table's URL state asks for (search,
+ * sort, filters, page), one page at a time from the server, and applies status
+ * changes and deletes through the per-item route (`${listUrl}/${id}`). After a
+ * change it refetches the current page and refreshes the server components
+ * (sidebar/inbox counts).
  */
-export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singular }: QueueOptions) {
+export function useStatusQueue<T extends { id: string }>({ listUrl, spec, noun, singular }: QueueOptions) {
   const router = useRouter()
-  const [rows, setRows] = useState<T[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const params = useSearchParams()
   const [selected, setSelected] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkResult, setBulkResult] = useState('')
-  const loadId = useRef(0)
+  const [guard] = useState(createRequestGuard)
+  // Bumped to refetch the same view (after a change, or Try again).
+  const [nonce, setNonce] = useState(0)
 
-  const reload = useCallback(async () => {
-    const id = ++loadId.current
-    setLoading(true)
-    setError('')
-    const result = await fetchAllPages<T>(listUrl)
-    if (id !== loadId.current) return
-    if (result.ok) {
-      setRows(result.rows)
-      // Drop selections for rows that no longer exist.
-      setSelected(prev => prev.filter(s => result.rows.some(r => r.id === s)))
-    } else {
-      setError(result.error)
-    }
-    setLoading(false)
-  }, [listUrl])
+  // The table writes q/sort/filters/page to the URL; search waits for typing to pause.
+  const state = parseTableState(params, queueTableOptions(spec))
+  const q = useDebounce(state.q, 250)
+  const viewKey = JSON.stringify({ ...state, q })
+  const view = useMemo(() => JSON.parse(viewKey) as TableState, [viewKey])
 
-  useEffect(() => { reload() }, [reload])
+  // The last answer and the request it answers; loading until it answers this one.
+  const requestKey = `${viewKey}#${nonce}`
+  const [loaded, setLoaded] = useState<{ key: string; rows: T[]; total: number; error: string } | null>(null)
+  const loading = loaded?.key !== requestKey
+  const rows = loaded?.rows ?? []
+  const total = loaded?.total ?? 0
+  const error = loaded && !loading ? loaded.error : ''
+
+  useEffect(() => {
+    const isCurrent = guard.begin()
+    loadQueuePage<T>({ listUrl, view, isCurrent }).then(result => {
+      if (result.status === 'stale') return
+      setLoaded(prev => result.status === 'ok'
+        ? { key: requestKey, rows: result.rows, total: result.total, error: '' }
+        : { key: requestKey, rows: prev?.rows ?? [], total: prev?.total ?? 0, error: result.error })
+    })
+  }, [guard, listUrl, view, requestKey])
+
+  const reload = useCallback(() => setNonce(n => n + 1), [])
 
   const afterChange = useCallback(() => {
     reload()
@@ -139,6 +152,7 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singul
         return false
       }
       notifySuccess(`${singular} deleted`)
+      setSelected(prev => prev.filter(s => s !== id))
       afterChange()
       return true
     } catch {
@@ -150,16 +164,17 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singul
   async function applyBulk(status: ReviewStatus) {
     if (selected.length === 0) return
     setBulkBusy(true)
-    const outcome = await patchStatuses(listUrl, selected, status)
-    setBulkBusy(false)
-    const { ok, message } = bulkMessage(outcome, noun)
-    setBulkResult(message)
-    if (ok) notifySuccess(message)
-    else notifyError(message)
-    // Keep only what failed selected, so a retry is one click.
-    setSelected(outcome.failed)
-    if (outcome.ok.length > 0) afterChange()
+    try {
+      const { ok, message, failed } = await runBulkStatus({ listUrl, ids: selected, status, noun, refetch: afterChange })
+      setBulkResult(message)
+      if (ok) notifySuccess(message)
+      else notifyError(message)
+      // Keep only what failed selected, so a retry is one click.
+      setSelected(failed)
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
-  return { rows, loading, error, reload, selected, setSelected, bulkBusy, bulkResult, applyBulk, setStatus, remove, afterChange }
+  return { rows, total, loading, error, reload, selected, setSelected, bulkBusy, bulkResult, applyBulk, setStatus, remove, afterChange }
 }
