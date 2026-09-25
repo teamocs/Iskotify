@@ -82,6 +82,30 @@ describe('TextField', () => {
     expect(input().props.inputMode).toBe('email')
   })
 
+  describe('pressing the label (web: <label for> behaviour)', () => {
+    it('focuses the input', () => {
+      render(<TextField label="Full name" value="" onChangeText={() => {}} />)
+      const focus = jest.spyOn(input().instance as { focus: () => void }, 'focus')
+      fireEvent.press(screen.getByText('Full name'))
+      expect(focus).toHaveBeenCalledTimes(1)
+    })
+
+    it('still forwards the caller ref to the input', () => {
+      const ref = React.createRef<TextInput>()
+      render(<TextField ref={ref} label="Full name" value="" onChangeText={() => {}} />)
+      expect(ref.current).toBe(input().instance)
+    })
+
+    it('keeps the input as the only named control (the label is not a second button)', () => {
+      render(<TextField label="Full name" value="" onChangeText={() => {}} />)
+      expect(screen.queryByRole('button', { name: 'Full name' })).toBeNull()
+      const named = screen.getAllByLabelText('Full name')
+      expect(named).toHaveLength(1)
+      expect(named[0]!.props.value).toBe('')
+      expect(named[0]!.props.onChangeText).toBeDefined()
+    })
+  })
+
   describe('password visibility toggle', () => {
     it('starts hidden and toggles with a 44pt button that names its action', () => {
       render(<TextField label="Password" value="secret123" onChangeText={() => {}} secureToggle />)

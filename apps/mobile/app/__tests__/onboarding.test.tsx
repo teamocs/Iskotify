@@ -65,16 +65,18 @@ let mockSavedSettings: Record<string, unknown>[] = []
 let mockFocusRows: Record<string, unknown>[] = []
 const mockInserts: { table: unknown; values: Record<string, unknown> }[] = []
 jest.mock('../../hooks/useDb', () => {
-  const { userSettings } = jest.requireActual('../../db/schema')
+  const { userSettings, focusListings } = jest.requireActual('../../db/schema')
   const db = {
     select: jest.fn(() => ({
       from: jest.fn((table: unknown) => {
-        const rows = () => (table === userSettings ? mockSavedSettings : mockFocusRows)
+        const rows = () => (table === userSettings ? mockSavedSettings : table === focusListings ? mockFocusRows : [])
         const chain: Record<string, unknown> = {}
         chain.where = jest.fn(() => chain)
+        chain.orderBy = jest.fn(() => chain)
         chain.limit = jest.fn(() => Promise.resolve(rows()))
-        // Awaited without .limit() (the question-bank read) → nothing synced yet.
-        ;(chain as { then: unknown }).then = (resolve: (v: unknown) => unknown) => resolve([])
+        // Awaited without .limit(): settings / focus rows as saved; anything else
+        // (the question-bank read) → nothing synced yet.
+        ;(chain as { then: unknown }).then = (resolve: (v: unknown) => unknown) => resolve(rows())
         return chain
       }),
     })),
@@ -89,6 +91,7 @@ jest.mock('../../hooks/useDb', () => {
         }
       }),
     })),
+    delete: jest.fn(() => ({ where: jest.fn(() => Promise.resolve()) })),
     transaction: jest.fn((cb: (tx: unknown) => void) => cb({
       insert: jest.fn(() => ({ values: jest.fn(() => ({ run: jest.fn() })) })),
     })),
@@ -217,6 +220,114 @@ describe('Onboarding: resume-safe', () => {
     await renderFresh()
     await waitFor(() => expect(screen.getByRole('header', { name: 'What grade are you in?' })).toBeTruthy())
   })
+
+  it('records the furthest step reached, including a skipped optional one', async () => {
+    await renderFresh()
+    await answerNameAndGrade()
+    fireEvent.press(screen.getByRole('button', { name: 'Skip this question' }))
+    await flush()
+    const steps = mockInserts.filter(i => i.table === userSettings).map(i => i.values.onboardingStep)
+    expect(steps).toEqual(['name', 'grade', 'school'])
+  })
+
+  it('going Back never moves the saved progress marker backwards', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, onboardingStep: 'school' }]
+    await renderFresh()
+    await waitFor(() => screen.getByRole('header', { name: 'What are you preparing for?' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    pressContinue()
+    await flush()
+    const last = mockInserts.filter(i => i.table === userSettings).at(-1)!.values
+    expect(last.onboardingStep).toBe('school')
+  })
+
+  it('resumes at the optional school question when the student stopped after the grade', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, school: '', schoolRegion: '', onboardingStep: 'grade' }]
+    await renderFresh()
+    await waitFor(() => expect(screen.getByRole('header', { name: 'Where do you study?' })).toBeTruthy())
+    expect(screen.getByText('Step 3 of 9')).toBeTruthy()
+  })
+
+  it('resumes after the goal at the courses, with the exams restored and recommendations shown', async () => {
+    const { supabase } = require('../../services/supabase')
+    supabase.from.mockImplementation((table: string) => {
+      if (table === 'university_profiles') {
+        return makeBuilder([{
+          school_id: 'upd', data_tier: 'FULL_PROFILE', entrance_exam_acronym: 'UPCAT',
+          entrance_exam_name: 'UP College Admission Test', exam_month: 'August',
+          known_for_courses: ['Computer Science'], prc_top_courses: [],
+        }])
+      }
+      if (table === 'tertiary_schools') {
+        return makeBuilder([{
+          id: 'upd', name: 'University of the Philippines Diliman', acronym: 'UP Diliman',
+          region: 'NCR', province: 'Metro Manila', rank_in_province: 1,
+        }])
+      }
+      if (table === 'course_taxonomy_map') {
+        return makeBuilder([{ course_tab: 'bscs', career_course_id: null, label: 'BS Computer Science' }])
+      }
+      return makeBuilder([])
+    })
+    mockSavedSettings = [{
+      id: 1, fullName: 'Juan', gradeLevel: 11, school: 'Pasig High', schoolRegion: 'NCR',
+      selectedListingSlug: 'upcat',
+      targetExams: JSON.stringify([{ schoolId: 'upd', schoolName: 'University of the Philippines Diliman', examAcronym: 'UPCAT' }]),
+      targetCourses: '[]',
+      onboardingStep: 'goals',
+    }]
+    mockFocusRows = [
+      { listingSlug: 'upcat', priority: 1, addedAt: 1 },
+      { listingSlug: 'dost-sei', priority: 2, addedAt: 1 },
+    ]
+    await renderFresh()
+    await waitFor(() => screen.getByRole('header', { name: 'Which courses are you considering?' }))
+    expect(await screen.findByRole('header', { name: 'Recommended for your exams' })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: 'BS Computer Science' })).toBeTruthy()
+
+    // Back on the goal: the exam and the scholarship are still picked.
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    await flush()
+    const exam = await screen.findByRole('checkbox', { name: /University of the Philippines Diliman/ })
+    expect(aria(exam, 'aria-checked')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Continue (2)' })).toBeTruthy()
+  })
+
+  it('restores the course, income, GWA and province answers', async () => {
+    mockSavedSettings = [{
+      id: 1, fullName: 'Juan', gradeLevel: 11, selectedListingSlug: 'upcat',
+      targetExams: JSON.stringify([{ schoolId: 'upd', schoolName: 'UP Diliman', examAcronym: 'UPCAT' }]),
+      targetCourses: JSON.stringify([{ id: 'tax:bscs', label: 'BS Computer Science', careerCourseId: null }]),
+      incomeBracket: '100k-300k', gwa: 90.5, province: 'Albay',
+      onboardingStep: 'province',
+    }]
+    mockFocusRows = [{ listingSlug: 'upcat', priority: 1, addedAt: 1 }]
+    await renderFresh()
+    await waitFor(() => expect(screen.getByText('Step 9 of 9')).toBeTruthy())
+
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('button', { name: 'Continue with Albay' })).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByLabelText('GWA').props.value).toBe('90.5')
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(aria(screen.getByRole('radio', { name: '₱100k to ₱300k' }), 'aria-checked')).toBe(true)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    await flush()
+    expect(aria(screen.getByRole('checkbox', { name: 'BS Computer Science' }), 'aria-checked')).toBe(true)
+  })
+
+  it('a finished onboarding is not re-entered: it goes straight to the app', async () => {
+    const { router } = require('expo-router')
+    mockSavedSettings = [{
+      id: 1, fullName: 'Juan', gradeLevel: 11, selectedListingSlug: 'upcat', onboardingStep: 'done',
+    }]
+    mockFocusRows = [{ listingSlug: 'upcat', priority: 1, addedAt: 1 }]
+    await renderFresh()
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'))
+    expect(screen.queryByRole('header')).toBeNull()
+  })
 })
 
 // ─── Goals → readiness gate ────────────────────────────────────────────────────
@@ -319,6 +430,9 @@ describe('Onboarding: goals and the readiness gate', () => {
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/welcome'))
     expect(screen.queryByText('Hang tight, almost there')).toBeNull()
+    // Marked finished, so a relaunch never re-enters the flow.
+    const steps = mockInserts.filter(i => i.table === userSettings).map(i => i.values.onboardingStep)
+    expect(steps.at(-1)).toBe('done')
   })
 })
 

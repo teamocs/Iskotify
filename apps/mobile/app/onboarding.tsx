@@ -14,7 +14,7 @@ import { capture } from '../lib/analytics'
 import {
   userSettings, practiceSessions, focusListings as focusListingsTable, upcatQuestions,
 } from '../db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, notInArray } from 'drizzle-orm'
 import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
@@ -27,14 +27,17 @@ import { SearchField } from '../components/explore/SearchField'
 import { StepShell } from '../components/onboarding/StepShell'
 import { ChoiceRow } from '../components/onboarding/ChoiceRow'
 import { QuestionView, ResultsView } from '../components/onboarding/PreAssessment'
-import { nextStep, prevStep, resumeStep, type StepId } from '../components/onboarding/flow'
+import {
+  nextStep, prevStep, resumeStep, furthestStep, type StepId, type ProgressMarker,
+} from '../components/onboarding/flow'
+import { restoreAnswers, examFocusSlug } from '../components/onboarding/restore'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
 import {
-  buildExamCatalog, orderExams, searchExams, examAcronymToListingSlug,
+  buildExamCatalog, orderExams, searchExams,
   recommendCourses, allCourseOptions,
   type ExamOption, type CourseOption, type TaxonomyRow, type CareerCourseRow,
 } from '../utils/targetExams'
-import { schoolFocusSlug, isSchoolFocusSlug } from '../utils/focusSlug'
+import { isSchoolFocusSlug } from '../utils/focusSlug'
 import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
 import { prefetchSessionImages } from '../utils/prefetchQuestionImages'
 import { canonicalizeRegion } from '../utils/region'
@@ -161,36 +164,56 @@ export default function OnboardingScreen() {
   // Re-entry guard for the sync chain (a ref, so promise callbacks see the live value).
   const syncRunningRef = useRef(false)
 
-  // Resume: prefill from the saved profile (Google sign-in seeds the name; an
-  // interrupted onboarding saved each answer as it went) and open on the first
-  // unanswered required question.
+  // Furthest step completed, as persisted in user_settings.onboarding_step.
+  // Only moves forward (see furthestStep), so Back + Continue never rewinds it.
+  const furthestRef = useRef<string>('')
+
+  // Resume: prefill every saved answer (Google sign-in seeds the name; an
+  // interrupted onboarding saved each answer as it went) and open on the step
+  // after the furthest one reached. A finished onboarding goes to the app.
   useEffect(() => {
     async function prefill() {
       try {
         const [rows, focusRows] = await Promise.all([
           db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
-          db.select().from(focusListingsTable).limit(1),
+          db.select().from(focusListingsTable).orderBy(focusListingsTable.priority),
         ])
         const s = rows[0]
+        if (!aliveRef.current) return
+        const focusSlugs = (focusRows ?? []).map(r => r.listingSlug)
         if (s) {
           if (s.fullName) setFullName(s.fullName)
           if (s.school) setSchool(s.school)
           if (s.schoolRegion) setSchoolRegion(s.schoolRegion)
           if (s.gradeLevel) setGradeLevel(s.gradeLevel)
+          const restored = restoreAnswers(s, focusSlugs)
+          setSelectedExams(restored.selectedExams)
+          setSelectedSlugs(restored.selectedSlugs)
+          setSelectedCourses(restored.selectedCourses)
+          setIncomeBracket(restored.incomeBracket)
+          setGwaText(restored.gwaText)
+          setProvince(restored.province)
+          furthestRef.current = s.onboardingStep ?? ''
         }
-        if (!aliveRef.current) return
-        setStep(resumeStep({
+        const resume = resumeStep({
           fullName: s?.fullName,
           gradeLevel: s?.gradeLevel,
           hasFocus: hasOnboardingFocus({
             selectedListingSlug: s?.selectedListingSlug,
-            focusCount: focusRows?.length ?? 0,
+            focusCount: focusSlugs.length,
             targetExams: s?.targetExams,
           }),
-        }))
+          furthest: s?.onboardingStep,
+        })
+        if (resume === 'done') {
+          // Finished before: stay blank (never flash a question) and leave.
+          router.replace('/(tabs)')
+          return
+        }
+        setStep(resume)
+        setReady(true)
       } catch (e) {
         console.warn('[onboarding] prefill error:', e)
-      } finally {
         if (aliveRef.current) setReady(true)
       }
     }
@@ -210,6 +233,13 @@ export default function OnboardingScreen() {
       .then(() => invalidate('settings:'))
       .catch((e: unknown) => console.warn('[onboarding] persist error:', e))
   }, [db])
+
+  /** Record `id` as completed; returns the marker to persist with that step's answer. */
+  function reached(id: ProgressMarker): ProgressMarker {
+    const f = furthestStep(furthestRef.current, id)
+    furthestRef.current = f
+    return f
+  }
 
   useEffect(() => {
     if (step !== 'goals') return
@@ -270,7 +300,11 @@ export default function OnboardingScreen() {
         }))
         taxonomyRef.current = tax
         careerRef.current = cc
-        setExamCatalog(buildExamCatalog(profiles, schools))
+        const catalog = buildExamCatalog(profiles, schools)
+        setExamCatalog(catalog)
+        // Exams restored on resume are stubs (id, name, acronym); swap in the
+        // catalog entries so course recommendations see their course lists.
+        setSelectedExams(prev => prev.map(e => catalog.find(c => c.schoolId === e.schoolId) ?? e))
         setAllCourses(allCourseOptions(tax, cc))
       } catch (e) {
         console.warn('[onboarding] exam catalog load error:', e)
@@ -318,18 +352,21 @@ export default function OnboardingScreen() {
     if (!name) return
     go(nextStep('name'))
     // Persist NOW: fullName is what gates landing-vs-app on launch.
-    saveProfile({ fullName: name })
+    saveProfile({ fullName: name, onboardingStep: reached('name') })
   }
 
   function continueFromGrade() {
     if (!gradeLevel) return
     go(nextStep('grade'))
-    saveProfile({ fullName: fullName.trim(), gradeLevel })
+    saveProfile({ fullName: fullName.trim(), gradeLevel, onboardingStep: reached('grade') })
   }
 
   function continueFromSchool(skip: boolean) {
     go(nextStep('school'))
-    if (!skip) saveProfile({ school: school.trim(), schoolRegion: canonicalizeRegion(schoolRegion) })
+    const onboardingStep = reached('school')
+    saveProfile(skip
+      ? { onboardingStep }
+      : { school: school.trim(), schoolRegion: canonicalizeRegion(schoolRegion), onboardingStep })
   }
 
   // ── Your goal ────────────────────────────────────────────────────────────
@@ -342,7 +379,7 @@ export default function OnboardingScreen() {
     // picked school becomes a school-level focus ("school:<id>") so the choice
     // is never silently dropped — its practice resolves to general-cet.
     const examSlugs = Array.from(new Set(
-      selectedExams.map(e => examAcronymToListingSlug(e.examAcronym) ?? schoolFocusSlug(e.schoolId)),
+      selectedExams.map(examFocusSlug),
     ))
     const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
     // selectedListingSlug is consumed app-wide as a CONTENT slug — never store
@@ -358,6 +395,7 @@ export default function OnboardingScreen() {
       schoolRegion: canonicalizeRegion(schoolRegion),
       gradeLevel: gradeLevel ?? undefined,
       targetExams: targetExamsJson,
+      onboardingStep: reached('goals'),
     }
     // Persist profile + selection FIRST, in its own statement, so a bad focus-row
     // insert can't roll it back (these gate returning-user detection).
@@ -371,6 +409,13 @@ export default function OnboardingScreen() {
       invalidate('settings:')
     } catch (e) {
       console.error('[onboarding] goal settings persist error:', e)
+    }
+    // A resumed goal step starts from the saved picks; drop any the student
+    // un-picked so they don't come back on the next resume.
+    try {
+      await db.delete(focusListingsTable).where(notInArray(focusListingsTable.listingSlug, focusSlugs))
+    } catch (e) {
+      console.warn('[onboarding] focus row cleanup error:', e)
     }
     for (let i = 0; i < focusSlugs.length; i++) {
       try {
@@ -395,11 +440,12 @@ export default function OnboardingScreen() {
   }
 
   function continueFromCourses(skip: boolean) {
+    const onboardingStep = reached('courses')
     if (!skip && selectedCourses.length > 0) {
       const json = JSON.stringify(
         selectedCourses.map(c => ({ id: c.id, label: c.label, careerCourseId: c.careerCourseId })),
       )
-      saveProfile({ targetCourses: json })
+      saveProfile({ targetCourses: json, onboardingStep })
       void supabase.auth.getUser().then(({ data }) => {
         if (data.user) {
           void supabase.from('profiles')
@@ -407,6 +453,8 @@ export default function OnboardingScreen() {
             .eq('id', data.user.id)
         }
       })
+    } else {
+      saveProfile({ onboardingStep })
     }
     go(nextStep('courses'))
   }
@@ -414,25 +462,31 @@ export default function OnboardingScreen() {
   // ── Scholarship match ────────────────────────────────────────────────────
 
   function continueFromIncome(skip: boolean) {
-    if (!skip && incomeBracket !== null) saveProfile({ incomeBracket })
+    const onboardingStep = reached('income')
+    // "Prefer not to say" is an answer too: it clears a bracket restored on resume.
+    const answered = !skip && (incomeBracket !== null || incomePreferNotToSay)
+    saveProfile(answered ? { incomeBracket, onboardingStep } : { onboardingStep })
     go(nextStep('income'))
   }
 
   function continueFromGwa(skip: boolean) {
+    let gwaNum: number | null = null
     if (!skip && gwaText.trim()) {
-      const gwaNum = parseFloat(gwaText.trim())
+      gwaNum = parseFloat(gwaText.trim())
       if (isNaN(gwaNum) || gwaNum < 75 || gwaNum > 100) {
         setGwaError('Enter a GWA from 75 to 100, like 90.5.')
         return
       }
-      saveProfile({ gwa: gwaNum })
     }
+    const onboardingStep = reached('gwa')
+    saveProfile(gwaNum !== null ? { gwa: gwaNum, onboardingStep } : { onboardingStep })
     setGwaError(undefined)
     go(nextStep('gwa'))
   }
 
   function continueFromProvince(skip: boolean) {
-    if (!skip && province.trim()) saveProfile({ province: province.trim() })
+    const onboardingStep = reached('province')
+    saveProfile(!skip && province.trim() ? { province: province.trim(), onboardingStep } : { onboardingStep })
     go(nextStep('province'))
   }
 
@@ -517,6 +571,8 @@ export default function OnboardingScreen() {
 
   function finishOnboarding() {
     capture('onboarding_completed')
+    // Finished: a relaunch or a stray link back here goes straight to the app.
+    saveProfile({ onboardingStep: reached('done') })
     if (syncStatus === 'done' || syncStatus === 'idle') {
       router.replace('/welcome')
     } else {

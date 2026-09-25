@@ -50,14 +50,46 @@ export function isOptional(id: StepId): boolean {
   return ONBOARDING_STEPS.find(s => s.id === id)!.optional
 }
 
+/** Persisted progress marker: the furthest step completed, or 'done' once finished. */
+export type ProgressMarker = StepId | 'done'
+
+/** Position of a saved marker: -1 = none/unknown, IDS.length = finished. */
+function markerRank(m: string | null | undefined): number {
+  if (m === 'done') return IDS.length
+  return IDS.indexOf(m as StepId)
+}
+
 /**
- * Where to pick up after a relaunch. Every answer is saved when the student
- * continues, so the saved profile is the resume record: the first unanswered
- * REQUIRED question. Optional steps already passed are not asked again.
+ * The marker to save after completing `completed`: the later of it and the
+ * saved one, so going Back and answering again never moves resume backwards.
  */
-export function resumeStep(saved: { fullName?: string | null; gradeLevel?: number | null; hasFocus?: boolean }): StepId {
-  if (!saved.fullName?.trim()) return 'name'
-  if (!saved.gradeLevel) return 'grade'
-  if (!saved.hasFocus) return 'goals'
-  return 'courses'
+export function furthestStep(saved: string | null | undefined, completed: ProgressMarker): ProgressMarker {
+  return markerRank(saved) > markerRank(completed) ? (saved as ProgressMarker) : completed
+}
+
+/**
+ * Where to pick up after a relaunch, or 'done' when onboarding was finished.
+ *
+ * `furthest` is the persisted marker: resume at the step after it, because an
+ * optional step can't be judged by its answer (skipping it is a valid answer).
+ * A missing REQUIRED answer always wins, whatever the marker says. Without a
+ * marker (profiles saved before it existed) the first unanswered required
+ * question decides, and a saved focus resumes at the courses.
+ */
+export function resumeStep(saved: {
+  fullName?: string | null
+  gradeLevel?: number | null
+  hasFocus?: boolean
+  furthest?: string | null
+}): StepId | 'done' {
+  const required: StepId | null =
+    !saved.fullName?.trim() ? 'name'
+      : !saved.gradeLevel ? 'grade'
+        : !saved.hasFocus ? 'goals'
+          : null
+  const rank = markerRank(saved.furthest)
+  if (rank < 0) return required ?? 'courses'
+  const next: StepId | 'done' = rank + 1 >= IDS.length ? 'done' : IDS[rank + 1]!
+  if (required && (next === 'done' || IDS.indexOf(required) < IDS.indexOf(next))) return required
+  return next
 }

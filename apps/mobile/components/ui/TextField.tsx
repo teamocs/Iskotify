@@ -1,4 +1,4 @@
-import { forwardRef, useId, useState } from 'react'
+import { forwardRef, useCallback, useId, useRef, useState } from 'react'
 import { View, Text, TextInput, Pressable, Platform, type TextInputProps } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { EyeOutlined, EyeSolid } from '@lineiconshq/free-icons'
@@ -39,6 +39,13 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
   ref,
 ) {
   const { theme: t } = useTheme()
+  // Own handle on the input (the label focuses it) while still forwarding `ref`.
+  const inputRef = useRef<TextInput | null>(null)
+  const setInputRef = useCallback((node: TextInput | null) => {
+    inputRef.current = node
+    if (typeof ref === 'function') ref(node)
+    else if (ref) ref.current = node
+  }, [ref])
   const [focused, setFocused] = useState(false)
   const [ownReveal, setOwnReveal] = useState(false)
   const shown = revealed ?? ownReveal
@@ -66,10 +73,15 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 
   return (
     <View style={{ gap: spacing.xs }}>
-      <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>
-        {label}
-        {required ? <Text {...decorative} style={{ color: t.accentText }}> *</Text> : null}
-      </Text>
+      {/* Pressing the label focuses the field, like <label for> on the web.
+          Not a separate accessible element: the input already carries the
+          label as its name, so screen readers still hear it once. */}
+      <Pressable onPress={() => inputRef.current?.focus()} accessible={false} focusable={false}>
+        <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>
+          {label}
+          {required ? <Text {...decorative} style={{ color: t.accentText }}> *</Text> : null}
+        </Text>
+      </Pressable>
       <View
         style={{
           flexDirection: 'row',
@@ -85,7 +97,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         }}
       >
         <TextInput
-          ref={ref}
+          ref={setInputRef}
           testID={testID}
           accessibilityLabel={label}
           placeholderTextColor={t.textTertiary}

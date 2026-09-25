@@ -38,7 +38,8 @@ function makeDb(): DrizzleClient {
       sync_rev INTEGER NOT NULL DEFAULT 0,
       ai_provider TEXT NOT NULL DEFAULT 'local',
       daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
-      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1
+      weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
+      onboarding_step TEXT NOT NULL DEFAULT ''
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
