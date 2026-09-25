@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { parseTableState, type SortState } from '@/lib/table/tableState'
 import type { DataTableConfig, DataTableColumnConfig } from '@/lib/dataTables'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { isDirty } from '@/lib/admin/formDirty'
+import { useDebounce } from '@/lib/useDebounce'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
@@ -325,15 +326,6 @@ export function buildListUrl(table: string, view: { q: string; sort: SortState |
   return `/api/admin/data/${table}?${p}`
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -343,10 +335,8 @@ interface Props {
 type DrawerState = { row: Row | null } | null
 
 export function DataTableManager({ config }: Props) {
-  const [rows, setRows] = useState<Row[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
+  // Bumped to refetch the same view.
+  const [nonce, setNonce] = useState(0)
   const [drawer, setDrawer] = useState<DrawerState>(null)
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -372,32 +362,38 @@ export function DataTableManager({ config }: Props) {
   const q = useDebounce(state.q, 250)
   const listUrl = buildListUrl(config.table, { q, sort: state.sort, page: state.page })
 
-  const fetchRows = useCallback(async () => {
-    const id = ++fetchCountRef.current
-    setLoading(true)
-    setLoadError('')
-    try {
-      const res = await fetch(listUrl)
-      if (id !== fetchCountRef.current) return
-      const body = await res.json().catch(() => ({}))
-      // Re-check after the body is read: a newer request may have finished
-      // while this one was still parsing, and must not be overwritten.
-      if (id !== fetchCountRef.current) return
-      if (!res.ok) {
-        setLoadError(body.error ?? 'Failed to load')
-        return
-      }
-      setRows(body.rows ?? [])
-      setTotal(body.count ?? 0)
-    } catch {
-      if (id !== fetchCountRef.current) return
-      setLoadError('Network error')
-    } finally {
-      if (id === fetchCountRef.current) setLoading(false)
-    }
-  }, [listUrl])
+  // The last answer and the request it answers; loading until it answers this one.
+  const requestKey = `${listUrl}#${nonce}`
+  const [loaded, setLoaded] = useState<{ key: string; rows: Row[]; total: number; error: string } | null>(null)
+  const loading = loaded?.key !== requestKey
+  const rows = loaded?.rows ?? []
+  const total = loaded?.total ?? 0
+  const loadError = loaded && !loading ? loaded.error : ''
 
-  useEffect(() => { fetchRows() }, [fetchRows])
+  useEffect(() => {
+    const id = ++fetchCountRef.current
+    const isCurrent = () => id === fetchCountRef.current
+    const settle = (patch: { rows?: Row[]; total?: number; error?: string }) =>
+      setLoaded(prev => ({ key: requestKey, rows: prev?.rows ?? [], total: prev?.total ?? 0, error: '', ...patch }))
+    async function load() {
+      try {
+        const res = await fetch(listUrl)
+        if (!isCurrent()) return
+        const body = await res.json().catch(() => ({}))
+        // Re-check after the body is read: a newer request may have finished
+        // while this one was still parsing, and must not be overwritten.
+        if (!isCurrent()) return
+        if (!res.ok) settle({ error: body.error ?? 'Failed to load' })
+        else settle({ rows: body.rows ?? [], total: body.count ?? 0 })
+      } catch {
+        if (isCurrent()) settle({ error: 'Network error' })
+      }
+    }
+    load()
+  }, [listUrl, requestKey])
+
+  /** Refetch the current page (after a save, delete or import, or Try again). */
+  const fetchRows = () => setNonce(n => n + 1)
 
   const idOf = (row: Row) => String(row[config.idColumn] ?? '')
 

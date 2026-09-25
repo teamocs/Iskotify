@@ -42,8 +42,9 @@ export function PostHogDashboardForm({ currentUrl }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: trimmed }),
       })
-      const json = (await res.json()) as { ok: boolean; error?: string }
-      if (!json.ok) {
+      // An error page (e.g. a 502 from the host) may not be JSON; the status decides.
+      const json = (await res.json().catch(() => ({ ok: false }))) as { ok: boolean; error?: string }
+      if (!res.ok || !json.ok) {
         const message = json.error ?? 'Failed to save. Please try again.'
         setServerError(message)
         notifyError(message)

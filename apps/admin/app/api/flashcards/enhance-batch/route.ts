@@ -3,6 +3,7 @@ import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
+import { embedOne } from '@/lib/embedOne'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60  // Vercel cap
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     .single()
   if (topicErr || !topic) return NextResponse.json({ error: 'Topic not found' }, { status: 404 })
 
-  const subjectName = (topic as any).flashcard_subjects?.name ?? 'General'
+  const subjectName = embedOne(topic.flashcard_subjects)?.name ?? 'General'
   const topicName = topic.name
 
   // Fetch cards needing enhancement

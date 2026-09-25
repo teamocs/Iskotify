@@ -315,7 +315,8 @@ async function carryOverPublished(db: SupabaseClient, rows: KbRow[]): Promise<nu
       .select('question_id, question_text, options, correct_index, status, image_url')
       .in('question_id', ids.slice(i, i + 200))
     if (error) throw new Error(`upcat_questions read failed: ${error.message}`)
-    for (const q of (data ?? []) as any[]) if (q.status === 'published') live.set(q.question_id, q)
+    type LiveRow = { question_id: string; question_text: string; options: string[]; correct_index: number; status: string; image_url: string | null }
+    for (const q of (data ?? []) as LiveRow[]) if (q.status === 'published') live.set(q.question_id, q)
   }
   if (live.size === 0) return 0
 

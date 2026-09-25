@@ -8,6 +8,7 @@ import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { Button, buttonClass } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
+import { errorMessage } from '@/lib/errorMessage'
 
 export interface Draft {
   topic_id: string
@@ -148,6 +149,12 @@ export function DraftsTable() {
   // Manual reloads (retry, after bulk publish) can overlap the 5s poll; only
   // the newest request may write state.
   const fetchCountRef = useRef(0)
+  // Whether any topic is still enhancing; read by the poll, so the poll never
+  // runs side effects inside a state updater.
+  const pendingRef = useRef(false)
+  useEffect(() => {
+    pendingRef.current = drafts?.some(d => d.cards_needing_enhancement > 0) ?? false
+  }, [drafts])
 
   async function fetchDrafts() {
     const id = ++fetchCountRef.current
@@ -158,20 +165,19 @@ export function DraftsTable() {
       if (!res.ok) throw new Error(body.error ?? 'Failed to load drafts')
       setError(null)
       setDrafts(body.drafts)
-    } catch (e: any) {
+    } catch (e) {
       if (id !== fetchCountRef.current) return
-      setError(e?.message ?? 'Failed to load drafts')
+      setError(errorMessage(e, 'Failed to load drafts'))
     }
   }
 
   useEffect(() => {
+    // Initial load plus a poll while cards are enhancing. State is only set once
+    // a response arrives (see fetchDrafts); the rule can't see past the call.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDrafts()
     const iv = setInterval(() => {
-      setDrafts(curr => {
-        const stillPending = curr?.some(d => d.cards_needing_enhancement > 0)
-        if (stillPending) fetchDrafts()
-        return curr ?? null
-      })
+      if (pendingRef.current) fetchDrafts()
     }, 5000)
     return () => clearInterval(iv)
   }, [])
@@ -234,7 +240,7 @@ function DistractorsCell({ draft }: { draft: Draft }) {
         aria-valuenow={ready}
         className="h-1.5 w-24 overflow-hidden rounded-pill bg-neutral-soft"
       >
-        <div className="h-full bg-maroon transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-maroon transition-[width]" style={{ width: `${pct}%` }} />
       </div>
       <span className="text-xs tabular-nums text-ink-muted">{ready}/{draft.total_cards}</span>
     </div>

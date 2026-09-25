@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { embedOne } from '@/lib/embedOne'
 
 async function requireAdmin() {
   const auth = await createAuthClient()
@@ -31,7 +32,7 @@ export async function GET(
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // Flatten the nested subject for the client.
-  const subject = (data as any).flashcard_subjects
+  const subject = embedOne(data.flashcard_subjects)
   return NextResponse.json({
     id: data.id,
     name: data.name,

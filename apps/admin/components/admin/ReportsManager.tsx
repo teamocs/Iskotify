@@ -10,6 +10,7 @@ import { Field, controlClass } from '@/components/ui/Field'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
+import { PRESET_REASONS, QUEUE_PAGE_SIZE, REPORTS_QUEUE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
 import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
@@ -45,9 +46,6 @@ export interface UpcatQuestion {
 
 const SOURCE_LABEL: Record<QuestionReport['source_table'], string> = { flashcards: 'Flashcard', upcat_questions: 'UPCAT' }
 
-/** The reasons the mobile app offers (ReportQuestionModal); details follow after " — ". */
-const PRESET_REASONS = ['Wrong answer', 'Typo or formatting issue', 'Question is unclear'] as const
-
 const FILTERS: FilterDef<QuestionReport>[] = [
   statusFilter<QuestionReport>(),
   {
@@ -55,16 +53,12 @@ const FILTERS: FilterDef<QuestionReport>[] = [
     label: 'Reason',
     allLabel: 'Any reason',
     options: [...PRESET_REASONS.map(r => ({ value: r, label: r })), { value: 'other', label: 'Other' }],
-    predicate: (r, v) => v === 'other'
-      ? !PRESET_REASONS.some(p => (r.reason ?? '').startsWith(p))
-      : (r.reason ?? '').startsWith(v),
   },
   {
     id: 'source',
     label: 'Source',
     allLabel: 'All sources',
     options: [{ value: 'flashcards', label: 'Flashcard' }, { value: 'upcat_questions', label: 'UPCAT' }],
-    predicate: (r, v) => r.source_table === v,
   },
 ]
 
@@ -418,7 +412,10 @@ export function QuestionEditorDrawer({ report, onClose, onResolved, initialQuest
 // ── Table ───────────────────────────────────────────────────────────────────
 
 interface ViewProps {
+  /** The current page, as the server returned it (already searched, filtered and sorted). */
   rows: QuestionReport[]
+  /** Rows matching the current search and filters, across every page. */
+  total: number
   loading: boolean
   error: string
   selected: string[]
@@ -433,7 +430,7 @@ interface ViewProps {
   onDelete: (r: QuestionReport) => void
 }
 
-export function ReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
+export function ReportsView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -518,8 +515,9 @@ export function ReportsView({ rows, loading, error, selected, onSelectedChange, 
         rowKey={r => r.id}
         filters={FILTERS}
         searchPlaceholder="Search question, ID or reason"
-        pageSize={50}
-        defaultSort={{ id: 'reported', dir: 'desc' }}
+        pageSize={QUEUE_PAGE_SIZE}
+        server={{ total }}
+        defaultSort={REPORTS_QUEUE.defaultSort}
         loading={loading}
         emptyTitle="No reported questions"
         emptyDescription="When a student reports a flashcard or UPCAT question from the app, it shows up here for review."
@@ -539,6 +537,7 @@ export function ReportsView({ rows, loading, error, selected, onSelectedChange, 
 export function ReportsManager() {
   const queue = useStatusQueue<QuestionReport>({
     listUrl: '/api/admin/reports',
+    spec: REPORTS_QUEUE,
     noun: { one: 'report', many: 'reports' },
     singular: 'Report',
   })
@@ -549,6 +548,7 @@ export function ReportsManager() {
     <PageBody intro="Questions students flagged from the app. Fix the question, then mark the report resolved.">
       <ReportsView
         rows={queue.rows}
+        total={queue.total}
         loading={queue.loading}
         error={queue.error}
         selected={queue.selected}

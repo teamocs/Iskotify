@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { patchStatuses, bulkMessage, fetchAllPages, REVIEW_STATUS_LABEL } from '../bulkStatus'
+import { patchStatuses, bulkMessage, runBulkStatus, REVIEW_STATUS_LABEL } from '../bulkStatus'
 
 const okRes = () => ({ ok: true, status: 200, json: async () => ({ ok: true }) }) as Response
 const failRes = () => ({ ok: false, status: 500, json: async () => ({ error: 'Database error' }) }) as Response
@@ -58,27 +58,32 @@ describe('bulkMessage', () => {
   })
 })
 
-describe('fetchAllPages', () => {
-  it('pages through the list endpoint until it has every row', async () => {
-    const fetcher = vi.fn(async (url: string) => {
-      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
-      const rows = page === 0 ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'c' }]
-      return { ok: true, json: async () => ({ rows, count: 3 }) } as Response
-    })
-    const out = await fetchAllPages<{ id: string }>('/api/admin/reports', fetcher as unknown as typeof fetch, 2)
-    expect(out).toEqual({ ok: true, rows: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], count: 3 })
-    expect(fetcher).toHaveBeenCalledWith('/api/admin/reports?page=0&limit=2')
-    expect(fetcher).toHaveBeenCalledWith('/api/admin/reports?page=1&limit=2')
+describe('runBulkStatus', () => {
+  const noun = { one: 'report', many: 'reports' }
+
+  it('refetches the current page after a bulk change that changed something', async () => {
+    const fetcher = vi.fn(async () => okRes())
+    const refetch = vi.fn()
+    const out = await runBulkStatus({ listUrl: '/api/admin/reports', ids: ['a', 'b'], status: 'resolved', noun, refetch, fetcher })
+    expect(out).toEqual({ ok: true, message: 'Marked 2 reports resolved', failed: [] })
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 
-  it('returns the server error instead of rows', async () => {
+  it('refetches on partial failure and hands back what failed, to keep it selected', async () => {
+    const fetcher = vi.fn(async (url: string) => (url.endsWith('/b') ? failRes() : okRes()))
+    const refetch = vi.fn()
+    const out = await runBulkStatus({ listUrl: '/x', ids: ['a', 'b'], status: 'new', noun, refetch, fetcher: fetcher as unknown as typeof fetch })
+    expect(out.ok).toBe(false)
+    expect(out.failed).toEqual(['b'])
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refetch when nothing changed', async () => {
     const fetcher = vi.fn(async () => failRes())
-    expect(await fetchAllPages('/api/admin/feedback', fetcher)).toEqual({ ok: false, error: 'Database error' })
-  })
-
-  it('returns a network error when the request throws', async () => {
-    const fetcher = vi.fn(async () => { throw new TypeError('Failed to fetch') })
-    expect(await fetchAllPages('/api/admin/feedback', fetcher)).toEqual({ ok: false, error: 'Network error' })
+    const refetch = vi.fn()
+    const out = await runBulkStatus({ listUrl: '/x', ids: ['a'], status: 'new', noun, refetch, fetcher })
+    expect(out.failed).toEqual(['a'])
+    expect(refetch).not.toHaveBeenCalled()
   })
 })
 

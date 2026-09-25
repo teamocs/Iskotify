@@ -58,11 +58,11 @@ export async function importCsvCore(
   }
 
   // 4. Build card inserts
-  const cardInserts: any[] = []
+  const cardInserts: Record<string, unknown>[] = []
   let cardsNeedingEnhancement = 0
   for (const group of topicGroups.values()) {
     for (const row of group.rows) {
-      const insert: any = {
+      const insert: Record<string, unknown> = {
         topic_id: group.topicId,
         question: row.question,
         answer: row.answer,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
+import { embedOne } from '@/lib/embedOne'
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-admin-secret')
@@ -26,8 +27,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Card not found' }, { status: 404 })
   }
 
-  const topicName = (card as any).flashcard_topics?.name ?? 'General'
-  const subjectName = (card as any).flashcard_topics?.flashcard_subjects?.name ?? 'General Knowledge'
+  const topic = embedOne(card.flashcard_topics)
+  const topicName = topic?.name ?? 'General'
+  const subjectName = embedOne(topic?.flashcard_subjects)?.name ?? 'General Knowledge'
 
   const result = await generateDistractorsForCard({
     subject: subjectName,

@@ -21,13 +21,18 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) {
-      setError('Invalid email or password')
-      return
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setError('Invalid email or password')
+        return
+      }
+      router.push('/admin/listings')
+    } catch {
+      setError('Couldn’t reach the sign-in service. Check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
-    router.push('/admin/listings')
   }
 
   return (
@@ -43,8 +48,9 @@ export default function LoginPage() {
           className="bg-white rounded-[22px] shadow-[0_8px_32px_rgba(0,0,0,0.06)] p-8 space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Email</label>
-            <input aria-label="Email"
+            <label htmlFor="login-email" className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Email</label>
+            <input id="login-email"
+              autoComplete="email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -54,8 +60,9 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Password</label>
-            <input aria-label="Password"
+            <label htmlFor="login-password" className="block text-xs font-medium text-ink-muted mb-1.5 uppercase tracking-wide">Password</label>
+            <input id="login-password"
+              autoComplete="current-password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}

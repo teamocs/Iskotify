@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { Dialog } from '@/components/ui/Dialog'
@@ -18,6 +18,7 @@ const EMPTY: CardValues = { question: '', answer: '', explanation: '' }
 
 export function AddCardModal({ topicId, topicStatus, onClose }: Props) {
   const [values, setValues] = useState(EMPTY)
+  const questionRef = useRef<HTMLTextAreaElement>(null)
   const [errors, setErrors] = useState<CardErrors>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -65,6 +66,7 @@ export function AddCardModal({ topicId, topicStatus, onClose }: Props) {
       open
       onClose={() => { if (!saving) onClose() }}
       title="Add card"
+      initialFocusRef={questionRef}
       onSubmit={handleSubmit}
       dirty={isCardDirty(values, EMPTY)}
       footer={close => (
@@ -76,7 +78,7 @@ export function AddCardModal({ topicId, topicStatus, onClose }: Props) {
     >
       <div className="space-y-3">
         {error && <ErrorBanner title="Couldn’t add the card" message={error} />}
-        <CardFields values={values} errors={errors} onChange={setValues} />
+        <CardFields values={values} errors={errors} onChange={setValues} questionRef={questionRef} />
       </div>
     </Dialog>
   )

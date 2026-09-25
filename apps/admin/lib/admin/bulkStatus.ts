@@ -61,35 +61,23 @@ export function bulkMessage(outcome: BulkOutcome, noun: { one: string; many: str
   }
 }
 
-export type PagedResult<T> = { ok: true; rows: T[]; count: number } | { ok: false; error: string }
+interface BulkRun {
+  listUrl: string
+  ids: string[]
+  status: ReviewStatus
+  noun: { one: string; many: string }
+  /** Reloads the page on screen; called once when anything changed. */
+  refetch: () => void
+  fetcher?: typeof fetch
+}
 
 /**
- * Read a whole queue from a paged list endpoint (`?page=&limit=` → `{ rows, count }`),
- * so search, filters and sort can run over every row. Stops at `maxPages` as a safety cap.
+ * A bulk status change end to end: PATCH every id, summarise the outcome, and
+ * refetch the current page if any row changed. `failed` is what should stay
+ * selected, so a retry is one click.
  */
-export async function fetchAllPages<T>(
-  listUrl: string,
-  fetcher: typeof fetch = fetch,
-  limit = 200,
-  maxPages = 25,
-): Promise<PagedResult<T>> {
-  const rows: T[] = []
-  let total = 0
-  try {
-    for (let page = 0; page < maxPages; page++) {
-      const res = await fetcher(`${listUrl}?page=${page}&limit=${limit}`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        return { ok: false, error: body.error ?? 'Failed to load' }
-      }
-      const body = await res.json()
-      const batch: T[] = body.rows ?? []
-      total = body.count ?? 0
-      rows.push(...batch)
-      if (batch.length < limit || rows.length >= total) break
-    }
-  } catch {
-    return { ok: false, error: 'Network error' }
-  }
-  return { ok: true, rows, count: total }
+export async function runBulkStatus({ listUrl, ids, status, noun, refetch, fetcher = fetch }: BulkRun) {
+  const outcome = await patchStatuses(listUrl, ids, status, fetcher)
+  if (outcome.ok.length > 0) refetch()
+  return { ...bulkMessage(outcome, noun), failed: outcome.failed }
 }

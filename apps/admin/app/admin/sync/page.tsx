@@ -10,16 +10,19 @@ export const dynamic = 'force-dynamic'
 
 export default async function SyncPage() {
   const db = createServerClient()
-  const { data: logs, error: logsError } = await db
-    .from('sync_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(100)
-  // Missing table (migration 055 not applied yet) just renders the empty state.
-  const { data: kbFiles } = await db
-    .from('kb_drive_files')
-    .select('drive_file_id, name, path, status, dialect, rows_total, rows_imported, rows_missing_media, rows_drafted, message, imported_at, published_at, updated_at')
-    .order('name')
+  // Independent reads: run them together. A missing kb_drive_files table
+  // (migration 055 not applied yet) just renders the empty state.
+  const [{ data: logs, error: logsError }, { data: kbFiles }] = await Promise.all([
+    db
+      .from('sync_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100),
+    db
+      .from('kb_drive_files')
+      .select('drive_file_id, name, path, status, dialect, rows_total, rows_imported, rows_missing_media, rows_drafted, message, imported_at, published_at, updated_at')
+      .order('name'),
+  ])
 
   return (
     <>

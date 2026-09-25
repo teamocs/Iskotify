@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { generateDistractorsForCard } from '@/lib/gemini/generateDistractors'
+import { embedOne } from '@/lib/embedOne'
 
 const CONCURRENCY = 4
 const DEFAULT_LIMIT = 50
@@ -37,9 +38,10 @@ export async function POST(req: NextRequest) {
 
   const cardList = cards ?? []
 
-  const outcomes = await processBatch(cardList, async (card: any) => {
-    const topicName = card.flashcard_topics?.name ?? 'General'
-    const subjectName = card.flashcard_topics?.flashcard_subjects?.name ?? 'General Knowledge'
+  const outcomes = await processBatch(cardList, async card => {
+    const topic = embedOne(card.flashcard_topics)
+    const topicName = topic?.name ?? 'General'
+    const subjectName = embedOne(topic?.flashcard_subjects)?.name ?? 'General Knowledge'
 
     const result = await generateDistractorsForCard({
       subject: subjectName,

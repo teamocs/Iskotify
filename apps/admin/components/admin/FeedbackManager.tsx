@@ -6,6 +6,7 @@ import { Button, IconButton } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
+import { FEEDBACK_QUEUE, QUEUE_PAGE_SIZE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
 import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
@@ -48,7 +49,6 @@ const FILTERS: FilterDef<AppFeedback>[] = [
       ...[5, 4, 3, 2, 1].map(n => ({ value: String(n), label: `${n} of 5` })),
       { value: 'none', label: 'No rating' },
     ],
-    predicate: (r, v) => (v === 'none' ? ratingOf(r) === 0 : ratingOf(r) === Number(v)),
   },
 ]
 
@@ -60,7 +60,10 @@ const shortLabel = (r: AppFeedback) => {
 // ── Table ───────────────────────────────────────────────────────────────────
 
 interface ViewProps {
+  /** The current page, as the server returned it (already searched, filtered and sorted). */
   rows: AppFeedback[]
+  /** Rows matching the current search and filters, across every page. */
+  total: number
   loading: boolean
   error: string
   selected: string[]
@@ -74,7 +77,7 @@ interface ViewProps {
   onDelete: (r: AppFeedback) => void
 }
 
-export function FeedbackView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
+export function FeedbackView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -133,8 +136,9 @@ export function FeedbackView({ rows, loading, error, selected, onSelectedChange,
         rowKey={r => r.id}
         filters={FILTERS}
         searchPlaceholder="Search feedback messages"
-        pageSize={50}
-        defaultSort={{ id: 'submitted', dir: 'desc' }}
+        pageSize={QUEUE_PAGE_SIZE}
+        server={{ total }}
+        defaultSort={FEEDBACK_QUEUE.defaultSort}
         loading={loading}
         emptyTitle="No feedback yet"
         emptyDescription="Ratings and comments that students send from the app’s feedback form show up here."
@@ -154,6 +158,7 @@ export function FeedbackView({ rows, loading, error, selected, onSelectedChange,
 export function FeedbackManager() {
   const queue = useStatusQueue<AppFeedback>({
     listUrl: '/api/admin/feedback',
+    spec: FEEDBACK_QUEUE,
     noun: { one: 'feedback item', many: 'feedback items' },
     singular: 'Feedback',
   })
@@ -163,6 +168,7 @@ export function FeedbackManager() {
     <PageBody intro="Ratings and comments from students. Mark items reviewed once read, resolved once acted on.">
       <FeedbackView
         rows={queue.rows}
+        total={queue.total}
         loading={queue.loading}
         error={queue.error}
         selected={queue.selected}

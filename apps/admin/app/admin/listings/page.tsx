@@ -29,6 +29,8 @@ export default async function ListingsPage() {
 
   function syncHealth(): { label: string; tone: BadgeTone } {
     if (!lastSyncTime) return { label: 'Never synced', tone: 'neutral' }
+    // Server component: rendered once per request, so reading the clock here is intended.
+    // eslint-disable-next-line react-hooks/purity
     const hrs = (Date.now() - new Date(lastSyncTime).getTime()) / 3600_000
     if (hrs < 12) return { label: 'Healthy', tone: 'success' }
     if (hrs < 24) return { label: 'Stale', tone: 'warning' }

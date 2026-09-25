@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { errorMessage } from '@/lib/errorMessage'
+import { embedOne } from '@/lib/embedOne'
 
 export const runtime = 'nodejs'
+
+/** One draft topic as fetchDrafts selects it. */
+interface DraftTopicRow {
+  id: string
+  name: string
+  source_type: string | null
+  created_at: string
+  flashcard_subjects: { id: string; name: string } | { id: string; name: string }[] | null
+  flashcards: Array<{ options: string[] | null; ai_options: string[] | null }> | null
+}
 
 const fetchDrafts = unstable_cache(
   async () => {
@@ -18,7 +30,7 @@ const fetchDrafts = unstable_cache(
       .eq('status', 'draft')
       .order('created_at', { ascending: false })
     if (error) throw error
-    return data ?? []
+    return (data ?? []) as DraftTopicRow[]
   },
   ['flashcards-drafts'],
   { tags: ['drafts'], revalidate: 30 },
@@ -36,15 +48,16 @@ export async function GET(_req: NextRequest) {
 
   // Fetch all draft topics with their subject + raw cards array.
   // We derive counters in JS to keep the query simple and to avoid Postgres array tricks.
-  let rawTopics: any[]
+  let rawTopics: DraftTopicRow[]
   try {
     rawTopics = await fetchDrafts()
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'Database error' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err, 'Database error') }, { status: 500 })
   }
 
-  const drafts = rawTopics.map((t: any) => {
-    const cards: Array<{ options: string[] | null; ai_options: string[] | null }> = t.flashcards ?? []
+  const drafts = rawTopics.map(t => {
+    const cards = t.flashcards ?? []
+    const subject = embedOne(t.flashcard_subjects)
     const total_cards = cards.length
     const cards_with_options = cards.filter(c => Array.isArray(c.options) && c.options.length >= 4).length
     const cards_enhanced = cards.filter(c => Array.isArray(c.ai_options) && c.ai_options.length >= 4).length
@@ -54,8 +67,8 @@ export async function GET(_req: NextRequest) {
     return {
       topic_id: t.id,
       topic_name: t.name,
-      subject_id: t.flashcard_subjects?.id ?? null,
-      subject_name: t.flashcard_subjects?.name ?? 'Unknown',
+      subject_id: subject?.id ?? null,
+      subject_name: subject?.name ?? 'Unknown',
       source_type: t.source_type,
       created_at: t.created_at,
       total_cards,

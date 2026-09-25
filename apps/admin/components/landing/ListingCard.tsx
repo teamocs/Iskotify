@@ -33,7 +33,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
   const isClosed = listing.status === 'closed'
 
   return (
-    <div className="group bg-white rounded-[20px] border border-black/[0.07] overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
+    <div className="group bg-white rounded-[20px] border border-black/[0.07] overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-[box-shadow,transform] duration-200 flex flex-col">
 
       {/* Top accent + icon row */}
       <div className="px-5 pt-5 pb-4 flex items-start gap-3">

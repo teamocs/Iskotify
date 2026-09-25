@@ -39,6 +39,10 @@ jobs:
       - name: Type-check
         run: pnpm turbo run type-check
 
+      # Admin only: the mobile app's `lint` script is `tsc --noEmit`, already run above.
+      - name: Lint (admin)
+        run: pnpm --filter @iskotify/admin lint
+
       - name: Test
         run: pnpm turbo run test
         env:

@@ -34,9 +34,10 @@ export function SendApkButton({ id, status, recipient }: Props) {
         body: JSON.stringify({ id }),
       })
 
-      const json = (await res.json()) as { ok: boolean; error?: string }
+      // An error page (e.g. a 502 from the host) may not be JSON; the status decides.
+      const json = (await res.json().catch(() => ({ ok: false }))) as { ok: boolean; error?: string }
 
-      if (!json.ok) {
+      if (!res.ok || !json.ok) {
         const message = json.error ?? 'Failed to send APK. Please try again.'
         setError(message)
         notifyError(message)

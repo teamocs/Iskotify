@@ -31,6 +31,7 @@ const view = (props: Partial<React.ComponentProps<typeof AppReportsView>> = {}) 
   renderToStaticMarkup(
     <AppReportsView
       rows={rows}
+      total={rows.length}
       loading={false}
       error=""
       selected={[]}
@@ -58,6 +59,13 @@ describe('AppReportsView table', () => {
   it('labels the screenshot thumbnail button by what it opens', () => {
     const html = view()
     expect(html).toContain('aria-label="View screenshot for Flashcards bug report"')
+  })
+
+  it('shows the page the server returned as-is, with the server total', () => {
+    search = 'platform=android'
+    const html = view({ total: 75 })
+    expect(html).toContain('Crash on open')
+    expect(html).toContain('Showing 1–2 of 75')
   })
 
   it('offers status and platform filters', () => {

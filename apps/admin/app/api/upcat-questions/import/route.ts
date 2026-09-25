@@ -4,6 +4,7 @@ import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
 import { importUpcatCore, type RawUpcatRow } from '@/lib/upcat/importUpcatCore'
 import { normalizeQuestionBankHeader } from '@/lib/csv/questionBankHeaders'
+import { errorMessage } from '@/lib/errorMessage'
 
 export const runtime = 'nodejs'
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await importUpcatCore(supabase, rows)
     return NextResponse.json(result)
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'Import failed' }, { status: 500 })
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err, 'Import failed') }, { status: 500 })
   }
 }
