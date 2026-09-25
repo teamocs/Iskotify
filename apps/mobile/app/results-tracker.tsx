@@ -1,18 +1,24 @@
-import { useCallback, useMemo, useState } from 'react'
-import {
-  Linking, Pressable, StyleSheet, Text, View,
-} from 'react-native'
+import { useCallback, useState } from 'react'
+import { View, Text, Linking } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Bell1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { resultWatches, listings as listingsTable } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
-import { daysUntil } from '../utils/admissionsFeed'
-import { spacing, radius } from '../theme/tokens'
 import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { Card } from '../components/ui/Card'
-import { WebTopSpacer } from '../components/ui/WebTopSpacer'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Skeleton } from '../components/ui/Skeleton'
+import { EmptyState } from '../components/ui/EmptyState'
+import { ErrorState } from '../components/ui/ErrorState'
+import { DetailTopBar } from '../components/explore/DetailTopBar'
+import { LinkRow } from '../components/explore/LinkRow'
+import { daysUntilDate, fmtLongDate } from '../components/explore/exploreModel'
+import { radius, spacing, textStyle } from '../theme/tokens'
 
 interface WatchedExam {
   slug: string
@@ -22,22 +28,71 @@ interface WatchedExam {
   externalUrl: string | null
 }
 
-/** Convert a ms-epoch timestamp to a YYYY-MM-DD ISO date string (UTC). */
-function epochToISO(epoch: number): string {
-  return new Date(epoch).toISOString().slice(0, 10)
-}
+type Status = 'loading' | 'ready' | 'error'
 
-/** Format an epoch into a human-readable date. */
-function fmtDate(epoch: number): string {
-  return new Date(epoch).toLocaleDateString('en-PH', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  })
+/** One watched exam: status first, then the one relevant action. */
+function WatchCard({ w, onRemove }: { w: WatchedExam; onRemove: (slug: string) => void }) {
+  const { theme: t } = useTheme()
+  const name = w.title ?? w.slug
+  const days = daysUntilDate(w.resultsDate)
+  const pending = days !== null && days > 0
+
+  return (
+    <Card style={{ gap: spacing.md }}>
+      <View style={{ gap: spacing.xs }}>
+        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{name}</Text>
+        <Badge label={pending ? 'Waiting for results' : w.resultsDate ? 'Results may be out' : 'No results date yet'} tone={pending ? 'neutral' : w.resultsDate ? 'success' : 'neutral'} />
+      </View>
+
+      {pending ? (
+        <View
+          accessible
+          accessibilityLabel={`${days} days to go, results expected ${fmtLongDate(w.resultsDate!)}`}
+          style={{ gap: 2 }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
+            <Text style={textStyle('numericLg', t.textPrimary)} maxFontSizeMultiplier={1.3}>{String(days)}</Text>
+            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>days to go</Text>
+          </View>
+          <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+            Expected {fmtLongDate(w.resultsDate!)}
+          </Text>
+        </View>
+      ) : w.resultsDate ? (
+        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          Expected {fmtLongDate(w.resultsDate)}. Check the official site for your result.
+        </Text>
+      ) : (
+        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          We'll show a countdown once the school announces a results date.
+        </Text>
+      )}
+
+      {!pending && w.externalUrl ? (
+        <LinkRow
+          label="Check results on the official site"
+          accessibilityLabel={`Check ${name} results on the official site`}
+          onPress={() => { void Linking.openURL(w.externalUrl!) }}
+        />
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        <Button
+          label="Stop tracking"
+          accessibilityLabel={`Stop tracking ${name}`}
+          variant="ghost"
+          size="sm"
+          onPress={() => onRemove(w.slug)}
+        />
+      </View>
+    </Card>
+  )
 }
 
 export default function ResultsTrackerScreen() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [watches, setWatches] = useState<WatchedExam[]>([])
+  const [status, setStatus] = useState<Status>('loading')
 
   const load = useCallback(async () => {
     try {
@@ -52,205 +107,53 @@ export default function ResultsTrackerScreen() {
         .from(resultWatches)
         .leftJoin(listingsTable, eq(listingsTable.slug, resultWatches.slug))
       setWatches(rows as WatchedExam[])
+      setStatus('ready')
     } catch (e) {
       console.warn('[ResultsTracker] load failed:', e)
+      setStatus('error')
     }
   }, [db])
 
   useFocusEffect(useCallback(() => { void load() }, [load]))
 
-  async function removeWatch(slug: string) {
+  const removeWatch = useCallback(async (slug: string) => {
     try {
       await db.delete(resultWatches).where(eq(resultWatches.slug, slug))
       setWatches(prev => prev.filter(w => w.slug !== slug))
     } catch (e) {
       console.warn('[ResultsTracker] removeWatch failed:', e)
     }
-  }
+  }, [db])
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    topBar: {
-      flexDirection: 'row', alignItems: 'center',
-      paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm,
-    },
-    backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topBarTitle: {
-      flex: 1, fontSize: typo.h2, fontWeight: '700',
-      color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-    },
-    cardTitle: {
-      fontSize: typo.md, fontWeight: '700',
-      color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-      marginBottom: spacing.xs, lineHeight: 22,
-    },
-    waitingBadge: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-      backgroundColor: 'rgba(34,197,94,0.10)', borderWidth: 1,
-      borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, alignSelf: 'flex-start',
-      marginBottom: spacing.sm,
-    },
-    waitingTxt: {
-      fontSize: typo.xs, fontWeight: '700',
-      color: t.success, fontFamily: 'Lexend_600SemiBold',
-    },
-    readyBadge: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-      backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1,
-      borderColor: 'rgba(245,158,11,0.28)', borderRadius: radius.sm,
-      paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 1, alignSelf: 'flex-start',
-      marginBottom: spacing.sm,
-    },
-    readyTxt: {
-      fontSize: typo.xs, fontWeight: '700',
-      color: t.warning, fontFamily: 'Lexend_600SemiBold',
-    },
-    subTxt: {
-      fontSize: typo.xs, color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular', marginBottom: spacing.md, lineHeight: 17,
-    },
-    row: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs / 2 },
-    linkBtn: {
-      flex: 1, borderWidth: 1, borderColor: t.divider,
-      borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center',
-      justifyContent: 'center', minHeight: 44,
-    },
-    linkBtnTxt: {
-      fontSize: typo.sm, color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
-    },
-    removeBtn: {
-      borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)',
-      borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-      alignItems: 'center', justifyContent: 'center', minHeight: 44,
-    },
-    removeBtnTxt: {
-      fontSize: typo.xs, color: t.accentText,
-      fontFamily: 'Lexend_400Regular',
-    },
-    removeOnlyBtn: {
-      alignSelf: 'flex-start', borderWidth: 1,
-      borderColor: 'rgba(128,0,0,0.28)', borderRadius: radius.md,
-      paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-      alignItems: 'center', justifyContent: 'center', minHeight: 44,
-    },
-    removeOnlyTxt: {
-      fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_400Regular',
-    },
-    pressed: { opacity: 0.7 },
-    emptyWrap: { alignItems: 'center', paddingTop: 80, paddingHorizontal: spacing.xxl },
-    emptyIcon: { fontSize: 40, marginBottom: spacing.lg },
-    emptyTitle: {
-      fontSize: typo.lg, fontWeight: '700',
-      color: t.textPrimary, fontFamily: 'Outfit_700Bold',
-      textAlign: 'center', marginBottom: spacing.sm,
-    },
-    emptySub: {
-      fontSize: typo.sm, color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20,
-    },
-  }), [t, typo])
-
-  const today = new Date().toISOString().slice(0, 10)
+  // Soonest results first; undated last.
+  const sorted = [...watches].sort((a, b) => (a.resultsDate ?? Infinity) - (b.resultsDate ?? Infinity))
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable
-          style={({ pressed }) => [s.backBtn, pressed && s.pressed]}
-          onPress={() => router.back()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topBarTitle}>Results Tracker</Text>
-      </View>
-
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <DetailTopBar title="Results Tracker" fallbackHref="/explore?section=news" />
       <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.xs, gap: spacing.md }}>
-        {watches.length === 0 ? (
-          <View style={s.emptyWrap}>
-            <Text style={s.emptyIcon}>🔔</Text>
-            <Text style={s.emptyTitle}>No exams tracked yet</Text>
-            <Text style={s.emptySub}>
-              {"You're not watching any exam results yet. Open an exam and tap 'Watch results'."}
-            </Text>
+        {status === 'loading' ? (
+          <View testID="results-skeleton" accessible accessibilityLabel="Loading tracked results" accessibilityState={{ busy: true }} style={{ gap: spacing.md }}>
+            <Skeleton height={140} radius={radius.xl} />
+            <Skeleton height={140} radius={radius.xl} />
           </View>
+        ) : status === 'error' ? (
+          <ErrorState title="Couldn't load your tracked results" onRetry={() => { setStatus('loading'); void load() }} />
+        ) : sorted.length === 0 ? (
+          <EmptyState
+            icon={<Lineicons icon={Bell1Outlined} size={26} color={t.textSecondary} />}
+            title="No results tracked yet"
+            body="Open an entrance exam and tap Watch results. We'll count down to its results date here."
+            actionLabel="Find an exam"
+            onAction={() => router.push('/explore?section=universities')}
+          />
         ) : (
-          watches.map(w => {
-            const resultsIso = w.resultsDate ? epochToISO(w.resultsDate) : null
-            const days = resultsIso ? daysUntil(resultsIso, today) : null
-            const isFuture = days !== null && days > 0
-            const displayDate = w.resultsDate ? fmtDate(w.resultsDate) : null
-
-            return (
-              <Card key={w.slug} elevated>
-                <Text style={s.cardTitle} numberOfLines={2}>
-                  {w.title ?? w.slug}
-                </Text>
-
-                {isFuture ? (
-                  <>
-                    <View style={s.waitingBadge}>
-                      <Text style={s.waitingTxt}>
-                        Waiting · results ~{displayDate}
-                      </Text>
-                    </View>
-                    <Text style={s.subTxt}>
-                      {days} day{days === 1 ? '' : 's'} to go
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <View style={s.readyBadge}>
-                      <Text style={s.readyTxt}>Results may be out — check the official site</Text>
-                    </View>
-                    {displayDate ? (
-                      <Text style={s.subTxt}>Expected: {displayDate}</Text>
-                    ) : (
-                      <Text style={s.subTxt}>Results date not set</Text>
-                    )}
-                  </>
-                )}
-
-                <View style={s.row}>
-                  {(!isFuture && w.externalUrl) ? (
-                    <>
-                      <Pressable
-                        style={({ pressed }) => [s.linkBtn, pressed && s.pressed]}
-                        onPress={() => w.externalUrl && Linking.openURL(w.externalUrl)}
-                        accessibilityRole="link"
-                        accessibilityLabel="Visit official site"
-                      >
-                        <Text style={s.linkBtnTxt}>Official Site ↗</Text>
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [s.removeBtn, pressed && s.pressed]}
-                        onPress={() => removeWatch(w.slug)}
-                        accessibilityRole="button"
-                        accessibilityLabel="Remove from watch list"
-                      >
-                        <Text style={s.removeBtnTxt}>Remove</Text>
-                      </Pressable>
-                    </>
-                  ) : (
-                    <Pressable
-                      style={({ pressed }) => [s.removeOnlyBtn, pressed && s.pressed]}
-                      onPress={() => removeWatch(w.slug)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Remove from watch list"
-                    >
-                      <Text style={s.removeOnlyTxt}>Remove watch</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </Card>
-            )
-          })
+          <>
+            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+              Results dates are estimates from past years.
+            </Text>
+            {sorted.map(w => <WatchCard key={w.slug} w={w} onRemove={removeWatch} />)}
+          </>
         )}
       </ScreenScroll>
     </SafeAreaView>

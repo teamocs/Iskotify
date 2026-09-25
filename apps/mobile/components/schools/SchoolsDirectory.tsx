@@ -1,23 +1,29 @@
-import { useState, useEffect, useMemo, useCallback, memo, type ReactElement } from 'react'
-import { StyleSheet, View, Text, ScrollView, Pressable, ActivityIndicator, FlatList } from 'react-native'
+import { useState, useEffect, useMemo, useCallback, type ReactElement } from 'react'
+import { View, Text, ScrollView } from 'react-native'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Buildings1Outlined, SearchMinusOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, type Theme } from '../../theme/tokens'
-import { Card } from '../ui/Card'
-import { useWebContentWidth } from '../ui/webMaxWidth'
+import { spacing, textStyle } from '../../theme/tokens'
+import { FilterChip } from '../ui/Chip'
+import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
+import { ListingCard } from '../explore/ListingCard'
+import { ExploreGrid, GridSkeleton } from '../explore/ExploreGrid'
+import type { BadgeSpec } from '../explore/exploreModel'
+import { useSyncSettled } from '../explore/useSyncSettled'
 import { normalizeSchoolType, type SchoolTypeBucket } from '../../utils/schoolType'
 import { passesFreeTuitionFilter } from '../../utils/freeTuitionFilter'
 import { parseSchoolSearchIntent } from '../../utils/schoolSearchIntent'
 
 // ---------------------------------------------------------------------------
 // Shared tertiary-schools directory: data load + region/type/free-tuition
-// filters + searchable card list. Used by the /schools screen and by the
-// Lists → Universities tab. The search query is supplied by the parent so the
-// host screen can own the search input (the /schools top bar; the Lists shared
-// search row).
+// filters + a virtualised, responsive grid of school cards. Used by the
+// /schools screen and by Explore → Schools & exams. The search query is
+// supplied by the host screen, which owns the search field.
 // ---------------------------------------------------------------------------
 
 export interface SchoolRow {
@@ -33,9 +39,7 @@ export interface SchoolRow {
   freeTuition: boolean | null
   entranceExamAcronym: string | null
   /** Raw JSON-encoded text[] from university_profiles.requirements — only used
-   *  to derive a "Requirements ✓" presence indicator on the card, so it's kept
-   *  as the raw string rather than parsed (parsing/splitting is the detail
-   *  screen's job — see safeParseArray in app/schools/[slug].tsx). */
+   *  for a "Requirements listed" presence badge, so it stays unparsed here. */
   requirements: string | null
 }
 
@@ -50,297 +54,229 @@ function hasNonEmptyJsonArray(raw: string | null | undefined): boolean {
   }
 }
 
-type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'VERY LOW' | null
-
-function confidenceBadgeStyle(level: ConfidenceLevel, t: Theme): { bg: string; border: string; text: string; label: string } {
+/** Data-confidence as a labelled badge (honest about uncertainty; unknown → none). */
+function confidenceBadge(level: string | null): BadgeSpec | null {
   switch ((level ?? '').toUpperCase()) {
-    case 'HIGH':
-      return { bg: t.successSurface, border: t.successSurface, text: t.success, label: 'HIGH' }
-    case 'MEDIUM':
-      return { bg: t.warningSurface, border: t.warningSurface, text: t.warning, label: 'MED' }
+    case 'HIGH': return { label: 'High confidence', tone: 'success' }
+    case 'MEDIUM': return { label: 'Medium confidence', tone: 'warning' }
     case 'LOW':
-    case 'VERY LOW':
-      return { bg: t.surfaceSubtle, border: t.divider, text: t.textTertiary, label: level === 'VERY LOW' ? 'V-LOW' : 'LOW' }
-    default:
-      return { bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', text: 'rgba(45,10,10,0.40)', label: '—' }
+    case 'VERY LOW': return { label: 'Low confidence', tone: 'neutral' }
+    default: return null
   }
 }
 
-const ALL_REGIONS = 'All Regions'
-const ALL_TYPES   = 'All Types'
-
-type SchoolCardStyles = {
-  card: object; cardBody: object; cardName: object; cardSub: object
-  badgeRow: object; badge: object; badgeTxt: object
-  freeBadge: object; freeBadgeTxt: object
-  examBadge: object; examBadgeTxt: object
-  reqBadge: object; reqBadgeTxt: object
-  chevron: object
+function schoolBadges(s: SchoolRow): BadgeSpec[] {
+  const out: BadgeSpec[] = []
+  if (s.entranceExamAcronym) out.push({ label: s.entranceExamAcronym, tone: 'accent' })
+  if (s.freeTuition) out.push({ label: 'Free tuition', tone: 'success' })
+  if (hasNonEmptyJsonArray(s.requirements)) out.push({ label: 'Requirements listed', tone: 'neutral' })
+  const conf = confidenceBadge(s.dataConfidence)
+  if (conf) out.push(conf)
+  return out
 }
 
-interface SchoolCardProps {
-  school: SchoolRow
-  styles: SchoolCardStyles
-  onPress: (id: string) => void
+function schoolMeta(s: SchoolRow): string {
+  const place = [s.region, s.province].filter(Boolean).join(', ')
+  return [s.acronym, s.type, place].filter(Boolean).join(' · ')
 }
 
-const SchoolCard = memo(function SchoolCard({ school, styles, onPress }: SchoolCardProps) {
-  const { theme: t } = useTheme()
-  const confidence = (school.dataConfidence?.toUpperCase() ?? null) as ConfidenceLevel
-  const badge = confidenceBadgeStyle(confidence, t)
-  const locationParts = [school.region, school.province].filter(Boolean)
-  const hasRequirements = hasNonEmptyJsonArray(school.requirements)
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
-      onPress={() => onPress(school.id)}
-      accessibilityRole="button"
-    >
-      <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={2} maxFontSizeMultiplier={1.4}>{school.name}</Text>
-        <Text style={styles.cardSub} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-          {school.acronym ? `${school.acronym}  ·  ` : ''}
-          {school.type ?? ''}
-          {locationParts.length > 0 ? `  ·  ${locationParts.join(' · ')}` : ''}
-        </Text>
-        <View style={styles.badgeRow}>
-          <View style={[styles.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
-            <Text style={[styles.badgeTxt, { color: badge.text }]} maxFontSizeMultiplier={1.4}>{badge.label}</Text>
-          </View>
-          {school.entranceExamAcronym ? (
-            <View style={[styles.badge, styles.examBadge]}>
-              <Text style={[styles.badgeTxt, styles.examBadgeTxt]} maxFontSizeMultiplier={1.4}>{school.entranceExamAcronym}</Text>
-            </View>
-          ) : null}
-          {school.freeTuition ? (
-            <View style={[styles.badge, styles.freeBadge]}>
-              <Text style={[styles.badgeTxt, styles.freeBadgeTxt]} maxFontSizeMultiplier={1.4}>Free Tuition</Text>
-            </View>
-          ) : null}
-          {hasRequirements ? (
-            <View style={[styles.badge, styles.reqBadge]}>
-              <Text style={[styles.badgeTxt, styles.reqBadgeTxt]} maxFontSizeMultiplier={1.4}>Requirements ✓</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-      <Text style={styles.chevron}>›</Text>
-    </Pressable>
-  )
-})
+const TYPE_ORDER: SchoolTypeBucket[] = ['SUC', 'LUC', 'State College', 'Private', 'Other']
+
+const openSchool = (id: string) => router.push(`/schools/${id}` as never)
+const keyOf = (s: SchoolRow) => s.id
+const renderSchool = (s: SchoolRow) => (
+  <ListingCard
+    icon={Buildings1Outlined}
+    title={s.name}
+    meta={schoolMeta(s)}
+    badges={schoolBadges(s)}
+    onPress={() => openSchool(s.id)}
+    accessibilityHint="Opens the school profile"
+  />
+)
 
 interface SchoolsDirectoryProps {
   /** Search text (name/acronym), owned by the host screen. */
   query: string
+  /** Clear the host's search text (offered by the empty state). */
+  onClearQuery?: () => void
   /** Bottom padding for the list (e.g. tab-bar clearance). */
   bottomInset?: number
   /** Optional region to preselect when it exists in the data (canonical form). */
   defaultRegion?: string | null
-  /** Optional element rendered (and scrolled) above the school list — e.g. the
-      pinned "Entrance exams" section on the Lists → Universities tab. */
+  /** Optional element scrolled above the school grid (e.g. Explore's Entrance exams). */
   listHeader?: ReactElement | null
 }
 
-export function SchoolsDirectory({ query, bottomInset = spacing.xxxl, defaultRegion = null, listHeader = null }: SchoolsDirectoryProps) {
+export function SchoolsDirectory({
+  query, onClearQuery, bottomInset = spacing.xxxl, defaultRegion = null, listHeader = null,
+}: SchoolsDirectoryProps) {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
-  // Web-only max-width centering (null on native/sm). Applied to the vertical
-  // list's contentContainerStyle and to the chip rail's OUTER style (never to a
-  // horizontal ScrollView's content container — that would break scrolling).
-  const webWidth = useWebContentWidth()
+  const { theme: t } = useTheme()
+  const syncSettled = useSyncSettled()
 
   const [schools, setSchools] = useState<SchoolRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selRegion, setSelRegion] = useState<string>(ALL_REGIONS)
-  const [selType, setSelType]     = useState<string>(ALL_TYPES)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
+  const [selRegion, setSelRegion] = useState<string | null>(null)
+  const [selType, setSelType] = useState<SchoolTypeBucket | null>(null)
   const [freeTuitionOnly, setFreeTuitionOnly] = useState(false)
 
   useEffect(() => {
     let alive = true
-    async function load() {
-      const rows = await db
-        .select({
-          id:                  schoolsTable.id,
-          name:                schoolsTable.name,
-          acronym:             schoolsTable.acronym,
-          region:              schoolsTable.region,
-          province:            schoolsTable.province,
-          type:                schoolsTable.type,
-          isSuc:               schoolsTable.isSuc,
-          isLuc:               schoolsTable.isLuc,
-          dataConfidence:      profilesTable.dataConfidence,
-          freeTuition:         profilesTable.freeTuition,
-          entranceExamAcronym: profilesTable.entranceExamAcronym,
-          requirements:        profilesTable.requirements,
-        })
-        .from(schoolsTable)
-        .leftJoin(profilesTable, eq(schoolsTable.id, profilesTable.schoolId))
-      if (!alive) return
-      setSchools(rows as SchoolRow[])
-      setLoading(false)
-    }
-    void load()
+    setStatus(prev => (prev === 'ready' ? prev : 'loading'))
+    db
+      .select({
+        id:                  schoolsTable.id,
+        name:                schoolsTable.name,
+        acronym:             schoolsTable.acronym,
+        region:              schoolsTable.region,
+        province:            schoolsTable.province,
+        type:                schoolsTable.type,
+        isSuc:               schoolsTable.isSuc,
+        isLuc:               schoolsTable.isLuc,
+        dataConfidence:      profilesTable.dataConfidence,
+        freeTuition:         profilesTable.freeTuition,
+        entranceExamAcronym: profilesTable.entranceExamAcronym,
+        requirements:        profilesTable.requirements,
+      })
+      .from(schoolsTable)
+      .leftJoin(profilesTable, eq(schoolsTable.id, profilesTable.schoolId))
+      .then(rows => {
+        if (!alive) return
+        setSchools(rows as SchoolRow[])
+        setStatus('ready')
+      })
+      .catch((e: unknown) => {
+        console.warn('[SchoolsDirectory] load failed:', e)
+        if (alive) setStatus('error')
+      })
     return () => { alive = false }
-  }, [db])
+  }, [db, attempt, syncSettled])
 
-  // Preselect the user's region once the data is loaded, if it exists as an option.
+  // Preselect the student's region once the data is loaded, if it exists.
   useEffect(() => {
     if (!defaultRegion || schools.length === 0) return
-    const hit = schools.some(s => s.region === defaultRegion)
-    if (hit) setSelRegion(prev => (prev === ALL_REGIONS ? defaultRegion : prev))
+    if (schools.some(s => s.region === defaultRegion)) setSelRegion(prev => prev ?? defaultRegion)
   }, [defaultRegion, schools])
 
   const regions = useMemo<string[]>(() => {
     const set = new Set<string>()
     for (const s of schools) if (s.region) set.add(s.region)
-    return [ALL_REGIONS, ...Array.from(set).sort()]
+    return Array.from(set).sort()
   }, [schools])
 
-  // Normalized type buckets (SUC/LUC/Private/State College/Other) instead of one
-  // chip per raw free-text `type` string (52+ distinct values in production).
-  // Fixed, meaningful display order rather than alphabetical.
-  const types = useMemo<string[]>(() => {
+  // Normalized type buckets (SUC/LUC/Private/State College/Other) instead of
+  // one chip per raw free-text `type` (52+ distinct values in production).
+  const types = useMemo<SchoolTypeBucket[]>(() => {
     const present = new Set<SchoolTypeBucket>()
     for (const s of schools) present.add(normalizeSchoolType(s.type))
-    const order: SchoolTypeBucket[] = ['SUC', 'LUC', 'State College', 'Private', 'Other']
-    return [ALL_TYPES, ...order.filter(b => present.has(b))]
+    return TYPE_ORDER.filter(b => present.has(b))
   }, [schools])
 
-  // Light intent parse over the search box: "free tuition universities in
-  // bicol" → region=Bicol, freeTuitionOnly=true, remaining tokens ("in",
-  // "universities") already stripped so they don't zero out the name match.
+  // "free tuition universities in bicol" → region=Bicol, free tuition only,
+  // with the filler words stripped so they don't zero out the name match.
   const intent = useMemo(() => parseSchoolSearchIntent(query), [query])
 
   const filtered = useMemo(() => {
     const nameQ = intent.nameQuery
-    // Chip selection wins when set explicitly; otherwise fall back to the
-    // region detected in the search query.
-    const effRegion = selRegion !== ALL_REGIONS ? selRegion : intent.region
-    const effFreeTuitionOnly = freeTuitionOnly || intent.freeTuitionOnly
+    const effRegion = selRegion ?? intent.region
+    const effFree = freeTuitionOnly || intent.freeTuitionOnly
     return schools.filter(s => {
       if (nameQ && !(
         s.name.toLowerCase().includes(nameQ) ||
         (s.acronym ?? '').toLowerCase().includes(nameQ)
       )) return false
       if (effRegion && s.region !== effRegion) return false
-      if (selType !== ALL_TYPES && normalizeSchoolType(s.type) !== selType) return false
-      // Free tuition: profile.freeTuition === true OR the school is an
-      // SUC/LUC (RA 10931 covers both) — previously this silently dropped
-      // every profile-less school (freeTuition null).
-      if (effFreeTuitionOnly && !passesFreeTuitionFilter(s, s.freeTuition)) return false
+      if (selType && normalizeSchoolType(s.type) !== selType) return false
+      // SUC/LUC count as free tuition (RA 10931) even without a profile row.
+      if (effFree && !passesFreeTuitionFilter(s, s.freeTuition)) return false
       return true
     })
   }, [schools, intent, selRegion, selType, freeTuitionOnly])
 
-  const s = useMemo(() => StyleSheet.create({
-    root:          { flex: 1 },
-    chipScroll:    { paddingTop: spacing.sm, paddingLeft: spacing.lg, paddingBottom: spacing.sm, flexGrow: 0 },
-    chipRow:       { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.lg },
-    chip:          { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: t.border, backgroundColor: t.surface, minHeight: 36, justifyContent: 'center' },
-    chipActive:    { backgroundColor: t.accentSurface, borderColor: t.accent },
-    chipTxt:       { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    chipTxtActive: { color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    list:          { paddingHorizontal: spacing.lg, paddingBottom: bottomInset, gap: spacing.md },
-    card:          { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
-    cardBody:      { flex: 1, minWidth: 0 },
-    cardName:      { fontSize: typo.base, color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs / 2 },
-    cardSub:       { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', lineHeight: 16 },
-    badgeRow:      { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, flexWrap: 'wrap' },
-    badge:         { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2, borderWidth: 1 },
-    badgeTxt:      { fontSize: typo.xs, fontFamily: 'Lexend_600SemiBold' },
-    freeBadge:     { backgroundColor: 'rgba(22,163,74,0.10)', borderColor: 'rgba(22,163,74,0.25)' },
-    freeBadgeTxt:  { color: t.success },
-    examBadge:     { backgroundColor: t.accentSurface, borderColor: t.accent },
-    examBadgeTxt:  { color: t.accentText },
-    reqBadge:      { backgroundColor: t.successSurface, borderColor: t.success },
-    reqBadgeTxt:   { color: t.success },
-    chevron:       { color: t.textTertiary, fontSize: typo.lg, flexShrink: 0 },
-    empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
-    countTxt:      { paddingHorizontal: spacing.lg, marginBottom: spacing.sm, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    loading:       { marginTop: 60 },
-  }), [t, typo, bottomInset])
+  const filtersActive = freeTuitionOnly || selType !== null || selRegion !== null || !!query.trim()
+  const clearFilters = useCallback(() => {
+    setFreeTuitionOnly(false)
+    setSelType(null)
+    setSelRegion(null)
+    onClearQuery?.()
+  }, [onClearQuery])
 
-  const cardStyles = useMemo<SchoolCardStyles>(() => ({
-    card: s.card, cardBody: s.cardBody, cardName: s.cardName, cardSub: s.cardSub,
-    badgeRow: s.badgeRow, badge: s.badge, badgeTxt: s.badgeTxt,
-    freeBadge: s.freeBadge, freeBadgeTxt: s.freeBadgeTxt,
-    examBadge: s.examBadge, examBadgeTxt: s.examBadgeTxt,
-    reqBadge: s.reqBadge, reqBadgeTxt: s.reqBadgeTxt,
-    chevron: s.chevron,
-  }), [s])
-
-  const handlePressSchool = useCallback((id: string) => {
-    router.push(`/schools/${id}` as never)
-  }, [])
-
-  const renderItem = useCallback(({ item }: { item: SchoolRow }) => (
-    <Card elevated padded>
-      <SchoolCard school={item} styles={cardStyles} onPress={handlePressSchool} />
-    </Card>
-  ), [cardStyles, handlePressSchool])
-
-  const keyExtractor = useCallback((item: SchoolRow) => item.id, [])
-
-  if (loading) {
-    return <ActivityIndicator color={t.accent} style={s.loading} />
+  if (status === 'loading') return <GridSkeleton label="Loading schools" />
+  if (status === 'error') {
+    return <ErrorState title="Couldn't load the schools directory" onRetry={() => setAttempt(a => a + 1)} />
   }
 
-  const countHeader = filtered.length > 0
-    ? <Text style={s.countTxt}>{filtered.length} school{filtered.length !== 1 ? 's' : ''}</Text>
-    : null
-  const fullHeader = (listHeader || countHeader)
-    ? <>{listHeader}{countHeader}</>
-    : null
+  const header = (
+    <View style={{ gap: spacing.sm }}>
+      {listHeader}
+      {filtered.length > 0 ? (
+        <Text style={textStyle('caption', t.textSecondary)} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.6}>
+          {filtered.length} school{filtered.length !== 1 ? 's' : ''}
+        </Text>
+      ) : null}
+    </View>
+  )
 
   return (
-    <View style={s.root}>
-      {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow} style={[s.chipScroll, webWidth]}>
-        <Pressable
-          style={({ pressed }) => [s.chip, freeTuitionOnly && s.chipActive, pressed && { opacity: 0.7 }]}
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.sm }}
+      >
+        <FilterChip
+          label="Free tuition"
+          mode="multiple"
+          selected={freeTuitionOnly}
           onPress={() => setFreeTuitionOnly(v => !v)}
-          accessibilityRole="button"
-        >
-          <Text style={[s.chipTxt, freeTuitionOnly && s.chipTxtActive]}>Free Tuition</Text>
-        </Pressable>
-
-        {/* bounded: distinct regions from the loaded set; horizontal chip rail — virtualization unwarranted */}
-        {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
-        {regions.map(r => (
-          <Pressable
-            key={r}
-            style={({ pressed }) => [s.chip, selRegion === r && s.chipActive, pressed && { opacity: 0.7 }]}
-            onPress={() => setSelRegion(r)}
-            accessibilityRole="button"
-          >
-            <Text style={[s.chipTxt, selRegion === r && s.chipTxtActive]}>
-              {r === ALL_REGIONS ? 'All Regions' : r}
-            </Text>
-          </Pressable>
-        ))}
-
-        {types.filter(tp => tp !== ALL_TYPES).map(tp => (
-          <Pressable
-            key={tp}
-            style={({ pressed }) => [s.chip, selType === tp && s.chipActive, pressed && { opacity: 0.7 }]}
-            onPress={() => setSelType(prev => prev === tp ? ALL_TYPES : tp)}
-            accessibilityRole="button"
-          >
-            <Text style={[s.chipTxt, selType === tp && s.chipTxtActive]}>{tp}</Text>
-          </Pressable>
-        ))}
+        />
+        <View accessibilityRole="radiogroup" accessibilityLabel="School type" style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {types.map(tp => (
+            <FilterChip
+              key={tp}
+              label={tp}
+              selected={selType === tp}
+              onPress={() => setSelType(prev => (prev === tp ? null : tp))}
+            />
+          ))}
+        </View>
+      </ScrollView>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{ paddingBottom: spacing.md }}
+      >
+        {/* bounded: ~17 PH regions; a horizontal chip rail does not need virtualisation */}
+        <View accessibilityRole="radiogroup" accessibilityLabel="Region" style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <FilterChip label="All regions" selected={selRegion === null} onPress={() => setSelRegion(null)} />
+          {/* eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list */}
+          {regions.map(r => (
+            <FilterChip key={r} label={r} selected={selRegion === r} onPress={() => setSelRegion(r)} />
+          ))}
+        </View>
       </ScrollView>
 
-      <FlatList
+      <ExploreGrid
         data={filtered}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        contentContainerStyle={[s.list, webWidth]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        ListHeaderComponent={fullHeader}
-        ListEmptyComponent={<Text style={s.empty}>No schools found.</Text>}
+        keyExtractor={keyOf}
+        renderItem={renderSchool}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ paddingBottom: bottomInset }}
+        ListEmptyComponent={
+          <EmptyState
+            icon={<Lineicons icon={SearchMinusOutlined} size={26} color={t.textSecondary} />}
+            title="No schools match"
+            body={filtersActive
+              ? 'Try another region or type, or turn off Free tuition.'
+              : 'The schools directory is still syncing. Check back in a moment.'}
+            actionLabel={filtersActive ? 'Clear filters' : undefined}
+            onAction={filtersActive ? clearFilters : undefined}
+          />
+        }
       />
     </View>
   )

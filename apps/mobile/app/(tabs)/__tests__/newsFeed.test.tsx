@@ -6,6 +6,14 @@ jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
 }))
 
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
+
+const mockBp: { value: 'compact' | 'medium' | 'expanded' } = { value: 'compact' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -117,6 +125,7 @@ const EVENT_ROW = {
 describe('UpdatesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockBp.value = 'compact'
   })
 
   // Redesign M1: the Updates tab is now Explore's "News & dates" section, so
@@ -151,20 +160,20 @@ describe('UpdatesScreen', () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     render(<UpdatesScreen />)
-    fireEvent.press(screen.getByText('Results Tracker'))
+    fireEvent.press(screen.getByRole('button', { name: /^Results Tracker/ }))
     expect(router.push).toHaveBeenCalledWith('/results-tracker')
   })
 
-  it('renders Upcoming Events section when event rows exist', async () => {
+  it('renders Upcoming dates when event rows exist, with how soon each is', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([EVENT_ROW]))
     render(<UpdatesScreen />)
     await waitFor(() => {
-      // Title appears in both Upcoming Events and News sections
+      // Title appears in both Upcoming dates and Admissions news
       expect(screen.getAllByText('ACET Exam Day').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText('Exam')).toBeTruthy()
-      expect(screen.getAllByText('Ateneo').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText('UPCOMING EVENTS')).toBeTruthy()
+      expect(screen.getByText('Ateneo · Exam')).toBeTruthy()
+      expect(screen.getByText('In 5 days')).toBeTruthy()
+      expect(screen.getByRole('header', { name: 'Upcoming dates' })).toBeTruthy()
     })
   })
 
@@ -173,7 +182,8 @@ describe('UpdatesScreen', () => {
     useDb.mockReturnValue(makeDb([URGENT_ROW]))
     render(<UpdatesScreen />)
     await waitFor(() => {
-      expect(screen.queryByText('UPCOMING EVENTS')).toBeNull()
+      expect(screen.getByText('UPCAT Application Now Open')).toBeTruthy()
+      expect(screen.queryByText('Upcoming dates')).toBeNull()
     })
   })
 
@@ -198,6 +208,54 @@ describe('UpdatesScreen', () => {
       expect(urgentEl).toBeTruthy()
       expect(infoEl).toBeTruthy()
     })
+    const order = JSON.stringify(screen.toJSON())
+    expect(order.indexOf('UPCAT Application Now Open')).toBeLessThan(order.indexOf('USTET Results Released'))
+  })
+
+  // ── Redesign M2: states and structure ────────────────────────────────────
+
+  it('a news row is one button named with its severity, and opens the detail', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([URGENT_ROW]))
+    render(<UpdatesScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: /^Urgent: UPCAT Application Now Open/ }))
+    expect(screen.getByTestId('modal-title')).toBeTruthy()
+  })
+
+  it('shows a skeleton until the feed has loaded', () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue({ select: jest.fn(() => ({ from: jest.fn(() => new Promise(() => {})) })) })
+    render(<UpdatesScreen />)
+    expect(screen.getByTestId('news-skeleton')).toBeTruthy()
+  })
+
+  it('says plainly when there is no news yet', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([]))
+    render(<UpdatesScreen />)
+    expect(await screen.findByText('No admissions news yet')).toBeTruthy()
+  })
+
+  it('a failed load shows a retry instead of an empty feed', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    let calls = 0
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => (calls++ === 0 ? Promise.reject(new Error('offline')) : Promise.resolve([URGENT_ROW]))),
+      })),
+    })
+    render(<UpdatesScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('UPCAT Application Now Open')).toBeTruthy()
+  })
+
+  it('on desktop, news sits beside the calendar in two columns', async () => {
+    mockBp.value = 'expanded'
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([URGENT_ROW]))
+    render(<UpdatesScreen />)
+    await screen.findByText('UPCAT Application Now Open')
+    expect(screen.getByTestId('news-columns').props.style).toEqual(expect.objectContaining({ flexDirection: 'row' }))
   })
 
   it('no longer renders the removed ISKOTIFY UPDATES section', async () => {

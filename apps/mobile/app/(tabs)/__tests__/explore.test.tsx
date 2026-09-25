@@ -1,4 +1,5 @@
 import React from 'react'
+import { FlatList } from 'react-native'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import ListsScreen from '../explore'
 
@@ -16,14 +17,27 @@ jest.mock('@lineiconshq/free-icons', () => ({
   SparkOutlined: {},
 }))
 
+// Sync status under test (idle by default).
+const mockSync: { value: { isSyncing: boolean; firstSyncDone: boolean } } = { value: { isSyncing: false, firstSyncDone: true } }
+jest.mock('../../../hooks/useSyncStatus', () => ({ useSyncStatus: () => mockSync.value }))
+
+// Size class under test (compact phone by default).
+const mockBp: { value: 'compact' | 'medium' | 'expanded' } = { value: 'compact' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
 // Controlled deep-link params — legacy ?tab= (old Lists links) and ?section=
 // (Explore). Override per-test via mockTabParam.value / mockSectionParam.value.
 const mockTabParam: { value?: string } = { value: undefined }
 const mockSectionParam: { value?: string } = { value: undefined }
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
-  useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
+  router: { push: jest.fn(), setParams: jest.fn(), replace: jest.fn() },
+  // Like the real hook: run on focus (mount) and when the callback changes —
+  // not on every render.
+  useFocusEffect: (cb: any) => require('react').useEffect(cb, [cb]),
   useLocalSearchParams: jest.fn(() => ({ tab: mockTabParam.value, section: mockSectionParam.value })),
 }))
 
@@ -108,14 +122,21 @@ const makeDb = (rows: any[] = [], schoolRows: any[] = []) => ({
   insert: jest.fn(() => ({ values: jest.fn(() => ({ onConflictDoNothing: jest.fn().mockResolvedValue(undefined) })) })),
 })
 
+/** numColumns of the section's grid (the FlatList element, not its host view). */
+function gridColumns(): number | undefined {
+  return screen.UNSAFE_getAllByType(FlatList).find(l => l.props.testID === 'explore-grid')?.props.numColumns
+}
+
 // Universities tab is now the tertiary-schools directory (not exam listings).
-const SEARCH_PLACEHOLDER_UNI = 'Search universities by name or acronym'
-const SEARCH_PLACEHOLDER_SCHOLAR = "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
+const SEARCH_PLACEHOLDER_UNI = 'Name or acronym, e.g. UPLB'
+const SEARCH_PLACEHOLDER_SCHOLAR = 'Try "full scholarship for STEM"'
 
 describe('ListsScreen', () => {
   beforeEach(() => {
     mockTabParam.value = undefined
     mockSectionParam.value = undefined
+    mockBp.value = 'compact'
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     jest.clearAllMocks()
@@ -250,7 +271,7 @@ describe('ListsScreen', () => {
   it('shows the directory empty state when there are no schools (Universities tab)', async () => {
     render(<ListsScreen />)
     await waitFor(() => {
-      expect(screen.getByText('No schools found.')).toBeTruthy()
+      expect(screen.getByText('No schools match')).toBeTruthy()
     })
   })
 
@@ -258,7 +279,7 @@ describe('ListsScreen', () => {
     render(<ListsScreen />)
     fireEvent.press(screen.getByText('Scholarships'))
     await waitFor(() => {
-      expect(screen.getByText('No scholarships yet.')).toBeTruthy()
+      expect(screen.getByText('No scholarships yet')).toBeTruthy()
     })
   })
 
@@ -283,7 +304,7 @@ describe('ListsScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Entrance exams')).toBeTruthy()
       expect(screen.getByText('UPCAT')).toBeTruthy()      // focusable exam card
-      expect(screen.getByText('All universities')).toBeTruthy()
+      expect(screen.getByText('All schools')).toBeTruthy()
       expect(screen.getByText('UP Diliman')).toBeTruthy() // directory below
     })
   })
@@ -370,7 +391,7 @@ describe('ListsScreen', () => {
     render(<ListsScreen />)
     fireEvent.press(screen.getByText('Courses'))
     await waitFor(() => {
-      expect(screen.getByText('★ Your target courses')).toBeTruthy()
+      expect(screen.getByText('Your target courses')).toBeTruthy()
     })
   })
 
@@ -515,7 +536,131 @@ describe('ListsScreen', () => {
   it('rows have ≤2 badge elements contract upheld', async () => {
     render(<ListsScreen />)
     await waitFor(() => {
-      expect(screen.getByText('No schools found.')).toBeTruthy()
+      expect(screen.getByText('No schools match')).toBeTruthy()
     })
+  })
+  // ── Redesign M2: URL-synced sections, states, grid, accessible search ─────
+
+  it('writes the chosen section to ?section= so refresh and bookmarks keep it', () => {
+    const { router } = require('expo-router')
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('tab', { name: 'Destinations' }))
+    expect(router.setParams).toHaveBeenCalledWith({ section: 'destinations', tab: undefined })
+  })
+
+  it('restores the section from the URL after a refresh (setParams → ?section= → remount)', () => {
+    const { router } = require('expo-router')
+    const first = render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('tab', { name: 'Courses' }))
+    const written = router.setParams.mock.calls.at(-1)[0].section
+    first.unmount()
+    mockSectionParam.value = written
+    render(<ListsScreen />)
+    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+  })
+
+  it('does not rewrite the URL when the section came from the URL itself', () => {
+    const { router } = require('expo-router')
+    mockSectionParam.value = 'news'
+    render(<ListsScreen />)
+    expect(router.setParams).not.toHaveBeenCalled()
+  })
+
+  it('names the search field for the section it searches', () => {
+    render(<ListsScreen />)
+    expect(screen.getByLabelText('Search schools and exams')).toBeTruthy()
+    fireEvent.press(screen.getByRole('tab', { name: 'Scholarships' }))
+    expect(screen.getByLabelText('Search scholarships')).toBeTruthy()
+  })
+
+  it('shows a labelled skeleton (not a spinner) while scholarships load', () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const pending = makeDb()
+    pending.select = jest.fn(() => ({
+      from: jest.fn(() => ({
+        leftJoin: jest.fn(() => new Promise(() => {})),
+        then: jest.fn(() => new Promise(() => {})),
+      })),
+    })) as any
+    useDb.mockReturnValue(pending)
+    mockSectionParam.value = 'scholarships'
+    render(<ListsScreen />)
+    expect(screen.getByTestId('explore-skeleton').props.accessibilityLabel).toBe('Loading scholarships')
+  })
+
+  it('shows a retryable error when the catalog fails to load, then recovers', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockRejectedValueOnce(new Error('offline'))
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([
+      { id: 's1', slug: 'dost', title: 'DOST-SEI Scholarship', type: 'scholarship', examDate: null, region: 'National', provider: 'DOST', targetCourses: '[]' },
+    ]))
+    mockSectionParam.value = 'scholarships'
+    render(<ListsScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('DOST-SEI Scholarship')).toBeTruthy()
+  })
+
+  it('an empty search result offers one next step: clear the search', async () => {
+    // Courses filter by substring. (Scholarship keyword search deliberately
+    // falls back to ranking everything when no word matches — see listingSearch.)
+    const { useCourseTabOptions } = require('../../../hooks/useCourseTabOptions')
+    useCourseTabOptions.mockReturnValue({
+      targetOptions: [], allOptions: [{ courseTab: 'nursing', label: 'Nursing' }], loading: false, dbEmpty: false,
+    })
+    mockSectionParam.value = 'courses'
+    render(<ListsScreen />)
+    await screen.findByText('Nursing')
+    fireEvent.changeText(screen.getByLabelText('Filter courses'), 'zzzz')
+    expect(await screen.findByText('No matches for “zzzz”')).toBeTruthy()
+    fireEvent.press(screen.getAllByRole('button', { name: 'Clear search' }).at(-1)!)
+    expect(await screen.findByText('Nursing')).toBeTruthy()
+  })
+
+  it('lays scholarships out in a 3-column grid on desktop widths', async () => {
+    mockBp.value = 'expanded'
+    mockSectionParam.value = 'scholarships'
+    render(<ListsScreen />)
+    await waitFor(() => expect(gridColumns()).toBe(3))
+  })
+
+  it('stays a single column on phones', async () => {
+    mockSectionParam.value = 'scholarships'
+    render(<ListsScreen />)
+    await waitFor(() => expect(gridColumns()).toBe(1))
+  })
+
+  it('school filters are FilterChips: Free tuition is a checkbox, regions are radios', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([], [
+      { id: 'upd', name: 'UP Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true },
+    ]))
+    render(<ListsScreen />)
+    const free = await screen.findByRole('checkbox', { name: 'Free tuition' })
+    expect(free.props.accessibilityState).toEqual({ checked: false })
+    fireEvent.press(free)
+    expect(screen.getByRole('checkbox', { name: 'Free tuition' }).props.accessibilityState).toEqual({ checked: true })
+    expect(screen.getByRole('radio', { name: 'NCR' })).toBeTruthy()
+  })
+
+  it('an upcoming exam card says how soon it is, with no emoji', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: Date.now() + 5 * 86_400_000 + 3_600_000, region: 'NCR', provider: 'UP', targetCourses: '[]' }],
+      [],
+    ))
+    render(<ListsScreen />)
+    expect(await screen.findByText('In 5 days')).toBeTruthy()
+    expect(screen.queryByText(/📍|📝/)).toBeNull()
+  })
+  it('reloads the catalog when a sync finishes (a fresh web session is not stuck empty)', async () => {
+    const { getSettings } = require('../../../services/settings')
+    mockSync.value = { isSyncing: true, firstSyncDone: false }
+    mockSectionParam.value = 'scholarships'
+    const view = render(<ListsScreen />)
+    await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(1))
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
+    view.rerender(<ListsScreen />)
+    await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(2))
   })
 })

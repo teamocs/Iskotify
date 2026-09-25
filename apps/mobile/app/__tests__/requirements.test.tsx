@@ -1,12 +1,14 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react-native'
+import { render, screen, fireEvent } from '@testing-library/react-native'
 import RequirementsScreen from '../requirements'
 
 const mockBack = jest.fn()
 const mockPush = jest.fn()
 jest.mock('expo-router', () => ({
-  router: { back: () => mockBack(), push: (p: string) => mockPush(p) },
+  router: { back: () => mockBack(), push: (p: string) => mockPush(p), canGoBack: () => true, replace: jest.fn() },
 }))
+
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -25,9 +27,10 @@ jest.mock('../../hooks/useFocusListings', () => ({
 // (infinite loop → heap OOM). Build it once inside the factory; read mockRows
 // lazily at call time. Real useDb() is likewise a stable reference.
 let mockRows: Array<{ slug: string; requirements: string | null }> = []
+let mockPending = false
 jest.mock('../../hooks/useDb', () => {
   const db = {
-    select: () => ({ from: () => ({ where: () => Promise.resolve(mockRows) }) }),
+    select: () => ({ from: () => ({ where: () => (mockPending ? new Promise(() => {}) : Promise.resolve(mockRows)) }) }),
   }
   return { useDb: () => db }
 })
@@ -48,28 +51,35 @@ describe('RequirementsScreen', () => {
   beforeEach(() => {
     mockFocus = []
     mockRows = []
+    mockPending = false
     mockBack.mockClear()
     mockPush.mockClear()
   })
 
-  it('renders the screen title', () => {
+  it('renders the screen title as its header', () => {
     render(<RequirementsScreen />)
-    expect(screen.getByText('Requirements')).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Requirements' })).toBeTruthy()
   })
 
-  it('shows a back arrow button', () => {
+  it('has a labelled back button (a drawn icon, not a glyph)', () => {
     render(<RequirementsScreen />)
-    expect(screen.getByText('‹')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
+    expect(screen.queryByText('‹')).toBeNull()
   })
 
-  it('shows the Lists empty-state when there are no focus listings', async () => {
+  it('with nothing in Focus, the empty state points to Explore (the Lists tab is gone)', async () => {
     mockFocus = []
     render(<RequirementsScreen />)
-    expect(
-      await screen.findByText(
-        'Add an exam or scholarship from the Lists tab to track its requirements here.',
-      ),
-    ).toBeTruthy()
+    expect(await screen.findByText('Nothing to track yet')).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Browse Explore' }))
+    expect(mockPush).toHaveBeenCalledWith('/explore')
+  })
+
+  it('shows a skeleton while requirements load', () => {
+    mockFocus = [{ slug: 'upcat', title: 'UPCAT', type: 'exam' }]
+    mockPending = true
+    render(<RequirementsScreen />)
+    expect(screen.getByTestId('requirements-skeleton')).toBeTruthy()
   })
 
   it('lists each focus listing with its acquired progress', async () => {

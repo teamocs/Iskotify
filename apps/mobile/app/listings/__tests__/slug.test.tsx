@@ -1,10 +1,13 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import { Linking } from 'react-native'
+import { render, screen, fireEvent } from '@testing-library/react-native'
 import ListingDetailScreen from '../[slug]'
+
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
 // ── Router / expo ──────────────────────────────────────────────────────────
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), back: jest.fn() },
+  router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) },
   useLocalSearchParams: jest.fn(() => ({ slug: 'upcat' })),
 }))
 
@@ -24,23 +27,16 @@ jest.mock('../../../components/RequirementsChecklist', () => ({
   RequirementsChecklist: () => null,
 }))
 
-// ── AppButton ─────────────────────────────────────────────────────────────
-jest.mock('../../../components/ui/AppButton', () => ({
-  AppButton: ({ label, onPress }: any) => {
-    const { Pressable, Text } = require('react-native')
-    return <Pressable onPress={onPress}><Text>{label}</Text></Pressable>
-  },
-}))
-
 // ── DB ─────────────────────────────────────────────────────────────────────
 jest.mock('../../../hooks/useDb', () => ({ useDb: jest.fn() }))
 
+const mockFocus = { inFocus: false, addListing: jest.fn(), removeListing: jest.fn() }
 jest.mock('../../../hooks/useFocusListings', () => ({
   useFocusListings: () => ({
-    isInFocus: jest.fn().mockReturnValue(false),
-    getPriority: jest.fn().mockReturnValue(null),
-    addListing: jest.fn(),
-    removeListing: jest.fn(),
+    isInFocus: () => mockFocus.inFocus,
+    getPriority: () => (mockFocus.inFocus ? 1 : null),
+    addListing: mockFocus.addListing,
+    removeListing: mockFocus.removeListing,
   }),
 }))
 
@@ -52,13 +48,16 @@ jest.mock('../../../services/examBlueprints', () => ({
   listPublishedBlueprintSlugs: jest.fn().mockResolvedValue([]),
 }))
 
+const DAY = 86_400_000
+
 const BASE_EXAM_LISTING = {
   id: 'exam-1',
   slug: 'upcat',
   title: 'UPCAT 2025',
   type: 'exam',
   status: 'active',
-  examDate: Date.now() + 30 * 86_400_000,
+  // Exactly 30 calendar days out: the countdown counts whole days.
+  examDate: Date.now() + 30 * DAY,
   deadline: null,
   region: 'National',
   description: 'University of the Philippines College Admissions Test. This is a very long description that should be truncated in the preview to about 60 characters.',
@@ -88,7 +87,7 @@ const BASE_SCHOLARSHIP_LISTING = {
   title: 'DOST-SEI Scholarship',
   type: 'scholarship',
   examDate: null,
-  deadline: Date.now() + 60 * 86_400_000,
+  deadline: Date.now() + 60 * DAY,
   description: 'Science scholarship for outstanding students.',
   coverage: 'Full tuition and monthly stipend.',
   provider: 'DOST',
@@ -100,12 +99,10 @@ const BASE_SCHOLARSHIP_LISTING = {
   scholarshipMeta: '{}',
 }
 
-// The screen runs 3 parallel queries via db.select():
+// The screen runs parallel queries via db.select():
 //   [0] listingRows  → .from(listings).where(eq(slug)).limit(1)  → [listing]
 //   [1] watchRows    → .from(resultWatches).where(...).limit(1)  → []
-//   [2] settings     → handled by getSettings mock (not db.select)
-// savedListings was removed from this screen (bookmark feature deleted).
-// We track call count to return listing only on the first call.
+// Settings come from the getSettings mock.
 function makeDb(listing: any = null) {
   let callCount = 0
   return {
@@ -115,8 +112,7 @@ function makeDb(listing: any = null) {
         from: jest.fn(() => ({
           where: jest.fn(() => ({
             limit: jest.fn().mockResolvedValue(
-              // First select call = listings query; return listing if provided
-              callIndex === 0 && listing ? [listing] : []
+              callIndex % 2 === 0 && listing ? [listing] : [],
             ),
           })),
         })),
@@ -127,182 +123,216 @@ function makeDb(listing: any = null) {
   }
 }
 
-describe('ListingDetailScreen', () => {
+/** Every rendered string, in document order — for hierarchy assertions. */
+function textOrder(): string {
+  return JSON.stringify(screen.toJSON())
+}
+
+function resetMocks() {
+  jest.clearAllMocks()
+  mockFocus.inFocus = false
+  const { getSettings } = require('../../../services/settings')
+  getSettings.mockResolvedValue({})
+  const { listPublishedBlueprintSlugs } = require('../../../services/examBlueprints')
+  listPublishedBlueprintSlugs.mockResolvedValue([])
+  const { router } = require('expo-router')
+  router.canGoBack.mockReturnValue(true)
+}
+
+describe('ListingDetailScreen — exam', () => {
   beforeEach(() => {
+    resetMocks()
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(BASE_EXAM_LISTING))
+    const { useLocalSearchParams } = require('expo-router')
+    useLocalSearchParams.mockReturnValue({ slug: 'upcat' })
   })
 
-  it('shows back button immediately (before load completes)', () => {
+  it('shows a labelled back button and a skeleton before the listing loads', () => {
     render(<ListingDetailScreen />)
-    // Back button (‹) is always present in the top bar
-    expect(screen.getAllByText('‹').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
+    expect(screen.getByTestId('listing-skeleton')).toBeTruthy()
   })
 
-  it('renders Key Dates section header after load', async () => {
+  it('back falls back to Explore after a deep link (no history)', async () => {
+    const { router } = require('expo-router')
+    router.canGoBack.mockReturnValue(false)
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Key Dates')).toBeTruthy()
-    })
+    await screen.findByRole('header', { name: 'UPCAT 2025' })
+    fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
+    expect(router.replace).toHaveBeenCalledWith('/explore?section=universities')
   })
 
-  it('renders primary CTA (Add to Focus) after Key Dates — above the fold', async () => {
+  it('leads with the date: a tabular countdown and the exam date', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Key Dates')).toBeTruthy()
-      expect(screen.getByText('+ Add to Focus')).toBeTruthy()
-    })
+    expect(await screen.findByTestId('listing-key-facts')).toBeTruthy()
+    expect(screen.getByText('30')).toBeTruthy()
+    expect(screen.getByText('days until the exam')).toBeTruthy()
+    expect(screen.getByText('Exam date')).toBeTruthy()
   })
 
-  // Wave 2b: About section collapsed by default
-  it('About section is collapsed by default (section title visible, full text hidden)', async () => {
+  it('puts the key facts BEFORE the actions, and actions before About', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('About')).toBeTruthy()
-    })
-    // The full description should not be visible when collapsed
+    await screen.findByTestId('listing-key-facts')
+    const order = textOrder()
+    const facts = order.indexOf('days until the exam')
+    const save = order.indexOf('Add to Focus')
+    const about = order.indexOf('"About"')
+    expect(facts).toBeGreaterThan(-1)
+    expect(facts).toBeLessThan(save)
+    expect(save).toBeLessThan(about)
+  })
+
+  it('without a mock blueprint the primary action is practice', async () => {
+    const { router } = require('expo-router')
+    render(<ListingDetailScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Practise for this exam' }))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/practice')
+    expect(screen.queryByRole('button', { name: 'Take a mock exam' })).toBeNull()
+  })
+
+  it('with a published blueprint the primary action is the mock exam', async () => {
+    const { router } = require('expo-router')
+    const { listPublishedBlueprintSlugs } = require('../../../services/examBlueprints')
+    listPublishedBlueprintSlugs.mockResolvedValue(['upcat'])
+    render(<ListingDetailScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Take a mock exam' }))
+    expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
+    expect(screen.queryByRole('button', { name: 'Practise for this exam' })).toBeNull()
+  })
+
+  it('the save action adds to Focus', async () => {
+    render(<ListingDetailScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Add to Focus' }))
+    expect(mockFocus.addListing).toHaveBeenCalledWith('upcat')
+  })
+
+  it('when saved, the save action says so and removes on press', async () => {
+    mockFocus.inFocus = true
+    render(<ListingDetailScreen />)
+    const saved = await screen.findByRole('button', { name: 'In Focus #1. Remove from Focus' })
+    fireEvent.press(saved)
+    expect(mockFocus.removeListing).toHaveBeenCalledWith('upcat')
+  })
+
+  it('watch results toggles and persists', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const db = makeDb(BASE_EXAM_LISTING)
+    useDb.mockReturnValue(db)
+    render(<ListingDetailScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Watch results' }))
+    expect(await screen.findByRole('button', { name: 'Watching results' })).toBeTruthy()
+    expect(db.insert).toHaveBeenCalled()
+  })
+
+  it('About is a collapsed disclosure that reveals the description', async () => {
+    render(<ListingDetailScreen />)
+    const about = await screen.findByRole('button', { name: 'About' })
+    expect(about.props.accessibilityState).toEqual({ expanded: false })
     expect(screen.queryByText(BASE_EXAM_LISTING.description)).toBeNull()
+    fireEvent.press(about)
+    expect(screen.getByText(BASE_EXAM_LISTING.description)).toBeTruthy()
   })
 
-  // Wave 2b: About section expands on press
-  it('About section expands when tapped', async () => {
+  it('Coverage is a collapsed disclosure', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('About')).toBeTruthy()
-    })
-    fireEvent.press(screen.getByText('About'))
-    await waitFor(() => {
-      expect(screen.getByText(BASE_EXAM_LISTING.description)).toBeTruthy()
-    })
+    const cov = await screen.findByRole('button', { name: 'Coverage' })
+    expect(cov.props.accessibilityState).toEqual({ expanded: false })
+    fireEvent.press(cov)
+    expect(screen.getByRole('button', { name: 'Coverage' }).props.accessibilityState).toEqual({ expanded: true })
   })
 
-  it('does not render Take Mock Exam CTA when no blueprint', async () => {
+  it('renders no emoji or glyph icons', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('+ Add to Focus')).toBeTruthy()
-    })
-    expect(screen.queryByText('📝 Take Mock Exam')).toBeNull()
+    await screen.findByTestId('listing-key-facts')
+    expect(textOrder()).not.toMatch(/[📝⚡🔔📍🎓📋‹↑↓✎]/u)
   })
 
-  it('shows Start Practicing button in the lower section (after requirements)', async () => {
+  it('a missing listing gets an empty state that leads back to Explore', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(null))
+    const { router } = require('expo-router')
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('⚡ Start Practicing for this Exam')).toBeTruthy()
-    })
+    expect(await screen.findByText("We couldn't find this listing")).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Back to Explore' }))
+    expect(router.replace).toHaveBeenCalledWith('/explore')
   })
 
-  it('shows Watch results toggle in lower section', async () => {
+  it('a failed load shows a retry, which reloads', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockRejectedValueOnce(new Error('offline'))
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('🔔 Watch results')).toBeTruthy()
-    })
-  })
-
-  it('Coverage (exam) section is collapsed by default — Card body not yet rendered', async () => {
-    // The exam fixture has grantAmount = '' so grantLabel never appears.
-    // The coverage text appears in both preview and body; however we can assert
-    // the section collapses by checking the Coverage section renders with a
-    // chevron indicator (↓) rather than (↑).
-    render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Coverage')).toBeTruthy()
-    })
-    // Down chevron = collapsed state
-    const chevrons = screen.queryAllByText('↓')
-    expect(chevrons.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('Coverage section expands when tapped (chevron flips to ↑)', async () => {
-    render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Coverage')).toBeTruthy()
-    })
-    fireEvent.press(screen.getByText('Coverage'))
-    await waitFor(() => {
-      // After expand the section shows ↑
-      const upChevrons = screen.queryAllByText('↑')
-      expect(upChevrons.length).toBeGreaterThanOrEqual(1)
-    })
+    fireEvent.press(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByTestId('listing-key-facts')).toBeTruthy()
   })
 })
 
-describe('ListingDetailScreen — Scholarship', () => {
+describe('ListingDetailScreen — scholarship', () => {
   beforeEach(() => {
+    resetMocks()
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(BASE_SCHOLARSHIP_LISTING))
     const { useLocalSearchParams } = require('expo-router')
     useLocalSearchParams.mockReturnValue({ slug: 'dost-sei' })
   })
 
-  it('renders scholarship Key Dates section', async () => {
+  it('leads with the deadline countdown', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Key Dates')).toBeTruthy()
-    })
+    await screen.findByTestId('listing-key-facts')
+    expect(screen.getByText('60')).toBeTruthy()
+    expect(screen.getByText('days left to apply')).toBeTruthy()
+    expect(screen.getByText('Application deadline')).toBeTruthy()
   })
 
-  it('Scholarship Details section collapsed by default', async () => {
+  it('with no profile, eligibility invites the student to complete it', async () => {
+    const { router } = require('expo-router')
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Scholarship Details')).toBeTruthy()
-    })
-    // Detail rows (Income Ceiling label) should not be visible when collapsed
-    expect(screen.queryByText('Income Ceiling')).toBeNull()
+    fireEvent.press(await screen.findByRole('button', { name: 'Complete profile' }))
+    expect(router.push).toHaveBeenCalledWith('/profile/scholarship-info')
   })
 
-  it('Scholarship Details section expands when tapped', async () => {
+  it('with a profile, eligibility shows a labelled status before the actions', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockResolvedValue({ gwa: 95, province: 'Albay', incomeBracket: '<=100k', gradeLevel: 'G12' })
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Scholarship Details')).toBeTruthy()
-    })
-    fireEvent.press(screen.getByText('Scholarship Details'))
-    await waitFor(() => {
-      expect(screen.getByText('Income Ceiling')).toBeTruthy()
-    })
+    const status = await screen.findByText(/^(Eligible|Maybe eligible|Not eligible)$/)
+    const order = textOrder()
+    expect(order.indexOf(`"${status.props.children}"`)).toBeLessThan(order.indexOf('Add to Focus'))
   })
 
-  it('Benefits section collapsed by default — shows ↓ chevron', async () => {
+  it('the service obligation is visible without expanding anything', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Benefits')).toBeTruthy()
-    })
-    // All collapsible sections start closed, so at least one ↓ chevron is visible
-    const chevrons = screen.queryAllByText('↓')
-    expect(chevrons.length).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText(/Requires 2 years of service/)).toBeTruthy()
   })
 
-  it('Benefits section expands when tapped', async () => {
+  it('with an official URL the primary action is to apply there', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({ ...BASE_SCHOLARSHIP_LISTING, externalUrl: 'https://sei.dost.gov.ph' }))
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never)
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Benefits')).toBeTruthy()
-    })
-    fireEvent.press(screen.getByText('Benefits'))
-    await waitFor(() => {
-      expect(screen.getByText('Full tuition and monthly stipend.')).toBeTruthy()
-    })
+    fireEvent.press(await screen.findByRole('link', { name: 'Apply on the official site' }))
+    expect(open).toHaveBeenCalledWith('https://sei.dost.gov.ph')
   })
 
-  it('service obligation warning is always visible (safety info, not collapsible)', async () => {
+  it('has no exam-only actions', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText(/Requires 2 years of service/)).toBeTruthy()
-    })
+    await screen.findByRole('button', { name: 'Add to Focus' })
+    expect(screen.queryByRole('button', { name: 'Take a mock exam' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Practise for this exam' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Watch results' })).toBeNull()
   })
 
-  it('Add to Focus CTA visible after Key Dates — no Take Mock Exam or Start Practicing for scholarships', async () => {
+  it('Scholarship details and Benefits are collapsed disclosures', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Key Dates')).toBeTruthy()
-      expect(screen.getByText('+ Add to Focus')).toBeTruthy()
-    })
-    expect(screen.queryByText('📝 Take Mock Exam')).toBeNull()
-    expect(screen.queryByText('⚡ Start Practicing for this Exam')).toBeNull()
+    fireEvent.press(await screen.findByRole('button', { name: 'Scholarship details' }))
+    expect(screen.getByText('Income ceiling')).toBeTruthy()
+    expect(screen.queryByText('Full tuition and monthly stipend.')).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Benefits' }))
+    expect(screen.getByText('Full tuition and monthly stipend.')).toBeTruthy()
   })
 
-  it('verified badge is rendered', async () => {
+  it('states whether the listing is verified', async () => {
     render(<ListingDetailScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('✓ Verified')).toBeTruthy()
-    })
+    expect(await screen.findByText('Verified')).toBeTruthy()
   })
 })

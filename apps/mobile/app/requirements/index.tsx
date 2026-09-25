@@ -1,18 +1,23 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { StyleSheet, View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { inArray } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ClipboardOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { listings as listingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, typography, type Theme, type Typography } from '../../theme/tokens'
+import { radius, spacing, textStyle } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
-import { InfoBanner } from '../../components/ui/InfoBanner'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { Badge } from '../../components/ui/Badge'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 
 // ---------------------------------------------------------------------------
@@ -35,70 +40,56 @@ function parseRequirements(raw: string | null | undefined): string[] {
   }
 }
 
-function makeStyles(t: Theme, typo: Typography) {
-  return StyleSheet.create({
-    root:       { flex: 1, backgroundColor: t.bg },
-    topBar:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn:    { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow:  { color: t.textSecondary, fontSize: typography.h3, lineHeight: 30 },
-    topTitle:   { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    subHint:    { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.sm },
-    section:    { marginBottom: spacing.xl },
-    // Per-listing header row: title left, "n/m done" progress right.
-    cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.sm },
-    cardTitle:  { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 20 },
-    progress:   { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', flexShrink: 0, marginTop: 2 },
-    progressDone: { color: t.success },
-    noReqs:     { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-    empty:      { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxl, fontStyle: 'italic' },
-  })
-}
-
 // ---------------------------------------------------------------------------
-// One focus listing's checklist section. Reuses RequirementsChecklist — the
-// SAME component the listing-details screen renders — so toggling persists via
-// toggleRequirement / getAcquiredRequirementIndices on the user_requirements
-// table, keeping both screens in sync. Tracks acquired count for the "n/m done".
+// One focus listing's checklist. Reuses RequirementsChecklist — the SAME
+// component the listing page renders — so ticks persist to user_requirements
+// and both screens stay in sync.
 // ---------------------------------------------------------------------------
-function ListingSection({ item, s }: { item: ListingRequirements; s: ReturnType<typeof makeStyles> }) {
+function ListingSection({ item }: { item: ListingRequirements }) {
+  const { theme: t } = useTheme()
   const [acquired, setAcquired] = useState(0)
   const total = item.requirements.length
   const allDone = total > 0 && acquired >= total
-
   const onAcquiredCountChange = useCallback((a: number) => setAcquired(a), [])
 
   return (
-    <View style={s.section}>
-      <Card elevated>
-        <View style={s.cardHeader}>
-          <Text style={s.cardTitle} numberOfLines={2} maxFontSizeMultiplier={1.4}>{item.title}</Text>
-          {total > 0 ? (
-            <Text
-              style={[s.progress, allDone && s.progressDone]}
-              maxFontSizeMultiplier={1.4}
-              accessibilityLabel={`${acquired} of ${total} requirements done`}
-            >
-              {acquired}/{total} done
-            </Text>
-          ) : null}
+    <Card style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
+        <View style={{ flex: 1, gap: spacing.xs }}>
+          <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{item.title}</Text>
+          <Badge label={item.type === 'scholarship' ? 'Scholarship' : 'Entrance exam'} tone="neutral" />
         </View>
         {total > 0 ? (
+          <Text
+            style={textStyle('label', allDone ? t.success : t.textSecondary)}
+            maxFontSizeMultiplier={1.6}
+            accessibilityLabel={`${acquired} of ${total} requirements done`}
+          >
+            {acquired}/{total} done
+          </Text>
+        ) : null}
+      </View>
+      {total > 0 ? (
+        <>
+          <ProgressBar value={acquired / total} label={`${item.title} requirements done`} tone={allDone ? 'success' : 'accent'} />
           <RequirementsChecklist
             listingSlug={item.slug}
             requirements={item.requirements}
             onAcquiredCountChange={onAcquiredCountChange}
           />
-        ) : (
-          <Text style={s.noReqs} maxFontSizeMultiplier={1.4}>No requirements listed</Text>
-        )}
-      </Card>
-    </View>
+        </>
+      ) : (
+        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          No requirements listed yet. Check the official site.
+        </Text>
+      )}
+    </Card>
   )
 }
 
 export default function RequirementsScreen() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const { focusListings: focusListingsList } = useFocusListings()
 
   const [reqsBySlug, setReqsBySlug] = useState<Map<string, { requirements: string[] }>>(() => new Map())
@@ -135,9 +126,9 @@ export default function RequirementsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, slugsKey])
 
-  // Join focus listings (for title/type/order) with their parsed requirements.
+  // Focus listings (title/type/order) joined with their parsed requirements.
+  // School-level focus entries have no requirements checklist — excluded.
   const sections = useMemo<ListingRequirements[]>(
-    // School-level focus entries have no requirements checklist — exclude them.
     () => focusListingsList.filter(f => !isSchoolFocusSlug(f.slug)).map(f => ({
       slug: f.slug,
       title: f.title,
@@ -147,47 +138,32 @@ export default function RequirementsScreen() {
     [focusListingsList, reqsBySlug],
   )
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>Requirements</Text>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
-      ) : sections.length > 0 ? (
-        <ScreenScroll tabBarInset={false}>
-          <Text style={s.subHint} maxFontSizeMultiplier={1.4}>
-            Track requirements for your focus exams & scholarships. Tap to mark done.
-          </Text>
-          {sections.map(item => (
-            <ListingSection key={item.slug} item={item} s={s} />
-          ))}
-        </ScreenScroll>
-      ) : (
-        <ScreenScroll tabBarInset={false}>
-          <View style={{ marginTop: spacing.md }}>
-            <InfoBanner
-              icon={<Text style={{ fontSize: typography.base }}>🎯</Text>}
-              message="Add an exam or scholarship from the Lists tab to track its requirements here."
-              actionLabel="Lists"
-              onAction={() => router.push('/(tabs)/explore')}
-              tone="neutral"
-            />
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <DetailTopBar title="Requirements" fallbackHref="/" />
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.xs }}>
+        {loading ? (
+          <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" accessibilityState={{ busy: true }} style={{ gap: spacing.lg }}>
+            <Skeleton height={160} radius={radius.xl} />
+            <Skeleton height={160} radius={radius.xl} />
           </View>
-        </ScreenScroll>
-      )}
+        ) : sections.length > 0 ? (
+          <>
+            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+              Documents for the exams and scholarships in your Focus. Tick each one as you get it.
+            </Text>
+            {sections.map(item => <ListingSection key={item.slug} item={item} />)}
+          </>
+        ) : (
+          <EmptyState
+            icon={<Lineicons icon={ClipboardOutlined} size={26} color={t.textSecondary} />}
+            title="Nothing to track yet"
+            body="Add an exam or scholarship to Focus from Explore, and its requirements show up here."
+            actionLabel="Browse Explore"
+            onAction={() => router.push('/explore')}
+          />
+        )}
+      </ScreenScroll>
     </SafeAreaView>
   )
 }
