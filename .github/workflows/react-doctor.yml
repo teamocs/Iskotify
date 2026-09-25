@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: millionco/react-doctor@v1
+      - uses: millionco/react-doctor@v2
         # Report-only until the optimisation phase clears the existing findings
         # (it has failed on master since before CI was added); then remove
         # `non-blocking` so it gates again. CI (ci.yml) is the required gate.
