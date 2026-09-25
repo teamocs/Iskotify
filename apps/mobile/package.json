@@ -73,7 +73,7 @@
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.17",
     "@types/sql.js": "^1.4.11",
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^13.0.3",
     "drizzle-kit": "^0.29.0",
     "expo-build-properties": "~1.0.10",
     "jest-expo": "^54.0.17",
