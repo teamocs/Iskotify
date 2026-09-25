@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   open: boolean
@@ -54,7 +55,9 @@ export function GenerateMoreModal({
         error?: string;
       }
       if (!genRes.ok || !genBody.cards) {
-        setError(genBody.error ?? 'Generation failed')
+        const message = genBody.error ?? 'Generation failed'
+        setError(message)
+        notifyError(message)
         return
       }
 
@@ -70,14 +73,18 @@ export function GenerateMoreModal({
       })
       if (!insertRes.ok) {
         const body = await insertRes.json() as { error?: string }
-        setError(body.error ?? 'Insert failed')
+        const message = body.error ?? 'Insert failed'
+        setError(message)
+        notifyError(message)
         return
       }
 
+      notifySuccess(`${genBody.cards.length} card${genBody.cards.length === 1 ? '' : 's'} generated`)
       onSuccess()
       onClose()
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setIsGenerating(false)
     }

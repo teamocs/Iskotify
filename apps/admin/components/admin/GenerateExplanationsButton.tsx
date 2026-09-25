@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useTransition } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   /** Which table to backfill. Renders its own button + label. */
@@ -18,7 +19,6 @@ interface Props {
  */
 export function GenerateExplanationsButton({ source, label }: Props) {
   const [isPending, startTransition] = useTransition()
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
   function handleClick() {
     startTransition(async () => {
@@ -32,36 +32,23 @@ export function GenerateExplanationsButton({ source, label }: Props) {
           succeeded?: number; failed?: number; remaining?: number; error?: string
         }
         if (!res.ok) {
-          setToast({ msg: body.error ?? 'Generation failed', ok: false })
-        } else {
-          setToast({
-            msg: `Generated ${body.succeeded ?? 0} · Failed ${body.failed ?? 0} · ${body.remaining ?? 0} remaining`,
-            ok: true,
-          })
+          notifyError(body.error ?? 'Generation failed')
+          return
         }
+        notifySuccess(`Generated ${body.succeeded ?? 0} · Failed ${body.failed ?? 0} · ${body.remaining ?? 0} remaining`)
       } catch {
-        setToast({ msg: 'Network error', ok: false })
+        notifyError('Network error')
       }
-      setTimeout(() => setToast(null), 5000)
     })
   }
 
   return (
-    <div className="relative inline-block">
-      <button
-        onClick={handleClick}
-        disabled={isPending}
-        className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-white text-maroon border border-maroon/30 hover:bg-maroon/5 transition-colors disabled:opacity-60"
-      >
-        {isPending ? '⏳ Generating…' : (label ?? '✨ Generate explanations')}
-      </button>
-      {toast && (
-        <div className={`absolute top-10 right-0 z-50 rounded-[12px] px-4 py-2.5 text-[12px] font-medium shadow-lg whitespace-nowrap ${
-          toast.ok ? 'bg-success text-white' : 'bg-danger-strong text-white'
-        }`}>
-          {toast.msg}
-        </div>
-      )}
-    </div>
+    <button
+      onClick={handleClick}
+      disabled={isPending}
+      className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-white text-maroon border border-maroon/30 hover:bg-maroon/5 transition-colors disabled:opacity-60"
+    >
+      {isPending ? '⏳ Generating…' : (label ?? '✨ Generate explanations')}
+    </button>
   )
 }

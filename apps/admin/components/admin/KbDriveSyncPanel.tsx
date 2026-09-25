@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // One row of the kb_drive_files ledger (supabase/migrations/055).
 export interface KbDriveFile {
@@ -57,10 +58,17 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
           s.errors.length ? `${s.errors.length} failed` : '',
           s.remaining ? `${s.remaining} left for the next run` : '',
         ].filter(Boolean)
-        setNotice({ msg: parts.join(' · '), ok: s.errors.length === 0 })
+        const msg = parts.join(' · ')
+        setNotice({ msg, ok: s.errors.length === 0 })
+        // The persistent summary line above carries the breakdown; the toast
+        // is only the action-level headline, so the text isn't shown twice.
+        if (s.errors.length === 0) notifySuccess('Drive sync complete')
+        else notifyError(`Drive sync finished with ${s.errors.length} failed file(s)`)
         router.refresh()
       } catch (err) {
-        setNotice({ msg: err instanceof Error ? err.message : 'Sync failed', ok: false })
+        const msg = err instanceof Error ? err.message : 'Sync failed'
+        setNotice({ msg, ok: false })
+        notifyError(msg)
       }
     })
   }
@@ -74,13 +82,14 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
         r.skippedFewOptions ? `${r.skippedFewOptions} with 3 options` : '',
         r.skippedDuplicate ? `${r.skippedDuplicate} duplicates` : '',
       ].filter(Boolean)
-      setNotice({
-        msg: `${f.name}: published ${r.published}${held.length ? ` · held back ${held.join(', ')}` : ''}`,
-        ok: true,
-      })
+      const msg = `${f.name}: published ${r.published}${held.length ? ` · held back ${held.join(', ')}` : ''}`
+      setNotice({ msg, ok: true })
+      notifySuccess(`Published ${r.published} question${r.published === 1 ? '' : 's'}`)
       router.refresh()
     } catch (err) {
-      setNotice({ msg: err instanceof Error ? err.message : 'Publish failed', ok: false })
+      const msg = err instanceof Error ? err.message : 'Publish failed'
+      setNotice({ msg, ok: false })
+      notifyError(msg)
     } finally {
       setPublishing(null)
     }
@@ -130,7 +139,18 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
                     {f.status === 'imported' && (
                       <>
                         {f.rows_imported} questions
-                        {f.rows_missing_media > 0 && <> · <span className="text-warning-strong">{f.rows_missing_media} missing figures</span></>}
+                        {f.rows_missing_media > 0 && (
+                          <>
+                            {' · '}<span className="text-warning-strong">{f.rows_missing_media} missing figures</span>
+                            {' · '}
+                            <a
+                              href={`/api/kb/missing-figures?driveFileId=${encodeURIComponent(f.drive_file_id)}`}
+                              className="text-maroon font-medium underline underline-offset-2 hover:no-underline"
+                            >
+                              Download list
+                            </a>
+                          </>
+                        )}
                         {f.imported_at && <> · synced {fmt(f.imported_at)}</>}
                         {f.published_at && <> · Published {fmt(f.published_at)}</>}
                       </>

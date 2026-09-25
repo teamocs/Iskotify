@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   id: string
@@ -33,13 +34,17 @@ export function SendApkButton({ id, status }: Props) {
       const json = (await res.json()) as { ok: boolean; error?: string }
 
       if (!json.ok) {
-        setError(json.error ?? 'Failed to send APK. Please try again.')
+        const message = json.error ?? 'Failed to send APK. Please try again.'
+        setError(message)
+        notifyError(message)
         return
       }
 
+      notifySuccess(isSent ? 'APK link resent' : 'APK link sent')
       router.refresh()
     } catch {
       setError('Network error. Please check your connection and try again.')
+      notifyError('Network error. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }

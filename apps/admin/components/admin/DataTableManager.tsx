@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react'
 import type { DataTableConfig, DataTableColumnConfig } from '@/lib/dataTables'
 import { SectionHelp } from './SectionHelp'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface ImportResultState {
   ok: boolean
@@ -288,12 +289,16 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+        const message = body.error ?? 'Something went wrong'
+        setError(message)
+        notifyError(message)
         return
       }
+      notifySuccess(isNew ? `${config.label} created` : `${config.label} saved`)
       onSaved()
     } catch (e) {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -309,12 +314,16 @@ function RowDrawer({ config, row, onClose, onSaved }: DrawerProps) {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Delete failed')
+        const message = body.error ?? 'Delete failed'
+        setError(message)
+        notifyError(message)
         return
       }
+      notifySuccess(`${config.label} deleted`)
       onSaved()
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -521,18 +530,24 @@ export function DataTableManager({ config }: Props) {
       const res = await fetch(`/api/admin/data/${config.table}/import`, { method: 'POST', body: fd })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setImportResult({ ok: false, message: body.error ?? 'Import failed' })
+        const message = body.error ?? 'Import failed'
+        setImportResult({ ok: false, message })
+        notifyError(message)
       } else {
         const errCount = body.errors?.length ?? 0
+        const message = `Imported ${body.total} row(s): ${body.inserted} new, ${body.updated} updated${errCount ? `, ${errCount} skipped` : ''}.`
         setImportResult({
           ok: errCount === 0,
-          message: `Imported ${body.total} row(s): ${body.inserted} new, ${body.updated} updated${errCount ? `, ${errCount} skipped` : ''}.`,
+          message,
           errors: body.errors,
         })
+        if (errCount === 0) notifySuccess(message)
+        else notifyError(message)
         fetchRows(debouncedSearch, page)
       }
     } catch {
       setImportResult({ ok: false, message: 'Network error' })
+      notifyError('Network error')
     } finally {
       setImporting(false)
     }

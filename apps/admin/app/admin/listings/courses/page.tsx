@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Topbar } from '@/components/admin/Topbar'
+import { saveCourseTags } from '@/lib/admin/courseTagsApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // The canonical course clusters (must match career_courses.cluster). A listing tagged
 // with one or more of these is restricted to those fields; ["all"] = open to any course.
@@ -50,19 +52,29 @@ export default function CourseTagsPage() {
 
   const save = useCallback(async (id: string, target_courses: string[]) => {
     setSavingId(id)
-    setRows(prev => prev.map(r => r.id === id ? { ...r, target_courses, target_courses_source: 'manual' } : r))
-    try {
-      const res = await fetch('/api/admin/listings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, target_courses }),
-      })
-      if (!res.ok) setError('Save failed — check your admin session and try again.')
-    } catch {
-      setError('Save failed — network error.')
-    } finally {
+    // Optimistic update — remember the previous value so it can be rolled
+    // back if the server rejects the change. Previously there was no
+    // rollback at all: a failed save left the checkbox showing a state the
+    // database never actually stored.
+    let previous: { target_courses: string[]; target_courses_source: string | null } | null = null
+    setRows(prev => prev.map(r => {
+      if (r.id !== id) return r
+      previous = { target_courses: r.target_courses, target_courses_source: r.target_courses_source }
+      return { ...r, target_courses, target_courses_source: 'manual' }
+    }))
+    const result = await saveCourseTags(id, target_courses)
+    if (!result.ok) {
+      setError(result.error)
+      notifyError(result.error)
+      if (previous) {
+        const revertTo = previous as { target_courses: string[]; target_courses_source: string | null }
+        setRows(prev => prev.map(r => r.id === id ? { ...r, ...revertTo } : r))
+      }
       setSavingId(null)
+      return
     }
+    notifySuccess('Course tags saved')
+    setSavingId(null)
   }, [])
 
   const toggleCluster = useCallback((r: Row, cluster: string) => {

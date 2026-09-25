@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface TopicOption {
   id: string
@@ -36,7 +37,6 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
   const [subjectId, setSubjectId] = useState('')
   const [topicId, setTopicId] = useState('')
   const [scope, setScope] = useState<'ai_enhanced' | 'all'>('ai_enhanced')
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
 
   const topics = subjects.find(s => s.id === subjectId)?.topics ?? []
 
@@ -56,17 +56,13 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
           succeeded?: number; failed?: number; remaining?: number; error?: string
         }
         if (!res.ok) {
-          setToast({ msg: body.error ?? 'Regeneration failed', ok: false })
-        } else {
-          setToast({
-            msg: `Regenerated ${body.succeeded ?? 0} · Failed ${body.failed ?? 0} · ${body.remaining ?? 0} remaining`,
-            ok: true,
-          })
+          notifyError(body.error ?? 'Regeneration failed')
+          return
         }
+        notifySuccess(`Regenerated ${body.succeeded ?? 0} · Failed ${body.failed ?? 0} · ${body.remaining ?? 0} remaining`)
       } catch {
-        setToast({ msg: 'Network error', ok: false })
+        notifyError('Network error')
       }
-      setTimeout(() => setToast(null), 6000)
     })
   }
 
@@ -113,14 +109,6 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
       >
         {isPending ? '⏳ Regenerating…' : 'Run'}
       </button>
-
-      {toast && (
-        <div className={`absolute top-full mt-1 right-0 z-50 rounded-[12px] px-4 py-2.5 text-[12px] font-medium shadow-lg whitespace-nowrap ${
-          toast.ok ? 'bg-success text-white' : 'bg-danger-strong text-white'
-        }`}>
-          {toast.msg}
-        </div>
-      )}
     </div>
   )
 }

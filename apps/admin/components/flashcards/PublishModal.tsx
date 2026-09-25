@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Listing {
   slug: string
@@ -76,10 +77,15 @@ export function PublishModal({
 
     setPublishing(false)
     if (failed.length > 0) {
+      // Keep the detailed partial-failure breakdown inline (which topic ids
+      // failed and why) — the toast gives the action-level headline only.
       setError(
         `Published ${published.length}/${topicIds.length}. ${failed.length} failed: ` +
         failed.map(f => f.message).join('; ')
       )
+      notifyError(`Published ${published.length}/${topicIds.length} — ${failed.length} failed`)
+    } else {
+      notifySuccess(`Published ${published.length} topic${published.length === 1 ? '' : 's'}`)
     }
     if (published.length > 0) onPublished(published)
   }

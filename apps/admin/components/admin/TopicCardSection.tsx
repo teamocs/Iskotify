@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddCardModal } from './AddCardModal'
 import { GenerateMoreModal } from './GenerateMoreModal'
+import { renameTopic, deleteTopic, updateCard, deleteCard } from '@/lib/admin/topicsApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Card {
   id: string
@@ -112,18 +114,18 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     setRenameSaving(true)
     setRenameError('')
     try {
-      const res = await fetch(`/api/flashcards/topics/${topic.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: renameValue.trim() }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setRenameError(body.error ?? 'Something went wrong')
+      const result = await renameTopic(topic.id, renameValue)
+      if (!result.ok) {
+        setRenameError(result.error)
+        notifyError(result.error)
         return
       }
       setRenaming(false)
+      notifySuccess('Topic renamed')
       router.refresh()
+    } catch {
+      setRenameError('Network error')
+      notifyError('Network error')
     } finally {
       setRenameSaving(false)
     }
@@ -139,14 +141,18 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     setTopicDeleteSaving(true)
     setTopicDeleteError('')
     try {
-      const res = await fetch(`/api/flashcards/topics/${topic.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setTopicDeleteError(body.error ?? 'Something went wrong')
+      const result = await deleteTopic(topic.id)
+      if (!result.ok) {
+        setTopicDeleteError(result.error)
+        notifyError(result.error)
         return
       }
       setDeletingTopic(false)
+      notifySuccess('Topic deleted')
       router.refresh()
+    } catch {
+      setTopicDeleteError('Network error')
+      notifyError('Network error')
     } finally {
       setTopicDeleteSaving(false)
     }
@@ -166,18 +172,14 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     setError('')
     setSaving(true)
     try {
-      const res = await fetch(`/api/flashcards/cards/${editingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: editQ.trim(),
-          answer: editA.trim(),
-          explanation: editExp.trim() || null,
-        }),
+      const result = await updateCard(editingId, {
+        question: editQ.trim(),
+        answer: editA.trim(),
+        explanation: editExp.trim() || null,
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+      if (!result.ok) {
+        setError(result.error)
+        notifyError(result.error)
         return
       }
       setCards(prev =>
@@ -188,6 +190,10 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
         )
       )
       setEditingId(null)
+      notifySuccess('Card saved')
+    } catch {
+      setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -198,15 +204,19 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     setError('')
     setSaving(true)
     try {
-      const res = await fetch(`/api/flashcards/cards/${deletingId}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+      const result = await deleteCard(deletingId)
+      if (!result.ok) {
+        setError(result.error)
+        notifyError(result.error)
         return
       }
       setCards(prev => prev.filter(c => c.id !== deletingId))
       setLocalCardCount(prev => Math.max(0, prev - 1))
       setDeletingId(null)
+      notifySuccess('Card deleted')
+    } catch {
+      setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }

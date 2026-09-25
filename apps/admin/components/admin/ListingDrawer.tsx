@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Listing } from '@iskotify/utils'
+import { saveListing } from '@/lib/admin/listingsApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   listing: Listing | null   // null = new listing
@@ -194,21 +196,22 @@ export function ListingDrawer({ listing, onClose }: Props) {
     delete payload.meta_show_raw
     delete payload.meta_open
 
-    const url = listing ? `/api/admin/listings/${listing.id}` : '/api/admin/listings'
-    const method = listing ? 'PATCH' : 'POST'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    setSaving(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Something went wrong')
-      return
+    try {
+      const result = await saveListing(payload, listing?.id)
+      if (!result.ok) {
+        setError(result.error)
+        notifyError(result.error)
+        return
+      }
+      notifySuccess(listing ? 'Listing saved' : 'Listing created')
+      router.refresh()
+      onClose()
+    } catch {
+      setError('Network error')
+      notifyError('Network error')
+    } finally {
+      setSaving(false)
     }
-    router.refresh()
-    onClose()
   }
 
   const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"

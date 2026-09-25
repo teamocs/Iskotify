@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   currentUrl: string
@@ -37,13 +38,18 @@ export function ApkUrlForm({ currentUrl }: Props) {
       const json = (await res.json()) as { ok: boolean; error?: string }
 
       if (!json.ok) {
-        setStatus({ type: 'error', message: json.error ?? 'Failed to save. Please try again.' })
+        const message = json.error ?? 'Failed to save. Please try again.'
+        setStatus({ type: 'error', message })
+        notifyError(message)
       } else {
-        setStatus({ type: 'success', message: trimmed === '' ? 'APK link cleared.' : 'APK link saved successfully.' })
+        const message = trimmed === '' ? 'APK link cleared.' : 'APK link saved successfully.'
+        setStatus({ type: 'success', message })
+        notifySuccess(message)
         router.refresh()
       }
     } catch {
       setStatus({ type: 'error', message: 'Network error. Check your connection and try again.' })
+      notifyError('Network error. Check your connection and try again.')
     } finally {
       setSaving(false)
     }

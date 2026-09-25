@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AdmissionsUpdate } from '@/app/admin/updates/page'
+import { saveUpdate, deleteUpdate } from '@/lib/admin/updatesApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   updates: AdmissionsUpdate[]
@@ -93,35 +95,43 @@ function UpdateDrawer({
       sources,
       verified: form.verified,
     }
-    const url = '/api/admin/updates'
-    const method = update ? 'PATCH' : 'POST'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    setSaving(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Something went wrong')
-      return
+    try {
+      const result = await saveUpdate(payload)
+      if (!result.ok) {
+        setError(result.error)
+        notifyError(result.error)
+        return
+      }
+      notifySuccess(update ? 'Update saved' : 'Update created')
+      router.refresh()
+      onClose()
+    } catch {
+      setError('Network error')
+      notifyError('Network error')
+    } finally {
+      setSaving(false)
     }
-    router.refresh()
-    onClose()
   }
 
   async function handleDelete() {
     if (!update) return
     setSaving(true)
-    const res = await fetch(`/api/admin/updates?id=${encodeURIComponent(update.id)}`, { method: 'DELETE' })
-    setSaving(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setError(body.error ?? 'Delete failed')
-      return
+    try {
+      const result = await deleteUpdate(update.id)
+      if (!result.ok) {
+        setError(result.error)
+        notifyError(result.error)
+        return
+      }
+      notifySuccess('Update deleted')
+      router.refresh()
+      onClose()
+    } catch {
+      setError('Network error')
+      notifyError('Network error')
+    } finally {
+      setSaving(false)
     }
-    router.refresh()
-    onClose()
   }
 
   const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"

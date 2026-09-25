@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -133,12 +134,16 @@ export function FeedbackManager() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to update status')
+        const message = body.error ?? 'Failed to update status'
+        setActionError(message)
+        notifyError(message)
         return
       }
+      notifySuccess(`Feedback marked ${status}`)
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 
@@ -148,13 +153,17 @@ export function FeedbackManager() {
       const res = await fetch(`/api/admin/feedback/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to delete feedback')
+        const message = body.error ?? 'Failed to delete feedback'
+        setActionError(message)
+        notifyError(message)
         return
       }
       setConfirmingDelete(null)
+      notifySuccess('Feedback deleted')
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 

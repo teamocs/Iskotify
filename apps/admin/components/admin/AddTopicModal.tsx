@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   subjectId: string
@@ -27,13 +28,17 @@ export function AddTopicModal({ subjectId, onClose }: Props) {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Something went wrong')
+        const message = body.error ?? 'Something went wrong'
+        setError(message)
+        notifyError(message)
         return
       }
+      notifySuccess('Topic added')
       router.refresh()
       onClose()
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
