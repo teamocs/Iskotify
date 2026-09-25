@@ -106,6 +106,11 @@ const Q2: RawUpcatQuestion = {
   options: ['1', '2', '3', '4'], correctIndex: 3, explanation: '',
   setId: null, setPosition: null, mainSubject: 'Math', topic: 'Geometry',
 }
+const Q3: RawUpcatQuestion = {
+  questionId: 'Q3', subtest: 'Mathematics', questionText: '5+5?',
+  options: ['9', '10', '11', '12'], correctIndex: 1, explanation: '',
+  setId: null, setPosition: null, mainSubject: 'Math', topic: 'Arithmetic',
+}
 
 /** Fix 2: the last question opens a review sheet instead of submitting
  *  directly — drives that flow through to an actual submit() call, the same
@@ -415,10 +420,89 @@ describe('BlueprintExam', () => {
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     })
 
+    // Review finding #1 (HIGH): reorderByIds drops a vanished question and
+    // COMPACTS the survivors — answers/idx saved against the original id
+    // order must be remapped, or resume lands them on the wrong question.
+    it('restores answers onto the right questions when a question was removed from the pool since saving', async () => {
+      // Saved run covers 3 questions [Q1, Q2, Q3]; Q2 has since been removed
+      // from the current pool (unpublished/deleted) — only Q1 and Q3 remain.
+      mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q1, Q3]]]))
+      mockLoadRun.mockResolvedValue({
+        runKey: 'exam:test-mock', kind: 'exam', slug: 'test-mock', mode: 'full',
+        questionIds: ['Q1', 'Q2', 'Q3'], sectionNames: ['Math', 'Math', 'Math'],
+        answers: { 0: 1, 1: 2, 2: 3 }, // Q1->'2', Q2->answer (vanishes), Q3->'12'
+        idx: 2, sectionIdx: 0, floorIdx: 0,
+        endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+      })
+
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+      fireEvent.press(screen.getByText('Resume where you left off'))
+
+      // idx 2 pointed at Q3 originally; after compaction (Q1, Q3) Q3 is now at
+      // index 1 — resume must land ON Q3, not silently drift to some other
+      // question at the stale index.
+      await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
+      expect(screen.getByRole('button', { name: '12' }).props.accessibilityState.selected).toBe(true)
+
+      // Q1's answer (index 0, unaffected by the compaction) must still be
+      // intact after navigating back to it.
+      fireEvent.press(screen.getByText('Back'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      expect(screen.getByRole('button', { name: '2' }).props.accessibilityState.selected).toBe(true)
+    })
+
     it('does not offer Resume when no saved run exists', async () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
       expect(screen.queryByText('Resume where you left off')).toBeNull()
+    })
+
+    // Review finding #2 (HIGH): submit() stays in phase 'exam' through its
+    // awaits (clearRun is fire-and-forget). If any state the save effect
+    // depends on changes during that window — an option tap, or the
+    // section-auto-advance timer — the effect would re-insert the just-
+    // cleared row, resurrecting a "finished" run as still in-progress.
+    it('never re-saves the run once submit has started, even if state changes mid-submit', async () => {
+      let resolveAttempts!: () => void
+      mockRecordAttempts.mockImplementationOnce(
+        () => new Promise<void>(resolve => { resolveAttempts = () => resolve(undefined) }),
+      )
+
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      fireEvent.press(screen.getByText('2'))
+
+      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+      const buttons = call[2] as { text: string; onPress?: () => void }[]
+
+      // Kick off submit() — it will suspend on the controlled recordAttempts promise.
+      await act(async () => {
+        buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+      })
+      const saveCallsAtSubmitStart = mockSaveRun.mock.calls.length
+      expect(mockClearRun).toHaveBeenCalledWith('exam:test-mock')
+
+      // Attempt a state change while submit() is still in flight — inputs
+      // should be disabled, so this must be a no-op either way.
+      fireEvent.press(screen.getByText('1')) // would flip the Q1 answer if not disabled
+
+      expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+
+      // Let submit() finish.
+      await act(async () => { resolveAttempts() })
+      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
+
+      // No save was re-triggered by the (blocked) tap, or by reaching results.
+      expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
     })
   })
 })

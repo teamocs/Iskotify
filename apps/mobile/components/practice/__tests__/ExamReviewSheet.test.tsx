@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, fireEvent, screen } from '@testing-library/react-native'
-import { Alert } from 'react-native'
+import { Alert, AccessibilityInfo } from 'react-native'
 import { ExamReviewSheet } from '../ExamReviewSheet'
 
 describe('ExamReviewSheet', () => {
@@ -80,5 +80,53 @@ describe('ExamReviewSheet', () => {
     fireEvent.press(screen.getByRole('button', { name: /back to exam/i }))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  // Review finding #4 (MEDIUM): the sheet is a full-screen modal — it needs
+  // accessibilityViewIsModal (so screen readers don't escape into content
+  // behind it), an accessibilityRole="header" title, and initial focus moved
+  // onto that title when it opens.
+  describe('accessibility', () => {
+    let focusSpy: jest.SpyInstance
+
+    beforeEach(() => {
+      focusSpy = jest.spyOn(AccessibilityInfo, 'setAccessibilityFocus').mockImplementation(() => {})
+    })
+    afterEach(() => focusSpy.mockRestore())
+
+    it('marks the sheet content as a modal view for assistive technology', () => {
+      render(<ExamReviewSheet {...baseProps} />)
+      const title = screen.getByText('Review your answers')
+      // Walk up from the title to find the ancestor flagged as the modal view.
+      let node: any = title.parent
+      let found = false
+      while (node) {
+        if (node.props?.accessibilityViewIsModal) { found = true; break }
+        node = node.parent
+      }
+      expect(found).toBe(true)
+    })
+
+    it('gives the title an accessibilityRole of "header"', () => {
+      render(<ExamReviewSheet {...baseProps} />)
+      expect(screen.getByText('Review your answers').props.accessibilityRole).toBe('header')
+    })
+
+    it('moves accessibility focus onto the title when the sheet becomes visible', () => {
+      render(<ExamReviewSheet {...baseProps} visible={true} />)
+      expect(focusSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not steal focus while the sheet is closed', () => {
+      render(<ExamReviewSheet {...baseProps} visible={false} />)
+      expect(focusSpy).not.toHaveBeenCalled()
+    })
+
+    it('moves focus again each time the sheet reopens', () => {
+      const { rerender } = render(<ExamReviewSheet {...baseProps} visible={false} />)
+      expect(focusSpy).not.toHaveBeenCalled()
+      rerender(<ExamReviewSheet {...baseProps} visible={true} />)
+      expect(focusSpy).toHaveBeenCalledTimes(1)
+    })
   })
 })

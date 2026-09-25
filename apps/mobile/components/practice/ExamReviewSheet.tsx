@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Modal, View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { useEffect, useMemo, useRef } from 'react'
+import { Modal, View, Text, Pressable, ScrollView, StyleSheet, AccessibilityInfo, findNodeHandle } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius } from '../../theme/tokens'
 import { confirmAction } from '../../utils/confirmAction'
@@ -29,6 +29,16 @@ export function ExamReviewSheet({
 }: ExamReviewSheetProps) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  const titleRef = useRef<Text>(null)
+
+  // Review finding #4: move accessibility focus onto the title every time the
+  // sheet opens — otherwise a screen reader user's focus stays wherever it
+  // was on the exam screen behind this full-screen modal.
+  useEffect(() => {
+    if (!visible) return
+    const handle = findNodeHandle(titleRef.current)
+    AccessibilityInfo.setAccessibilityFocus(handle ?? 0)
+  }, [visible])
 
   const unansweredCount = total - answeredIdxs.size
   const summary = unansweredCount === 0
@@ -48,9 +58,16 @@ export function ExamReviewSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={s.overlay}>
-        <View style={s.sheet}>
+        <View style={s.sheet} accessibilityViewIsModal>
           <View style={s.handle} />
-          <Text style={s.title} maxFontSizeMultiplier={1.4}>Review your answers</Text>
+          <Text
+            ref={titleRef}
+            style={s.title}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+          >
+            Review your answers
+          </Text>
           <Text style={s.summary} maxFontSizeMultiplier={1.4}>{summary}</Text>
 
           <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>

@@ -38,6 +38,47 @@ export function safeParseJson<T>(raw: string | null | undefined, fallback: T): T
   }
 }
 
+/**
+ * Review finding #1 (HIGH) — reorderByIds() drops ids no longer in the pool
+ * and COMPACTS the survivors, so an answers/flags record keyed by the
+ * ORIGINAL flat index would land on the wrong question the moment anything
+ * earlier in the list vanished. Remap every entry through the id each old
+ * index pointed to: an entry whose question vanished is dropped (there is
+ * nothing sane to remap it onto); everything else lands on its new
+ * (compacted) index.
+ */
+export function remapIndexedById<T>(
+  originalIds: readonly string[],
+  newIds: readonly string[],
+  byOldIndex: Readonly<Record<number, T>>,
+): Record<number, T> {
+  const newIndexById = new Map(newIds.map((id, i) => [id, i]))
+  const out: Record<number, T> = {}
+  for (const [oldIdxStr, value] of Object.entries(byOldIndex)) {
+    const oldIdx = Number(oldIdxStr)
+    const id = originalIds[oldIdx]
+    if (id == null) continue
+    const newIdx = newIndexById.get(id)
+    if (newIdx !== undefined) out[newIdx] = value
+  }
+  return out
+}
+
+/**
+ * Same id-based remap as remapIndexedById(), but for a single scalar index
+ * (the resumed run's current question / floor position) rather than a whole
+ * record. When the question at `oldIdx` itself vanished, there is no exact
+ * answer — clamp into the surviving range instead of resuming out of bounds
+ * or crashing.
+ */
+export function remapSingleIndex(originalIds: readonly string[], newIds: readonly string[], oldIdx: number): number {
+  const newIndexById = new Map(newIds.map((id, i) => [id, i]))
+  const id = originalIds[oldIdx]
+  const exact = id != null ? newIndexById.get(id) : undefined
+  if (exact !== undefined) return exact
+  return Math.max(0, Math.min(oldIdx, newIds.length - 1))
+}
+
 export interface ReconstructedBuiltExam<Section, Q> {
   runnable: { section: Section; questions: Q[]; available: number }[]
   comingSoon: Section[]

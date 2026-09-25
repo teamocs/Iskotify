@@ -26,9 +26,10 @@ import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
-import { runKeyFor, reorderByIds } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
 type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
 
@@ -65,6 +66,9 @@ export default function UpcatExam() {
   // Fix 1: leave-confirmation + resume-in-progress-run state.
   const [leaveConfirmed, setLeaveConfirmed] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
+  // Review finding #2: disables exam inputs while submit() is in flight (see
+  // exam/[slug].tsx's submitting flag for the full rationale).
+  const [submitting, setSubmitting] = useState(false)
   const parsedRef = useRef<RawUpcatQuestion[]>([])
   const rawPassagesRef = useRef<{ setId: string; subtest: string; passageText: string }[]>([])
   const runKey = runKeyFor('upcat', subtestParam ?? 'all', mode === 'quick' ? 'quick' : 'full')
@@ -189,9 +193,12 @@ export default function UpcatExam() {
     const passageById = new Map(rawPassagesRef.current.map(p => [p.setId, p.passageText]))
     const built: ExamQuestion[] = ordered.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
     setQuestions(built)
-    setAnswers(run.answers)
-    const maxIdx = built.length - 1
-    setIdx(Math.min(run.idx, maxIdx))
+    // Review finding #1: remap answers/idx through the surviving id order —
+    // reorderByIds() compacted away vanished questions, so the ORIGINAL
+    // indices no longer point at the same questions.
+    const newIds = built.map(q => q.questionId)
+    setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
+    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
     setEndTime(run.endTime)
     setPhase('exam')
   }
@@ -203,8 +210,10 @@ export default function UpcatExam() {
   }
 
   // Fix 1: persist answers/position/timer on every change while in progress.
+  // Review finding #2: gated on submittedRef too — see exam/[slug].tsx's
+  // save effect comment for the full rationale.
   useEffect(() => {
-    if (phase !== 'exam' || questions.length === 0) return
+    if (phase !== 'exam' || questions.length === 0 || submittedRef.current) return
     void saveRun({
       runKey,
       kind: 'upcat',
@@ -235,12 +244,15 @@ export default function UpcatExam() {
   useEffect(() => {
     if (leaveConfirmed) router.back()
   }, [leaveConfirmed])
+  // Review finding #3: web-only tab-close warning + immediate persist flush.
+  useBeforeUnloadWarning(phase === 'exam')
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
+    setSubmitting(true) // Review finding #2: disable exam inputs immediately
 
     // Fix 1: run finished — stop offering "Resume" for a completed attempt.
     void clearRun(runKey).catch(err => console.warn('[practice/upcat/[subtest]] clearRun failed:', err))
@@ -454,7 +466,7 @@ export default function UpcatExam() {
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
-        onJump={setIdx}
+        onJump={i => { if (!submitting) setIdx(i) }}
       />
 
       {/* Middle pane: passage + question text scroll; options live in their own fixed
@@ -480,7 +492,11 @@ export default function UpcatExam() {
       {/* Fixed options zone: capped at 42% of the window so the question pane keeps
           the majority of the viewport; very long option lists scroll inside this zone. */}
       <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
       </ScrollView>
 
       <View style={s.footer}>
@@ -488,24 +504,34 @@ export default function UpcatExam() {
           accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0}
+          disabled={idx === 0 || submitting}
         >
-          <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
+          <Text style={[s.footGhostTxt, (idx === 0 || submitting) && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
         {isLast ? (
           // Fix 2: the last question never submits directly anymore.
-          <Pressable accessibilityRole="button" style={s.footBtnPrimary} onPress={() => setReviewOpen(true)}>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.footBtnPrimary, submitting && s.footDisabled]}
+            disabled={submitting}
+            onPress={() => setReviewOpen(true)}
+          >
             <Text style={s.footPrimaryTxt}>Review & submit</Text>
           </Pressable>
         ) : (
           <>
-            <Pressable accessibilityRole="button" style={s.footBtnGhost} onPress={() => setIdx(i => i + 1)}>
+            <Pressable
+              accessibilityRole="button"
+              style={s.footBtnGhost}
+              onPress={() => setIdx(i => i + 1)}
+              disabled={submitting}
+            >
               <Text style={s.footGhostTxt}>Skip</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-              disabled={sel === undefined}
+              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
+              disabled={sel === undefined || submitting}
               onPress={() => setIdx(i => i + 1)}
             >
               <Text style={s.footPrimaryTxt}>Next</Text>
@@ -520,7 +546,7 @@ export default function UpcatExam() {
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
         flaggedIdxs={new Set(Object.keys(reported).map(Number))}
-        onJump={setIdx}
+        onJump={i => { if (!submitting) setIdx(i) }}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />

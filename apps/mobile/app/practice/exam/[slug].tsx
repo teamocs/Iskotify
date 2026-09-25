@@ -32,9 +32,10 @@ import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius } from '../../../theme/tokens'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
-import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'exam' | 'results'
 
@@ -182,6 +183,12 @@ export default function BlueprintExam() {
   const [leaveConfirmed, setLeaveConfirmed] = useState(false)
   const [resumeAvailable, setResumeAvailable] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
+  // Review finding #2: true from the first synchronous line of submit()
+  // until the screen leaves 'exam' phase — disables exam inputs so a tap
+  // during submit()'s awaits can't change answers/idx and re-trigger the
+  // persistence effect below (which also re-checks submittedRef itself, as
+  // a second line of defense against anything that isn't gated by this).
+  const [submitting, setSubmitting] = useState(false)
 
   // Countdown timer. endTime is an absolute timestamp so the clock stays accurate even
   // if the interval drifts. The total timer always runs; per-section timers run when
@@ -282,8 +289,13 @@ export default function BlueprintExam() {
   // Fix 1: persist answers/position/timers on every change while the run is
   // in progress — cleared on submit (see submit()). Best-effort: a save
   // failure must never interrupt the exam.
+  // Review finding #2: also gated on submittedRef — submit() stays in phase
+  // 'exam' through its awaits, so without this check a state change during
+  // that window (blocked at the input layer by `submitting`, but checked
+  // here too as a second line of defense) would re-insert the row right
+  // after clearRun() fired, resurrecting a finished run as in-progress.
   useEffect(() => {
-    if (phase !== 'exam' || !slug || questions.length === 0) return
+    if (phase !== 'exam' || !slug || questions.length === 0 || submittedRef.current) return
     void saveRun({
       runKey: runKeyFor('exam', slug),
       kind: 'exam',
@@ -316,6 +328,8 @@ export default function BlueprintExam() {
   useEffect(() => {
     if (leaveConfirmed) router.back()
   }, [leaveConfirmed])
+  // Review finding #3: web-only tab-close warning + immediate persist flush.
+  useBeforeUnloadWarning(phase === 'exam')
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's question ids (re-fetching the current pool + passages, already
@@ -343,10 +357,14 @@ export default function BlueprintExam() {
     setBuilt(reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, flat))
     setExamMode(run.mode === 'sprint' ? 'sprint' : 'full')
     setQuestions(flat)
-    setAnswers(run.answers)
-    const maxIdx = flat.length - 1
-    setIdx(Math.min(run.idx, maxIdx))
-    setFloorIdx(Math.min(run.floorIdx, maxIdx))
+    // Review finding #1: reorderByIds compacts away vanished questions, so
+    // answers/idx/floorIdx saved against the ORIGINAL id order must be
+    // remapped through the surviving order — not applied at their old
+    // positions, which would land on the wrong question.
+    const newIds = flat.map(fq => fq.q.questionId)
+    setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
+    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
+    setFloorIdx(remapSingleIndex(run.questionIds, newIds, run.floorIdx))
     setSectionIdx(run.sectionIdx)
     setEndTime(run.endTime)
     setSectionEndTime(run.sectionEndTime)
@@ -403,10 +421,16 @@ export default function BlueprintExam() {
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
     submittedRef.current = true
+    // Review finding #2: disable exam inputs immediately — closes the window
+    // where a tap during submit()'s awaits could change answers/idx and
+    // re-trigger the (now also submittedRef-gated) persistence effect.
+    setSubmitting(true)
 
     // Fix 1: the run is finished — clear the saved in-progress state so the
     // prestart screen stops offering "Resume" for a completed attempt.
-    // Best-effort: must never block reaching results.
+    // Best-effort: must never block reaching results. Runs after submittedRef
+    // is already true, so the save effect above will no-op even if something
+    // still manages to change state before results render.
     if (slug) void clearRun(runKeyFor('exam', slug)).catch(err => console.warn('[exam/[slug]] clearRun failed:', err))
 
     // Post-session delta — UPCAT only. Snapshot before this session's
@@ -761,9 +785,9 @@ export default function BlueprintExam() {
         <Text style={s.counter}>{idx + 1}/{questions.length}</Text>
       </View>
 
-      <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (i >= floorIdx) setIdx(i) }} />
+      <QuestionNavigator total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }} />
 
-      <SectionGrid sections={sectionChips} onJump={start => setIdx(Math.max(start, floorIdx))} />
+      <SectionGrid sections={sectionChips} onJump={start => { if (!submitting) setIdx(Math.max(start, floorIdx)) }} />
 
       {/* Subject/topic bar lives in the fixed header zone with a fixed min height so it
           never mounts/unmounts (and never shifts layout) between questions. */}
@@ -801,7 +825,11 @@ export default function BlueprintExam() {
       {/* Fixed options zone: capped at 42% of the window so the question pane keeps
           the majority of the viewport; very long option lists scroll inside this zone. */}
       <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
       </ScrollView>
 
       <View style={s.footer}>
@@ -809,9 +837,9 @@ export default function BlueprintExam() {
           accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(floorIdx, i - 1))}
-          disabled={!canGoBack}
+          disabled={!canGoBack || submitting}
         >
-          <Text style={[s.footGhostTxt, !canGoBack && { opacity: 0.3 }]}>Back</Text>
+          <Text style={[s.footGhostTxt, (!canGoBack || submitting) && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
         {isLast ? (
           // Fix 2: the last question never submits directly anymore — it opens
@@ -819,7 +847,8 @@ export default function BlueprintExam() {
           // with an explicit "Submit exam" confirmation inside it.
           <Pressable
             accessibilityRole="button"
-            style={s.footBtnPrimary}
+            style={[s.footBtnPrimary, submitting && s.footDisabled]}
+            disabled={submitting}
             onPress={() => setReviewOpen(true)}
           >
             <Text style={s.footPrimaryTxt}>Review & submit</Text>
@@ -830,13 +859,14 @@ export default function BlueprintExam() {
               accessibilityRole="button"
               style={s.footBtnGhost}
               onPress={() => setIdx(i => i + 1)}
+              disabled={submitting}
             >
               <Text style={s.footGhostTxt}>Skip</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-              disabled={sel === undefined}
+              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
+              disabled={sel === undefined || submitting}
               onPress={() => setIdx(i => i + 1)}
             >
               <Text style={s.footPrimaryTxt}>Next</Text>
@@ -851,7 +881,7 @@ export default function BlueprintExam() {
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
         flaggedIdxs={new Set(Object.keys(reported).map(Number))}
-        onJump={i => { if (i >= floorIdx) setIdx(i) }}
+        onJump={i => { if (!submitting && i >= floorIdx) setIdx(i) }}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />

@@ -310,6 +310,70 @@ describe('DiagnosticExam', () => {
     expect(cBtn).toBeTruthy()
   })
 
+  // Review finding #1 (HIGH): reorderByIds compacts away a vanished question —
+  // answers/idx keyed by the ORIGINAL saved order must be remapped or they
+  // land on the wrong question.
+  it('restores answers onto the right questions when a question was removed from the bank since saving', async () => {
+    mockSearchParams = { subject: 'Science' }
+    // S2 has since been removed from the bank — only S1 and S3 remain.
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      { questionId: 'S3', subtest: 'Science', questionText: 'Sci Q3', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 1, explanation: '', setId: null },
+    ]
+    mockLoadRun.mockResolvedValue({
+      runKey: 'diagnostic:Science', kind: 'diagnostic', slug: 'Science', mode: '',
+      questionIds: ['S1', 'S2', 'S3'], sectionNames: ['Science', 'Science', 'Science'],
+      answers: { 0: 0, 1: 1, 2: 2 }, // S1 -> 'a', S2 -> vanishes, S3 -> 'c'
+      idx: 2, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+    fireEvent.press(screen.getByText('Resume where you left off'))
+
+    // idx 2 pointed at S3; after compaction ([S1, S3]) S3 sits at index 1.
+    await waitFor(() => expect(screen.getByText('Sci Q3')).toBeTruthy())
+    expect(screen.getByRole('button', { name: 'c' }).props.accessibilityState.selected).toBe(true)
+  })
+
+  // Review finding #2 (HIGH): submit() stays in phase 'exam' through its
+  // awaits — a state change during that window would re-trigger the save
+  // effect and resurrect the just-cleared run.
+  it('never re-saves the run once submit has started, even if state changes mid-submit', async () => {
+    let resolveAttempts!: () => void
+    mockRecordAttempts.mockImplementationOnce(
+      () => new Promise<void>(resolve => { resolveAttempts = () => resolve(undefined) }),
+    )
+
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+    fireEvent.press(screen.getByText('a'))
+
+    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+    const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+    const buttons = call[2] as { text: string; onPress?: () => void }[]
+
+    await act(async () => {
+      buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+    })
+    const saveCallsAtSubmitStart = mockSaveRun.mock.calls.length
+    expect(mockClearRun).toHaveBeenCalledWith('diagnostic:Science')
+
+    fireEvent.press(screen.getByText('b')) // would flip the answer if not disabled
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+
+    await act(async () => { resolveAttempts() })
+    await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+  })
+
   it('Fix 1: "Start over" discards the saved run and builds a fresh sample', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [

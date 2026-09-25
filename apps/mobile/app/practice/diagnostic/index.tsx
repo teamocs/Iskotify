@@ -29,9 +29,10 @@ import { useTheme } from '../../../theme/ThemeContext'
 import { spacing, radius, type Theme } from '../../../theme/tokens'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
+import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
-import { runKeyFor, reorderByIds } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 import { buildPreAssessFromUpcat, type UpcatLocalRow } from '../../../utils/preAssessmentSource'
 import { PRE_ASSESS_QUESTIONS } from '../../../data/preAssessment'
 
@@ -75,6 +76,9 @@ export default function DiagnosticExam() {
   const [reviewOpen, setReviewOpen] = useState(false)
   // Fix 1: leave-confirmation + resume-in-progress-run state.
   const [leaveConfirmed, setLeaveConfirmed] = useState(false)
+  // Review finding #2: disables exam inputs while submit() is in flight (see
+  // exam/[slug].tsx's submitting flag for the full rationale).
+  const [submitting, setSubmitting] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
   const bankRowsRef = useRef<UpcatLocalRow[]>([])
   const subtestsRef = useRef<string[]>([])
@@ -178,8 +182,11 @@ export default function DiagnosticExam() {
       return
     }
     setQuestions(ordered)
-    setAnswers(run.answers)
-    setIdx(Math.min(run.idx, ordered.length - 1))
+    // Review finding #1: remap answers/idx through the surviving id order —
+    // reorderByIds() compacted away vanished questions.
+    const newIds = ordered.map(q => q.id)
+    setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
+    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
     setEndTime(run.endTime)
     setPhase('exam')
   }
@@ -191,8 +198,10 @@ export default function DiagnosticExam() {
   }
 
   // Fix 1: persist answers/position/timer on every change while in progress.
+  // Review finding #2: gated on submittedRef too — see exam/[slug].tsx's
+  // save effect comment for the full rationale.
   useEffect(() => {
-    if (phase !== 'exam' || questions.length === 0) return
+    if (phase !== 'exam' || questions.length === 0 || submittedRef.current) return
     void saveRun({
       runKey,
       kind: 'diagnostic',
@@ -223,12 +232,15 @@ export default function DiagnosticExam() {
   useEffect(() => {
     if (leaveConfirmed) router.back()
   }, [leaveConfirmed])
+  // Review finding #3: web-only tab-close warning + immediate persist flush.
+  useBeforeUnloadWarning(phase === 'exam')
 
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   async function submit() {
     if (submittedRef.current) return // guard against double-submit (timer + tap)
     submittedRef.current = true
+    setSubmitting(true) // Review finding #2: disable exam inputs immediately
 
     // Fix 1: run finished — stop offering "Resume" for a completed attempt.
     void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
@@ -430,7 +442,11 @@ export default function DiagnosticExam() {
         contentContainerStyle={webWidth ?? undefined}
         showsVerticalScrollIndicator={false}
       >
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
       </ScrollView>
 
       <View style={s.footer}>
@@ -438,24 +454,34 @@ export default function DiagnosticExam() {
           accessibilityRole="button"
           style={s.footBtnGhost}
           onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0}
+          disabled={idx === 0 || submitting}
         >
-          <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
+          <Text style={[s.footGhostTxt, (idx === 0 || submitting) && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
         {isLast ? (
           // Fix 2: the last question never submits directly anymore.
-          <Pressable accessibilityRole="button" style={s.footBtnPrimary} onPress={() => setReviewOpen(true)}>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.footBtnPrimary, submitting && s.footDisabled]}
+            disabled={submitting}
+            onPress={() => setReviewOpen(true)}
+          >
             <Text style={s.footPrimaryTxt}>Review & submit</Text>
           </Pressable>
         ) : (
           <>
-            <Pressable accessibilityRole="button" style={s.footBtnGhost} onPress={() => setIdx(i => i + 1)}>
+            <Pressable
+              accessibilityRole="button"
+              style={s.footBtnGhost}
+              onPress={() => setIdx(i => i + 1)}
+              disabled={submitting}
+            >
               <Text style={s.footGhostTxt}>Skip</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-              disabled={sel === undefined}
+              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
+              disabled={sel === undefined || submitting}
               onPress={() => setIdx(i => i + 1)}
             >
               <Text style={s.footPrimaryTxt}>Next</Text>
@@ -469,7 +495,7 @@ export default function DiagnosticExam() {
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={new Set(Object.keys(answers).map(Number))}
-        onJump={setIdx}
+        onJump={i => { if (!submitting) setIdx(i) }}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />

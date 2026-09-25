@@ -360,6 +360,74 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
   })
 
+  // Review finding #1 (HIGH): reorderByIds compacts away a vanished question —
+  // answers/idx keyed by the ORIGINAL saved order must be remapped or they
+  // land on the wrong question.
+  it('restores answers onto the right questions when a question was removed from the pool since saving', async () => {
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+      // Q2 has since been removed from the bank — only Q1 and Q3 remain.
+      { questionId: 'Q3', subtest: 'Mathematics', questionText: '5+5?', options: JSON.stringify(['9', '10', '11', '12']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    mockLoadRun.mockResolvedValue({
+      runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+      questionIds: ['Q1', 'Q2', 'Q3'], sectionNames: ['Mathematics', 'Mathematics', 'Mathematics'],
+      answers: { 0: 1, 1: 2, 2: 3 }, // Q1 -> '2', Q2 -> vanishes, Q3 -> '12'
+      idx: 2, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+    })
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+    fireEvent.press(screen.getByText('Resume where you left off'))
+
+    // idx 2 pointed at Q3; after compaction ([Q1, Q3]) Q3 sits at index 1.
+    await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
+    expect(screen.getByRole('button', { name: '12' }).props.accessibilityState.selected).toBe(true)
+
+    fireEvent.press(screen.getByText('Back'))
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    expect(screen.getByRole('button', { name: '2' }).props.accessibilityState.selected).toBe(true)
+  })
+
+  // Review finding #2 (HIGH): submit() stays in phase 'exam' through its
+  // awaits — a state change during that window would re-trigger the save
+  // effect and resurrect the just-cleared run.
+  it('never re-saves the run once submit has started, even if state changes mid-submit', async () => {
+    let resolveAttempts!: () => void
+    mockRecordAttempts.mockImplementationOnce(
+      () => new Promise<void>(resolve => { resolveAttempts = () => resolve(undefined) }),
+    )
+
+    mockSearchParams = { subtest: 'Mathematics' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+
+    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+    const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
+    const buttons = call[2] as { text: string; onPress?: () => void }[]
+
+    await act(async () => {
+      buttons.find(b => b.text.toLowerCase() === 'submit')!.onPress!()
+    })
+    const saveCallsAtSubmitStart = mockSaveRun.mock.calls.length
+    expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
+
+    fireEvent.press(screen.getByText('1')) // would flip the answer if not disabled
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+
+    await act(async () => { resolveAttempts() })
+    await waitFor(() => expect(screen.getByText('Per-subtest')).toBeTruthy())
+    expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+  })
+
   it('Fix 1: "Start over" discards the saved run and builds a fresh sample', async () => {
     mockSearchParams = { subtest: 'Mathematics' }
     mockQuestionRows = [
