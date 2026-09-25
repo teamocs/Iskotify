@@ -2,7 +2,7 @@
  * app/+html.tsx — Expo Router web HTML shell.
  *
  * This file is web-only: it injects global <head> metadata and a <style>
- * block that sets baseline behaviour for the dark-themed web build.
+ * block that sets baseline behaviour for the web build.
  *
  * Notes:
  * - React <ViewTransition> is intentionally omitted — it requires React canary
@@ -41,8 +41,10 @@ export default function Root({ children }: PropsWithChildren) {
  * Global web-only CSS injected into the <head>.
  *
  * Rules:
- *  1. color-scheme: dark — tells the browser this is a dark-themed app so
- *     native form controls, scroll bars, and system UI match the theme.
+ *  1. color-scheme: light — the first-launch default (owner decision, 2026-09).
+ *     ThemeProvider updates document.documentElement.style.colorScheme at
+ *     runtime once the user's preference / the OS scheme is known, so native
+ *     form controls and scroll bars follow the painted palette.
  *  2. Font-smoothing antialiased — prevents sub-pixel rendering on macOS/Linux
  *     which looks blurry on dark backgrounds.
  *  3. overscroll-behavior-y: none — prevents the iOS/Android-style pull-to-
@@ -54,7 +56,7 @@ export default function Root({ children }: PropsWithChildren) {
  */
 const WEB_STYLES = `
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {

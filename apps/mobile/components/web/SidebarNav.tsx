@@ -1,235 +1,149 @@
 /**
- * SidebarNav — persistent desktop sidebar for lg breakpoint (web only).
+ * SidebarNav — persistent navigation for expanded web (≥ 1024).
  *
- * Reuses the exact same icon components as TabBar.tsx:
- *   Home2Outlined, Bolt2Outlined, GraduationCap1Outlined, Bell1Outlined, TrendUp1Outlined
- * plus User4Outlined for profile and Gear1Outlined for settings.
+ * Same four destinations as the bottom TabBar (Today / Practice / Explore /
+ * Progress), as links inside a navigation landmark; the current one carries
+ * aria-current="page". Profile (avatar + name) and Settings sit at the bottom.
  *
- * Hover support: react-native-web 0.21.2 exposes `hovered` in the Pressable
- * style function — VERIFIED in node_modules/react-native-web/src/exports/Pressable/index.js.
- * We use style={({hovered, pressed}) => [...]} directly (no onHoverIn/Out needed).
- *
- * focus-visible: RN-Web adds focus rings by default — not removed here.
+ * Hover: react-native-web exposes `hovered` in the Pressable style function.
+ * Focus rings: a 2px focusRing outline on keyboard focus (see ui/a11y).
+ * The current link is marked with aria-current="page" only — aria-selected is
+ * not valid on a link.
  */
 // RN Image is fine for a tiny bundled asset.
 // eslint-disable-next-line react-doctor/rn-prefer-expo-image
-import { View, Text, Pressable, StyleSheet, Image, Platform } from 'react-native'
+import { View, Text, Pressable, Image } from 'react-native'
 import { usePathname, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import {
-  Home2Outlined,
-  Bolt2Outlined,
-  GraduationCap1Outlined,
-  Bell1Outlined,
-  TrendUp1Outlined,
-  User4Outlined,
-  Gear1Outlined,
-} from '@lineiconshq/free-icons'
+import { Gear1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, typography } from '../../theme/tokens'
+import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
+import { Avatar } from '../ui/Avatar'
+import { useProfileName } from '../../hooks/useProfileName'
+import { focusRing, type WebPressableState } from '../ui/a11y'
 
-const SIDEBAR_WIDTH = 240
+const SIDEBAR_WIDTH = 248
 
-interface NavEntry {
+// aria-current is honoured by react-native-web but missing from RN's types.
+const CURRENT_PAGE = { 'aria-current': 'page' } as Record<string, string>
+
+interface ItemProps {
   label: string
-  icon: typeof Home2Outlined
-  route: string
-  // The route segment that counts as "active" (pathname must start with this)
-  activePrefix: string
-}
-
-const NAV_ITEMS: NavEntry[] = [
-  { label: 'Home',     icon: Home2Outlined,          route: '/',          activePrefix: '/(tabs)/index' },
-  { label: 'Exams',    icon: Bolt2Outlined,           route: '/practice',  activePrefix: '/practice' },
-  { label: 'Lists',    icon: GraduationCap1Outlined,  route: '/listings',  activePrefix: '/listings' },
-  { label: 'Updates',  icon: Bell1Outlined,           route: '/updates',   activePrefix: '/updates' },
-  { label: 'Progress', icon: TrendUp1Outlined,        route: '/analytics', activePrefix: '/analytics' },
-]
-
-const BOTTOM_ITEMS: NavEntry[] = [
-  { label: 'Profile',  icon: User4Outlined,  route: '/profile',  activePrefix: '/profile' },
-  { label: 'Settings', icon: Gear1Outlined,  route: '/settings', activePrefix: '/settings' },
-]
-
-// Expo-router on web uses pathnames like "/" for the index tab.
-// We also check for the /(tabs)/ segment that expo-router may return.
-function isActive(pathname: string, entry: NavEntry): boolean {
-  if (entry.route === '/') {
-    return pathname === '/' || pathname === '/index' || pathname === '/(tabs)/index' || pathname === '/(tabs)'
-  }
-  // Strip /(tabs) prefix for comparison
-  const clean = pathname.replace(/^\/\(tabs\)/, '')
-  return clean === entry.route || clean.startsWith(entry.route + '/') ||
-    pathname.startsWith(entry.activePrefix)
-}
-
-interface SidebarItemProps {
-  entry: NavEntry
+  /** Secondary line inside the link (e.g. the student's name under Profile). */
+  sublabel?: string
   active: boolean
   onPress: () => void
+  leading: React.ReactNode
 }
 
-function SidebarItem({ entry, active, onPress }: SidebarItemProps) {
+function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
   const { theme: t } = useTheme()
-
+  const color = active ? t.accentText : t.textSecondary
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={entry.label}
-      accessibilityState={{ selected: active }}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      {...(active ? CURRENT_PAGE : null)}
       style={(state) => {
-        // RN-Web 0.21.2: style function receives { hovered, focused, pressed }
-        const { hovered, pressed } = state as { hovered?: boolean; focused?: boolean; pressed: boolean }
-        return [
-          styles.item,
-          active && { backgroundColor: t.accentSurface },
-          hovered && !active && { backgroundColor: t.surface },
-          pressed && { opacity: 0.75 },
-        ]
+        const { hovered, pressed, focused } = state as WebPressableState
+        return [{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+          minHeight: 44,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: active ? t.accentSurface : hovered ? t.surface2 : 'transparent',
+          opacity: pressed ? 0.75 : 1,
+        }, focusRing(t.focusRing, focused)]
       }}
     >
-      <Lineicons
-        icon={entry.icon}
-        size={20}
-        color={active ? t.accentText : t.textSecondary}
-      />
-      <Text
-        style={[
-          styles.itemLabel,
-          { color: active ? t.accentText : t.textSecondary },
-          active && { fontFamily: 'Outfit_700Bold' },
-        ]}
-        numberOfLines={1}
-      >
-        {entry.label}
-      </Text>
-      {active ? (
-        <View style={[styles.activePill, { backgroundColor: t.accentText }]} />
-      ) : null}
+      {leading}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          style={[textStyle('body', color), { fontFamily: active ? fonts.heading : fonts.bodyMedium }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {sublabel ? (
+          <Text style={textStyle('caption', t.textSecondary)} numberOfLines={1}>{sublabel}</Text>
+        ) : null}
+      </View>
     </Pressable>
   )
 }
 
-/**
- * Rendered only when Platform.OS === 'web' and breakpoint === 'lg'.
- * The layout switch in app/(tabs)/_layout.tsx conditionally mounts this.
- */
+/** Rendered only on web at the expanded breakpoint (see app/(tabs)/_layout.tsx). */
 export function SidebarNav() {
   const { theme: t } = useTheme()
   const pathname = usePathname()
+  const current = activeDestination(pathname)
+  const name = useProfileName()
+  const onProfile = pathname.replace(/^\/\(tabs\)/, '').startsWith('/profile')
+  const onSettings = pathname.startsWith('/settings')
 
   return (
     <View
-      style={[
-        styles.sidebar,
-        {
-          backgroundColor: t.tabBar,
-          borderRightColor: t.border,
-        },
-      ]}
+      testID="sidebar-nav"
+      role="navigation"
+      accessibilityLabel="Main"
+      style={{
+        width: SIDEBAR_WIDTH,
+        alignSelf: 'stretch',
+        backgroundColor: t.surface,
+        borderRightWidth: 1,
+        borderRightColor: t.border,
+        paddingHorizontal: spacing.md,
+        paddingBottom: spacing.lg,
+      }}
     >
-      {/* Logo + app name */}
-      <View style={styles.logoRow}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.xl, paddingBottom: spacing.xl }}>
         <Image
           source={require('../../assets/images/icon.png')}
-          style={styles.logoImg}
+          style={{ width: 32, height: 32, borderRadius: radius.sm }}
           resizeMode="contain"
-          accessibilityLabel="Iskotify logo"
+          accessibilityIgnoresInvertColors
+          accessible={false}
         />
-        <Text style={[styles.appName, { color: t.textPrimary }]}>Iskotify</Text>
+        <Text style={textStyle('headline', t.textPrimary)}>Iskotify</Text>
       </View>
 
-      {/* Primary nav items */}
-      <View style={styles.navSection}>
-        {NAV_ITEMS.map(entry => (
-          <SidebarItem
-            key={entry.route}
-            entry={entry}
-            active={isActive(pathname, entry)}
-            onPress={() => router.push(entry.route as any)}
-          />
-        ))}
+      <View style={{ gap: spacing.xs }}>
+        {TAB_DESTINATIONS.map(dest => {
+          const active = current === dest.name
+          return (
+            <SidebarLink
+              key={dest.name}
+              label={dest.label}
+              active={active}
+              onPress={() => router.push(dest.href as never)}
+              leading={<Lineicons icon={dest.icon} size={20} color={active ? t.accentText : t.textSecondary} />}
+            />
+          )
+        })}
       </View>
 
-      {/* Spacer pushes bottom items down */}
       <View style={{ flex: 1 }} />
 
-      {/* Bottom: Profile + Settings */}
-      <View style={[styles.bottomSection, { borderTopColor: t.border }]}>
-        {BOTTOM_ITEMS.map(entry => (
-          <SidebarItem
-            key={entry.route}
-            entry={entry}
-            active={isActive(pathname, entry)}
-            onPress={() => router.push(entry.route as any)}
-          />
-        ))}
+      <View style={{ borderTopWidth: 1, borderTopColor: t.border, paddingTop: spacing.sm, gap: spacing.xs }}>
+        <SidebarLink
+          label="Profile"
+          sublabel={name || undefined}
+          active={onProfile}
+          onPress={() => router.push('/profile' as never)}
+          leading={<Avatar name={name} size={28} />}
+        />
+        <SidebarLink
+          label="Settings"
+          active={onSettings}
+          onPress={() => router.push('/settings' as never)}
+          leading={<Lineicons icon={Gear1Outlined} size={20} color={onSettings ? t.accentText : t.textSecondary} />}
+        />
       </View>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  sidebar: {
-    width: SIDEBAR_WIDTH,
-    // On web, position: 'sticky' / 'fixed' is not a valid RN style value.
-    // The parent layout (tabs _layout) uses flexDirection:'row'; this sidebar
-    // is a flex sibling, so it stays visible while content scrolls independently.
-    alignSelf: 'stretch',
-    borderRightWidth: 1,
-    paddingTop: Platform.OS === 'web' ? 0 : 0,
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.lg,
-    // Ensure sidebar is above content on web
-    zIndex: 10,
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  logoImg: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-  },
-  appName: {
-    fontSize: typography.md,
-    fontFamily: 'Outfit_700Bold',
-    letterSpacing: -0.3,
-  },
-  navSection: {
-    gap: spacing.xs,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    minHeight: 44,
-    // cursor: pointer is automatic for Pressable on web (RN-Web applies it)
-  },
-  itemLabel: {
-    flex: 1,
-    fontSize: typography.sm,
-    fontFamily: 'Outfit_600SemiBold',
-    letterSpacing: 0.1,
-  },
-  activePill: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.pill,
-  },
-  bottomSection: {
-    borderTopWidth: 1,
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
-  },
-})

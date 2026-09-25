@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
-import ListsScreen from '../listings'
+import ListsScreen from '../explore'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -16,13 +16,28 @@ jest.mock('@lineiconshq/free-icons', () => ({
   SparkOutlined: {},
 }))
 
-// Controlled ?tab= deep-link param — override per-test via mockTabParam.value
+// Controlled deep-link params — legacy ?tab= (old Lists links) and ?section=
+// (Explore). Override per-test via mockTabParam.value / mockSectionParam.value.
 const mockTabParam: { value?: string } = { value: undefined }
+const mockSectionParam: { value?: string } = { value: undefined }
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
   useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
-  useLocalSearchParams: jest.fn(() => ({ tab: mockTabParam.value })),
+  useLocalSearchParams: jest.fn(() => ({ tab: mockTabParam.value, section: mockSectionParam.value })),
+}))
+
+// The News & dates section is covered by newsFeed.test.tsx; stub it here.
+jest.mock('../../../components/explore/NewsFeed', () => ({
+  NewsFeed: () => {
+    const { Text } = require('react-native')
+    return <Text>NEWS_FEED_STUB</Text>
+  },
+}))
+
+// Header avatar reads the student's name; keep it out of the db mock.
+jest.mock('../../../hooks/useProfileName', () => ({
+  useProfileName: () => 'Ana Reyes',
 }))
 
 jest.mock('../../../services/sync', () => ({
@@ -100,6 +115,7 @@ const SEARCH_PLACEHOLDER_SCHOLAR = "Search scholarships, e.g. 'full-ride for low
 describe('ListsScreen', () => {
   beforeEach(() => {
     mockTabParam.value = undefined
+    mockSectionParam.value = undefined
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     jest.clearAllMocks()
@@ -115,12 +131,47 @@ describe('ListsScreen', () => {
     getSettings.mockResolvedValue({})
   })
 
-  // ── Renames ────────────────────────────────────────────────────────────────
+  // ── Redesign M1: Lists + Updates fold into Explore ─────────────────────────
 
-  it('renders the Lists title and updated subtitle', () => {
+  it('renders the Explore title (the old Lists tab is now Explore)', () => {
     render(<ListsScreen />)
-    expect(screen.getByText('Lists')).toBeTruthy()
-    expect(screen.getByText('Universities, scholarships, courses & career destinations')).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy()
+    expect(screen.queryByText('Lists')).toBeNull()
+  })
+
+  it('has a Profile avatar in the header that opens /profile', () => {
+    const { router } = require('expo-router')
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Profile' }))
+    expect(router.push).toHaveBeenCalledWith('/profile')
+  })
+
+  it('offers five sections in one tablist, including News & dates', () => {
+    render(<ListsScreen />)
+    expect(screen.getByTestId('explore-sections').props.accessibilityRole).toBe('tablist')
+    expect(screen.getAllByRole('tab').map(t => t.props.accessibilityLabel)).toEqual([
+      'Schools & exams', 'Scholarships', 'Courses', 'Destinations', 'News & dates',
+    ])
+  })
+
+  it('switching to News & dates shows the feed and hides the listings search', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('News & dates'))
+    expect(screen.getByText('NEWS_FEED_STUB')).toBeTruthy()
+    expect(screen.queryByPlaceholderText(SEARCH_PLACEHOLDER_UNI)).toBeNull()
+    expect(screen.getAllByRole('tab')[4]?.props.accessibilityState?.selected).toBe(true)
+  })
+
+  it('opens News & dates from ?section=news (old Updates deep links redirect here)', () => {
+    mockSectionParam.value = 'news'
+    render(<ListsScreen />)
+    expect(screen.getByText('NEWS_FEED_STUB')).toBeTruthy()
+  })
+
+  it('accepts ?section= for listing sections too', () => {
+    mockSectionParam.value = 'scholarships'
+    render(<ListsScreen />)
+    expect(screen.getAllByRole('tab')[1]?.props.accessibilityState?.selected).toBe(true)
   })
 
   it('does NOT render the old "Exams" title', () => {
@@ -129,15 +180,9 @@ describe('ListsScreen', () => {
     expect(screen.queryByText('College entrance exams & scholarships')).toBeNull()
   })
 
-  // ── 4-tab navigation ───────────────────────────────────────────────────────
-
-  it('renders exactly 4 tabs: Universities, Scholarships, Courses, Destinations', () => {
-    render(<ListsScreen />)
-    expect(screen.getByText('Universities')).toBeTruthy()
-    expect(screen.getByText('Scholarships')).toBeTruthy()
-    expect(screen.getByText('Courses')).toBeTruthy()
-    expect(screen.getByText('Destinations')).toBeTruthy()
-  })
+  // ── Section navigation (the 4 listing sections + News & dates) ─────────────
+  // "Universities" is now labelled "Schools & exams" — entrance exams live in
+  // it, so a student looking for UPCAT dates finds them (brief finding 5).
 
   it('Universities tab is active by default (has accessibilityState selected)', () => {
     render(<ListsScreen />)

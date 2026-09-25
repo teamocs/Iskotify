@@ -9,6 +9,7 @@ import * as Linking from 'expo-linking'
 import { supabase } from '../services/supabase'
 import { pullUserData, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
+import { invalidate } from '../services/queryCache'
 import { eq } from 'drizzle-orm'
 import { userSettings, focusListings } from '../db/schema'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
@@ -66,6 +67,7 @@ export default function LandingScreen() {
                     target: userSettings.id,
                     set: { googleId: user.id, email: user.email ?? '', fullName: nameToUse },
                   })
+                invalidate('settings:') // refresh the cached header name
                 // Restore an existing cloud backup (returning login / new device), or push
                 // this device's anonymous-onboarding data up on a first sign-in. Non-fatal.
                 let hasCloudBackup = false

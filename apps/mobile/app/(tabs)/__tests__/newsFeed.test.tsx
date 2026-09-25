@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
-import UpdatesScreen from '../updates'
+import { NewsFeed as UpdatesScreen } from '../../../components/explore/NewsFeed'
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn() },
@@ -119,12 +119,24 @@ describe('UpdatesScreen', () => {
     jest.clearAllMocks()
   })
 
-  it('renders header title and subtitle', async () => {
+  // Redesign M1: the Updates tab is now Explore's "News & dates" section, so
+  // the feed renders without its own screen title (Explore owns the header).
+  it('renders as a section without the old Updates screen title', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb())
     render(<UpdatesScreen />)
-    expect(screen.getByText('Updates')).toBeTruthy()
-    expect(screen.getByText('Events, news & app updates')).toBeTruthy()
+    expect(screen.queryByText('Updates')).toBeNull()
+    expect(screen.getByTestId('updates-calendar-strip')).toBeTruthy()
+  })
+
+  it("reloads the feed when Explore's header refresh bumps refreshKey", async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const db = makeDb()
+    useDb.mockReturnValue(db)
+    const { rerender } = render(<UpdatesScreen refreshKey={0} />)
+    await waitFor(() => expect(db.select).toHaveBeenCalledTimes(1))
+    rerender(<UpdatesScreen refreshKey={1} />)
+    await waitFor(() => expect(db.select).toHaveBeenCalledTimes(2))
   })
 
   it('renders the Results Tracker card', async () => {

@@ -7,6 +7,8 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { TabHeader } from '../../components/TabHeader'
+import { webContentStyle } from '../../components/ui/webMaxWidth'
 import { router } from 'expo-router'
 import { usePracticeData, type Strength, type TopicRow } from '../../hooks/usePracticeData'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -28,7 +30,7 @@ import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { AdmissionEstimateCard } from '../../components/home/AdmissionEstimateCard'
 import { groupTopicsBySubject } from '../../utils/groupTopicsBySubject'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, typography } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -37,33 +39,27 @@ import { ListCard } from '../../components/ui/ListCard'
 import { LoadingState } from '../../components/ui/LoadingState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { useAnalytics } from '../../hooks/useAnalytics'
-import { useBreakpoint, gridItemWidth } from '../../hooks/useBreakpoint'
+import { useBreakpoint, gridItemWidth, pagePadding } from '../../hooks/useBreakpoint'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch } from '../../services/sync'
 
 // ── Strength colours ──────────────────────────────────────────────────────────
 
-// Static borders only (no border tokens exist); surfaces/text are resolved from
-// theme tokens in useStrengthColor so greens/reds/ambers stay legible in dark mode.
-const STRENGTH_BORDER_STATIC: Record<Strength, string> = {
-  New:    'rgba(128,0,0,0.25)',
-  Weak:   'rgba(239,68,68,0.22)',
-  Review: 'rgba(245,158,11,0.22)',
-  Strong: 'rgba(34,197,94,0.22)',
-}
-
+// Everything resolves from theme tokens so it re-themes. Text on a status tint
+// uses the *Strong token (DESIGN.md: the DEFAULT status colour on its own 10%
+// tint falls under 4.5:1 in light mode). Borders are decorative here, so they
+// take the tint itself: calm, and never the only signal (the label says it).
 function useStrengthColor(strength: Strength) {
   const { theme: t } = useTheme()
-  const border = STRENGTH_BORDER_STATIC[strength]
   switch (strength) {
     case 'New':
-      return { bg: t.accentSurface, border, text: t.accentText, iconBg: t.accentSurface, iconColor: t.accentText }
+      return { bg: t.accentSurface, border: t.accentSurface, text: t.accentText, iconBg: t.accentSurface, iconColor: t.accentText }
     case 'Weak':
-      return { bg: t.dangerSurface, border, text: t.danger, iconBg: t.dangerSurface, iconColor: t.danger }
+      return { bg: t.dangerSurface, border: t.dangerSurface, text: t.dangerStrong, iconBg: t.dangerSurface, iconColor: t.dangerStrong }
     case 'Review':
-      return { bg: t.warningSurface, border, text: t.warning, iconBg: t.warningSurface, iconColor: t.warning }
+      return { bg: t.warningSurface, border: t.warningSurface, text: t.warningStrong, iconBg: t.warningSurface, iconColor: t.warningStrong }
     case 'Strong':
-      return { bg: t.successSurface, border, text: t.success, iconBg: t.successSurface, iconColor: t.success }
+      return { bg: t.successSurface, border: t.successSurface, text: t.successStrong, iconBg: t.successSurface, iconColor: t.successStrong }
   }
 }
 
@@ -114,7 +110,7 @@ function DeckCard({
   return (
     <View style={{ marginBottom: spacing.sm }}>
       <ListCard
-        icon={<Text style={{ fontSize: 16 }}>🗂️</Text>}
+        icon={<Text style={{ fontSize: typography.base }}>🗂️</Text>}
         title={deck.name}
         subtitle={`${deck.topicIds.length} topic${deck.topicIds.length !== 1 ? 's' : ''} · ${totalCards} cards`}
         onPress={() => router.push(`/practice/deck/${deck.id}`)}
@@ -453,8 +449,7 @@ function makeStyles(
   return {
     s: StyleSheet.create({
       root: { flex: 1, backgroundColor: t.bg },
-      header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
-      title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
+      header: { paddingHorizontal: spacing.lg },
       // AI Study Feedback
       aiFeedbackCard: { gap: spacing.xs / 2 },
       aiFeedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
@@ -476,10 +471,10 @@ function makeStyles(
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm + 2,
       },
-      collapsedIcon: { fontSize: 16, width: 22, textAlign: 'center' },
+      collapsedIcon: { fontSize: typo.base, width: 22, textAlign: 'center' },
       collapsedLabel: { flex: 1, fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
       collapsedSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-      collapsedChevron: { fontSize: 18, color: t.textTertiary },
+      collapsedChevron: { fontSize: typo.md, color: t.textTertiary },
       secRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
       secTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
       secSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, textAlign: 'right', marginLeft: spacing.sm },
@@ -509,7 +504,7 @@ function makeStyles(
         gap: spacing.md,
         backgroundColor: t.warningSurface,
         borderWidth: 1,
-        borderColor: 'rgba(251,191,36,0.35)',
+        borderColor: t.warningBorder,
         borderRadius: radius.lg,
         borderCurve: 'continuous',
         paddingHorizontal: spacing.md,
@@ -519,10 +514,10 @@ function makeStyles(
         width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous',
         backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center',
       },
-      dueIcon: { fontSize: 18 },
+      dueIcon: { fontSize: typo.md },
       dueTitle: { fontSize: typo.base, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
       dueSub: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-      dueChevron: { fontSize: 20, color: t.warning },
+      dueChevron: { fontSize: typo.lg, color: t.warningStrong },
     }),
     rc: StyleSheet.create({
       grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -579,7 +574,7 @@ function makeStyles(
       addTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', textAlign: 'center' },
     }),
     m: StyleSheet.create({
-      overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+      overlay: { flex: 1, backgroundColor: t.backdrop, justifyContent: 'flex-end' },
       sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, borderCurve: 'continuous', padding: spacing.xl, paddingBottom: spacing.xxxl, borderTopWidth: 1, borderColor: t.border, maxHeight: '85%' },
       headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
       title: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
@@ -748,7 +743,7 @@ export default function PracticeScreen() {
   // Web-only adaptive grids: native tablets (iPad etc.) keep the phone 2-col
   // layout — the native app's rendering must not change with viewport width.
   const bpRaw = useBreakpoint()
-  const bp = Platform.OS === 'web' ? bpRaw : 'sm'
+  const bp = Platform.OS === 'web' ? bpRaw : 'compact'
 
   // Stable element for the ScrollView refreshControl prop. RN's refreshControl
   // requires a JSX element (no component/render-prop form), so memoize it to avoid
@@ -864,10 +859,15 @@ export default function PracticeScreen() {
   return (
     <SafeAreaView style={s.root}>
       <WebTopSpacer />
-      {/* (1) Header */}
-      <View style={[s.header, { flexDirection: 'row', alignItems: 'center' }]}>
-        <Text style={[s.title, { flex: 1 }]}>Exams</Text>
-        <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
+      {/* (1) Header — the old "Exams" tab is Practice (redesign M1) */}
+      <View style={[s.header, { paddingHorizontal: pagePadding(bpRaw) }]}>
+        {/* Same centered column as the ScreenScroll body below, so they align. */}
+        <View style={webContentStyle(bpRaw)}>
+          <TabHeader
+            title="Practice"
+            actions={<WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />}
+          />
+        </View>
       </View>
 
       <ScreenScroll
@@ -925,7 +925,7 @@ export default function PracticeScreen() {
                   accessibilityLabel="Collapse AI Study Feedback"
                   style={{ marginLeft: 'auto' }}
                 >
-                  <Text style={{ fontSize: 18, color: t.textTertiary }}>‹</Text>
+                  <Text style={{ fontSize: typography.md, color: t.textTertiary }}>‹</Text>
                 </Pressable>
               </View>
               {weakSubjectsFeedback && weakSubjectsFeedback.length > 0 ? (
@@ -1045,7 +1045,7 @@ export default function PracticeScreen() {
               <View style={rc.cardWrap}>
                 <Pressable
                   style={({ pressed }) => [rd.addCard, pressed && { opacity: 0.7 }]}
-                  onPress={() => router.push('/(tabs)/listings')}
+                  onPress={() => router.push('/(tabs)/explore')}
                   accessibilityRole="button"
                   accessibilityLabel="Add exam or scholarship"
                 >
@@ -1055,10 +1055,10 @@ export default function PracticeScreen() {
             </View>
           ) : (
             <InfoBanner
-              icon={<Text style={{ fontSize: 16 }}>🎯</Text>}
-              message="Add an exam or scholarship from the Lists tab"
-              actionLabel="Lists"
-              onAction={() => router.push('/(tabs)/listings')}
+              icon={<Text style={{ fontSize: typography.base }}>🎯</Text>}
+              message="Add an exam or scholarship from Explore"
+              actionLabel="Explore"
+              onAction={() => router.push('/(tabs)/explore')}
               tone="neutral"
             />
           )}
@@ -1162,15 +1162,15 @@ export default function PracticeScreen() {
               </View>
               <View style={{ gap: spacing.sm }}>
                 <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>✅</Text>}
-                  iconBg="rgba(34,197,94,0.14)"
+                  icon={<Text style={{ fontSize: typography.base }}>✅</Text>}
+                  iconBg={t.successSurface}
                   title="Requirements"
                   subtitle="Track requirements for your focus exams & scholarships"
                   onPress={() => router.push('/requirements')}
                 />
                 <ListCard
-                  icon={<Text style={{ fontSize: 15 }}>📝</Text>}
-                  iconBg="rgba(128,0,0,0.18)"
+                  icon={<Text style={{ fontSize: typography.base }}>📝</Text>}
+                  iconBg={t.accentSurface}
                   title="Notes"
                   subtitle="Your study notes & reminders"
                   onPress={() => router.push('/notes')}

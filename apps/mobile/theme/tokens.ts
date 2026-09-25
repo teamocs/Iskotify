@@ -1,3 +1,5 @@
+import type { TextStyle } from 'react-native'
+
 // ── Design tokens (Refined Maroon, 2026) ─────────────────────────────────────
 // One source of truth for color, type, spacing, radius, elevation. Both themes are
 // contrast-tuned to WCAG: primary text ≥ 7:1, secondary ≥ 4.5:1, tertiary ≥ 3:1.
@@ -11,7 +13,7 @@ export const darkTheme = {
   border:        'rgba(255,255,255,0.14)',
   textPrimary:   '#ffffff',
   textSecondary: 'rgba(255,255,255,0.72)',  // was 0.62 → ~5.5:1
-  textTertiary:  'rgba(255,255,255,0.52)',  // was 0.38 (≈2:1, failed) → ~3.4:1
+  textTertiary:  'rgba(255,255,255,0.52)',  // was 0.38 (≈2:1, failed) → ≈5.47:1 on bg (4.87:1 on surfaceRaised)
   accent:        '#800000',
   accentText:    '#fca5a5',
   accentSurface: 'rgba(128,0,0,0.22)',
@@ -38,7 +40,8 @@ export const darkTheme = {
   successStrong: '#4ade80',
   dangerStrong:  '#f87171',
   warningStrong: '#fbbf24',
-  tabBar:        'rgba(26,26,46,0.92)',
+  // Opaque (was 0.92): scrolled content showed through behind tab labels.
+  tabBar:        '#1a1a2e',
   divider:       'rgba(255,255,255,0.20)',
   surfaceSubtle: 'rgba(255,255,255,0.05)',
   // Elevation — boxShadow strings (new-arch, cross-platform). Dark uses deeper black.
@@ -48,6 +51,26 @@ export const darkTheme = {
   // the only bright thing on screen; controls on it use textInverse.
   scrim:         'rgba(0,0,0,0.92)',
   scrimControl:  'rgba(255,255,255,0.15)',
+  // ── Redesign M1 (direction C) additions ─────────────────────────────────
+  // Status/accent BORDERS: alpha tuned so each clears 3:1 (WCAG 1.4.11
+  // non-text contrast) against BOTH bg #1a1a2e and surface-over-bg (~#2c2c3f),
+  // so a border can carry a state boundary (selected chip, error field) on its
+  // own. Measured (WCAG relative luminance):
+  //   successBorder 3.82 / 3.40 · dangerBorder 3.65 / 3.13
+  //   warningBorder 3.48 / 3.15 · accentBorder 3.62 / 3.23
+  successBorder: 'rgba(74,222,128,0.55)',
+  dangerBorder:  'rgba(248,113,113,0.70)',
+  warningBorder: 'rgba(251,191,36,0.50)',
+  accentBorder:  'rgba(252,165,165,0.55)',
+  // Pressed fill for the one maroon primary action. White on it: 14.43:1.
+  accentPressed: '#5c0000',
+  // Opaque raised surface for sheets/dialogs (= surface blended over bg).
+  // textPrimary 13.64 · textSecondary 7.85 · textTertiary 4.87 · accentText 7.19.
+  surfaceRaised: '#2c2c3f',
+  // Dimmed layer behind sheets/dialogs (not the media scrim above).
+  backdrop:      'rgba(0,0,0,0.60)',
+  // Keyboard focus ring: 8.99:1 on bg.
+  focusRing:     '#fca5a5',
 }
 
 export const lightTheme = {
@@ -83,7 +106,8 @@ export const lightTheme = {
   successStrong: '#166534',
   dangerStrong:  '#991b1b',
   warningStrong: '#92400e',
-  tabBar:        'rgba(253,244,244,0.92)',
+  // Opaque (was 0.92): scrolled content showed through behind tab labels.
+  tabBar:        '#fdf4f4',
   divider:       'rgba(128,0,0,0.14)',
   surfaceSubtle: 'rgba(128,0,0,0.05)',
   // Elevation — soft maroon-tinted shadows for the warm light palette.
@@ -91,6 +115,21 @@ export const lightTheme = {
   shadowMd:      '0px 8px 24px rgba(128,0,0,0.12)',
   scrim:         'rgba(0,0,0,0.92)',
   scrimControl:  'rgba(255,255,255,0.15)',
+  // ── Redesign M1 (direction C) additions ─────────────────────────────────
+  // Borders clear 3:1 (WCAG 1.4.11) against BOTH #fdf4f4 and #ffffff:
+  //   successBorder 3.32 / 3.49 · dangerBorder 3.31 / 3.46
+  //   warningBorder 3.33 / 3.53 · accentBorder 3.10 / 3.18
+  successBorder: 'rgba(21,128,61,0.80)',
+  dangerBorder:  'rgba(185,28,28,0.65)',
+  warningBorder: 'rgba(180,83,9,0.80)',
+  accentBorder:  'rgba(128,0,0,0.50)',
+  // Pressed fill for the maroon primary action. White on it: 14.43:1.
+  accentPressed: '#5c0000',
+  // Sheets/dialogs sit on plain white (all text tokens measured on #ffffff).
+  surfaceRaised: '#ffffff',
+  backdrop:      'rgba(45,10,10,0.40)',
+  // Keyboard focus ring: 10.13:1 on bg.
+  focusRing:     '#800000',
 }
 
 export const statusColors = {
@@ -112,6 +151,53 @@ export const typography = {
   h1:      36,
   display: 48,
 } as const
+
+// Font families (loaded in app/_layout.tsx). Outfit for headings, numbers and
+// button labels; Lexend for reading text and small labels.
+export const fonts = {
+  heading:     'Outfit_700Bold',
+  headingSemi: 'Outfit_600SemiBold',
+  headingReg:  'Outfit_400Regular',
+  body:        'Lexend_400Regular',
+  bodyMedium:  'Lexend_500Medium',
+  bodySemi:    'Lexend_600SemiBold',
+} as const
+
+type TextRole = {
+  fontFamily: string
+  fontSize: number
+  lineHeight: number
+  letterSpacing?: number
+  fontVariant?: TextStyle['fontVariant']
+}
+
+/**
+ * Type roles (direction C: big tabular numbers for timers/scores/countdowns,
+ * everything else quieter). Sizes come only from `typography`; nothing below
+ * 12; tracking never tighter than -0.04em. Use via `textStyle(role, color)`
+ * instead of hand-picking a fontSize per screen.
+ */
+export const textStyles = {
+  display:   { fontFamily: fonts.heading,     fontSize: typography.display, lineHeight: 54, letterSpacing: -1 },
+  title:     { fontFamily: fonts.heading,     fontSize: typography.h3,      lineHeight: 32, letterSpacing: -0.5 },
+  headline:  { fontFamily: fonts.heading,     fontSize: typography.lg,      lineHeight: 26, letterSpacing: -0.2 },
+  titleSm:   { fontFamily: fonts.headingSemi, fontSize: typography.md,      lineHeight: 22 },
+  body:      { fontFamily: fonts.body,        fontSize: typography.base,    lineHeight: 24 },
+  bodySm:    { fontFamily: fonts.body,        fontSize: typography.sm,      lineHeight: 19 },
+  label:     { fontFamily: fonts.bodySemi,    fontSize: typography.sm,      lineHeight: 18 },
+  button:    { fontFamily: fonts.heading,     fontSize: typography.base,    lineHeight: 20, letterSpacing: 0.1 },
+  caption:   { fontFamily: fonts.body,        fontSize: typography.xs,      lineHeight: 16 },
+  numeric:   { fontFamily: fonts.heading,     fontSize: typography.xl,      lineHeight: 28, fontVariant: ['tabular-nums'] },
+  numericLg: { fontFamily: fonts.heading,     fontSize: typography.h1,      lineHeight: 42, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+} as const satisfies Record<string, TextRole>
+
+export type TextStyleRole = keyof typeof textStyles
+
+/** A type role as a TextStyle, optionally with a colour (pass a theme token). */
+export function textStyle(role: TextStyleRole, color?: string): TextStyle {
+  const base = textStyles[role] as TextStyle
+  return color ? { ...base, color } : { ...base }
+}
 
 // 4/8 spacing rhythm.
 export const spacing = {
@@ -139,8 +225,8 @@ export const radius = {
 // `tabBarHeight + content gap` ABOVE the safe-area inset to avoid overlap.
 // Use at call sites as: paddingBottom: insets.bottom + layout.tabBarClearance.
 export const layout = {
-  tabBarHeight:    62,
-  tabBarClearance: 78,  // tabBarHeight + 16 gap (add insets.bottom at the call site)
+  tabBarHeight:    64,
+  tabBarClearance: 80,  // tabBarHeight + 16 gap (add insets.bottom at the call site)
 } as const
 
 export type Theme      = typeof darkTheme

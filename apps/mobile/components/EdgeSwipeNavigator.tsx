@@ -4,18 +4,15 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
 import { router, usePathname } from 'expo-router'
 
-// Swipe order follows the navigation sequence: the visible tabs (Home · Review ·
-// Exams · Updates) then the secondary screens (Analytics, Profile) so they stay
-// swipeable even though they're not in the tab bar. The Home↔Notes swipe (below)
-// is intentionally separate and must stay unchanged.
-const TAB_PATHS = ['/', '/practice', '/listings', '/updates', '/analytics', '/profile'] as const
+// Swipe order follows the tab bar: Today · Practice · Explore · Progress.
+// Profile is not a tab (it opens from the header avatar), so it is not in the
+// swipe sequence. The Today↔Notes swipe (below) is intentionally separate.
+const TAB_PATHS = ['/', '/practice', '/explore', '/progress'] as const
 const TAB_HREFS = [
   '/(tabs)',
   '/(tabs)/practice',
-  '/(tabs)/listings',
-  '/(tabs)/updates',
-  '/(tabs)/analytics',
-  '/(tabs)/profile',
+  '/(tabs)/explore',
+  '/(tabs)/progress',
 ] as const
 
 const NOTES_PATH = '/notes'

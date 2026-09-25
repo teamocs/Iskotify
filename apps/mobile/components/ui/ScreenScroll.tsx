@@ -2,17 +2,18 @@ import { Platform, ScrollView, View, type ScrollViewProps, type StyleProp, type 
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
 import { layout, spacing } from '../../theme/tokens'
-import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBreakpoint'
 
-// Max-width constants for content centering on wide web viewports.
-const MAX_WIDTH_LG = 1040
-const MAX_WIDTH_MD = 840
+// Content widths: medium (tablet) gets the 720 reading column; expanded
+// (desktop, beside the sidebar) keeps 1040 for grid-heavy tab screens.
+const MAX_WIDTH_LG = contentMaxWidth('wide')
+const MAX_WIDTH_MD = contentMaxWidth('reading')
 
 interface Props extends ScrollViewProps {
   children: React.ReactNode
   /** Reserve space for the floating bottom tab bar (true for tab screens). */
   tabBarInset?: boolean
-  /** Apply default horizontal page padding (spacing.lg). */
+  /** Apply the responsive horizontal page gutter (16 / 24 / 32 by size class). */
   padded?: boolean
   contentContainerStyle?: StyleProp<ViewStyle>
 }
@@ -37,23 +38,20 @@ export function ScreenScroll({
 
   // On desktop web (lg), tab bar is hidden (SidebarNav takes over) so we don't
   // add the tab bar clearance padding. On native/sm the floating bar is present.
-  const isDesktopWeb = Platform.OS === 'web' && bp === 'lg'
+  const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
   const paddingBottom = insets.bottom + (tabBarInset && !isDesktopWeb ? layout.tabBarClearance : spacing.xl)
 
   // Web-only: wrap children in a max-width centering view for md/lg viewports.
   // sm (and native) renders unchanged — no wrapper, no max-width.
   const isWeb = Platform.OS === 'web'
-  const needsMaxWidth = isWeb && (bp === 'lg' || bp === 'md')
-  const maxWidth = bp === 'lg' ? MAX_WIDTH_LG : MAX_WIDTH_MD
+  const needsMaxWidth = isWeb && bp !== 'compact'
+  const maxWidth = bp === 'expanded' ? MAX_WIDTH_LG : MAX_WIDTH_MD
 
+  // The caller's contentContainerStyle (gap, paddingTop…) moves onto the
+  // centered column when there is one — otherwise `gap` would space only the
+  // single wrapper and every section would touch on tablets and desktop.
   const innerContent = needsMaxWidth ? (
-    <View
-      style={{
-        width: '100%',
-        maxWidth,
-        alignSelf: 'center',
-      }}
-    >
+    <View testID="screen-scroll-column" style={[{ width: '100%', maxWidth, alignSelf: 'center' }, contentContainerStyle]}>
       {children}
     </View>
   ) : children
@@ -65,8 +63,8 @@ export function ScreenScroll({
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
       contentContainerStyle={[
-        { paddingHorizontal: padded ? spacing.lg : 0, paddingBottom },
-        contentContainerStyle,
+        { paddingHorizontal: padded ? pagePadding(bp) : 0, paddingBottom },
+        needsMaxWidth ? null : contentContainerStyle,
       ]}
       {...rest}
     >

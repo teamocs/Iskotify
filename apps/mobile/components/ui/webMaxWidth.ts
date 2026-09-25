@@ -1,10 +1,10 @@
 import { Platform, type ViewStyle } from 'react-native'
-import { useBreakpoint, type Breakpoint } from '../../hooks/useBreakpoint'
+import { useBreakpoint, contentMaxWidth, type Breakpoint } from '../../hooks/useBreakpoint'
 
 // Max-width constants for content centering on wide web viewports.
 // Keep in sync with components/ui/ScreenScroll.tsx (MAX_WIDTH_LG / MAX_WIDTH_MD).
-const MAX_WIDTH_LG = 1040
-const MAX_WIDTH_MD = 840
+const MAX_WIDTH_LG = contentMaxWidth('wide')
+const MAX_WIDTH_MD = contentMaxWidth('reading')
 
 /**
  * Pure helper: web-only max-width centering style for stack screens that
@@ -16,10 +16,10 @@ const MAX_WIDTH_MD = 840
  */
 export function webContentStyle(bp: Breakpoint): ViewStyle | null {
   if (Platform.OS !== 'web') return null
-  if (bp !== 'lg' && bp !== 'md') return null
+  if (bp === 'compact') return null
   return {
     width: '100%',
-    maxWidth: bp === 'lg' ? MAX_WIDTH_LG : MAX_WIDTH_MD,
+    maxWidth: bp === 'expanded' ? MAX_WIDTH_LG : MAX_WIDTH_MD,
     alignSelf: 'center',
   }
 }

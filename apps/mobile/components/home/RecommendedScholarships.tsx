@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { View, Text } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
+import { spacing, typography } from '../../theme/tokens'
 import { SectionHeader } from '../ui/SectionHeader'
 import { ListCard } from '../ui/ListCard'
 import { InfoBanner } from '../ui/InfoBanner'
@@ -44,7 +44,7 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
         title="Recommended Scholarships"
         subtitle="Ranked to your profile and target courses"
         actionLabel="See all"
-        onAction={() => router.push('/(tabs)/listings?tab=scholarships')}
+        onAction={() => router.push('/(tabs)/explore?section=scholarships')}
       />
       {recommended.length > 0 ? (
         <View style={{ gap: spacing.sm }}>
@@ -55,7 +55,7 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
               <ListCard
                 key={listing.id}
                 iconBg={t.successSurface}
-                icon={<Text style={{ fontSize: 16 }}>🏅</Text>}
+                icon={<Text style={{ fontSize: typography.base }}>🏅</Text>}
                 title={listing.title}
                 subtitle={subtitle}
                 trailing={<MatchPill status={status} />}
@@ -66,10 +66,10 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
         </View>
       ) : (
         <InfoBanner
-          icon={<Text style={{ fontSize: 16 }}>🎓</Text>}
+          icon={<Text style={{ fontSize: typography.base }}>🎓</Text>}
           message="Complete your profile (GWA, province, income) to see scholarships you qualify for."
           actionLabel="Browse"
-          onAction={() => router.push('/(tabs)/listings?tab=scholarships')}
+          onAction={() => router.push('/(tabs)/explore?section=scholarships')}
           tone="neutral"
         />
       )}

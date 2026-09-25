@@ -99,6 +99,26 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.getByText('Profile')).toBeTruthy()
   })
 
+  // Redesign M1: Profile is no longer a tab — it opens from the header avatar,
+  // so it needs its own way back.
+  it('has a Back button that returns to the previous screen when there is one', () => {
+    const { router } = require('expo-router')
+    router.canGoBack = jest.fn(() => true)
+    router.back = jest.fn()
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(router.back).toHaveBeenCalled()
+  })
+
+  it('Back falls back to Today when Profile was opened directly (deep link / web URL)', () => {
+    const { router } = require('expo-router')
+    router.canGoBack = jest.fn(() => false)
+    router.replace.mockClear()
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(router.replace).toHaveBeenCalledWith('/')
+  })
+
   it('shows default name Student when no data', () => {
     render(<ProfileScreen />)
     expect(screen.getByText('Student')).toBeTruthy()
@@ -125,6 +145,13 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.queryByText('Signed in')).toBeNull()
   })
 })
+
+/** Nearest host View above a node (`.parent` is the composite wrapper). */
+function hostViewAbove(node: any) {
+  let n = node.parent
+  while (n && n.type !== 'View') n = n.parent
+  return n
+}
 
 describe('ProfileScreen — with user data', () => {
   beforeEach(() => {
@@ -166,6 +193,15 @@ describe('ProfileScreen — with user data', () => {
       expect(screen.getByText('Signed in')).toBeTruthy()
       expect(screen.getByText('maria@gmail.com')).toBeTruthy()
     })
+  })
+
+  it('the Signed in badge draws a visible border (border token, not the fill token)', async () => {
+    const { StyleSheet } = require('react-native')
+    render(<ProfileScreen />)
+    const label = await screen.findByText('Signed in')
+    const badge = StyleSheet.flatten(hostViewAbove(label).props.style)
+    expect(badge.borderWidth).toBe(1)
+    expect(badge.borderColor).not.toBe(badge.backgroundColor)
   })
 })
 

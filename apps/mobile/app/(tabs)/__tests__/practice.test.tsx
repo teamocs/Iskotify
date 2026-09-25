@@ -7,6 +7,11 @@ jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
 }))
 
+// Header avatar reads the student's name; keep it out of the db mock.
+jest.mock('../../../hooks/useProfileName', () => ({
+  useProfileName: () => 'Ana Reyes',
+}))
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -140,9 +145,16 @@ describe('PracticeScreen', () => {
     mockUseAdmissionEstimate.mockReturnValue(emptyAdmissionEstimate)
   })
 
-  it('renders the Exams title', () => {
+  it('renders the Practice title (the old "Exams" tab is now Practice)', () => {
     render(<PracticeScreen />)
-    expect(screen.getByText('Exams')).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Practice' })).toBeTruthy()
+    expect(screen.queryByText('Exams')).toBeNull()
+  })
+
+  it('has a Profile avatar in the header that opens /profile', () => {
+    render(<PracticeScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Profile' }))
+    expect(router.push).toHaveBeenCalledWith('/profile')
   })
 
   it('renders the Subject readiness section header', () => {
@@ -365,11 +377,11 @@ describe('PracticeScreen', () => {
     expect(screen.queryByText('EXTRA')).toBeNull()
   })
 
-  it('My Focus empty banner navigates to the Lists tab', () => {
+  it('My Focus empty banner navigates to Explore', () => {
     render(<PracticeScreen />)
-    // No focus listings → empty banner with a "Lists" action
-    fireEvent.press(screen.getByText('Lists'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
+    // No focus listings → empty banner with an "Explore" action
+    fireEvent.press(screen.getByText('Explore'))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
   })
 
   it('My Focus card navigates to the start chooser (no inline Review button)', async () => {
@@ -396,14 +408,14 @@ describe('PracticeScreen', () => {
     expect(screen.getByText('72%')).toBeTruthy()
   })
 
-  it('My Focus "Add exam or scholarship" ghost card navigates to the Lists tab', async () => {
+  it('My Focus "Add exam or scholarship" ghost card navigates to Explore', async () => {
     ;(mockFocusListings as any[]).splice(0, mockFocusListings.length,
       { slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT 2025', type: 'exam' },
     )
     render(<PracticeScreen />)
     await act(async () => {})
     fireEvent.press(screen.getByText('＋ Add exam or scholarship'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
   })
 
   // ── Task H: due queue surfaces ──────────────────────────────────────────────
