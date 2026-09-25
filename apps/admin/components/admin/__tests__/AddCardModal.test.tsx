@@ -16,17 +16,20 @@ describe('AddCardModal', () => {
     expect(html).toContain('Explanation')
   })
 
-  it('save button is disabled in initial empty state', () => {
+  // Empty fields are caught on submit with an error next to each field
+  // (validateCard, see flashcardDialogs.test.tsx), so the submit stays enabled.
+  it('submit is enabled in the initial empty state and blank fields are required', () => {
     const html = renderToStaticMarkup(
       React.createElement(AddCardModal, { topicId: 'topic-1', topicStatus: 'published', onClose: vi.fn() })
     )
-    expect(html).toContain('disabled')
+    expect(html).toMatch(/<button type="submit"(?![^>]*disabled="")[^>]*>/)
+    expect(html.match(/<textarea[^>]*required=""/g)?.length).toBe(2)
   })
 
-  it('renders "Add Card" title', () => {
+  it('renders "Add card" title', () => {
     const html = renderToStaticMarkup(
       React.createElement(AddCardModal, { topicId: 'topic-1', topicStatus: 'published', onClose: vi.fn() })
     )
-    expect(html).toContain('Add Card')
+    expect(html).toContain('Add card')
   })
 })

@@ -3,15 +3,21 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button } from '@/components/ui/Button'
 
 interface Props {
   id: string
+  /** Names the listing in the buttons' accessible labels. */
+  label?: string
 }
 
-export function DateContributionActions({ id }: Props) {
+const NETWORK_ERROR = 'Network error. Please check your connection and try again.'
+
+export function DateContributionActions({ id, label }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<null | 'approve' | 'reject'>(null)
   const [error, setError] = useState<string | null>(null)
+  const target = label ? `date correction for ${label}` : 'this date correction'
 
   async function run(action: 'approve' | 'reject') {
     setLoading(action)
@@ -36,37 +42,41 @@ export function DateContributionActions({ id }: Props) {
       notifySuccess(action === 'approve' ? 'Date correction approved' : 'Date correction rejected')
       router.refresh()
     } catch {
-      setError('Network error. Please check your connection and try again.')
-      notifyError('Network error. Please check your connection and try again.')
+      setError(NETWORK_ERROR)
+      notifyError(NETWORK_ERROR)
     } finally {
       setLoading(null)
     }
   }
 
   return (
-    <div className="flex flex-col items-start gap-1 min-w-[160px]">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          icon="check"
           onClick={() => run('approve')}
           disabled={loading !== null}
-          aria-label="Approve this date correction and apply it to the listing"
-          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 bg-maroon text-white hover:bg-maroon-light"
+          loading={loading === 'approve'}
+          aria-label={`Approve ${target}`}
+          title="Approve and write the suggested date onto the listing"
         >
           {loading === 'approve' ? 'Approving…' : 'Approve'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          icon="x"
           onClick={() => run('reject')}
           disabled={loading !== null}
-          aria-label="Reject this date correction"
-          className="rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60 border border-maroon text-maroon bg-white hover:bg-[#fff8f8]"
+          loading={loading === 'reject'}
+          aria-label={`Reject ${target}`}
         >
           {loading === 'reject' ? 'Rejecting…' : 'Reject'}
-        </button>
+        </Button>
       </div>
       {error && (
-        <p className="text-[11px] text-danger leading-tight max-w-[220px]" role="alert">
+        <p className="max-w-[14rem] text-xs leading-tight text-danger" role="alert">
           {error}
         </p>
       )}

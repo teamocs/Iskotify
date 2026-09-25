@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useId, useState, useTransition } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button } from '@/components/ui/Button'
+import { controlClass } from '@/components/ui/Field'
 
 interface TopicOption {
   id: string
@@ -17,6 +19,8 @@ interface SubjectOption {
 interface Props {
   subjects: SubjectOption[]
 }
+
+const selectClass = `${controlClass} h-8 w-auto text-ui`
 
 /**
  * Task F bulk admin action — "Regenerate distractors (hard mode)" for
@@ -37,6 +41,7 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
   const [subjectId, setSubjectId] = useState('')
   const [topicId, setTopicId] = useState('')
   const [scope, setScope] = useState<'ai_enhanced' | 'all'>('ai_enhanced')
+  const headingId = useId()
 
   const topics = subjects.find(s => s.id === subjectId)?.topics ?? []
 
@@ -67,14 +72,14 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
   }
 
   return (
-    <div className="relative flex flex-wrap items-center gap-2 rounded-xl border border-maroon/20 bg-maroon/[0.03] px-3 py-2">
-      <span className="text-[11px] font-semibold text-maroon whitespace-nowrap">🎯 Regenerate distractors (hard mode)</span>
+    <div role="group" aria-labelledby={headingId} className="flex flex-wrap items-center gap-2 rounded-sm border border-subtle bg-surface px-3 py-2">
+      <span id={headingId} className="whitespace-nowrap text-ui font-semibold text-ink">Regenerate distractors (hard mode)</span>
 
       <select
         aria-label="Subject filter"
         value={subjectId}
         onChange={e => { setSubjectId(e.target.value); setTopicId('') }}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink"
+        className={selectClass}
       >
         <option value="">All subjects</option>
         {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -85,7 +90,7 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
         value={topicId}
         onChange={e => setTopicId(e.target.value)}
         disabled={!subjectId}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink disabled:opacity-50"
+        className={selectClass}
       >
         <option value="">{subjectId ? 'All topics in subject' : 'All topics'}</option>
         {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -95,20 +100,15 @@ export function RegenerateDistractorsPanel({ subjects }: Props) {
         aria-label="Card scope"
         value={scope}
         onChange={e => setScope(e.target.value === 'all' ? 'all' : 'ai_enhanced')}
-        className="border border-black/[0.1] rounded-md px-2 py-1 text-[12px] bg-white text-ink"
+        className={selectClass}
       >
         <option value="ai_enhanced">Only already AI-enhanced cards</option>
         <option value="all">All cards in scope</option>
       </select>
 
-      <button
-        type="button"
-        onClick={handleRun}
-        disabled={isPending}
-        className="rounded-[980px] px-3 py-1 text-[12px] font-semibold bg-maroon text-white hover:bg-[#6b0000] transition-colors disabled:opacity-60"
-      >
-        {isPending ? '⏳ Regenerating…' : 'Run'}
-      </button>
+      <Button size="sm" loading={isPending} onClick={handleRun}>
+        {isPending ? 'Regenerating…' : 'Run'}
+      </Button>
     </div>
   )
 }

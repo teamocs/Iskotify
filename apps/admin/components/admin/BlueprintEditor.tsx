@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Topbar } from '@/components/admin/Topbar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { PageBody } from '@/components/ui/Page'
+import { Card } from '@/components/ui/Card'
+import { Field, controlClass } from '@/components/ui/Field'
+import { Button, IconButton } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { DiscardChangesDialog } from '@/components/ui/Dialog'
 
 interface Blueprint {
   slug: string
@@ -65,6 +71,31 @@ const EMPTY_NOTE: CourseNote = {
   course_cluster: 'all', note: '', min_percentile: null,
 }
 
+const LIST_URL = '/admin/exam-blueprints'
+const textareaClass = `${controlClass} h-auto py-2 resize-y`
+const checkboxClass = 'h-4 w-4 cursor-pointer accent-maroon'
+
+export type BlueprintErrors = Record<string, string>
+
+/**
+ * Required-field check run on submit. Keys are `slug`/`name`/`acronym` for the
+ * blueprint and `section-<i>-<field>` for sections — each key is also the id
+ * suffix of the Field that shows it.
+ */
+export function validateBlueprint(bp: Pick<Blueprint, 'slug' | 'name' | 'acronym'>, sections: Pick<Section, 'name' | 'skill_category'>[]): BlueprintErrors {
+  const errors: BlueprintErrors = {}
+  if (!bp.slug.trim()) errors.slug = 'Enter a slug, e.g. upcat-2026.'
+  if (!bp.name.trim()) errors.name = 'Enter the exam’s full name.'
+  if (!bp.acronym.trim()) errors.acronym = 'Enter an acronym, e.g. UPCAT.'
+  sections.forEach((s, i) => {
+    if (!s.name.trim()) errors[`section-${i}-name`] = 'Name this section.'
+    if (!s.skill_category) errors[`section-${i}-skill_category`] = 'Choose a skill category.'
+  })
+  return errors
+}
+
+const fieldId = (key: string) => `bp-${key}`
+
 export function BlueprintEditor({ initialBlueprint, initialSections, initialNotes, categories, isNew }: Props) {
   const router = useRouter()
   const [blueprint, setBlueprint] = useState<Blueprint>(initialBlueprint ?? EMPTY_BLUEPRINT)
@@ -73,17 +104,53 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<BlueprintErrors>({})
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+
+  // Unsaved edits = anything differing from what the page loaded with.
+  const initialSnapshot = useRef(JSON.stringify({ b: initialBlueprint ?? EMPTY_BLUEPRINT, s: initialSections, n: initialNotes }))
+  const dirty = useMemo(
+    () => JSON.stringify({ b: blueprint, s: sections, n: notes }) !== initialSnapshot.current,
+    [blueprint, sections, notes],
+  )
+  const leaving = useRef(false)
+
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => {
+      if (leaving.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  function clearError(key: string) {
+    setErrors(prev => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
 
   function setBp<K extends keyof Blueprint>(key: K, value: Blueprint[K]) {
     setBlueprint(prev => ({ ...prev, [key]: value }))
+    clearError(key)
   }
 
   // ---- Sections helpers ----
   function addSection() { setSections(prev => [...prev, { ...EMPTY_SECTION }]) }
-  function removeSection(i: number) { setSections(prev => prev.filter((_, idx) => idx !== i)) }
+  function removeSection(i: number) {
+    setSections(prev => prev.filter((_, idx) => idx !== i))
+    // Section error keys are positional; drop them rather than let them point at the wrong row.
+    setErrors(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith('section-'))))
+  }
   function setSection<K extends keyof Section>(i: number, key: K, value: Section[K]) {
     setSections(prev => prev.map((s, idx) => idx === i ? { ...s, [key]: value } : s))
+    clearError(`section-${i}-${key}`)
   }
 
   // ---- Course notes helpers ----
@@ -91,6 +158,29 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   function removeNote(i: number) { setNotes(prev => prev.filter((_, idx) => idx !== i)) }
   function setNote<K extends keyof CourseNote>(i: number, key: K, value: CourseNote[K]) {
     setNotes(prev => prev.map((n, idx) => idx === i ? { ...n, [key]: value } : n))
+  }
+
+  function leave() {
+    leaving.current = true
+    router.push(LIST_URL)
+  }
+
+  function requestCancel() {
+    if (dirty) setConfirmingDiscard(true)
+    else leave()
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (saving || deleting) return
+    const found = validateBlueprint(blueprint, sections)
+    setErrors(found)
+    const first = Object.keys(found)[0]
+    if (first) {
+      document.getElementById(fieldId(first))?.focus()
+      return
+    }
+    await handleSave()
   }
 
   async function handleSave() {
@@ -110,7 +200,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
         return
       }
       notifySuccess('Blueprint saved')
-      router.push('/admin/exam-blueprints')
+      leaving.current = true
+      router.push(LIST_URL)
       router.refresh()
     } catch (e: any) {
       const message = e?.message ?? 'Save failed'
@@ -139,7 +230,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
         return
       }
       notifySuccess('Blueprint deleted')
-      router.push('/admin/exam-blueprints')
+      leaving.current = true
+      router.push(LIST_URL)
       router.refresh()
     } catch (e: any) {
       const message = e?.message ?? 'Delete failed'
@@ -156,350 +248,214 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <Topbar title={title} />
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-3xl mx-auto space-y-8">
-
-          {error && (
-            <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">{error}</div>
-          )}
+      <form noValidate onSubmit={handleSubmit} aria-label={isNew ? 'New blueprint' : `Edit blueprint ${blueprint.slug}`} className="flex min-h-0 flex-1 flex-col">
+        <PageBody width="narrow">
+          {error && <ErrorBanner title="Couldn’t save the blueprint" message={error} />}
 
           {/* ---- Blueprint fields ---- */}
-          <section className="space-y-4">
-            <h2 className="text-ink font-heading font-bold text-lg tracking-tight border-b border-black/[0.08] pb-2">Blueprint</h2>
+          <Card title="Details">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Slug" id={fieldId('slug')} required error={errors.slug} hint={isNew ? 'Lowercase, used in links. Can’t be changed later.' : 'Can’t be changed after creation.'}>
+                  {p => (
+                    <input {...p} value={blueprint.slug} onChange={e => setBp('slug', e.target.value)} disabled={!isNew} placeholder="e.g. upcat-2026" className={controlClass} />
+                  )}
+                </Field>
+                <Field label="Acronym" id={fieldId('acronym')} required error={errors.acronym}>
+                  {p => (
+                    <input {...p} value={blueprint.acronym} onChange={e => setBp('acronym', e.target.value)} placeholder="e.g. UPCAT" className={controlClass} />
+                  )}
+                </Field>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted mb-1">Slug</label>
-                <input aria-label="Slug"
-                  value={blueprint.slug}
-                  onChange={e => setBp('slug', e.target.value)}
-                  disabled={!isNew}
-                  placeholder="e.g. upcat-2026"
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm disabled:bg-surface-2 disabled:text-ink-muted"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted mb-1">Acronym</label>
-                <input aria-label="Acronym"
-                  value={blueprint.acronym}
-                  onChange={e => setBp('acronym', e.target.value)}
-                  placeholder="e.g. UPCAT"
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-ink-muted mb-1">Name</label>
-              <input aria-label="Name"
-                value={blueprint.name}
-                onChange={e => setBp('name', e.target.value)}
-                placeholder="Full exam name"
-                className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted mb-1">Total items</label>
-                <input aria-label="Total items"
-                  type="number" min={0}
-                  value={blueprint.total_items}
-                  onChange={e => setBp('total_items', Number(e.target.value))}
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted mb-1">Total minutes</label>
-                <input aria-label="Total minutes"
-                  type="number" min={0}
-                  value={blueprint.total_time_minutes}
-                  onChange={e => setBp('total_time_minutes', Number(e.target.value))}
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted mb-1">Display order</label>
-                <input aria-label="Display order"
-                  type="number" min={0}
-                  value={blueprint.display_order}
-                  onChange={e => setBp('display_order', Number(e.target.value))}
-                  className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={blueprint.has_guessing_penalty}
-                    onChange={e => setBp('has_guessing_penalty', e.target.checked)}
-                  />
-                  Has guessing penalty
-                </label>
-                {blueprint.has_guessing_penalty && (
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">Penalty per wrong answer</label>
-                    <input aria-label="Penalty per wrong answer"
-                      type="number" min={0} step={0.01}
-                      value={blueprint.guessing_penalty}
-                      onChange={e => setBp('guessing_penalty', Number(e.target.value))}
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
+              <Field label="Name" id={fieldId('name')} required error={errors.name}>
+                {p => (
+                  <input {...p} value={blueprint.name} onChange={e => setBp('name', e.target.value)} placeholder="Full exam name" className={controlClass} />
                 )}
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Total items" id={fieldId('total_items')}>
+                  {p => (
+                    <input {...p} type="number" min={0} value={blueprint.total_items} onChange={e => setBp('total_items', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                  )}
+                </Field>
+                <Field label="Total minutes" id={fieldId('total_time_minutes')}>
+                  {p => (
+                    <input {...p} type="number" min={0} value={blueprint.total_time_minutes} onChange={e => setBp('total_time_minutes', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                  )}
+                </Field>
+                <Field label="Display order" id={fieldId('display_order')}>
+                  {p => (
+                    <input {...p} type="number" min={0} value={blueprint.display_order} onChange={e => setBp('display_order', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                  )}
+                </Field>
               </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={blueprint.section_blocked}
-                    onChange={e => setBp('section_blocked', e.target.checked)}
-                  />
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+                    <input type="checkbox" className={checkboxClass} checked={blueprint.has_guessing_penalty} onChange={e => setBp('has_guessing_penalty', e.target.checked)} />
+                    Has guessing penalty
+                  </label>
+                  {blueprint.has_guessing_penalty && (
+                    <Field label="Penalty per wrong answer" id={fieldId('guessing_penalty')}>
+                      {p => (
+                        <input {...p} type="number" min={0} step={0.01} value={blueprint.guessing_penalty} onChange={e => setBp('guessing_penalty', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                      )}
+                    </Field>
+                  )}
+                </div>
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-ink">
+                  <input type="checkbox" className={`${checkboxClass} mt-0.5`} checked={blueprint.section_blocked} onChange={e => setBp('section_blocked', e.target.checked)} />
                   Section-blocked (separate time per section)
                 </label>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-ink-muted mb-1">Scoring note</label>
-              <textarea aria-label="Scoring note"
-                value={blueprint.scoring_note}
-                onChange={e => setBp('scoring_note', e.target.value)}
-                rows={2}
-                className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm resize-y"
-                placeholder="e.g. 1 point per correct answer, no penalty for wrong answers"
-              />
-            </div>
+              <Field label="Scoring note" id={fieldId('scoring_note')}>
+                {p => (
+                  <textarea {...p} rows={2} value={blueprint.scoring_note} onChange={e => setBp('scoring_note', e.target.value)} placeholder="e.g. 1 point per correct answer, no penalty for wrong answers" className={textareaClass} />
+                )}
+              </Field>
 
-            <div>
-              <label className="block text-xs font-semibold text-ink-muted mb-1">Mechanics note</label>
-              <textarea aria-label="Mechanics note"
-                value={blueprint.mechanics_note}
-                onChange={e => setBp('mechanics_note', e.target.value)}
-                rows={3}
-                className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm resize-y"
-                placeholder="General mechanics, instructions, or notes for this exam"
-              />
-            </div>
+              <Field label="Mechanics note" id={fieldId('mechanics_note')}>
+                {p => (
+                  <textarea {...p} rows={3} value={blueprint.mechanics_note} onChange={e => setBp('mechanics_note', e.target.value)} placeholder="General mechanics, instructions, or notes for this exam" className={textareaClass} />
+                )}
+              </Field>
 
-            <div>
-              <label className="block text-xs font-semibold text-ink-muted mb-1">Status</label>
-              <select aria-label="Status"
-                value={blueprint.status}
-                onChange={e => setBp('status', e.target.value)}
-                className="border border-black/[0.15] rounded px-3 py-2 text-sm"
-              >
-                <option value="draft">draft</option>
-                <option value="published">published</option>
-              </select>
+              <Field label="Status" id={fieldId('status')} hint="Only published blueprints appear in the app." className="sm:max-w-xs">
+                {p => (
+                  <select {...p} value={blueprint.status} onChange={e => setBp('status', e.target.value)} className={controlClass}>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                )}
+              </Field>
             </div>
-          </section>
+          </Card>
 
           {/* ---- Sections editor ---- */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between border-b border-black/[0.08] pb-2">
-              <h2 className="text-ink font-heading font-bold text-lg tracking-tight">Sections</h2>
-              <button
-                type="button"
-                onClick={addSection}
-                className="text-xs font-semibold text-maroon hover:text-maroon-light transition-colors"
-              >
-                + Add section
-              </button>
-            </div>
-
-            {sections.length === 0 && (
-              <p className="text-ink-muted text-sm">No sections yet. Click &quot;Add section&quot; to start.</p>
+          <Card
+            title="Sections"
+            description="Saved in this order. Saving replaces every section of this blueprint."
+            actions={<Button size="sm" icon="plus" onClick={addSection}>Add section</Button>}
+            flush
+          >
+            {sections.length === 0 ? (
+              <p className="px-4 py-6 text-ui text-ink-muted">No sections yet. Use Add section to define the exam’s parts.</p>
+            ) : (
+              <ol className="divide-y divide-subtle">
+                {sections.map((sec, i) => (
+                  <li key={i}>
+                    <fieldset className="relative space-y-3 px-4 py-4">
+                      <legend className="float-left w-full pr-10 text-ui font-semibold text-ink">Section {i + 1}</legend>
+                      <IconButton icon="trash" label={`Remove section ${i + 1}${sec.name ? ` (${sec.name})` : ''}`} onClick={() => removeSection(i)} className="absolute right-3 top-3 hover:bg-danger-soft hover:text-danger-strong" />
+                      <div className="clear-both" />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Section name" id={fieldId(`section-${i}-name`)} required error={errors[`section-${i}-name`]}>
+                          {p => (
+                            <input {...p} value={sec.name} onChange={e => setSection(i, 'name', e.target.value)} placeholder="e.g. Mathematics" className={controlClass} />
+                          )}
+                        </Field>
+                        <Field label="Skill category" id={fieldId(`section-${i}-skill_category`)} required error={errors[`section-${i}-skill_category`]}>
+                          {p => (
+                            <select {...p} value={sec.skill_category} onChange={e => setSection(i, 'skill_category', e.target.value)} className={controlClass}>
+                              <option value="">Choose a category</option>
+                              {categories.map(c => (
+                                <option key={c.name} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <Field label="Item count" id={fieldId(`section-${i}-item_count`)}>
+                          {p => (
+                            <input {...p} type="number" min={0} value={sec.item_count} onChange={e => setSection(i, 'item_count', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                          )}
+                        </Field>
+                        <Field label="Section minutes" id={fieldId(`section-${i}-time_minutes`)} hint="Only if section-blocked.">
+                          {p => (
+                            <input {...p} type="number" min={0} value={sec.time_minutes ?? ''} onChange={e => setSection(i, 'time_minutes', e.target.value === '' ? null : Number(e.target.value))} placeholder="Optional" className={`${controlClass} tabular-nums`} />
+                          )}
+                        </Field>
+                        <label className="flex cursor-pointer items-center gap-2 self-start text-sm text-ink sm:mt-7">
+                          <input type="checkbox" className={checkboxClass} checked={sec.requires_spatial_logic} onChange={e => setSection(i, 'requires_spatial_logic', e.target.checked)} />
+                          Spatial / logic
+                        </label>
+                      </div>
+                    </fieldset>
+                  </li>
+                ))}
+              </ol>
             )}
-
-            {sections.map((sec, i) => (
-              <div key={i} className="rounded-xl border border-black/[0.08] bg-surface-3 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Section {i + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeSection(i)}
-                    className="text-xs text-danger hover:text-danger-strong transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">Name</label>
-                    <input aria-label="Name"
-                      value={sec.name}
-                      onChange={e => setSection(i, 'name', e.target.value)}
-                      placeholder="e.g. Mathematics"
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">Skill category</label>
-                    <select aria-label="Skill category"
-                      value={sec.skill_category}
-                      onChange={e => setSection(i, 'skill_category', e.target.value)}
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    >
-                      <option value="">— select category —</option>
-                      {categories.map(c => (
-                        <option key={c.name} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">Item count</label>
-                    <input aria-label="Item count"
-                      type="number" min={0}
-                      value={sec.item_count}
-                      onChange={e => setSection(i, 'item_count', Number(e.target.value))}
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">
-                      Per-section minutes <span className="text-ink-subtle">(only if section-blocked)</span>
-                    </label>
-                    <input aria-label="Per-section minutes (only if section-blocked)"
-                      type="number" min={0}
-                      value={sec.time_minutes ?? ''}
-                      onChange={e => setSection(i, 'time_minutes', e.target.value === '' ? null : Number(e.target.value))}
-                      placeholder="optional"
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="flex items-end pb-2">
-                    <label className="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={sec.requires_spatial_logic}
-                        onChange={e => setSection(i, 'requires_spatial_logic', e.target.checked)}
-                      />
-                      Spatial/logic
-                    </label>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </section>
+          </Card>
 
           {/* ---- Course notes editor ---- */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between border-b border-black/[0.08] pb-2">
-              <h2 className="text-ink font-heading font-bold text-lg tracking-tight">Course Notes</h2>
-              <button
-                type="button"
-                onClick={addNote}
-                className="text-xs font-semibold text-maroon hover:text-maroon-light transition-colors"
-              >
-                + Add note
-              </button>
-            </div>
-
-            {notes.length === 0 && (
-              <p className="text-ink-muted text-sm">No course notes. Click &quot;Add note&quot; for course-specific guidance.</p>
+          <Card
+            title="Course notes"
+            description="Course-specific guidance shown with this exam."
+            actions={<Button size="sm" icon="plus" onClick={addNote}>Add note</Button>}
+            flush
+          >
+            {notes.length === 0 ? (
+              <p className="px-4 py-6 text-ui text-ink-muted">No course notes. Use Add note for course-specific guidance.</p>
+            ) : (
+              <ol className="divide-y divide-subtle">
+                {notes.map((n, i) => (
+                  <li key={i}>
+                    <fieldset className="relative space-y-3 px-4 py-4">
+                      <legend className="float-left w-full pr-10 text-ui font-semibold text-ink">Note {i + 1}</legend>
+                      <IconButton icon="trash" label={`Remove note ${i + 1}`} onClick={() => removeNote(i)} className="absolute right-3 top-3 hover:bg-danger-soft hover:text-danger-strong" />
+                      <div className="clear-both" />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="Course cluster" id={fieldId(`note-${i}-course_cluster`)} hint="“all” applies to every course.">
+                          {p => (
+                            <input {...p} value={n.course_cluster} onChange={e => setNote(i, 'course_cluster', e.target.value)} placeholder="all, Engineering & Technology, …" className={controlClass} />
+                          )}
+                        </Field>
+                        <Field label="Min percentile" id={fieldId(`note-${i}-min_percentile`)} hint="Optional.">
+                          {p => (
+                            <input {...p} type="number" min={0} max={100} value={n.min_percentile ?? ''} onChange={e => setNote(i, 'min_percentile', e.target.value === '' ? null : Number(e.target.value))} placeholder="e.g. 90" className={`${controlClass} tabular-nums`} />
+                          )}
+                        </Field>
+                      </div>
+                      <Field label="Note" id={fieldId(`note-${i}-note`)}>
+                        {p => (
+                          <textarea {...p} rows={2} value={n.note} onChange={e => setNote(i, 'note', e.target.value)} placeholder="Course-specific exam guidance or tip" className={textareaClass} />
+                        )}
+                      </Field>
+                    </fieldset>
+                  </li>
+                ))}
+              </ol>
             )}
+          </Card>
+        </PageBody>
 
-            {notes.map((n, i) => (
-              <div key={i} className="rounded-xl border border-black/[0.08] bg-surface-3 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Note {i + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeNote(i)}
-                    className="text-xs text-danger hover:text-danger-strong transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">Course cluster</label>
-                    <input aria-label="Course cluster"
-                      value={n.course_cluster}
-                      onChange={e => setNote(i, 'course_cluster', e.target.value)}
-                      placeholder="all, Engineering & Technology, …"
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink-muted mb-1">
-                      Min percentile <span className="text-ink-subtle">(optional)</span>
-                    </label>
-                    <input aria-label="Min percentile"
-                      type="number" min={0} max={100}
-                      value={n.min_percentile ?? ''}
-                      onChange={e => setNote(i, 'min_percentile', e.target.value === '' ? null : Number(e.target.value))}
-                      placeholder="e.g. 90"
-                      className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-ink-muted mb-1">Note</label>
-                  <textarea aria-label="Note"
-                    value={n.note}
-                    onChange={e => setNote(i, 'note', e.target.value)}
-                    rows={2}
-                    className="w-full border border-black/[0.15] rounded px-3 py-2 text-sm resize-y"
-                    placeholder="Course-specific exam guidance or tip"
-                  />
-                </div>
-              </div>
-            ))}
-          </section>
-
-          {/* ---- Actions ---- */}
-          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-black/[0.08]">
-            <button
-              type="button"
-              onClick={handleSave}
+        {/* ---- Actions ---- */}
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-t border-subtle bg-surface px-4 py-3 md:px-6">
+          <Button type="submit" variant="primary" loading={saving} disabled={busy}>
+            {saving ? 'Saving…' : 'Save blueprint'}
+          </Button>
+          <Button onClick={requestCancel} disabled={busy}>Cancel</Button>
+          {dirty && !busy && <span className="text-xs text-ink-muted">Unsaved changes</span>}
+          {!isNew && (
+            <Button
+              variant="ghost"
+              icon="trash"
+              onClick={handleDelete}
+              loading={deleting}
               disabled={busy}
-              className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${
-                busy
-                  ? 'bg-surface-2 text-ink-muted cursor-not-allowed'
-                  : 'bg-maroon text-white hover:bg-[#9a0a1f]'
-              }`}
+              className="ml-auto text-danger hover:bg-danger-soft hover:text-danger-strong"
             >
-              {saving ? 'Saving…' : 'Save blueprint'}
-            </button>
-
-            {!isNew && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={busy}
-                className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors ${
-                  busy
-                    ? 'text-ink-subtle cursor-not-allowed'
-                    : 'text-danger hover:bg-danger-soft'
-                }`}
-              >
-                {deleting ? 'Deleting…' : 'Delete blueprint'}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => router.push('/admin/exam-blueprints')}
-              disabled={busy}
-              className="text-sm text-ink-muted hover:text-ink-muted transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-
+              {deleting ? 'Deleting…' : 'Delete blueprint'}
+            </Button>
+          )}
         </div>
-      </div>
+      </form>
+
       {confirmingDelete && (
         <ConfirmDialog
           message={`Delete blueprint "${blueprint.slug}"? This cannot be undone.`}
@@ -507,6 +463,11 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
           onCancel={() => setConfirmingDelete(false)}
         />
       )}
+      <DiscardChangesDialog
+        open={confirmingDiscard}
+        onKeep={() => setConfirmingDiscard(false)}
+        onDiscard={() => { setConfirmingDiscard(false); leave() }}
+      />
     </div>
   )
 }

@@ -222,3 +222,35 @@ describe('applyTableState', () => {
     expect(applyTableState(rows, s, columns, filters, 25).total).toBe(3)
   })
 })
+
+import { parseHiddenColumns, serializeHiddenColumns, toggleId, togglePage } from '../tableState'
+
+describe('hidden columns', () => {
+  const ids = ['title', 'kind', 'score']
+  it('reads known ids and drops unknown ones', () => {
+    expect(parseHiddenColumns(new URLSearchParams('hide=kind,bogus'), ids)).toEqual(['kind'])
+  })
+  it('never hides every column', () => {
+    expect(parseHiddenColumns(new URLSearchParams('hide=title,kind,score'), ids)).toEqual(['title', 'kind'])
+  })
+  it('honours the prefix', () => {
+    expect(parseHiddenColumns(new URLSearchParams('hide=kind&t_hide=score'), ids, 't_')).toEqual(['score'])
+  })
+  it('writes and clears the param while keeping others', () => {
+    expect(serializeHiddenColumns(new URLSearchParams('q=a'), ['kind', 'score'])).toBe('q=a&hide=kind%2Cscore')
+    expect(serializeHiddenColumns(new URLSearchParams('q=a&hide=kind'), [])).toBe('q=a')
+  })
+})
+
+describe('selection helpers', () => {
+  it('toggles one id', () => {
+    expect(toggleId(['a'], 'b')).toEqual(['a', 'b'])
+    expect(toggleId(['a', 'b'], 'a')).toEqual(['b'])
+  })
+  it('select-all adds the page, keeping selections from other pages', () => {
+    expect(togglePage(['x'], ['a', 'b'])).toEqual(['x', 'a', 'b'])
+  })
+  it('select-all removes the page when the whole page was selected', () => {
+    expect(togglePage(['x', 'a', 'b'], ['a', 'b'])).toEqual(['x'])
+  })
+})

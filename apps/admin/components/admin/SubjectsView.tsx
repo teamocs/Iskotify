@@ -4,6 +4,13 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { createSubject as createSubjectRequest, updateSubject, deleteSubject } from '@/lib/admin/subjectsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { DataTable, type Column } from '@/components/ui/DataTable'
+import { Badge } from '@/components/ui/Badge'
+import { Button, IconButton, buttonClass } from '@/components/ui/Button'
+import { Dialog } from '@/components/ui/Dialog'
+import { Field, controlClass } from '@/components/ui/Field'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface SubjectRow {
   id: string
@@ -27,523 +34,256 @@ interface Props {
   listings: ListingOption[]
 }
 
-function StatusBadge({ status }: { status: string }) {
-  return status === 'published'
-    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-success-soft text-success-strong">PUBLISHED</span>
-    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning-strong">DRAFT</span>
+/** The editable part of a subject. */
+export interface SubjectDraft {
+  id: string
+  name: string
+  listing_slugs: string[]
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** A subject needs a name; returns the message to show, or undefined when valid. */
+export function validateSubjectName(name: string): string | undefined {
+  return name.trim() ? undefined : 'Enter a subject name.'
+}
+
+function sameSlugs(a: string[], b: string[]) {
+  return a.length === b.length && a.every(s => b.includes(s))
 }
 
 function ListingPills({ slugs, listings }: { slugs: string[]; listings: ListingOption[] }) {
-  if (slugs.length === 0) return null
+  const linked = slugs.map(slug => listings.find(l => l.slug === slug)).filter((l): l is ListingOption => Boolean(l))
+  if (linked.length === 0) return null
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {slugs.map(slug => {
-        const listing = listings.find(l => l.slug === slug)
-        return listing ? (
-          <span key={slug} className="px-1.5 py-0.5 rounded text-[10px] bg-[#f3f4f6] text-ink-muted">
-            {listing.title}
-          </span>
-        ) : null
-      })}
-    </div>
+    <span className="mt-1 flex flex-wrap gap-1">
+      {linked.map(l => <Badge key={l.slug}>{l.title}</Badge>)}
+    </span>
+  )
+}
+
+function ListingGroup({ legend, options, selected, onToggle }: {
+  legend: string
+  options: ListingOption[]
+  selected: string[]
+  onToggle: (slug: string) => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="mb-1 text-ui font-medium text-ink">{legend}</legend>
+      <div className="max-h-40 space-y-1 overflow-y-auto rounded-sm border border-subtle p-2">
+        {options.map(l => (
+          <label key={l.slug} className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-0.5 hover:bg-surface-hover">
+            <input
+              type="checkbox"
+              value={l.slug}
+              checked={selected.includes(l.slug)}
+              onChange={() => onToggle(l.slug)}
+              className="h-4 w-4 accent-maroon"
+            />
+            <span className="text-sm text-ink">{l.title}</span>
+            {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+/**
+ * Create (subject = null) or edit a subject: its name and the scholarships and
+ * exams it belongs to.
+ */
+export function SubjectFormDialog({ subject, listings, onClose, onSaved }: {
+  subject: SubjectDraft | null
+  listings: ListingOption[]
+  onClose: () => void
+  onSaved: (saved: SubjectDraft) => void
+}) {
+  const creating = subject === null
+  const initialName = subject?.name ?? ''
+  const initialSlugs = subject?.listing_slugs ?? []
+  const [name, setName] = useState(initialName)
+  const [slugs, setSlugs] = useState<string[]>(initialSlugs)
+  const [nameError, setNameError] = useState<string | undefined>()
+  const [serverError, setServerError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const toggle = (slug: string) =>
+    setSlugs(prev => (prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]))
+
+  async function handleSubmit() {
+    if (saving) return
+    const invalid = validateSubjectName(name)
+    setNameError(invalid)
+    if (invalid) return
+    setSaving(true)
+    setServerError('')
+    try {
+      const result = subject === null
+        ? await createSubjectRequest(name, slugs)
+        : await updateSubject(subject.id, name, slugs)
+      if (!result.ok) {
+        setServerError(result.error)
+        notifyError(result.error)
+        return
+      }
+      const saved = result.data
+      notifySuccess(creating ? 'Subject created' : 'Subject saved')
+      onSaved({ id: saved.id, name: saved.name, listing_slugs: saved.listing_slugs ?? [] })
+    } catch {
+      setServerError('Network error')
+      notifyError('Network error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={() => { if (!saving) onClose() }}
+      title={creating ? 'New subject' : 'Edit subject'}
+      description="Link the scholarships and exams whose reviewers should include this subject."
+      onSubmit={handleSubmit}
+      dirty={name !== initialName || !sameSlugs(slugs, initialSlugs)}
+      footer={close => (
+        <>
+          <Button onClick={close} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {creating ? (saving ? 'Creating…' : 'Create subject') : (saving ? 'Saving…' : 'Save subject')}
+          </Button>
+        </>
+      )}
+    >
+      <div className="space-y-4">
+        {serverError && <ErrorBanner title={creating ? 'Couldn’t create the subject' : 'Couldn’t save the subject'} message={serverError} />}
+        <Field label="Subject name" required error={nameError}>
+          {p => (
+            <input {...p} type="text" autoFocus value={name} placeholder="e.g. Biology"
+              onChange={e => setName(e.target.value)} className={controlClass} />
+          )}
+        </Field>
+        <ListingGroup legend="Scholarships" options={listings.filter(l => l.type === 'scholarship')} selected={slugs} onToggle={toggle} />
+        <ListingGroup legend="Exams" options={listings.filter(l => l.type === 'exam')} selected={slugs} onToggle={toggle} />
+      </div>
+    </Dialog>
   )
 }
 
 export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
   const [subjects, setSubjects] = useState(initialSubjects)
-  const [editingSubject, setEditingSubject] = useState<SubjectRow | null>(null)
+  // null = closed, 'new' = creating, a row = editing it
+  const [formFor, setFormFor] = useState<SubjectRow | 'new' | null>(null)
   const [deletingSubject, setDeletingSubject] = useState<SubjectRow | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [editError, setEditError] = useState('')
-  const [deleteError, setDeleteError] = useState('')
-  const [editName, setEditName] = useState('')
-  const [editSlugs, setEditSlugs] = useState<string[]>([])
+  const [deleting, setDeleting] = useState(false)
 
-  const [creating, setCreating] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [createSlugs, setCreateSlugs] = useState<string[]>([])
-  const [createError, setCreateError] = useState('')
-
-  const scholarships = listings.filter(l => l.type === 'scholarship')
-  const exams = listings.filter(l => l.type === 'exam')
-
-  function startEdit(subject: SubjectRow) {
-    setEditingSubject(subject)
-    setEditName(subject.name)
-    setEditSlugs(subject.listing_slugs)
-    setDeletingSubject(null)
-    setEditError('')
-  }
-
-  function startDelete(subject: SubjectRow) {
-    setDeletingSubject(subject)
-    setEditingSubject(null)
-    setDeleteError('')
-  }
-
-  function toggleSlug(slug: string) {
-    setEditSlugs(prev =>
-      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
-    )
-  }
-
-  function startCreate() {
-    setCreating(true)
-    setCreateName('')
-    setCreateSlugs([])
-    setCreateError('')
-    setEditingSubject(null)
-    setDeletingSubject(null)
-  }
-
-  function toggleCreateSlug(slug: string) {
-    setCreateSlugs(prev =>
-      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
-    )
-  }
-
-  async function createSubject() {
-    if (!createName.trim()) return
-    setSaving(true)
-    setCreateError('')
-    try {
-      const result = await createSubjectRequest(createName, createSlugs)
-      if (!result.ok) {
-        setCreateError(result.error)
-        notifyError(result.error)
-        return
-      }
-      const created = result.data
+  function handleSaved(saved: SubjectDraft) {
+    if (formFor === 'new') {
       setSubjects(prev =>
-        [...prev, { id: created.id, name: created.name, listing_slugs: created.listing_slugs ?? [], topics: [], totalCards: 0, overallStatus: 'draft' }]
+        [...prev, { id: saved.id, name: saved.name, listing_slugs: saved.listing_slugs, topics: [], totalCards: 0, overallStatus: 'draft' }]
           .sort((a, b) => a.name.localeCompare(b.name))
       )
-      setCreating(false)
-      notifySuccess('Subject created')
-    } catch {
-      setCreateError('Network error')
-      notifyError('Network error')
-    } finally {
-      setSaving(false)
+    } else {
+      setSubjects(prev => prev.map(s => (s.id === saved.id ? { ...s, name: saved.name, listing_slugs: saved.listing_slugs } : s)))
     }
-  }
-
-  async function saveEdit() {
-    if (!editingSubject) return
-    setSaving(true)
-    setEditError('')
-    try {
-      const result = await updateSubject(editingSubject.id, editName, editSlugs)
-      if (!result.ok) {
-        setEditError(result.error)
-        notifyError(result.error)
-        return
-      }
-      const updated = result.data
-      setSubjects(prev =>
-        prev.map(s =>
-          s.id === updated.id
-            ? { ...s, name: updated.name, listing_slugs: updated.listing_slugs }
-            : s
-        )
-      )
-      setEditingSubject(null)
-      notifySuccess('Subject saved')
-    } catch {
-      setEditError('Network error')
-      notifyError('Network error')
-    } finally {
-      setSaving(false)
-    }
+    setFormFor(null)
   }
 
   async function confirmDelete() {
-    if (!deletingSubject) return
-    setSaving(true)
-    setDeleteError('')
+    if (!deletingSubject || deleting) return
+    const id = deletingSubject.id
+    setDeleting(true)
     try {
-      const result = await deleteSubject(deletingSubject.id)
+      const result = await deleteSubject(id)
       if (!result.ok) {
-        setDeleteError(result.error)
         notifyError(result.error)
         return
       }
-      setSubjects(prev => prev.filter(s => s.id !== deletingSubject.id))
+      setSubjects(prev => prev.filter(s => s.id !== id))
       setDeletingSubject(null)
       notifySuccess('Subject deleted')
     } catch {
-      setDeleteError('Network error')
       notifyError('Network error')
     } finally {
-      setSaving(false)
+      setDeleting(false)
     }
   }
 
+  const columns: Column<SubjectRow>[] = [
+    {
+      id: 'name',
+      header: 'Subject',
+      sortValue: s => s.name,
+      searchValue: s => `${s.name} ${s.listing_slugs.map(slug => listings.find(l => l.slug === slug)?.title ?? '').join(' ')}`,
+      cell: s => (
+        <>
+          <Link href={`/admin/flashcards/subjects/${s.id}`} className="font-medium text-ink underline-offset-2 hover:underline">{s.name}</Link>
+          <ListingPills slugs={s.listing_slugs} listings={listings} />
+        </>
+      ),
+    },
+    { id: 'topics', header: 'Topics', align: 'right', sortValue: s => s.topics.length, cell: s => <span className="tabular-nums text-ink-muted">{s.topics.length}</span> },
+    { id: 'cards', header: 'Cards', align: 'right', sortValue: s => s.totalCards, cell: s => <span className="tabular-nums text-ink-muted">{s.totalCards}</span> },
+    {
+      id: 'status',
+      header: 'Status',
+      sortValue: s => s.overallStatus,
+      cell: s => (s.overallStatus === 'published' ? <Badge tone="success">Published</Badge> : <Badge tone="warning">Draft</Badge>),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      hideHeader: true,
+      align: 'right',
+      cell: s => (
+        <span className="inline-flex gap-1">
+          <IconButton icon="pencil" label={`Edit ${s.name}`} onClick={() => setFormFor(s)} />
+          <IconButton icon="trash" label={`Delete ${s.name}`} onClick={() => setDeletingSubject(s)} className="hover:bg-danger-soft hover:text-danger-strong" />
+        </span>
+      ),
+    },
+  ]
+
   return (
-    <div data-testid="subjects-view" className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-ink-muted">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</p>
-        <div className="flex gap-2">
-          <button
-            onClick={startCreate}
-            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-ink-muted hover:bg-surface-2 transition-colors"
-          >
-            + New subject
-          </button>
-          <Link
-            href="/admin/flashcards/new"
-            className="px-3 py-1.5 text-xs font-semibold border border-[#d1d5db] rounded-lg text-ink-muted hover:bg-surface-2 transition-colors"
-          >
-            + Add manually
-          </Link>
-          <Link
-            href="/admin/upcat/import"
-            className="px-3 py-1.5 text-xs font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] transition-colors"
-          >
-            Import CSV
-          </Link>
-        </div>
+    <div data-testid="subjects-view">
+      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+        <DataTable
+          label="Subjects"
+          rows={subjects}
+          columns={columns}
+          rowKey={s => s.id}
+          searchPlaceholder="Search subjects or linked listings"
+          pageSize={50}
+          emptyTitle="No subjects yet"
+          emptyDescription="Create a subject, add cards by hand, or import a CSV of questions."
+          toolbar={
+            <>
+              <Link href="/admin/upcat/import" className={buttonClass({ size: 'sm' })}>Import CSV</Link>
+              <Link href="/admin/flashcards/new" className={buttonClass({ size: 'sm' })}>Add manually</Link>
+              <Button variant="primary" size="sm" icon="plus" onClick={() => setFormFor('new')}>New subject</Button>
+            </>
+          }
+        />
       </div>
 
-      {subjects.length === 0 ? (
-        <div className="text-center py-16 text-ink-muted text-sm">
-          No subjects yet. Upload a PDF or add cards manually.
-        </div>
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Subject</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Topics</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Cards</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Status</th>
-                  <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjects.map(subject => (
-                  <React.Fragment key={subject.id}>
-                    <tr className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-ink">{subject.name}</p>
-                        <ListingPills slugs={subject.listing_slugs} listings={listings} />
-                      </td>
-                      <td className="px-5 py-3 text-ink-muted">{subject.topics.length}</td>
-                      <td className="px-5 py-3 text-ink-muted">{subject.totalCards}</td>
-                      <td className="px-5 py-3"><StatusBadge status={subject.overallStatus} /></td>
-                      <td className="px-5 py-3">
-                        <div className="flex gap-3">
-                          <Link
-                            href={`/admin/flashcards/subjects/${subject.id}`}
-                            className="text-xs text-ink-muted hover:text-ink"
-                          >
-                            View
-                          </Link>
-                          <button
-                            onClick={() => startEdit(subject)}
-                            className="text-xs text-ink-muted hover:text-ink"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => startDelete(subject)}
-                            className="text-xs text-ink-muted hover:text-danger"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {deletingSubject?.id === subject.id && (
-                      <tr className="border-b border-[#f3f4f6]">
-                        <td colSpan={5} className="px-5 py-3 bg-danger-soft border-t border-danger/15">
-                          <div className="flex items-center justify-between gap-4">
-                            <p className="text-sm text-danger">
-                              Delete <strong>{subject.name}</strong>? This will permanently remove{' '}
-                              <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
-                              <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
-                            </p>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              {deleteError && <p className="text-xs text-danger">{deleteError}</p>}
-                              <button
-                                onClick={confirmDelete}
-                                disabled={saving}
-                                className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
-                              >
-                                Yes, delete
-                              </button>
-                              <button
-                                onClick={() => { setDeletingSubject(null); setDeleteError('') }}
-                                className="text-xs text-ink-muted hover:text-ink"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
-            {subjects.map(subject => (
-              <div key={subject.id} className="bg-white border border-[#e5e7eb] rounded-2xl p-4">
-                <p className="font-medium text-ink">{subject.name}</p>
-                <p className="text-xs text-ink-muted mt-0.5">
-                  {subject.topics.length} {subject.topics.length !== 1 ? 'topics' : 'topic'} · {subject.totalCards} {subject.totalCards !== 1 ? 'cards' : 'card'}
-                </p>
-                <ListingPills slugs={subject.listing_slugs} listings={listings} />
-                <div className="mt-1"><StatusBadge status={subject.overallStatus} /></div>
-                <div className="flex gap-3 mt-3 pt-3 border-t border-[#f3f4f6]">
-                  <Link
-                    href={`/admin/flashcards/subjects/${subject.id}`}
-                    className="text-xs text-ink-muted hover:text-ink"
-                  >
-                    View
-                  </Link>
-                  <button
-                    onClick={() => startEdit(subject)}
-                    className="text-xs text-ink-muted hover:text-ink"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => startDelete(subject)}
-                    className="text-xs text-ink-muted hover:text-danger"
-                  >
-                    Delete
-                  </button>
-                </div>
-                {deletingSubject?.id === subject.id && (
-                  <div className="mt-3 pt-3 border-t border-danger/15 bg-danger-soft -mx-4 -mb-4 px-4 pb-4 rounded-b-2xl">
-                    <p className="text-sm text-danger mb-2">
-                      Delete <strong>{subject.name}</strong>? This will permanently remove{' '}
-                      <strong>{subject.topics.length} topic{subject.topics.length !== 1 ? 's' : ''}</strong> and{' '}
-                      <strong>{subject.totalCards} card{subject.totalCards !== 1 ? 's' : ''}</strong>.
-                    </p>
-                    {deleteError && <p className="text-xs text-danger mb-2">{deleteError}</p>}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={confirmDelete}
-                        disabled={saving}
-                        className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
-                      >
-                        Yes, delete
-                      </button>
-                      <button
-                        onClick={() => { setDeletingSubject(null); setDeleteError('') }}
-                        className="text-xs text-ink-muted hover:text-ink"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
+      {formFor !== null && (
+        <SubjectFormDialog
+          subject={formFor === 'new' ? null : formFor}
+          listings={listings}
+          onClose={() => setFormFor(null)}
+          onSaved={handleSaved}
+        />
       )}
 
-      {/* Edit modal */}
-      {editingSubject && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={() => { if (!saving) { setEditingSubject(null); setEditError('') } }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-subject-heading"
-            tabIndex={-1}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' && !saving) {
-                setEditingSubject(null)
-                setEditError('')
-              }
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
-          >
-            <h2 id="edit-subject-heading" className="text-base font-semibold text-ink">Edit Subject</h2>
-
-            <div className="space-y-1">
-              <label htmlFor="edit-subject-name" className="text-xs font-medium text-ink-muted">Subject name</label>
-              <input
-                id="edit-subject-name"
-                autoFocus
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-              />
-            </div>
-
-            {scholarships.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-ink-muted">Scholarships</p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {scholarships.map(l => (
-                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editSlugs.includes(l.slug)}
-                        onChange={() => toggleSlug(l.slug)}
-                        className="accent-maroon"
-                      />
-                      <span className="text-sm text-ink">{l.title}</span>
-                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {exams.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-ink-muted">Exams</p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {exams.map(l => (
-                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={editSlugs.includes(l.slug)}
-                        onChange={() => toggleSlug(l.slug)}
-                        className="accent-maroon"
-                      />
-                      <span className="text-sm text-ink">{l.title}</span>
-                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {editError && (
-              <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">{editError}</p>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => { setEditingSubject(null); setEditError('') }}
-                className="text-sm text-ink-muted hover:text-ink px-3 py-1.5"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEdit}
-                disabled={saving || !editName.trim()}
-                className="px-4 py-1.5 text-sm font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create modal */}
-      {creating && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={() => { if (!saving) { setCreating(false); setCreateError('') } }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="new-subject-heading"
-            tabIndex={-1}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape' && !saving) {
-                setCreating(false)
-                setCreateError('')
-              }
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4"
-          >
-            <h2 id="new-subject-heading" className="text-base font-semibold text-ink">New Subject</h2>
-
-            <div className="space-y-1">
-              <label htmlFor="new-subject-name" className="text-xs font-medium text-ink-muted">Subject name</label>
-              <input
-                id="new-subject-name"
-                autoFocus
-                value={createName}
-                onChange={e => setCreateName(e.target.value)}
-                placeholder="e.g. Biology"
-                className="w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-              />
-            </div>
-
-            {scholarships.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-ink-muted">Scholarships</p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {scholarships.map(l => (
-                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={createSlugs.includes(l.slug)}
-                        onChange={() => toggleCreateSlug(l.slug)}
-                        className="accent-maroon"
-                      />
-                      <span className="text-sm text-ink">{l.title}</span>
-                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {exams.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-ink-muted">Exams</p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {exams.map(l => (
-                    <label key={l.slug} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={createSlugs.includes(l.slug)}
-                        onChange={() => toggleCreateSlug(l.slug)}
-                        className="accent-maroon"
-                      />
-                      <span className="text-sm text-ink">{l.title}</span>
-                      {l.provider && <span className="text-xs text-ink-muted">· {l.provider}</span>}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {createError && (
-              <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">{createError}</p>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => { setCreating(false); setCreateError('') }}
-                className="text-sm text-ink-muted hover:text-ink px-3 py-1.5"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createSubject}
-                disabled={saving || !createName.trim()}
-                className="px-4 py-1.5 text-sm font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {deletingSubject && (
+        <ConfirmDialog
+          message={`Delete "${deletingSubject.name}"? This permanently removes ${plural(deletingSubject.topics.length, 'topic')} and ${plural(deletingSubject.totalCards, 'card')}.`}
+          confirmLabel={deleting ? 'Deleting…' : 'Delete subject'}
+          onConfirm={confirmDelete}
+          onCancel={() => { if (!deleting) setDeletingSubject(null) }}
+        />
       )}
     </div>
   )

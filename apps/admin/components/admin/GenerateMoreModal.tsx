@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Dialog } from '@/components/ui/Dialog'
+import { Field, controlClass } from '@/components/ui/Field'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Props {
   open: boolean
@@ -14,6 +18,9 @@ interface Props {
   onSuccess: () => void  // refresh callback for parent
 }
 
+const COUNTS = [5, 10, 15, 20] as const
+const DEFAULT_COUNT = 5
+
 export function GenerateMoreModal({
   open,
   onClose,
@@ -24,11 +31,9 @@ export function GenerateMoreModal({
   listingSlugs,
   onSuccess,
 }: Props) {
-  const [count, setCount] = useState(5)
+  const [count, setCount] = useState<number>(DEFAULT_COUNT)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
-
-  if (!open) return null
 
   async function handleGenerate() {
     if (isGenerating) return
@@ -91,67 +96,32 @@ export function GenerateMoreModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-bold text-ink">Generate more cards with AI</h2>
-          <p className="text-xs text-ink-muted mt-1">
-            Topic: <strong>{topicName}</strong> · Subject: <strong>{subjectName}</strong>
-          </p>
-          <p className="text-xs text-ink-muted mt-1">
-            {existingQuestions.length} existing cards — Gemini will avoid duplicates.
-          </p>
-        </div>
-
-        <div>
-          <label className="text-[11px] text-ink-muted font-semibold block mb-1">HOW MANY?</label>
-          <div className="flex gap-2">
-            {[5, 10, 15, 20].map(n => {
-              const active = count === n
-              return (
-                <button
-                  key={n}
-                  onClick={() => setCount(n)}
-                  disabled={isGenerating}
-                  className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
-                    active
-                      ? 'bg-maroon text-white border-maroon'
-                      : 'bg-white text-ink border-[#d1d5db] hover:border-maroon'
-                  } disabled:opacity-40`}
-                >
-                  {n}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {error && <p className="text-xs text-maroon font-medium">{error}</p>}
-
-        <div className="flex gap-2 pt-2">
-          <button
-            onClick={onClose}
-            disabled={isGenerating}
-            className="flex-1 px-4 py-2 border border-[#d1d5db] rounded-full text-sm font-semibold text-ink-muted hover:bg-surface-2 disabled:opacity-40"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="flex-1 px-4 py-2 bg-ink text-white text-sm font-semibold rounded-full hover:bg-black disabled:opacity-40 flex items-center justify-center gap-2"
-          >
-            {isGenerating ? (
-              <>
-                <span className="inline-block w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                Generating…
-              </>
-            ) : (
-              `✨ Generate ${count}`
-            )}
-          </button>
-        </div>
+    <Dialog
+      open={open}
+      onClose={() => { if (!isGenerating) onClose() }}
+      title="Generate cards with AI"
+      description={<>For <strong className="font-medium text-ink">{topicName}</strong> in {subjectName}. {existingQuestions.length} existing card{existingQuestions.length === 1 ? '' : 's'} — Gemini avoids duplicates.</>}
+      onSubmit={handleGenerate}
+      dirty={count !== DEFAULT_COUNT}
+      footer={close => (
+        <>
+          <Button onClick={close} disabled={isGenerating}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={isGenerating}>
+            {isGenerating ? 'Generating…' : `Generate ${count} cards`}
+          </Button>
+        </>
+      )}
+    >
+      <div className="space-y-3">
+        {error && <ErrorBanner title="Couldn’t generate cards" message={error} />}
+        <Field label="Number of cards" required>
+          {p => (
+            <select {...p} value={count} disabled={isGenerating} onChange={e => setCount(Number(e.target.value))} className={`${controlClass} max-w-[10rem]`}>
+              {COUNTS.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
+        </Field>
       </div>
-    </div>
+    </Dialog>
   )
 }

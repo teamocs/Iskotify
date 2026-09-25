@@ -2,7 +2,7 @@ import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { KbDriveSyncPanel, type KbDriveFile } from '@/components/admin/KbDriveSyncPanel'
 import { SyncLogTable } from '@/components/admin/SyncLogTable'
-import type { SyncLog } from '@/components/admin/SyncPanel'
+import type { SyncLog } from '@/lib/admin/syncLog'
 import { Card } from '@/components/ui/Card'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 

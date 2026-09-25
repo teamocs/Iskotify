@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { IconButton } from '@/components/ui/Button'
 
 interface Props {
   title: string
@@ -10,20 +11,18 @@ interface Props {
   children?: ReactNode
 }
 
-// Small "?" pill that toggles a popover with a one-liner + a link into the full guide.
+// Small help button that toggles a popover with a one-liner + a link into the full guide.
 export function SectionHelp({ title, guideAnchor, children }: Props) {
   const [open, setOpen] = useState(false)
   return (
     <span className="relative inline-flex">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-label={`Help: ${title}`}
+      <IconButton
+        icon="help"
+        label={`Help: ${title}`}
         aria-expanded={open}
-        className="w-5 h-5 rounded-full border border-black/[0.15] text-[11px] leading-none text-ink-muted hover:text-maroon hover:border-maroon flex items-center justify-center"
-      >
-        ?
-      </button>
+        onClick={() => setOpen(o => !o)}
+        className="h-6 w-6"
+      />
       {open && (
         <>
           <button
@@ -32,16 +31,16 @@ export function SectionHelp({ title, guideAnchor, children }: Props) {
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-7 z-50 w-72 rounded-[12px] border border-black/[0.08] bg-white shadow-xl p-3 text-left">
-            <p className="text-[13px] font-semibold text-ink mb-1">{title}</p>
-            <p className="text-[12px] text-ink-muted leading-relaxed">
+          <div className="absolute left-0 top-7 z-50 w-72 rounded-sm border border-subtle bg-surface p-3 text-left shadow-overlay">
+            <p className="mb-1 text-ui font-semibold text-ink">{title}</p>
+            <p className="text-xs leading-relaxed text-ink-muted">
               {children ?? 'Add, edit, delete, import, or export rows for this table. Changes reach the mobile app on its next sync.'}
             </p>
             <a
               href={`/admin/guide${guideAnchor ? `#${guideAnchor}` : ''}`}
-              className="inline-block mt-2 text-[12px] font-semibold text-maroon hover:underline"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-maroon underline-offset-2 hover:underline"
             >
-              Full guide →
+              Full guide
             </a>
           </div>
         </>

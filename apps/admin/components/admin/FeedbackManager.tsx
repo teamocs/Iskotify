@@ -1,7 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { notifySuccess, notifyError } from '@/lib/toast'
+import { useState } from 'react'
+import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
+import { Button, IconButton } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageBody } from '@/components/ui/Page'
+import type { ReviewStatus } from '@/lib/admin/bulkStatus'
+import { ConfirmDialog } from './ConfirmDialog'
+import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -10,326 +16,173 @@ export interface AppFeedback {
   user_id: string | null
   rating: number | null
   message: string | null
-  status: 'new' | 'reviewed' | 'resolved'
+  status: ReviewStatus
   created_at: string
   updated_at: string
 }
 
-interface FetchState {
-  rows: AppFeedback[]
-  count: number
-  loading: boolean
-  error: string
+const ratingOf = (r: AppFeedback) =>
+  typeof r.rating === 'number' && r.rating >= 1 && r.rating <= 5 ? Math.round(r.rating) : 0
+
+/** Stars are decoration; the "4 of 5" text carries the rating. */
+function Stars({ rating }: { rating: number }) {
+  if (!rating) return <span className="text-ink-subtle">—</span>
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span aria-hidden="true" className="tracking-tight">
+        <span className="text-warning">{'★'.repeat(rating)}</span>
+        <span className="text-ink-subtle opacity-40">{'★'.repeat(5 - rating)}</span>
+      </span>
+      <span className="text-xs tabular-nums text-ink-muted">{rating} of 5</span>
+    </span>
+  )
 }
 
-type StatusTab = 'all' | 'new' | 'reviewed' | 'resolved'
-
-const TABS: { key: StatusTab; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'new', label: 'New' },
-  { key: 'reviewed', label: 'Reviewed' },
-  { key: 'resolved', label: 'Resolved' },
+const FILTERS: FilterDef<AppFeedback>[] = [
+  statusFilter<AppFeedback>(),
+  {
+    id: 'rating',
+    label: 'Rating',
+    allLabel: 'Any rating',
+    options: [
+      ...[5, 4, 3, 2, 1].map(n => ({ value: String(n), label: `${n} of 5` })),
+      { value: 'none', label: 'No rating' },
+    ],
+    predicate: (r, v) => (v === 'none' ? ratingOf(r) === 0 : ratingOf(r) === Number(v)),
+  },
 ]
 
-const PAGE_SIZE = 50
-
-const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-ink hover:bg-surface-2 disabled:opacity-40'
-
-function useDebounce(value: string, delay: number) {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
+const shortLabel = (r: AppFeedback) => {
+  const t = (r.message || 'feedback without a message').trim()
+  return t.length > 60 ? `${t.slice(0, 60)}…` : t
 }
 
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    new: 'bg-maroon/10 text-maroon',
-    reviewed: 'bg-warning-soft text-warning-strong',
-    resolved: 'bg-success-soft text-success-strong',
+// ── Table ───────────────────────────────────────────────────────────────────
+
+interface ViewProps {
+  rows: AppFeedback[]
+  loading: boolean
+  error: string
+  selected: string[]
+  onSelectedChange: (ids: string[]) => void
+  bulkBusy: boolean
+  /** Outcome of the last bulk action, announced to screen readers. */
+  bulkResult?: string
+  onBulk: (status: ReviewStatus) => void
+  onRetry: () => void
+  onSetStatus: (id: string, status: ReviewStatus) => void
+  onDelete: (r: AppFeedback) => void
+}
+
+export function FeedbackView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
+  if (error) {
+    return (
+      <ErrorBanner
+        title="Couldn’t load feedback"
+        message={error}
+        action={<Button size="sm" icon="refresh" onClick={onRetry}>Try again</Button>}
+      />
+    )
   }
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
-      {status}
-    </span>
-  )
-}
 
-function Stars({ rating }: { rating: number | null }) {
-  const n = typeof rating === 'number' && rating >= 1 && rating <= 5 ? Math.round(rating) : 0
-  if (!n) return <span className="text-ink-subtle">—</span>
-  return (
-    <span className="whitespace-nowrap" title={`${n} of 5`}>
-      <span className="text-amber-500">{'★'.repeat(n)}</span>
-      <span className="text-black/15">{'★'.repeat(5 - n)}</span>
-      <span className="ml-1 text-[11px] text-ink-muted align-middle">{n}/5</span>
-    </span>
-  )
-}
+  const columns: Column<AppFeedback>[] = [
+    {
+      id: 'message',
+      header: 'Message',
+      searchValue: r => r.message ?? '',
+      className: 'max-w-[32rem]',
+      cell: r => <ClampText text={r.message || '—'} max={120} />,
+    },
+    { id: 'rating', header: 'Rating', sortValue: r => ratingOf(r), cell: r => <Stars rating={ratingOf(r)} /> },
+    { id: 'status', header: 'Status', sortValue: r => r.status, cell: r => <StatusBadge status={r.status} /> },
+    {
+      id: 'submitted',
+      header: 'Submitted',
+      sortValue: r => new Date(r.created_at),
+      cell: r => <span className="whitespace-nowrap tabular-nums text-ink-muted">{fmtDate(r.created_at)}</span>,
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      hideHeader: true,
+      align: 'right',
+      cell: r => {
+        const name = shortLabel(r)
+        return (
+          <span className="inline-flex items-center gap-1">
+            {r.status !== 'reviewed' && (
+              <Button size="sm" variant="ghost" aria-label={`Mark reviewed: ${name}`} onClick={() => onSetStatus(r.id, 'reviewed')}>Reviewed</Button>
+            )}
+            {r.status !== 'resolved' && (
+              <Button size="sm" variant="ghost" aria-label={`Mark resolved: ${name}`} onClick={() => onSetStatus(r.id, 'resolved')}>Resolved</Button>
+            )}
+            <IconButton icon="trash" label={`Delete feedback: ${name}`} onClick={() => onDelete(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
+          </span>
+        )
+      },
+    },
+  ]
 
-function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return iso
-  }
+  return (
+    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <DataTable
+        announcement={bulkResult}
+        label="Feedback"
+        rows={rows}
+        columns={columns}
+        rowKey={r => r.id}
+        filters={FILTERS}
+        searchPlaceholder="Search feedback messages"
+        pageSize={50}
+        defaultSort={{ id: 'submitted', dir: 'desc' }}
+        loading={loading}
+        emptyTitle="No feedback yet"
+        emptyDescription="Ratings and comments that students send from the app’s feedback form show up here."
+        selection={{
+          selected,
+          onChange: onSelectedChange,
+          rowLabel: shortLabel,
+          actions: <BulkStatusActions busy={bulkBusy} onApply={onBulk} />,
+        }}
+      />
+    </div>
+  )
 }
 
 // ── Main FeedbackManager ────────────────────────────────────────────────────
 
 export function FeedbackManager() {
-  const [tab, setTab] = useState<StatusTab>('all')
-  const [search, setSearch] = useState('')
-  const debouncedSearch = useDebounce(search, 300)
-  const [page, setPage] = useState(0)
-  const [state, setState] = useState<FetchState>({ rows: [], count: 0, loading: true, error: '' })
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
-  const [actionError, setActionError] = useState('')
-  const fetchCountRef = useRef(0)
-
-  const fetchRows = useCallback(async (status: StatusTab, q: string, p: number) => {
-    const id = ++fetchCountRef.current
-    setState(prev => ({ ...prev, loading: true, error: '' }))
-    try {
-      const params = new URLSearchParams({ page: String(p) })
-      if (status !== 'all') params.set('status', status)
-      if (q) params.set('q', q)
-      const res = await fetch(`/api/admin/feedback?${params}`)
-      if (id !== fetchCountRef.current) return
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setState(prev => ({ ...prev, loading: false, error: body.error ?? 'Failed to load' }))
-        return
-      }
-      const { rows, count } = await res.json()
-      setState({ rows: rows ?? [], count: count ?? 0, loading: false, error: '' })
-    } catch {
-      if (id !== fetchCountRef.current) return
-      setState(prev => ({ ...prev, loading: false, error: 'Network error' }))
-    }
-  }, [])
-
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedSearch, tab])
-
-  useEffect(() => {
-    fetchRows(tab, debouncedSearch, page)
-  }, [tab, debouncedSearch, page, fetchRows])
-
-  function refresh() {
-    fetchRows(tab, debouncedSearch, page)
-  }
-
-  async function setFeedbackStatus(id: string, status: 'reviewed' | 'resolved') {
-    setActionError('')
-    try {
-      const res = await fetch(`/api/admin/feedback/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const message = body.error ?? 'Failed to update status'
-        setActionError(message)
-        notifyError(message)
-        return
-      }
-      notifySuccess(`Feedback marked ${status}`)
-      refresh()
-    } catch {
-      setActionError('Network error')
-      notifyError('Network error')
-    }
-  }
-
-  async function deleteFeedback(id: string) {
-    setActionError('')
-    try {
-      const res = await fetch(`/api/admin/feedback/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const message = body.error ?? 'Failed to delete feedback'
-        setActionError(message)
-        notifyError(message)
-        return
-      }
-      setConfirmingDelete(null)
-      notifySuccess('Feedback deleted')
-      refresh()
-    } catch {
-      setActionError('Network error')
-      notifyError('Network error')
-    }
-  }
-
-  const totalPages = Math.ceil(state.count / PAGE_SIZE)
+  const queue = useStatusQueue<AppFeedback>({
+    listUrl: '/api/admin/feedback',
+    noun: { one: 'feedback item', many: 'feedback items' },
+    singular: 'Feedback',
+  })
+  const [deleting, setDeleting] = useState<AppFeedback | null>(null)
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
-        {/* Header */}
-        <div>
-          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Feedback</h2>
-          <p className="text-ink-muted text-sm mt-0.5">
-            {state.loading ? 'Loading…' : `${state.count} item${state.count !== 1 ? 's' : ''}`}
-          </p>
-        </div>
+    <PageBody intro="Ratings and comments from students. Mark items reviewed once read, resolved once acted on.">
+      <FeedbackView
+        rows={queue.rows}
+        loading={queue.loading}
+        error={queue.error}
+        selected={queue.selected}
+        onSelectedChange={queue.setSelected}
+        bulkBusy={queue.bulkBusy}
+        bulkResult={queue.bulkResult}
+        onBulk={queue.applyBulk}
+        onRetry={queue.reload}
+        onSetStatus={queue.setStatus}
+        onDelete={setDeleting}
+      />
 
-        {/* Tabs + Search */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-surface-2 rounded-[980px] p-1">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={`px-4 py-1.5 rounded-[980px] text-sm font-medium transition-colors ${
-                  tab === key ? 'bg-white text-maroon shadow-sm' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            aria-label="Search feedback message"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search feedback message…"
-            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-          />
-        </div>
-
-        {/* Errors */}
-        {state.error ? (
-          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{state.error}</p>
-        ) : null}
-        {actionError ? (
-          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{actionError}</p>
-        ) : null}
-
-        {/* Table */}
-        <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[680px]">
-              <thead className="bg-surface-2 border-b border-black/[0.08]">
-                <tr>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Rating</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Message</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Submitted</th>
-                  <th className="px-4 py-3 text-right text-ink-muted text-xs font-semibold uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/[0.05]">
-                {state.loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-sm">Loading…</td>
-                  </tr>
-                ) : null}
-                {!state.loading && state.rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-ink-muted text-sm">No feedback found.</td>
-                  </tr>
-                ) : null}
-                {state.rows.map((row) => {
-                  const isExpanded = !!expanded[row.id]
-                  const text = row.message || '—'
-                  const needsTruncate = text.length > 120
-                  return (
-                    <tr key={row.id} className="hover:bg-surface-3 transition-colors align-top">
-                      <td className="px-4 py-3"><Stars rating={row.rating} /></td>
-                      <td className="px-4 py-3 text-ink max-w-[420px]">
-                        <span className="block whitespace-pre-wrap break-words">
-                          {isExpanded || !needsTruncate ? text : `${text.slice(0, 120)}…`}
-                        </span>
-                        {needsTruncate ? (
-                          <button
-                            type="button"
-                            onClick={() => setExpanded(prev => ({ ...prev, [row.id]: !isExpanded }))}
-                            className="text-xs text-maroon hover:underline mt-1"
-                          >
-                            {isExpanded ? 'Show less' : 'Show more'}
-                          </button>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3"><StatusPill status={row.status} /></td>
-                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatDate(row.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5 justify-end">
-                          {row.status !== 'reviewed' ? (
-                            <button type="button" onClick={() => setFeedbackStatus(row.id, 'reviewed')} className={pillBtnCls}>
-                              Reviewed
-                            </button>
-                          ) : null}
-                          {row.status !== 'resolved' ? (
-                            <button type="button" onClick={() => setFeedbackStatus(row.id, 'resolved')} className={pillBtnCls}>
-                              Resolved
-                            </button>
-                          ) : null}
-                          {confirmingDelete === row.id ? (
-                            <span className="inline-flex gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => deleteFeedback(row.id)}
-                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-danger text-white hover:bg-danger-strong"
-                              >
-                                Confirm
-                              </button>
-                              <button type="button" onClick={() => setConfirmingDelete(null)} className={pillBtnCls}>
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingDelete(row.id)}
-                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-danger/25 text-danger hover:bg-danger-soft"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 ? (
-          <div className="flex items-center justify-between text-sm text-ink-muted">
-            <span>Page {page + 1} of {totalPages} ({state.count} items)</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
+      {deleting && (
+        <ConfirmDialog
+          message={`Delete this feedback (“${shortLabel(deleting)}”)? This cannot be undone.`}
+          confirmLabel="Delete feedback"
+          onConfirm={async () => { if (await queue.remove(deleting.id)) setDeleting(null) }}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
+    </PageBody>
   )
 }

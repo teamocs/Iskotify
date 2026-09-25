@@ -2,12 +2,16 @@
 
 import { useTransition } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button } from '@/components/ui/Button'
 
 interface Props {
   /** Which table to backfill. Renders its own button + label. */
   source: 'flashcards' | 'upcat_questions'
   label?: string
 }
+
+// Callers may still pass a label that leads with an emoji; the icon slot owns that job now.
+const stripLeadingEmoji = (s: string) => s.replace(/^\p{Extended_Pictographic}️?\s*/u, '')
 
 /**
  * Task E bulk admin action — "Generate explanations" for existing rows
@@ -43,12 +47,8 @@ export function GenerateExplanationsButton({ source, label }: Props) {
   }
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={isPending}
-      className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-white text-maroon border border-maroon/30 hover:bg-maroon/5 transition-colors disabled:opacity-60"
-    >
-      {isPending ? '⏳ Generating…' : (label ?? '✨ Generate explanations')}
-    </button>
+    <Button size="sm" icon="file-pen" loading={isPending} onClick={handleClick}>
+      {isPending ? 'Generating…' : stripLeadingEmoji(label ?? 'Generate explanations')}
+    </Button>
   )
 }

@@ -1,117 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { notifySuccess, notifyError } from '@/lib/toast'
+import { HostedUrlForm } from './HostedUrlForm'
 
 interface Props {
   currentUrl: string
 }
 
-// NOTE: This is a Next.js DOM component — react-doctor rn-no-raw-text alerts
-// are false positives here (they apply to React Native, not the web admin).
-
+/** The APK for pushing an update to users who already installed Iskotify. */
 export function UpdateApkUrlForm({ currentUrl }: Props) {
-  const router = useRouter()
-  const [url, setUrl] = useState(currentUrl)
-  const [saving, setSaving] = useState(false)
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-
-  async function handleSave() {
-    const trimmed = url.trim()
-
-    // Client-side validation: non-empty must start with https://
-    if (trimmed !== '' && !trimmed.startsWith('https://')) {
-      setStatus({ type: 'error', message: 'The URL must start with https://' })
-      return
-    }
-
-    setSaving(true)
-    setStatus(null)
-
-    try {
-      const res = await fetch('/api/admin/update-apk-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: trimmed }),
-      })
-      const json = (await res.json()) as { ok: boolean; error?: string }
-
-      if (!json.ok) {
-        const message = json.error ?? 'Failed to save. Please try again.'
-        setStatus({ type: 'error', message })
-        notifyError(message)
-      } else {
-        const message = trimmed === '' ? 'Update APK link cleared.' : 'Update APK link saved successfully.'
-        setStatus({ type: 'success', message })
-        notifySuccess(message)
-        router.refresh()
-      }
-    } catch {
-      setStatus({ type: 'error', message: 'Network error. Check your connection and try again.' })
-      notifyError('Network error. Check your connection and try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <div className="rounded-[12px] border border-black/[0.07] bg-surface-3 px-4 py-4 space-y-3">
-      <p className="text-[12px] font-semibold text-ink uppercase tracking-wide">
-        Update APK download link
-      </p>
-
-      <div className="space-y-2">
-        <label
-          htmlFor="update-apk-url-input"
-          className="block text-[13px] text-ink-muted"
-        >
-          Paste the permanent hosted download URL for the NEW update build (GitHub Releases, Google Drive, etc.)
-        </label>
-        <input
-          id="update-apk-url-input"
-          type="url"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value)
-            setStatus(null)
-          }}
-          disabled={saving}
-          placeholder="https://github.com/.../releases/download/.../iskotify-update.apk"
-          className={[
-            'w-full rounded-[8px] border px-3 py-2 text-[13px] text-ink',
-            'placeholder-ink-subtle outline-none transition-colors',
-            'focus:border-maroon focus:ring-1 focus:ring-maroon/30',
-            saving ? 'border-black/10 bg-white/60 cursor-not-allowed' : 'border-black/[0.12] bg-white',
-          ].join(' ')}
-        />
-      </div>
-
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving}
-        className={[
-          'rounded-[980px] px-4 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-60',
-          'bg-maroon text-white hover:bg-maroon-light',
-        ].join(' ')}
-      >
-        {saving ? 'Saving…' : 'Save link'}
-      </button>
-
-      {/* Accessible live region for status messages */}
-      <div aria-live="polite" aria-atomic="true">
-        {status?.type === 'error' && (
-          <p className="text-[12px] text-danger bg-danger-soft rounded-[8px] px-3 py-2" role="alert">
-            {status.message}
-          </p>
-        )}
-        {status?.type === 'success' && (
-          <p className="text-[12px] text-success bg-success-soft rounded-[8px] px-3 py-2">
-            {status.message}
-          </p>
-        )}
-      </div>
-    </div>
+    <HostedUrlForm
+      currentUrl={currentUrl}
+      inputId="update-apk-url-input"
+      label="Update APK download link"
+      hint="Paste the permanent hosted download URL for the new update build (GitHub Releases, Google Drive, etc.). Leave empty to clear it."
+      placeholder="https://github.com/.../releases/download/.../iskotify-update.apk"
+      endpoint="/api/admin/update-apk-url"
+      savedMessage="Update APK link saved successfully."
+      clearedMessage="Update APK link cleared."
+    />
   )
 }

@@ -3,22 +3,25 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button } from '@/components/ui/Button'
 
 interface Props {
   id: string
   status: string
+  /** Names the registrant in the accessible label ("Send APK to ana@…"). */
+  recipient?: string
 }
 
-export function SendApkButton({ id, status }: Props) {
+const NETWORK_ERROR = 'Network error. Please check your connection and try again.'
+
+export function SendApkButton({ id, status, recipient }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isSent = status === 'sent'
   const label = isSent ? 'Resend APK' : 'Send APK'
-  const ariaLabel = isSent
-    ? 'Resend APK download link to this registrant'
-    : 'Send APK download link to this registrant'
+  const ariaLabel = `${label} to ${recipient ?? 'this registrant'}`
 
   async function handleClick() {
     setLoading(true)
@@ -43,31 +46,27 @@ export function SendApkButton({ id, status }: Props) {
       notifySuccess(isSent ? 'APK link resent' : 'APK link sent')
       router.refresh()
     } catch {
-      setError('Network error. Please check your connection and try again.')
-      notifyError('Network error. Please check your connection and try again.')
+      setError(NETWORK_ERROR)
+      notifyError(NETWORK_ERROR)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col items-start gap-1 min-w-[100px]">
-      <button
-        type="button"
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        size="sm"
+        variant={isSent ? 'ghost' : 'secondary'}
+        icon="mail"
         onClick={handleClick}
-        disabled={loading}
+        loading={loading}
         aria-label={ariaLabel}
-        className={[
-          'rounded-[980px] px-3 py-1 text-[12px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60',
-          isSent
-            ? 'border border-maroon text-maroon bg-white hover:bg-[#fff8f8]'
-            : 'bg-maroon text-white hover:bg-maroon-light',
-        ].join(' ')}
       >
         {loading ? 'Sending…' : label}
-      </button>
+      </Button>
       {error && (
-        <p className="text-[11px] text-danger leading-tight max-w-[180px]" role="alert">
+        <p className="max-w-[12rem] text-xs leading-tight text-danger" role="alert">
           {error}
         </p>
       )}

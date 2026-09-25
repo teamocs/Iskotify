@@ -1,4 +1,6 @@
 import { Topbar } from '@/components/admin/Topbar'
+import { PageBody } from '@/components/ui/Page'
+import { Card } from '@/components/ui/Card'
 import { DATA_TABLE_MAP, type DataTableConfig, type DataTableColumnConfig } from '@/lib/dataTables'
 import { exportColumnNames } from '@/lib/dataTables/serialization'
 
@@ -47,26 +49,27 @@ function FormatTable({ config }: { config: DataTableConfig }) {
   const order = exportColumnNames(config)
   const byName = new Map(config.columns.map(c => [c.name, c]))
   return (
-    <div className="overflow-x-auto rounded-[12px] border border-black/[0.06]">
-      <table className="w-full text-sm min-w-[520px]">
-        <thead className="bg-surface-3 border-b border-black/[0.06]">
+    <div className="overflow-x-auto rounded-sm border border-subtle">
+      <table className="w-full min-w-[520px] text-ui">
+        <caption className="sr-only">{config.label} columns</caption>
+        <thead className="border-b border-subtle bg-surface-3">
           <tr>
             {['Column', 'Type', 'Required', 'Notes'].map(h => (
-              <th key={h} className="text-left px-3 py-2 text-[11px] font-semibold text-ink-subtle uppercase tracking-wider">{h}</th>
+              <th key={h} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-ink-muted">{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-black/[0.04]">
+        <tbody className="divide-y divide-subtle">
           {order.map(name => {
             const col = byName.get(name)
             const type = col?.type ?? 'text'
             const required = name === config.idColumn || !!col?.required
             return (
               <tr key={name}>
-                <td className="px-3 py-1.5 font-mono text-[12px] text-ink">{name}</td>
+                <td className="px-3 py-1.5 font-mono text-xs text-ink">{name}</td>
                 <td className="px-3 py-1.5 text-ink-muted">{TYPE_LABEL[type]}</td>
                 <td className="px-3 py-1.5 text-ink-muted">{required ? 'Yes' : ''}</td>
-                <td className="px-3 py-1.5 text-ink-muted text-[12px]">{col ? colNote(col, config) : ''}</td>
+                <td className="px-3 py-1.5 text-xs text-ink-muted">{col ? colNote(col, config) : ''}</td>
               </tr>
             )
           })}
@@ -76,73 +79,65 @@ function FormatTable({ config }: { config: DataTableConfig }) {
   )
 }
 
+const B = ({ children }: { children: React.ReactNode }) => <strong className="font-semibold text-ink">{children}</strong>
+
 export default function GuidePage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <Topbar title="User Guide" />
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="max-w-3xl space-y-8">
+      <PageBody
+        width="narrow"
+        intro={<>This console manages all the data the Iskotify mobile &amp; web apps read. Most data lives in the <B>Data</B> sections of the sidebar, each backed by the same editor with the same controls.</>}
+      >
+        <Card title="Working with Data tables">
+          <ul className="space-y-2 text-ui text-ink-muted">
+            <li><B>Add, edit, delete:</B> <B>Add row</B> opens an empty editor; click a row’s name or its pencil to edit it. Delete from the row’s trash icon or the editor’s <B>Delete</B> button.</li>
+            <li><B>Search, sort and pages:</B> the search box filters by the table’s key columns, column headers sort, and long tables paginate 50 rows at a time. The view is kept in the address bar, so it survives a refresh and can be shared.</li>
+            <li><B>Export:</B> the <B>CSV</B> (spreadsheet-friendly) and <B>JSON</B> (exact copy) buttons download <em>all</em> rows, not just the current page.</li>
+            <li><B>Import:</B> <B>Import</B> accepts a CSV <em>or</em> JSON file and <B>upserts</B> on the id column — existing ids are updated, new ids are inserted. You’ll see a summary of new / updated / skipped rows.</li>
+            <li><B>Changes reach the apps automatically</B> on the next sync (every edit/import stamps <code>updated_at</code>, which the app pulls incrementally). No deploy needed.</li>
+          </ul>
+        </Card>
 
-          {/* Intro */}
-          <section className="space-y-3">
-            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Admin Console Guide</h2>
-            <p className="text-ink-muted text-sm leading-relaxed">
-              This console manages all the data the Iskotify mobile &amp; web apps read. Most data lives in
-              the <strong>Data</strong> sections of the sidebar, each backed by a uniform editor with the same controls.
-            </p>
-            <div className="rounded-[12px] border border-black/[0.06] bg-surface-3 p-4 space-y-2 text-sm text-ink-muted">
-              <p><strong>Add / Edit / Delete:</strong> click <strong>+ New</strong> to add a row, or click any row to open its editor drawer; the drawer also has a <strong>Delete this row</strong> action.</p>
-              <p><strong>Search &amp; pages:</strong> the search box filters by the table’s key columns; long tables paginate 50 rows at a time.</p>
-              <p><strong>Export:</strong> <strong>⬇ CSV</strong> (spreadsheet-friendly) or <strong>⬇ JSON</strong> (exact copy). Export streams <em>all</em> rows, not just the current page.</p>
-              <p><strong>Import:</strong> <strong>⬆ Import</strong> accepts a CSV <em>or</em> JSON file and <strong>upserts</strong> on the id column — existing ids are updated, new ids are inserted. You’ll see a summary of new / updated / skipped rows.</p>
-              <p><strong>Changes reach the apps automatically</strong> on the next sync (every edit/import stamps <code>updated_at</code>, which the app pulls incrementally). No deploy needed.</p>
-            </div>
-          </section>
+        <Card title="Import / export formats">
+          <ul className="list-disc list-inside space-y-1.5 text-ui text-ink-muted">
+            <li><B>CSV</B> uses the same column headers shown in each table’s reference below. The easiest way to start is to export CSV, edit in a spreadsheet, then import the same file.</li>
+            <li><B>Array columns</B> (type “JSON array”, e.g. <code>known_for_courses</code>) are written as JSON text inside one cell — <code>[&quot;Nursing&quot;,&quot;Biology&quot;]</code>. On import you can also use a simple <code>semicolon;separated;list</code>.</li>
+            <li><B>Booleans</B> are <code>true</code> / <code>false</code> (a blank cell counts as false).</li>
+            <li><B>The id column is required</B> on every imported row (it’s how upsert matches). For tables with a generated id, leave it blank to create new rows.</li>
+            <li><B>JSON import</B> expects an array of row objects (or <code>{`{ "rows": [...] }`}</code>) with the same keys.</li>
+          </ul>
+        </Card>
 
-          {/* Formats */}
-          <section className="space-y-3">
-            <h3 className="text-ink font-heading font-bold text-lg">Import / export formats</h3>
-            <ul className="list-disc list-inside text-sm text-ink-muted space-y-1.5">
-              <li><strong>CSV</strong> uses the same column headers shown in each table’s reference below. The easiest way to start is to <strong>Export CSV</strong>, edit in a spreadsheet, then <strong>Import</strong> the same file.</li>
-              <li><strong>Array columns</strong> (type “JSON array”, e.g. <code>known_for_courses</code>) are written as JSON text inside one cell — <code>[&quot;Nursing&quot;,&quot;Biology&quot;]</code>. On import you can also use a simple <code>semicolon;separated;list</code>.</li>
-              <li><strong>Booleans</strong> are <code>true</code> / <code>false</code> (a blank cell counts as false).</li>
-              <li><strong>The id column is required</strong> on every imported row (it’s how upsert matches). For tables with a generated id, leave it blank to create new rows.</li>
-              <li><strong>JSON import</strong> expects an array of row objects (or <code>{`{ "rows": [...] }`}</code>) with the same keys.</li>
-            </ul>
-          </section>
+        <Card title="Specialized editors">
+          <ul className="list-disc list-inside space-y-1.5 text-ui text-ink-muted">
+            <li><B>UPCAT question bank</B> (Knowledge base → Import CSV): use the authoring sheet with <code>option_a…option_d</code> + a letter <code>answer</code>. This is different from a raw table export — don’t mix the two shapes.</li>
+            <li><B>Flashcards, Exam Blueprints, Listings</B> have their own purpose-built editors in the sidebar; their underlying tables are not in the generic Data sections.</li>
+            <li><B>Passages vs. questions:</B> reading passages live in <code>upcat_passages</code> (a Data table). The questions that reference them are managed by the UPCAT importer.</li>
+          </ul>
+        </Card>
 
-          {/* Special importers */}
-          <section className="space-y-3">
-            <h3 className="text-ink font-heading font-bold text-lg">Specialized editors</h3>
-            <ul className="list-disc list-inside text-sm text-ink-muted space-y-1.5">
-              <li><strong>UPCAT question bank</strong> (Knowledgebase → Import CSV): use the authoring sheet with <code>option_a…option_d</code> + a letter <code>answer</code>. This is different from a raw table export — don’t mix the two shapes.</li>
-              <li><strong>Flashcards, Exam Blueprints, Listings</strong> have their own purpose-built editors in the sidebar; their underlying tables are not in the generic Data sections.</li>
-              <li><strong>Passages vs. questions:</strong> reading passages live in <code>upcat_passages</code> (a Data table). The questions that reference them are managed by the UPCAT importer.</li>
-            </ul>
-          </section>
-
-          {/* Per-domain table references */}
-          {GROUPS.map(group => (
-            <section key={group.title} className="space-y-4">
-              <div>
-                <h3 className="text-ink font-heading font-bold text-lg">{group.title}</h3>
-                <p className="text-ink-muted text-sm mt-0.5">{group.blurb}</p>
-              </div>
+        {/* Per-domain table references */}
+        {GROUPS.map(group => (
+          <Card key={group.title} title={group.title} description={group.blurb}>
+            <div className="space-y-6">
               {group.tables.map(table => {
                 const config = DATA_TABLE_MAP[table]
                 if (!config) return null
                 return (
                   <div key={table} id={table} className="scroll-mt-16 space-y-2">
-                    <h4 className="text-ink font-semibold text-[15px]">{config.label} <span className="font-mono text-[12px] text-ink-subtle">({table})</span></h4>
-                    {config.helpText && <p className="text-[13px] text-ink-muted leading-relaxed">{config.helpText}</p>}
+                    <h3 className="text-sm font-semibold text-ink">
+                      {config.label} <span className="font-mono text-xs font-normal text-ink-muted">({table})</span>
+                    </h3>
+                    {config.helpText && <p className="text-ui text-ink-muted">{config.helpText}</p>}
                     <FormatTable config={config} />
                   </div>
                 )
               })}
-            </section>
-          ))}
-        </div>
-      </div>
+            </div>
+          </Card>
+        ))}
+      </PageBody>
     </div>
   )
 }

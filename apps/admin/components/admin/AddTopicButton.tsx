@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Button } from '@/components/ui/Button'
 import { AddTopicModal } from './AddTopicModal'
 
 interface Props {
@@ -11,12 +12,9 @@ export function AddTopicButton({ subjectId }: Props) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="px-3 py-1.5 text-xs font-semibold bg-maroon text-white rounded-lg hover:bg-[#6b0000] transition-colors"
-      >
-        + Add Topic
-      </button>
+      <Button variant="primary" size="sm" icon="plus" onClick={() => setOpen(true)}>
+        Add topic
+      </Button>
       {open && <AddTopicModal subjectId={subjectId} onClose={() => setOpen(false)} />}
     </>
   )

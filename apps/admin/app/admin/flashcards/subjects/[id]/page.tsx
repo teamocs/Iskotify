@@ -5,6 +5,12 @@ import { Topbar } from '@/components/admin/Topbar'
 import { Breadcrumb } from '@/components/admin/Breadcrumb'
 import { AddTopicButton } from '@/components/admin/AddTopicButton'
 import { SubjectCardsView } from '@/components/admin/SubjectCardsView'
+import { PageBody } from '@/components/ui/Page'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { NAV_GROUPS } from '@/lib/nav/adminNav'
+
+// The section name comes from the sidebar so the two never disagree.
+const SECTION_LABEL = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === '/admin/flashcards')?.label ?? 'Knowledge base'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +33,7 @@ export default async function SubjectDetailPage({
 
   if (!subject) return notFound()
 
-  const { data: topicsRaw } = await db
+  const { data: topicsRaw, error: topicsError } = await db
     .from('flashcard_topics')
     .select('id, name, status, flashcards (id)')
     .eq('subject_id', id)
@@ -49,18 +55,23 @@ export default async function SubjectDetailPage({
 
   return (
     <>
-      <Topbar title={subject.name} />
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
-        <div className="flex items-center justify-between gap-3">
+      <Topbar title={subject.name} actions={<AddTopicButton subjectId={id} />} />
+      <PageBody>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <Breadcrumb items={[
-            { label: 'Subjects', href: '/admin/flashcards' },
+            { label: SECTION_LABEL, href: '/admin/flashcards' },
             { label: subject.name },
           ]} />
-          <AddTopicButton subjectId={id} />
+          {!topicsError && (
+            <p className="text-ui text-ink-muted tabular-nums">{topics.length} topic{topics.length !== 1 ? 's' : ''}</p>
+          )}
         </div>
-        <p className="text-sm text-ink-muted">{topics.length} topic{topics.length !== 1 ? 's' : ''}</p>
-        <SubjectCardsView subjectId={id} subjectName={subject.name} topics={topicsWithCount} defaultOpenTopicId={defaultOpenTopicId} />
-      </div>
+        {topicsError ? (
+          <ErrorBanner title="Couldn’t load topics" message={topicsError.message} />
+        ) : (
+          <SubjectCardsView subjectId={id} subjectName={subject.name} topics={topicsWithCount} defaultOpenTopicId={defaultOpenTopicId} />
+        )}
+      </PageBody>
     </>
   )
 }

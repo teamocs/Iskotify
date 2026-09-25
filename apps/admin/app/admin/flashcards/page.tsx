@@ -4,6 +4,8 @@ import { Topbar } from '@/components/admin/Topbar'
 import { SubjectsView } from '@/components/admin/SubjectsView'
 import { GenerateExplanationsButton } from '@/components/admin/GenerateExplanationsButton'
 import { RegenerateDistractorsPanel } from '@/components/admin/RegenerateDistractorsPanel'
+import { PageBody } from '@/components/ui/Page'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +19,7 @@ type Topic = {
 export default async function FlashcardsPage() {
   const db = createServerClient()
 
-  const { data: subjectsRaw } = await db
+  const { data: subjectsRaw, error: subjectsError } = await db
     .from('flashcard_subjects')
     .select(`
       id,
@@ -32,7 +34,7 @@ export default async function FlashcardsPage() {
     `)
     .order('name')
 
-  const { data: listingsRaw } = await db
+  const { data: listingsRaw, error: listingsError } = await db
     .from('listings')
     .select('id, slug, title, provider, type')
     .in('status', ['active', 'upcoming'])
@@ -63,20 +65,35 @@ export default async function FlashcardsPage() {
 
   return (
     <>
-      <Topbar title="Knowledge Base" exportHref="/api/admin/flashcards/export" />
-      <div className="flex flex-wrap items-center justify-end gap-2 px-4 md:px-6 pt-3">
-        <GenerateExplanationsButton source="flashcards" label="✨ Generate explanations for cards" />
-      </div>
-      <div className="px-4 md:px-6 pt-3">
-        <RegenerateDistractorsPanel
-          subjects={subjects.map(s => ({
-            id: s.id,
-            name: s.name,
-            topics: s.topics.map(t => ({ id: t.id, name: t.name })),
-          }))}
-        />
-      </div>
-      <SubjectsView subjects={subjects} listings={listings} />
+      <Topbar title="Knowledge base" exportHref="/api/admin/flashcards/export" />
+      <PageBody intro="Subjects, their topics and the flashcards students review in the app. Open a subject to manage its cards.">
+        {subjectsError ? (
+          <ErrorBanner
+            title="Couldn’t load subjects"
+            message={subjectsError.message}
+          />
+        ) : (
+          <>
+            {listingsError && (
+              <ErrorBanner
+                title="Couldn’t load scholarships and exams"
+                message={`${listingsError.message} Linked listings won’t show until this loads.`}
+              />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <GenerateExplanationsButton source="flashcards" label="Generate explanations for cards" />
+              <RegenerateDistractorsPanel
+                subjects={subjects.map(s => ({
+                  id: s.id,
+                  name: s.name,
+                  topics: s.topics.map(t => ({ id: t.id, name: t.name })),
+                }))}
+              />
+            </div>
+            <SubjectsView subjects={subjects} listings={listings} />
+          </>
+        )}
+      </PageBody>
     </>
   )
 }

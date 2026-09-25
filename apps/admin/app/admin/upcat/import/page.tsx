@@ -10,6 +10,13 @@ import { cleanImportedText } from '@/lib/csv/cleaners'
 import { VALID_SUBTESTS } from '@/lib/upcat/importUpcatCore'
 import { validateAllQbRows, EXPECTED_COLUMNS, normalizeAnswerLetter } from '@/lib/upcat/validateQuestionBank'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { PageBody } from '@/components/ui/Page'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { controlClass } from '@/components/ui/Field'
+import { Icon } from '@/components/ui/Icon'
 
 type Row = Record<string, string>
 const PAGE_SIZE = 25
@@ -144,120 +151,123 @@ export default function QuestionBankImportPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <Topbar title="Import Question Bank" exportHref="/api/admin/upcat-questions/export" />
-      <div className="flex justify-end px-4 md:px-6 pt-3">
-        <GenerateExplanationsButton source="upcat_questions" label="✨ Generate explanations for questions" />
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
-          <div>
-            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Import the Question Bank</h2>
-            <p className="text-ink-muted text-sm mt-1">
-              Upload the authored Question Bank CSV (Q ID, Subtest, Main Subject, Topic, Options A–D, Answer,
-              Passage / Set Text, …). Friendly tracker labels or snake_case headers both work, and text encoding is
-              repaired automatically. Rows are validated below — fix any errors inline, then import. Rows marked{' '}
-              <strong>Approved</strong> are published; other statuses import as drafts.
-            </p>
-          </div>
+      <Topbar
+        title="Import Question Bank"
+        exportHref="/api/admin/upcat-questions/export"
+        actions={<GenerateExplanationsButton source="upcat_questions" label="Generate explanations for questions" />}
+      />
+      <PageBody
+        width="wide"
+        intro={<>
+          Upload the authored Question Bank CSV (Q ID, Subtest, Main Subject, Topic, Options A–D, Answer,
+          Passage / Set Text, …). Friendly tracker labels or snake_case headers both work, and text encoding is
+          repaired automatically. Rows are validated below — fix any errors inline, then import. Rows marked{' '}
+          <strong className="font-semibold text-ink">Approved</strong> are published; other statuses import as drafts.
+        </>}
+      >
+        <CsvDropzone
+          onFileSelected={handleFile}
+          disabled={busy}
+          hint="Max 5 MB · UTF-8 · feeds the UPCAT mock-exam engine; project afterward to also feed the flashcard quiz."
+          sampleHref="/question-bank-sample.csv"
+          sampleLabel="Download sample Question Bank CSV"
+        />
 
-          <CsvDropzone
-            onFileSelected={handleFile}
-            disabled={busy}
-            hint="Max 5 MB · UTF-8 · feeds the UPCAT mock-exam engine; project afterward to also feed the flashcard quiz."
-            sampleHref="/question-bank-sample.csv"
-            sampleLabel="Download sample Question Bank CSV"
-          />
+        {error && <ErrorBanner title="Import problem" message={error} />}
 
-          {error && <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">{error}</div>}
-
-          {result && (
-            <div className="rounded-2xl border border-success/25 bg-success-soft p-6 shadow-sm space-y-4">
-              <div className="text-ink font-heading font-bold">✓ Imported {result.questions} questions across {result.passages} passages into the question bank.</div>
-              <p className="text-ink-muted text-sm">
+        {result && (
+          <Card title="Import complete">
+            <div className="space-y-3">
+              <p className="flex items-start gap-2 text-sm font-medium text-success-strong">
+                <Icon name="check" className="mt-0.5 shrink-0" />
+                Imported {result.questions} questions across {result.passages} passages into the question bank.
+              </p>
+              <p className="text-ui text-ink-muted">
                 Step 2 — project the published questions into the flashcard quiz engine so they appear in the
                 mobile app&apos;s topic/deck practice (in addition to the UPCAT mock exams).
               </p>
-              <button type="button" onClick={handleProject} disabled={projecting}
-                className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${projecting ? 'bg-surface-2 text-ink-muted' : 'bg-maroon text-white hover:bg-[#9a0a1f]'}`}>
+              <Button variant="primary" onClick={handleProject} loading={projecting}>
                 {projecting ? 'Projecting…' : 'Project to flashcards'}
-              </button>
+              </Button>
               {projection && (
-                <div className="text-ink text-sm font-medium">
-                  ✓ Flashcards now: {projection.cards} cards · {projection.topics} topics · {projection.subjects} subjects.
-                </div>
+                <p role="status" className="flex items-start gap-2 text-sm font-medium text-ink">
+                  <Icon name="check" className="mt-0.5 shrink-0 text-success" />
+                  Flashcards now: {projection.cards} cards · {projection.topics} topics · {projection.subjects} subjects.
+                </p>
               )}
             </div>
-          )}
+          </Card>
+        )}
 
-          {rows.length > 0 && !result && (
-            <div className="space-y-3">
-              {/* Summary + controls */}
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-success-soft text-success-strong">{validCount} rows valid</span>
-                {errorRowCount > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-danger-soft text-danger-strong">{errorRowCount} rows have errors</span>
-                )}
-                <span className="text-ink-muted text-xs">{rows.length} total</span>
-                <label className="ml-auto inline-flex items-center gap-2 text-ink-muted text-xs cursor-pointer">
-                  <input type="checkbox" checked={showOnlyErrors} onChange={e => { setShowOnlyErrors(e.target.checked); setPage(0) }} />
-                  Show only rows with errors
+        {rows.length > 0 && !result && (
+          <div className="space-y-3">
+            {/* Summary + controls */}
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <Badge tone="success">{validCount} rows valid</Badge>
+              {errorRowCount > 0 && <Badge tone="danger">{errorRowCount} rows have errors</Badge>}
+              <span className="text-xs tabular-nums text-ink-muted">{rows.length} total</span>
+              <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-ui text-ink">
+                <input type="checkbox" className="h-4 w-4 cursor-pointer accent-maroon" checked={showOnlyErrors} onChange={e => { setShowOnlyErrors(e.target.checked); setPage(0) }} />
+                Show only rows with errors
+              </label>
+            </div>
+
+            {/* Bulk subtest fix — the most common error class */}
+            {errorRowCount > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-sm bg-warning-soft px-3 py-2">
+                <label htmlFor="bulk-subtest" className="text-ui text-warning-strong">
+                  Bulk fix: set the subtest on every row whose subtest is missing or invalid
                 </label>
+                <select
+                  id="bulk-subtest"
+                  value={bulkSubtest}
+                  onChange={e => setBulkSubtest(e.target.value)}
+                  className={`${controlClass} h-8 w-auto text-ui`}
+                >
+                  <option value="">Choose subtest</option>
+                  {VALID_SUBTESTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <Button size="sm" onClick={applyBulkSubtest} disabled={!bulkSubtest}>Apply</Button>
               </div>
+            )}
 
-              {/* Bulk subtest fix — the most common error class */}
-              {errorRowCount > 0 && (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-sm">
-                  <span className="text-warning-strong text-xs">Bulk fix: set subtest for every row whose subtest is missing or invalid →</span>
-                  <select aria-label="Bulk fix: subtest to apply to invalid rows" value={bulkSubtest} onChange={e => setBulkSubtest(e.target.value)}
-                    className="border border-black/[0.15] rounded-md px-2 py-1 text-[13px] bg-white">
-                    <option value="">— choose subtest —</option>
-                    {VALID_SUBTESTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <button type="button" onClick={applyBulkSubtest} disabled={!bulkSubtest}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold ${bulkSubtest ? 'bg-warning text-white hover:bg-warning-strong' : 'bg-black/[0.06] text-ink-muted cursor-not-allowed'}`}>
-                    Apply
-                  </button>
-                </div>
-              )}
-
-              {displayedAll.length === 0 ? (
-                <div className="rounded-xl border border-success/25 bg-success-soft px-4 py-6 text-center text-success-strong text-sm">
-                  🎉 No rows with errors. Ready to import.
-                </div>
-              ) : (
-                <>
-                  <QuestionBankEditorTable
-                    displayed={pageRows}
-                    errorsByRow={errorsByRow}
-                    subtests={VALID_SUBTESTS}
-                    onEdit={updateCell}
-                  />
-                  {pageCount > 1 && (
-                    <div className="flex items-center justify-center gap-3 text-sm">
-                      <button type="button" disabled={safePage === 0} onClick={() => setPage(p => Math.max(0, p - 1))}
-                        className={`rounded-md px-3 py-1 ${safePage === 0 ? 'text-ink-subtle' : 'text-maroon hover:bg-black/[0.04]'}`}>← Prev</button>
-                      <span className="text-ink-muted text-xs tabular-nums">Page {safePage + 1} of {pageCount} · showing {pageRows.length} of {displayedAll.length}{showOnlyErrors ? ' error rows' : ' rows'}</span>
-                      <button type="button" disabled={safePage >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                        className={`rounded-md px-3 py-1 ${safePage >= pageCount - 1 ? 'text-ink-subtle' : 'text-maroon hover:bg-black/[0.04]'}`}>Next →</button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Import action */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button onClick={handleImport} disabled={busy || validCount === 0}
-                  className={`inline-flex items-center rounded-[980px] px-5 py-2 text-sm font-semibold transition-colors shadow-sm ${busy || validCount === 0 ? 'bg-surface-2 text-ink-muted cursor-not-allowed' : 'bg-maroon text-white hover:bg-[#9a0a1f]'}`}>
-                  {importing ? 'Importing…' : `Import ${validCount} question${validCount === 1 ? '' : 's'}`}
-                </button>
-                {errorRowCount > 0 && (
-                  <span className="text-warning text-xs">{errorRowCount} row{errorRowCount === 1 ? '' : 's'} with errors will be skipped — fix them above to include them.</span>
+            {displayedAll.length === 0 ? (
+              <p role="status" className="flex items-center justify-center gap-2 rounded-sm bg-success-soft px-4 py-6 text-center text-ui font-medium text-success-strong">
+                <Icon name="check" />
+                No rows with errors. Ready to import.
+              </p>
+            ) : (
+              <>
+                <QuestionBankEditorTable
+                  displayed={pageRows}
+                  errorsByRow={errorsByRow}
+                  subtests={VALID_SUBTESTS}
+                  onEdit={updateCell}
+                />
+                {pageCount > 1 && (
+                  <nav aria-label="Rows pages" className="flex items-center justify-center gap-3">
+                    <Button variant="ghost" size="sm" icon="chevron-left" disabled={safePage === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
+                    <span className="text-xs tabular-nums text-ink-muted">Page {safePage + 1} of {pageCount} · showing {pageRows.length} of {displayedAll.length}{showOnlyErrors ? ' error rows' : ' rows'}</span>
+                    <Button variant="ghost" size="sm" disabled={safePage >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>
+                      Next <Icon name="chevron-right" />
+                    </Button>
+                  </nav>
                 )}
-              </div>
+              </>
+            )}
+
+            {/* Import action */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button variant="primary" onClick={handleImport} loading={importing} disabled={busy || validCount === 0}>
+                {importing ? 'Importing…' : `Import ${validCount} question${validCount === 1 ? '' : 's'}`}
+              </Button>
+              {errorRowCount > 0 && (
+                <span className="text-xs text-warning-strong">{errorRowCount} row{errorRowCount === 1 ? '' : 's'} with errors will be skipped — fix them above to include them.</span>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </PageBody>
     </div>
   )
 }

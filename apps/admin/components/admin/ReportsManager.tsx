@@ -1,7 +1,17 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
+import { Badge } from '@/components/ui/Badge'
+import { Button, IconButton } from '@/components/ui/Button'
+import { Drawer } from '@/components/ui/Drawer'
+import { Field, controlClass } from '@/components/ui/Field'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageBody } from '@/components/ui/Page'
+import type { ReviewStatus } from '@/lib/admin/bulkStatus'
+import { ConfirmDialog } from './ConfirmDialog'
+import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -12,19 +22,19 @@ export interface QuestionReport {
   question_text: string
   reason: string
   user_id: string | null
-  status: 'new' | 'reviewed' | 'resolved'
+  status: ReviewStatus
   created_at: string
   updated_at: string
 }
 
-interface FlashcardQuestion {
+export interface FlashcardQuestion {
   id: string
   question: string | null
   answer: string | null
   explanation: string | null
 }
 
-interface UpcatQuestion {
+export interface UpcatQuestion {
   question_id: string
   question_text: string
   options: string[]
@@ -33,97 +43,112 @@ interface UpcatQuestion {
   status: string
 }
 
-interface FetchState {
-  rows: QuestionReport[]
-  count: number
-  loading: boolean
-  error: string
-}
+const SOURCE_LABEL: Record<QuestionReport['source_table'], string> = { flashcards: 'Flashcard', upcat_questions: 'UPCAT' }
 
-type StatusTab = 'all' | 'new' | 'reviewed' | 'resolved'
+/** The reasons the mobile app offers (ReportQuestionModal); details follow after " — ". */
+const PRESET_REASONS = ['Wrong answer', 'Typo or formatting issue', 'Question is unclear'] as const
 
-const TABS: { key: StatusTab; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'new', label: 'New' },
-  { key: 'reviewed', label: 'Reviewed' },
-  { key: 'resolved', label: 'Resolved' },
+const FILTERS: FilterDef<QuestionReport>[] = [
+  statusFilter<QuestionReport>(),
+  {
+    id: 'reason',
+    label: 'Reason',
+    allLabel: 'Any reason',
+    options: [...PRESET_REASONS.map(r => ({ value: r, label: r })), { value: 'other', label: 'Other' }],
+    predicate: (r, v) => v === 'other'
+      ? !PRESET_REASONS.some(p => (r.reason ?? '').startsWith(p))
+      : (r.reason ?? '').startsWith(v),
+  },
+  {
+    id: 'source',
+    label: 'Source',
+    allLabel: 'All sources',
+    options: [{ value: 'flashcards', label: 'Flashcard' }, { value: 'upcat_questions', label: 'UPCAT' }],
+    predicate: (r, v) => r.source_table === v,
+  },
 ]
 
-const PAGE_SIZE = 50
-
-const inputCls = 'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink'
-const labelCls = 'block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1'
-const pillBtnCls = 'px-3 py-1 rounded-[980px] text-xs font-medium border border-black/[0.08] text-ink hover:bg-surface-2 disabled:opacity-40'
-
-function useDebounce(value: string, delay: number) {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
+const shortLabel = (r: QuestionReport) => {
+  const t = (r.question_text || r.question_id).trim()
+  return t.length > 60 ? `${t.slice(0, 60)}…` : t
 }
 
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    new: 'bg-maroon/10 text-maroon',
-    reviewed: 'bg-warning-soft text-warning-strong',
-    resolved: 'bg-success-soft text-success-strong',
+// ── Question editor drawer ──────────────────────────────────────────────────
+
+interface Values {
+  question: string
+  answer: string
+  text: string
+  options: string[]
+  correct: number
+  explanation: string
+  visibility: 'published' | 'draft'
+}
+
+const EMPTY: Values = { question: '', answer: '', text: '', options: ['', '', '', ''], correct: 0, explanation: '', visibility: 'published' }
+
+function valuesFrom(isUpcat: boolean, question: FlashcardQuestion | UpcatQuestion): Values {
+  if (isUpcat) {
+    const q = question as UpcatQuestion
+    return {
+      ...EMPTY,
+      text: q.question_text ?? '',
+      options: Array.isArray(q.options) && q.options.length >= 4 ? q.options : ['', '', '', ''],
+      correct: typeof q.correct_index === 'number' ? q.correct_index : 0,
+      explanation: q.explanation ?? '',
+      visibility: q.status === 'draft' ? 'draft' : 'published',
+    }
   }
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${styles[status] ?? 'bg-gray-100 text-gray-600'}`}>
-      {status}
-    </span>
-  )
+  const q = question as FlashcardQuestion
+  return { ...EMPTY, question: q.question ?? '', answer: q.answer ?? '', explanation: q.explanation ?? '' }
 }
 
-function SourceBadge({ source }: { source: string }) {
-  const isUpcat = source === 'upcat_questions'
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${isUpcat ? 'bg-info-soft text-info-strong' : 'bg-purple-100 text-purple-800'}`}>
-      {isUpcat ? 'UPCAT' : 'Flashcard'}
-    </span>
-  )
-}
+type Errors = Partial<Record<string, string>>
 
-function formatDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return iso
+function validate(isUpcat: boolean, v: Values): Errors {
+  const e: Errors = {}
+  if (isUpcat) {
+    if (!v.text.trim()) e.text = 'Enter the question text.'
+    v.options.forEach((o, i) => { if (!o.trim()) e[`option${i}`] = `Enter option ${i + 1}.` })
+    if (v.correct < 0 || v.correct >= v.options.length || v.correct > 3) e.correct = 'Pick one of the first 4 options as the correct answer.'
+  } else {
+    if (!v.question.trim()) e.question = 'Enter the question.'
+    if (!v.answer.trim()) e.answer = 'Enter the answer.'
   }
+  return e
 }
-
-// ── Question Editor Drawer ──────────────────────────────────────────────────
 
 interface EditorProps {
   report: QuestionReport
   onClose: () => void
   onResolved: () => void
+  /**
+   * The live question when the caller already has it: `null` means it no
+   * longer exists. Left undefined, the drawer loads it from the report route.
+   */
+  initialQuestion?: FlashcardQuestion | UpcatQuestion | null
 }
 
-function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
+export function QuestionEditorDrawer({ report, onClose, onResolved, initialQuestion }: EditorProps) {
   const isUpcat = report.source_table === 'upcat_questions'
-  const [loading, setLoading] = useState(true)
-  const [missing, setMissing] = useState(false)
-  const [error, setError] = useState('')
+  const preloaded = initialQuestion !== undefined
+  const start = initialQuestion ? valuesFrom(isUpcat, initialQuestion) : EMPTY
+  const [loading, setLoading] = useState(!preloaded)
+  const [missing, setMissing] = useState(initialQuestion === null)
+  const [loadError, setLoadError] = useState('')
+  const [serverError, setServerError] = useState('')
+  const [errors, setErrors] = useState<Errors>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [initial, setInitial] = useState<Values>(start)
+  const [values, setValues] = useState<Values>(start)
 
-  // Flashcard fields
-  const [fcQuestion, setFcQuestion] = useState('')
-  const [fcAnswer, setFcAnswer] = useState('')
-  const [fcExplanation, setFcExplanation] = useState('')
-
-  // UPCAT fields
-  const [uqText, setUqText] = useState('')
-  const [uqOptions, setUqOptions] = useState<string[]>(['', '', '', ''])
-  const [uqCorrectIndex, setUqCorrectIndex] = useState(0)
-  const [uqExplanation, setUqExplanation] = useState('')
-  const [uqStatus, setUqStatus] = useState('published')
+  const dirty = !loading && !missing && JSON.stringify(values) !== JSON.stringify(initial)
+  const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues(v => ({ ...v, [key]: value }))
 
   useEffect(() => {
+    if (preloaded) return
     let cancelled = false
     async function load() {
       try {
@@ -131,7 +156,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
         if (cancelled) return
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
-          setError(body.error ?? 'Failed to load question')
+          setLoadError(body.error ?? 'Failed to load question')
           setLoading(false)
           return
         }
@@ -139,51 +164,30 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
         if (cancelled) return
         if (!question) {
           setMissing(true)
-          setLoading(false)
-          return
-        }
-        if (report.source_table === 'upcat_questions') {
-          const q = question as UpcatQuestion
-          setUqText(q.question_text ?? '')
-          setUqOptions(Array.isArray(q.options) && q.options.length >= 4 ? q.options : ['', '', '', ''])
-          setUqCorrectIndex(typeof q.correct_index === 'number' ? q.correct_index : 0)
-          setUqExplanation(q.explanation ?? '')
-          setUqStatus(q.status === 'draft' ? 'draft' : 'published')
         } else {
-          const q = question as FlashcardQuestion
-          setFcQuestion(q.question ?? '')
-          setFcAnswer(q.answer ?? '')
-          setFcExplanation(q.explanation ?? '')
+          const v = valuesFrom(report.source_table === 'upcat_questions', question)
+          setInitial(v)
+          setValues(v)
         }
         setLoading(false)
       } catch {
         if (!cancelled) {
-          setError('Network error')
+          setLoadError('Network error')
           setLoading(false)
         }
       }
     }
     load()
     return () => { cancelled = true }
-  }, [report.id, report.source_table])
+  }, [report.id, report.source_table, preloaded])
 
   async function handleSave() {
-    setError('')
+    if (loading || missing) return
+    setServerError('')
     setSaved(false)
-    if (isUpcat) {
-      if (!uqText.trim()) { setError('Question text cannot be empty.'); return }
-      if (uqOptions.length < 4 || uqOptions.some(o => !o.trim())) {
-        setError('All options must be filled in (minimum 4).')
-        return
-      }
-      if (uqCorrectIndex < 0 || uqCorrectIndex >= uqOptions.length || uqCorrectIndex > 3) {
-        setError('Correct answer must point to one of the first 4 options.')
-        return
-      }
-    } else {
-      if (!fcQuestion.trim()) { setError('Question cannot be empty.'); return }
-      if (!fcAnswer.trim()) { setError('Answer cannot be empty.'); return }
-    }
+    const found = validate(isUpcat, values)
+    setErrors(found)
+    if (Object.keys(found).length > 0) return
 
     setSaving(true)
     try {
@@ -192,33 +196,34 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              question_text: uqText,
-              options: uqOptions,
-              correct_index: uqCorrectIndex,
-              explanation: uqExplanation,
-              status: uqStatus,
+              question_text: values.text,
+              options: values.options,
+              correct_index: values.correct,
+              explanation: values.explanation,
+              status: values.visibility,
             }),
           })
         : await fetch(`/api/flashcards/cards/${encodeURIComponent(report.question_id)}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              question: fcQuestion,
-              answer: fcAnswer,
-              explanation: fcExplanation,
+              question: values.question,
+              answer: values.answer,
+              explanation: values.explanation,
             }),
           })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         const message = body.error ?? 'Save failed'
-        setError(message)
+        setServerError(message)
         notifyError(message)
         return
       }
+      setInitial(values)
       setSaved(true)
       notifySuccess('Question saved')
     } catch {
-      setError('Network error')
+      setServerError('Network error')
       notifyError('Network error')
     } finally {
       setSaving(false)
@@ -226,7 +231,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
   }
 
   async function handleDeleteQuestion() {
-    setError('')
+    setServerError('')
     setSaving(true)
     try {
       const url = isUpcat
@@ -236,7 +241,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         const message = body.error ?? 'Delete failed'
-        setError(message)
+        setServerError(message)
         notifyError(message)
         return
       }
@@ -245,7 +250,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       setSaved(true)
       notifySuccess('Question deleted')
     } catch {
-      setError('Network error')
+      setServerError('Network error')
       notifyError('Network error')
     } finally {
       setSaving(false)
@@ -253,7 +258,7 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
   }
 
   async function handleMarkResolved() {
-    setError('')
+    setServerError('')
     setSaving(true)
     try {
       const res = await fetch(`/api/admin/reports/${report.id}`, {
@@ -264,187 +269,267 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         const message = body.error ?? 'Failed to mark resolved'
-        setError(message)
+        setServerError(message)
         notifyError(message)
         return
       }
       notifySuccess('Report marked resolved')
       onResolved()
     } catch {
-      setError('Network error')
+      setServerError('Network error')
       notifyError('Network error')
     } finally {
       setSaving(false)
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <button
-        type="button"
-        aria-label="Close drawer"
-        className="flex-1 bg-black/20 backdrop-blur-sm border-0 p-0 cursor-default"
-        onClick={onClose}
-      />
-      <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
-          <div>
-            <h2 className="font-heading font-bold text-lg text-ink">Edit Question</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <SourceBadge source={report.source_table} />
-              <span className="text-[11px] text-ink-subtle font-mono">{report.question_id}</span>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">✕</button>
-        </div>
+  const textarea = `${controlClass} h-auto py-2`
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {/* Report context */}
-          <div className="bg-surface-2 rounded-[10px] px-3 py-2">
-            <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-0.5">Reported reason</p>
-            <p className="text-sm text-ink">{report.reason || '—'}</p>
-          </div>
+  return (
+    <>
+      <Drawer
+        open
+        onClose={onClose}
+        width="lg"
+        title="Edit question"
+        description={<>{SOURCE_LABEL[report.source_table]} question <span className="font-mono">{report.question_id}</span></>}
+        onSubmit={handleSave}
+        dirty={dirty}
+        footer={close => (
+          <>
+            {report.status !== 'resolved' && (
+              <Button icon="check" onClick={handleMarkResolved} disabled={saving} className="mr-auto">Mark resolved</Button>
+            )}
+            <Button onClick={close}>Close</Button>
+            <Button type="submit" variant="primary" loading={saving} disabled={loading || missing}>
+              {saving ? 'Saving…' : 'Save question'}
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <dl className="rounded-sm bg-surface-2 px-3 py-2">
+            <dt className="text-xs font-medium text-ink-muted">Reported reason</dt>
+            <dd className="text-ui text-ink">{report.reason || '—'}</dd>
+          </dl>
+
+          {loadError && <ErrorBanner title="Couldn’t load the question" message={loadError} />}
+          {serverError && <ErrorBanner title="That didn’t work" message={serverError} />}
+          {saved && (
+            <p role="status" className="rounded-sm bg-success-soft px-3 py-2 text-ui text-success-strong">
+              Saved. You can mark this report resolved when you’re done.
+            </p>
+          )}
 
           {loading ? (
-            <p className="text-sm text-ink-muted">Loading question…</p>
+            <p role="status" className="text-ui text-ink-muted">Loading question…</p>
           ) : missing ? (
-            <p className="text-sm text-warning-strong bg-warning-soft rounded-[10px] px-3 py-2">
+            <p className="rounded-sm bg-warning-soft px-3 py-2 text-ui text-warning-strong">
               This question no longer exists. Snapshot at report time: “{report.question_text || '—'}”
             </p>
-          ) : isUpcat ? (
+          ) : loadError ? null : isUpcat ? (
             <>
-              <div>
-                <label className={labelCls}>Question Text</label>
-                <textarea aria-label="Question Text" value={uqText} onChange={(e) => setUqText(e.target.value)} rows={3} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Options (correct answer selected)</label>
-                <div className="space-y-2">
-                  {uqOptions.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="correct-option"
-                        checked={uqCorrectIndex === i}
-                        onChange={() => setUqCorrectIndex(i)}
-                        disabled={i > 3}
-                        className="accent-maroon flex-shrink-0"
-                        aria-label={`Mark option ${i + 1} correct`}
-                      />
-                      <input aria-label="Options (correct answer selected)"
-                        type="text"
-                        value={opt}
-                        onChange={(e) => {
-                          const next = [...uqOptions]
-                          next[i] = e.target.value
-                          setUqOptions(next)
-                        }}
-                        className={inputCls}
-                        placeholder={`Option ${i + 1}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className={labelCls}>Explanation</label>
-                <textarea aria-label="Explanation" value={uqExplanation} onChange={(e) => setUqExplanation(e.target.value)} rows={3} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Status</label>
-                <select aria-label="Status" value={uqStatus} onChange={(e) => setUqStatus(e.target.value)} className={inputCls}>
-                  <option value="published">Published</option>
-                  <option value="draft">Draft</option>
-                </select>
-              </div>
+              <Field label="Question text" required error={errors.text}>
+                {p => <textarea {...p} rows={3} value={values.text} onChange={e => set('text', e.target.value)} className={textarea} />}
+              </Field>
+              <fieldset className="space-y-2">
+                <legend className="mb-1 text-ui font-medium text-ink">Correct answer</legend>
+                <p className="text-xs text-ink-muted">Select the correct option. Every option needs text.</p>
+                {values.options.map((opt, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <input
+                      type="radio"
+                      name="correct-option"
+                      checked={values.correct === i}
+                      onChange={() => set('correct', i)}
+                      disabled={i > 3}
+                      aria-label={`Option ${i + 1} is correct`}
+                      className="mb-2.5 h-4 w-4 shrink-0 accent-maroon"
+                    />
+                    <Field label={`Option ${i + 1}`} required error={errors[`option${i}`]} className="flex-1">
+                      {p => (
+                        <input
+                          {...p}
+                          type="text"
+                          value={opt}
+                          onChange={e => set('options', values.options.map((o, j) => (j === i ? e.target.value : o)))}
+                          className={controlClass}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                ))}
+                {errors.correct && <p role="alert" className="text-xs font-medium text-danger">{errors.correct}</p>}
+              </fieldset>
+              <Field label="Explanation">
+                {p => <textarea {...p} rows={3} value={values.explanation} onChange={e => set('explanation', e.target.value)} className={textarea} />}
+              </Field>
+              <Field label="Visibility" hint="Drafts are hidden from students.">
+                {p => (
+                  <select {...p} value={values.visibility} onChange={e => set('visibility', e.target.value as Values['visibility'])} className={controlClass}>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                )}
+              </Field>
             </>
           ) : (
             <>
-              <div>
-                <label className={labelCls}>Question</label>
-                <textarea aria-label="Question" value={fcQuestion} onChange={(e) => setFcQuestion(e.target.value)} rows={3} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Answer</label>
-                <textarea aria-label="Answer" value={fcAnswer} onChange={(e) => setFcAnswer(e.target.value)} rows={2} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Explanation</label>
-                <textarea aria-label="Explanation" value={fcExplanation} onChange={(e) => setFcExplanation(e.target.value)} rows={3} className={inputCls} />
-              </div>
+              <Field label="Question" required error={errors.question}>
+                {p => <textarea {...p} rows={3} value={values.question} onChange={e => set('question', e.target.value)} className={textarea} />}
+              </Field>
+              <Field label="Answer" required error={errors.answer}>
+                {p => <textarea {...p} rows={2} value={values.answer} onChange={e => set('answer', e.target.value)} className={textarea} />}
+              </Field>
+              <Field label="Explanation">
+                {p => <textarea {...p} rows={3} value={values.explanation} onChange={e => set('explanation', e.target.value)} className={textarea} />}
+              </Field>
             </>
           )}
 
-          {error ? (
-            <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>
-          ) : null}
-          {saved ? (
-            <p className="text-sm text-success bg-success-soft rounded-[10px] px-3 py-2">
-              Saved. You can mark this report resolved below.
-            </p>
-          ) : null}
-
-          {/* Delete question zone */}
-          {!loading && !missing ? (
-            <div className="pt-2 border-t border-black/[0.06]">
-              {confirmingDelete ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-danger">Delete this question permanently?</span>
-                  <button
-                    type="button"
-                    onClick={handleDeleteQuestion}
-                    disabled={saving}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium bg-danger text-white hover:bg-danger-strong disabled:opacity-50"
-                  >
-                    Yes, delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingDelete(false)}
-                    className="px-4 py-1.5 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="text-sm text-danger hover:text-danger-strong"
-                >
-                  Delete this question
-                </button>
-              )}
+          {!loading && !missing && !loadError && (
+            <div className="border-t border-subtle pt-3">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="trash"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={saving}
+                className="text-danger hover:bg-danger-soft hover:text-danger-strong"
+              >
+                Delete this question
+              </Button>
             </div>
-          ) : null}
+          )}
         </div>
+      </Drawer>
+      {confirmingDelete && (
+        <ConfirmDialog
+          message={`Delete this ${SOURCE_LABEL[report.source_table]} question permanently? Students will no longer see it.`}
+          confirmLabel="Delete question"
+          onConfirm={handleDeleteQuestion}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+    </>
+  )
+}
 
-        <div className="px-6 py-4 border-t border-black/[0.08] flex gap-2 justify-end">
+// ── Table ───────────────────────────────────────────────────────────────────
+
+interface ViewProps {
+  rows: QuestionReport[]
+  loading: boolean
+  error: string
+  selected: string[]
+  onSelectedChange: (ids: string[]) => void
+  bulkBusy: boolean
+  /** Outcome of the last bulk action, announced to screen readers. */
+  bulkResult?: string
+  onBulk: (status: ReviewStatus) => void
+  onRetry: () => void
+  onEdit: (r: QuestionReport) => void
+  onSetStatus: (id: string, status: ReviewStatus) => void
+  onDelete: (r: QuestionReport) => void
+}
+
+export function ReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
+  if (error) {
+    return (
+      <ErrorBanner
+        title="Couldn’t load reported questions"
+        message={error}
+        action={<Button size="sm" icon="refresh" onClick={onRetry}>Try again</Button>}
+      />
+    )
+  }
+
+  const columns: Column<QuestionReport>[] = [
+    {
+      id: 'question',
+      header: 'Question',
+      sortValue: r => r.question_text,
+      searchValue: r => `${r.question_text} ${r.question_id}`,
+      className: 'max-w-[22rem]',
+      cell: r => (
+        <>
           <button
             type="button"
-            onClick={handleMarkResolved}
-            disabled={saving}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-success/30 text-success hover:bg-success-soft disabled:opacity-50 mr-auto"
+            onClick={() => onEdit(r)}
+            className="line-clamp-3 whitespace-pre-wrap break-words text-left font-medium text-ink underline-offset-2 hover:underline"
           >
-            ✓ Mark resolved
+            {r.question_text || '—'}
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || loading || missing}
-            className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save Question'}
-          </button>
-        </div>
-      </div>
+          <span className="block font-mono text-xs text-ink-muted">{r.question_id}</span>
+        </>
+      ),
+    },
+    {
+      id: 'source',
+      header: 'Source',
+      sortValue: r => SOURCE_LABEL[r.source_table],
+      cell: r => <Badge tone={r.source_table === 'upcat_questions' ? 'info' : 'neutral'}>{SOURCE_LABEL[r.source_table] ?? r.source_table}</Badge>,
+    },
+    {
+      id: 'reason',
+      header: 'Reason',
+      sortValue: r => r.reason,
+      searchValue: r => r.reason ?? '',
+      className: 'max-w-[16rem]',
+      cell: r => <ClampText text={r.reason || '—'} max={100} />,
+    },
+    { id: 'status', header: 'Status', sortValue: r => r.status, cell: r => <StatusBadge status={r.status} /> },
+    {
+      id: 'reported',
+      header: 'Reported',
+      sortValue: r => new Date(r.created_at),
+      cell: r => <span className="whitespace-nowrap tabular-nums text-ink-muted">{fmtDate(r.created_at)}</span>,
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      hideHeader: true,
+      align: 'right',
+      cell: r => {
+        const name = shortLabel(r)
+        return (
+          <span className="inline-flex items-center gap-1">
+            {r.status !== 'reviewed' && (
+              <Button size="sm" variant="ghost" aria-label={`Mark reviewed: ${name}`} onClick={() => onSetStatus(r.id, 'reviewed')}>Reviewed</Button>
+            )}
+            {r.status !== 'resolved' && (
+              <Button size="sm" variant="ghost" aria-label={`Mark resolved: ${name}`} onClick={() => onSetStatus(r.id, 'resolved')}>Resolved</Button>
+            )}
+            <IconButton icon="pencil" label={`Edit question: ${name}`} onClick={() => onEdit(r)} />
+            <IconButton icon="trash" label={`Delete report: ${name}`} onClick={() => onDelete(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
+          </span>
+        )
+      },
+    },
+  ]
+
+  return (
+    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <DataTable
+        announcement={bulkResult}
+        label="Reported questions"
+        rows={rows}
+        columns={columns}
+        rowKey={r => r.id}
+        filters={FILTERS}
+        searchPlaceholder="Search question, ID or reason"
+        pageSize={50}
+        defaultSort={{ id: 'reported', dir: 'desc' }}
+        loading={loading}
+        emptyTitle="No reported questions"
+        emptyDescription="When a student reports a flashcard or UPCAT question from the app, it shows up here for review."
+        selection={{
+          selected,
+          onChange: onSelectedChange,
+          rowLabel: shortLabel,
+          actions: <BulkStatusActions busy={bulkBusy} onApply={onBulk} />,
+        }}
+      />
     </div>
   )
 }
@@ -452,277 +537,46 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
 // ── Main ReportsManager ─────────────────────────────────────────────────────
 
 export function ReportsManager() {
-  const [tab, setTab] = useState<StatusTab>('all')
-  const [search, setSearch] = useState('')
-  const debouncedSearch = useDebounce(search, 300)
-  const [page, setPage] = useState(0)
-  const [state, setState] = useState<FetchState>({ rows: [], count: 0, loading: true, error: '' })
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
-  const [actionError, setActionError] = useState('')
+  const queue = useStatusQueue<QuestionReport>({
+    listUrl: '/api/admin/reports',
+    noun: { one: 'report', many: 'reports' },
+    singular: 'Report',
+  })
   const [editing, setEditing] = useState<QuestionReport | null>(null)
-  const fetchCountRef = useRef(0)
-
-  const fetchRows = useCallback(async (status: StatusTab, q: string, p: number) => {
-    const id = ++fetchCountRef.current
-    setState(prev => ({ ...prev, loading: true, error: '' }))
-    try {
-      const params = new URLSearchParams({ page: String(p) })
-      if (status !== 'all') params.set('status', status)
-      if (q) params.set('q', q)
-      const res = await fetch(`/api/admin/reports?${params}`)
-      if (id !== fetchCountRef.current) return
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setState(prev => ({ ...prev, loading: false, error: body.error ?? 'Failed to load' }))
-        return
-      }
-      const { rows, count } = await res.json()
-      setState({ rows: rows ?? [], count: count ?? 0, loading: false, error: '' })
-    } catch {
-      if (id !== fetchCountRef.current) return
-      setState(prev => ({ ...prev, loading: false, error: 'Network error' }))
-    }
-  }, [])
-
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedSearch, tab])
-
-  useEffect(() => {
-    fetchRows(tab, debouncedSearch, page)
-  }, [tab, debouncedSearch, page, fetchRows])
-
-  function refresh() {
-    fetchRows(tab, debouncedSearch, page)
-  }
-
-  async function setReportStatus(id: string, status: 'reviewed' | 'resolved') {
-    setActionError('')
-    try {
-      const res = await fetch(`/api/admin/reports/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const message = body.error ?? 'Failed to update status'
-        setActionError(message)
-        notifyError(message)
-        return
-      }
-      notifySuccess(`Report marked ${status}`)
-      refresh()
-    } catch {
-      setActionError('Network error')
-      notifyError('Network error')
-    }
-  }
-
-  async function deleteReport(id: string) {
-    setActionError('')
-    try {
-      const res = await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        const message = body.error ?? 'Failed to delete report'
-        setActionError(message)
-        notifyError(message)
-        return
-      }
-      setConfirmingDelete(null)
-      notifySuccess('Report deleted')
-      refresh()
-    } catch {
-      setActionError('Network error')
-      notifyError('Network error')
-    }
-  }
-
-  const totalPages = Math.ceil(state.count / PAGE_SIZE)
+  const [deleting, setDeleting] = useState<QuestionReport | null>(null)
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
-        {/* Header */}
-        <div>
-          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Reported Questions</h2>
-          <p className="text-ink-muted text-sm mt-0.5">
-            {state.loading ? 'Loading…' : `${state.count} report${state.count !== 1 ? 's' : ''}`}
-          </p>
-        </div>
+    <PageBody intro="Questions students flagged from the app. Fix the question, then mark the report resolved.">
+      <ReportsView
+        rows={queue.rows}
+        loading={queue.loading}
+        error={queue.error}
+        selected={queue.selected}
+        onSelectedChange={queue.setSelected}
+        bulkBusy={queue.bulkBusy}
+        bulkResult={queue.bulkResult}
+        onBulk={queue.applyBulk}
+        onRetry={queue.reload}
+        onEdit={setEditing}
+        onSetStatus={queue.setStatus}
+        onDelete={setDeleting}
+      />
 
-        {/* Tabs + Search */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-surface-2 rounded-[980px] p-1">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={`px-4 py-1.5 rounded-[980px] text-sm font-medium transition-colors ${
-                  tab === key ? 'bg-white text-maroon shadow-sm' : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            aria-label="Search question text or reason"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search question text or reason…"
-            className="flex-1 min-w-[200px] max-w-sm px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-          />
-        </div>
-
-        {/* Errors */}
-        {state.error ? (
-          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{state.error}</p>
-        ) : null}
-        {actionError ? (
-          <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{actionError}</p>
-        ) : null}
-
-        {/* Table */}
-        <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
-              <thead className="bg-surface-2 border-b border-black/[0.08]">
-                <tr>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Question</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Source</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Reason</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-ink-muted text-xs font-semibold uppercase tracking-wide whitespace-nowrap">Reported</th>
-                  <th className="px-4 py-3 text-right text-ink-muted text-xs font-semibold uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/[0.05]">
-                {state.loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-ink-muted text-sm">Loading…</td>
-                  </tr>
-                ) : null}
-                {!state.loading && state.rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-ink-muted text-sm">No reports found.</td>
-                  </tr>
-                ) : null}
-                {state.rows.map((row) => {
-                  const isExpanded = !!expanded[row.id]
-                  const text = row.question_text || '—'
-                  const needsTruncate = text.length > 100
-                  return (
-                    <tr key={row.id} className="hover:bg-surface-3 transition-colors align-top">
-                      <td className="px-4 py-3 text-ink max-w-[320px]">
-                        <span className="block whitespace-pre-wrap break-words">
-                          {isExpanded || !needsTruncate ? text : `${text.slice(0, 100)}…`}
-                        </span>
-                        {needsTruncate ? (
-                          <button
-                            type="button"
-                            onClick={() => setExpanded(prev => ({ ...prev, [row.id]: !isExpanded }))}
-                            className="text-xs text-maroon hover:underline mt-1"
-                          >
-                            {isExpanded ? 'Show less' : 'Show more'}
-                          </button>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3"><SourceBadge source={row.source_table} /></td>
-                      <td className="px-4 py-3 text-ink max-w-[220px]">
-                        <span className="block whitespace-pre-wrap break-words">{row.reason || '—'}</span>
-                      </td>
-                      <td className="px-4 py-3"><StatusPill status={row.status} /></td>
-                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatDate(row.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5 justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setEditing(row)}
-                            className="px-3 py-1 rounded-[980px] text-xs font-medium bg-maroon text-white hover:bg-maroon-light"
-                          >
-                            Edit question
-                          </button>
-                          {row.status !== 'reviewed' ? (
-                            <button type="button" onClick={() => setReportStatus(row.id, 'reviewed')} className={pillBtnCls}>
-                              Reviewed
-                            </button>
-                          ) : null}
-                          {row.status !== 'resolved' ? (
-                            <button type="button" onClick={() => setReportStatus(row.id, 'resolved')} className={pillBtnCls}>
-                              Resolved
-                            </button>
-                          ) : null}
-                          {confirmingDelete === row.id ? (
-                            <span className="inline-flex gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => deleteReport(row.id)}
-                                className="px-3 py-1 rounded-[980px] text-xs font-medium bg-danger text-white hover:bg-danger-strong"
-                              >
-                                Confirm
-                              </button>
-                              <button type="button" onClick={() => setConfirmingDelete(null)} className={pillBtnCls}>
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingDelete(row.id)}
-                              className="px-3 py-1 rounded-[980px] text-xs font-medium border border-danger/25 text-danger hover:bg-danger-soft"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 ? (
-          <div className="flex items-center justify-between text-sm text-ink-muted">
-            <span>Page {page + 1} of {totalPages} ({state.count} reports)</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="px-4 py-1.5 rounded-[980px] border border-black/[0.08] text-sm font-medium disabled:opacity-40 hover:bg-surface-2"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Question editor drawer */}
-      {editing ? (
+      {editing && (
         <QuestionEditorDrawer
           report={editing}
-          onClose={() => { setEditing(null); refresh() }}
-          onResolved={() => { setEditing(null); refresh() }}
+          onClose={() => { setEditing(null); queue.reload() }}
+          onResolved={() => { setEditing(null); queue.afterChange() }}
         />
-      ) : null}
-    </div>
+      )}
+      {deleting && (
+        <ConfirmDialog
+          message={`Delete this report about “${shortLabel(deleting)}”? The question itself is not deleted.`}
+          confirmLabel="Delete report"
+          onConfirm={async () => { if (await queue.remove(deleting.id)) setDeleting(null) }}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
+    </PageBody>
   )
 }

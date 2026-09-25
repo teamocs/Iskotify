@@ -158,3 +158,33 @@ export function applyTableState<T>(
   const range = paginate(out.length, state.page, pageSize)
   return { total: out.length, range, pageRows: out.slice(range.offset, range.offset + pageSize) }
 }
+
+/**
+ * Column visibility, kept in the URL as `hide=a,b` so a trimmed view of a wide
+ * table survives refresh and can be shared. Unknown ids are dropped, and at
+ * least one column always stays visible.
+ */
+export function parseHiddenColumns(params: ParamReader, ids: readonly string[], prefix = ''): string[] {
+  const raw = params.get(`${prefix}hide`) ?? ''
+  const hidden = raw.split(',').filter(id => ids.includes(id))
+  return hidden.length >= ids.length ? hidden.slice(0, ids.length - 1) : hidden
+}
+
+export function serializeHiddenColumns(base: { toString(): string }, hidden: readonly string[], prefix = ''): string {
+  const out = new URLSearchParams(base.toString())
+  if (hidden.length) out.set(`${prefix}hide`, hidden.join(','))
+  else out.delete(`${prefix}hide`)
+  return out.toString()
+}
+
+/** Toggle one id in or out of a selection, keeping order stable. */
+export function toggleId(selected: readonly string[], id: string): string[] {
+  return selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]
+}
+
+/** Select-all for the visible page: add every page id, or remove them all if all were already in. */
+export function togglePage(selected: readonly string[], pageIds: readonly string[]): string[] {
+  const allIn = pageIds.length > 0 && pageIds.every(id => selected.includes(id))
+  if (allIn) return selected.filter(id => !pageIds.includes(id))
+  return [...selected, ...pageIds.filter(id => !selected.includes(id))]
+}

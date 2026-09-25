@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Dialog } from '@/components/ui/Dialog'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ExamTagSelector } from './ExamTagSelector'
 
 interface Listing {
   slug: string
@@ -22,36 +26,35 @@ interface Props {
 export function PublishModal({
   open, title, description, topicIds, onClose, onPublished, primaryLabel,
 }: Props) {
-  const [listings, setListings] = useState<Listing[]>([])
-  const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set())
+  const [listings, setListings] = useState<Listing[] | null>(null)
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([])
   const [publishing, setPublishing] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [tagError, setTagError] = useState<string | undefined>(undefined)
+  const [listingsError, setListingsError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    setError(null); setPublishing(false); setProgress(null); setSelectedSlugs(new Set())
+    setError(null); setPublishing(false); setProgress(null); setSelectedSlugs([]); setTagError(undefined); setListings(null); setListingsError(null)
     fetch('/api/admin/listings')
       .then(r => r.json())
       .then(body => {
         setListings(Array.isArray(body) ? body : (body.listings ?? []))
       })
-      .catch(e => setError(e?.message ?? 'Failed to load listings'))
+      .catch(e => { setListings([]); setListingsError(e?.message ?? 'Failed to load listings') })
   }, [open])
 
-  function toggleSlug(slug: string) {
-    setSelectedSlugs(prev => {
-      const next = new Set(prev)
-      if (next.has(slug)) next.delete(slug); else next.add(slug)
-      return next
-    })
-  }
-
   async function handlePublish() {
-    if (selectedSlugs.size === 0 || topicIds.length === 0) return
+    if (publishing || topicIds.length === 0) return
+    if (selectedSlugs.length === 0) {
+      setTagError('Pick at least one exam or scholarship.')
+      return
+    }
+    setTagError(undefined)
     setPublishing(true); setError(null); setProgress({ done: 0, total: topicIds.length })
 
-    const slugs = Array.from(selectedSlugs)
+    const slugs = selectedSlugs
     const published: string[] = []
     const failed: Array<{ topicId: string; message: string }> = []
 
@@ -90,98 +93,75 @@ export function PublishModal({
     if (published.length > 0) onPublished(published)
   }
 
-  if (!open) return null
+  const finished = progress !== null && progress.done === progress.total && !publishing
+  // Closing mid-publish would orphan the loop's progress, so the dialog stays put.
+  const guardedClose = () => { if (!publishing) onClose() }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl border border-black/[0.08] w-full max-w-2xl mt-12 mb-12"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-6 border-b border-black/[0.06]">
-          <h3 className="text-ink font-heading font-bold text-xl tracking-tight">{title}</h3>
-          <p className="text-ink-muted text-sm mt-1">{description}</p>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div>
-            <div className="text-ink-muted text-xs font-semibold uppercase tracking-wider mb-2">
-              Tag to exams/scholarships
-            </div>
-            {listings.length === 0 ? (
-              <div className="text-ink-muted text-sm">Loading listings…</div>
-            ) : (
-              <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto">
-                {listings.map(l => {
-                  const on = selectedSlugs.has(l.slug)
-                  return (
-                    <button
-                      key={l.slug}
-                      onClick={() => toggleSlug(l.slug)}
-                      disabled={publishing}
-                      className={`px-3 py-1.5 rounded-[980px] text-xs font-medium border transition-colors
-                        ${on
-                          ? 'bg-maroon text-white border-maroon shadow-sm'
-                          : 'bg-white text-ink border-black/[0.12] hover:border-maroon/60 hover:text-maroon'}
-                        ${publishing ? 'opacity-50 cursor-not-allowed' : ''}
-                      `}
-                    >
-                      {l.title}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {progress && (
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-ink-muted">
-                <span>Publishing…</span>
-                <span className="tabular-nums">{progress.done}/{progress.total}</span>
-              </div>
-              <div className="w-full h-1.5 bg-black/[0.08] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-maroon transition-all"
-                  style={{ width: `${(progress.done / progress.total) * 100}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-danger-strong text-sm">
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-black/[0.06] flex items-center justify-end gap-2 bg-[#fafafb] rounded-b-2xl">
-          <button
-            onClick={onClose}
-            disabled={publishing}
-            className="px-4 py-2 rounded-[980px] text-sm font-medium text-ink hover:bg-black/[0.05] transition-colors disabled:opacity-50"
-          >
-            {progress?.done === progress?.total && progress ? 'Close' : 'Cancel'}
-          </button>
-          <button
-            onClick={handlePublish}
-            disabled={selectedSlugs.size === 0 || publishing || topicIds.length === 0}
-            className={`px-5 py-2 rounded-[980px] text-sm font-semibold transition-colors shadow-sm
-              ${selectedSlugs.size > 0 && !publishing && topicIds.length > 0
-                ? 'bg-success text-white hover:bg-success-strong'
-                : 'bg-surface-2 text-ink-muted cursor-not-allowed'}
-            `}
-          >
+    <Dialog
+      open={open}
+      onClose={guardedClose}
+      title={title}
+      description={description}
+      size="lg"
+      onSubmit={handlePublish}
+      dirty={selectedSlugs.length > 0 && !publishing && !finished}
+      footer={close => (
+        <>
+          <Button onClick={close} disabled={publishing}>{finished ? 'Close' : 'Cancel'}</Button>
+          <Button type="submit" variant="primary" loading={publishing} disabled={topicIds.length === 0}>
             {publishing
               ? `Publishing ${progress?.done ?? 0}/${progress?.total ?? topicIds.length}…`
               : (primaryLabel ?? `Publish ${topicIds.length} topic${topicIds.length === 1 ? '' : 's'}`)}
-          </button>
-        </div>
+          </Button>
+        </>
+      )}
+    >
+      <div className="space-y-4">
+        {listings === null ? (
+          <fieldset className="space-y-2">
+            <legend className="text-ui font-medium text-ink">
+              Tag to exams and scholarships<span aria-hidden="true" className="ml-0.5 text-danger">*</span>
+            </legend>
+            <p role="status" className="text-ui text-ink-muted">Loading exams and scholarships…</p>
+          </fieldset>
+        ) : (
+          <div className="max-h-64 overflow-y-auto">
+            <ExamTagSelector
+              label="Tag to exams and scholarships"
+              hint="Every card in the selected topics gets these tags."
+              required
+              listings={listings}
+              selected={selectedSlugs}
+              onChange={slugs => { setSelectedSlugs(slugs); if (slugs.length > 0) setTagError(undefined) }}
+              error={tagError}
+              disabled={publishing}
+            />
+          </div>
+        )}
+
+        {progress && (
+          <div className="space-y-1">
+            <div className="flex justify-between text-xs text-ink-muted">
+              <span id="publish-progress-label">{finished ? 'Done' : 'Publishing…'}</span>
+              <span className="tabular-nums">{progress.done}/{progress.total}</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-labelledby="publish-progress-label"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.done}
+              className="h-1.5 w-full overflow-hidden rounded-pill bg-neutral-soft"
+            >
+              <div className="h-full bg-maroon transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+            </div>
+          </div>
+        )}
+
+        {listingsError && <ErrorBanner title="Couldn’t load exams and scholarships" message={listingsError} />}
+        {error && <ErrorBanner title="Some topics were not published" message={error} />}
       </div>
-    </div>
+    </Dialog>
   )
 }

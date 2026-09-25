@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import type { Listing } from '@iskotify/utils'
 import { ListingTable } from './ListingTable'
-import type { SyncLog } from './SyncPanel'
+import type { SyncLog } from '@/lib/admin/syncLog'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 
 interface Props {

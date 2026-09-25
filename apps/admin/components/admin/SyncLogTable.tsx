@@ -2,7 +2,7 @@
 
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
-import type { SyncLog } from './SyncPanel'
+import type { SyncLog } from '@/lib/admin/syncLog'
 
 const STATUS: Record<SyncLog['status'], { label: string; tone: BadgeTone }> = {
   ok: { label: 'OK', tone: 'success' },

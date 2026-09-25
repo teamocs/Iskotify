@@ -35,7 +35,7 @@ function filterBody(body: Record<string, unknown>, columnNames: Set<string>): Re
   return out
 }
 
-// GET /api/admin/data/[table]?search=&page=
+// GET /api/admin/data/[table]?search=&page=&sort=&dir=asc|desc  (page is 0-based)
 export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ table: string }> },
@@ -77,9 +77,18 @@ export async function GET(
     query = query.or(orParts)
   }
 
-  const { data, error, count } = await query
-    .order(config.idColumn)
-    .range(from, to)
+  // Sort only by a column configured for this table (or its id); anything else
+  // falls back to id order. The id stays a tiebreaker so pages never overlap.
+  const sortCol = url.searchParams.get('sort') ?? ''
+  const ascending = url.searchParams.get('dir') !== 'desc'
+  const sortable = sortCol === config.idColumn || config.columns.some(c => c.name === sortCol)
+  if (sortable && sortCol !== config.idColumn) {
+    query = query.order(sortCol, { ascending }).order(config.idColumn, { ascending: true })
+  } else {
+    query = query.order(config.idColumn, { ascending: sortable ? ascending : true })
+  }
+
+  const { data, error, count } = await query.range(from, to)
 
   if (error) {
     console.error(`[admin/data/${config.table} GET] supabase error:`, error)

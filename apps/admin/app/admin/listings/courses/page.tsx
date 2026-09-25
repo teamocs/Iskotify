@@ -5,6 +5,14 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Topbar } from '@/components/admin/Topbar'
 import { saveCourseTags } from '@/lib/admin/courseTagsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { PageBody } from '@/components/ui/Page'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { controlClass } from '@/components/ui/Field'
+import { buttonClass } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Icon } from '@/components/ui/Icon'
 
 // The canonical course clusters (must match career_courses.cluster). A listing tagged
 // with one or more of these is restricted to those fields; ["all"] = open to any course.
@@ -14,12 +22,37 @@ const CLUSTERS = [
   'Maritime', 'Multi-Interdisciplinary', 'Other',
 ] as const
 
+const TYPE_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'exam', label: 'Exams' },
+  { value: 'scholarship', label: 'Scholarships' },
+] as const
+
 interface Row {
   id: string
   title: string
   type: string
   target_courses: string[]
   target_courses_source: string | null
+}
+
+/** A pressed-state chip: selected reads as a check + tinted fill, not colour alone. */
+function Chip({ on, onClick, disabled, children }: { on: boolean; onClick: () => void; disabled?: boolean; children: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        'inline-flex h-7 items-center gap-1 rounded-pill border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        on ? 'border-maroon bg-maroon-dim text-maroon' : 'border-strong bg-surface text-ink-muted hover:bg-surface-hover hover:text-ink',
+      ].join(' ')}
+    >
+      {on && <Icon name="check" size={12} />}
+      {children}
+    </button>
+  )
 }
 
 export default function CourseTagsPage() {
@@ -101,85 +134,83 @@ export default function CourseTagsPage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <Topbar title="Course Tags" />
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-5xl mx-auto space-y-4">
-          <div>
-            <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Course-field tags</h2>
-            <p className="text-ink-muted text-sm mt-1">
-              Which course fields each exam/scholarship is open to. <strong>All courses</strong> = no field
-              restriction. Tags map to a student&apos;s target course via its cluster, so course-specific
-              scholarships (DOST, etc.) reach the right students. {aiCount > 0 ? `${aiCount} were AI-tagged — review and correct any below.` : ''}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+      <PageBody
+        width="wide"
+        intro={<>
+          Which course fields each exam or scholarship is open to. <strong className="font-semibold text-ink">All courses</strong> means no
+          field restriction. Tags map to a student&apos;s target course via its cluster, so course-specific scholarships (DOST, etc.) reach
+          the right students.{aiCount > 0 ? ` ${aiCount} were AI-tagged — review and correct any below.` : ''}
+        </>}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
+            <Icon name="search" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle" />
             <input
               type="search"
               aria-label="Search listings"
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Search listings…"
-              className="flex-1 min-w-[200px] border border-black/[0.12] rounded-lg px-3 py-2 text-sm"
+              placeholder="Search listings"
+              className={`${controlClass} pl-8`}
             />
-            {(['all', 'exam', 'scholarship'] as const).map(tf => (
+          </div>
+          <div role="group" aria-label="Listing type" className="flex gap-1">
+            {TYPE_FILTERS.map(tf => (
               <button
-                key={tf}
+                key={tf.value}
                 type="button"
-                onClick={() => setTypeFilter(tf)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold ${typeFilter === tf ? 'bg-maroon text-white' : 'bg-surface-2 text-ink-muted'}`}
+                aria-pressed={typeFilter === tf.value}
+                onClick={() => setTypeFilter(tf.value)}
+                className={buttonClass({ variant: typeFilter === tf.value ? 'secondary' : 'ghost', size: 'sm', className: typeFilter === tf.value ? 'bg-surface-2' : undefined })}
               >
-                {tf === 'all' ? 'All' : tf === 'exam' ? 'Exams' : 'Scholarships'}
+                {tf.label}
               </button>
             ))}
           </div>
-
-          {error && <div className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-2 text-danger-strong text-sm">{error}</div>}
-          {loading ? (
-            <div className="text-ink-muted text-sm py-10 text-center">Loading…</div>
-          ) : (
-            <div className="space-y-2">
-              <div className="text-ink-muted text-xs">{filtered.length} listing{filtered.length === 1 ? '' : 's'}</div>
-              {filtered.map(r => {
-                const openAll = r.target_courses.length === 0 || r.target_courses.includes('all')
-                return (
-                  <div key={r.id} className="rounded-2xl border border-black/[0.08] bg-white p-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${r.type === 'exam' ? 'bg-maroon/10 text-maroon' : 'bg-success-soft text-success-strong'}`}>
-                        {r.type}
-                      </span>
-                      <span className="text-ink text-sm font-semibold flex-1 min-w-0 truncate">{r.title}</span>
-                      {r.target_courses_source === 'ai' && <span className="text-[10px] text-warning bg-warning-soft border border-warning/25 rounded px-1.5 py-0.5">AI</span>}
-                      {savingId === r.id && <span className="text-[10px] text-ink-muted">saving…</span>}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setOpenAll(r)}
-                        className={`text-xs px-2.5 py-1 rounded-full border ${openAll ? 'bg-maroon text-white border-maroon' : 'bg-white text-ink-muted border-black/[0.15]'}`}
-                      >
-                        All courses
-                      </button>
-                      {CLUSTERS.map(c => {
-                        const on = r.target_courses.includes(c)
-                        return (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => toggleCluster(r, c)}
-                            className={`text-xs px-2.5 py-1 rounded-full border ${on ? 'bg-maroon text-white border-maroon' : 'bg-white text-ink-muted border-black/[0.15]'}`}
-                          >
-                            {c}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
         </div>
-      </div>
+
+        {error && <ErrorBanner title="Couldn’t load or save course tags" message={error} />}
+
+        {loading ? (
+          <p role="status" className="py-10 text-center text-ui text-ink-muted">Loading listings…</p>
+        ) : (
+          <Card flush>
+            <p aria-live="polite" className="border-b border-subtle px-4 py-2 text-xs tabular-nums text-ink-muted">
+              {filtered.length} listing{filtered.length === 1 ? '' : 's'}
+            </p>
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon="tag"
+                title={rows.length === 0 ? 'No listings yet' : 'No listings match'}
+                description={rows.length === 0 ? 'Listings arrive from the master-sheet sync on the Listings page.' : 'Try a different search or type.'}
+              />
+            ) : (
+              <ul className="divide-y divide-subtle">
+                {filtered.map(r => {
+                  const openAll = r.target_courses.length === 0 || r.target_courses.includes('all')
+                  const saving = savingId === r.id
+                  return (
+                    <li key={r.id} className="px-4 py-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Badge tone={r.type === 'exam' ? 'info' : 'brand'}>{r.type === 'exam' ? 'Exam' : r.type === 'scholarship' ? 'Scholarship' : r.type}</Badge>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{r.title}</span>
+                        {r.target_courses_source === 'ai' && <Badge tone="warning">AI-tagged</Badge>}
+                        {saving && <span role="status" className="text-xs text-ink-muted">Saving…</span>}
+                      </div>
+                      <div role="group" aria-label={`Course fields for ${r.title}`} className="flex flex-wrap gap-1.5">
+                        <Chip on={openAll} onClick={() => setOpenAll(r)} disabled={saving}>All courses</Chip>
+                        {CLUSTERS.map(c => (
+                          <Chip key={c} on={r.target_courses.includes(c)} onClick={() => toggleCluster(r, c)} disabled={saving}>{c}</Chip>
+                        ))}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </Card>
+        )}
+      </PageBody>
     </div>
   )
 }
