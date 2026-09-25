@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @iskotify/mobile...",
   "framework": null,
+  "git": { "deploymentEnabled": { "master": true, "**": false } },
   "rewrites": [
     { "source": "/auth/sign-in", "destination": "/auth/sign-in.html" },
     { "source": "/auth/callback", "destination": "/auth/callback.html" },
