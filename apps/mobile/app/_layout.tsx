@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Image, InteractionManager } from 'react-native'
+import { Platform, View, Image, InteractionManager, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -18,6 +18,8 @@ import {
 } from '@expo-google-fonts/lexend'
 import { DrizzleProvider } from '../db'
 import { ThemeProvider, useTheme } from '../theme/ThemeContext'
+import { darkTheme, lightTheme, radius } from '../theme/tokens'
+import { resolveColorScheme } from '../theme/resolveColorScheme'
 import { useDb } from '../hooks/useDb'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
@@ -63,6 +65,9 @@ export default function RootLayout() {
   })
   const [appReady, setAppReady] = useState(false)
   const fontsReady = fontsLoaded || !!fontError
+  // The splash sits outside ThemeProvider (the stored preference isn't read
+  // yet), so it follows the OS and otherwise the light first-launch default.
+  const splashBg = resolveColorScheme('system', useColorScheme()) === 'dark' ? darkTheme.bg : lightTheme.bg
 
   // Stable callback — never changes, safe as useCallback dep
   const handleReady = useCallback(() => setAppReady(true), [])
@@ -81,11 +86,11 @@ export default function RootLayout() {
           {(!appReady || !fontsReady) && (
             <View style={{
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: splashBg, alignItems: 'center', justifyContent: 'center',
             }}>
               <Image
                 source={require('../assets/images/icon.png')}
-                style={{ width: 80, height: 80, borderRadius: 20 }}
+                style={{ width: 80, height: 80, borderRadius: radius.xl }}
               />
             </View>
           )}
@@ -114,11 +119,11 @@ export default function RootLayout() {
         {(!appReady || !fontsReady) && (
           <View style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: splashBg, alignItems: 'center', justifyContent: 'center',
           }}>
             <Image
               source={require('../assets/images/icon.png')}
-              style={{ width: 80, height: 80, borderRadius: 20 }}
+              style={{ width: 80, height: 80, borderRadius: radius.xl }}
             />
           </View>
         )}

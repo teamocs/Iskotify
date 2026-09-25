@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
+  ArrowLeftOutlined,
   User4Outlined,
   SparkOutlined,
   Gear1Outlined,
@@ -108,7 +109,7 @@ function FocusListItem({
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     backgroundColor: bg.value > 0.5
-      ? (Platform.OS === 'ios' ? 'rgba(128,0,0,0.08)' : 'rgba(128,0,0,0.06)')
+      ? t.surface2
       : 'transparent',
     borderRadius: 12,
     zIndex: isDragging ? 10 : 1,
@@ -247,7 +248,7 @@ export default function ProfileScreen() {
     googleBadge:   { backgroundColor: t.textPrimary, borderRadius: radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
     googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
     googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: 'rgba(34,197,94,0.22)', borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
+    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successSurface, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
     signedInText:  { fontSize: typo.xs, fontWeight: '600', color: t.success, fontFamily: 'Lexend_600SemiBold' },
     secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },
@@ -259,7 +260,7 @@ export default function ProfileScreen() {
     signInBadgeText: { fontSize: typo.xl, fontWeight: '700', color: t.accentStrong, fontFamily: 'Outfit_700Bold' },
     signInTitle:   { fontSize: typo.base, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
     signInSubtitle:{ fontSize: typo.sm, color: t.textInverse, opacity: 0.85, fontFamily: 'Lexend_400Regular', marginTop: 2 },
-    signInChevron: { fontSize: 22, color: t.textInverse, opacity: 0.9 },
+    signInChevron: { fontSize: typo.xl, color: t.textInverse, opacity: 0.9 },
   }), [t, typo])
 
   // ── Sync (web-only refresh) ────────────────────────────────────────────────
@@ -491,8 +492,19 @@ export default function ProfileScreen() {
           />
         }
       >
-        {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        {/* Header — Profile opens from the avatar (not a tab), so it carries its own Back. */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.xs }}>
+          <Pressable
+            onPress={() => (router.canGoBack?.() ? router.back() : router.replace('/'))}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            style={({ pressed }) => ({
+              width: 44, height: 44, marginLeft: -spacing.sm, alignItems: 'center', justifyContent: 'center',
+              borderRadius: radius.pill, backgroundColor: pressed ? t.surface2 : 'transparent',
+            })}
+          >
+            <Lineicons icon={ArrowLeftOutlined} size={22} color={t.textPrimary} />
+          </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.title}>Profile</Text>
             <Text style={s.subtitle}>Your account, focus list, and data</Text>
@@ -590,7 +602,7 @@ export default function ProfileScreen() {
           <SectionHeader
             title="My Focus List"
             actionLabel="+ Add More"
-            onAction={() => router.push('/(tabs)/listings')}
+            onAction={() => router.push('/(tabs)/explore')}
           />
 
           {focusListingsData.length > 1 ? (
@@ -623,8 +635,8 @@ export default function ProfileScreen() {
 
         {/* Scholarship matching profile — editable income / GWA / province (matcher fields) */}
         <ListCard
-          icon={<Text style={{ fontSize: 18 }}>🎓</Text>}
-          iconBg={profile.scholarshipIncomplete ? 'rgba(245,158,11,0.14)' : 'rgba(34,197,94,0.12)'}
+          icon={<Text style={{ fontSize: typography.md }}>🎓</Text>}
+          iconBg={profile.scholarshipIncomplete ? t.warningSurface : t.successSurface}
           title="Scholarship Profile"
           subtitle={profile.scholarshipIncomplete ? 'Add income, GWA & province for better matches' : 'Complete — powering your scholarship matches'}
           onPress={() => router.push('/profile/scholarship-info')}
@@ -651,28 +663,28 @@ export default function ProfileScreen() {
         {/* Action cards */}
         <ListCard
           icon={<Lineicons icon={Upload1Outlined} size={16} color={t.success} style={{ transform: [{ rotate: '180deg' }] }} />}
-          iconBg="rgba(34,197,94,0.12)"
+          iconBg={t.successSurface}
           title="Export Data"
           subtitle="Save your preferences as a JSON file"
           onPress={handleExport}
         />
         <ListCard
-          icon={<Lineicons icon={Upload1Outlined} size={16} color="#3b82f6" />}
-          iconBg="rgba(96,165,250,0.12)"
+          icon={<Lineicons icon={Upload1Outlined} size={16} color={t.textSecondary} />}
+          iconBg={t.surface2}
           title="Import Data"
           subtitle="Restore from a previously exported JSON file"
           onPress={handleImport}
         />
         <ListCard
           icon={<Text style={{ fontSize: typo.base, color: t.textSecondary }}>↪</Text>}
-          iconBg="rgba(148,163,184,0.12)"
+          iconBg={t.surface2}
           title="Sign Out"
           subtitle="Sign out of your Google account on this device"
           onPress={handleSignOut}
         />
         <ListCard
           icon={<Text style={{ fontSize: typo.base, color: t.danger }}>⚠</Text>}
-          iconBg="rgba(239,68,68,0.10)"
+          iconBg={t.dangerSurface}
           title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
           titleColor={t.danger}
           subtitle={Platform.OS === 'web'

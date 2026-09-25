@@ -8,11 +8,33 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useDb } from '../../hooks/useDb'
 import { syncOnLaunch } from '../../services/sync'
 import { SidebarNav } from '../../components/web/SidebarNav'
+import { useTheme } from '../../theme/ThemeContext'
+
+/**
+ * Four destinations: Today (index) · Practice · Explore · Progress.
+ *
+ * Still registered but never drawn in the bar:
+ *   - profile   — opened from the avatar in every tab header / the sidebar;
+ *   - listings, updates, analytics — legacy routes that redirect into
+ *     Explore / Progress so old deep links and notifications keep working.
+ */
+// A flat array (not a fragment) so the navigator sees each Tabs.Screen directly.
+const TAB_SCREENS = [
+  <Tabs.Screen key="index"     name="index"     options={{ title: 'Today' }} />,
+  <Tabs.Screen key="practice"  name="practice"  options={{ title: 'Practice' }} />,
+  <Tabs.Screen key="explore"   name="explore"   options={{ title: 'Explore' }} />,
+  <Tabs.Screen key="progress"  name="progress"  options={{ title: 'Progress' }} />,
+  <Tabs.Screen key="profile"   name="profile"   options={{ title: 'Profile' }} />,
+  <Tabs.Screen key="listings"  name="listings"  options={{ title: 'Explore' }} />,
+  <Tabs.Screen key="updates"   name="updates"   options={{ title: 'Explore' }} />,
+  <Tabs.Screen key="analytics" name="analytics" options={{ title: 'Progress' }} />,
+]
 
 export default function TabLayout() {
   const bp = useBreakpoint()
   const db = useDb()
-  const isDesktopWeb = Platform.OS === 'web' && bp === 'lg'
+  const { theme: t } = useTheme()
+  const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
 
   // Retry handler for the sync-error banner. syncOnLaunch marks start/done on
   // the syncStatus store itself, so the banner hides while the retry runs.
@@ -21,53 +43,36 @@ export default function TabLayout() {
   }, [db])
 
   if (isDesktopWeb) {
-    // Desktop web: sidebar beside content; tab bar hidden.
-    // The Tabs navigator still drives routing — sidebar items call router.push
-    // to the tab routes. tabBar={() => null} suppresses the floating bar.
+    // Desktop web: persistent sidebar beside the content; no bottom bar.
+    // The 1040 cap keeps screens that render their own FlatList (and headers
+    // outside a scroll view) from stretching edge to edge on wide monitors;
+    // <Screen> narrows reading screens further to 720.
     return (
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.bg }}>
         <SidebarNav />
-        {/* Center the content column at a comfortable max-width so screens that
-            render their own FlatList/ScrollView (Lists, Exams) — bypassing
-            ScreenScroll's centering — don't stretch edge-to-edge on wide
-            monitors. 1040 matches ScreenScroll's MAX_WIDTH_LG for consistency. */}
-        <View style={{ flex: 1, alignItems: 'center' }}>
+        <View style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
           <View style={{ flex: 1, width: '100%', maxWidth: 1040 }}>
-          <SyncErrorBanner onRetry={handleRetry} />
-          <Tabs
-            tabBar={() => null}
-            screenOptions={{ headerShown: false, animation: 'none' }}
-          >
-            <Tabs.Screen name="index"    options={{ title: 'Home' }} />
-            <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
-            <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
-            <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
-            <Tabs.Screen name="analytics" options={{ title: 'Progress' }} />
-            <Tabs.Screen name="profile"  options={{ title: 'Profile' }} />
-          </Tabs>
+            <SyncErrorBanner onRetry={handleRetry} />
+            <Tabs tabBar={() => null} screenOptions={{ headerShown: false, animation: 'none' }}>
+              {TAB_SCREENS}
+            </Tabs>
           </View>
         </View>
       </View>
     )
   }
 
-  // Native (iOS/Android) and sm/md web: unchanged floating TabBar.
+  // Phones, tablets and mid-width web: bottom navigation bar.
   return (
     <EdgeSwipeNavigator>
       <View style={{ flex: 1 }}>
-      <SyncErrorBanner onRetry={handleRetry} />
-      <Tabs
-        tabBar={(props) => <TabBar {...props} />}
-        screenOptions={{ headerShown: false, animation: 'shift' }}
-      >
-        <Tabs.Screen name="index"    options={{ title: 'Home' }} />
-        <Tabs.Screen name="practice" options={{ title: 'Exams' }} />
-        <Tabs.Screen name="listings" options={{ title: 'Lists' }} />
-        <Tabs.Screen name="updates"  options={{ title: 'Updates' }} />
-        <Tabs.Screen name="analytics" options={{ title: 'Progress' }} />
-        {/* Profile is reachable from the Home header avatar (not shown in the tab bar). */}
-        <Tabs.Screen name="profile"  options={{ title: 'Profile' }} />
-      </Tabs>
+        <SyncErrorBanner onRetry={handleRetry} />
+        <Tabs
+          tabBar={(props) => <TabBar {...props} />}
+          screenOptions={{ headerShown: false, animation: 'shift' }}
+        >
+          {TAB_SCREENS}
+        </Tabs>
       </View>
     </EdgeSwipeNavigator>
   )

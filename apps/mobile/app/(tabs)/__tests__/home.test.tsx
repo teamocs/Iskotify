@@ -226,7 +226,7 @@ describe('HomeScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/settings')
   })
 
-  it('profile tile navigates to the profile tab when pressed', () => {
+  it('profile avatar navigates to /profile when pressed', () => {
     const { router } = require('expo-router')
     jest.clearAllMocks()
     mockUseHomeStats.mockReturnValue(emptyStats)
@@ -234,7 +234,7 @@ describe('HomeScreen', () => {
     mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
     fireEvent.press(screen.getByLabelText('Profile'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/profile')
+    expect(router.push).toHaveBeenCalledWith('/profile')
   })
 
   // ── Explore ───────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ describe('HomeScreen', () => {
     mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
     fireEvent.press(screen.getByText('Universities'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=universities')
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore?section=universities')
   })
 
   it('pressing the Destinations explore card deep-links to the Destinations tab', () => {
@@ -271,7 +271,7 @@ describe('HomeScreen', () => {
     mockUseHomeCatalog.mockReturnValue(emptyCatalog)
     render(<HomeScreen />)
     fireEvent.press(screen.getByText('Destinations'))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=destinations')
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/explore?section=destinations')
   })
 
   // ── My Entrance Exams (FocusExamsFold) ───────────────────────────────────────
@@ -285,7 +285,7 @@ describe('HomeScreen', () => {
       render(<HomeScreen />)
       expect(screen.getByText('My Entrance Exams')).toBeTruthy()
       fireEvent.press(screen.getByText('See more'))
-      expect(router.push).toHaveBeenCalledWith('/(tabs)/listings')
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/explore')
     })
 
     it('suggests the default exams (with "+ Add") when nothing is focused', () => {
@@ -491,7 +491,7 @@ describe('HomeScreen', () => {
       // RecommendedScholarships renders before NewsAndDates, so its "See all" is first.
       const seeAlls = screen.getAllByText('See all')
       fireEvent.press(seeAlls[0]!)
-      expect(router.push).toHaveBeenCalledWith('/(tabs)/listings?tab=scholarships')
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/explore?section=scholarships')
     })
 
     it('shows an InfoBanner empty state when there are no open/upcoming scholarships', () => {
@@ -624,7 +624,7 @@ describe('HomeScreen', () => {
       // NewsAndDates renders after RecommendedScholarships, so its "See all" is last.
       const seeAlls = screen.getAllByText('See all')
       fireEvent.press(seeAlls[seeAlls.length - 1]!)
-      expect(router.push).toHaveBeenCalledWith('/(tabs)/updates')
+      expect(router.push).toHaveBeenCalledWith('/(tabs)/explore?section=news')
     })
   })
 

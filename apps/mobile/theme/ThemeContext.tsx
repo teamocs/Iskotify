@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
-import { useColorScheme } from 'react-native'
+import { Platform, useColorScheme } from 'react-native'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 import { darkTheme, lightTheme, typography, type Theme, type Typography } from './tokens'
-
-type ThemePref = 'system' | 'light' | 'dark'
+import { resolveColorScheme, type ThemePref } from './resolveColorScheme'
 
 interface ThemeContextValue {
   theme:       Theme
@@ -38,8 +37,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     void load()
   }, [db])
 
-  const colorScheme: 'light' | 'dark' =
-    themePref === 'system' ? (systemScheme ?? 'dark') : themePref
+  // First launch (stored pref 'system', OS reports nothing) resolves to LIGHT.
+  const colorScheme = resolveColorScheme(themePref, systemScheme)
+
+  // Web: keep the browser's own UI (form controls, scrollbars) in step with
+  // the painted palette instead of the static value in +html.tsx.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return
+    document.documentElement.style.colorScheme = colorScheme
+  }, [colorScheme])
 
   const isDark = colorScheme === 'dark'
   const theme  = isDark ? darkTheme : lightTheme

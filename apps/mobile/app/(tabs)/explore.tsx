@@ -1,0 +1,793 @@
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { StyleSheet, View, Text, FlatList, Pressable, TextInput, ActivityIndicator, RefreshControl, ScrollView, Platform } from 'react-native'
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { GraduationCap1Outlined, SparkOutlined } from '@lineiconshq/free-icons'
+import { useDb } from '../../hooks/useDb'
+import { useFocusListings } from '../../hooks/useFocusListings'
+import { useCourseTabOptions } from '../../hooks/useCourseTabOptions'
+import { listings as listingsTable, careerCourses, careerCountries as countriesTable, careerDestinations as destinationsTable } from '../../db/schema'
+import { useTheme } from '../../theme/ThemeContext'
+import { spacing, radius, layout } from '../../theme/tokens'
+import { SectionHeader } from '../../components/ui/SectionHeader'
+import { ListCard } from '../../components/ui/ListCard'
+import { Badge } from '../../components/ui/Badge'
+import { syncOnLaunch } from '../../services/sync'
+import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
+import { getSettings } from '../../services/settings'
+import { getListingMockBest, getListingAccuracy } from '../../services/homeAggregates'
+import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
+import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
+import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
+import { MatchPill } from '../../components/scholarships/MatchPill'
+import { InfoBanner } from '../../components/ui/InfoBanner'
+import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
+import { aiSearchListings } from '../../services/listingSearch'
+import { canonicalizeRegion } from '../../utils/region'
+import { cachedQuery, subscribe } from '../../services/queryCache'
+import { aggregateDestinationCountries } from '../../utils/destinationCountries'
+import type { CountryWithCount } from '../../utils/destinationCountries'
+import type { CourseTabOption } from '../../utils/courseTabs'
+import { useSyncStatus } from '../../hooks/useSyncStatus'
+import { LoadingState } from '../../components/ui/LoadingState'
+import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
+import { Screen } from '../../components/ui/Screen'
+import { FilterChip } from '../../components/ui/Chip'
+import { TabHeader } from '../../components/TabHeader'
+import { NewsFeed } from '../../components/explore/NewsFeed'
+import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
+import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+// Explore sections: the four former Lists tabs plus News & dates (the former
+// Updates tab). Keys double as the ?section= / legacy ?tab= deep-link values.
+type Tab = ExploreSection
+
+interface ListingRow extends SearchableListing {
+  id: string
+  slug: string
+  title: string
+  type: string
+  examDate: number | null
+  deadline: number | null
+  region: string
+  provider: string
+  province: string | null
+  city: string | null
+  scope: string | null
+  isVerified: boolean | null
+  incomeCeiling: number | null
+  gwaRequirement: number | null
+  serviceObligationYears: number | null
+  scholarshipMeta: string | null
+  targetCourses: string[]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtDate(ts: number | null): string {
+  if (!ts) return 'Date TBA'
+  return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function parseStrArray(s: string | null | undefined): string[] {
+  try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v.map(String) : [] } catch { return [] }
+}
+
+/** Trim a query for display inside a results header so long inputs don't overflow. */
+function truncateQuery(q: string, max = 32): string {
+  const t = q.trim()
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t
+}
+
+function toMatchInput(l: ListingRow): MatchInput {
+  let meta: Record<string, unknown> = {}
+  try { meta = JSON.parse(l.scholarshipMeta || '{}') } catch { /* ignore */ }
+  return {
+    scope: (l.scope as MatchInput['scope']) || 'national',
+    isVerified: !!l.isVerified,
+    incomeCeiling: l.incomeCeiling ?? null,
+    gwaRequirement: l.gwaRequirement ?? null,
+    serviceObligationYears: l.serviceObligationYears ?? null,
+    province: l.province ?? null,
+    city: l.city ?? null,
+    targetYearLevels: [],
+    hucExcluded: !!meta.huc_excluded,
+  }
+}
+
+// ── Module-scope statics ──────────────────────────────────────────────────────
+
+// "Universities" is labelled "Schools & exams": entrance exams (UPCAT dates,
+// mocks) live in it, so a student looking for an exam finds it here.
+const TAB_LABELS: { key: Tab; label: string }[] = [
+  { key: 'universities', label: 'Schools & exams' },
+  { key: 'scholarships', label: 'Scholarships' },
+  { key: 'courses', label: 'Courses' },
+  { key: 'destinations', label: 'Destinations' },
+  { key: 'news', label: 'News & dates' },
+]
+
+// Mirrors FocusExamsFold's / the practice diagnostic screen's tone→Badge mapping
+// so the same readiness % reads the same color everywhere in the app.
+const TONE_TO_BADGE: Record<ReadinessTone, 'success' | 'warning' | 'danger' | 'neutral'> = {
+  strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
+}
+
+/** Validate a ?section= (or legacy ?tab=) deep-link param into a Tab, or null. */
+function parseTabParam(v: unknown): Tab | null {
+  return parseExploreSection(v)
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function ExploreScreen() {
+  const db = useDb()
+  const { getPriority } = useFocusListings()
+  const { theme: t, typo } = useTheme()
+  const insets = useSafeAreaInsets()
+
+  // ── Sync / loading ────────────────────────────────────────────────────────
+  const sync = useSyncStatus()
+  const [loaded, setLoaded] = useState(false)
+  const showLoading = Platform.OS === 'web' && (!loaded || (sync.isSyncing && !sync.firstSyncDone))
+
+  // ── Listings state (Universities + Scholarships tabs) ─────────────────────
+  const [all, setAll] = useState<ListingRow[]>([])
+  const [profile, setProfile] = useState<StudentProfile>({})
+  const [userRegion, setUserRegion] = useState<string>('')
+  const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
+  const [blueprintSlugs, setBlueprintSlugs] = useState<Set<string>>(new Set())
+  // Per-exam readiness (Global Constraints: getListingMockBest, falling back to
+  // listingAccuracy) — same source the Home exam tiles use, so the numbers agree.
+  const [listingMockBest, setListingMockBest] = useState<Map<string, number>>(new Map())
+  const [listingAccuracy, setListingAccuracy] = useState<Record<string, number>>({})
+
+  // ── Destinations tab state ────────────────────────────────────────────────
+  const [destCountries, setDestCountries] = useState<CountryWithCount[]>([])
+  const [destLoaded, setDestLoaded] = useState(false)
+
+  // ── Navigation + search state ─────────────────────────────────────────────
+  const [tab, setTab] = useState<Tab>('universities')
+  const [query, setQuery] = useState('')
+
+  // ?tab= deep-link (e.g. Home's Explore quick-links). Keyed on the param ONLY:
+  // it re-applies when a new push changes the param, but never overrides the
+  // user's manual tab switches afterwards (those don't re-run this effect).
+  const params = useLocalSearchParams<{ tab?: string; section?: string }>()
+  const tabParam = params.section ?? params.tab
+  useEffect(() => {
+    const parsed = parseTabParam(tabParam)
+    if (!parsed) return
+    setTab(prev => (prev === parsed ? prev : parsed))
+    setQuery('')
+    setAiResults(null)
+  }, [tabParam])
+
+  // Hybrid search: keyword (instant) is the base; AI (on submit) reorders if available.
+  const [aiResults, setAiResults] = useState<ListingRow[] | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // ── Courses tab (from shared hook) ────────────────────────────────────────
+  const { targetOptions: courseTargetOptions, allOptions: courseAllOptions, loading: courseLoading } = useCourseTabOptions()
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const loadListings = useCallback(async () => {
+    const [rows, settings, ccRows, bpSlugs, mockBestRows, accuracyRows] = await Promise.all([
+      db.select({
+        id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
+        type: listingsTable.type, examDate: listingsTable.examDate, deadline: listingsTable.deadline, region: listingsTable.region,
+        provider: listingsTable.provider, province: listingsTable.province, city: listingsTable.city, scope: listingsTable.scope,
+        isVerified: listingsTable.isVerified, incomeCeiling: listingsTable.incomeCeiling,
+        gwaRequirement: listingsTable.gwaRequirement, serviceObligationYears: listingsTable.serviceObligationYears,
+        scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
+      }).from(listingsTable),
+      getSettings(db),
+      db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
+      listPublishedBlueprintSlugs(db),
+      getListingMockBest(db),
+      getListingAccuracy(db),
+    ])
+    setListingMockBest(new Map(mockBestRows.map(r => [r.listingSlug, r.bestPct])))
+    setListingAccuracy(Object.fromEntries(
+      accuracyRows.filter(r => r.total > 0).map(r => [r.listingSlug, Math.round((r.ok / r.total) * 100)]),
+    ))
+    // The local target_courses column stores a JSON array of cluster names (or ["all"]).
+    setAll(rows.map(r => ({ ...r, targetCourses: parseStrArray(r.targetCourses as unknown as string) })) as ListingRow[])
+    setUserRegion(settings.schoolRegion ?? '')
+
+    // Map the user's chosen target courses → their course clusters
+    const clusterByCourse = new Map<string, string>()
+    for (const c of ccRows) if (c.cluster) clusterByCourse.set(c.courseId, c.cluster)
+    let userCourses: { careerCourseId?: string | null }[] = []
+    try { const v = JSON.parse(settings.targetCourses ?? '[]'); if (Array.isArray(v)) userCourses = v } catch { /* ignore */ }
+    const uClusters = new Set<string>()
+    for (const uc of userCourses) {
+      const cl = uc.careerCourseId ? clusterByCourse.get(uc.careerCourseId) : undefined
+      if (cl) uClusters.add(cl)
+    }
+    setUserClusters(uClusters)
+    setBlueprintSlugs(new Set(bpSlugs))
+
+    setProfile({
+      gradeLevel: settings.gradeLevel ?? undefined,
+      incomeBracket: settings.incomeBracket ?? undefined,
+      gwa: settings.gwa ?? undefined,
+      province: settings.province ?? undefined,
+      city: settings.city ?? undefined,
+    })
+    setLoaded(true)
+  }, [db])
+
+  const loadDestinations = useCallback(async () => {
+    // No destLoaded early-return: callers gate the FIRST load (focus effect),
+    // and the cache invalidation subscriber below needs to force a re-fetch
+    // after the web sync lands. cachedQuery dedupes/returns cached within TTL.
+    const [countryRows, destRows] = await cachedQuery(
+      'lists:destinations-meta',
+      300_000,
+      () => Promise.all([
+        db.select({
+          code: countriesTable.code,
+          name: countriesTable.name,
+          region: countriesTable.region,
+        }).from(countriesTable),
+        db.select({
+          courseId: destinationsTable.courseId,
+          country: destinationsTable.country,
+        }).from(destinationsTable),
+      ]),
+    )
+    const countries = (countryRows as { code: string; name: string | null; region: string | null }[]).map(c => ({
+      code: c.code,
+      name: c.name ?? c.code,
+      region: c.region ?? '',
+    }))
+    const dests = (destRows as { courseId: string | null; country: string | null }[])
+      .filter((d): d is { courseId: string; country: string } => !!d.courseId && !!d.country)
+    setDestCountries(aggregateDestinationCountries(countries, dests))
+    setDestLoaded(true)
+  }, [db, destLoaded])
+
+  useFocusEffect(useCallback(() => {
+    void loadListings()
+  }, [loadListings]))
+
+  // Load destinations lazily on first visit to that tab
+  useFocusEffect(useCallback(() => {
+    if (tab === 'destinations' && !destLoaded) {
+      void loadDestinations()
+    }
+  }, [tab, destLoaded, loadDestinations]))
+
+  // Re-fetch destinations when the catalog cache is invalidated (e.g. after the
+  // web fire-and-forget sync completes), so a tab visited before sync landed
+  // doesn't stay stuck on empty. Mirrors usePracticeData's subscribe() refresh.
+  useEffect(() => {
+    const unsub = subscribe('lists:destinations-meta', () => { void loadDestinations() })
+    return unsub
+  }, [loadDestinations])
+
+  const [newsRefreshKey, setNewsRefreshKey] = useState(0)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await syncOnLaunch(db)
+      setNewsRefreshKey(k => k + 1)
+      await loadListings()
+      // Sync invalidated the destinations cache; drop the loaded flag so the
+      // focus effect / next tab visit re-pulls fresh destination data.
+      setDestLoaded(false)
+    } finally { setRefreshing(false) }
+  }, [db, loadListings])
+
+  // ── Derived data — Universities + Scholarships ────────────────────────────
+
+  // Map tab to listing type (only for uni/scholarship tabs)
+  const listingType = tab === 'universities' ? 'exam' : 'scholarship'
+  const typeListings = useMemo(
+    // Exclude the general-practice fallback exam — it's reachable from any school's
+    // detail page, not a headline entrance exam in the Universities list.
+    () => all.filter(l => l.type === listingType && l.slug !== 'general-cet'),
+    [all, listingType],
+  )
+
+  // Scholarship eligibility (computed once per listing)
+  const matchStatusMap = useMemo<Map<string, MatchStatus>>(() => {
+    const map = new Map<string, MatchStatus>()
+    for (const l of all) {
+      if (l.type === 'scholarship') map.set(l.id, matchScholarship(toMatchInput(l), profile).status)
+    }
+    return map
+  }, [all, profile])
+
+  // Region-recommended exams (universities tab, no active query) pinned to the top.
+  const recommended = useMemo(() => {
+    if (tab !== 'universities' || query.trim() || !userRegion) return []
+    const uReg = canonicalizeRegion(userRegion).toLowerCase()
+    return typeListings.filter(l => l.region && canonicalizeRegion(l.region).toLowerCase() === uReg)
+  }, [tab, query, userRegion, typeListings])
+
+  const recommendedIds = useMemo(() => new Set(recommended.map(l => l.id)), [recommended])
+
+  // Instant keyword results (the always-on base layer).
+  const keywordResults = useMemo(
+    () => searchListings(typeListings, query, userRegion) as ListingRow[],
+    [typeListings, query, userRegion],
+  )
+
+  // What the listing FlatList shows: AI results (if a submit produced them) else keyword results;
+  // when there's no query, the full set minus the pinned recommendations.
+  const listingData = useMemo(() => {
+    if (query.trim()) {
+      // Apply the profile-first / tab-aware display order to whichever tier produced
+      // the rows (AI reorder OR instant keyword), so personalization holds either way.
+      // The pure ranker keeps incoming (relevance) order as its stable final tiebreak.
+      const base = aiResults ?? keywordResults
+      return rankForDisplay(base, {
+        tab, query, profile, clusters: userClusters, region: userRegion, now: Date.now(),
+      })
+    }
+    const base = [...typeListings].sort((a, b) => {
+      if (tab === 'universities') {
+        if (!a.examDate) return 1
+        if (!b.examDate) return -1
+        return a.examDate - b.examDate
+      }
+      // scholarships: eligible/maybe first, then by title
+      const rank = (s: MatchStatus | undefined) => (s === 'eligible' ? 0 : s === 'maybe' ? 1 : 2)
+      const ra = rank(matchStatusMap.get(a.id)); const rb = rank(matchStatusMap.get(b.id))
+      if (ra !== rb) return ra - rb
+      return a.title.localeCompare(b.title)
+    })
+    return base.filter(l => !recommendedIds.has(l.id))
+  }, [query, aiResults, keywordResults, typeListings, tab, matchStatusMap, recommendedIds, profile, userClusters, userRegion])
+
+  const runAiSearch = useCallback(async () => {
+    const q = query.trim()
+    if (!q) { setAiResults(null); return }
+    setAiLoading(true)
+    try {
+      const ranked = await aiSearchListings(q, typeListings, userRegion)
+      setAiResults(ranked as ListingRow[] | null)
+    } catch {
+      setAiResults(null)
+    } finally {
+      setAiLoading(false)
+    }
+  }, [query, typeListings, userRegion])
+
+  const onChangeQuery = useCallback((text: string) => {
+    setQuery(text)
+    setAiResults(null) // typing invalidates the previous AI ranking
+  }, [])
+
+  const onChangeTab = useCallback((newTab: Tab) => {
+    setTab(newTab)
+    setQuery('')
+    setAiResults(null)
+    // Lazy-load destinations on first switch
+    if (newTab === 'destinations') {
+      void loadDestinations()
+    }
+  }, [loadDestinations])
+
+  // ── Filtered data for Courses + Destinations tabs ─────────────────────────
+
+  const filteredCourseTargets = useMemo<CourseTabOption[]>(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return courseTargetOptions
+    return courseTargetOptions.filter(opt => opt.label.toLowerCase().includes(q))
+  }, [courseTargetOptions, query])
+
+  const filteredCourseAll = useMemo<CourseTabOption[]>(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return courseAllOptions
+    return courseAllOptions.filter(opt => opt.label.toLowerCase().includes(q))
+  }, [courseAllOptions, query])
+
+  const filteredDestinations = useMemo<CountryWithCount[]>(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return destCountries
+    return destCountries.filter(c => c.name.toLowerCase().includes(q))
+  }, [destCountries, query])
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+
+  const scholarColor = t.success
+  const s = useMemo(() => StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.bg },
+    headerWrap: { paddingHorizontal: spacing.lg },
+    sectionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+    newsWrap: { flex: 1, paddingHorizontal: spacing.lg },
+
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginHorizontal: spacing.lg, marginBottom: spacing.sm, minHeight: 48 },
+    searchInput: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', padding: 0 },
+    clearBtn: { padding: spacing.xs },
+    aiHint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+    aiActiveHint: { color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    // Dense list spacing
+    list: { paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + layout.tabBarClearance, gap: spacing.xs },
+    // Dense row for listings
+    row: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: radius.lg,
+      borderCurve: 'continuous',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    rowIcon: { width: 32, height: 32, borderRadius: radius.sm, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    examIcon: { backgroundColor: t.accentSurface },
+    scholarIcon: { backgroundColor: t.successSurface },
+    rowBody: { flex: 1, minWidth: 0, gap: 3 },
+    rowTitle: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'nowrap' },
+    metaText: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flexShrink: 1 },
+    metaSep: { fontSize: typo.xs, color: t.textTertiary, opacity: 0.5 },
+    mockBadge: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    mockBadgeTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    focusBadge: { backgroundColor: t.accentStrong, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, flexShrink: 0 },
+    focusBadgeTxt: { fontSize: typo.xs, color: t.textInverse, fontFamily: 'Lexend_600SemiBold' },
+    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xxxl },
+    sectionWrap: { marginTop: spacing.sm, marginBottom: spacing.xs },
+    // Courses + Destinations tab content
+    scrollContent: { paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + layout.tabBarClearance, gap: spacing.sm },
+    sectionGap: { gap: spacing.sm },
+  }), [t, typo, insets.bottom])
+
+  // ── Listing card renderer (Universities + Scholarships) ───────────────────
+
+  const renderCard = useCallback((l: ListingRow) => {
+    const exam = l.type === 'exam'
+    const matchStatus: MatchStatus = (!exam && matchStatusMap.has(l.id)) ? matchStatusMap.get(l.id)! : 'unknown'
+    const p = getPriority(l.slug)
+    const hasMock = exam && blueprintSlugs.has(l.slug)
+    // Same source + fallback as the Home exam tiles (getListingMockBest → listingAccuracy)
+    // so the readiness % a student sees here always agrees with the homepage.
+    const readinessPct = hasMock ? (listingMockBest.get(l.slug) ?? listingAccuracy[l.slug] ?? null) : null
+
+    const datePart = exam ? fmtDate(l.examDate) : null
+    const regionPart = l.region ? `📍 ${l.region}` : (l.province ? l.province : null)
+
+    return (
+      <Pressable
+        style={({ pressed }) => [s.row, { boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
+        onPress={() => router.push(`/listings/${l.slug}`)}
+        accessibilityRole="button"
+      >
+        <View style={[s.rowIcon, exam ? s.examIcon : s.scholarIcon]}>
+          <Lineicons icon={exam ? GraduationCap1Outlined : SparkOutlined} size={14} color={exam ? t.accentText : scholarColor} />
+        </View>
+        <View style={s.rowBody}>
+          <Text style={s.rowTitle} numberOfLines={1}>{l.title}</Text>
+          <View style={s.rowMeta}>
+            {datePart ? (
+              <Text style={s.metaText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                {datePart}
+              </Text>
+            ) : null}
+            {datePart && regionPart ? (
+              <Text style={s.metaSep} maxFontSizeMultiplier={1.4}>·</Text>
+            ) : null}
+            {regionPart ? (
+              <Text style={s.metaText} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                {regionPart}
+              </Text>
+            ) : null}
+            {!exam && matchStatus !== 'unknown' ? (
+              <MatchPill status={matchStatus} />
+            ) : null}
+            {hasMock ? (
+              <View style={s.mockBadge}>
+                <Text style={s.mockBadgeTxt} maxFontSizeMultiplier={1.4}>📝 Mock</Text>
+              </View>
+            ) : null}
+            {hasMock ? (
+              <Badge label={readinessPct != null ? `${readinessPct}%` : '—'} tone={TONE_TO_BADGE[readinessTone(readinessPct)]} />
+            ) : null}
+            {p !== null && !hasMock ? (
+              <View style={s.focusBadge}>
+                <Text style={s.focusBadgeTxt} maxFontSizeMultiplier={1.4}>#{p} Focus</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Pressable>
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchStatusMap, getPriority, blueprintSlugs, listingMockBest, listingAccuracy, s, t, scholarColor])
+
+  const renderListingItem = useCallback(({ item }: { item: ListingRow }) => renderCard(item), [renderCard])
+
+  const showAiActive = !!query.trim() && aiResults !== null
+
+  // ── List header (universities: region-recommended pinned; scholarships: profile banner) ──
+  const listingsListHeader = useMemo(() => {
+    if (tab === 'universities' && !query.trim() && recommended.length > 0) {
+      return (
+        <>
+          <View style={s.sectionWrap}>
+            <SectionHeader title={`★ Recommended for ${canonicalizeRegion(userRegion)}`} />
+          </View>
+          {recommended.map(l => <View key={`rec-${l.id}`}>{renderCard(l)}</View>)}
+          <View style={s.sectionWrap}>
+            <SectionHeader title="All entrance exams" />
+          </View>
+        </>
+      )
+    }
+    return null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, query, recommended, userRegion, s, renderCard])
+
+  // Universities tab: pin the focusable entrance exams (the slug-backed listings)
+  // ABOVE the schools directory, so users can still add a target exam to Focus
+  // (tap a card → /listings/[slug] → "Add to Focus"). Shown only with no query.
+  const universitiesExamsHeader = useMemo(() => {
+    if (tab !== 'universities' || typeListings.length === 0) return null
+    const exams = [...typeListings].sort((a, b) => {
+      if (!a.examDate) return 1
+      if (!b.examDate) return -1
+      return a.examDate - b.examDate
+    })
+    return (
+      <>
+        <View style={s.sectionWrap}>
+          <SectionHeader title="Entrance exams" subtitle="Add a target exam to your Focus — each has mock tests & review" />
+        </View>
+        <View style={{ gap: spacing.xs }}>
+          {exams.map(l => <View key={`exam-${l.id}`}>{renderCard(l)}</View>)}
+        </View>
+        <View style={s.sectionWrap}>
+          <SectionHeader title="All universities" subtitle="Browse schools — open one to practice its entrance exam" />
+        </View>
+      </>
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, typeListings, s, renderCard])
+
+  // When a query is active, a results header sits above the matches summarising
+  // them (universities/scholarships only). Empty query → the regional header above.
+  const resultsHeader = useMemo(() => {
+    const q = query.trim()
+    if (!q || (tab !== 'universities' && tab !== 'scholarships')) return null
+    if (listingData.length === 0) return null // empty state owns the screen instead
+
+    if (tab === 'universities') {
+      return (
+        <View style={s.sectionWrap}>
+          <SectionHeader title={`Top universities matching "${truncateQuery(q)}"`} />
+        </View>
+      )
+    }
+    // scholarships — show a match count when the profile is usable for eligibility
+    const profileUsable = !scholarshipProfileIncomplete({
+      gwa: profile.gwa ?? null, province: profile.province ?? null, incomeBracket: profile.incomeBracket ?? null,
+    })
+    const eligibleCount = profileUsable
+      ? listingData.reduce((n, l) => (matchStatusMap.get(l.id) === 'eligible' ? n + 1 : n), 0)
+      : 0
+    const subtitle = profileUsable ? `You match ${eligibleCount} of ${listingData.length}` : undefined
+    return (
+      <View style={s.sectionWrap}>
+        <SectionHeader title={`Top scholarships matching "${truncateQuery(q)}"`} subtitle={subtitle} />
+      </View>
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, query, listingData, matchStatusMap, profile, s])
+
+  const scholarshipBanner = tab === 'scholarships' && !query.trim() && scholarshipProfileIncomplete({
+    gwa: profile.gwa ?? null, province: profile.province ?? null, incomeBracket: profile.incomeBracket ?? null,
+  }) ? (
+    <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+      <InfoBanner
+        icon={<Text style={{ fontSize: typo.base }}>🎓</Text>}
+        message="Add your income, GWA & province to see which scholarships you actually qualify for."
+        actionLabel="Complete"
+        onAction={() => router.push('/profile/scholarship-info')}
+      />
+    </View>
+  ) : null
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <Screen
+      scroll={false}
+      padded={false}
+      header={(
+        <View style={s.headerWrap}>
+          <TabHeader
+            title="Explore"
+            subtitle="Schools, exams, scholarships, courses and dates"
+            actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} />}
+          />
+        </View>
+      )}
+    >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        {/* Section switcher — wraps rather than scrolls sideways, so every
+            section stays visible and the edge-swipe gesture never fights it. */}
+        <View style={s.sectionRow} accessibilityRole="tablist" testID="explore-sections">
+          {TAB_LABELS.map(({ key, label }) => (
+            <FilterChip
+              key={key}
+              label={label}
+              role="tab"
+              selected={tab === key}
+              onPress={() => onChangeTab(key)}
+            />
+          ))}
+        </View>
+
+        {/* Search input (listing sections; AI search only on scholarships) */}
+        {tab !== 'news' ? (
+        <View style={s.searchRow}>
+          <Text style={{ fontSize: typo.sm }}>
+            {tab === 'scholarships' && aiLoading ? '✨' : '🔍'}
+          </Text>
+          <TextInput
+            style={s.searchInput}
+            value={query}
+            onChangeText={onChangeQuery}
+            onSubmitEditing={() => {
+              if (tab === 'scholarships') void runAiSearch()
+            }}
+            placeholder={
+              tab === 'universities' ? 'Search universities by name or acronym'
+              : tab === 'scholarships' ? "Search scholarships, e.g. 'full-ride for low-income' or 'DOST for STEM'"
+              : tab === 'courses' ? 'Filter courses'
+              : 'Filter destinations'
+            }
+            placeholderTextColor={t.textTertiary}
+            returnKeyType="search"
+          />
+          {tab === 'scholarships' && aiLoading ? (
+            <ActivityIndicator size="small" color={t.accentText} />
+          ) : null}
+          {query ? (
+            <Pressable
+              style={({ pressed }) => [s.clearBtn, pressed && { opacity: 0.7 }]}
+              onPress={() => onChangeQuery('')}
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: typo.xs, color: t.textTertiary }}>✕</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        ) : null}
+
+        {/* AI hint — only on the scholarships tab (universities is an instant directory filter) */}
+        {tab === 'scholarships' && query.trim() ? (
+          <Text style={[s.aiHint, showAiActive && s.aiActiveHint]}>
+            {showAiActive ? '✨ AI-ranked results' : 'Press search to ask the AI'}
+          </Text>
+        ) : null}
+
+        {/* Scholarship profile banner */}
+        {scholarshipBanner}
+
+        {/* ── Section content ── */}
+        {tab === 'news' ? (
+          <View style={s.newsWrap}>
+            <NewsFeed refreshKey={newsRefreshKey} />
+          </View>
+        ) : tab === 'universities' ? (
+          /* Universities = the full tertiary-schools directory (727 schools).
+             Entrance-exam practice lives on the Exams tab; school detail at /schools/[id]. */
+          <SchoolsDirectory
+            query={query}
+            bottomInset={insets.bottom + layout.tabBarClearance}
+            defaultRegion={userRegion ? canonicalizeRegion(userRegion) : null}
+            listHeader={query.trim() ? null : universitiesExamsHeader}
+          />
+        ) : tab === 'scholarships' ? (
+          <FlatList
+            data={listingData}
+            keyExtractor={item => item.id}
+            contentContainerStyle={s.list}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={query.trim() ? resultsHeader : listingsListHeader}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={t.accent} colors={[t.accent]} progressBackgroundColor={t.surface} />
+            }
+            ListEmptyComponent={
+              query.trim() ? (
+                <Text style={s.empty}>No matches found. Try different words.</Text>
+              ) : showLoading ? (
+                <LoadingState label="Loading…" />
+              ) : (
+                <Text style={s.empty}>No scholarships yet.</Text>
+              )
+            }
+            renderItem={renderListingItem}
+          />
+        ) : tab === 'courses' ? (
+          <ScrollView
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          >
+            {courseLoading ? (
+              <ActivityIndicator color={t.accent} style={{ marginTop: 40 }} />
+            ) : (
+              <>
+                {/* Target courses section */}
+                {filteredCourseTargets.length > 0 ? (
+                  <View style={s.sectionGap}>
+                    <SectionHeader title="★ Your target courses" />
+                    {filteredCourseTargets.map(opt => (
+                      <ListCard
+                        key={`target-${opt.courseTab}`}
+                        icon={<Text style={{ fontSize: typo.base }}>★</Text>}
+                        title={opt.label}
+                        onPress={() => router.push((`/schools/course/${opt.courseTab}`) as never)}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {/* All courses section */}
+                <View style={s.sectionGap}>
+                  <SectionHeader title="All courses" />
+                  {filteredCourseAll.length > 0 ? filteredCourseAll.map(opt => (
+                    <ListCard
+                      key={`all-${opt.courseTab}`}
+                      title={opt.label}
+                      onPress={() => router.push((`/schools/course/${opt.courseTab}`) as never)}
+                    />
+                  )) : (
+                    <Text style={s.empty}>No courses found.</Text>
+                  )}
+                </View>
+              </>
+            )}
+          </ScrollView>
+        ) : (
+          /* Destinations tab */
+          <ScrollView
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          >
+            {!destLoaded ? (
+              <ActivityIndicator color={t.accent} style={{ marginTop: 40 }} />
+            ) : filteredDestinations.length > 0 ? (
+              <View style={s.sectionGap}>
+                {filteredDestinations.map(c => {
+                  const courseCountTxt = c.courseCount > 0
+                    ? `${c.region} · ${c.courseCount} course${c.courseCount === 1 ? '' : 's'} in demand`
+                    : c.region
+                  return (
+                    <ListCard
+                      key={c.code}
+                      title={c.name}
+                      subtitle={courseCountTxt}
+                      onPress={() => router.push((`/career/country/${c.code}`) as never)}
+                    />
+                  )
+                })}
+              </View>
+            ) : (
+              <Text style={s.empty}>No destinations found.</Text>
+            )}
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
+    </Screen>
+  )
+}

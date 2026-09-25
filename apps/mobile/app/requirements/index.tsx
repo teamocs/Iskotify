@@ -8,7 +8,7 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { listings as listingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, type Theme, type Typography } from '../../theme/tokens'
+import { spacing, typography, type Theme, type Typography } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { InfoBanner } from '../../components/ui/InfoBanner'
@@ -40,7 +40,7 @@ function makeStyles(t: Theme, typo: Typography) {
     root:       { flex: 1, backgroundColor: t.bg },
     topBar:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
     backBtn:    { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow:  { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
+    backArrow:  { color: t.textSecondary, fontSize: typography.h3, lineHeight: 30 },
     topTitle:   { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     subHint:    { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: spacing.sm },
     section:    { marginBottom: spacing.xl },
@@ -179,10 +179,10 @@ export default function RequirementsScreen() {
         <ScreenScroll tabBarInset={false}>
           <View style={{ marginTop: spacing.md }}>
             <InfoBanner
-              icon={<Text style={{ fontSize: 16 }}>🎯</Text>}
+              icon={<Text style={{ fontSize: typography.base }}>🎯</Text>}
               message="Add an exam or scholarship from the Lists tab to track its requirements here."
               actionLabel="Lists"
-              onAction={() => router.push('/(tabs)/listings')}
+              onAction={() => router.push('/(tabs)/explore')}
               tone="neutral"
             />
           </View>

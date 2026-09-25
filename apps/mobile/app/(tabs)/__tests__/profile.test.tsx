@@ -99,6 +99,26 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.getByText('Profile')).toBeTruthy()
   })
 
+  // Redesign M1: Profile is no longer a tab — it opens from the header avatar,
+  // so it needs its own way back.
+  it('has a Back button that returns to the previous screen when there is one', () => {
+    const { router } = require('expo-router')
+    router.canGoBack = jest.fn(() => true)
+    router.back = jest.fn()
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(router.back).toHaveBeenCalled()
+  })
+
+  it('Back falls back to Today when Profile was opened directly (deep link / web URL)', () => {
+    const { router } = require('expo-router')
+    router.canGoBack = jest.fn(() => false)
+    router.replace.mockClear()
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(router.replace).toHaveBeenCalledWith('/')
+  })
+
   it('shows default name Student when no data', () => {
     render(<ProfileScreen />)
     expect(screen.getByText('Student')).toBeTruthy()

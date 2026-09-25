@@ -77,7 +77,7 @@ describe('EdgeSwipeNavigator', () => {
     mockUsePathname.mockReturnValue('/practice')
     render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
     getOnEndCallback()({ translationX: -200, velocityX: -800 })
-    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/listings')
+    expect(mockNavigate).toHaveBeenCalledWith('/(tabs)/explore')
   })
 
   it('navigates to previous tab on qualifying right swipe', () => {
@@ -102,7 +102,14 @@ describe('EdgeSwipeNavigator', () => {
     expect(mockBack).not.toHaveBeenCalled()
   })
 
-  it('no-op at Profile boundary on left swipe', () => {
+  it('no-op at the Progress boundary on left swipe (Profile is not a tab)', () => {
+    mockUsePathname.mockReturnValue('/progress')
+    render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
+    getOnEndCallback()({ translationX: -200, velocityX: -800 })
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('does not swipe between tabs from /profile', () => {
     mockUsePathname.mockReturnValue('/profile')
     render(<EdgeSwipeNavigator><Text>x</Text></EdgeSwipeNavigator>)
     getOnEndCallback()({ translationX: -200, velocityX: -800 })

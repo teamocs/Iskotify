@@ -1,27 +1,27 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, type Theme } from '../../theme/tokens'
+import { fonts, radius, spacing, textStyle, type Theme } from '../../theme/tokens'
 
 type Tone = 'accent' | 'neutral' | 'success' | 'warning' | 'danger'
 
 /*
- * Tones name theme keys rather than literal colours. The previous literals were
- * the dark palette's values, so a success badge rendered mint-on-white in light
- * mode (1.7:1). Resolving against the live theme is what makes the badge switch.
+ * Tones name theme keys rather than literal colours, so the badge re-themes.
+ * Status tones put the `*Strong` token on their own `*Surface` tint (DESIGN.md:
+ * the DEFAULT status colour on its own 10% tint drops below 4.5:1 in light
+ * mode). The label is required: a badge never carries meaning by colour alone.
  */
 const TONES: Record<Tone, { bg: keyof Theme; fg: keyof Theme; border: keyof Theme }> = {
-  accent:  { bg: 'accentSurface',  fg: 'accentText', border: 'border' },
-  neutral: { bg: 'surface2',       fg: 'textSecondary', border: 'divider' },
-  success: { bg: 'successSurface', fg: 'success', border: 'successSurface' },
-  warning: { bg: 'warningSurface', fg: 'warning', border: 'warningSurface' },
-  danger:  { bg: 'dangerSurface',  fg: 'danger',  border: 'dangerSurface' },
+  accent:  { bg: 'accentSurface',  fg: 'accentText',    border: 'accentSurface' },
+  neutral: { bg: 'surface2',       fg: 'textSecondary', border: 'surface2' },
+  success: { bg: 'successSurface', fg: 'successStrong', border: 'successSurface' },
+  warning: { bg: 'warningSurface', fg: 'warningStrong', border: 'warningSurface' },
+  danger:  { bg: 'dangerSurface',  fg: 'dangerStrong',  border: 'dangerSurface' },
 }
 
-/** Small pill for tags/counts/status (design system §4). */
+/** Small pill for tags/counts/status. */
 export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const c = TONES[tone]
-  const fg = t[c.fg]
   return (
     <View
       style={{
@@ -34,7 +34,7 @@ export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }
         paddingVertical: 2,
       }}
     >
-      <Text style={{ fontSize: typo.xs, fontWeight: '700', color: fg, fontFamily: 'Lexend_600SemiBold' }} maxFontSizeMultiplier={1.4}>{label}</Text>
+      <Text style={[textStyle('caption', t[c.fg]), { fontFamily: fonts.bodySemi }]} maxFontSizeMultiplier={1.4}>{label}</Text>
     </View>
   )
 }

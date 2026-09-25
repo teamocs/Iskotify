@@ -20,11 +20,21 @@ const darkTheme = {
   successStrong: '#4ade80',
   dangerStrong: '#f87171',
   warningStrong: '#fbbf24',
-  tabBar: 'rgba(26,26,46,0.92)',
+  tabBar: '#1a1a2e',
   divider: 'rgba(255,255,255,0.20)',
   surfaceSubtle: 'rgba(255,255,255,0.04)',
   shadowSm: '0px 1px 3px rgba(0,0,0,0.40)',
   shadowMd: '0px 6px 18px rgba(0,0,0,0.48)',
+  scrim: 'rgba(0,0,0,0.92)',
+  scrimControl: 'rgba(255,255,255,0.15)',
+  successBorder: 'rgba(74,222,128,0.55)',
+  dangerBorder: 'rgba(248,113,113,0.70)',
+  warningBorder: 'rgba(251,191,36,0.50)',
+  accentBorder: 'rgba(252,165,165,0.55)',
+  accentPressed: '#5c0000',
+  surfaceRaised: '#2c2c3f',
+  backdrop: 'rgba(0,0,0,0.60)',
+  focusRing: '#fca5a5',
 }
 
 const typography = { xs: 11, sm: 13, base: 16, md: 17, lg: 20, xl: 22, h3: 26, h2: 30, h1: 36, display: 48 }

@@ -3,13 +3,14 @@ import { StyleSheet, View, Text, Modal, Switch, Platform, Pressable, RefreshCont
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Gear1Outlined, Bell1Outlined, Bell1Solid, User4Outlined } from '@lineiconshq/free-icons'
+import { Gear1Outlined, Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
 // logo.svg has no viewBox attribute (2048×2048 canvas) — pass viewBox explicitly at the call site so it scales.
 import Logo from '../../assets/images/logo.svg'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { Avatar } from '../../components/ui/Avatar'
 import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
 import { AdmissionEstimateCard } from '../../components/home/AdmissionEstimateCard'
@@ -81,7 +82,7 @@ function NotificationModal({
   const { theme: t, typo } = useTheme()
   const insets = useSafeAreaInsets()
   const nm = useMemo(() => StyleSheet.create({
-    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.backdrop },
     sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: Math.max(32, insets.bottom + 16), paddingTop: 12 },
     handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
@@ -93,7 +94,7 @@ function NotificationModal({
     sectionLabel: { fontSize: typo.sm, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10, fontFamily: 'Lexend_600SemiBold' },
     typeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle },
     typeRowDisabled: { opacity: 0.38 },
-    typeIcon: { fontSize: 20, width: 28, textAlign: 'center' },
+    typeIcon: { fontSize: typo.lg, width: 28, textAlign: 'center' },
     typeTitle: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', marginBottom: 2 },
     typeSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
     hint: { marginTop: 16, fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 16 },
@@ -137,7 +138,7 @@ function NotificationModal({
           <Switch
             value={enabled}
             onValueChange={onToggle}
-            trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+            trackColor={{ false: t.border, true: t.accentBorder }}
             thumbColor={enabled ? t.accentText : t.textTertiary}
             ios_backgroundColor={t.border}
           />
@@ -297,7 +298,7 @@ export default function HomeScreen() {
     logoClip: { width: 28, height: 28, borderRadius: 8, borderCurve: 'continuous', overflow: 'hidden' },
     // Date + greeting block
     dateLine: { fontSize: typo.xs, letterSpacing: 1.2, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.xs },
-    greeting: { fontSize: 28, color: t.textPrimary, fontFamily: 'Outfit_400Regular', letterSpacing: -0.3 },
+    greeting: { fontSize: typo.h3, color: t.textPrimary, fontFamily: 'Outfit_400Regular', letterSpacing: -0.3 },
     greetingName: { fontWeight: '700', fontFamily: 'Outfit_700Bold' },
     section: { marginTop: spacing.xl },
     // Explore quick-links grid (2×2)
@@ -317,7 +318,7 @@ export default function HomeScreen() {
       paddingVertical: 12,
       paddingHorizontal: spacing.md,
     },
-    exploreEmoji: { fontSize: 16 },
+    exploreEmoji: { fontSize: typo.base },
     exploreLabel: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
   }), [t, typo])
 
@@ -360,15 +361,14 @@ export default function HomeScreen() {
                 color={notifEnabled ? t.accentText : t.textTertiary}
               />
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push('/(tabs)/profile')}
-              accessibilityRole="button"
+            {/* Profile is no longer a tab (redesign M1): the avatar opens it. */}
+            <Avatar
+              name={fullName}
+              size={40}
+              onPress={() => router.push('/profile')}
               accessibilityLabel="Profile"
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-            >
-              <Lineicons icon={User4Outlined} size={20} color={t.textSecondary} />
-            </Pressable>
+              accessibilityHint="Opens your profile and settings"
+            />
             <Pressable
               style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}
               onPress={() => router.push('/settings')}
@@ -436,7 +436,7 @@ export default function HomeScreen() {
               <Pressable
                 key={tab}
                 style={({ pressed }) => [s.exploreCard, pressed && { opacity: 0.75 }]}
-                onPress={() => router.push(`/(tabs)/listings?tab=${tab}`)}
+                onPress={() => router.push(`/(tabs)/explore?section=${tab}`)}
                 accessibilityRole="button"
                 accessibilityLabel={label}
               >

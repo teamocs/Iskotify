@@ -4,7 +4,7 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bell1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, typography } from '../../theme/tokens'
 import { SectionHeader } from '../ui/SectionHeader'
 import { ListCard } from '../ui/ListCard'
 import { InfoBanner } from '../ui/InfoBanner'
@@ -50,12 +50,12 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
       if (item.slug === 'upcat' || item.title.toUpperCase().includes('UPCAT')) {
         router.push('/practice/exam/upcat' as never)
       } else {
-        router.push('/(tabs)/updates' as never)
+        router.push('/(tabs)/explore?section=news' as never)
       }
     } else if (item.kind === 'listing') {
       router.push(`/listings/${item.slug}` as never)
     } else {
-      router.push('/(tabs)/updates' as never)
+      router.push('/(tabs)/explore?section=news' as never)
     }
   }
 
@@ -72,7 +72,7 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
         title="News & Dates"
         subtitle="Admission news, deadlines and exam dates on your radar"
         actionLabel="See all"
-        onAction={() => router.push('/(tabs)/updates')}
+        onAction={() => router.push('/(tabs)/explore?section=news')}
       />
       {feed.length > 0 ? (
         <View style={{ gap: spacing.sm }}>
@@ -82,7 +82,7 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
                 <ListCard
                   key={item.key}
                   iconBg={t.surface2}
-                  icon={<Text style={{ fontSize: 16 }}>{SEVERITY_DOT[item.severity ?? ''] ?? '🔵'}</Text>}
+                  icon={<Text style={{ fontSize: typography.base }}>{SEVERITY_DOT[item.severity ?? ''] ?? '🔵'}</Text>}
                   title={item.title}
                   subtitle={item.label}
                   onPress={() => onPressEntry(item)}
@@ -98,7 +98,7 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
                 icon={
                   item.kind === 'reminder'
                     ? <Lineicons icon={Bell1Outlined} size={18} color={t.accentText} />
-                    : <Text style={{ fontSize: 16 }}>{item.kind === 'admission' ? '📌' : item.label === 'Exam' ? '📝' : '🎓'}</Text>
+                    : <Text style={{ fontSize: typography.base }}>{item.kind === 'admission' ? '📌' : item.label === 'Exam' ? '📝' : '🎓'}</Text>
                 }
                 title={item.title}
                 subtitle={`${item.label} · ${formatShortDate(item.date!)}`}
@@ -114,14 +114,14 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
         </View>
       ) : (
         <InfoBanner
-          icon={<Text style={{ fontSize: 16 }}>🗓️</Text>}
+          icon={<Text style={{ fontSize: typography.base }}>🗓️</Text>}
           message={
             hasAnyFocus
               ? 'No news or upcoming dates right now — check back soon.'
               : 'Add exams or scholarships to your focus to track upcoming dates and news.'
           }
           actionLabel="Lists"
-          onAction={() => router.push('/(tabs)/listings')}
+          onAction={() => router.push('/(tabs)/explore')}
           tone="neutral"
         />
       )}

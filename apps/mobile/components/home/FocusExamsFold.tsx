@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { View, Text, Pressable, StyleSheet, Modal } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, typography } from '../../theme/tokens'
 import { SectionHeader } from '../ui/SectionHeader'
 import { Badge } from '../ui/Badge'
 import { WebTopSpacer } from '../ui/WebTopSpacer'
@@ -92,7 +92,7 @@ export function FocusExamsFold({
           title="My Entrance Exams"
           subtitle="Your target exams and how ready you are"
           actionLabel="See more"
-          onAction={() => router.push('/(tabs)/listings')}
+          onAction={() => router.push('/(tabs)/explore')}
         />
       </View>
       <View style={s.grid}>
@@ -142,7 +142,7 @@ export function FocusExamsFold({
       </View>
 
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={s.backdrop} onPress={() => setPickerOpen(false)} accessibilityRole="button" accessibilityLabel="Close" />
+        <Pressable style={[s.backdrop, { backgroundColor: t.backdrop }]} onPress={() => setPickerOpen(false)} accessibilityRole="button" accessibilityLabel="Close" />
         <View style={[s.sheet, { backgroundColor: t.bg }]}>
           <WebTopSpacer />
           <View style={[s.handle, { backgroundColor: t.divider }]} />
@@ -175,7 +175,7 @@ export function FocusExamsFold({
           ) : null}
           <Pressable
             style={({ pressed }) => [s.seeAllBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => { setPickerOpen(false); router.push('/(tabs)/listings') }}
+            onPress={() => { setPickerOpen(false); router.push('/(tabs)/explore') }}
             accessibilityRole="button"
           >
             <Text style={[s.seeAllTxt, { color: t.accentText }]} maxFontSizeMultiplier={1.4}>See all exams ›</Text>
@@ -208,15 +208,15 @@ function makeStyles() {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    blankPlus: { fontSize: 24, opacity: 0.5 },
+    blankPlus: { fontSize: typography.xl, opacity: 0.5 },
     tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch' },
     addPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
-    addPillTxt: { fontSize: 10, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    addPillTxt: { fontSize: typography.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
     monogram: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    monogramTxt: { fontSize: 12, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    tileTitle: { fontSize: 11, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
+    monogramTxt: { fontSize: typography.xs, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    tileTitle: { fontSize: typography.xs, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
     // Modal
-    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)' },
+    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, maxHeight: '80%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 32, paddingTop: 12 },
     handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
@@ -224,8 +224,8 @@ function makeStyles() {
     pickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     pickerTile: { flexBasis: '31%', flexGrow: 1, minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.xs },
     pickerMonogram: { width: 44, height: 44, borderRadius: 22 },
-    pickerTileTitle: { fontSize: 11, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
+    pickerTileTitle: { fontSize: typography.xs, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
     seeAllBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
-    seeAllTxt: { fontSize: 14, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    seeAllTxt: { fontSize: typography.sm, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
   })
 }

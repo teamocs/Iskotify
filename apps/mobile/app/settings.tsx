@@ -20,7 +20,7 @@ import {
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius } from '../theme/tokens'
+import { spacing, radius, typography } from '../theme/tokens'
 import { ScreenScroll } from '../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../components/ui/WebTopSpacer'
 import { Card } from '../components/ui/Card'
@@ -52,7 +52,7 @@ function SettingsRow({
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
     rowIcon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center' as const, justifyContent: 'center' as const, borderCurve: 'continuous' as const },
     rowLabel: { flex: 1, fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    rowChevron: { color: t.textTertiary, fontSize: 18 },
+    rowChevron: { color: t.textTertiary, fontSize: typography.md },
   }), [t, typo])
 
   return (
@@ -109,9 +109,9 @@ export default function SettingsScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
     backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
-    backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
+    backArrow: { color: t.textSecondary, fontSize: typography.h3, lineHeight: 32 },
     pageTitle: { fontSize: typo.h2, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
+    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentSurface, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
     versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: t.accentText, fontFamily: 'Outfit_700Bold' },
     versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
     versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
     profileAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: t.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
     profileName: { fontSize: typo.base, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     profileSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
-    rowChevron: { color: t.textTertiary, fontSize: 18 },
+    rowChevron: { color: t.textTertiary, fontSize: typography.md },
     divider: { height: 1, backgroundColor: t.divider },
     section: { gap: spacing.md },
     appearRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
@@ -136,7 +136,7 @@ export default function SettingsScreen() {
     notifRowDisabled: { opacity: 0.45 },
     stepper: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm },
     stepperBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border },
-    stepperBtnTxt: { fontSize: 16, fontWeight: '700' as const, color: t.textPrimary },
+    stepperBtnTxt: { fontSize: typography.base, fontWeight: '700' as const, color: t.textPrimary },
     stepperValue: { fontSize: typo.sm, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', minWidth: 68, textAlign: 'center' as const },
   }), [t, typo])
 
@@ -171,11 +171,11 @@ export default function SettingsScreen() {
           <Card elevated>
             <Pressable
               style={({ pressed }) => [s.profileCard, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => router.push('/profile')}
               accessibilityRole="button"
             >
               <View style={s.profileAvatar}>
-                <Lineicons icon={User4Outlined} size={22} color="#fff" />
+                <Lineicons icon={User4Outlined} size={22} color={t.textInverse} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={s.profileName} numberOfLines={1}>{profileName}</Text>
@@ -194,10 +194,10 @@ export default function SettingsScreen() {
             <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor={t.accentText} label="About Iskotify"
               onPress={() => router.push('/about')} />
             <View style={s.divider} />
-            <SettingsRow icon={QuestionMarkCircleOutlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Help & Support"
+            <SettingsRow icon={QuestionMarkCircleOutlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Help & Support"
               onPress={() => router.push('/help')} />
             <View style={s.divider} />
-            <SettingsRow icon={Shield2Outlined} iconBg="rgba(245,158,11,0.10)" iconColor="#fbbf24" label="Privacy & Terms"
+            <SettingsRow icon={Shield2Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Privacy & Terms"
               onPress={() => router.push('/privacy')} />
           </Card>
 
@@ -205,8 +205,8 @@ export default function SettingsScreen() {
           <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
             <SettingsRow
               icon={Download1Outlined}
-              iconBg="rgba(74,222,128,0.12)"
-              iconColor="#4ade80"
+              iconBg={t.surface2}
+              iconColor={t.textSecondary}
               label="On-device AI model"
               onPress={() => setModelDownloadVisible(true)}
             />
@@ -214,10 +214,10 @@ export default function SettingsScreen() {
 
           <SectionHeader title="Feedback" />
           <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow icon={Bug1Outlined} iconBg="rgba(248,113,113,0.12)" iconColor="#f87171" label="Report a Bug"
+            <SettingsRow icon={Bug1Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Report a Bug"
               onPress={() => router.push('/settings/report-bug')} />
             <View style={s.divider} />
-            <SettingsRow icon={Comment1Outlined} iconBg="rgba(96,165,250,0.12)" iconColor="#60a5fa" label="Leave Feedback"
+            <SettingsRow icon={Comment1Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Leave Feedback"
               onPress={() => router.push('/settings/leave-feedback')} />
           </Card>
 
@@ -234,7 +234,7 @@ export default function SettingsScreen() {
               <Switch
                 value={notifEnabled}
                 onValueChange={() => void toggleNotifs(focusedListings)}
-                trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+                trackColor={{ false: t.border, true: t.accentBorder }}
                 thumbColor={notifEnabled ? t.accentText : t.textTertiary}
                 ios_backgroundColor={t.border}
               />
@@ -277,7 +277,7 @@ export default function SettingsScreen() {
                 value={weeklySummaryEnabled}
                 onValueChange={() => void toggleWeeklySummary(focusedListings)}
                 disabled={!notifEnabled}
-                trackColor={{ false: t.border, true: 'rgba(252,165,165,0.55)' }}
+                trackColor={{ false: t.border, true: t.accentBorder }}
                 thumbColor={weeklySummaryEnabled ? t.accentText : t.textTertiary}
                 ios_backgroundColor={t.border}
               />
@@ -286,7 +286,7 @@ export default function SettingsScreen() {
 
           <SectionHeader title="Session" />
           <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow icon={ExitOutlined} iconBg="rgba(239,68,68,0.10)" iconColor="#f87171" label="Exit App" onPress={handleExitApp} />
+            <SettingsRow icon={ExitOutlined} iconBg={t.dangerSurface} iconColor={t.danger} label="Exit App" onPress={handleExitApp} />
           </Card>
 
           <SectionHeader title="Appearance" />
