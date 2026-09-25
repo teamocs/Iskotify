@@ -1,9 +1,8 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import {
-  View, Text, TextInput, SectionList, StyleSheet,
-  Pressable, ActivityIndicator, ScrollView, Image,
-} from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { View, Text, SectionList, ActivityIndicator, ScrollView, Platform } from 'react-native'
+// RN Image is fine for this bundled brand artwork.
+// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+import { Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../services/supabase'
@@ -20,9 +19,15 @@ import { SchoolPicker } from '../components/SchoolPicker'
 import { PRE_ASSESS_QUESTIONS } from '../data/preAssessment'
 import type { PreAssessQuestion } from '../data/preAssessment'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, type Theme } from '../theme/tokens'
-import { Card } from '../components/ui/Card'
-import { AppButton } from '../components/ui/AppButton'
+import { spacing, textStyle } from '../theme/tokens'
+import { Button } from '../components/ui/Button'
+import { TextField } from '../components/ui/TextField'
+import { heading } from '../components/ui/a11y'
+import { SearchField } from '../components/explore/SearchField'
+import { StepShell } from '../components/onboarding/StepShell'
+import { ChoiceRow } from '../components/onboarding/ChoiceRow'
+import { QuestionView, ResultsView } from '../components/onboarding/PreAssessment'
+import { nextStep, prevStep, resumeStep, type StepId } from '../components/onboarding/flow'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
 import {
   buildExamCatalog, orderExams, searchExams, examAcronymToListingSlug,
@@ -32,8 +37,8 @@ import {
 import { schoolFocusSlug, isSchoolFocusSlug } from '../utils/focusSlug'
 import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
 import { prefetchSessionImages } from '../utils/prefetchQuestionImages'
-import { QuestionFigure } from '../components/practice/QuestionFigure'
 import { canonicalizeRegion } from '../utils/region'
+import { hasOnboardingFocus } from '../utils/onboardingStatus'
 
 function parseJsonArray(s: string | null | undefined): string[] {
   try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
@@ -67,10 +72,10 @@ const PH_PROVINCES = [
 ] as const
 
 const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
-  { label: '₱100k or below / yr', value: '<=100k' },
-  { label: '₱100k–₱300k', value: '100k-300k' },
-  { label: '₱300k–₱600k', value: '300k-600k' },
-  { label: '₱600k–₱1.2M', value: '600k-1.2M' },
+  { label: '₱100k or below a year', value: '<=100k' },
+  { label: '₱100k to ₱300k', value: '100k-300k' },
+  { label: '₱300k to ₱600k', value: '300k-600k' },
+  { label: '₱600k to ₱1.2M', value: '600k-1.2M' },
   { label: 'Above ₱1.2M', value: '>1.2M' },
   { label: 'Prefer not to say', value: null },
 ]
@@ -78,53 +83,31 @@ const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
 interface ListingRow { id: string; slug: string; title: string; type: string; exam_date: string | null }
 
 const GRADES = [9, 10, 11, 12] as const
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const tmp = a[i] as T; a[i] = a[j] as T; a[j] = tmp
-  }
-  return a
-}
-
-// Step progress indicator (token-driven). `active` = which of the 4 steps is current.
-function StepDots({ active, t }: { active: 0 | 1 | 2 | 3; t: Theme }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-      {[0, 1, 2, 3].map(i => (
-        <View
-          key={i}
-          style={{
-            width: i === active ? 24 : 8,
-            height: 4,
-            borderRadius: radius.pill,
-            backgroundColor: i === active ? t.accent : t.surface2,
-          }}
-        />
-      ))}
-    </View>
-  )
-}
+const MAX_COURSES = 3
 
 export default function OnboardingScreen() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
-  // Step 1
-  const [step, setStep] = useState<1 | 2 | 'matcher' | 'courses' | 3>(1)
+  // Which question is on screen. `ready` stays false until the saved profile
+  // has been read, so a relaunch opens straight on the resume step instead of
+  // flashing the name question first.
+  const [step, setStep] = useState<StepId>('name')
+  const [ready, setReady] = useState(false)
+
+  // About you
   const [fullName, setFullName] = useState('')
   const [school, setSchool] = useState('')
   const [schoolRegion, setSchoolRegion] = useState('')
   const [gradeLevel, setGradeLevel] = useState<number | null>(null)
 
-  // Target University Exams step
+  // Target University Exams
   const [examCatalog, setExamCatalog] = useState<ExamOption[]>([])
   const [examQuery, setExamQuery] = useState('')
   const [loadingExams, setLoadingExams] = useState(false)
   const [selectedExams, setSelectedExams] = useState<ExamOption[]>([])
 
-  // Target Courses step
+  // Target Courses
   const [allCourses, setAllCourses] = useState<CourseOption[]>([])
   const [courseQuery, setCourseQuery] = useState('')
   const [selectedCourses, setSelectedCourses] = useState<CourseOption[]>([])
@@ -141,101 +124,95 @@ export default function OnboardingScreen() {
   const recommendedCourses = useMemo(() => {
     try { return recommendCourses(selectedExams, taxonomyRef.current, careerRef.current) }
     catch { return [] }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedExams, allCourses])
 
-  // Matcher step state
+  // Scholarship match (all optional)
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
   // "Prefer not to say" is an explicit, selectable choice — distinct from "not yet
-  // answered". Both leave incomeBracket null (no income filter), but this flag lets
-  // the chip show as selected so the option is actually pickable.
+  // answered". Both leave incomeBracket null (no income filter).
   const [incomePreferNotToSay, setIncomePreferNotToSay] = useState(false)
   const [gwaText, setGwaText] = useState('')
-  const [gwaError, setGwaError] = useState<string | null>(null)
+  const [gwaError, setGwaError] = useState<string | undefined>(undefined)
   const [province, setProvince] = useState('')
   const [provinceQuery, setProvinceQuery] = useState('')
 
-  // Step 2 state
+  // Scholarships (shown with the exams on the goal step)
   const [listings, setListings] = useState<ListingRow[]>([])
   const [loadingListings, setLoadingListings] = useState(false)
   const [selectedSlugs, setSelectedSlugs] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const [selectedSlug, setSelectedSlug] = useState('')  // kept for assessment
 
-  // Step 3 — pre-assessment (static 20 questions)
+  // Quick check
   const [assessIdx, setAssessIdx] = useState(0)
   const [assessAnswers, setAssessAnswers] = useState<Array<{ q: PreAssessQuestion; correct: boolean }>>([])
   const [assessDone, setAssessDone] = useState(false)
 
-  // Readiness gate — tracks background sync initiated in handleConfirmStep2
+  // Readiness gate — tracks background sync started when the goal is confirmed
   const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [gateVisible, setGateVisible] = useState(false)
 
-  // Unmount guard — prevents setState calls on an unmounted component
   const aliveRef = useRef(true)
   useEffect(() => {
     aliveRef.current = true
     return () => { aliveRef.current = false }
   }, [])
 
-  // Re-entry guard for the sync chain — use a ref so the closure inside the
-  // promise chain sees the current value rather than a stale captured state.
+  // Re-entry guard for the sync chain (a ref, so promise callbacks see the live value).
   const syncRunningRef = useRef(false)
 
-  // Pre-fill profile from Google sign-in data (seeded into DB by auth/callback.tsx)
+  // Resume: prefill from the saved profile (Google sign-in seeds the name; an
+  // interrupted onboarding saved each answer as it went) and open on the first
+  // unanswered required question.
   useEffect(() => {
     async function prefill() {
       try {
-        const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+        const [rows, focusRows] = await Promise.all([
+          db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
+          db.select().from(focusListingsTable).limit(1),
+        ])
         const s = rows[0]
-        if (!s) return
-        if (s.fullName) setFullName(s.fullName)
-        if (s.school) setSchool(s.school)
-        if (s.schoolRegion) setSchoolRegion(s.schoolRegion)
-        if (s.gradeLevel) setGradeLevel(s.gradeLevel)
+        if (s) {
+          if (s.fullName) setFullName(s.fullName)
+          if (s.school) setSchool(s.school)
+          if (s.schoolRegion) setSchoolRegion(s.schoolRegion)
+          if (s.gradeLevel) setGradeLevel(s.gradeLevel)
+        }
+        if (!aliveRef.current) return
+        setStep(resumeStep({
+          fullName: s?.fullName,
+          gradeLevel: s?.gradeLevel,
+          hasFocus: hasOnboardingFocus({
+            selectedListingSlug: s?.selectedListingSlug,
+            focusCount: focusRows?.length ?? 0,
+            targetExams: s?.targetExams,
+          }),
+        }))
       } catch (e) {
         console.warn('[onboarding] prefill error:', e)
+      } finally {
+        if (aliveRef.current) setReady(true)
       }
     }
     void prefill()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const assessStyle = useMemo(() => StyleSheet.create({
-    questionCard: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.xl, marginBottom: spacing.xs },
-    questionLabel: { fontSize: typo.xs, letterSpacing: 1, textTransform: 'uppercase', color: t.textTertiary, marginBottom: spacing.sm, fontFamily: 'Lexend_600SemiBold' },
-    questionText: { fontSize: typo.lg, fontWeight: '600', color: t.textPrimary, lineHeight: 23, fontFamily: 'Outfit_600SemiBold' },
-    optionBtn: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: 13, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
-    optionLetter: { width: 28, height: 28, borderRadius: radius.sm, backgroundColor: 'rgba(128,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    optionLetterTxt: { fontSize: typo.sm, fontWeight: '700', color: t.accentText, fontFamily: 'Outfit_700Bold' },
-    optionText: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 19 },
-    resultPct: { fontSize: typo.display, fontWeight: '700', color: t.accentText, letterSpacing: -2, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    resultTitle: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm, textAlign: 'center' },
-    resultSub: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20, marginBottom: spacing.xxl },
-    resultCounts: { flexDirection: 'row', gap: spacing.xxxl, marginBottom: spacing.xxxl },
-    resultCount: { alignItems: 'center' },
-    resultNum: { fontSize: typo.h2, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    resultLbl: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textTransform: 'uppercase', letterSpacing: 0.5 },
-    primaryBtn: { backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.xxl, alignItems: 'center', width: '100%', minHeight: 44, justifyContent: 'center' },
-    primaryBtnTxt: { fontSize: typo.base, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-  }), [t, typo])
-
-  // Gate-specific styles — memoised alongside assessStyle so they update with theme
-  const gateStyle = useMemo(() => StyleSheet.create({
-    container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl },
-    mascot: { width: 120, height: 120, marginBottom: spacing.xxl },
-    heading: { fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, textAlign: 'center', marginBottom: spacing.md },
-    body: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xxl },
-    btnGroup: { width: '100%', gap: spacing.md },
-    ghostBtn: { paddingVertical: 15, paddingHorizontal: spacing.xxl, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-    ghostBtnTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textSecondary },
-    ghostBtnSub: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', marginTop: spacing.xs },
-  }), [t, typo])
-
-  const labelStyle = { fontFamily: 'Lexend_500Medium' as const, fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.sm }
-  const inputStyle = { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous' as const, paddingHorizontal: spacing.lg as number, paddingVertical: 13 as number, fontFamily: 'Lexend_400Regular' as const, fontSize: typo.base, color: t.textPrimary }
+  // Best-effort upsert of profile fields. The UI never waits on it: the
+  // expo-sqlite driver runs synchronously, so the row is written before the
+  // next question renders, and a failure only logs.
+  const saveProfile = useCallback((patch: Partial<typeof userSettings.$inferInsert>) => {
+    void Promise.resolve(
+      db.insert(userSettings)
+        .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
+        .onConflictDoUpdate({ target: userSettings.id, set: patch }),
+    )
+      .then(() => invalidate('settings:'))
+      .catch((e: unknown) => console.warn('[onboarding] persist error:', e))
+  }, [db])
 
   useEffect(() => {
-    if (step !== 2) return
+    if (step !== 'goals') return
     setLoadingListings(true)
     supabase
       .from('listings')
@@ -251,13 +228,11 @@ export default function OnboardingScreen() {
   }, [step])
 
   // Build the searchable, region-ordered exam catalog + course data when entering
-  // step 2. Fetched from Supabase because the catalog tables (university_profiles /
-  // tertiary_schools) aren't synced into the local DB until after the first sync,
-  // which only runs once focus listings are chosen (i.e. after this step).
+  // the goal step. Fetched from Supabase because the catalog tables aren't synced
+  // into the local DB until after the first sync, which only runs once a goal is
+  // chosen (i.e. after this step). The courses step retries if it was missed.
   useEffect(() => {
-    // Load on step 2 and, as a fallback, on the courses step too — so the course
-    // list/recommendations still populate even if the step-2 fetch was missed.
-    if ((step !== 2 && step !== 'courses') || examCatalog.length > 0) return
+    if ((step !== 'goals' && step !== 'courses') || examCatalog.length > 0) return
     setLoadingExams(true)
     void (async () => {
       try {
@@ -306,11 +281,14 @@ export default function OnboardingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
 
-  // ── Deduplicated sync chain ───────────────────────────────────────────────
-  // Used by both handleConfirmStep2 (initial) and retrySync.
-  // Re-entry is guarded via syncRunningRef (not syncStatus state, which would be
-  // stale inside the promise callbacks). Unmount guard (aliveRef) wraps every
-  // setState so we never update state on an unmounted component.
+  // Build the quick check from the synced question bank when it is reached.
+  useEffect(() => {
+    if (step !== 'check') return
+    void loadPreAssessment()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
+  // ── Deduplicated sync chain (initial + retry) ─────────────────────────────
   const startContentSync = useCallback((_reason: 'initial' | 'retry') => {
     if (syncRunningRef.current) return
     syncRunningRef.current = true
@@ -326,37 +304,39 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] sync error:', e)
         if (aliveRef.current) setSyncStatus('error')
       })
-  // db is stable (useDb returns the same instance); aliveRef/syncRunningRef are refs
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db])
 
-  function handleNextStep() {
-    if (!fullName.trim() || !gradeLevel) return
-    // Advance immediately — the UI transition must never block on a DB write.
-    setStep(2)
-    // Persist the profile NOW — separately from step 2's focus transaction — so a new
-    // user's name/grade survive even if a later step or the focus insert fails. fullName
-    // is what gates landing-vs-app on launch, so this prevents the "relaunch loops back
-    // to the startup screen" data-loss bug. Best-effort, fire-and-forget: the expo-sqlite
-    // driver executes synchronously, so the row is written before this returns.
-    const patch = {
-      fullName: fullName.trim(),
-      school: school.trim(),
-      schoolRegion: canonicalizeRegion(schoolRegion),
-      gradeLevel,
-    }
-    void db.insert(userSettings)
-      .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
-      .onConflictDoUpdate({ target: userSettings.id, set: patch })
-      .then(() => invalidate('settings:')) // refresh the cached header name
-      .catch((e: unknown) => console.warn('[onboarding] step 1 persist error:', e))
+  function go(to: StepId | null) {
+    if (to) setStep(to)
   }
 
-  async function handleConfirmStep2() {
-    // Need at least one target exam or scholarship to proceed.
+  // ── About you ────────────────────────────────────────────────────────────
+
+  function continueFromName() {
+    const name = fullName.trim()
+    if (!name) return
+    go(nextStep('name'))
+    // Persist NOW: fullName is what gates landing-vs-app on launch.
+    saveProfile({ fullName: name })
+  }
+
+  function continueFromGrade() {
+    if (!gradeLevel) return
+    go(nextStep('grade'))
+    saveProfile({ fullName: fullName.trim(), gradeLevel })
+  }
+
+  function continueFromSchool(skip: boolean) {
+    go(nextStep('school'))
+    if (!skip) saveProfile({ school: school.trim(), schoolRegion: canonicalizeRegion(schoolRegion) })
+  }
+
+  // ── Your goal ────────────────────────────────────────────────────────────
+
+  async function confirmGoals() {
     if (selectedExams.length === 0 && selectedSlugs.length === 0) return
     setSaving(true)
-    // Pure computations up front (can't throw) so the persist+navigation below is simple.
     const now = Date.now()
     // Exams that map to a content-backed listing keep their slug; any other
     // picked school becomes a school-level focus ("school:<id>") so the choice
@@ -364,7 +344,6 @@ export default function OnboardingScreen() {
     const examSlugs = Array.from(new Set(
       selectedExams.map(e => examAcronymToListingSlug(e.examAcronym) ?? schoolFocusSlug(e.schoolId)),
     ))
-    // Focus = chosen scholarships first, then the selected exams. De-duplicated.
     const focusSlugs = Array.from(new Set([...selectedSlugs, ...examSlugs]))
     // selectedListingSlug is consumed app-wide as a CONTENT slug — never store
     // a school: pseudo-slug; school-only selections fall back to general-cet.
@@ -381,8 +360,7 @@ export default function OnboardingScreen() {
       targetExams: targetExamsJson,
     }
     // Persist profile + selection FIRST, in its own statement, so a bad focus-row
-    // insert can't roll it back. selectedListingSlug + targetExams here are what gate
-    // returning-user detection (hasOnboardingFocus), so they MUST survive independently.
+    // insert can't roll it back (these gate returning-user detection).
     try {
       await db.insert(userSettings).values({
         id: 1, selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields,
@@ -390,13 +368,10 @@ export default function OnboardingScreen() {
         target: userSettings.id,
         set: { selectedListingSlug: primarySlug, lastSyncedAt: 0, ...profileFields },
       })
-      invalidate('settings:') // refresh the cached header name
-      setSelectedSlug(primarySlug)
+      invalidate('settings:')
     } catch (e) {
-      console.error('[onboarding] step 2 settings persist error:', e)
+      console.error('[onboarding] goal settings persist error:', e)
     }
-    // Focus listings — best-effort, each independent so one bad row can't drop the rest
-    // or the settings write above.
     for (let i = 0; i < focusSlugs.length; i++) {
       try {
         await db.insert(focusListingsTable)
@@ -406,7 +381,6 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] focus row persist error:', e)
       }
     }
-    // Best-effort cloud mirror of target exams when signed in.
     void supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         void supabase.from('profiles')
@@ -414,39 +388,55 @@ export default function OnboardingScreen() {
           .eq('id', data.user.id)
       }
     })
-    // ALWAYS advance to the courses step; sync content in the background.
+    // ALWAYS advance; sync content in the background.
     setSaving(false)
-    setStep('courses')
+    go(nextStep('goals'))
     startContentSync('initial')
   }
 
-  async function handleMatcherContinue(skip = false) {
-    if (!skip) {
-      // Validate GWA if provided
-      const gwaNum = gwaText.trim() ? parseFloat(gwaText.trim()) : null
-      if (gwaText.trim() && (isNaN(gwaNum!) || gwaNum! < 75 || gwaNum! > 100)) {
-        setGwaError('GWA must be between 75 and 100.')
+  function continueFromCourses(skip: boolean) {
+    if (!skip && selectedCourses.length > 0) {
+      const json = JSON.stringify(
+        selectedCourses.map(c => ({ id: c.id, label: c.label, careerCourseId: c.careerCourseId })),
+      )
+      saveProfile({ targetCourses: json })
+      void supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          void supabase.from('profiles')
+            .update({ target_courses: selectedCourses.map(c => c.label) })
+            .eq('id', data.user.id)
+        }
+      })
+    }
+    go(nextStep('courses'))
+  }
+
+  // ── Scholarship match ────────────────────────────────────────────────────
+
+  function continueFromIncome(skip: boolean) {
+    if (!skip && incomeBracket !== null) saveProfile({ incomeBracket })
+    go(nextStep('income'))
+  }
+
+  function continueFromGwa(skip: boolean) {
+    if (!skip && gwaText.trim()) {
+      const gwaNum = parseFloat(gwaText.trim())
+      if (isNaN(gwaNum) || gwaNum < 75 || gwaNum > 100) {
+        setGwaError('Enter a GWA from 75 to 100, like 90.5.')
         return
       }
-      setGwaError(null)
-      // Persist via inline Drizzle (matching the mechanism used for other fields in this screen)
-      try {
-        const patch: Record<string, unknown> = {}
-        if (incomeBracket !== null) patch.incomeBracket = incomeBracket
-        if (gwaNum !== null) patch.gwa = gwaNum
-        if (province.trim()) patch.province = province.trim()
-        if (Object.keys(patch).length > 0) {
-          await db
-            .insert(userSettings)
-            .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
-            .onConflictDoUpdate({ target: userSettings.id, set: patch })
-        }
-      } catch (e) {
-        console.warn('[onboarding] matcher persist error:', e)
-      }
+      saveProfile({ gwa: gwaNum })
     }
-    setStep(3)
+    setGwaError(undefined)
+    go(nextStep('gwa'))
   }
+
+  function continueFromProvince(skip: boolean) {
+    if (!skip && province.trim()) saveProfile({ province: province.trim() })
+    go(nextStep('province'))
+  }
+
+  // ── Quick check ──────────────────────────────────────────────────────────
 
   async function loadPreAssessment() {
     try {
@@ -464,38 +454,14 @@ export default function OnboardingScreen() {
         imageWidth: upcatQuestions.imageWidth,
         imageHeight: upcatQuestions.imageHeight,
       }).from(upcatQuestions).where(eq(upcatQuestions.status, 'published'))
-      const built = buildPreAssessFromUpcat(rows, [...PRE_ASSESS_SUBTESTS], 3)
-      if (built.length >= 3) {
+      const built = buildPreAssessFromUpcat(rows ?? [], [...PRE_ASSESS_SUBTESTS], 3)
+      if (built.length >= 3 && aliveRef.current && assessIdx === 0) {
         setPreAssessQuestions(built)
-        prefetchSessionImages(built) // fire-and-forget; never blocks session start
+        prefetchSessionImages(built) // fire-and-forget; never blocks the check
       }
     } catch (e) {
       console.warn('[onboarding] pre-assessment build error:', e)
     }
-  }
-
-  async function handleCoursesContinue(skip = false) {
-    if (!skip && selectedCourses.length > 0) {
-      try {
-        const json = JSON.stringify(
-          selectedCourses.map(c => ({ id: c.id, label: c.label, careerCourseId: c.careerCourseId })),
-        )
-        await db.insert(userSettings)
-          .values({ id: 1, targetCourses: json } as typeof userSettings.$inferInsert)
-          .onConflictDoUpdate({ target: userSettings.id, set: { targetCourses: json } })
-        void supabase.auth.getUser().then(({ data }) => {
-          if (data.user) {
-            void supabase.from('profiles')
-              .update({ target_courses: selectedCourses.map(c => c.label) })
-              .eq('id', data.user.id)
-          }
-        })
-      } catch (e) {
-        console.warn('[onboarding] courses persist error:', e)
-      }
-    }
-    await loadPreAssessment()
-    setStep('matcher')
   }
 
   function handleAssessAnswer(optionIdx: number) {
@@ -506,8 +472,6 @@ export default function OnboardingScreen() {
 
     if (assessIdx === preAssessQuestions.length - 1) {
       const now = Date.now()
-
-      // Group by subject and count correct vs total per subject
       const grouped = new Map<string, { correct: number; total: number }>()
       for (const r of newAnswers) {
         const stats = grouped.get(r.q.subject) ?? { correct: 0, total: 0 }
@@ -515,10 +479,8 @@ export default function OnboardingScreen() {
         if (r.correct) stats.correct++
         grouped.set(r.q.subject, stats)
       }
-
       // Synchronous transaction (Drizzle's expo-sqlite driver is sync — an async
-      // callback would commit BEFORE the awaited inserts ran, silently dropping the
-      // pre-assessment progress). Use .run() inside, matching the rest of the app.
+      // callback would commit BEFORE the awaited inserts ran). Use .run() inside.
       try {
         db.transaction(tx => {
           for (const [subject, stats] of grouped) {
@@ -534,12 +496,10 @@ export default function OnboardingScreen() {
             }).run()
           }
         })
-        // Backup the new pre-assessment data to Supabase if signed in (fire-and-forget)
         void pushUserData(db).catch(err => console.warn('[onboarding] push failed:', err))
       } catch (e) {
         console.warn('[onboarding] save assess error:', e)
       }
-
       setAssessAnswers(newAnswers)
       setAssessDone(true)
     } else {
@@ -548,8 +508,7 @@ export default function OnboardingScreen() {
     }
   }
 
-  // Auto-navigate when sync finishes while the gate is showing.
-  // Onboarding completion routes to the welcome tour, which then forwards to tabs.
+  // Auto-continue when sync finishes while the gate is showing.
   useEffect(() => {
     if (gateVisible && syncStatus === 'done') {
       if (aliveRef.current) router.replace('/welcome')
@@ -565,51 +524,52 @@ export default function OnboardingScreen() {
     }
   }
 
-  function retrySync() {
-    startContentSync('retry')
-  }
+  // ── Render ───────────────────────────────────────────────────────────────
 
-  // ── Getting Ready gate ───────────────────────────────────────────────────
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: t.bg }} />
+  }
 
   if (gateVisible) {
     const isError = syncStatus === 'error'
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-          <View style={gateStyle.container}>
+          <View style={{ alignItems: 'center', paddingHorizontal: spacing.xxl, width: '100%', maxWidth: 480, alignSelf: 'center' }}>
             <Image
               source={require('../assets/images/kuya-baw-logo.png')}
-              style={gateStyle.mascot}
+              style={{ width: 112, height: 112, marginBottom: spacing.xxl }}
               resizeMode="contain"
+              accessibilityIgnoresInvertColors
+              accessible={false}
             />
-            <Text style={gateStyle.heading}>
-              {isError ? "Hmm, that didn't load 😅" : 'Hang tight, almost there! 🎒'}
+            <Text {...heading(1)} style={[textStyle('title', t.textPrimary), { textAlign: 'center' }]}>
+              {isError ? "That didn't load" : 'Hang tight, almost there'}
             </Text>
-            <Text style={gateStyle.body}>
+            <Text
+              style={[textStyle('body', t.textSecondary), { textAlign: 'center', marginTop: spacing.md, marginBottom: spacing.xxl }]}
+              accessibilityLiveRegion="polite"
+            >
               {isError
                 ? 'Please check your internet connection and try again.'
                 : "We're preparing your reviewers, exams, and scholarship matches based on what you picked. First-time setup usually takes under a minute."}
             </Text>
             {isError ? (
-              <View style={gateStyle.btnGroup}>
-                <AppButton label="Try again" onPress={retrySync} />
-                <Pressable
+              <View style={{ width: '100%', gap: spacing.sm }}>
+                <Button label="Try again" onPress={() => startContentSync('retry')} size="lg" fullWidth />
+                <Button
+                  label="Continue anyway"
+                  variant="ghost"
                   onPress={() => router.replace('/(tabs)')}
-                  style={({ pressed }) => [gateStyle.ghostBtn, pressed ? { opacity: 0.6 } : null]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue anyway"
                   accessibilityHint="Skips setup for now and finishes it next time you open the app"
-                >
-                  <Text style={gateStyle.ghostBtnTxt}>
-                    Continue anyway
-                  </Text>
-                  <Text style={gateStyle.ghostBtnSub}>
-                    {`We'll finish getting things ready next time you open the app.`}
-                  </Text>
-                </Pressable>
+                  fullWidth
+                />
+                <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]}>
+                  {"We'll finish getting things ready next time you open the app."}
+                </Text>
               </View>
             ) : (
-              <ActivityIndicator color={t.accent} size="large" />
+              <ActivityIndicator color={t.accentText} size="large" accessibilityLabel="Preparing your content" />
             )}
           </View>
         </ScrollView>
@@ -617,151 +577,131 @@ export default function OnboardingScreen() {
     )
   }
 
-  // ── Step 1: Profile ───────────────────────────────────────────────────────
-
-  if (step === 1) {
-    const isValid = fullName.trim().length > 0 && gradeLevel !== null
+  if (step === 'name') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <KeyboardAwareScrollView
-          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxxl, paddingBottom: 40 }}
-          keyboardShouldPersistTaps="handled"
-          style={{ flex: 1 }}
-          bottomOffset={20}
-        >
-
-            <View style={{ marginBottom: spacing.xxl }}>
-              <StepDots active={0} t={t} />
-            </View>
-
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, marginBottom: spacing.sm }}>
-              Tell us about yourself
-            </Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 19 }}>
-              This helps us personalise your experience.
-            </Text>
-
-            <Card elevated padded>
-              <Text style={labelStyle}>Full Name *</Text>
-              <TextInput
-                style={inputStyle}
-                placeholder="e.g. Juan dela Cruz"
-                placeholderTextColor={t.textTertiary}
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-
-              <Text style={[labelStyle, { marginTop: spacing.lg }]}>School / University</Text>
-              <SchoolPicker value={school} onChange={setSchool} onSelectMeta={m => setSchoolRegion(m.region ?? '')} />
-
-              <Text style={[labelStyle, { marginTop: spacing.lg }]}>Grade Level *</Text>
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: spacing.sm }}>
-                Philippines K-12 curriculum — select your current grade
-              </Text>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                {GRADES.map(g => {
-                  const active = gradeLevel === g
-                  return (
-                    <Pressable
-                      key={g}
-                      onPress={() => setGradeLevel(g)}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`Grade ${g}`}
-                      accessibilityState={{ selected: active, checked: active }}
-                      style={({ pressed }) => [{
-                        flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', alignItems: 'center', minHeight: 44, justifyContent: 'center',
-                        backgroundColor: active ? t.accent : t.surface2,
-                        borderWidth: 1, borderColor: active ? t.accent : t.border,
-                      }, pressed ? { opacity: 0.85 } : null]}
-                    >
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: active ? '#fff' : t.textSecondary }}>
-                        G{g}
-                      </Text>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            </Card>
-
-            <View style={{ marginTop: spacing.xxxl }}>
-              <AppButton label="Next →" onPress={handleNextStep} disabled={!isValid} />
-            </View>
-        </KeyboardAwareScrollView>
-      </SafeAreaView>
+      <StepShell
+        step="name"
+        title="What should we call you?"
+        description="Your name stays on this phone, and in your backup if you sign in."
+        primaryLabel="Continue"
+        onPrimary={continueFromName}
+        primaryDisabled={!fullName.trim()}
+      >
+        <TextField
+          label="Full name"
+          required
+          value={fullName}
+          onChangeText={setFullName}
+          placeholder="e.g. Juan dela Cruz"
+          autoComplete="name"
+          textContentType="name"
+          autoCapitalize="words"
+          autoCorrect={false}
+          returnKeyType="next"
+          onSubmitEditing={continueFromName}
+          autoFocus={Platform.OS === 'web'}
+        />
+      </StepShell>
     )
   }
 
-  // ── Step 2: Listing picker ────────────────────────────────────────────────
+  if (step === 'grade') {
+    return (
+      <StepShell
+        step="grade"
+        title="What grade are you in?"
+        description="Philippine K-12. We pace your study plan to it."
+        onBack={() => go(prevStep('grade'))}
+        primaryLabel="Continue"
+        onPrimary={continueFromGrade}
+        primaryDisabled={!gradeLevel}
+      >
+        <View accessibilityRole="radiogroup" accessibilityLabel="Grade level" style={{ gap: spacing.sm }}>
+          {GRADES.map(g => (
+            <ChoiceRow
+              key={g}
+              mode="radio"
+              label={`Grade ${g}`}
+              description={g >= 11 ? 'Senior high school' : 'Junior high school'}
+              accessibilityLabel={`Grade ${g}`}
+              selected={gradeLevel === g}
+              onPress={() => setGradeLevel(g)}
+            />
+          ))}
+        </View>
+      </StepShell>
+    )
+  }
 
-  if (step === 2) {
+  if (step === 'school') {
+    return (
+      <StepShell
+        step="school"
+        title="Where do you study?"
+        description="We use your school's region to show nearby universities first."
+        onBack={() => go(prevStep('school'))}
+        onSkip={() => continueFromSchool(true)}
+        primaryLabel="Continue"
+        onPrimary={() => continueFromSchool(false)}
+      >
+        <Text style={[textStyle('label', t.textPrimary), { marginBottom: spacing.xs }]}>School</Text>
+        <SchoolPicker value={school} onChange={setSchool} onSelectMeta={m => setSchoolRegion(m.region ?? '')} />
+      </StepShell>
+    )
+  }
+
+  if (step === 'goals') {
     const ordered = orderExams(examCatalog, schoolRegion)
     const q = examQuery.trim()
     const examItems = searchExams(ordered, q).slice(0, q ? 60 : 80)
     const scholarshipItems = q
       ? listings.filter(l => l.title.toLowerCase().includes(q.toLowerCase()))
       : listings
-    type Step2Item = ExamOption | ListingRow
-    const sections: { key: string; title: string; data: Step2Item[] }[] = [
-      { key: 'exams', title: 'University Entrance Exams', data: examItems },
+    type GoalItem = ExamOption | ListingRow
+    const sections: { key: string; title: string; data: GoalItem[] }[] = [
+      { key: 'exams', title: 'University entrance exams', data: examItems },
       { key: 'sch', title: 'Scholarships', data: scholarshipItems },
     ].filter(s => s.data.length > 0)
     const selectedCount = selectedExams.length + selectedSlugs.length
-    const loadingStep2 = loadingExams || loadingListings
+    const loadingGoals = loadingExams || loadingListings
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl }}>
-          <StepDots active={1} t={t} />
-        </View>
-
-        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm }}>
-          <Pressable
-            onPress={() => setStep(1)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Back to previous step"
-            style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}
-          >
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-          </Pressable>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, marginBottom: spacing.xs }}>
-            What are you{'\n'}preparing for?
-          </Text>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary }}>
-            Search and pick your target entrance exams{schoolRegion ? ` — top national schools first, then ${canonicalizeRegion(schoolRegion)}` : ''}, plus any scholarships.
-          </Text>
-          <TextInput
-            style={[inputStyle, { marginTop: spacing.md }]}
-            placeholder="Search exam, university, or scholarship…"
-            placeholderTextColor={t.textTertiary}
-            value={examQuery}
-            onChangeText={setExamQuery}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-          />
-        </View>
-
-        {loadingStep2 ? (
+      <StepShell
+        step="goals"
+        title="What are you preparing for?"
+        description={`Pick one or more entrance exams or scholarships${schoolRegion ? `. Top national schools come first, then ${canonicalizeRegion(schoolRegion)}` : ''}.`}
+        onBack={() => go(prevStep('goals'))}
+        primaryLabel={saving ? 'Saving…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
+        onPrimary={() => void confirmGoals()}
+        primaryDisabled={selectedCount === 0}
+        primaryLoading={saving}
+        scroll={false}
+      >
+        <SearchField
+          value={examQuery}
+          onChangeText={setExamQuery}
+          placeholder="e.g. UPCAT, DOST, Ateneo"
+          accessibilityLabel="Search exams, universities or scholarships"
+        />
+        {loadingGoals ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={t.textPrimary} size="large" />
+            <ActivityIndicator color={t.accentText} size="large" accessibilityLabel="Loading exams and scholarships" />
           </View>
         ) : (
           <SectionList
             sections={sections}
+            style={{ flex: 1 }}
             keyExtractor={(item, i) => ('schoolId' in item ? item.schoolId : item.id) + ':' + i}
-            contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xs, paddingBottom: 170 }}
+            contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.sm }}
             keyboardShouldPersistTaps="handled"
             stickySectionHeadersEnabled={false}
             ListEmptyComponent={
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 40 }}>
-                No matches found.
+              <Text style={[textStyle('body', t.textSecondary), { textAlign: 'center', paddingTop: spacing.xxl }]}>
+                {q ? `Nothing matches “${q}”. Try the school's short name, like UPLB.` : 'No exams to show yet. Check your connection.'}
               </Text>
             }
             renderSectionHeader={({ section }) => (
-              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm }}>
+              <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.lg, marginBottom: spacing.xs }]}>
                 {section.title}
               </Text>
             )}
@@ -769,413 +709,226 @@ export default function OnboardingScreen() {
               if (section.key === 'exams') {
                 const ex = item as ExamOption
                 const sel = selectedExams.some(s => s.schoolId === ex.schoolId)
+                const meta = [ex.examAcronym, ex.region, ex.national ? 'Top in PH' : null].filter(Boolean).join(' · ')
                 return (
-                  <Pressable
+                  <ChoiceRow
+                    mode="checkbox"
+                    label={ex.schoolName}
+                    description={meta}
+                    selected={sel}
                     onPress={() => setSelectedExams(prev => sel ? prev.filter(s => s.schoolId !== ex.schoolId) : [...prev, ex])}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={`${ex.schoolName}, ${ex.examAcronym}`}
-                    accessibilityState={{ checked: sel }}
-                    style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }} numberOfLines={2}>{ex.schoolName}</Text>
-                      <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
-                        {ex.examAcronym}{ex.region ? ` · ${ex.region}` : ''}{ex.national ? ' · Top PH' : ''}
-                      </Text>
-                    </View>
-                    <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-                  </Pressable>
+                  />
                 )
               }
               const lst = item as ListingRow
-              const sel = selectedSlugs.indexOf(lst.slug) !== -1
+              const sel = selectedSlugs.includes(lst.slug)
               return (
-                <Pressable
+                <ChoiceRow
+                  mode="checkbox"
+                  label={lst.title}
+                  description={lst.exam_date
+                    ? new Date(lst.exam_date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
+                    : undefined}
+                  selected={sel}
                   onPress={() => setSelectedSlugs(prev => sel ? prev.filter(s => s !== lst.slug) : [...prev, lst.slug])}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={lst.title}
-                  accessibilityState={{ checked: sel }}
-                  style={({ pressed }) => [{ backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface, borderRadius: radius.md, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.sm, borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }, pressed ? { opacity: 0.85 } : null]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary }}>{lst.title}</Text>
-                    {lst.exam_date ? (
-                      <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
-                        {new Date(lst.exam_date).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-                </Pressable>
+                />
               )
             }}
           />
         )}
-
-        {/* Sticky bottom CTA */}
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.xxl, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          <AppButton
-            label={saving ? 'Setting up…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''} →`}
-            disabled={selectedCount === 0 || saving}
-            onPress={() => void handleConfirmStep2()}
-          />
-        </View>
-
-        {saving && (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={t.textPrimary} size="large" />
-            <Text style={{ color: t.textSecondary, fontFamily: 'Lexend_400Regular', marginTop: spacing.md, fontSize: typo.sm }}>Setting up your content…</Text>
-          </View>
-        )}
-      </SafeAreaView>
+      </StepShell>
     )
   }
-
-  // ── Matcher step: Income / GWA / Province (optional) ─────────────────────
-
-  if (step === 'matcher') {
-    const filteredProvinces = provinceQuery.trim().length > 0
-      ? PH_PROVINCES.filter(p => p.toLowerCase().includes(provinceQuery.toLowerCase()))
-      : PH_PROVINCES
-
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <KeyboardAwareScrollView
-          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xxxl, paddingBottom: 48 }}
-          keyboardShouldPersistTaps="handled"
-          style={{ flex: 1 }}
-          bottomOffset={20}
-        >
-          {/* Step dots */}
-          <View style={{ marginBottom: spacing.xxl }}>
-            <StepDots active={2} t={t} />
-          </View>
-
-          {/* Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, flex: 1 }}>
-              Help us match scholarships
-            </Text>
-            <Pressable
-              onPress={() => void handleMatcherContinue(true)}
-              hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }}
-              accessibilityRole="button"
-              accessibilityLabel="Skip scholarship matching"
-              style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
-            >
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-            </Pressable>
-          </View>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 19 }}>
-            These details let us personalise scholarship eligibility. All fields are optional.
-          </Text>
-
-          {/* Income bracket */}
-          <Card elevated padded style={{ marginBottom: spacing.lg }}>
-            <Text style={labelStyle}>Household Income Bracket</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {INCOME_OPTIONS.map(opt => {
-                const isPreferNotToSay = opt.value === null
-                const active = isPreferNotToSay
-                  ? incomePreferNotToSay
-                  : (!incomePreferNotToSay && incomeBracket === opt.value)
-                return (
-                  <Pressable
-                    key={opt.label}
-                    onPress={() => {
-                      if (isPreferNotToSay) {
-                        setIncomePreferNotToSay(true)
-                        setIncomeBracket(null)
-                      } else {
-                        setIncomePreferNotToSay(false)
-                        setIncomeBracket(prev => prev === opt.value ? null : opt.value)
-                      }
-                    }}
-                    style={({ pressed }) => [{
-                      paddingVertical: 9,
-                      paddingHorizontal: spacing.lg,
-                      borderRadius: radius.pill,
-                      backgroundColor: active ? t.accent : t.surface2,
-                      borderWidth: 1,
-                      borderColor: active ? t.accent : t.border,
-                    }, pressed ? { opacity: 0.85 } : null]}
-                  >
-                    <Text style={{
-                      fontFamily: 'Lexend_500Medium',
-                      fontSize: typo.sm,
-                      color: active ? '#fff' : t.textSecondary,
-                    }}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-          </Card>
-
-          {/* GWA */}
-          <Card elevated padded style={{ marginBottom: spacing.lg }}>
-            <Text style={labelStyle}>GWA (General Weighted Average)</Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginBottom: spacing.sm }}>
-              Your latest general weighted average (percentage)
-            </Text>
-            <TextInput
-              style={[inputStyle, gwaError ? { borderColor: t.danger } : {}]}
-              placeholder="e.g. 90.5"
-              placeholderTextColor={t.textTertiary}
-              value={gwaText}
-              onChangeText={text => { setGwaText(text); setGwaError(null) }}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-            />
-            {gwaError ? (
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.danger, marginTop: spacing.xs }}>
-                {gwaError}
-              </Text>
-            ) : null}
-          </Card>
-
-          {/* Province */}
-          <Card elevated padded style={{ marginBottom: spacing.xxl }}>
-            <Text style={labelStyle}>Province</Text>
-            <TextInput
-              style={[inputStyle, { marginBottom: spacing.xs }]}
-              placeholder="Search province..."
-              placeholderTextColor={t.textTertiary}
-              value={provinceQuery}
-              onChangeText={setProvinceQuery}
-              returnKeyType="search"
-              autoCorrect={false}
-              autoCapitalize="words"
-            />
-            {province.trim() ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-                <View style={{
-                  backgroundColor: 'rgba(128,0,0,0.20)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.40)',
-                  borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-                }}>
-                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.accentText }}>
-                    {province}
-                  </Text>
-                </View>
-                <Pressable onPress={() => { setProvince(''); setProvinceQuery('') }} hitSlop={8} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
-                  <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }}>clear</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            <View style={{
-              maxHeight: 200, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous',
-              overflow: 'hidden',
-            }}>
-              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                {filteredProvinces.map(p => (
-                  <Pressable
-                    key={p}
-                    onPress={() => { setProvince(p); setProvinceQuery(p) }}
-                    style={({ pressed }) => [{
-                      paddingHorizontal: spacing.lg, paddingVertical: 11, minHeight: 44, justifyContent: 'center',
-                      backgroundColor: province === p ? 'rgba(128,0,0,0.12)' : 'transparent',
-                      borderBottomWidth: 1, borderBottomColor: t.border,
-                    }, pressed ? { opacity: 0.7 } : null]}
-                  >
-                    <Text style={{
-                      fontFamily: 'Lexend_400Regular', fontSize: typo.sm,
-                      color: province === p ? t.accentText : t.textPrimary,
-                    }}>
-                      {p}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          </Card>
-
-          {/* CTA */}
-          <AppButton label="Next →" onPress={() => void handleMatcherContinue(false)} />
-          <Pressable
-            onPress={() => void handleMatcherContinue(true)}
-            style={({ pressed }) => [{ alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.md, minHeight: 44, justifyContent: 'center' }, pressed ? { opacity: 0.6 } : null]}
-          >
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>
-              Skip for now
-            </Text>
-          </Pressable>
-        </KeyboardAwareScrollView>
-      </SafeAreaView>
-    )
-  }
-
-  // ── Target Courses step ───────────────────────────────────────────────────
 
   if (step === 'courses') {
     const cq = courseQuery.trim().toLowerCase()
     const searchResults = cq ? allCourses.filter(c => c.label.toLowerCase().includes(cq)).slice(0, 40) : []
-    const isCourseSelected = (c: CourseOption) => selectedCourses.some(s => s.id === c.id)
-    const MAX_COURSES = 3
-    const toggleCourse = (c: CourseOption) =>
+    const isSel = (c: CourseOption) => selectedCourses.some(s => s.id === c.id)
+    const full = selectedCourses.length >= MAX_COURSES
+    const toggle = (c: CourseOption) =>
       setSelectedCourses(prev => {
-        if (isCourseSelected(c)) return prev.filter(s => s.id !== c.id)
-        if (prev.length >= MAX_COURSES) return prev  // cap selection at 3
+        if (prev.some(s => s.id === c.id)) return prev.filter(s => s.id !== c.id)
+        if (prev.length >= MAX_COURSES) return prev
         return [...prev, c]
       })
-
-    // Render helper (called, not used as <CourseRow/>) so it is not re-created as a
-    // new component type on every render — that would remount every row.
-    const renderCourseRow = (c: CourseOption) => {
-      const sel = isCourseSelected(c)
-      return (
-        <Pressable
-          key={c.id}
-          onPress={() => toggleCourse(c)}
-          style={({ pressed }) => [{
-            backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
-            borderRadius: radius.md, borderCurve: 'continuous', paddingVertical: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.sm,
-            borderWidth: sel ? 2 : 1, borderColor: sel ? t.accent : t.border,
-            flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44,
-          }, pressed ? { opacity: 0.85 } : null]}
-        >
-          <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary, flex: 1 }}>{c.label}</Text>
-          <Text style={{ color: sel ? t.accentText : t.textTertiary, fontSize: 18 }}>{sel ? '✓' : '＋'}</Text>
-        </Pressable>
-      )
-    }
+    const row = (c: CourseOption) => (
+      <ChoiceRow
+        key={c.id}
+        mode="checkbox"
+        label={c.label}
+        selected={isSel(c)}
+        disabled={full && !isSel(c)}
+        onPress={() => toggle(c)}
+      />
+    )
+    const extraSelected = selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id))
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.sm }}>
-          <Pressable onPress={() => setStep(2)} hitSlop={8} style={({ pressed }) => [{ marginBottom: spacing.md }, pressed ? { opacity: 0.6 } : null]}>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-          </Pressable>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h2, color: t.textPrimary, flex: 1 }}>Target Courses</Text>
-            <Pressable onPress={() => void handleCoursesContinue(true)} hitSlop={{ top: 8, bottom: 8, left: 16, right: 0 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
-              <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-            </Pressable>
-          </View>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textSecondary, marginTop: spacing.xs }}>
-            Pick up to 3 courses ({selectedCourses.length}/3). Recommendations are based on your target exams.
-          </Text>
-          <TextInput
-            style={[inputStyle, { marginTop: spacing.md }]}
-            placeholder="Search courses (e.g. Nursing, Civil Engineering)…"
-            placeholderTextColor={t.textTertiary}
+      <StepShell
+        step="courses"
+        title="Which courses are you considering?"
+        description={`Pick up to ${MAX_COURSES}. ${selectedCourses.length} of ${MAX_COURSES} picked.`}
+        onBack={() => go(prevStep('courses'))}
+        onSkip={() => continueFromCourses(true)}
+        primaryLabel={`Continue${selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''}`}
+        onPrimary={() => continueFromCourses(false)}
+      >
+        <View style={{ gap: spacing.sm }}>
+          <SearchField
             value={courseQuery}
             onChangeText={setCourseQuery}
-            autoCorrect={false}
-            returnKeyType="search"
+            placeholder="e.g. Nursing, Civil Engineering"
+            accessibilityLabel="Search courses"
           />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.sm, paddingBottom: 140 }}
-          keyboardShouldPersistTaps="handled"
-        >
           {cq ? (
             searchResults.length > 0
-              ? searchResults.map(renderCourseRow)
-              : <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: spacing.lg }}>No courses found.</Text>
+              ? searchResults.map(row)
+              : <Text style={[textStyle('body', t.textSecondary), { paddingTop: spacing.lg }]}>{`No course matches “${courseQuery.trim()}”.`}</Text>
           ) : (
             <>
-              {recommendedCourses.length > 0 && (
+              {recommendedCourses.length > 0 ? (
                 <>
-                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.sm, marginBottom: spacing.sm }}>
-                    Recommended for you
-                  </Text>
-                  {recommendedCourses.map(renderCourseRow)}
+                  <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.md }]}>Recommended for your exams</Text>
+                  {recommendedCourses.map(row)}
                 </>
-              )}
-              {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).length > 0 && (
+              ) : null}
+              {extraSelected.length > 0 ? (
                 <>
-                  <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm }}>
-                    Also selected
-                  </Text>
-                  {selectedCourses.filter(c => !recommendedCourses.some(r => r.id === c.id)).map(renderCourseRow)}
+                  <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.md }]}>Also picked</Text>
+                  {extraSelected.map(row)}
                 </>
-              )}
-              {recommendedCourses.length === 0 && selectedCourses.length === 0 && (
-                <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, paddingTop: spacing.lg }}>
-                  Search above to add the courses you&apos;re considering.
+              ) : null}
+              {recommendedCourses.length === 0 && selectedCourses.length === 0 ? (
+                <Text style={[textStyle('body', t.textSecondary), { paddingTop: spacing.md }]}>
+                  Search for the courses you&apos;re thinking about.
                 </Text>
-              )}
+              ) : null}
             </>
           )}
-        </ScrollView>
-
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: spacing.xxl, backgroundColor: t.bg, borderTopWidth: 1, borderTopColor: t.border }}>
-          <AppButton
-            label={`Continue${selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''} →`}
-            onPress={() => void handleCoursesContinue(false)}
-          />
         </View>
-      </SafeAreaView>
+      </StepShell>
     )
   }
 
-  // ── Step 3: Pre-assessment ────────────────────────────────────────────────
+  if (step === 'income') {
+    return (
+      <StepShell
+        step="income"
+        title="What is your household income?"
+        description="A yearly estimate. Many scholarships have an income limit, so this helps us show the ones you can apply for. It stays private."
+        onBack={() => go(prevStep('income'))}
+        onSkip={() => continueFromIncome(true)}
+        primaryLabel="Continue"
+        onPrimary={() => continueFromIncome(false)}
+      >
+        <View accessibilityRole="radiogroup" accessibilityLabel="Household income a year" style={{ gap: spacing.sm }}>
+          {INCOME_OPTIONS.map(opt => {
+            const isPreferNot = opt.value === null
+            const active = isPreferNot ? incomePreferNotToSay : (!incomePreferNotToSay && incomeBracket === opt.value)
+            return (
+              <ChoiceRow
+                key={opt.label}
+                mode="radio"
+                label={opt.label}
+                selected={active}
+                onPress={() => {
+                  if (isPreferNot) {
+                    setIncomePreferNotToSay(true)
+                    setIncomeBracket(null)
+                  } else {
+                    setIncomePreferNotToSay(false)
+                    setIncomeBracket(opt.value)
+                  }
+                }}
+              />
+            )
+          })}
+        </View>
+      </StepShell>
+    )
+  }
+
+  if (step === 'gwa') {
+    return (
+      <StepShell
+        step="gwa"
+        title="What is your latest GWA?"
+        description="Your general weighted average, as a percentage. Scholarships use it to check eligibility."
+        onBack={() => go(prevStep('gwa'))}
+        onSkip={() => continueFromGwa(true)}
+        primaryLabel="Continue"
+        onPrimary={() => continueFromGwa(false)}
+      >
+        <TextField
+          label="GWA"
+          hint="From 75 to 100"
+          error={gwaError}
+          value={gwaText}
+          onChangeText={v => { setGwaText(v); setGwaError(undefined) }}
+          placeholder="e.g. 90.5"
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          returnKeyType="done"
+          onSubmitEditing={() => continueFromGwa(false)}
+        />
+      </StepShell>
+    )
+  }
+
+  if (step === 'province') {
+    const pq = provinceQuery.trim().toLowerCase()
+    const filtered = pq ? PH_PROVINCES.filter(p => p.toLowerCase().includes(pq)) : PH_PROVINCES
+    return (
+      <StepShell
+        step="province"
+        title="Which province do you live in?"
+        description="Some scholarships are only for students from certain provinces."
+        onBack={() => go(prevStep('province'))}
+        onSkip={() => continueFromProvince(true)}
+        primaryLabel={province ? `Continue with ${province}` : 'Continue'}
+        onPrimary={() => continueFromProvince(false)}
+      >
+        <View style={{ gap: spacing.sm }}>
+          <SearchField
+            value={provinceQuery}
+            onChangeText={setProvinceQuery}
+            placeholder="e.g. Camarines Sur"
+            accessibilityLabel="Search provinces"
+          />
+          <View accessibilityRole="radiogroup" accessibilityLabel="Province" style={{ gap: spacing.sm }}>
+            {filtered.map(p => (
+              <ChoiceRow key={p} mode="radio" label={p} selected={province === p} onPress={() => setProvince(p)} />
+            ))}
+          </View>
+          {filtered.length === 0 ? (
+            <Text style={textStyle('body', t.textSecondary)}>{`No province matches “${provinceQuery.trim()}”.`}</Text>
+          ) : null}
+        </View>
+      </StepShell>
+    )
+  }
+
+  // ── Quick check ───────────────────────────────────────────────────────────
 
   if (assessDone) {
     const correct = assessAnswers.filter(r => r.correct).length
-
     const subjects = Array.from(new Set(assessAnswers.map(r => r.q.subject)))
     const bySubject = subjects.map(sub => {
       const qs = assessAnswers.filter(r => r.q.subject === sub)
-      const c = qs.filter(r => r.correct).length
-      return { sub, correct: c, total: qs.length }
+      return { sub, correct: qs.filter(r => r.correct).length, total: qs.length }
     })
-
+    const focusTitles = [
+      ...selectedExams.map(e => `${e.schoolName} (${e.examAcronym})`),
+      ...selectedSlugs.map(slug => listings.find(l => l.slug === slug)?.title ?? slug),
+    ]
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingTop: 40, paddingBottom: 48 }}>
-          <Text style={assessStyle.resultTitle}>Assessment Complete!</Text>
-          <Text style={assessStyle.resultSub}>
-            {correct} of {assessAnswers.length} correct.{'\n'}We've calibrated your starting level.
-          </Text>
-
-          <View style={{ marginBottom: spacing.xxl, gap: spacing.sm }}>
-            {bySubject.filter(s => s.total > 0).map(({ sub, correct: c, total }) => {
-              const pctSub = Math.round((c / total) * 100)
-              return (
-                <Card key={sub} padded={false} style={{ padding: spacing.md }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm }}>
-                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary }}>{sub}</Text>
-                    <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: pctSub >= 60 ? t.success : t.danger }}>
-                      {c}/{total} ({pctSub}%)
-                    </Text>
-                  </View>
-                  <View style={{ height: 4, backgroundColor: t.surface2, borderRadius: radius.pill }}>
-                    <View style={{ height: 4, borderRadius: radius.pill, width: `${pctSub}%` as any, backgroundColor: pctSub >= 60 ? t.success : t.danger }} />
-                  </View>
-                </Card>
-              )
-            })}
-          </View>
-
-          {selectedSlugs.length > 0 && (
-            <View style={{ marginBottom: spacing.xxl }}>
-              <Text style={{ fontFamily: 'Lexend_600SemiBold', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: spacing.sm }}>
-                Your Focus List
-              </Text>
-              {selectedSlugs.map((slug, i) => {
-                const listing = listings.find(l => l.slug === slug)
-                return (
-                  <View key={slug} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-                    <View style={{ width: 28, height: 28, borderRadius: radius.pill, backgroundColor: 'rgba(128,0,0,0.82)', alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.textInverse }}>#{i + 1}</Text>
-                    </View>
-                    <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary, flex: 1 }}>
-                      {listing?.title ?? slug}
-                    </Text>
-                  </View>
-                )
-              })}
-            </View>
-          )}
-
-          <View style={{ marginTop: spacing.sm }}>
-            <AppButton label="Start Learning →" onPress={finishOnboarding} />
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+      <ResultsView
+        correct={correct}
+        total={assessAnswers.length}
+        bySubject={bySubject}
+        focusTitles={focusTitles}
+        onStart={finishOnboarding}
+      />
     )
   }
 
@@ -1183,54 +936,14 @@ export default function OnboardingScreen() {
   if (!q) return null
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl }}>
-        <StepDots active={3} t={t} />
-      </View>
-
-      <View style={{ paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: spacing.md }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs }}>
-          <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary }}>
-            Pre-Assessment
-          </Text>
-          <Pressable onPress={finishOnboarding} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>Skip</Text>
-          </Pressable>
-        </View>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: spacing.sm }}>
-          {q.subject} · Question {assessIdx + 1} of {preAssessQuestions.length}
-        </Text>
-        <View style={{ height: 3, backgroundColor: t.surface2, borderRadius: radius.pill }}>
-          <View style={{
-            height: 3, backgroundColor: t.accent, borderRadius: radius.pill,
-            width: `${((assessIdx + 1) / preAssessQuestions.length) * 100}%` as any,
-          }} />
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xxl, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        <View style={assessStyle.questionCard}>
-          <Text style={assessStyle.questionLabel}>{q.subject.toUpperCase()}</Text>
-          <Text style={assessStyle.questionText}>{q.stem}</Text>
-        </View>
-
-        <QuestionFigure imageUrl={q.imageUrl} imageAlt={q.imageAlt} imageWidth={q.imageWidth} imageHeight={q.imageHeight} />
-
-        <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-          {q.options.map((opt, i) => (
-            <Pressable
-              key={i}
-              style={({ pressed }) => [assessStyle.optionBtn, pressed ? { opacity: 0.75 } : null]}
-              onPress={() => handleAssessAnswer(i)}
-            >
-              <View style={assessStyle.optionLetter}>
-                <Text style={assessStyle.optionLetterTxt}>{(['A', 'B', 'C', 'D'] as const)[i]}</Text>
-              </View>
-              <Text style={assessStyle.optionText}>{opt}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <StepShell
+      step="check"
+      title="A quick warm-up"
+      description={`${preAssessQuestions.length} short questions. Answer what you can; it only sets your starting point.`}
+      onBack={assessIdx === 0 ? () => go(prevStep('check')) : undefined}
+      onSkip={finishOnboarding}
+    >
+      <QuestionView q={q} index={assessIdx} total={preAssessQuestions.length} onAnswer={handleAssessAnswer} />
+    </StepShell>
   )
 }

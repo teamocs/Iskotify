@@ -8,6 +8,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { WebRefreshButton } from '../WebRefreshButton'
+import { aria } from '../../../test-utils/aria'
 
 const { Platform } = require('react-native')
 let originalOS: string
@@ -29,9 +30,26 @@ describe('WebRefreshButton — web', () => {
     expect(screen.getByRole('button', { name: /refresh data/i })).toBeTruthy()
   })
 
-  it('shows the ↻ glyph when not refreshing', () => {
+  it('shows a drawn icon and a visible Refresh label, never a text glyph', () => {
     render(<WebRefreshButton onRefresh={jest.fn()} refreshing={false} />)
-    expect(screen.getByText('↻')).toBeTruthy()
+    expect(screen.getByText('Refresh')).toBeTruthy()
+    expect(screen.getByTestId('web-refresh-icon', { includeHiddenElements: true })).toBeTruthy()
+    expect(screen.queryByText('↻')).toBeNull()
+  })
+
+  it('keeps a 44pt target', () => {
+    const { StyleSheet } = require('react-native')
+    render(<WebRefreshButton onRefresh={jest.fn()} refreshing={false} />)
+    const btn = screen.getByRole('button', { name: /refresh data/i })
+    expect(StyleSheet.flatten(btn.props.style).minHeight).toBeGreaterThanOrEqual(44)
+  })
+
+  it('says it is refreshing while busy and marks itself busy/disabled for the web build', () => {
+    render(<WebRefreshButton onRefresh={jest.fn()} refreshing={true} />)
+    expect(screen.getByText('Refreshing')).toBeTruthy()
+    const btn = screen.getByRole('button', { name: /refresh data/i })
+    expect(aria(btn, 'aria-busy')).toBe(true)
+    expect(aria(btn, 'aria-disabled')).toBe(true)
   })
 
   it('calls onRefresh when pressed', () => {
@@ -41,9 +59,9 @@ describe('WebRefreshButton — web', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1)
   })
 
-  it('does NOT show the glyph when refreshing (shows ActivityIndicator instead)', () => {
+  it('swaps the icon for a spinner while refreshing', () => {
     render(<WebRefreshButton onRefresh={jest.fn()} refreshing={true} />)
-    expect(screen.queryByText('↻')).toBeNull()
+    expect(screen.queryByTestId('web-refresh-icon', { includeHiddenElements: true })).toBeNull()
   })
 
   it('button has disabled prop when refreshing', () => {

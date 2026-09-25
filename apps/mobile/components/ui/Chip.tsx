@@ -68,6 +68,8 @@ export function FilterChip({ label, selected, onPress, mode = 'single', role, ac
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={a11yState}
+      // Web: react-native-web ignores accessibilityState, so state rides on aria-*.
+      {...(a11yRole === 'checkbox' || a11yRole === 'radio' ? { 'aria-checked': selected } : { 'aria-selected': selected })}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
         return [

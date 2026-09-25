@@ -1,20 +1,23 @@
+/**
+ * Onboarding (redesign M2): one question per step, a "Step n of 9" progress
+ * indicator, large selectable rows with aria state, and resume-safe — every
+ * answer is saved when the student continues, and a relaunch picks up at the
+ * first unanswered required question.
+ */
 import React from 'react'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native'
 import OnboardingScreen from '../onboarding'
-import { practiceSessions, userProgress } from '../../db/schema'
+import { userSettings } from '../../db/schema'
+import { aria } from '../../test-utils/aria'
 
 jest.mock('../../components/SchoolPicker', () => ({
   SchoolPicker: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
     const { TextInput } = require('react-native')
-    return (
-      <TextInput
-        testID="school-picker-mock"
-        value={value}
-        onChangeText={onChange}
-      />
-    )
+    return <TextInput testID="school-picker-mock" value={value} onChangeText={onChange} />
   },
 }))
+
+jest.mock('../../components/practice/QuestionFigure', () => ({ QuestionFigure: () => null }))
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn() },
@@ -22,396 +25,314 @@ jest.mock('expo-router', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }))
 
-jest.mock('../../services/supabase', () => {
-  // Permissive chainable query builder: any method returns the same builder, and
-  // awaiting it (or .then) resolves to an empty result. Covers select/eq/in/order/etc.
-  const makeBuilder = () => {
-    const builder: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) {
-      builder[m] = jest.fn(() => builder)
-    }
-    builder.single = jest.fn().mockResolvedValue({ data: null, error: null })
-    ;(builder as { then: unknown }).then = (resolve: (v: unknown) => unknown) =>
-      resolve({ data: [], error: null })
-    return builder
+function makeBuilder(data: Record<string, unknown>[] = []) {
+  const builder: Record<string, unknown> = {}
+  for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) {
+    builder[m] = jest.fn(() => builder)
   }
-  return {
-    supabase: {
-      from: jest.fn(() => makeBuilder()),
-      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
-    },
-  }
-})
+  builder.single = jest.fn().mockResolvedValue({ data: null, error: null })
+  ;(builder as { then: unknown }).then = (resolve: (v: unknown) => unknown) => resolve({ data, error: null })
+  return builder
+}
 
-// Sync mock: controlled per-test. Variable is `mock`-prefixed so Jest's
-// factory hoisting allows referencing it inside jest.mock().
+jest.mock('../../services/supabase', () => ({
+  supabase: {
+    from: jest.fn(() => {
+      const b: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) b[m] = jest.fn(() => b)
+      ;(b as { then: unknown }).then = (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null })
+      return b
+    }),
+    auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) },
+  },
+}))
+
 let mockSyncImpl: () => Promise<void> = () => Promise.resolve()
-
 jest.mock('../../services/sync', () => ({
   syncOnLaunch: jest.fn(() => mockSyncImpl()),
   pushUserData: jest.fn().mockResolvedValue(undefined),
-}))
-
-// Track all insert table references captured during transaction
-const insertedTables: unknown[] = []
-const valuesInserted: unknown[] = []
-
-const mockTx = {
-  insert: jest.fn((table: unknown) => {
-    insertedTables.push(table)
-    return {
-      values: jest.fn((vals: unknown) => {
-        valuesInserted.push(vals)
-        return Promise.resolve()
-      }),
-      onConflictDoUpdate: jest.fn().mockReturnValue({ run: jest.fn() }),
-      onConflictDoNothing: jest.fn().mockReturnValue({ run: jest.fn() }),
-      run: jest.fn(),
-    }
-  }),
-}
-
-jest.mock('../../hooks/useDb', () => ({
-  useDb: () => ({
-    insert: jest.fn(() => ({
-      values: jest.fn(() => ({
-        onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
-        onConflictDoNothing: jest.fn().mockResolvedValue(undefined),
-      })),
-    })),
-    transaction: jest.fn(async (cb: (tx: typeof mockTx) => Promise<void>) => {
-      await cb(mockTx)
-    }),
-  }),
 }))
 
 jest.mock('../../hooks/useAiEnhancement', () => ({
   runEnhancement: jest.fn().mockResolvedValue(undefined),
 }))
 
-describe('OnboardingScreen — Step 1', () => {
-  it('renders the step 1 heading', () => {
-    render(<OnboardingScreen />)
-    expect(screen.getByText('Tell us about yourself')).toBeTruthy()
-  })
-
-  it('renders Full Name and School inputs', () => {
-    render(<OnboardingScreen />)
-    expect(screen.getByPlaceholderText('e.g. Juan dela Cruz')).toBeTruthy()
-    expect(screen.getByTestId('school-picker-mock')).toBeTruthy()
-  })
-
-  it('renders grade buttons G9 through G12', () => {
-    render(<OnboardingScreen />)
-    expect(screen.getByText('G9')).toBeTruthy()
-    expect(screen.getByText('G10')).toBeTruthy()
-    expect(screen.getByText('G11')).toBeTruthy()
-    expect(screen.getByText('G12')).toBeTruthy()
-  })
-
-  it('Next button is present', () => {
-    render(<OnboardingScreen />)
-    expect(screen.getByText('Next →')).toBeTruthy()
-  })
-
-  it('does not navigate when form is empty', () => {
-    const { router } = require('expo-router')
-    jest.clearAllMocks()
-    render(<OnboardingScreen />)
-    fireEvent.press(screen.getByText('Next →'))
-    expect(router.replace).not.toHaveBeenCalled()
-  })
-
-  it('advances to step 2 after filling name and grade', () => {
-    render(<OnboardingScreen />)
-    fireEvent.changeText(screen.getByPlaceholderText('e.g. Juan dela Cruz'), 'Juan dela Cruz')
-    fireEvent.press(screen.getByText('G11'))
-    fireEvent.press(screen.getByText('Next →'))
-    expect(screen.getByText(/What are you/)).toBeTruthy()
-  })
-})
-
-
-describe('OnboardingScreen — Pre-assessment DB writes', () => {
-  beforeEach(() => {
-    insertedTables.length = 0
-    valuesInserted.length = 0
-  })
-
-  it('writes 5 practice_sessions rows (one per subject) and never inserts into userProgress', async () => {
-    const { PRE_ASSESS_QUESTIONS } = require('../../data/preAssessment')
-
-    render(<OnboardingScreen />)
-
-    // Navigate to step 2
-    fireEvent.changeText(screen.getByPlaceholderText('e.g. Juan dela Cruz'), 'Test User')
-    fireEvent.press(screen.getByText('G11'))
-    fireEvent.press(screen.getByText('Next →'))
-
-    // Skip listing step and go straight to assessment (press Skip on step 2 implicitly via step 3 show)
-    // Step 2 requires selecting listings + confirming — instead render at step 3 by mocking state isn't easy.
-    // Use the actual flow: advance through step 2 by selecting & confirming.
-    // Since listings are empty ([]), pick the "Continue" button won't be enabled.
-    // We reach step 3 via handleConfirmListings which requires selectedSlugs.length > 0.
-    // Instead, test handleAssessAnswer directly by rendering at step 3.
-    // The simplest approach: we cannot easily skip to step 3.
-    // The screen advances to step 3 after handleConfirmListings completes.
-    // Since supabase returns empty listings, we can't select one.
-    // We test the assessment writes by using a custom wrapper that starts at step 3.
-    //
-    // Alternative: expose step via testID or use a helper. Since we can't modify onboarding.tsx
-    // just for tests, let's verify the mock shape instead via a unit-level check.
-    //
-    // Verify practiceSessions reference is the schema table (basic smoke test)
-    expect(practiceSessions).toBeDefined()
-    // Verify userProgress is the schema table
-    expect(userProgress).toBeDefined()
-    // Verify they are different table references
-    expect(practiceSessions).not.toBe(userProgress)
-
-    // Verify topicId pattern: each subject produces a pre-assess-<Subject> topicId
-    const subjects = ['Mathematics', 'Science', 'English', 'Abstract Reasoning', 'Filipino'] as const
-    for (const subject of subjects) {
-      const topicId = `pre-assess-${subject}`
-      expect(topicId).toMatch(/^pre-assess-/)
-      expect(topicId).toContain(subject)
-    }
-
-    // Verify PRE_ASSESS_QUESTIONS covers exactly those 5 subjects
-    const questionSubjects = new Set(PRE_ASSESS_QUESTIONS.map((q: { subject: string }) => q.subject))
-    expect(questionSubjects.size).toBe(5)
-    for (const subject of subjects) {
-      expect(questionSubjects.has(subject)).toBe(true)
-    }
-  })
-})
-
-// ─── Readiness gate tests ─────────────────────────────────────────────────────
-//
-// Strategy: override the supabase `from()` mock within each test so that
-// university_profiles returns a single exam entry, which populates the exam
-// catalog and makes the UP Diliman / UPCAT entry selectable in step 2.
-// Then we confirm step 2, which kicks off handleConfirmStep2 and the sync.
-// The sync promise is controlled via mockSyncImpl so we can test each gate state.
-
-function makeSyncBuilder(data: Record<string, unknown>[]) {
-  const builder: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'in', 'gt', 'neq', 'order', 'limit', 'update', 'upsert']) {
-    builder[m] = jest.fn(() => builder)
+// DB: `select` resolves the saved settings row (resume source); inserts are recorded.
+let mockSavedSettings: Record<string, unknown>[] = []
+let mockFocusRows: Record<string, unknown>[] = []
+const mockInserts: { table: unknown; values: Record<string, unknown> }[] = []
+jest.mock('../../hooks/useDb', () => {
+  const { userSettings } = jest.requireActual('../../db/schema')
+  const db = {
+    select: jest.fn(() => ({
+      from: jest.fn((table: unknown) => {
+        const rows = () => (table === userSettings ? mockSavedSettings : mockFocusRows)
+        const chain: Record<string, unknown> = {}
+        chain.where = jest.fn(() => chain)
+        chain.limit = jest.fn(() => Promise.resolve(rows()))
+        // Awaited without .limit() (the question-bank read) → nothing synced yet.
+        ;(chain as { then: unknown }).then = (resolve: (v: unknown) => unknown) => resolve([])
+        return chain
+      }),
+    })),
+    insert: jest.fn((table: unknown) => ({
+      values: jest.fn((values: Record<string, unknown>) => {
+        mockInserts.push({ table, values })
+        const done = Promise.resolve()
+        return {
+          onConflictDoUpdate: jest.fn(() => done),
+          onConflictDoNothing: jest.fn(() => done),
+          run: jest.fn(),
+        }
+      }),
+    })),
+    transaction: jest.fn((cb: (tx: unknown) => void) => cb({
+      insert: jest.fn(() => ({ values: jest.fn(() => ({ run: jest.fn() })) })),
+    })),
   }
-  builder.single = jest.fn().mockResolvedValue({ data: null, error: null })
-  ;(builder as { then: unknown }).then = (resolve: (v: unknown) => unknown) =>
-    resolve({ data, error: null })
-  return builder
+  return { useDb: () => db }
+})
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockSavedSettings = []
+  mockFocusRows = []
+  mockInserts.length = 0
+  mockSyncImpl = () => Promise.resolve()
+  const { supabase } = require('../../services/supabase')
+  supabase.from.mockImplementation(() => makeBuilder([]))
+})
+
+async function flush() {
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
 }
 
-// Advance through step 1 and step 2, using a supabase mock that returns one
-// exam (UP Diliman / UPCAT) so the exam item is renderable and selectable.
-// After confirming step 2, navigates through courses+skip and matcher+skip to
-// land on step 3 (pre-assessment), then returns.
-async function advanceThroughStep2({ syncImpl }: { syncImpl: () => Promise<void> }) {
+async function renderFresh() {
+  render(<OnboardingScreen />)
+  await flush()
+}
+
+function pressContinue() {
+  fireEvent.press(screen.getByRole('button', { name: /^Continue/ }))
+}
+
+async function answerNameAndGrade(name = 'Juan dela Cruz', grade = 'Grade 11') {
+  fireEvent.changeText(screen.getByLabelText('Full name'), name)
+  pressContinue()
+  await flush()
+  fireEvent.press(screen.getByRole('radio', { name: grade }))
+  pressContinue()
+  await flush()
+}
+
+describe('Onboarding: one question per step', () => {
+  it('opens on the name question with the step indicator', async () => {
+    await renderFresh()
+    expect(screen.getByRole('header', { name: 'What should we call you?' })).toBeTruthy()
+    expect(screen.getByText('Step 1 of 9')).toBeTruthy()
+    expect(screen.getByRole('progressbar')).toBeTruthy()
+    // Only the name field on this step: no grade picker, no school picker.
+    expect(screen.queryByRole('radio', { name: 'Grade 11' })).toBeNull()
+    expect(screen.queryByTestId('school-picker-mock')).toBeNull()
+  })
+
+  it('keeps Continue disabled (aria-disabled) until a name is typed', async () => {
+    await renderFresh()
+    const cont = screen.getByRole('button', { name: /^Continue/ })
+    expect(aria(cont, 'aria-disabled')).toBe(true)
+    fireEvent.changeText(screen.getByLabelText('Full name'), 'Juan')
+    expect(aria(screen.getByRole('button', { name: /^Continue/ }), 'aria-disabled')).toBe(false)
+  })
+
+  it('the name field autocompletes as a name', async () => {
+    await renderFresh()
+    const field = screen.getByLabelText('Full name')
+    expect(field.props.autoComplete).toBe('name')
+    expect(field.props.textContentType).toBe('name')
+  })
+
+  it('asks the grade next, as large radio rows that expose aria-checked', async () => {
+    await renderFresh()
+    fireEvent.changeText(screen.getByLabelText('Full name'), 'Juan')
+    pressContinue()
+    await flush()
+    expect(screen.getByRole('header', { name: 'What grade are you in?' })).toBeTruthy()
+    expect(screen.getByText('Step 2 of 9')).toBeTruthy()
+    const g11 = screen.getByRole('radio', { name: 'Grade 11' })
+    expect(aria(g11, 'aria-checked')).toBe(false)
+    fireEvent.press(g11)
+    expect(aria(screen.getByRole('radio', { name: 'Grade 11' }), 'aria-checked')).toBe(true)
+    expect(aria(screen.getByRole('radio', { name: 'Grade 12' }), 'aria-checked')).toBe(false)
+  })
+
+  it('saves the name and grade as soon as each is answered', async () => {
+    await renderFresh()
+    await answerNameAndGrade('Maria Santos', 'Grade 12')
+    const saved = mockInserts.filter(i => i.table === userSettings).map(i => i.values)
+    expect(saved).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fullName: 'Maria Santos' }),
+      expect.objectContaining({ gradeLevel: 12 }),
+    ]))
+  })
+
+  it('then asks for the school (optional, with Skip)', async () => {
+    await renderFresh()
+    await answerNameAndGrade()
+    expect(screen.getByRole('header', { name: 'Where do you study?' })).toBeTruthy()
+    expect(screen.getByTestId('school-picker-mock')).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Skip this question' }))
+    await flush()
+    expect(screen.getByRole('header', { name: 'What are you preparing for?' })).toBeTruthy()
+  })
+
+  it('Back returns to the previous question with the answer kept', async () => {
+    await renderFresh()
+    fireEvent.changeText(screen.getByLabelText('Full name'), 'Juan')
+    pressContinue()
+    await flush()
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('header', { name: 'What should we call you?' })).toBeTruthy()
+    expect(screen.getByLabelText('Full name').props.value).toBe('Juan')
+  })
+
+  it('has no Back button on the first question', async () => {
+    await renderFresh()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+  })
+})
+
+describe('Onboarding: resume-safe', () => {
+  it('resumes at the goal question when name and grade were saved before', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, school: '', schoolRegion: '' }]
+    await renderFresh()
+    await waitFor(() => expect(screen.getByRole('header', { name: 'What are you preparing for?' })).toBeTruthy())
+    expect(screen.getByText('Step 4 of 9')).toBeTruthy()
+  })
+
+  it('resumes at the grade when only the name is saved (e.g. from Google sign-in)', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: null }]
+    await renderFresh()
+    await waitFor(() => expect(screen.getByRole('header', { name: 'What grade are you in?' })).toBeTruthy())
+  })
+})
+
+// ─── Goals → readiness gate ────────────────────────────────────────────────────
+
+async function advanceToCheck({ syncImpl }: { syncImpl: () => Promise<void> }) {
   mockSyncImpl = syncImpl
-
-  const profileData = [{
-    school_id: 'upd',
-    data_tier: 'tier1',
-    entrance_exam_acronym: 'UPCAT',
-    entrance_exam_name: 'UP College Admission Test',
-    exam_month: 'August',
-    known_for_courses: [],
-    prc_top_courses: [],
-  }]
-  const schoolData = [{
-    id: 'upd',
-    name: 'University of the Philippines Diliman',
-    acronym: 'UP Diliman',
-    region: 'NCR',
-    province: 'Metro Manila',
-    rank_in_province: 1,
-  }]
-
   const { supabase } = require('../../services/supabase')
   supabase.from.mockImplementation((table: string) => {
-    if (table === 'university_profiles') return makeSyncBuilder(profileData)
-    if (table === 'tertiary_schools') return makeSyncBuilder(schoolData)
-    // all others (listings, course_taxonomy_map, career_courses) → empty
-    return makeSyncBuilder([])
+    if (table === 'university_profiles') {
+      return makeBuilder([{
+        school_id: 'upd', data_tier: 'tier1', entrance_exam_acronym: 'UPCAT',
+        entrance_exam_name: 'UP College Admission Test', exam_month: 'August',
+        known_for_courses: [], prc_top_courses: [],
+      }])
+    }
+    if (table === 'tertiary_schools') {
+      return makeBuilder([{
+        id: 'upd', name: 'University of the Philippines Diliman', acronym: 'UP Diliman',
+        region: 'NCR', province: 'Metro Manila', rank_in_province: 1,
+      }])
+    }
+    return makeBuilder([])
   })
-
+  mockSavedSettings = [{ id: 1, fullName: 'Test', gradeLevel: 11, school: '', schoolRegion: '' }]
   render(<OnboardingScreen />)
-
-  // Step 1
-  fireEvent.changeText(screen.getByPlaceholderText('e.g. Juan dela Cruz'), 'Test User')
-  fireEvent.press(screen.getByText('G11'))
-  fireEvent.press(screen.getByText('Next →'))
-
-  // Step 2: wait for the exam catalog to load then select the exam
-  await act(async () => {
-    await Promise.resolve()
-  })
-
-  // The exam card should now be visible — select it
-  const examCard = await screen.findByText('University of the Philippines Diliman')
-  fireEvent.press(examCard)
-
-  // Confirm step 2 — this fires handleConfirmStep2 which sets syncStatus='running'
-  await act(async () => {
-    fireEvent.press(screen.getByText(/Continue/))
-    await Promise.resolve()
-  })
-
-  // Now on courses step — skip it
-  await act(async () => {
-    fireEvent.press(screen.getByText('Skip'))
-    await Promise.resolve()
-  })
-
-  // Now on matcher step — skip it
-  await act(async () => {
-    fireEvent.press(screen.getByText('Skip for now'))
-    await Promise.resolve()
-  })
-
-  // Now on step 3 (pre-assessment)
+  await flush()
+  const exam = await screen.findByRole('checkbox', { name: /University of the Philippines Diliman/ })
+  expect(aria(exam, 'aria-checked')).toBe(false)
+  fireEvent.press(exam)
+  expect(aria(screen.getByRole('checkbox', { name: /University of the Philippines Diliman/ }), 'aria-checked')).toBe(true)
+  await act(async () => { pressContinue(); await Promise.resolve() })
+  await flush()
+  // courses, income, gwa, province: all optional
+  for (const header of ['Which courses are you considering?', 'What is your household income?', 'What is your latest GWA?', 'Which province do you live in?']) {
+    expect(screen.getByRole('header', { name: header })).toBeTruthy()
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })); await Promise.resolve() })
+    await flush()
+  }
+  expect(screen.getByText('Step 9 of 9')).toBeTruthy()
 }
 
-describe('OnboardingScreen — Readiness gate', () => {
+describe('Onboarding: goals and the readiness gate', () => {
   const { router } = require('expo-router')
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockSyncImpl = () => Promise.resolve()
+  it('Continue on the goal stays disabled until an exam or scholarship is picked', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11 }]
+    await renderFresh()
+    await waitFor(() => screen.getByRole('header', { name: 'What are you preparing for?' }))
+    expect(aria(screen.getByRole('button', { name: /^Continue/ }), 'aria-disabled')).toBe(true)
   })
 
-  it('finishing while sync is running shows the gate and does NOT navigate', async () => {
-    // Sync stays pending until resolved manually
+  it('finishing while sync runs shows the gate (no emoji) and does not navigate', async () => {
     let resolveSync!: () => void
-    const pendingSync = new Promise<void>(res => { resolveSync = res })
-    mockSyncImpl = () => pendingSync
-
-    await advanceThroughStep2({ syncImpl: () => pendingSync })
-
-    // Press "Skip" on the pre-assessment step (calls finishOnboarding while sync is running)
-    await act(async () => {
-      fireEvent.press(screen.getByText('Skip'))
-    })
-
-    // Gate must be visible with the loading copy
-    expect(screen.getByText('Hang tight, almost there! 🎒')).toBeTruthy()
+    const pending = new Promise<void>(res => { resolveSync = res })
+    await advanceToCheck({ syncImpl: () => pending })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
+    expect(screen.getByText('Hang tight, almost there')).toBeTruthy()
     expect(screen.getByText(/We're preparing your reviewers/)).toBeTruthy()
-    // router.replace must NOT have been called yet
     expect(router.replace).not.toHaveBeenCalled()
-
-    // Cleanup: resolve the promise so no dangling async state warnings
     await act(async () => { resolveSync() })
   })
 
-  it('sync resolving while gate is visible auto-navigates to tabs', async () => {
+  it('sync resolving while the gate is visible continues to the welcome tour', async () => {
     let resolveSync!: () => void
-    const pendingSync = new Promise<void>(res => { resolveSync = res })
-    mockSyncImpl = () => pendingSync
-
-    await advanceThroughStep2({ syncImpl: () => pendingSync })
-
-    // Trigger gate
-    await act(async () => {
-      fireEvent.press(screen.getByText('Skip'))
-    })
-    expect(screen.getByText('Hang tight, almost there! 🎒')).toBeTruthy()
-    expect(router.replace).not.toHaveBeenCalled()
-
-    // Now resolve sync — should trigger auto-navigation to the welcome tour
-    await act(async () => {
-      resolveSync()
-      await Promise.resolve()
-    })
-
+    const pending = new Promise<void>(res => { resolveSync = res })
+    await advanceToCheck({ syncImpl: () => pending })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
+    await act(async () => { resolveSync(); await Promise.resolve() })
     expect(router.replace).toHaveBeenCalledWith('/welcome')
   })
 
-  it('sync error shows error copy; Try again re-fires syncOnLaunch; Continue anyway routes', async () => {
+  it('sync error explains itself, and Try again / Continue anyway both work', async () => {
     let rejectSync!: (e: Error) => void
-    const failingSync = new Promise<void>((_, rej) => { rejectSync = rej })
-    mockSyncImpl = () => failingSync
+    const failing = new Promise<void>((_, rej) => { rejectSync = rej })
+    await advanceToCheck({ syncImpl: () => failing })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
+    await act(async () => { rejectSync(new Error('network')); await Promise.resolve() })
+    expect(screen.getByText("That didn't load")).toBeTruthy()
+    expect(screen.getByText(/check your internet connection/i)).toBeTruthy()
 
-    await advanceThroughStep2({ syncImpl: () => failingSync })
+    const { syncOnLaunch } = require('../../services/sync')
+    const before = syncOnLaunch.mock.calls.length
+    mockSyncImpl = () => new Promise<void>(() => {})
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Try again' })) })
+    expect(syncOnLaunch.mock.calls.length).toBeGreaterThan(before)
+  })
 
-    // Trigger gate
-    await act(async () => {
-      fireEvent.press(screen.getByText('Skip'))
-    })
-
-    // Reject the sync
-    await act(async () => {
-      rejectSync(new Error('network error'))
-      await Promise.resolve()
-    })
-
-    // Error copy should be visible
-    expect(screen.getByText("Hmm, that didn't load 😅")).toBeTruthy()
-    expect(screen.getByText('Please check your internet connection and try again.')).toBeTruthy()
-
-    // "Continue anyway" should navigate immediately from the error state
-    await act(async () => {
-      fireEvent.press(screen.getByText('Continue anyway'))
-    })
+  it('Continue anyway from the error state enters the app', async () => {
+    let rejectSync!: (e: Error) => void
+    const failing = new Promise<void>((_, rej) => { rejectSync = rej })
+    await advanceToCheck({ syncImpl: () => failing })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
+    await act(async () => { rejectSync(new Error('network')); await Promise.resolve() })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: /Continue anyway/ })) })
     expect(router.replace).toHaveBeenCalledWith('/(tabs)')
   })
 
-  it('pressing Try again in error state re-fires syncOnLaunch', async () => {
-    let rejectSync!: (e: Error) => void
-    const failingSync = new Promise<void>((_, rej) => { rejectSync = rej })
-    mockSyncImpl = () => failingSync
-
-    await advanceThroughStep2({ syncImpl: () => failingSync })
-
-    // Trigger gate
-    await act(async () => {
-      fireEvent.press(screen.getByText('Skip'))
-    })
-
-    // Reject the sync to enter error state
-    await act(async () => {
-      rejectSync(new Error('network error'))
-      await Promise.resolve()
-    })
-
-    expect(screen.getByText("Hmm, that didn't load 😅")).toBeTruthy()
-
-    const { syncOnLaunch } = require('../../services/sync')
-    const callsBefore = syncOnLaunch.mock.calls.length
-
-    // Set up a new pending sync for the retry
-    let resolveRetry!: () => void
-    const retryPromise = new Promise<void>(res => { resolveRetry = res })
-    mockSyncImpl = () => retryPromise
-
-    await act(async () => {
-      fireEvent.press(screen.getByText('Try again'))
-      await Promise.resolve()
-    })
-
-    expect(syncOnLaunch.mock.calls.length).toBeGreaterThan(callsBefore)
-
-    // Cleanup: resolve the pending retry
-    await act(async () => { resolveRetry() })
-  })
-
-  it('finishing when sync already resolved navigates immediately without showing gate', async () => {
-    // Sync resolves immediately (default mockSyncImpl)
-    mockSyncImpl = () => Promise.resolve()
-
-    await advanceThroughStep2({ syncImpl: () => Promise.resolve() })
-
-    // Press Skip — syncStatus should be 'done' at this point (sync resolved immediately)
-    await act(async () => {
-      fireEvent.press(screen.getByText('Skip'))
-    })
-
-    // Should have navigated immediately to the welcome tour — waitFor flushes microtasks
+  it('finishing after sync already resolved goes straight to the welcome tour', async () => {
+    await advanceToCheck({ syncImpl: () => Promise.resolve() })
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/welcome'))
-    expect(screen.queryByText('Hang tight, almost there! 🎒')).toBeNull()
+    expect(screen.queryByText('Hang tight, almost there')).toBeNull()
+  })
+})
+
+describe('Onboarding: quick check results', () => {
+  it('shows a neutral starting point, never a pass/fail verdict', async () => {
+    await advanceToCheck({ syncImpl: () => Promise.resolve() })
+    // Answer every question with the first option.
+    for (let i = 0; i < 40; i++) {
+      const options = screen.queryAllByRole('button', { name: /^Option A/ })
+      if (options.length === 0) break
+      fireEvent.press(options[0]!)
+    }
+    expect(screen.getByRole('header', { name: 'Your starting point' })).toBeTruthy()
+    expect(screen.queryByText(/fail|pass|Assessment Complete/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /Start studying/ })).toBeTruthy()
   })
 })

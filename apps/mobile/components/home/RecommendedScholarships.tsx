@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { GraduationCap1Outlined, Trophy1Outlined } from '@lineiconshq/free-icons'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, typography } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { SectionHeader } from '../ui/SectionHeader'
 import { ListCard } from '../ui/ListCard'
 import { InfoBanner } from '../ui/InfoBanner'
@@ -55,7 +57,7 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
               <ListCard
                 key={listing.id}
                 iconBg={t.successSurface}
-                icon={<Text style={{ fontSize: typography.base }}>🏅</Text>}
+                icon={<Lineicons icon={Trophy1Outlined} size={18} color={t.successStrong} />}
                 title={listing.title}
                 subtitle={subtitle}
                 trailing={<MatchPill status={status} />}
@@ -66,7 +68,7 @@ export function RecommendedScholarships({ scholarships, profile, clusters, regio
         </View>
       ) : (
         <InfoBanner
-          icon={<Text style={{ fontSize: typography.base }}>🎓</Text>}
+          icon={<Lineicons icon={GraduationCap1Outlined} size={20} color={t.textSecondary} />}
           message="Complete your profile (GWA, province, income) to see scholarships you qualify for."
           actionLabel="Browse"
           onAction={() => router.push('/(tabs)/explore?section=scholarships')}

@@ -9,6 +9,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn() },
+  useLocalSearchParams: () => ({}),
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -39,6 +40,7 @@ beforeEach(() => {
 })
 
 import SignInScreen from '../sign-in'
+import { aria } from '../../../test-utils/aria'
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -247,5 +249,72 @@ describe('SignInScreen — password visibility toggle', () => {
     render(<SignInScreen />)
     fireEvent.press(screen.getByText('Show'))
     expect(screen.getByText('Hide')).toBeTruthy()
+  })
+})
+
+// ── Redesign M2 ───────────────────────────────────────────────────────────────
+
+describe('SignInScreen — redesign M2', () => {
+  it('carries the approved tagline and no retired AI claim', () => {
+    render(<SignInScreen />)
+    expect(screen.getByText('Para sa mga Iskolar ng Bayan')).toBeTruthy()
+    expect(screen.queryByText(/AI-powered/i)).toBeNull()
+  })
+
+  it('the mode switch is a tablist whose tabs expose aria-selected', () => {
+    render(<SignInScreen />)
+    expect(aria(screen.getByRole('tab', { name: 'Sign in' }), 'aria-selected')).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Create account' }), 'aria-selected')).toBe(false)
+    fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
+    expect(aria(screen.getByRole('tab', { name: 'Create account' }), 'aria-selected')).toBe(true)
+  })
+
+  it('labels fields visibly and sets the right autocomplete for password managers', () => {
+    render(<SignInScreen />)
+    const email = screen.getByLabelText('Email address')
+    expect(email.props.autoComplete).toBe('email')
+    expect(email.props.textContentType).toBe('emailAddress')
+    expect(email.props.inputMode).toBe('email')
+    const pw = screen.getByLabelText('Password')
+    expect(pw.props.autoComplete).toBe('current-password')
+    expect(pw.props.textContentType).toBe('password')
+    fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
+    const newPw = screen.getByLabelText('Password')
+    expect(newPw.props.autoComplete).toBe('new-password')
+    expect(newPw.props.textContentType).toBe('newPassword')
+  })
+
+  it('marks an invalid field and says how to fix it', async () => {
+    render(<SignInScreen />)
+    const signInButtons = screen.getAllByText('Sign in')
+    fireEvent.press(signInButtons[signInButtons.length - 1])
+    await waitFor(() => {
+      expect(aria(screen.getByLabelText('Email address'), 'aria-invalid')).toBe(true)
+    })
+  })
+
+  it('the password toggle is a named 44pt button', () => {
+    render(<SignInScreen />)
+    expect(screen.getByRole('button', { name: 'Show password' })).toBeTruthy()
+  })
+
+  it('shows why the student is back here after a failed sign-in link', () => {
+    const router = require('expo-router')
+    router.useLocalSearchParams = () => ({ error: 'link' })
+    render(<SignInScreen />)
+    expect(screen.getByText(/That sign-in link didn't work/)).toBeTruthy()
+    router.useLocalSearchParams = () => ({})
+  })
+
+  it('the submit button reports busy through aria-busy while signing in', async () => {
+    let resolve!: (v: unknown) => void
+    mockSignInWithEmail.mockReturnValue(new Promise(r => { resolve = r }))
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
+    const signInButtons = screen.getAllByText('Sign in')
+    fireEvent.press(signInButtons[signInButtons.length - 1])
+    await waitFor(() => expect(aria(screen.getByRole('button', { name: 'Sign in' }), 'aria-busy')).toBe(true))
+    resolve({ ok: true, data: undefined })
   })
 })

@@ -17,6 +17,7 @@ function NavItem({ dest, isFocused, onPress }: { dest: Destination; isFocused: b
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
+      aria-selected={isFocused}
       accessibilityLabel={dest.label}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState

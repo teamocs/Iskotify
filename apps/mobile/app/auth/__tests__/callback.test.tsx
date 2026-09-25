@@ -88,6 +88,7 @@ jest.mock('../../../services/supabase', () => ({
 
 // ── Import component after mocks ──────────────────────────────────────────────
 import AuthCallback from '../callback'
+import { aria } from '../../../test-utils/aria'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,5 +272,29 @@ describe('auth/callback — no code (native)', () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith('/landing')
     })
+  })
+})
+
+// ── Redesign M2: what the student sees while the callback works ──────────────
+
+describe('auth/callback — status and failure copy', () => {
+  it('says what is happening in a polite live region, not a bare spinner', () => {
+    mockUseLocalSearchParams.mockReturnValue({ code: undefined })
+    const { getByText } = render(<AuthCallback />)
+    const status = getByText('Signing you in…')
+    expect(status.props.accessibilityLiveRegion ?? aria(status, 'aria-live')).toBeTruthy()
+  })
+
+  it('a failed web sign-in returns to sign-in WITH a reason to show', async () => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'web', configurable: true })
+    Object.defineProperty(window, 'location', {
+      value: { href: 'https://app.iskotify.ph/auth/callback?code=bad' },
+      writable: true,
+      configurable: true,
+    })
+    mockExchangeCode.mockResolvedValue({ error: new Error('invalid grant') })
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+    render(<AuthCallback />)
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/sign-in?error=link'))
   })
 })

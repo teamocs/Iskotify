@@ -1,13 +1,22 @@
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { SyncOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { radius, spacing, textStyle } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from './a11y'
 
 interface WebRefreshButtonProps {
   onRefresh: () => void | Promise<void>
   refreshing: boolean
 }
 
+/**
+ * Web stand-in for pull-to-refresh (a desktop has no pull gesture). A drawn
+ * sync icon plus a visible "Refresh" label, so the button reads as an action
+ * rather than a stray glyph; the label says "Refreshing" while it runs.
+ */
 function WebRefreshButtonInner({ onRefresh, refreshing }: WebRefreshButtonProps) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
   return (
     <Pressable
@@ -15,25 +24,38 @@ function WebRefreshButtonInner({ onRefresh, refreshing }: WebRefreshButtonProps)
       disabled={refreshing}
       accessibilityRole="button"
       accessibilityLabel="Refresh data"
-      style={({ pressed }) => [
-        styles.pill,
-        {
-          backgroundColor: t.surface,
-          borderColor: t.border,
-          opacity: refreshing ? 0.6 : pressed ? 0.7 : 1,
-        },
-      ]}
+      aria-busy={refreshing}
+      aria-disabled={refreshing}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressableState
+        return [
+          {
+            minHeight: 44,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: spacing.sm,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.pill,
+            borderWidth: 1,
+            borderColor: t.border,
+            backgroundColor: pressed || hovered ? t.surface2 : t.surface,
+            flexShrink: 0,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
     >
       {refreshing ? (
-        <ActivityIndicator size="small" color={t.textSecondary} style={styles.indicator} />
+        <ActivityIndicator size="small" color={t.textSecondary} style={{ width: 18, height: 18 }} />
       ) : (
-        <Text
-          style={[styles.glyph, { color: t.textSecondary, fontSize: typo.base }]}
-          maxFontSizeMultiplier={1.4}
-        >
-          ↻
-        </Text>
+        <View testID="web-refresh-icon" {...decorative}>
+          <Lineicons icon={SyncOutlined} size={18} color={t.textSecondary} />
+        </View>
       )}
+      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        {refreshing ? 'Refreshing' : 'Refresh'}
+      </Text>
     </Pressable>
   )
 }
@@ -42,23 +64,3 @@ export function WebRefreshButton(props: WebRefreshButtonProps) {
   if (Platform.OS !== 'web') return null
   return <WebRefreshButtonInner {...props} />
 }
-
-const styles = StyleSheet.create({
-  pill: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  glyph: {
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  indicator: {
-    width: 20,
-    height: 20,
-  },
-})

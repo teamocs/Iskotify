@@ -1,30 +1,27 @@
-import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable, Alert, BackHandler, Switch } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect } from 'react'
+import { View, Text, Pressable, Alert, BackHandler, Switch, Platform } from 'react-native'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
-  User4Outlined,
   SparkOutlined,
   QuestionMarkCircleOutlined,
   Shield2Outlined,
   ExitOutlined,
-  Brush2Outlined,
   Bug1Outlined,
   Comment1Outlined,
   Download1Outlined,
-  Bell1Outlined,
+  ChevronLeftOutlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, typography } from '../theme/tokens'
-import { ScreenScroll } from '../components/ui/ScreenScroll'
-import { WebTopSpacer } from '../components/ui/WebTopSpacer'
-import { Card } from '../components/ui/Card'
-import { SectionHeader } from '../components/ui/SectionHeader'
+import { fonts, radius, spacing, textStyle } from '../theme/tokens'
+import { InfoPage } from '../components/info/InfoPage'
+import { ListRow } from '../components/ui/ListRow'
+import { Avatar } from '../components/ui/Avatar'
+import { decorative, focusRing, heading, type WebPressableState } from '../components/ui/a11y'
 import { AiModelDownloadSheet } from '../components/AiModelDownloadSheet'
 import { useNotifications } from '../hooks/useNotifications'
 import { useHomeStats } from '../hooks/useHomeStats'
@@ -37,43 +34,98 @@ function formatHour(hour: number): string {
 
 const version = Constants.expoConfig?.version ?? '1.0.0'
 
-function SettingsRow({
-  icon, iconBg, iconColor, label, onPress, disabled,
-}: {
-  icon: typeof SparkOutlined
-  iconBg: string
-  iconColor: string
-  label: string
-  onPress?: () => void
-  disabled?: boolean
-}) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => StyleSheet.create({
-    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
-    rowIcon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center' as const, justifyContent: 'center' as const, borderCurve: 'continuous' as const },
-    rowLabel: { flex: 1, fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    rowChevron: { color: t.textTertiary, fontSize: typography.md },
-  }), [t, typo])
+type Icon = typeof SparkOutlined
 
+/** A labelled group: level-2 heading, then a bordered list. */
+function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  const { theme: t } = useTheme()
+  return (
+    <View style={{ gap: spacing.sm, marginBottom: spacing.xxl }}>
+      <View style={{ gap: 2 }}>
+        <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)}>{title}</Text>
+        {note ? <Text style={textStyle('bodySm', t.textSecondary)}>{note}</Text> : null}
+      </View>
+      <View
+        style={{
+          backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
+          borderRadius: radius.xl, borderCurve: 'continuous', overflow: 'hidden',
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  )
+}
+
+function Divider() {
+  const { theme: t } = useTheme()
+  return <View style={{ height: 1, backgroundColor: t.divider, marginLeft: spacing.lg }} />
+}
+
+function IconTile({ icon, tone = 'neutral' }: { icon: Icon; tone?: 'neutral' | 'accent' | 'danger' }) {
+  const { theme: t } = useTheme()
+  const bg = tone === 'accent' ? t.accentSurface : tone === 'danger' ? t.dangerSurface : t.surface2
+  const fg = tone === 'accent' ? t.accentText : tone === 'danger' ? t.dangerStrong : t.textSecondary
+  return (
+    <View style={{ width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Lineicons icon={icon} size={18} color={fg} />
+    </View>
+  )
+}
+
+/** A text row with a trailing control (switch, stepper, segmented picker). */
+function ControlRow({ label, sub, dimmed, children }: { label: string; sub?: string; dimmed?: boolean; children: React.ReactNode }) {
+  const { theme: t } = useTheme()
+  return (
+    <View
+      style={{
+        minHeight: 64, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md,
+        paddingVertical: spacing.md, paddingHorizontal: spacing.lg, opacity: dimmed ? 0.5 : 1,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 160, gap: 2 }}>
+        <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{label}</Text>
+        {sub ? <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{sub}</Text> : null}
+      </View>
+      {children}
+    </View>
+  )
+}
+
+function StepButton({ label, direction, disabled, onPress }: { label: string; direction: 'back' | 'forward'; disabled: boolean; onPress: () => void }) {
+  const { theme: t } = useTheme()
   return (
     <Pressable
-      style={({ pressed }) => [s.row, disabled && { opacity: 0.5 }, pressed && !disabled && { opacity: 0.7 }]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityLabel={label}
+      aria-disabled={disabled}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressableState
+        return [{
+          width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+          borderWidth: 1, borderColor: t.inputBorder,
+          backgroundColor: pressed || (hovered && !disabled) ? t.surface2 : t.surface,
+        }, focusRing(t.focusRing, focused)]
+      }}
     >
-      <View style={[s.rowIcon, { backgroundColor: iconBg }]}>
-        <Lineicons icon={icon} size={15} color={iconColor} />
+      <View {...decorative} style={direction === 'forward' ? { transform: [{ scaleX: -1 }] } : null}>
+        <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textPrimary} />
       </View>
-      <Text style={[s.rowLabel, disabled && { color: t.textTertiary }]}>{label}</Text>
-      <Text style={s.rowChevron}>›</Text>
     </Pressable>
   )
 }
 
+const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark' }[] = [
+  { label: 'Auto', value: 'system' },
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+]
+
 export default function SettingsScreen() {
   const db = useDb()
-  const { theme: t, typo, themePref, setTheme } = useTheme()
+  const { theme: t, themePref, setTheme } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
   const [modelDownloadVisible, setModelDownloadVisible] = useState(false)
@@ -96,228 +148,152 @@ export default function SettingsScreen() {
 
   function handleExitApp() {
     Alert.alert(
-      'Exit Iskotify',
-      'Are you sure you want to exit?',
+      'Exit Iskotify?',
+      'Your progress is saved.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
-      ]
+      ],
     )
   }
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
-    backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
-    backArrow: { color: t.textSecondary, fontSize: typography.h3, lineHeight: 32 },
-    pageTitle: { fontSize: typo.h2, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    versionBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.xl, borderCurve: 'continuous' as const },
-    versionApp: { fontSize: typo.xs, fontWeight: '700' as const, color: t.accentText, fontFamily: 'Outfit_700Bold' },
-    versionDot: { width: 3, height: 3, backgroundColor: t.textTertiary, borderRadius: 99 },
-    versionNum: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    profileCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md },
-    profileAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: t.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
-    profileName: { fontSize: typo.base, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    profileSub: { fontSize: typo.sm, color: t.textTertiary, marginTop: 1, fontFamily: 'Lexend_400Regular' },
-    rowChevron: { color: t.textTertiary, fontSize: typography.md },
-    divider: { height: 1, backgroundColor: t.divider },
-    section: { gap: spacing.md },
-    appearRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
-    appearIcon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surface2, borderCurve: 'continuous' as const },
-    appearLabel: { fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    segWrap: { flexDirection: 'row' as const, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, padding: 3, gap: 2, marginLeft: 'auto' as const, borderCurve: 'continuous' as const },
-    segBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 7, alignItems: 'center' as const },
-    segBtnOn: { backgroundColor: t.accent },
-    segTxt: { fontSize: typo.xs, fontWeight: '600' as const, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    segTxtOn: { color: t.textInverse },
-    notifRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.md, paddingVertical: spacing.md },
-    notifLabel: { fontSize: typo.base, fontWeight: '500' as const, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    notifSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-    notifRowDisabled: { opacity: 0.45 },
-    stepper: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm },
-    stepperBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border },
-    stepperBtnTxt: { fontSize: typography.base, fontWeight: '700' as const, color: t.textPrimary },
-    stepperValue: { fontSize: typo.sm, fontWeight: '700' as const, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', minWidth: 68, textAlign: 'center' as const },
-  }), [t, typo])
-
-  const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark' }[] = [
-    { label: 'Auto', value: 'system' },
-    { label: 'Light', value: 'light' },
-    { label: 'Dark', value: 'dark' },
-  ]
+  // react-native-web colours the ON thumb from `activeThumbColor` (its own
+  // default is teal); native reads `thumbColor` for both states.
+  const switchColors = {
+    trackColor: { false: t.inputBorder, true: t.accent },
+    thumbColor: t.surfaceRaised,
+    ios_backgroundColor: t.inputBorder,
+    ...({ activeThumbColor: t.surfaceRaised } as object),
+  }
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.backRow}>
-        <Pressable
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-      </View>
+    <InfoPage title="Settings" fallbackHref="/(tabs)">
+      <Group title="Profile">
+        <ListRow
+          title={profileName}
+          subtitle={profileEmail || 'View your profile'}
+          leading={<Avatar name={profileName} size={40} />}
+          onPress={() => router.push('/profile')}
+        />
+      </Group>
 
-      <ScreenScroll tabBarInset={false} padded>
-        <Text style={s.pageTitle}>Settings</Text>
-        <View style={s.versionBadge}>
-          <Text style={s.versionApp}>Iskotify</Text>
-          <View style={s.versionDot} />
-          <Text style={s.versionNum}>v{version}</Text>
-        </View>
+      <Group title="Appearance">
+        <ControlRow label="Theme" sub="Auto follows your phone's setting">
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Theme"
+            style={{ flexDirection: 'row', backgroundColor: t.surface2, borderRadius: radius.md, padding: spacing.xs, gap: spacing.xs }}
+          >
+            {THEME_OPTIONS.map(opt => {
+              const on = themePref === opt.value
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => void setTheme(opt.value)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={opt.label}
+                  aria-checked={on}
+                  style={(state) => {
+                    const { pressed, hovered, focused } = state as WebPressableState
+                    return [{
+                      minHeight: 44, minWidth: 64, paddingHorizontal: spacing.md,
+                      alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
+                      backgroundColor: on ? t.surface : pressed || hovered ? t.surfaceSubtle : 'transparent',
+                      boxShadow: on ? t.shadowSm : undefined,
+                    }, focusRing(t.focusRing, focused)]
+                  }}
+                >
+                  <Text style={[textStyle('label', on ? t.textPrimary : t.textSecondary), { fontFamily: on ? fonts.bodySemi : fonts.bodyMedium }]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </ControlRow>
+      </Group>
 
-        <View style={s.section}>
-          <Card elevated>
-            <Pressable
-              style={({ pressed }) => [s.profileCard, pressed && { opacity: 0.7 }]}
-              onPress={() => router.push('/profile')}
-              accessibilityRole="button"
-            >
-              <View style={s.profileAvatar}>
-                <Lineicons icon={User4Outlined} size={22} color={t.textInverse} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.profileName} numberOfLines={1}>{profileName}</Text>
-                {profileEmail ? (
-                  <Text style={s.profileSub} numberOfLines={1}>{profileEmail}</Text>
-                ) : (
-                  <Text style={s.profileSub}>View Profile</Text>
-                )}
-              </View>
-              <Text style={s.rowChevron}>›</Text>
-            </Pressable>
-          </Card>
-
-          <SectionHeader title="App" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow icon={SparkOutlined} iconBg={t.accentSurface} iconColor={t.accentText} label="About Iskotify"
-              onPress={() => router.push('/about')} />
-            <View style={s.divider} />
-            <SettingsRow icon={QuestionMarkCircleOutlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Help & Support"
-              onPress={() => router.push('/help')} />
-            <View style={s.divider} />
-            <SettingsRow icon={Shield2Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Privacy & Terms"
-              onPress={() => router.push('/privacy')} />
-          </Card>
-
-          <SectionHeader title="AI Features" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow
-              icon={Download1Outlined}
-              iconBg={t.surface2}
-              iconColor={t.textSecondary}
-              label="On-device AI model"
-              onPress={() => setModelDownloadVisible(true)}
+      <Group title="Notifications" note="Daily nudges, reminders and your weekly summary">
+        <ControlRow label="Push notifications" sub={notifEnabled ? 'On: daily nudge, weekly summary, exam countdowns' : 'Off'}>
+          <Switch
+            accessibilityLabel="Push notifications"
+            value={notifEnabled}
+            onValueChange={() => void toggleNotifs(focusedListings)}
+            {...switchColors}
+          />
+        </ControlRow>
+        <Divider />
+        <ControlRow label="Daily reminder time" sub="When your daily practice nudge arrives" dimmed={!notifEnabled}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <StepButton
+              label="Earlier"
+              direction="back"
+              disabled={!notifEnabled}
+              onPress={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}
             />
-          </Card>
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[textStyle('titleSm', t.textPrimary), { minWidth: 76, textAlign: 'center', fontVariant: ['tabular-nums'] }]}
+            >
+              {formatHour(dailyReminderHour)}
+            </Text>
+            <StepButton
+              label="Later"
+              direction="forward"
+              disabled={!notifEnabled}
+              onPress={() => void setReminderHour((dailyReminderHour + 1) % 24, focusedListings)}
+            />
+          </View>
+        </ControlRow>
+        <Divider />
+        <ControlRow label="Weekly summary" sub="A Sunday nudge to review your weak areas" dimmed={!notifEnabled}>
+          <Switch
+            accessibilityLabel="Weekly summary"
+            value={weeklySummaryEnabled}
+            onValueChange={() => void toggleWeeklySummary(focusedListings)}
+            disabled={!notifEnabled}
+            {...switchColors}
+          />
+        </ControlRow>
+      </Group>
 
-          <SectionHeader title="Feedback" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow icon={Bug1Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Report a Bug"
-              onPress={() => router.push('/settings/report-bug')} />
-            <View style={s.divider} />
-            <SettingsRow icon={Comment1Outlined} iconBg={t.surface2} iconColor={t.textSecondary} label="Leave Feedback"
-              onPress={() => router.push('/settings/leave-feedback')} />
-          </Card>
+      <Group title="Offline tools">
+        <ListRow
+          title="On-device AI model"
+          subtitle="Download it for smarter search without internet"
+          leading={<IconTile icon={Download1Outlined} />}
+          onPress={() => setModelDownloadVisible(true)}
+        />
+      </Group>
 
-          <SectionHeader title="Notifications" subtitle="Daily nudges, reminders, and your weekly summary" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <View style={s.notifRow}>
-              <View style={s.appearIcon}>
-                <Lineicons icon={Bell1Outlined} size={15} color={t.textSecondary} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.notifLabel}>Push Notifications</Text>
-                <Text style={s.notifSub}>{notifEnabled ? 'On' : 'Off'} — daily nudge, weekly summary, exam countdowns</Text>
-              </View>
-              <Switch
-                value={notifEnabled}
-                onValueChange={() => void toggleNotifs(focusedListings)}
-                trackColor={{ false: t.border, true: t.accentBorder }}
-                thumbColor={notifEnabled ? t.accentText : t.textTertiary}
-                ios_backgroundColor={t.border}
-              />
-            </View>
-            <View style={s.divider} />
-            <View style={[s.notifRow, !notifEnabled && s.notifRowDisabled]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.notifLabel}>Daily reminder time</Text>
-                <Text style={s.notifSub}>When your daily practice nudge fires</Text>
-              </View>
-              <View style={s.stepper}>
-                <Pressable
-                  style={({ pressed }) => [s.stepperBtn, pressed && { opacity: 0.7 }]}
-                  onPress={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}
-                  disabled={!notifEnabled}
-                  accessibilityRole="button"
-                  accessibilityLabel="Earlier"
-                >
-                  <Text style={s.stepperBtnTxt}>‹</Text>
-                </Pressable>
-                <Text style={s.stepperValue}>{formatHour(dailyReminderHour)}</Text>
-                <Pressable
-                  style={({ pressed }) => [s.stepperBtn, pressed && { opacity: 0.7 }]}
-                  onPress={() => void setReminderHour((dailyReminderHour + 1) % 24, focusedListings)}
-                  disabled={!notifEnabled}
-                  accessibilityRole="button"
-                  accessibilityLabel="Later"
-                >
-                  <Text style={s.stepperBtnTxt}>›</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={s.divider} />
-            <View style={[s.notifRow, !notifEnabled && s.notifRowDisabled]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.notifLabel}>Weekly summary</Text>
-                <Text style={s.notifSub}>Sunday nudge to review your weak areas</Text>
-              </View>
-              <Switch
-                value={weeklySummaryEnabled}
-                onValueChange={() => void toggleWeeklySummary(focusedListings)}
-                disabled={!notifEnabled}
-                trackColor={{ false: t.border, true: t.accentBorder }}
-                thumbColor={weeklySummaryEnabled ? t.accentText : t.textTertiary}
-                ios_backgroundColor={t.border}
-              />
-            </View>
-          </Card>
+      <Group title="Feedback">
+        <ListRow title="Report a bug" leading={<IconTile icon={Bug1Outlined} />} onPress={() => router.push('/settings/report-bug')} />
+        <Divider />
+        <ListRow title="Leave feedback" leading={<IconTile icon={Comment1Outlined} />} onPress={() => router.push('/settings/leave-feedback')} />
+      </Group>
 
-          <SectionHeader title="Session" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <SettingsRow icon={ExitOutlined} iconBg={t.dangerSurface} iconColor={t.danger} label="Exit App" onPress={handleExitApp} />
-          </Card>
+      <Group title="About">
+        <ListRow title="About Iskotify" leading={<IconTile icon={SparkOutlined} tone="accent" />} onPress={() => router.push('/about')} />
+        <Divider />
+        <ListRow title="Help and support" leading={<IconTile icon={QuestionMarkCircleOutlined} />} onPress={() => router.push('/help')} />
+        <Divider />
+        <ListRow title="Privacy and terms" leading={<IconTile icon={Shield2Outlined} />} onPress={() => router.push('/privacy')} />
+      </Group>
 
-          <SectionHeader title="Appearance" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <View style={s.appearRow}>
-              <View style={s.appearIcon}>
-                <Lineicons icon={Brush2Outlined} size={15} color={t.textSecondary} />
-              </View>
-              <Text style={s.appearLabel}>Theme</Text>
-              <View style={s.segWrap}>
-                {THEME_OPTIONS.map(opt => (
-                  <Pressable
-                    key={opt.value}
-                    style={({ pressed }) => [s.segBtn, themePref === opt.value && s.segBtnOn, pressed && { opacity: 0.7 }]}
-                    onPress={() => void setTheme(opt.value)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[s.segTxt, themePref === opt.value && s.segTxtOn]}>{opt.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </Card>
-        </View>
-      </ScreenScroll>
+      {/* BackHandler.exitApp only works on Android; elsewhere the row would do nothing. */}
+      {Platform.OS === 'android' ? (
+        <Group title="Session">
+          <ListRow title="Exit app" leading={<IconTile icon={ExitOutlined} tone="danger" />} onPress={handleExitApp} showChevron={false} />
+        </Group>
+      ) : null}
+
+      <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]}>{`Iskotify v${version}`}</Text>
 
       <AiModelDownloadSheet
         visible={modelDownloadVisible}
         onClose={() => setModelDownloadVisible(false)}
         onReady={() => setModelDownloadVisible(false)}
       />
-    </SafeAreaView>
+    </InfoPage>
   )
 }

@@ -71,6 +71,13 @@ export const darkTheme = {
   backdrop:      'rgba(0,0,0,0.60)',
   // Keyboard focus ring: 8.99:1 on bg.
   focusRing:     '#fca5a5',
+  // ── Redesign M2 addition ────────────────────────────────────────────────
+  // Boundary of a form control (text field, search, select). `border` is a
+  // decorative hairline (~1.3:1) and cannot show where a field is on its own;
+  // this clears WCAG 1.4.11's 3:1 on every ground a field sits on. Opaque, so
+  // it measures the same over a translucent surface. Measured (WCAG formula):
+  //   bg #1a1a2e 5.06 · surface-over-bg 4.04 · surfaceRaised 4.04 · surface2 3.30
+  inputBorder:   '#8a8aa0',
 }
 
 export const lightTheme = {
@@ -130,6 +137,10 @@ export const lightTheme = {
   backdrop:      'rgba(45,10,10,0.40)',
   // Keyboard focus ring: 10.13:1 on bg.
   focusRing:     '#800000',
+  // Form-control boundary (see darkTheme). Maroon-tinted grey so it sits in
+  // the warm palette. Measured (WCAG formula):
+  //   bg #fdf4f4 3.48 · surface #ffffff 3.76 · surfaceRaised 3.76 · surface2 3.09
+  inputBorder:   '#9c7c7c',
 }
 
 export const statusColors = {

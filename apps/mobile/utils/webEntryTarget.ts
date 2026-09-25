@@ -6,7 +6,7 @@
  * can be unit-tested without any React/router dependencies.
  *
  *   no session          → '/auth/sign-in'
- *   session, no name    → '/auth/sign-in'   (shouldn't normally happen)
+ *   session, no name    → '/onboarding'     (a new email account: onboarding asks the name first)
  *   session, name, no focus → '/onboarding'
  *   session, name, focus    → '/(tabs)'
  */
@@ -16,7 +16,7 @@ export function webEntryTarget(
   hasFocus: boolean,
 ): '/auth/sign-in' | '/onboarding' | '/(tabs)' {
   if (!hasSession) return '/auth/sign-in'
-  if (!fullName?.trim()) return '/auth/sign-in'
+  if (!fullName?.trim()) return '/onboarding'
   if (!hasFocus) return '/onboarding'
   return '/(tabs)'
 }

@@ -1,27 +1,23 @@
-import { useState, useMemo, useCallback } from 'react'
-import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-  TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useCallback } from 'react'
+import { View, Text, Pressable } from 'react-native'
 import { router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { StarFatOutlined, StarFatSolid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { Card } from '../../components/ui/Card'
+import { radius, spacing, textStyle } from '../../theme/tokens'
+import { InfoPage } from '../../components/info/InfoPage'
+import { StatusPanel } from '../../components/auth/AuthLayout'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { goBackOr } from '../../components/explore/DetailTopBar'
 import { submitFeedback } from '../../services/appFeedback'
 
 const STARS = [1, 2, 3, 4, 5] as const
+const RATING_WORDS = ['', 'Needs a lot of work', 'Could be better', 'Okay', 'Good', 'Love it'] as const
 
 export default function LeaveFeedbackScreen() {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
   const [rating, setRating] = useState(0)
   const [message, setMessage] = useState('')
@@ -36,139 +32,94 @@ export default function LeaveFeedbackScreen() {
     setError(null)
     setIsSubmitting(true)
     try {
-      const ok = await submitFeedback({
-        rating: rating > 0 ? rating : undefined,
-        message,
-      })
-      if (ok) {
-        setSuccessShown(true)
-      } else {
-        setError("We couldn't send your feedback. Please check your connection and try again.")
-      }
+      const ok = await submitFeedback({ rating: rating > 0 ? rating : undefined, message })
+      if (ok) setSuccessShown(true)
+      else setError("We couldn't send your feedback. Check your connection and try again; your message is still here.")
     } catch {
-      setError('Something went wrong — please try again.')
+      setError('Something went wrong. Please try again; your message is still here.')
     } finally {
       setIsSubmitting(false)
     }
   }, [rating, message])
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    backRow: { flexDirection: 'row' as const, paddingHorizontal: spacing.sm, paddingTop: spacing.xs, paddingBottom: spacing.xs },
-    backBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
-    backArrow: { color: t.textSecondary, fontSize: 28, lineHeight: 32 },
-    pageTitle: { fontSize: typo.h2, fontWeight: '700' as const, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    pageSub: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: typo.sm * 1.6, marginBottom: spacing.xl },
-    label: { fontSize: typo.sm, fontWeight: '600' as const, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', marginBottom: spacing.sm },
-    starsRow: { flexDirection: 'row' as const, gap: spacing.xs, marginBottom: spacing.lg },
-    starBtn: { width: 44, height: 44, alignItems: 'center' as const, justifyContent: 'center' as const },
-    star: { fontSize: 30, lineHeight: 34, color: t.textTertiary },
-    starOn: { color: t.warning },
-    input: { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', minHeight: 120, textAlignVertical: 'top' as const, borderCurve: 'continuous' as const, marginBottom: spacing.lg },
-    errorText: { fontSize: typo.xs, color: t.danger, fontFamily: 'Lexend_400Regular', marginBottom: spacing.md, lineHeight: typo.xs * 1.5 },
-    submitBtn: { backgroundColor: t.accent, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' as const, justifyContent: 'center' as const, minHeight: 48, borderCurve: 'continuous' as const },
-    submitTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
-    successTitle: { fontSize: typo.base, fontWeight: '700' as const, color: t.success, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
-    successBody: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: typo.sm * 1.6 },
-    doneBtn: { backgroundColor: t.accent, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center' as const, marginTop: spacing.md, minHeight: 48, justifyContent: 'center' as const, borderCurve: 'continuous' as const },
-    doneTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
-  }), [t, typo])
+  if (successShown) {
+    return (
+      <InfoPage title="Leave feedback">
+        <View style={{ gap: spacing.lg }}>
+          <StatusPanel tone="success" title="Salamat! We got your feedback.">
+            <Text style={textStyle('bodySm', t.textSecondary)}>It helps us make Iskotify better for every student.</Text>
+          </StatusPanel>
+          <Button label="Done" onPress={() => goBackOr('/settings')} size="lg" fullWidth />
+        </View>
+      </InfoPage>
+    )
+  }
 
   return (
-    <SafeAreaView style={s.root}>
-      {/* iOS needs an explicit inset; Android's adjustResize already lifts the view. */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <WebTopSpacer />
-      <View style={s.backRow}>
-        <Pressable
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
+    <InfoPage
+      title="Leave feedback"
+      lead="What do you like, and what could we do better? We read every message."
+    >
+      <View style={{ gap: spacing.xl }}>
+        <View style={{ gap: spacing.sm }}>
+          <Text style={textStyle('label', t.textPrimary)}>How would you rate Iskotify? (optional)</Text>
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Rating"
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginLeft: -spacing.sm }}
+          >
+            {STARS.map(n => {
+              const filled = n <= rating
+              return (
+                <Pressable
+                  key={n}
+                  onPress={() => setRating(n)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
+                  aria-checked={rating === n}
+                  style={(state) => {
+                    const { pressed, hovered, focused } = state as WebPressableState
+                    return [{
+                      width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
+                    }, focusRing(t.focusRing, focused)]
+                  }}
+                >
+                  <View {...decorative}>
+                    <Lineicons icon={filled ? StarFatSolid : StarFatOutlined} size={28} color={filled ? t.warning : t.inputBorder} />
+                  </View>
+                </Pressable>
+              )
+            })}
+          </View>
+          {rating > 0 ? (
+            <Text style={textStyle('bodySm', t.textSecondary)}>{`${rating} of 5: ${RATING_WORDS[rating]}`}</Text>
+          ) : null}
+        </View>
+
+        <TextField
+          label="Your message"
+          value={message}
+          onChangeText={setMessage}
+          placeholder="e.g. The mock exams helped, but I want more Filipino questions."
+          multiline
+        />
+
+        {error ? (
+          <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
+            {error}
+          </Text>
+        ) : null}
+
+        <Button
+          label="Send feedback"
+          onPress={() => void handleSubmit()}
+          disabled={!canSubmit}
+          loading={isSubmitting}
+          size="lg"
+          fullWidth
+        />
       </View>
-
-      <ScreenScroll tabBarInset={false} padded>
-        <Text style={s.pageTitle}>Leave Feedback</Text>
-
-        {successShown ? (
-          <Card elevated>
-            <Text style={s.successTitle}>Thank you — salamat!</Text>
-            <Text style={s.successBody}>
-              Your feedback helps us make Iskotify better for every student.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [s.doneBtn, pressed && { opacity: 0.82 }]}
-              onPress={() => router.back()}
-              accessibilityRole="button"
-              accessibilityLabel="Done"
-            >
-              <Text style={s.doneTxt}>Done</Text>
-            </Pressable>
-          </Card>
-        ) : (
-          <>
-            <Text style={s.pageSub}>
-              We'd love to hear what you think — what you like, or what we could do better.
-            </Text>
-
-            <Text style={s.label}>How would you rate Iskotify?</Text>
-            <View style={s.starsRow} accessibilityRole="radiogroup" accessibilityLabel="Star rating">
-              {STARS.map(n => {
-                const on = n <= rating
-                return (
-                  <Pressable
-                    key={n}
-                    style={({ pressed }) => [s.starBtn, pressed && { opacity: 0.7 }]}
-                    onPress={() => setRating(n)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
-                  >
-                    <Text style={[s.star, on && s.starOn]} maxFontSizeMultiplier={1.4}>
-                      {on ? '★' : '☆'}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-
-            <Text style={s.label}>Your message</Text>
-            <TextInput
-              style={s.input}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Tell us what's on your mind…"
-              placeholderTextColor={t.textTertiary}
-              multiline
-              maxFontSizeMultiplier={1.4}
-              accessibilityLabel="Feedback message"
-            />
-
-            {error ? (
-              <Text style={s.errorText} maxFontSizeMultiplier={1.4}>{error}</Text>
-            ) : null}
-
-            <Pressable
-              style={({ pressed }) => [s.submitBtn, pressed && { opacity: 0.82 }, !canSubmit && { opacity: 0.5 }]}
-              onPress={() => void handleSubmit()}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSubmit }}
-              accessibilityLabel="Send feedback"
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={s.submitTxt}>Send feedback</Text>
-              )}
-            </Pressable>
-          </>
-        )}
-      </ScreenScroll>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </InfoPage>
   )
 }

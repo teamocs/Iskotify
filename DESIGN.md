@@ -204,6 +204,7 @@ silently disappears from the type.
 - `surfaceRaised` — modal sheets/dialogs (darker opaque composite)
 - `surfaceSubtle` — skeleton loaders, dividers
 - `border` — card and control edges
+- `inputBorder` — form-control boundary (text fields, pickers), non-text 3:1: dark 5.06 bg · 4.04 surface · 3.30 surface2; light 3.48 bg · 3.76 surface · 3.09 surface2
 
 **Brand and status** — named by function, not colour:
 - `accent` + `accentText` — primary interactive elements (maroon `#800000`)

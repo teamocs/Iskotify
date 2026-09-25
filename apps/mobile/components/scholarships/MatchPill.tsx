@@ -1,40 +1,24 @@
-import { View, Text, StyleSheet } from 'react-native'
-import { useTheme } from '../../theme/ThemeContext'
+import { Badge } from '../ui/Badge'
 import type { MatchStatus } from '../../utils/scholarshipMatch'
 
 interface MatchPillProps {
   status: MatchStatus
 }
 
+const PILL = {
+  eligible:   { label: 'Eligible',     tone: 'success' },
+  maybe:      { label: 'Maybe',        tone: 'warning' },
+  ineligible: { label: 'Not eligible', tone: 'danger' },
+} as const
+
+/**
+ * Scholarship eligibility as a Badge. Badge puts each status's `*Strong` text
+ * token on its own `*Surface` tint; the old pill used the DEFAULT status colour
+ * on that tint, which falls under 4.5:1 in the light theme (DESIGN.md "strong"
+ * role). The word carries the status, so no check glyph is needed.
+ */
 export function MatchPill({ status }: MatchPillProps) {
-  const { theme: t, typo } = useTheme()
-
   if (status === 'unknown') return null
-
-  const config =
-    status === 'eligible'
-      ? { label: '✓ Eligible', bg: t.successSurface, border: t.successSurface, color: t.success }
-      : status === 'maybe'
-      ? { label: 'Maybe', bg: t.warningSurface, border: t.warningSurface, color: t.warning }
-      : { label: 'Not eligible', bg: t.dangerSurface, border: t.dangerSurface, color: t.danger }
-
-  return (
-    <View style={[s.pill, { backgroundColor: config.bg, borderColor: config.border }]}>
-      <Text style={[s.txt, { fontSize: typo.xs, color: config.color }]}>{config.label}</Text>
-    </View>
-  )
+  const p = PILL[status]
+  return <Badge label={p.label} tone={p.tone} />
 }
-
-const s = StyleSheet.create({
-  pill: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    flexShrink: 0,
-  },
-  txt: {
-    fontWeight: '700',
-    fontFamily: 'Lexend_600SemiBold',
-  },
-})
