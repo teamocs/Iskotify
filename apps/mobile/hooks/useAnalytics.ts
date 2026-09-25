@@ -51,6 +51,8 @@ export interface AnalyticsData {
   /** Score-band history across full mock-exam attempts, oldest first (Fix 3: no percentile). */
   mockAttemptHistory: MockAttemptScore[]
   isLoading: boolean
+  /** The last load failed (Progress shows an ErrorState with a retry). */
+  error: boolean
   refresh: () => Promise<void>
 }
 
@@ -149,6 +151,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
     avgTime: { overallAvgMs: null, overallCount: 0, bySubject: [] },
     mostMissedTopics: [], accuracyTrend: [], mockAttemptHistory: [],
     isLoading: true,
+    error: false,
   })
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
@@ -224,6 +227,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
           sessionCount, avgAccuracy, streak, weeklyData, topicMastery, recentSessions,
           avgTime, mostMissedTopics, accuracyTrend, mockAttemptHistory,
           isLoading: false,
+          error: false,
         }
       }
 
@@ -234,6 +238,7 @@ export function useAnalytics(slug: string | 'overall'): AnalyticsData {
       }
     } catch (e) {
       console.error('[useAnalytics] load error:', e)
+      if (isMountedRef.current) setData(prev => ({ ...prev, isLoading: false, error: true }))
     } finally {
       loadingRef.current = false
     }

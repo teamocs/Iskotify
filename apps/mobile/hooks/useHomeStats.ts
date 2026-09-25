@@ -49,6 +49,10 @@ export interface HomeStats {
   noteReminders: NoteReminder[]
   /** slug → rounded accuracy % (0–100). Only present when total sessions > 0. */
   listingAccuracy: Record<string, number>
+  /** True until the first load settles (success or failure). */
+  loading: boolean
+  /** The last load failed. */
+  error: boolean
   refresh: () => Promise<void>
 }
 
@@ -139,6 +143,8 @@ const DEFAULT: HomeStats = {
   focusedListings: [],
   noteReminders: [],
   listingAccuracy: {},
+  loading: true,
+  error: false,
   refresh: async () => {},
 }
 
@@ -280,18 +286,19 @@ export function useHomeStats(): HomeStats {
         }
       }
 
-      const result = await cachedQuery<Omit<HomeStats, 'refresh'> | null>('home:stats', 30_000, fetcher)
+      const result = await cachedQuery<Omit<HomeStats, 'refresh' | 'loading' | 'error'> | null>('home:stats', 30_000, fetcher)
 
       lastLoadRef.current = Date.now()
       if (isMountedRef.current) {
         if (result === null) {
-          setStats(DEFAULT)
+          setStats({ ...DEFAULT, loading: false })
         } else {
-          setStats(prev => ({ ...prev, ...result }))
+          setStats(prev => ({ ...prev, ...result, loading: false, error: false }))
         }
       }
     } catch (e) {
       console.error('[useHomeStats] load error:', e)
+      if (isMountedRef.current) setStats(prev => ({ ...prev, loading: false, error: true }))
     } finally {
       loadingRef.current = false
     }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { listings as listingsTable, careerCourses } from '../db/schema'
@@ -49,6 +49,8 @@ export interface HomeCatalog {
   clusters: Set<string>
   region: string
   loaded: boolean
+  /** The last load failed. */
+  error: boolean
   refresh: () => Promise<void>
 }
 
@@ -78,6 +80,13 @@ export function useHomeCatalog(): HomeCatalog {
   const [clusters, setClusters] = useState<Set<string>>(new Set())
   const [region, setRegion] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -130,6 +139,7 @@ export function useHomeCatalog(): HomeCatalog {
       }
 
       const mockBest = new Map(data.mockBestRows.map(r => [r.listingSlug, r.bestPct]))
+      if (!isMountedRef.current) return
 
       setExamListings(exams)
       setScholarshipListings(scholarships)
@@ -145,10 +155,12 @@ export function useHomeCatalog(): HomeCatalog {
         province: data.settings.province ?? undefined,
         city: data.settings.city ?? undefined,
       })
+      setError(false)
     } catch (e) {
       console.warn('[useHomeCatalog] load failed:', e)
+      if (isMountedRef.current) setError(true)
     } finally {
-      setLoaded(true)
+      if (isMountedRef.current) setLoaded(true)
     }
   }, [db])
 
@@ -162,6 +174,6 @@ export function useHomeCatalog(): HomeCatalog {
 
   return {
     examListings, scholarshipListings, blueprintSlugs, blueprintInfo, listingMockBest,
-    profile, clusters, region, loaded, refresh: load,
+    profile, clusters, region, loaded, error, refresh: load,
   }
 }
