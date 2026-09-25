@@ -60,11 +60,10 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
         ].filter(Boolean)
         const msg = parts.join(' · ')
         setNotice({ msg, ok: s.errors.length === 0 })
-        // The persistent summary line above stays — it's the only place the
-        // per-file breakdown (imported/unchanged/needs-mapping/errors) is
-        // visible at a glance. The toast is just the action-level headline.
-        if (s.errors.length === 0) notifySuccess(msg)
-        else notifyError(msg)
+        // The persistent summary line above carries the breakdown; the toast
+        // is only the action-level headline, so the text isn't shown twice.
+        if (s.errors.length === 0) notifySuccess('Drive sync complete')
+        else notifyError(`Drive sync finished with ${s.errors.length} failed file(s)`)
         router.refresh()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Sync failed'
@@ -85,7 +84,7 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
       ].filter(Boolean)
       const msg = `${f.name}: published ${r.published}${held.length ? ` · held back ${held.join(', ')}` : ''}`
       setNotice({ msg, ok: true })
-      notifySuccess(msg)
+      notifySuccess(`Published ${r.published} question${r.published === 1 ? '' : 's'}`)
       router.refresh()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Publish failed'
