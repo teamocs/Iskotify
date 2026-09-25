@@ -68,10 +68,25 @@ function mockState(overrides: Partial<ReturnType<typeof useAdmissionEstimate>>) 
 describe('EstimatorScreen', () => {
   beforeEach(() => jest.clearAllMocks())
 
-  it('renders the screen title', () => {
+  it('titles the screen with the approved term (PRODUCT.md), not "Estimator"', () => {
     mockState({ status: 'loading' })
     render(<EstimatorScreen />)
-    expect(screen.getByText(/Admission Score Estimator/i)).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Estimated Admission Score' })).toBeTruthy()
+    expect(screen.queryByText(/Admission Score Estimator/i)).toBeNull()
+  })
+
+  it('offers a real Try again when local data fails to load', () => {
+    const reload = jest.fn()
+    mockState({ status: 'error', reload })
+    render(<EstimatorScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
+    expect(reload).toHaveBeenCalled()
+  })
+
+  it('shows a skeleton (announced once) while loading', () => {
+    mockState({ status: 'loading' })
+    render(<EstimatorScreen />)
+    expect(screen.getByLabelText('Loading your estimate')).toBeTruthy()
   })
 
   it('shows the disclaimer modal when not yet acknowledged', () => {
@@ -119,6 +134,9 @@ describe('EstimatorScreen', () => {
     mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
     render(<EstimatorScreen />)
     expect(screen.getByText(/palugit/i)).toBeTruthy()
+    // Plain-language framing (brief finding #8): say which way is better.
+    expect(screen.getByText(/A lower score is better/)).toBeTruthy()
+    expect(screen.queryByText('EEAS Adjustment')).toBeNull()
   })
 
   it('groups campuses by Likely / Possible / Unlikely, shows cutoff + year, program name, and marks estimates', () => {

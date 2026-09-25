@@ -72,4 +72,32 @@ describe('OptionList', () => {
     expect(screen.getByText('C')).toBeTruthy()
     expect(screen.queryByText('D')).toBeNull()
   })
+
+  // Redesign M2: answer choices are at least 48 tall (Android target) and the
+  // selected state carries a non-colour cue (a check mark), not a tint alone.
+  it('gives every option a touch target at least 48 tall', () => {
+    const { getAllByRole } = render(<OptionList options={OPTIONS} selectedIndex={undefined} onSelect={jest.fn()} />)
+    for (const btn of getAllByRole('button')) {
+      const flat = Object.assign({}, ...[btn.props.style].flat(Infinity).filter(Boolean))
+      expect(flat.minHeight).toBeGreaterThanOrEqual(48)
+    }
+  })
+
+  it('marks the selected option with a visible check, and only that one', () => {
+    render(<OptionList options={OPTIONS} selectedIndex={1} onSelect={jest.fn()} />)
+    expect(screen.getAllByTestId('option-selected-mark', { includeHiddenElements: true })).toHaveLength(1)
+  })
+
+  it('shows no check when nothing is selected', () => {
+    render(<OptionList options={OPTIONS} selectedIndex={undefined} onSelect={jest.fn()} />)
+    expect(screen.queryByTestId('option-selected-mark', { includeHiddenElements: true })).toBeNull()
+  })
+
+  it('ignores presses while disabled', () => {
+    const onSelect = jest.fn()
+    render(<OptionList options={OPTIONS} selectedIndex={undefined} onSelect={onSelect} disabled />)
+    fireEvent.press(screen.getByText('Cebu'))
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
+

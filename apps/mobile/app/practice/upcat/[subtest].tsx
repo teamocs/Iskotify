@@ -24,6 +24,9 @@ import { submitQuestionReport } from '../../../services/questionReports'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, StopwatchOutlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../../components/ui/a11y'
 import { spacing, radius } from '../../../theme/tokens'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
@@ -449,13 +452,14 @@ export default function UpcatExam() {
       <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
-          <Text style={s.back}>‹</Text>
+          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
           {subtestParam === 'all' ? 'Full Mock' : subtestParam}
         </Text>
         <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
-          <Text style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>⏱ {fmtTime(remaining)}</Text>
+          <View {...decorative}><Lineicons icon={StopwatchOutlined} size={14} color={remaining <= 60 ? t.warningStrong : t.textSecondary} /></View>
+          <Text accessibilityLabel={`Time left: ${fmtTime(remaining)}`} style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>{fmtTime(remaining)}</Text>
         </View>
         <Text style={s.counter}>
           {idx + 1}/{questions.length}
@@ -474,7 +478,7 @@ export default function UpcatExam() {
       <ScrollView
         ref={qPaneRef}
         style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
+        contentContainerStyle={[{ paddingTop: spacing.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
         <QuestionCard
@@ -492,11 +496,13 @@ export default function UpcatExam() {
       {/* Fixed options zone: capped at 42% of the window so the question pane keeps
           the majority of the viewport; very long option lists scroll inside this zone. */}
       <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingHorizontal: spacing.lg }}>
         <OptionList
           options={q.options}
           selectedIndex={sel}
           onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
         />
+        </View>
       </ScrollView>
 
       <View style={s.footer}>
@@ -593,7 +599,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingVertical: 8,
       gap: 8,
     },
-    back: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle: {
       flex: 1,
       fontSize: typo.md,
@@ -615,7 +620,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingHorizontal: 10,
       paddingVertical: 3,
     },
-    timerPillLow: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.35)' },
+    timerPillLow: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
     timerTxt: {
       fontSize: typo.xs,
       fontWeight: '700',
@@ -623,7 +628,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontFamily: 'Outfit_700Bold',
       fontVariant: ['tabular-nums'],
     },
-    timerTxtLow: { color: t.danger },
+    timerTxtLow: { color: t.warningStrong },
     footer: {
       flexDirection: 'row',
       gap: spacing.sm,
@@ -651,7 +656,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingVertical: 13,
       borderRadius: radius.md,
       borderCurve: 'continuous',
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       alignItems: 'center',
     },
     footDisabled: { opacity: 0.4 },
@@ -706,7 +711,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontFamily: 'Lexend_600SemiBold',
     },
     primaryBtn: {
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       borderRadius: 16,
       borderCurve: 'continuous',
       paddingVertical: 14,

@@ -4,7 +4,9 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, statusColors } from '../../theme/tokens'
+import { spacing, radius } from '../../theme/tokens'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { GraduationCap1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { Card } from '../../components/ui/Card'
 import { AppButton } from '../../components/ui/AppButton'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
@@ -99,10 +101,12 @@ export default function GwaCalculatorScreen() {
           </Text>
           {honor != null ? (
             <View style={{
-              marginTop: spacing.md, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)',
+              marginTop: spacing.md, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
+              flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
               borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.xs + 2,
             }}>
-              <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.accentText }}>🎓 {honor}</Text>
+              <Lineicons icon={GraduationCap1Outlined} size={16} color={t.accentText} />
+              <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.accentText }}>{honor}</Text>
             </View>
           ) : null}
           {gwa != null && honor == null && disqualified ? (
@@ -121,7 +125,7 @@ export default function GwaCalculatorScreen() {
               <View style={{ flex: 1.4 }}>
                 {idx === 0 ? <Text style={labelStyle}>Grade (1.00–5.00)</Text> : null}
                 <TextInput
-                  style={[inputStyle, gradeErr ? { borderColor: statusColors.weak } : {}]}
+                  style={[inputStyle, gradeErr ? { borderColor: t.dangerBorder, borderWidth: 2 } : {}]}
                   placeholder="e.g. 1.25"
                   placeholderTextColor={t.textTertiary}
                   value={row.grade}
@@ -132,7 +136,7 @@ export default function GwaCalculatorScreen() {
               <View style={{ flex: 1 }}>
                 {idx === 0 ? <Text style={labelStyle}>Units</Text> : null}
                 <TextInput
-                  style={[inputStyle, unitsErr ? { borderColor: statusColors.weak } : {}]}
+                  style={[inputStyle, unitsErr ? { borderColor: t.dangerBorder, borderWidth: 2 } : {}]}
                   placeholder="e.g. 3"
                   placeholderTextColor={t.textTertiary}
                   value={row.units}
@@ -155,7 +159,7 @@ export default function GwaCalculatorScreen() {
                   pressed && rows.length > 1 ? { opacity: 0.7 } : null,
                 ]}
               >
-                <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.base, color: t.textTertiary }}>✕</Text>
+                <Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} />
               </Pressable>
             </View>
           )

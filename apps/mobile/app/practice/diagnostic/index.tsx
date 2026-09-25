@@ -15,7 +15,6 @@ import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import type { PreAssessQuestion } from '../../../data/preAssessment'
-import { readinessTone, type ReadinessTone } from '../../../utils/readinessTone'
 import { Card } from '../../../components/ui/Card'
 import { Badge } from '../../../components/ui/Badge'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
@@ -26,7 +25,10 @@ import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, type Theme } from '../../../theme/tokens'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, StopwatchOutlined } from '@lineiconshq/free-icons'
+import { decorative } from '../../../components/ui/a11y'
+import { spacing, radius, textStyle } from '../../../theme/tokens'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
@@ -38,13 +40,8 @@ import { PRE_ASSESS_QUESTIONS } from '../../../data/preAssessment'
 
 type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
 
-const TONE_TO_BADGE: Record<ReadinessTone, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
-}
-
-const OVERALL_PCT_COLOR: Record<ReadinessTone, (t: Theme) => string> = {
-  strong: t => t.success, fair: t => t.accentText, weak: t => t.danger, none: t => t.textTertiary,
-}
+// Redesign M2: results are neutral — no tone-coloured percent or badges (a
+// green/red score reads as pass/fail, which PRODUCT.md rules out).
 
 function fmtTime(totalSecs: number): string {
   const m = Math.floor(totalSecs / 60)
@@ -321,7 +318,6 @@ export default function DiagnosticExam() {
     const score = scoreDiagnostic(questions, answers)
     const overallPct = score.overall.total ? Math.round((score.overall.correct / score.overall.total) * 100) : 0
     const weakest = weakestSubject(score.bySubject)
-    const overallTone = readinessTone(score.overall.total ? overallPct : null)
     return (
       <SafeAreaView style={s.root}>
         <WebTopSpacer />
@@ -329,7 +325,7 @@ export default function DiagnosticExam() {
           <Text style={s.title}>Diagnostic results</Text>
 
           <Card padded elevated style={s.overallCard}>
-            <Text style={[s.overallPct, { color: OVERALL_PCT_COLOR[overallTone](t) }]}>
+            <Text style={s.overallPct}>
               {overallPct}%
             </Text>
             <Text style={s.overallSub}>
@@ -340,13 +336,12 @@ export default function DiagnosticExam() {
           <Text style={s.sectionLbl}>Per-subject readiness</Text>
           {Object.entries(score.bySubject).map(([subject, b]) => {
             const pct = b.total ? Math.round((b.correct / b.total) * 100) : 0
-            const tone = readinessTone(b.total ? pct : null)
             return (
               <View key={subject} style={s.subjectRow}>
                 <Text style={s.subjectName}>{subject}</Text>
                 <View style={s.subjectRight}>
                   <Text style={s.subjectScore}>{b.correct}/{b.total}</Text>
-                  <Badge label={`${pct}%`} tone={TONE_TO_BADGE[tone]} />
+                  <Badge label={`${pct}%`} tone="neutral" />
                 </View>
               </View>
             )
@@ -406,13 +401,14 @@ export default function DiagnosticExam() {
       <WebTopSpacer />
       <View style={s.topBar}>
         <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
-          <Text style={s.back}>‹</Text>
+          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
         </Pressable>
         <Text style={s.topTitle} numberOfLines={1}>
           {subjectParam ?? 'Diagnostic'}
         </Text>
         <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
-          <Text style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>⏱ {fmtTime(remaining)}</Text>
+          <View {...decorative}><Lineicons icon={StopwatchOutlined} size={14} color={remaining <= 60 ? t.warningStrong : t.textSecondary} /></View>
+          <Text accessibilityLabel={`Time left: ${fmtTime(remaining)}`} style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>{fmtTime(remaining)}</Text>
         </View>
         <Text style={s.counter}>
           {idx + 1}/{questions.length}
@@ -422,7 +418,7 @@ export default function DiagnosticExam() {
       <ScrollView
         ref={qPaneRef}
         style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingBottom: spacing.lg }, webWidth]}
+        contentContainerStyle={[{ paddingTop: spacing.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
         <QuestionCard
@@ -439,7 +435,7 @@ export default function DiagnosticExam() {
           the majority of the viewport; very long option lists scroll inside this zone. */}
       <ScrollView
         style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }}
-        contentContainerStyle={webWidth ?? undefined}
+        contentContainerStyle={[{ paddingHorizontal: spacing.lg }, webWidth]}
         showsVerticalScrollIndicator={false}
       >
         <OptionList
@@ -519,7 +515,6 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingVertical: 8,
       gap: 8,
     },
-    back: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
     topTitle: {
       flex: 1,
       fontSize: typo.md,
@@ -541,7 +536,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingHorizontal: 10,
       paddingVertical: 3,
     },
-    timerPillLow: { backgroundColor: t.dangerSurface, borderColor: 'rgba(239,68,68,0.35)' },
+    timerPillLow: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
     timerTxt: {
       fontSize: typo.xs,
       fontWeight: '700',
@@ -549,7 +544,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       fontFamily: 'Outfit_700Bold',
       fontVariant: ['tabular-nums'],
     },
-    timerTxtLow: { color: t.danger },
+    timerTxtLow: { color: t.warningStrong },
     footer: {
       flexDirection: 'row',
       gap: spacing.sm,
@@ -577,7 +572,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       paddingVertical: 13,
       borderRadius: radius.md,
       borderCurve: 'continuous',
-      backgroundColor: 'rgba(128,0,0,0.85)',
+      backgroundColor: t.accent,
       alignItems: 'center',
     },
     footDisabled: { opacity: 0.4 },
@@ -595,7 +590,7 @@ function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').u
       marginBottom: spacing.md,
     },
     overallCard: { alignItems: 'center', marginBottom: spacing.lg },
-    overallPct: { fontSize: 52, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
+    overallPct: { ...textStyle('display', t.textPrimary), fontVariant: ['tabular-nums'] },
     overallSub: {
       fontSize: typo.sm,
       color: t.textTertiary,

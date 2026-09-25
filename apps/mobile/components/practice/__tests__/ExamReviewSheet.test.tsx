@@ -82,6 +82,32 @@ describe('ExamReviewSheet', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  // Redesign M2: the runner's section jumper moved out of the exam header and
+  // into this sheet, so the question keeps the screen on a phone.
+  it('lists sections when given and jumps to one, closing the sheet', () => {
+    const onJumpSection = jest.fn()
+    const onClose = jest.fn()
+    render(
+      <ExamReviewSheet
+        {...baseProps}
+        onClose={onClose}
+        sections={[
+          { name: 'Language', start: 0, active: true, disabled: false },
+          { name: 'Science', start: 2, active: false, disabled: false },
+        ]}
+        onJumpSection={onJumpSection}
+      />,
+    )
+    fireEvent.press(screen.getByText('Science'))
+    expect(onJumpSection).toHaveBeenCalledWith(2)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives every question cell a non-colour answered mark', () => {
+    render(<ExamReviewSheet {...baseProps} />)
+    expect(screen.getAllByTestId('qgrid-answered-mark', { includeHiddenElements: true })).toHaveLength(2)
+  })
+
   // Review finding #4 (MEDIUM): the sheet is a full-screen modal — it needs
   // accessibilityViewIsModal (so screen readers don't escape into content
   // behind it), an accessibilityRole="header" title, and initial focus moved
@@ -117,10 +143,10 @@ describe('ExamReviewSheet', () => {
       expect(focusSpy).toHaveBeenCalledTimes(1)
     })
 
-    // Regression: react-native-web's findNodeHandle THROWS ("not supported on
-    // web"), which unmounted the whole app the moment "Review & submit" opened
-    // the sheet, so a web student could never submit a mock. On web, RNW's
-    // Modal already moves focus into the sheet.
+    // Regression (found in the M2 web visual check): react-native-web's
+    // findNodeHandle THROWS ("not supported on web"), which unmounted the whole
+    // app the moment "Review & submit" opened the sheet — a web student could
+    // never submit a mock. On web, RNW's Modal already moves focus in.
     it('opens on web without calling findNodeHandle (it throws there)', () => {
       const RN = require('react-native')
       const restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')

@@ -5,6 +5,7 @@ import { Stack, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { BoxArchive1Outlined, Trash3Outlined, ArrowLeftOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { noteInk } from '../../utils/noteInk'
 import { useNotes, NOTE_COLORS, type Note } from '../../hooks/useNotes'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
@@ -30,11 +31,11 @@ export default function ArchiveScreen() {
     cardTitle: { fontSize: typo.sm, fontWeight: '700', fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
     cardContent: { fontSize: typo.xs, fontFamily: 'Lexend_400Regular', lineHeight: 16 },
     cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, minHeight: 44, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border },
     actionBtnPressed: { opacity: 0.7 },
     actionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_500Medium' },
-    dangerBtn: { borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.07)' },
-    dangerTxt: { color: t.danger },
+    dangerBtn: { borderColor: t.dangerBorder, backgroundColor: t.dangerSurface },
+    dangerTxt: { color: t.dangerStrong },
     empty: { paddingVertical: 60, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
@@ -68,15 +69,16 @@ export default function ArchiveScreen() {
           <View style={s.grid}>
             {(notes as Note[]).map(note => {
               const bg = note.color ? NOTE_COLORS[note.color] : t.surface
-              const textCol = note.color ? '#2d0a0a' : t.textPrimary
+              const ink = noteInk(t, !!note.color)
+              const textCol = ink.text
               return (
                 <View key={note.id} style={s.cardWrap}>
-                  <Card elevated padded={false} style={[s.card, { backgroundColor: bg, borderColor: note.color ? 'rgba(0,0,0,0.1)' : t.border }]}>
+                  <Card elevated padded={false} style={[s.card, { backgroundColor: bg, borderColor: ink.hairline }]}>
                     {note.title.length > 0 ? (
                       <Text style={[s.cardTitle, { color: textCol }]} numberOfLines={2}>{note.title}</Text>
                     ) : null}
                     {note.type === 'text' && note.content.length > 0 ? (
-                      <Text style={[s.cardContent, { color: note.color ? 'rgba(45,10,10,0.6)' : t.textSecondary }]} numberOfLines={3}>{note.content}</Text>
+                      <Text style={[s.cardContent, { color: ink.sub }]} numberOfLines={3}>{note.content}</Text>
                     ) : null}
                     <View style={s.cardActions}>
                       <Pressable
@@ -94,7 +96,7 @@ export default function ArchiveScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Move note to trash"
                       >
-                        <Lineicons icon={Trash3Outlined} size={13} color="#f87171" />
+                        <Lineicons icon={Trash3Outlined} size={13} color={t.dangerStrong} />
                         <Text style={[s.actionTxt, s.dangerTxt]}>Trash</Text>
                       </Pressable>
                     </View>

@@ -5,6 +5,7 @@ import { Stack, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Trash3Outlined, ArrowLeftOutlined, ArrowRightOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { noteInk } from '../../utils/noteInk'
 import { useNotes, NOTE_COLORS, type Note } from '../../hooks/useNotes'
 import { spacing, radius } from '../../theme/tokens'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -32,8 +33,8 @@ export default function TrashScreen() {
     topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.sm },
     backBtn: { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
     screenTitle: { flex: 1, fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.sm, borderCurve: 'continuous', borderWidth: 1, borderColor: 'rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.07)' },
-    emptyBtnTxt: { fontSize: typo.sm, color: t.danger, fontFamily: 'Lexend_500Medium' },
+    emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.sm, borderCurve: 'continuous', borderWidth: 1, borderColor: t.dangerBorder, backgroundColor: t.dangerSurface },
+    emptyBtnTxt: { fontSize: typo.sm, color: t.dangerStrong, fontFamily: 'Lexend_500Medium' },
     scroll: { paddingTop: spacing.xs, gap: spacing.md },
     hint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', paddingBottom: spacing.xs },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -44,8 +45,8 @@ export default function TrashScreen() {
     cardActions: { flexDirection: 'row', gap: spacing.xs + 2, marginTop: spacing.md },
     actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs + 1, minHeight: 44, paddingVertical: spacing.sm, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border },
     actionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_500Medium' },
-    dangerBtn: { borderColor: 'rgba(248,113,113,0.35)', backgroundColor: 'rgba(248,113,113,0.07)' },
-    dangerTxt: { color: t.danger },
+    dangerBtn: { borderColor: t.dangerBorder, backgroundColor: t.dangerSurface },
+    dangerTxt: { color: t.dangerStrong },
     empty: { paddingVertical: 60, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
@@ -71,7 +72,7 @@ export default function TrashScreen() {
             onPress={handleEmptyTrash}
             accessibilityRole="button"
           >
-            <Lineicons icon={Trash3Outlined} size={13} color="#f87171" />
+            <Lineicons icon={Trash3Outlined} size={13} color={t.dangerStrong} />
             <Text style={s.emptyBtnTxt}>Empty</Text>
           </Pressable>
         ) : null}
@@ -90,15 +91,16 @@ export default function TrashScreen() {
           <View style={s.grid}>
             {(notes as Note[]).map(note => {
               const bg = note.color ? NOTE_COLORS[note.color] : t.surface
-              const textCol = note.color ? '#2d0a0a' : t.textPrimary
+              const ink = noteInk(t, !!note.color)
+              const textCol = ink.text
               return (
                 <View key={note.id} style={s.cardWrap}>
-                  <View style={[s.card, { backgroundColor: bg, borderColor: note.color ? 'rgba(0,0,0,0.1)' : t.border }]}>
+                  <View style={[s.card, { backgroundColor: bg, borderColor: ink.hairline }]}>
                     {note.title.length > 0 ? (
                       <Text style={[s.cardTitle, { color: textCol }]} numberOfLines={2}>{note.title}</Text>
                     ) : null}
                     {note.type === 'text' && note.content.length > 0 ? (
-                      <Text style={[s.cardContent, { color: note.color ? 'rgba(45,10,10,0.6)' : t.textSecondary }]} numberOfLines={3}>{note.content}</Text>
+                      <Text style={[s.cardContent, { color: ink.sub }]} numberOfLines={3}>{note.content}</Text>
                     ) : null}
                     <View style={s.cardActions}>
                       <Pressable
@@ -114,7 +116,7 @@ export default function TrashScreen() {
                         onPress={() => void permanentlyDeleteNote(note.id)}
                         accessibilityRole="button"
                       >
-                        <Lineicons icon={Trash3Outlined} size={13} color="#f87171" />
+                        <Lineicons icon={Trash3Outlined} size={13} color={t.dangerStrong} />
                         <Text style={[s.actionTxt, s.dangerTxt]}>Delete</Text>
                       </Pressable>
                     </View>

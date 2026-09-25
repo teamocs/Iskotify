@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Stack, router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckOutlined, XmarkOutlined, Pencil1Outlined, Trash3Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
@@ -60,7 +62,6 @@ export default function LabelsScreen() {
     labelName: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
     editInput: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular', borderBottomWidth: 1, borderBottomColor: t.accent, paddingVertical: spacing.xs },
     rowBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    rowBtnTxt: { fontSize: typo.md },
     empty: { paddingVertical: spacing.xxl, alignItems: 'center' },
     emptyTxt: { fontSize: typo.base, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
   }), [t, typo])
@@ -129,15 +130,17 @@ export default function LabelsScreen() {
                         style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
                         onPress={() => handleRename(label.id)}
                         accessibilityRole="button"
+                        accessibilityLabel="Save label name"
                       >
-                        <Text style={s.rowBtnTxt}>✓</Text>
+                        <Lineicons icon={CheckOutlined} size={20} color={t.accentText} />
                       </Pressable>
                       <Pressable
                         style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
                         onPress={() => setEditingId(null)}
                         accessibilityRole="button"
+                        accessibilityLabel="Cancel renaming"
                       >
-                        <Text style={s.rowBtnTxt}>✕</Text>
+                        <Lineicons icon={XmarkOutlined} size={20} color={t.textSecondary} />
                       </Pressable>
                     </>
                   ) : (
@@ -147,15 +150,17 @@ export default function LabelsScreen() {
                         style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
                         onPress={() => { setEditingId(label.id); setEditingName(label.name) }}
                         accessibilityRole="button"
+                        accessibilityLabel={`Rename ${label.name}`}
                       >
-                        <Text style={s.rowBtnTxt}>✏️</Text>
+                        <Lineicons icon={Pencil1Outlined} size={18} color={t.textSecondary} />
                       </Pressable>
                       <Pressable
                         style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
                         onPress={() => handleDelete(label.id, label.name)}
                         accessibilityRole="button"
+                        accessibilityLabel={`Delete ${label.name}`}
                       >
-                        <Text style={s.rowBtnTxt}>🗑</Text>
+                        <Lineicons icon={Trash3Outlined} size={18} color={t.dangerStrong} />
                       </Pressable>
                     </>
                   )}

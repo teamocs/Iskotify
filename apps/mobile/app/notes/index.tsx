@@ -15,8 +15,10 @@ import {
   CheckSquare2Outlined,
   XmarkOutlined,
   Bell1Outlined,
+  PlusOutlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { noteInk } from '../../utils/noteInk'
 import { spacing, radius } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
@@ -49,8 +51,9 @@ function NoteCard({
 }) {
   const { theme: t, typo } = useTheme()
   const bg = note.color ? NOTE_COLORS[note.color] : t.surface
-  const textColor = note.color ? '#2d0a0a' : t.textPrimary
-  const subColor = note.color ? 'rgba(45,10,10,0.6)' : t.textSecondary
+  const ink = noteInk(t, !!note.color)
+  const textColor = ink.text
+  const subColor = ink.sub
   const now = Date.now()
   const hasReminder = note.reminderAt != null && note.reminderAt > now
 
@@ -68,7 +71,7 @@ function NoteCard({
           borderCurve: 'continuous',
           padding: spacing.md,
           borderWidth: selected ? 2 : 1,
-          borderColor: selected ? t.accent : (note.color ? 'rgba(0,0,0,0.1)' : t.border),
+          borderColor: selected ? t.accent : ink.hairline,
           flex: 1,
           boxShadow: t.shadowSm,
           opacity: pressed ? 0.85 : 1,
@@ -104,7 +107,7 @@ function NoteCard({
             <View style={{ gap: 3 }}>
               {items.slice(0, 5).map((item, i) => (
                 <Text key={i} style={{ fontSize: typo.xs, color: item.isChecked ? subColor : textColor, fontFamily: 'Lexend_400Regular', textDecorationLine: item.isChecked ? 'line-through' : 'none' }} numberOfLines={1}>
-                  {item.isChecked ? '☑ ' : '☐ '}{item.text}
+                  {item.isChecked ? '✓ ' : '○ '}{item.text}
                 </Text>
               ))}
               {items.length > 5 ? (
@@ -117,7 +120,7 @@ function NoteCard({
         } catch { return null }
       })() : null}
       {hasReminder ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, paddingTop: 6, borderTopWidth: 1, borderTopColor: note.color ? 'rgba(0,0,0,0.08)' : t.surfaceSubtle }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, paddingTop: 6, borderTopWidth: 1, borderTopColor: note.color ? ink.hairline : t.surfaceSubtle }}>
           <Lineicons icon={Bell1Outlined} size={12} color={subColor} />
           <Text style={{ fontSize: typo.xs, color: subColor, fontFamily: 'Lexend_400Regular' }}>
             {formatReminderShort(note.reminderAt!)}
@@ -211,15 +214,14 @@ export default function NotesScreen() {
     empty: { paddingVertical: 48, alignItems: 'center' },
     emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
     fab: { position: 'absolute', bottom: insets.bottom + 40, right: spacing.xxl, width: 64, height: 64, borderRadius: radius.pill, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', boxShadow: t.shadowMd },
-    fabTxt: { color: t.textInverse, fontSize: 32, lineHeight: 36, marginTop: -2 },
     // Selection bar
     selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.md), gap: spacing.sm },
     selCount: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
     selBtn: { width: 44, height: 44, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    selBtnDanger: { borderColor: 'rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)' },
+    selBtnDanger: { borderColor: t.dangerBorder, backgroundColor: t.dangerSurface },
     pressed: { opacity: 0.7 },
     // Bottom sheet
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+    backdrop: { flex: 1, backgroundColor: t.backdrop },
     sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingBottom: Math.max(spacing.xxxl, insets.bottom + spacing.lg), paddingTop: spacing.md },
     sheetHandle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.xl },
     sheetTitle: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
@@ -326,7 +328,7 @@ export default function NotesScreen() {
             accessibilityLabel="New note"
             accessibilityHint="Long press to create a text note straight away"
           >
-            <Text style={s.fabTxt}>+</Text>
+            <Lineicons icon={PlusOutlined} size={28} color={t.textInverse} />
           </Pressable>
         ) : null}
 

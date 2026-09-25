@@ -393,4 +393,22 @@ describe('DiagnosticExam', () => {
     await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
     expect(mockClearRun).toHaveBeenCalledWith('diagnostic:Science')
   })
+
+  // Redesign M2: the diagnostic's overall percent is neutral (same ink at any
+  // score) — it used to turn green/red by readiness tone, a pass/fail cue.
+  it.each([['a', '100%'], ['b', '0%']])('shows the overall percent in neutral ink (answer %s → %s)', async (pick, pct) => {
+    mockSearchParams = { subject: 'Science' }
+    mockBankRows = [
+      { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+    fireEvent.press(screen.getByText(pick))
+    await reviewAndConfirmSubmit(alertSpy)
+    await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+    const node = screen.getAllByText(pct)[0]! // the overall figure renders first
+    const flat = Object.assign({}, ...[node.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.color).toBe('#ffffff') // theme mock textPrimary — never success/danger
+  })
 })
+
