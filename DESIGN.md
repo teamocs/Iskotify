@@ -320,7 +320,7 @@ Example responsive screen:
 
 | Component | Purpose | Accessibility |
 |---|---|---|
-| `Button` | Maroon fill (primary, ONE per screen), outlined (secondary), text-only (ghost), danger tint. Sizes sm/md/lg all ≥ 44pt. | `accessibilityRole="button"`, `accessibilityLabel`, `accessibilityState={{ disabled }}` |
+| `Button` | Maroon fill (primary, ONE per screen), outlined (secondary), text-only (ghost), danger tint. Sizes sm/md/lg all ≥ 44pt. | `accessibilityRole="button"`, `accessibilityLabel`, `aria-disabled` |
 | `PillButton` | Inline, rounded, compact action (wraps `Button` with `shape="pill"`). | Same as Button |
 | `Card` | Bordered surface with optional elevation. Optionally pressable. | `accessibilityRole="button"` if `onPress`, optional `accessibilityLabel` |
 | `Badge` | Small pill tag for status/tone. Tone names theme keys: `accent`, `neutral`, `success`, `warning`, `danger`. Label required. | Decorative or status label |
