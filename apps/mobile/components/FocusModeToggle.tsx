@@ -61,7 +61,7 @@ export function FocusModeToggle({ enabled, onToggle }: Props) {
         thumbColor={enabled ? t.accentText : t.textTertiary}
         trackColor={{ false: t.surface2, true: t.accentSurface }}
         accessibilityRole="switch"
-        accessibilityState={{ checked: enabled }}
+        aria-checked={enabled}
         accessibilityLabel="Focus Mode toggle"
       />
     </View>

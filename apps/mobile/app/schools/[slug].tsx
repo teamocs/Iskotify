@@ -163,7 +163,7 @@ function ChipList({ items }: { items: string[] }) {
 
 function SchoolSkeleton() {
   return (
-    <View testID="school-skeleton" accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+    <View testID="school-skeleton" accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
       <Skeleton width="85%" height={28} />
       <Skeleton width="45%" height={14} />
       <Skeleton height={200} radius={radius.xl} />

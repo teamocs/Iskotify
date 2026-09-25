@@ -628,7 +628,7 @@ export default function BlueprintExam() {
   if (phase === 'loading') {
     return (
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
-        <View accessible accessibilityLabel="Loading mock exam" accessibilityState={{ busy: true }} style={{ gap: spacing.md, paddingTop: spacing.md }}>
+        <View accessible accessibilityLabel="Loading mock exam" aria-busy style={{ gap: spacing.md, paddingTop: spacing.md }}>
           <Skeleton width="60%" height={32} />
           <View style={{ flexDirection: 'row', gap: spacing.xxl }}>
             <Skeleton width={72} height={40} />
@@ -868,7 +868,7 @@ export default function BlueprintExam() {
   if (!fq) {
     return (
       <Screen>
-        <View accessible accessibilityLabel="Loading question" accessibilityState={{ busy: true }} style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
+        <View accessible accessibilityLabel="Loading question" aria-busy style={{ gap: spacing.md, paddingTop: spacing.xxl }}>
           <Skeleton height={28} />
           <Skeleton width="70%" height={28} />
         </View>

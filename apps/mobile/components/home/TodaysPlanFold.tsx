@@ -56,7 +56,7 @@ export function TodaysPlanFold({ items, topicNameById, onMarkComplete }: Props) 
                 accessibilityRole="checkbox"
                 accessibilityLabel={copy.title}
                 accessibilityHint={done ? undefined : 'Marks this as done'}
-                accessibilityState={{ checked: done }}
+                aria-checked={done}
                 style={(state) => {
                   const { focused } = state as WebPressableState
                   return [{ width: 52, minHeight: 56, alignItems: 'center', justifyContent: 'center' }, focusRing(t.focusRing, focused)]

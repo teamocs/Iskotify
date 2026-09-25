@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import { AnalyticsDashboard } from '../AnalyticsDashboard'
+import { aria } from '../../../test-utils/aria'
 
 // Redesign M2: Progress owns readiness and analytics. The dashboard is on the
 // shared primitives (StatNumber, FilterChip, Card, Skeleton / EmptyState /
@@ -134,11 +135,11 @@ describe('AnalyticsDashboard (Progress)', () => {
   describe('exam filter', () => {
     it('is a radio group of exam chips (schools excluded) that re-scopes the numbers', () => {
       render(<AnalyticsDashboard />)
-      expect(screen.getByRole('radio', { name: 'Overall' }).props.accessibilityState).toMatchObject({ selected: true })
+      expect(screen.getByRole('radio', { name: 'Overall', checked: true })).toBeTruthy()
       expect(screen.queryByRole('radio', { name: 'Some School' })).toBeNull()
       fireEvent.press(screen.getByRole('radio', { name: 'UPCAT 2026' }))
       expect(mockUseAnalytics).toHaveBeenLastCalledWith('upcat')
-      expect(screen.getByRole('radio', { name: 'UPCAT 2026' }).props.accessibilityState).toMatchObject({ selected: true })
+      expect(screen.getByRole('radio', { name: 'UPCAT 2026', checked: true })).toBeTruthy()
     })
   })
 
@@ -194,10 +195,10 @@ describe('AnalyticsDashboard (Progress)', () => {
     it('Pace is a disclosure: collapsed with a summary, expands on press', () => {
       render(<AnalyticsDashboard />)
       const toggle = screen.getByRole('button', { name: /^Pace/ })
-      expect(toggle.props.accessibilityState).toMatchObject({ expanded: false })
+      expect(aria(toggle, 'aria-expanded')).toBe(false)
       expect(within(toggle).getByText('42s per question')).toBeTruthy()
       fireEvent.press(toggle)
-      expect(screen.getByRole('button', { name: /^Pace/ }).props.accessibilityState).toMatchObject({ expanded: true })
+      expect(screen.getByRole('button', { name: /^Pace/, expanded: true })).toBeTruthy()
       expect(screen.getByText('1m 05s')).toBeTruthy()
     })
 

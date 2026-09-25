@@ -21,6 +21,7 @@ import { DetailTopBar } from '../DetailTopBar'
 import { ExploreGrid, GridSkeleton } from '../ExploreGrid'
 import { Disclosure } from '../Disclosure'
 import { LinkRow } from '../LinkRow'
+import { aria } from '../../../test-utils/aria'
 
 const ICON = {} as never
 
@@ -124,7 +125,7 @@ describe('ExploreGrid', () => {
     render(<GridSkeleton label="Loading scholarships" />)
     const sk = screen.getByTestId('explore-skeleton')
     expect(sk.props.accessibilityLabel).toBe('Loading scholarships')
-    expect(sk.props.accessibilityState).toEqual({ busy: true })
+    expect(aria(sk, 'aria-busy')).toBe(true)
   })
 })
 
@@ -132,10 +133,10 @@ describe('Disclosure', () => {
   it('is a 44pt button that exposes expanded state and reveals its body', () => {
     render(<Disclosure title="About" preview="Short text"><Text>BODY</Text></Disclosure>)
     const btn = screen.getByRole('button', { name: 'About' })
-    expect(btn.props.accessibilityState).toEqual({ expanded: false })
+    expect(aria(btn, 'aria-expanded')).toBe(false)
     expect(screen.queryByText('BODY')).toBeNull()
     fireEvent.press(btn)
-    expect(screen.getByRole('button', { name: 'About' }).props.accessibilityState).toEqual({ expanded: true })
+    expect(screen.getByRole('button', { name: 'About', expanded: true })).toBeTruthy()
     expect(screen.getByText('BODY')).toBeTruthy()
   })
 })

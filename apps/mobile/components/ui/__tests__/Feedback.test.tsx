@@ -8,6 +8,7 @@ import { EmptyState } from '../EmptyState'
 import { ErrorState } from '../ErrorState'
 import { Skeleton } from '../Skeleton'
 import { Sheet, sheetPresentation } from '../Sheet'
+import { aria } from '../../../test-utils/aria'
 
 describe('EmptyState', () => {
   it('shows icon, title as header, body and one action', () => {
@@ -71,7 +72,7 @@ describe('Skeleton', () => {
     render(<><Skeleton accessible /><Skeleton /></>)
     const els = screen.getAllByLabelText('Loading')
     expect(els).toHaveLength(1)
-    expect(els[0]!.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }))
+    expect(aria(els[0], 'aria-busy')).toBe(true)
   })
 
   it('accepts a custom label when accessible', () => {

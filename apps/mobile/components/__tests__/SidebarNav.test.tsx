@@ -20,6 +20,7 @@ jest.mock('../../hooks/useProfileName', () => ({
 }))
 
 import { SidebarNav } from '../web/SidebarNav'
+import { aria } from '../../test-utils/aria'
 
 const link = (name: string) => screen.getByRole('link', { name })
 
@@ -49,7 +50,7 @@ describe('SidebarNav', () => {
   it('marks the current destination with aria-current="page" only (no aria-selected on a link)', () => {
     render(<SidebarNav />)
     expect(link('Today').props['aria-current']).toBe('page')
-    expect(link('Today').props.accessibilityState?.selected).toBeUndefined()
+    expect(aria(link('Today'), 'aria-selected')).toBeUndefined()
     expect(link('Practice').props['aria-current']).toBeUndefined()
   })
 

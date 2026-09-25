@@ -86,7 +86,7 @@ export default function ExamPicker() {
         </View>
 
         {state.status === 'loading' ? (
-          <View accessible accessibilityLabel="Loading mock exams" accessibilityState={{ busy: true }} style={{ gap: spacing.sm }}>
+          <View accessible accessibilityLabel="Loading mock exams" aria-busy style={{ gap: spacing.sm }}>
             {[0, 1, 2].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
           </View>
         ) : state.status === 'error' ? (

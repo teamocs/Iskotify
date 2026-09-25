@@ -103,7 +103,7 @@ export function GridSkeleton({ label, count = 6, testID = 'explore-skeleton' }: 
       testID={testID}
       accessible
       accessibilityLabel={label}
-      accessibilityState={{ busy: true }}
+      aria-busy
       style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -HALF_GAP }}
     >
       {cells.map(i => (

@@ -111,7 +111,7 @@ function TopicCheckRow({ label, sub, checked, onToggle }: { label: string; sub: 
       onPress={onToggle}
       accessibilityRole="checkbox"
       accessibilityLabel={`${label}, ${sub}`}
-      accessibilityState={{ checked }}
+      aria-checked={checked}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
         return [

@@ -133,7 +133,7 @@ export default function ResultsTrackerScreen() {
       <DetailTopBar title="Results Tracker" fallbackHref="/explore?section=news" />
       <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.xs, gap: spacing.md }}>
         {status === 'loading' ? (
-          <View testID="results-skeleton" accessible accessibilityLabel="Loading tracked results" accessibilityState={{ busy: true }} style={{ gap: spacing.md }}>
+          <View testID="results-skeleton" accessible accessibilityLabel="Loading tracked results" aria-busy style={{ gap: spacing.md }}>
             <Skeleton height={140} radius={radius.xl} />
             <Skeleton height={140} radius={radius.xl} />
           </View>

@@ -274,7 +274,7 @@ export default function CourseCareerDetailScreen() {
         <DetailTopBar fallbackHref="/explore?section=courses" />
         <ScreenScroll tabBarInset={false}>
           {status === 'loading' ? (
-            <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+            <View accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
               <Skeleton width="75%" height={28} />
               <Skeleton height={140} radius={radius.xl} />
               <Skeleton height={120} radius={radius.xl} />

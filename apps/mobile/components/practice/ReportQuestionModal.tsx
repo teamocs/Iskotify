@@ -52,23 +52,25 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
           <View style={s.handle} />
           <Text style={s.title} maxFontSizeMultiplier={1.4}>Report this question</Text>
 
-          {PRESET_REASONS.map(reason => {
-            const on = selected === reason
-            return (
-              <Pressable
-                key={reason}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                style={[s.reasonRow, on && s.reasonRowOn]}
-                onPress={() => setSelected(reason)}
-              >
-                <View style={[s.radio, on && s.radioOn]} />
-                <Text style={[s.reasonTxt, on && s.reasonTxtOn]} maxFontSizeMultiplier={1.4}>
-                  {reason}
-                </Text>
-              </Pressable>
-            )
-          })}
+          <View accessibilityRole="radiogroup" accessibilityLabel="Reason">
+            {PRESET_REASONS.map(reason => {
+              const on = selected === reason
+              return (
+                <Pressable
+                  key={reason}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  style={[s.reasonRow, on && s.reasonRowOn]}
+                  onPress={() => setSelected(reason)}
+                >
+                  <View style={[s.radio, on && s.radioOn]} />
+                  <Text style={[s.reasonTxt, on && s.reasonTxtOn]} maxFontSizeMultiplier={1.4}>
+                    {reason}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
 
           <TextInput
             style={s.detailsInput}
@@ -87,7 +89,7 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: !selected }}
+              aria-disabled={!selected}
               style={[s.submitBtn, !selected && s.submitDisabled]}
               disabled={!selected}
               onPress={handleSubmit}

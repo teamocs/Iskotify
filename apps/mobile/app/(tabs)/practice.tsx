@@ -83,7 +83,7 @@ function RowIcon({ icon }: { icon: Parameters<typeof Lineicons>[0]['icon'] }) {
 
 function SkeletonRows({ label, count = 3 }: { label: string; count?: number }) {
   return (
-    <View accessible accessibilityLabel={label} accessibilityState={{ busy: true }} style={{ gap: spacing.sm }}>
+    <View accessible accessibilityLabel={label} aria-busy style={{ gap: spacing.sm }}>
       {Array.from({ length: count }, (_, i) => <Skeleton key={i} height={56} radius={radius.lg} />)}
     </View>
   )

@@ -2,6 +2,7 @@ import React from 'react'
 import { FlatList } from 'react-native'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 import ListsScreen from '../explore'
+import { aria } from '../../../test-utils/aria'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -210,7 +211,7 @@ describe('ListsScreen', () => {
     fireEvent.press(screen.getByText('News & dates'))
     expect(screen.getByText('NEWS_FEED_STUB')).toBeTruthy()
     expect(screen.queryByPlaceholderText(SEARCH_PLACEHOLDER_UNI)).toBeNull()
-    expect(screen.getAllByRole('tab')[4]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(screen.getAllByRole('tab')[4], 'aria-selected')).toBe(true)
   })
 
   it('opens News & dates from ?section=news (old Updates deep links redirect here)', () => {
@@ -222,7 +223,7 @@ describe('ListsScreen', () => {
   it('accepts ?section= for listing sections too', () => {
     mockSectionParam.value = 'scholarships'
     render(<ListsScreen />)
-    expect(screen.getAllByRole('tab')[1]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(screen.getAllByRole('tab')[1], 'aria-selected')).toBe(true)
   })
 
   it('does NOT render the old "Exams" title', () => {
@@ -235,38 +236,38 @@ describe('ListsScreen', () => {
   // "Universities" is now labelled "Schools & exams" — entrance exams live in
   // it, so a student looking for UPCAT dates finds them (brief finding 5).
 
-  it('Universities tab is active by default (has accessibilityState selected)', () => {
+  it('Universities tab is active by default (has aria-selected)', () => {
     render(<ListsScreen />)
     const tabs = screen.getAllByRole('tab')
     const uniTab = tabs.find(t => t.props.accessibilityLabel === undefined &&
-      t.props.accessibilityState?.selected === true)
+      aria(t, 'aria-selected') === true)
     // The first tab (Universities) should be selected
-    expect(tabs[0]?.props.accessibilityState?.selected).toBe(true)
-    expect(tabs[1]?.props.accessibilityState?.selected).toBe(false)
-    expect(tabs[2]?.props.accessibilityState?.selected).toBe(false)
-    expect(tabs[3]?.props.accessibilityState?.selected).toBe(false)
+    expect(aria(tabs[0], 'aria-selected')).toBe(true)
+    expect(aria(tabs[1], 'aria-selected')).toBe(false)
+    expect(aria(tabs[2], 'aria-selected')).toBe(false)
+    expect(aria(tabs[3], 'aria-selected')).toBe(false)
   })
 
   it('switching to Scholarships tab changes active state', () => {
     render(<ListsScreen />)
     fireEvent.press(screen.getByText('Scholarships'))
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[0]?.props.accessibilityState?.selected).toBe(false)
-    expect(tabs[1]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(tabs[0], 'aria-selected')).toBe(false)
+    expect(aria(tabs[1], 'aria-selected')).toBe(true)
   })
 
   it('switching to Courses tab changes active state', () => {
     render(<ListsScreen />)
     fireEvent.press(screen.getByText('Courses'))
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[2]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(tabs[2], 'aria-selected')).toBe(true)
   })
 
   it('switching to Destinations tab changes active state', () => {
     render(<ListsScreen />)
     fireEvent.press(screen.getByText('Destinations'))
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[3]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(tabs[3], 'aria-selected')).toBe(true)
   })
 
   it('does NOT render old "College Entrance Exams" segment label', () => {
@@ -498,22 +499,22 @@ describe('ListsScreen', () => {
     mockTabParam.value = 'courses'
     render(<ListsScreen />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[2]?.props.accessibilityState?.selected).toBe(true)
-    expect(tabs[0]?.props.accessibilityState?.selected).toBe(false)
+    expect(aria(tabs[2], 'aria-selected')).toBe(true)
+    expect(aria(tabs[0], 'aria-selected')).toBe(false)
   })
 
   it('opens with the Destinations tab active when tab param is "destinations"', () => {
     mockTabParam.value = 'destinations'
     render(<ListsScreen />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[3]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(tabs[3], 'aria-selected')).toBe(true)
   })
 
   it('ignores an invalid tab param and stays on Universities', () => {
     mockTabParam.value = 'bogus'
     render(<ListsScreen />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs[0]?.props.accessibilityState?.selected).toBe(true)
+    expect(aria(tabs[0], 'aria-selected')).toBe(true)
   })
 
   // ── Results header indicator (query active) ───────────────────────────────
@@ -586,7 +587,7 @@ describe('ListsScreen', () => {
     first.unmount()
     mockSectionParam.value = written
     render(<ListsScreen />)
-    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Courses' }), 'aria-selected')).toBe(true)
   })
 
   it('does not rewrite the URL when the section came from the URL itself', () => {
@@ -615,7 +616,7 @@ describe('ListsScreen', () => {
     expect(router.setParams).toHaveBeenCalledTimes(3)
     expect(mockNewsMounts.n).toBe(1)
     expect(cachedQuery).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Courses' }), 'aria-selected')).toBe(true)
     expect(screen.getByLabelText('Filter courses').props.value).toBe('nur')
   })
 
@@ -636,14 +637,14 @@ describe('ListsScreen', () => {
     expect(mockSectionParam.value).toBe('courses')
     expect(mockNewsMounts.n).toBe(1)
     expect(cachedQuery).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('tab', { name: 'Courses' }).props.accessibilityState.selected).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Courses' }), 'aria-selected')).toBe(true)
     expect(screen.getByLabelText('Filter courses').props.value).toBe('nur')
   })
 
   it('still follows a genuine URL change made elsewhere (deep link while open)', async () => {
     render(<ListsScreen />)
     await act(async () => { mockUrl.write({ section: 'destinations' }) })
-    expect(screen.getByRole('tab', { name: 'Destinations' }).props.accessibilityState.selected).toBe(true)
+    expect(aria(screen.getByRole('tab', { name: 'Destinations' }), 'aria-selected')).toBe(true)
   })
 
   it('applies only the latest catalog load when an older one resolves later', async () => {
@@ -748,9 +749,9 @@ describe('ListsScreen', () => {
     ]))
     render(<ListsScreen />)
     const free = await screen.findByRole('checkbox', { name: 'Free tuition' })
-    expect(free.props.accessibilityState).toEqual({ checked: false })
+    expect(aria(free, 'aria-checked')).toBe(false)
     fireEvent.press(free)
-    expect(screen.getByRole('checkbox', { name: 'Free tuition' }).props.accessibilityState).toEqual({ checked: true })
+    expect(aria(screen.getByRole('checkbox', { name: 'Free tuition' }), 'aria-checked')).toBe(true)
     expect(screen.getByRole('radio', { name: 'NCR' })).toBeTruthy()
   })
 

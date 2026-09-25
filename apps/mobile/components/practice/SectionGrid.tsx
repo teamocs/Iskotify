@@ -23,7 +23,8 @@ interface Props {
  * Section navigation for the mock-exam runner. Every section is always visible
  * (no sideways scroll), so the block never shifts between questions. The
  * active section is marked by a check and heavier label as well as its tint.
- * Sections locked by a section timer are disabled and announced as such.
+ * Sections locked by a section timer are disabled and announced as such; the
+ * active one is named "<section>, current section" for assistive tech.
  */
 export function SectionGrid({ sections, onJump, stacked = false }: Props) {
   const { theme: t } = useTheme()
@@ -38,7 +39,10 @@ export function SectionGrid({ sections, onJump, stacked = false }: Props) {
           key={sec.name}
           disabled={sec.disabled}
           accessibilityRole="button"
-          accessibilityState={{ selected: sec.active, disabled: sec.disabled }}
+          // aria-selected is invalid on a button, so the current section is
+          // spelled out in its name (as QuestionGrid does for its cells).
+          accessibilityLabel={sec.active ? `${sec.name}, current section` : sec.name}
+          aria-disabled={sec.disabled}
           onPress={() => onJump(sec.start)}
           style={(state) => {
             const { pressed, focused } = state as WebPressableState

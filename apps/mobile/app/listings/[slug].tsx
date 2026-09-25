@@ -139,7 +139,7 @@ function PrimaryLinkButton({ label, url }: { label: string; url: string }) {
 
 function DetailSkeleton() {
   return (
-    <View testID="listing-skeleton" accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+    <View testID="listing-skeleton" accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
       <Skeleton width={96} height={20} radius={radius.pill} />
       <Skeleton width="80%" height={28} />
       <Skeleton width="50%" height={14} />

@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native'
 import SchoolsDirectoryScreen from '../schools/index'
+import { aria } from '../../test-utils/aria'
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -255,7 +256,7 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await screen.findByText('Private U')
-    const checked = (name: string) => screen.getByRole('radio', { name }).props.accessibilityState?.selected
+    const checked = (name: string) => aria(screen.getByRole('radio', { name }), 'aria-checked')
     expect(checked('All types')).toBe(true)
 
     fireEvent.press(screen.getByRole('radio', { name: 'SUC' }))

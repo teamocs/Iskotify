@@ -285,7 +285,7 @@ export default function NoteEditorScreen() {
             <View>
               {unchecked.map(item => (
                 <View key={item.id} style={s.checkRow}>
-                  <TouchableOpacity style={s.checkBox} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} accessibilityState={{ checked: item.isChecked }}>
+                  <TouchableOpacity style={s.checkBox} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} aria-checked={item.isChecked}>
                     <Text style={s.checkMark}> </Text>
                   </TouchableOpacity>
                   <TextInput
@@ -313,7 +313,7 @@ export default function NoteEditorScreen() {
                   </Text>
                   {checked.map(item => (
                     <View key={item.id} style={s.checkRow}>
-                      <TouchableOpacity style={[s.checkBox, { backgroundColor: subCol }]} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} accessibilityState={{ checked: item.isChecked }}>
+                      <TouchableOpacity style={[s.checkBox, { backgroundColor: subCol }]} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} aria-checked={item.isChecked}>
                         <Text style={s.checkMark}>✓</Text>
                       </TouchableOpacity>
                       <Text style={[s.checkInput, s.checkedText]}>{item.text}</Text>
@@ -343,17 +343,17 @@ export default function NoteEditorScreen() {
                   onPress={() => setColor(key)}
                   accessibilityRole="radio"
                   accessibilityLabel={key ? `${key} note colour` : 'Default note colour'}
-                  accessibilityState={{ selected: color === key }}
+                  aria-checked={color === key}
                 />
               ))}
             </View>
           </ScrollView>
           {/* Reminder */}
-          <TouchableOpacity style={[s.toolBtn, hasActiveReminder && s.toolBtnActive]} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel="Reminder" accessibilityState={{ selected: hasActiveReminder }}>
+          <TouchableOpacity style={[s.toolBtn, hasActiveReminder && s.toolBtnActive]} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel={hasActiveReminder ? 'Reminder, set' : 'Reminder'}>
             <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accent : textCol} />
           </TouchableOpacity>
           {/* Labels */}
-          <TouchableOpacity style={[s.toolBtn, assignedIds.length > 0 && s.toolBtnActive]} onPress={() => setShowLabelPicker(true)} accessibilityRole="button" accessibilityLabel="Labels" accessibilityState={{ selected: assignedIds.length > 0 }}>
+          <TouchableOpacity style={[s.toolBtn, assignedIds.length > 0 && s.toolBtnActive]} onPress={() => setShowLabelPicker(true)} accessibilityRole="button" accessibilityLabel={assignedIds.length > 0 ? `Labels, ${assignedIds.length} assigned` : 'Labels'}>
             <Lineicons icon={Bookmark1Outlined} size={20} color={assignedIds.length > 0 ? t.accent : textCol} />
           </TouchableOpacity>
           {/* Archive */}
@@ -388,7 +388,7 @@ export default function NoteEditorScreen() {
             {labels.map(label => {
               const on = assignedIds.includes(label.id)
               return (
-                <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)} accessibilityRole="checkbox" accessibilityLabel={label.name} accessibilityState={{ checked: assignedIds.indexOf(label.id) !== -1 }}>
+                <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)} accessibilityRole="checkbox" accessibilityLabel={label.name} aria-checked={assignedIds.indexOf(label.id) !== -1}>
                   <Text style={s.labelName}>{label.name}</Text>
                   <View style={[s.checkCircle, on ? s.checkCircleOn : s.checkCircleOff]}>
                     {on && <Lineicons icon={CheckOutlined} size={12} color={t.textInverse} />}

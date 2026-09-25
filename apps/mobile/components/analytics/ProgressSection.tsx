@@ -44,7 +44,7 @@ export function ProgressSection({ title, summary, collapsible = false, defaultOp
             onPress={() => setOpen(v => !v)}
             accessibilityRole="button"
             accessibilityLabel={summary && !open ? `${title}, ${summary}` : title}
-            accessibilityState={{ expanded: open }}
+            aria-expanded={open}
             style={(state) => {
               const { pressed, hovered, focused } = state as WebPressableState
               return [

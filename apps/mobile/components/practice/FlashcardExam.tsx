@@ -319,7 +319,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           disabled={idx === 0}
           accessibilityRole="button"
           accessibilityLabel="Previous question"
-          accessibilityState={{ disabled: idx === 0 }}
+          aria-disabled={idx === 0}
         >
           <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
         </Pressable>
@@ -350,7 +350,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
               onPress={() => setIdx(i => i + 1)}
               accessibilityRole="button"
               accessibilityLabel="Next question"
-              accessibilityState={{ disabled: sel === undefined }}
+              aria-disabled={sel === undefined}
             >
               <Text style={s.footPrimaryTxt}>Next</Text>
             </Pressable>

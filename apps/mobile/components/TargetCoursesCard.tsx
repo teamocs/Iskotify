@@ -217,8 +217,10 @@ export function TargetCoursesCard() {
                         key={c.id}
                         onPress={() => toggle(c)}
                         disabled={disabled}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled, selected: sel }}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={c.label}
+                        aria-checked={sel}
+                        aria-disabled={disabled}
                         style={({ pressed }) => [s.row, {
                           backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
                           borderColor: sel ? '#831626' : t.border,

@@ -22,7 +22,7 @@ describe('ExamReviewSheet', () => {
 
   it('lists every question with an answered/unanswered accessibility state', () => {
     render(<ExamReviewSheet {...baseProps} />)
-    expect(screen.getByLabelText('Question 1, answered')).toBeTruthy()
+    expect(screen.getByLabelText('Question 1, answered, current question')).toBeTruthy()
     expect(screen.getByLabelText('Question 2, unanswered')).toBeTruthy()
     expect(screen.getByLabelText('Question 3, answered')).toBeTruthy()
     expect(screen.getByLabelText('Question 4, unanswered')).toBeTruthy()

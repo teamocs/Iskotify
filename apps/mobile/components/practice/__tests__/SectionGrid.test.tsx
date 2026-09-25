@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react-native'
 import { SectionGrid } from '../SectionGrid'
+import { aria } from '../../../test-utils/aria'
 
 type Section = { name: string; start: number; active: boolean; disabled: boolean }
 
@@ -37,14 +38,16 @@ describe('SectionGrid', () => {
     expect(onJump).not.toHaveBeenCalled()
   })
 
-  it('exposes accessibilityState: active card selected, disabled card disabled', () => {
-    const { getAllByRole } = render(<SectionGrid sections={makeSections()} onJump={jest.fn()} />)
+  // aria-selected is invalid on a button, so the active section is named
+  // "<section>, current section" (heard the same on web and native).
+  it('announces the active card as the current section and the locked card as disabled', () => {
+    const { getAllByRole, getByRole } = render(<SectionGrid sections={makeSections()} onJump={jest.fn()} />)
     const buttons = getAllByRole('button')
     expect(buttons).toHaveLength(4)
-    const active = buttons.find(b => b.props.accessibilityState?.selected === true)
-    expect(active).toBeTruthy()
-    const disabled = buttons.filter(b => b.props.accessibilityState?.disabled === true)
-    expect(disabled).toHaveLength(1)
+    expect(getByRole('button', { name: 'Language Proficiency, current section' })).toBeTruthy()
+    expect(getAllByRole('button', { name: /current section/ })).toHaveLength(1)
+    expect(buttons.filter(b => aria(b, 'aria-disabled') === true)).toHaveLength(1)
+    expect(aria(getByRole('button', { name: 'Science' }), 'aria-disabled')).toBe(true)
   })
 
   it('renders nothing for a single section', () => {

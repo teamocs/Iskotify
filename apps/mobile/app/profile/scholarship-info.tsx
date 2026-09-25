@@ -250,7 +250,7 @@ export default function ScholarshipInfoScreen() {
                         key={p}
                         onPress={() => { setProvince(p); setProvinceQuery(p) }}
                         accessibilityRole="radio"
-                        accessibilityState={{ selected }}
+                        aria-checked={selected}
                         style={({ pressed }) => ({
                           paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 44, justifyContent: 'center',
                           backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : 'transparent',

@@ -92,7 +92,7 @@ function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ disabled: !!disabled }}
+      aria-disabled={!!disabled}
       style={(state) => {
         const { pressed, hovered, focused } = state as WebPressableState
         return [

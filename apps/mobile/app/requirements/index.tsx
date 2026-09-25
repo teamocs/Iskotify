@@ -143,7 +143,7 @@ export default function RequirementsScreen() {
       <DetailTopBar title="Requirements" fallbackHref="/" />
       <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         {loading ? (
-          <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" accessibilityState={{ busy: true }} style={{ gap: spacing.lg }}>
+          <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" aria-busy style={{ gap: spacing.lg }}>
             <Skeleton height={160} radius={radius.xl} />
             <Skeleton height={160} radius={radius.xl} />
           </View>

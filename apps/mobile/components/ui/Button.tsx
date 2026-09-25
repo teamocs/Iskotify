@@ -60,9 +60,8 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: inactive, busy: !!loading }}
-      // react-native-web 0.21 ignores accessibilityState; aria-* reaches the DOM
-      // (and RN 0.81 reads it natively too).
+      // aria-* (not accessibilityState): react-native-web 0.21 only maps these
+      // to the DOM, and RN 0.81 folds them into native accessibility state.
       aria-disabled={inactive}
       aria-busy={!!loading}
       style={(state) => {

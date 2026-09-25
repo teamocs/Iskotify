@@ -159,7 +159,7 @@ function AdmissionsNews({ items, onOpen }: { items: FeedItem[]; onOpen: (item: F
 
 function NewsSkeleton() {
   return (
-    <View testID="news-skeleton" accessible accessibilityLabel="Loading admissions news" accessibilityState={{ busy: true }} style={{ gap: spacing.md }}>
+    <View testID="news-skeleton" accessible accessibilityLabel="Loading admissions news" aria-busy style={{ gap: spacing.md }}>
       <Skeleton width="40%" height={18} />
       {[0, 1, 2].map(i => (
         <View key={i} style={{ gap: spacing.sm }}>

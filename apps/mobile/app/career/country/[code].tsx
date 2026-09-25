@@ -140,7 +140,7 @@ export default function CareerCountryScreen() {
         <DetailTopBar fallbackHref="/explore?section=destinations" />
         <ScreenScroll tabBarInset={false}>
           {status === 'loading' ? (
-            <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+            <View accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
               <Skeleton width="60%" height={28} />
               <Skeleton height={120} radius={radius.xl} />
               <Skeleton height={180} radius={radius.xl} />

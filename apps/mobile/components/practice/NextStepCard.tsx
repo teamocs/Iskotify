@@ -30,7 +30,7 @@ export function NextStepCard({ copy, onAction }: Props) {
 
   if (!copy) {
     return (
-      <View style={frame} accessible accessibilityLabel="Loading your next step" accessibilityState={{ busy: true }}>
+      <View style={frame} accessible accessibilityLabel="Loading your next step" aria-busy>
         <Skeleton width="70%" height={26} />
         <Skeleton height={16} />
         <Skeleton width={160} height={48} radius={radius.lg} />

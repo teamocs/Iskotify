@@ -60,7 +60,6 @@ describe('OptionList', () => {
     expect(radios).toHaveLength(4)
     radios.forEach((r, i) => {
       expect(r.props['aria-checked']).toBe(i === 1)
-      expect(r.props.accessibilityState).toBeUndefined()
     })
   })
 
