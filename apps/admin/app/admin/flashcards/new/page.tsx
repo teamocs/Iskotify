@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ExamTagSelector } from '@/components/flashcards/ExamTagSelector'
 import { CsvDropzone } from '@/components/flashcards/CsvDropzone'
 import { Topbar } from '@/components/admin/Topbar'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 const MAX_SAMPLE_TEXT_CHARS = 20000
 
@@ -116,7 +117,9 @@ export default function NewFlashcardsPage() {
       })
       const body = await res.json() as { cards?: CardRow[]; error?: string }
       if (!res.ok || !body.cards) {
-        setGenerateError(body.error ?? 'Generation failed')
+        const message = body.error ?? 'Generation failed'
+        setGenerateError(message)
+        notifyError(message)
         return
       }
       // Append generated cards; if the only existing card is empty, replace it
@@ -130,8 +133,10 @@ export default function NewFlashcardsPage() {
         const existingHasContent = prev.some(c => c.question.trim() || c.answer.trim() || c.explanation.trim())
         return existingHasContent ? [...prev, ...generated] : generated
       })
+      notifySuccess(`${body.cards.length} card${body.cards.length === 1 ? '' : 's'} generated`)
     } catch {
       setGenerateError('Generation failed — check your connection')
+      notifyError('Generation failed — check your connection')
     } finally {
       setIsGenerating(false)
     }
@@ -157,15 +162,18 @@ export default function NewFlashcardsPage() {
         }),
       })
       if (res.ok) {
-        alert('Saved! AI is generating multiple-choice distractors in the background — they\'ll be ready for students within ~30 seconds per card.')
+        notifySuccess('Saved — AI is generating multiple-choice distractors in the background (~30s per card)')
         router.push('/admin/flashcards')
       } else {
         const body = await res.json() as { error?: string }
-        setError(body.error ?? 'Failed to save flashcards')
+        const message = body.error ?? 'Failed to save flashcards'
+        setError(message)
+        notifyError(message)
         setIsSubmitting(false)
       }
     } catch {
       setError('Failed to save — check your connection')
+      notifyError('Failed to save — check your connection')
       setIsSubmitting(false)
     }
   }

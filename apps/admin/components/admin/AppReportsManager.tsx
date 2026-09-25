@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -142,12 +143,16 @@ export function AppReportsManager() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to update status')
+        const message = body.error ?? 'Failed to update status'
+        setActionError(message)
+        notifyError(message)
         return
       }
+      notifySuccess(`Report marked ${status}`)
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 
@@ -157,13 +162,17 @@ export function AppReportsManager() {
       const res = await fetch(`/api/admin/app-reports/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to delete report')
+        const message = body.error ?? 'Failed to delete report'
+        setActionError(message)
+        notifyError(message)
         return
       }
       setConfirmingDelete(null)
+      notifySuccess('Report deleted')
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 

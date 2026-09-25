@@ -9,6 +9,7 @@ import { normalizeQuestionBankHeader } from '@/lib/csv/questionBankHeaders'
 import { cleanImportedText } from '@/lib/csv/cleaners'
 import { VALID_SUBTESTS } from '@/lib/upcat/importUpcatCore'
 import { validateAllQbRows, EXPECTED_COLUMNS, normalizeAnswerLetter } from '@/lib/upcat/validateQuestionBank'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 type Row = Record<string, string>
 const PAGE_SIZE = 25
@@ -100,10 +101,18 @@ export default function QuestionBankImportPage() {
     try {
       const res = await fetch('/api/upcat-questions/import', { method: 'POST', body: fd })
       const body = await res.json()
-      if (!res.ok) { setError(body.error ?? 'Import failed'); return }
+      if (!res.ok) {
+        const message = body.error ?? 'Import failed'
+        setError(message)
+        notifyError(message)
+        return
+      }
       setResult(body)
+      notifySuccess(`Imported ${body.questions} question${body.questions === 1 ? '' : 's'} across ${body.passages} passage${body.passages === 1 ? '' : 's'}`)
     } catch (e: any) {
-      setError(e?.message ?? 'Import failed')
+      const message = e?.message ?? 'Import failed'
+      setError(message)
+      notifyError(message)
     } finally {
       setImporting(false)
     }
@@ -114,10 +123,18 @@ export default function QuestionBankImportPage() {
     try {
       const res = await fetch('/api/flashcards/project', { method: 'POST' })
       const body = await res.json()
-      if (!res.ok) { setError(body.error ?? 'Projection failed'); return }
+      if (!res.ok) {
+        const message = body.error ?? 'Projection failed'
+        setError(message)
+        notifyError(message)
+        return
+      }
       setProjection(body)
+      notifySuccess(`Projected ${body.cards} cards · ${body.topics} topics · ${body.subjects} subjects`)
     } catch (e: any) {
-      setError(e?.message ?? 'Projection failed')
+      const message = e?.message ?? 'Projection failed'
+      setError(message)
+      notifyError(message)
     } finally {
       setProjecting(false)
     }

@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
+import { createSubject as createSubjectRequest, updateSubject, deleteSubject } from '@/lib/admin/subjectsApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface SubjectRow {
   id: string
@@ -105,22 +107,22 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     setSaving(true)
     setCreateError('')
     try {
-      const res = await fetch('/api/flashcards/subjects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName.trim(), listing_slugs: createSlugs }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setCreateError(body.error ?? 'Something went wrong')
+      const result = await createSubjectRequest(createName, createSlugs)
+      if (!result.ok) {
+        setCreateError(result.error)
+        notifyError(result.error)
         return
       }
-      const created = await res.json()
+      const created = result.data
       setSubjects(prev =>
         [...prev, { id: created.id, name: created.name, listing_slugs: created.listing_slugs ?? [], topics: [], totalCards: 0, overallStatus: 'draft' }]
           .sort((a, b) => a.name.localeCompare(b.name))
       )
       setCreating(false)
+      notifySuccess('Subject created')
+    } catch {
+      setCreateError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -131,17 +133,13 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     setSaving(true)
     setEditError('')
     try {
-      const res = await fetch(`/api/flashcards/subjects/${editingSubject.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim(), listing_slugs: editSlugs }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setEditError(body.error ?? 'Something went wrong')
+      const result = await updateSubject(editingSubject.id, editName, editSlugs)
+      if (!result.ok) {
+        setEditError(result.error)
+        notifyError(result.error)
         return
       }
-      const updated = await res.json()
+      const updated = result.data
       setSubjects(prev =>
         prev.map(s =>
           s.id === updated.id
@@ -150,6 +148,10 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
         )
       )
       setEditingSubject(null)
+      notifySuccess('Subject saved')
+    } catch {
+      setEditError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -160,16 +162,18 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     setSaving(true)
     setDeleteError('')
     try {
-      const res = await fetch(`/api/flashcards/subjects/${deletingSubject.id}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setDeleteError(body.error ?? 'Something went wrong')
+      const result = await deleteSubject(deletingSubject.id)
+      if (!result.ok) {
+        setDeleteError(result.error)
+        notifyError(result.error)
         return
       }
       setSubjects(prev => prev.filter(s => s.id !== deletingSubject.id))
       setDeletingSubject(null)
+      notifySuccess('Subject deleted')
+    } catch {
+      setDeleteError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }

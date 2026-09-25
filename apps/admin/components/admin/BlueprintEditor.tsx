@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Topbar } from '@/components/admin/Topbar'
+import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Blueprint {
   slug: string
@@ -71,6 +73,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   function setBp<K extends keyof Blueprint>(key: K, value: Blueprint[K]) {
     setBlueprint(prev => ({ ...prev, [key]: value }))
@@ -100,28 +103,48 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
         body: JSON.stringify({ blueprint, sections, courseNotes: notes }),
       })
       const body = await res.json()
-      if (!res.ok) { setError(body.error ?? 'Save failed'); return }
+      if (!res.ok) {
+        const message = body.error ?? 'Save failed'
+        setError(message)
+        notifyError(message)
+        return
+      }
+      notifySuccess('Blueprint saved')
       router.push('/admin/exam-blueprints')
       router.refresh()
     } catch (e: any) {
-      setError(e?.message ?? 'Save failed')
+      const message = e?.message ?? 'Save failed'
+      setError(message)
+      notifyError(message)
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete blueprint "${blueprint.slug}"? This cannot be undone.`)) return
+  function handleDelete() {
+    setConfirmingDelete(true)
+  }
+
+  async function confirmDelete() {
+    setConfirmingDelete(false)
     setError(null)
     setDeleting(true)
     try {
       const res = await fetch(`/api/exam-blueprints?slug=${encodeURIComponent(blueprint.slug)}`, { method: 'DELETE' })
       const body = await res.json()
-      if (!res.ok) { setError(body.error ?? 'Delete failed'); return }
+      if (!res.ok) {
+        const message = body.error ?? 'Delete failed'
+        setError(message)
+        notifyError(message)
+        return
+      }
+      notifySuccess('Blueprint deleted')
       router.push('/admin/exam-blueprints')
       router.refresh()
     } catch (e: any) {
-      setError(e?.message ?? 'Delete failed')
+      const message = e?.message ?? 'Delete failed'
+      setError(message)
+      notifyError(message)
     } finally {
       setDeleting(false)
     }
@@ -477,6 +500,13 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
 
         </div>
       </div>
+      {confirmingDelete && (
+        <ConfirmDialog
+          message={`Delete blueprint "${blueprint.slug}"? This cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   )
 }

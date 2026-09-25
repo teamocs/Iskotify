@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 interface Props {
   id: string
@@ -26,13 +27,17 @@ export function DateContributionActions({ id }: Props) {
       const json = (await res.json()) as { ok?: boolean; error?: string }
 
       if (!res.ok || !json.ok) {
-        setError(json.error ?? 'Action failed. Please try again.')
+        const message = json.error ?? 'Action failed. Please try again.'
+        setError(message)
+        notifyError(message)
         return
       }
 
+      notifySuccess(action === 'approve' ? 'Date correction approved' : 'Date correction rejected')
       router.refresh()
     } catch {
       setError('Network error. Please check your connection and try again.')
+      notifyError('Network error. Please check your connection and try again.')
     } finally {
       setLoading(null)
     }

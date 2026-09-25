@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // One row of the kb_drive_files ledger (supabase/migrations/055).
 export interface KbDriveFile {
@@ -57,10 +58,18 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
           s.errors.length ? `${s.errors.length} failed` : '',
           s.remaining ? `${s.remaining} left for the next run` : '',
         ].filter(Boolean)
-        setNotice({ msg: parts.join(' · '), ok: s.errors.length === 0 })
+        const msg = parts.join(' · ')
+        setNotice({ msg, ok: s.errors.length === 0 })
+        // The persistent summary line above stays — it's the only place the
+        // per-file breakdown (imported/unchanged/needs-mapping/errors) is
+        // visible at a glance. The toast is just the action-level headline.
+        if (s.errors.length === 0) notifySuccess(msg)
+        else notifyError(msg)
         router.refresh()
       } catch (err) {
-        setNotice({ msg: err instanceof Error ? err.message : 'Sync failed', ok: false })
+        const msg = err instanceof Error ? err.message : 'Sync failed'
+        setNotice({ msg, ok: false })
+        notifyError(msg)
       }
     })
   }
@@ -74,13 +83,14 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
         r.skippedFewOptions ? `${r.skippedFewOptions} with 3 options` : '',
         r.skippedDuplicate ? `${r.skippedDuplicate} duplicates` : '',
       ].filter(Boolean)
-      setNotice({
-        msg: `${f.name}: published ${r.published}${held.length ? ` · held back ${held.join(', ')}` : ''}`,
-        ok: true,
-      })
+      const msg = `${f.name}: published ${r.published}${held.length ? ` · held back ${held.join(', ')}` : ''}`
+      setNotice({ msg, ok: true })
+      notifySuccess(msg)
       router.refresh()
     } catch (err) {
-      setNotice({ msg: err instanceof Error ? err.message : 'Publish failed', ok: false })
+      const msg = err instanceof Error ? err.message : 'Publish failed'
+      setNotice({ msg, ok: false })
+      notifyError(msg)
     } finally {
       setPublishing(null)
     }

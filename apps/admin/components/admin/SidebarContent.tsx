@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { notifyError } from '@/lib/toast'
 
 const NAV: { section: string; items: { href: string; icon: string; label: string; disabled?: boolean }[] }[] = [
   {
@@ -118,7 +119,16 @@ export function SidebarContent({ userEmail, onItemClick }: Props) {
   )
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        notifyError(error.message || 'Sign out failed. Please try again.')
+        return
+      }
+    } catch {
+      notifyError('Sign out failed. Please try again.')
+      return
+    }
     router.push('/login')
   }
 

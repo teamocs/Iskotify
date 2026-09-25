@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -209,12 +210,16 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
           })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Save failed')
+        const message = body.error ?? 'Save failed'
+        setError(message)
+        notifyError(message)
         return
       }
       setSaved(true)
+      notifySuccess('Question saved')
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -230,14 +235,18 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Delete failed')
+        const message = body.error ?? 'Delete failed'
+        setError(message)
+        notifyError(message)
         return
       }
       setMissing(true)
       setConfirmingDelete(false)
       setSaved(true)
+      notifySuccess('Question deleted')
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -254,12 +263,16 @@ function QuestionEditorDrawer({ report, onClose, onResolved }: EditorProps) {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'Failed to mark resolved')
+        const message = body.error ?? 'Failed to mark resolved'
+        setError(message)
+        notifyError(message)
         return
       }
+      notifySuccess('Report marked resolved')
       onResolved()
     } catch {
       setError('Network error')
+      notifyError('Network error')
     } finally {
       setSaving(false)
     }
@@ -494,12 +507,16 @@ export function ReportsManager() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to update status')
+        const message = body.error ?? 'Failed to update status'
+        setActionError(message)
+        notifyError(message)
         return
       }
+      notifySuccess(`Report marked ${status}`)
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 
@@ -509,13 +526,17 @@ export function ReportsManager() {
       const res = await fetch(`/api/admin/reports/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setActionError(body.error ?? 'Failed to delete report')
+        const message = body.error ?? 'Failed to delete report'
+        setActionError(message)
+        notifyError(message)
         return
       }
       setConfirmingDelete(null)
+      notifySuccess('Report deleted')
       refresh()
     } catch {
       setActionError('Network error')
+      notifyError('Network error')
     }
   }
 

@@ -5,6 +5,8 @@ import type { Listing } from '@iskotify/utils'
 import { ListingDrawer } from './ListingDrawer'
 import { ConfirmDialog } from './ConfirmDialog'
 import { useRouter } from 'next/navigation'
+import { deleteListing } from '@/lib/admin/listingsApi'
+import { notifySuccess, notifyError } from '@/lib/toast'
 
 const TYPE_FILTERS = ['All', 'Scholarships', 'Exams', 'Active', 'Upcoming', 'Closed'] as const
 
@@ -38,8 +40,13 @@ export function ListingTable({ listings, filter, onFilterChange }: {
   })
 
   async function handleDelete(listing: Listing) {
-    await fetch(`/api/admin/listings/${listing.id}`, { method: 'DELETE' })
+    const result = await deleteListing(listing.id)
+    if (!result.ok) {
+      notifyError(result.error)
+      return
+    }
     setDeleteTarget(null)
+    notifySuccess('Listing deleted')
     router.refresh()
   }
 
