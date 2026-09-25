@@ -24,14 +24,10 @@ interface CacheEntry<T> {
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const cache = new Map<string, CacheEntry<any>>()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inFlight = new Map<string, Promise<any>>()
 // Store last fetcher per key so invalidate can trigger background refresh + notify
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fetchers = new Map<string, () => Promise<any>>()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const subscribers = new Map<string, Set<(value: any) => void>>()
 
 let maxEntries = 200

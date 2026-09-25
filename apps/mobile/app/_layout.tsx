@@ -43,7 +43,7 @@ import { AnalyticsScreenTracker } from '../components/AnalyticsScreenTracker'
 // wrapper to avoid any potential side effects.
 let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> | null = null
 if (Platform.OS !== 'web') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native-only module; a static import would pull it into the web bundle
   KeyboardProvider = require('react-native-keyboard-controller').KeyboardProvider
 }
 

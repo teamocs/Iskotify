@@ -11,7 +11,7 @@
  * not valid on a link.
  */
 // RN Image is fine for a tiny bundled asset.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { View, Text, Pressable, Image } from 'react-native'
 import { usePathname, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'

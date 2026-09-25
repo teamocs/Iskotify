@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { View, Text } from 'react-native'
 // RN Image is fine for a local screenshot preview.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
 import * as DocumentPicker from 'expo-document-picker'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'

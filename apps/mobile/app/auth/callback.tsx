@@ -208,7 +208,6 @@ export default function AuthCallback() {
     }
 
     void finish()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, db])
 
   // Say what is happening instead of a bare spinner; the live region lets a

@@ -17,7 +17,6 @@ function getN(): N | null {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     _N = require('expo-notifications') as N
     _N.setNotificationHandler({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false } as any),
     })
   } catch {

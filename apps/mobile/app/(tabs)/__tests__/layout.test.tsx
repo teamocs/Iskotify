@@ -25,7 +25,7 @@ jest.mock('expo-router', () => {
     }, [])
     return React.createElement(Text, { testID: 'tabs-navigator' }, 'tabs')
   }
-  Tabs.Screen = () => null
+  Tabs.Screen = function TabsScreen() { return null }
   return { Tabs, router: { push: jest.fn(), navigate: jest.fn() }, usePathname: () => '/' }
 })
 

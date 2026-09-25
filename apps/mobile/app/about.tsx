@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 // RN Image is fine for the tiny bundled app icon.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
 import Constants from 'expo-constants'
 import { useTheme } from '../theme/ThemeContext'

@@ -87,7 +87,7 @@ export default function TrashScreen() {
             <Text style={[s.emptyTxt, { marginTop: spacing.md }]}>Trash is empty</Text>
           </View>
         ) : (
-          // eslint-disable-next-line react-doctor/rn-no-scrollview-mapped-list
+          // react-doctor-disable-next-line react-doctor/rn-no-scrollview-mapped-list
           <View style={s.grid}>
             {(notes as Note[]).map(note => {
               const bg = note.color ? NOTE_COLORS[note.color] : t.surface

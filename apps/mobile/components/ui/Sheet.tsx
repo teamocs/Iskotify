@@ -14,8 +14,8 @@ import { decorative } from './a11y'
 // Native keyboard avoidance: react-native-keyboard-controller's version tracks
 // the IME frame-by-frame on Android (where adjustResize does not reach inside a
 // Modal window) and iOS alike. Web needs none: the browser resizes the viewport.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const NativeKeyboardAvoidingView: React.ComponentType<{ behavior: 'padding'; style?: object; children: React.ReactNode }> | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native-only module; a static import would pull it into the web bundle
   Platform.OS === 'web' ? null : require('react-native-keyboard-controller').KeyboardAvoidingView
 
 /** Bottom sheet on phones (thumb reach); a centered dialog from medium up. */

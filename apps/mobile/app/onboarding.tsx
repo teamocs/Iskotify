@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { View, Text, SectionList, ActivityIndicator, ScrollView, Platform } from 'react-native'
 // RN Image is fine for this bundled brand artwork.
-// eslint-disable-next-line react-doctor/rn-prefer-expo-image
+// react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -338,7 +338,6 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] sync error:', e)
         if (aliveRef.current) setSyncStatus('error')
       })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db])
 
   function go(to: StepId | null) {
