@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { useState } from 'react'
+import { View, Text } from 'react-native'
 import Svg, { Polyline, Circle, Line } from 'react-native-svg'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, textStyle } from '../../theme/tokens'
 import type { TrendPoint } from '../../services/analyticsAggregates'
 
 /**
@@ -18,7 +19,8 @@ import type { TrendPoint } from '../../services/analyticsAggregates'
  * dropping to 0% — a week with no practice isn't a 0% week.
  */
 
-const CHART_W = 300
+/** Fallback drawing width before the first layout pass. */
+const DEFAULT_W = 300
 const CHART_H = 110
 const PAD_X = 8
 const PAD_Y = 12
@@ -27,21 +29,26 @@ function fmtWeek(ts: number): string {
   return new Date(ts).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
 }
 
+/** "Weekly accuracy trend, latest 70%, 2 of 8 weeks with practice" — the chart as one phrase. */
+export function trendChartLabel(points: TrendPoint[]): string {
+  const known = points.filter(p => p.accuracy !== null)
+  const latest = known[known.length - 1]?.accuracy
+  return `Weekly accuracy trend, latest ${latest ?? 0}%, ${known.length} of ${points.length} weeks with practice`
+}
+
 export function TrendLineChart({ points }: { points: TrendPoint[] }) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => StyleSheet.create({
-    wrap: { gap: 6 },
-    labelsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    labelTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    emptyWrap: { alignItems: 'center', paddingVertical: 20 },
-    emptyTxt: { fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', fontFamily: 'Lexend_400Regular' },
-  }), [t, typo])
+  const { theme: t } = useTheme()
+  // Draw at the measured width so the line spans the card instead of being
+  // letterboxed inside a fixed 300-wide viewBox on wide screens.
+  const [CHART_W, setChartW] = useState(DEFAULT_W)
 
   const hasData = points.some(p => p.accuracy !== null)
   if (!hasData) {
     return (
-      <View style={s.emptyWrap}>
-        <Text style={s.emptyTxt}>Complete a few more sessions to see your trend.</Text>
+      <View style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+        <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+          Complete a few more sessions to see your trend.
+        </Text>
       </View>
     )
   }
@@ -69,10 +76,16 @@ export function TrendLineChart({ points }: { points: TrendPoint[] }) {
   const lineColor = t.accentText
 
   return (
-    <View style={s.wrap}>
+    <View style={{ gap: spacing.xs }}>
+      <View
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={trendChartLabel(points)}
+        onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); if (w > 0 && w !== CHART_W) setChartW(w) }}
+      >
       <Svg width="100%" height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}>
-        <Line x1={PAD_X} y1={yFor(100)} x2={CHART_W - PAD_X} y2={yFor(100)} stroke={t.surfaceSubtle} strokeWidth={1} />
-        <Line x1={PAD_X} y1={yFor(50)} x2={CHART_W - PAD_X} y2={yFor(50)} stroke={t.surfaceSubtle} strokeWidth={1} strokeDasharray="2,3" />
+        <Line x1={PAD_X} y1={yFor(100)} x2={CHART_W - PAD_X} y2={yFor(100)} stroke={t.divider} strokeWidth={1} />
+        <Line x1={PAD_X} y1={yFor(50)} x2={CHART_W - PAD_X} y2={yFor(50)} stroke={t.divider} strokeWidth={1} strokeDasharray="2,3" />
         {segments.map((seg, si) => (
           <Polyline
             key={si}
@@ -96,9 +109,10 @@ export function TrendLineChart({ points }: { points: TrendPoint[] }) {
           />
         ))}
       </Svg>
-      <View style={s.labelsRow}>
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {points.map((p, i) => (
-          <Text key={i} style={s.labelTxt} maxFontSizeMultiplier={1.4}>
+          <Text key={i} style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>
             {i === 0 || i === n - 1 ? fmtWeek(p.weekStart) : ''}
           </Text>
         ))}

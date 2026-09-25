@@ -27,10 +27,6 @@ jest.mock('@lineiconshq/free-icons', () => ({
   XmarkOutlined: {},
 }))
 
-// Mock AnalyticsDashboard so profile tests don't need its full dependency tree
-jest.mock('../../../components/analytics/AnalyticsDashboard', () => ({
-  AnalyticsDashboard: () => null,
-}))
 
 jest.mock('../../../services/export', () => ({
   exportUserData: jest.fn().mockResolvedValue({ status: 'saved', filename: 'test.json' }),
@@ -50,14 +46,16 @@ const makeTx = () => ({
   delete: jest.fn(() => ({ run: jest.fn() })),
 })
 
-const makeDb = (userRow?: any) => ({
+const makeDb = (userRow?: any, opts: { fail?: boolean } = {}) => ({
   select: jest.fn(() => ({
     from: jest.fn(() => ({
       leftJoin: jest.fn(() => ({
         orderBy: jest.fn().mockResolvedValue([]),
       })),
       where: jest.fn(() => ({
-        limit: jest.fn().mockResolvedValue(userRow ? [userRow] : []),
+        limit: opts.fail
+          ? jest.fn().mockRejectedValue(new Error('disk I/O error'))
+          : jest.fn().mockResolvedValue(userRow ? [userRow] : []),
       })),
       orderBy: jest.fn().mockResolvedValue([]),
     })),
@@ -119,14 +117,53 @@ describe('ProfileScreen — empty DB', () => {
     expect(router.replace).toHaveBeenCalledWith('/')
   })
 
-  it('shows default name Student when no data', () => {
+  it('shows default name Student when no data', async () => {
     render(<ProfileScreen />)
-    expect(screen.getByText('Student')).toBeTruthy()
+    expect(await screen.findByText('Student')).toBeTruthy()
   })
 
-  it('shows default listing title', () => {
+  it('shows default listing title', async () => {
     render(<ProfileScreen />)
-    expect(screen.getByText('No exam selected')).toBeTruthy()
+    expect(await screen.findByText('No exam selected')).toBeTruthy()
+  })
+
+  // Redesign M2: Progress owns analytics — Profile links there instead of
+  // embedding a second copy of the dashboard.
+  it('links to Progress instead of embedding the analytics dashboard', () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    expect(screen.queryByText('Analytics')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Expand analytics/ })).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: /^Progress and analytics/ }))
+    expect(router.push).toHaveBeenCalledWith('/(tabs)/progress')
+  })
+
+  it('has a labelled Settings button (moved here from Today)', () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Settings' }))
+    expect(router.push).toHaveBeenCalledWith('/settings')
+  })
+
+  it('shows a busy skeleton until the profile has loaded', async () => {
+    render(<ProfileScreen />)
+    expect(screen.getByLabelText('Loading your profile')).toBeTruthy()
+    await screen.findByText('Student')
+    expect(screen.queryByLabelText('Loading your profile')).toBeNull()
+  })
+
+  it('uses no emoji or glyph icons', async () => {
+    render(<ProfileScreen />)
+    await screen.findByText('Student')
+    const texts: string[] = []
+    const walk = (n: any): void => {
+      if (n == null) return
+      if (typeof n === 'string') { texts.push(n); return }
+      if (Array.isArray(n)) { n.forEach(walk); return }
+      if (n.children) walk(n.children)
+    }
+    walk(screen.toJSON())
+    expect(texts.join(' ')).not.toMatch(/[\p{Extended_Pictographic}↪⚠⠿›]/u)
   })
 
   it('renders My Focus List section', () => {
@@ -398,5 +435,21 @@ describe('ProfileScreen — WEB sign-out & reset', () => {
     fireEvent.press(getByText('Clear data & sign out'))
     expect((global as any).window.confirm).toHaveBeenCalled()
     expect(clearWebData).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProfileScreen — load failure', () => {
+  it('says so with a retry instead of showing defaults as if they were real', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const db = makeDb(undefined, { fail: true })
+    useDb.mockReturnValue(db)
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    render(<ProfileScreen />)
+    expect(await screen.findByText("Couldn't load your profile")).toBeTruthy()
+    expect(screen.queryByText('Student')).toBeNull()
+    useDb.mockReturnValue(makeDb({ fullName: 'Maria Santos', school: 'UPLB', gradeLevel: 11, googleId: '', email: '', selectedListingSlug: '' }))
+    fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Maria Santos')).toBeTruthy()
+    warn.mockRestore()
   })
 })

@@ -49,6 +49,8 @@ export interface HomeCatalog {
   clusters: Set<string>
   region: string
   loaded: boolean
+  /** The last load failed. */
+  error: boolean
   refresh: () => Promise<void>
 }
 
@@ -78,6 +80,7 @@ export function useHomeCatalog(): HomeCatalog {
   const [clusters, setClusters] = useState<Set<string>>(new Set())
   const [region, setRegion] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -145,8 +148,10 @@ export function useHomeCatalog(): HomeCatalog {
         province: data.settings.province ?? undefined,
         city: data.settings.city ?? undefined,
       })
+      setError(false)
     } catch (e) {
       console.warn('[useHomeCatalog] load failed:', e)
+      setError(true)
     } finally {
       setLoaded(true)
     }
@@ -162,6 +167,6 @@ export function useHomeCatalog(): HomeCatalog {
 
   return {
     examListings, scholarshipListings, blueprintSlugs, blueprintInfo, listingMockBest,
-    profile, clusters, region, loaded, refresh: load,
+    profile, clusters, region, loaded, error, refresh: load,
   }
 }

@@ -1,29 +1,34 @@
 import { useMemo, useState } from 'react'
-import { View, Text, Pressable, StyleSheet, Modal } from 'react-native'
+import { View, Text } from 'react-native'
 import { router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { PlusOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, typography } from '../../theme/tokens'
+import { spacing, textStyle } from '../../theme/tokens'
 import { SectionHeader } from '../ui/SectionHeader'
+import { Card } from '../ui/Card'
+import { ListRow } from '../ui/ListRow'
 import { Badge } from '../ui/Badge'
-import { WebTopSpacer } from '../ui/WebTopSpacer'
+import { Button } from '../ui/Button'
+import { StatNumber } from '../ui/StatNumber'
+import { Sheet } from '../ui/Sheet'
+import { Skeleton } from '../ui/Skeleton'
+import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
-import { subjectColor } from '../../utils/subjectColors'
-import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import {
-  buildFocusExamSlots, buildExamPickerOptions, examAcronym, resolveFocusTileRoute,
+  buildFocusExamSlots, buildExamPickerOptions, resolveFocusTileRoute,
   DEFAULT_SUGGESTED_EXAM_SLUGS, type FocusExamSlot,
 } from '../../utils/focusExamSlots'
+import { pickCountdown } from '../../utils/todayNextStep'
 import type { ExamListingSummary, BlueprintInfo } from '../../hooks/useHomeCatalog'
-
-const TONE_TO_BADGE: Record<ReadinessTone, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
-}
 
 interface FocusedExamInput {
   slug: string
   priority: number
   title: string
   type: string
+  examDate?: number | null
 }
 
 interface Props {
@@ -34,17 +39,29 @@ interface Props {
   listingMockBest: Map<string, number>
   listingAccuracy: Record<string, number>
   onAddListing: (slug: string) => void | Promise<void>
+  loading?: boolean
+  error?: boolean
+  onRetry: () => void
 }
 
+// Hoisted: building an Intl formatter is slow.
+const EXAM_DATE = new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+
+/**
+ * "Your exams": the one focused-exam countdown (big tabular number), then the
+ * exams in Focus with their best mock score, then a single "Add an exam" row
+ * that opens the picker sheet.
+ */
 export function FocusExamsFold({
   focusedListings, examListings, blueprintSlugs, blueprintInfo, listingMockBest, listingAccuracy, onAddListing,
+  loading, error, onRetry,
 }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const examTitleBySlug = useMemo(() => new Map(examListings.map(l => [l.slug, l.title])), [examListings])
 
-  // Exam-type, non-school focus entries only — school-level focus has no exam tile.
+  // Exam-type, non-school focus entries only — school-level focus has no exam row.
   const focusedExams = useMemo(
     () => focusedListings.filter(l => l.type === 'exam' && !isSchoolFocusSlug(l.slug)),
     [focusedListings],
@@ -60,8 +77,10 @@ export function FocusExamsFold({
     return m
   }, [examTitleBySlug])
 
+  // Suggestions only for exams the catalog actually has (a slug-only row is noise).
   const slots = useMemo(
-    () => buildFocusExamSlots(focusedExams, { defaultTitles }),
+    () => buildFocusExamSlots(focusedExams, { defaultTitles, defaults: Object.keys(defaultTitles) })
+      .filter((s): s is Exclude<FocusExamSlot, { kind: 'blank' }> => s.kind !== 'blank'),
     [focusedExams, defaultTitles],
   )
 
@@ -70,162 +89,129 @@ export function FocusExamsFold({
     [examListings, blueprintSlugs, blueprintInfo, focusedSlugSet],
   )
 
+  const countdown = useMemo(
+    () => pickCountdown(focusedExams.map(f => ({ ...f, examDate: f.examDate ?? null })), Date.now()),
+    [focusedExams],
+  )
+
   const readinessFor = (slug: string): number | null =>
     listingMockBest.get(slug) ?? listingAccuracy[slug] ?? null
 
-  const acronymFor = (slug: string, title: string): string =>
-    examAcronym(title, blueprintInfo.get(slug)?.acronym)
-
-  function onTileTap(slot: FocusExamSlot) {
-    if (slot.kind === 'blank') { setPickerOpen(true); return }
+  function onRowPress(slot: Exclude<FocusExamSlot, { kind: 'blank' }>) {
     if (slot.kind === 'suggested') { void onAddListing(slot.slug); return }
-    const hasScore = readinessFor(slot.slug) != null
-    router.push(resolveFocusTileRoute(slot.slug, hasScore, blueprintSlugs) as never)
+    router.push(resolveFocusTileRoute(slot.slug, readinessFor(slot.slug) != null, blueprintSlugs) as never)
   }
 
-  const s = useMemo(() => makeStyles(), [])
+  const nothingYet = focusedExams.length === 0
+
+  let body: React.ReactNode
+  if (loading && nothingYet) {
+    body = (
+      <View style={{ padding: spacing.lg, gap: spacing.md }}>
+        <Skeleton accessible label="Loading your exams" width="50%" height={36} />
+        <Skeleton height={44} />
+        <Skeleton height={44} />
+      </View>
+    )
+  } else if (error && nothingYet) {
+    body = <ErrorState title="Couldn't load your exams" onRetry={onRetry} />
+  } else {
+    body = (
+      <>
+        {countdown ? (
+          <View style={{ padding: spacing.lg, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: t.divider }}>
+            <StatNumber
+              size="lg"
+              value={countdown.days === 0 ? 'Today' : countdown.days}
+              unit={countdown.days === 0 ? undefined : countdown.days === 1 ? 'day' : 'days'}
+              label={`Until ${countdown.title}`}
+            />
+            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+              {EXAM_DATE.format(new Date(countdown.dateMs))}
+            </Text>
+          </View>
+        ) : null}
+        {slots.length === 0 ? (
+          <EmptyState title="No exams yet" body="Add the entrance exams you're taking to see a countdown here." />
+        ) : (
+          slots.map(slot => {
+            if (slot.kind === 'suggested') {
+              return (
+                <ListRow
+                  key={slot.slug}
+                  title={slot.title}
+                  subtitle="Suggested"
+                  trailing={<Badge label="Add" tone="accent" />}
+                  showChevron={false}
+                  onPress={() => onRowPress(slot)}
+                  accessibilityLabel={`Add ${slot.title} to your exams`}
+                />
+              )
+            }
+            const pct = readinessFor(slot.slug)
+            return (
+              <ListRow
+                key={slot.slug}
+                title={slot.title}
+                subtitle={pct != null ? 'Best score' : 'No score yet'}
+                trailing={
+                  <Text style={textStyle('numeric', pct != null ? t.textPrimary : t.textSecondary)} maxFontSizeMultiplier={1.5}>
+                    {pct != null ? `${pct}%` : '—'}
+                  </Text>
+                }
+                onPress={() => onRowPress(slot)}
+                accessibilityLabel={`${slot.title}, ${pct != null ? `best score ${pct}%` : 'no score yet'}`}
+              />
+            )
+          })
+        )}
+        <View style={{ borderTopWidth: 1, borderTopColor: t.divider }}>
+          <ListRow
+            title="Add an exam"
+            leading={<Lineicons icon={PlusOutlined} size={20} color={t.accentText} />}
+            showChevron={false}
+            onPress={() => setPickerOpen(true)}
+            accessibilityLabel="Add an exam"
+          />
+        </View>
+      </>
+    )
+  }
 
   return (
     <View>
-      <View style={{ marginTop: spacing.xl }}>
-        <SectionHeader
-          title="My Entrance Exams"
-          subtitle="Your target exams and how ready you are"
-          actionLabel="See more"
-          onAction={() => router.push('/(tabs)/explore')}
-        />
-      </View>
-      <View style={s.grid}>
-        {slots.map((slot, i) => {
-          if (slot.kind === 'blank') {
-            return (
-              <Pressable
-                key={`blank-${i}`}
-                style={({ pressed }) => [s.tile, s.blankTile, { borderColor: t.border }, pressed && { opacity: 0.7 }]}
-                onPress={() => onTileTap(slot)}
-                accessibilityRole="button"
-                accessibilityLabel="Add an exam"
-              >
-                <Text style={[s.blankPlus, { color: t.textTertiary }]}>＋</Text>
-              </Pressable>
-            )
-          }
+      <SectionHeader title="Your exams" actionLabel="All exams" onAction={() => router.push('/(tabs)/explore')} />
+      <Card padded={false} style={{ overflow: 'hidden' }}>{body}</Card>
 
-          const pct = readinessFor(slot.slug)
-          const tone = readinessTone(pct)
-          const accent = subjectColor(slot.slug).accent
-          const acronym = acronymFor(slot.slug, slot.title)
-
-          return (
-            <Pressable
-              key={slot.slug}
-              style={({ pressed }) => [s.tile, { backgroundColor: t.surface, borderColor: t.border, boxShadow: t.shadowSm }, pressed && { opacity: 0.8 }]}
-              onPress={() => onTileTap(slot)}
-              accessibilityRole="button"
-              accessibilityLabel={slot.title}
-            >
-              <View style={s.tileTop}>
-                <Badge label={pct != null ? `${pct}%` : '—'} tone={TONE_TO_BADGE[tone]} />
-                {slot.kind === 'suggested' ? (
-                  <View style={[s.addPill, { backgroundColor: t.accentSurface }]}>
-                    <Text style={[s.addPillTxt, { color: t.accentText }]} maxFontSizeMultiplier={1.4}>+ Add</Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={[s.monogram, { backgroundColor: accent }]}>
-                <Text style={[s.monogramTxt, { color: t.textInverse }]} maxFontSizeMultiplier={1.2}>{acronym}</Text>
-              </View>
-              <Text style={[s.tileTitle, { color: t.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>{slot.title}</Text>
-            </Pressable>
-          )
-        })}
-      </View>
-
-      <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={[s.backdrop, { backgroundColor: t.backdrop }]} onPress={() => setPickerOpen(false)} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={[s.sheet, { backgroundColor: t.bg }]}>
-          <WebTopSpacer />
-          <View style={[s.handle, { backgroundColor: t.divider }]} />
-          <View style={s.sheetHeader}>
-            <Text style={[s.sheetTitle, { fontSize: typo.lg, color: t.textPrimary }]}>Add an exam</Text>
-            <Pressable onPress={() => setPickerOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
-              <Text style={{ fontSize: typo.md, color: t.textTertiary }}>✕</Text>
-            </Pressable>
-          </View>
-          <View style={s.pickerGrid}>
-            {pickerOptions.map(opt => (
-              <Pressable
-                key={opt.slug}
-                style={({ pressed }) => [s.pickerTile, pressed && { opacity: 0.8 }]}
-                onPress={() => { void onAddListing(opt.slug); setPickerOpen(false) }}
-                accessibilityRole="button"
-                accessibilityLabel={`Add ${opt.title} to Focus`}
-              >
-                <View style={[s.monogram, s.pickerMonogram, { backgroundColor: subjectColor(opt.slug).accent }]}>
-                  <Text style={s.monogramTxt} maxFontSizeMultiplier={1.2}>{opt.acronym}</Text>
-                </View>
-                <Text style={[s.pickerTileTitle, { color: t.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={1.4}>{opt.title}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {pickerOptions.length === 0 ? (
-            <Text style={{ fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', marginVertical: spacing.lg }}>
-              You've added every exam we track — nice.
-            </Text>
-          ) : null}
-          <Pressable
-            style={({ pressed }) => [s.seeAllBtn, pressed && { opacity: 0.7 }]}
+      <Sheet
+        visible={pickerOpen}
+        title="Add an exam"
+        onClose={() => setPickerOpen(false)}
+        footer={
+          <Button
+            label="See all exams"
+            variant="secondary"
+            fullWidth
             onPress={() => { setPickerOpen(false); router.push('/(tabs)/explore') }}
-            accessibilityRole="button"
-          >
-            <Text style={[s.seeAllTxt, { color: t.accentText }]} maxFontSizeMultiplier={1.4}>See all exams ›</Text>
-          </Pressable>
-        </View>
-      </Modal>
+          />
+        }
+      >
+        {pickerOptions.length === 0 ? (
+          <Text style={[textStyle('body', t.textSecondary), { paddingVertical: spacing.lg }]} maxFontSizeMultiplier={2}>
+            You've added every exam we track.
+          </Text>
+        ) : (
+          pickerOptions.map(opt => (
+            <ListRow
+              key={opt.slug}
+              title={opt.title}
+              showChevron={false}
+              onPress={() => { void onAddListing(opt.slug); setPickerOpen(false) }}
+              accessibilityLabel={`Add ${opt.title} to Focus`}
+            />
+          ))
+        )}
+      </Sheet>
     </View>
   )
-}
-
-function makeStyles() {
-  return StyleSheet.create({
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    tile: {
-      position: 'relative',
-      flexBasis: '31%',
-      flexGrow: 1,
-      minHeight: 108,
-      backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderRadius: radius.lg,
-      borderCurve: 'continuous',
-      padding: spacing.sm,
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: spacing.xs,
-    },
-    blankTile: {
-      borderStyle: 'dashed',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    blankPlus: { fontSize: typography.xl, opacity: 0.5 },
-    tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', alignSelf: 'stretch' },
-    addPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm },
-    addPillTxt: { fontSize: typography.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    monogram: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    monogramTxt: { fontSize: typography.xs, fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    tileTitle: { fontSize: typography.xs, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
-    // Modal
-    backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-    sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, maxHeight: '80%', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 32, paddingTop: 12 },
-    handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-    sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
-    sheetTitle: { fontWeight: '700', fontFamily: 'Outfit_700Bold' },
-    pickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    pickerTile: { flexBasis: '31%', flexGrow: 1, minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.xs },
-    pickerMonogram: { width: 44, height: 44, borderRadius: 22 },
-    pickerTileTitle: { fontSize: typography.xs, fontWeight: '600', textAlign: 'center', fontFamily: 'Outfit_600SemiBold' },
-    seeAllBtn: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
-    seeAllTxt: { fontSize: typography.sm, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-  })
 }

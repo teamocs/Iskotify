@@ -19,6 +19,8 @@ export interface StudyPlanItem {
 export interface UseStudyPlanResult {
   items: StudyPlanItem[]
   loading: boolean
+  /** The last load failed (Today shows an ErrorState with a retry). */
+  error: boolean
   /** Items exist for today AND every one is completed. */
   allDone: boolean
   /** Rough size of tomorrow's plan, shown in the all-caught-up state. 0 when unknown/none. */
@@ -49,6 +51,7 @@ export function useStudyPlan(): UseStudyPlanResult {
   const db = useDb()
   const [items, setItems] = useState<StudyPlanItem[]>(EMPTY_ITEMS)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [tomorrowItemCount, setTomorrowItemCount] = useState(0)
   const isMountedRef = useRef(true)
   const generatingRef = useRef(false)
@@ -93,11 +96,12 @@ export function useStudyPlan(): UseStudyPlanResult {
         setItems(rows.map(r => ({
           id: r.id, kind: r.kind, refId: r.refId, targetCount: r.targetCount, completedAt: r.completedAt,
         })))
+        setError(false)
         setLoading(false)
       }
     } catch (e) {
       console.error('[useStudyPlan] load error:', e)
-      if (isMountedRef.current) setLoading(false)
+      if (isMountedRef.current) { setError(true); setLoading(false) }
     } finally {
       generatingRef.current = false
     }
@@ -134,6 +138,6 @@ export function useStudyPlan(): UseStudyPlanResult {
   const allDone = items.length > 0 && items.every(i => i.completedAt != null)
 
   return useMemo(() => ({
-    items, loading, allDone, tomorrowItemCount, markComplete, refresh: load,
-  }), [items, loading, allDone, tomorrowItemCount, markComplete, load])
+    items, loading, error, allDone, tomorrowItemCount, markComplete, refresh: load,
+  }), [items, loading, error, allDone, tomorrowItemCount, markComplete, load])
 }

@@ -1,18 +1,21 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { StyleSheet, View, Text, Pressable, Alert, RefreshControl, Platform } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { View, Text, Pressable, Alert, RefreshControl, Platform } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   ArrowLeftOutlined,
-  User4Outlined,
-  SparkOutlined,
   Gear1Outlined,
   Upload1Outlined,
+  Download1Outlined,
   ChevronUpOutlined,
   ChevronDownOutlined,
   XmarkOutlined,
+  GoogleOutlined,
+  ExitOutlined,
+  Trash3Outlined,
+  TrendUp1Outlined,
+  GraduationCap1Outlined,
 } from '@lineiconshq/free-icons'
 import Animated, {
   useAnimatedStyle,
@@ -23,21 +26,28 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { exportUserData, importUserData } from '../../services/export'
 import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
 import { clearWebData } from '../../services/webReset'
 import { userSettings, listings, userProgress, practiceSessions, focusListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
-import { AnalyticsDashboard } from '../../components/analytics/AnalyticsDashboard'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
+import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
 import { Card } from '../../components/ui/Card'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { ListCard } from '../../components/ui/ListCard'
+import { ListRow } from '../../components/ui/ListRow'
+import { Avatar } from '../../components/ui/Avatar'
+import { Button } from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { ErrorState } from '../../components/ui/ErrorState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
-import { spacing, radius, typography } from '../../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch } from '../../services/sync'
 
@@ -61,37 +71,64 @@ const DEFAULT: ProfileData = {
   scholarshipIncomplete: true,
 }
 
+type LoadStatus = 'loading' | 'ready' | 'error'
+
+/** A 44×44 icon button (header actions, reorder controls). */
+function IconButton({
+  icon, label, onPress, disabled, hint, tone = 'secondary',
+}: {
+  icon: typeof Gear1Outlined
+  label: string
+  onPress: () => void
+  disabled?: boolean
+  hint?: string
+  tone?: 'primary' | 'secondary'
+}) {
+  const { theme: t } = useTheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityState={{ disabled: !!disabled }}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressableState
+        return [
+          {
+            width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: (pressed || hovered) && !disabled ? t.surface2 : 'transparent',
+            opacity: disabled ? 0.35 : 1,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <Lineicons icon={icon} size={20} color={tone === 'primary' ? t.textPrimary : t.textSecondary} />
+    </Pressable>
+  )
+}
+
 // ── Drag-to-reorder focus item ───────────────────────────────────────────────
 
 function DragHandle({ color }: { color: string }) {
-  // 6-dot grip handle — instantly recognizable to all users
+  // 6-dot grip, drawn (not a glyph).
+  const dot = { width: 4, height: 4, borderRadius: 2, backgroundColor: color }
   return (
-    <View style={{ width: 20, alignItems: 'center', gap: 3, paddingVertical: 2 }}>
-      <View style={{ flexDirection: 'row', gap: 3 }}>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      </View>
-      <View style={{ flexDirection: 'row', gap: 3 }}>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      </View>
-      <View style={{ flexDirection: 'row', gap: 3 }}>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color }} />
-      </View>
+    <View {...decorative} style={{ width: 20, alignItems: 'center', gap: 3, paddingVertical: 2 }}>
+      {[0, 1, 2].map(r => (
+        <View key={r} style={{ flexDirection: 'row', gap: 3 }}>
+          <View style={dot} />
+          <View style={dot} />
+        </View>
+      ))}
     </View>
   )
 }
 
 function FocusListItem({
-  item,
-  index,
-  total,
-  onMoveUp,
-  onMoveDown,
-  onRemove,
-  isDragging,
-  onDragStart,
+  item, index, total, onMoveUp, onMoveDown, onRemove, isDragging, onDragStart,
 }: {
   item: FocusListing
   index: number
@@ -102,34 +139,31 @@ function FocusListItem({
   isDragging: boolean
   onDragStart: () => void
 }) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  const reduced = useReducedMotion()
   const scale = useSharedValue(1)
-  const bg = useSharedValue(0)
+  const lifted = useSharedValue(0)
+  const liftedBg = t.surface2
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    backgroundColor: bg.value > 0.5
-      ? t.surface2
-      : 'transparent',
-    borderRadius: 12,
+    backgroundColor: lifted.value > 0.5 ? liftedBg : 'transparent',
     zIndex: isDragging ? 10 : 1,
   }))
 
-  // Long press to activate drag cue (visual feedback)
+  // Long press lifts the row (visual cue). Under reduced motion the lift is
+  // an instant background change, with no scale spring.
+  const spring = { damping: 12, stiffness: 300 }
   const longPressGesture = Gesture.LongPress()
     .minDuration(300)
     .onStart(() => {
-      scale.value = withSpring(1.02, { damping: 12, stiffness: 300 })
-      bg.value = withSpring(1, { damping: 12, stiffness: 300 })
+      scale.value = reduced ? 1 : withSpring(1.02, spring)
+      lifted.value = 1
       runOnJS(onDragStart)()
     })
-    .onEnd(() => {
-      scale.value = withSpring(1, { damping: 12, stiffness: 300 })
-      bg.value = withSpring(0, { damping: 12, stiffness: 300 })
-    })
     .onFinalize(() => {
-      scale.value = withSpring(1, { damping: 12, stiffness: 300 })
-      bg.value = withSpring(0, { damping: 12, stiffness: 300 })
+      scale.value = reduced ? 1 : withSpring(1, spring)
+      lifted.value = 0
     })
 
   const isFirst = index === 0
@@ -141,81 +175,33 @@ function FocusListItem({
         style={[
           animStyle,
           {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingVertical: 10,
-            paddingHorizontal: 6,
-            borderTopWidth: index === 0 ? 0 : 1,
-            borderTopColor: t.surfaceSubtle,
+            flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 56,
+            borderRadius: radius.md, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: t.divider,
           },
         ]}
       >
-        {/* Drag handle — 6-dot grip */}
         <Pressable
-          onPress={() => Alert.alert('Reorder', 'Long-press this item to drag it up or down, or use the ↑↓ arrows.')}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+          onPress={() => Alert.alert('Reorder', 'Long-press an exam to drag it, or use the up and down buttons.')}
           accessibilityRole="button"
-          accessibilityLabel="Drag handle"
-          accessibilityHint="Long-press to drag and reorder"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+          accessibilityLabel={`Reorder ${item.title}`}
+          accessibilityHint="Long-press to drag, or use the up and down buttons"
+          style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
           <DragHandle color={t.textTertiary} />
         </Pressable>
 
-        {/* Priority badge */}
-        <View style={{
-          width: 28, height: 28, borderRadius: radius.pill,
-          backgroundColor: t.accentStrong,
-          alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
-          <Text style={{ fontSize: typo.sm, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' }}>
-            #{item.priority}
-          </Text>
+        {/* Badge pins itself to flex-start; the wrapper centres it in the row. */}
+        <View style={{ alignSelf: 'center' }}>
+          <Badge label={`#${item.priority}`} tone="accent" />
         </View>
 
-        {/* Title */}
-        <Text
-          style={{ flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' }}
-          numberOfLines={1}
-        >
+        <Text style={[textStyle('titleSm', t.textPrimary), { flex: 1, marginLeft: spacing.xs }]} numberOfLines={2} maxFontSizeMultiplier={2}>
           {item.title}
         </Text>
 
-        {/* Up arrow */}
-        <Pressable
-          onPress={onMoveUp}
-          disabled={isFirst}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Move up"
-          style={({ pressed }) => [{ padding: spacing.xs, opacity: isFirst ? 0.25 : 1 }, pressed && !isFirst ? { opacity: 0.7 } : null]}
-        >
-          <Lineicons icon={ChevronUpOutlined} size={16} color={t.textSecondary} />
-        </Pressable>
-
-        {/* Down arrow */}
-        <Pressable
-          onPress={onMoveDown}
-          disabled={isLast}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Move down"
-          style={({ pressed }) => [{ padding: spacing.xs, opacity: isLast ? 0.25 : 1 }, pressed && !isLast ? { opacity: 0.7 } : null]}
-        >
-          <Lineicons icon={ChevronDownOutlined} size={16} color={t.textSecondary} />
-        </Pressable>
-
-        {/* Remove */}
-        <Pressable
-          onPress={onRemove}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          accessibilityRole="button"
-          accessibilityLabel="Remove from focus list"
-          style={({ pressed }) => [{ padding: spacing.xs }, pressed ? { opacity: 0.7 } : null]}
-        >
-          <Lineicons icon={XmarkOutlined} size={16} color={t.textTertiary} />
-        </Pressable>
+        <IconButton icon={ChevronUpOutlined} label={`Move ${item.title} up`} onPress={onMoveUp} disabled={isFirst} />
+        <IconButton icon={ChevronDownOutlined} label={`Move ${item.title} down`} onPress={onMoveDown} disabled={isLast} />
+        <IconButton icon={XmarkOutlined} label={`Remove ${item.title} from your focus list`} onPress={onRemove} />
       </Animated.View>
     </GestureDetector>
   )
@@ -223,49 +209,22 @@ function FocusListItem({
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 
+/**
+ * Profile (opened from the avatar; not a tab). Identity, focus list and
+ * target courses on the left; links to Progress and the scholarship profile,
+ * then data and account actions on the right (desktop), stacked on phones.
+ * Analytics lives in Progress only — this screen links there.
+ */
 export default function ProfileScreen() {
   const db = useDb()
+  const bp = useBreakpoint()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
+  const [status, setStatus] = useState<LoadStatus>('loading')
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [draggingSlug, setDraggingSlug] = useState<string | null>(null)
-  const [analyticsOpen, setAnalyticsOpen] = useState(false)
 
-  const s = useMemo(() => StyleSheet.create({
-    root:          { flex: 1, backgroundColor: t.bg },
-    title:         { fontSize: typography.h2, color: t.textPrimary, letterSpacing: -0.3, fontFamily: 'Outfit_700Bold' },
-    subtitle:      { fontSize: typography.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
-    avatarRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    avatar:        { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    name:          { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 3 },
-    schoolRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
-    school:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    gradeChip:     { backgroundColor: t.accentStrong, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 2 },
-    gradeText:     { fontSize: typo.xs, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-    listingRow:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    listingTitle:  { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1 },
-    googleRow:     { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: t.divider },
-    googleBadge:   { backgroundColor: t.textPrimary, borderRadius: radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
-    googleBadgeText: { fontSize: typo.sm, fontWeight: '700', color: t.bg, fontFamily: 'Outfit_700Bold' },
-    googleEmail:   { flex: 1, fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    signedInBadge: { backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successBorder, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
-    signedInText:  { fontSize: typo.xs, fontWeight: '600', color: t.success, fontFamily: 'Lexend_600SemiBold' },
-    secTitle:      { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    dragHint:      { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs, marginBottom: 2 },
-    analyticsHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    analyticsBody:    { marginTop: spacing.md },
-    analyticsChevron: { fontSize: typography.sm, color: t.textTertiary, marginLeft: spacing.xs },
-    signInCard:    { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
-    signInBadge:   { width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.textInverse, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    signInBadgeText: { fontSize: typo.xl, fontWeight: '700', color: t.accentStrong, fontFamily: 'Outfit_700Bold' },
-    signInTitle:   { fontSize: typo.base, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
-    signInSubtitle:{ fontSize: typo.sm, color: t.textInverse, opacity: 0.85, fontFamily: 'Lexend_400Regular', marginTop: 2 },
-    signInChevron: { fontSize: typo.xl, color: t.textInverse, opacity: 0.9 },
-  }), [t, typo])
-
-  // ── Sync (web-only refresh) ────────────────────────────────────────────────
   const sync = useSyncStatus()
-
   const isMountedRef = useRef(true)
   const loadingRef = useRef(false)
 
@@ -275,7 +234,10 @@ export default function ProfileScreen() {
     try {
       const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
       const row = rows[0]
-      if (!row) return
+      if (!row) {
+        if (isMountedRef.current) setStatus('ready')
+        return
+      }
 
       let listingTitle = 'No exam selected'
       if (row.selectedListingSlug) {
@@ -301,9 +263,11 @@ export default function ProfileScreen() {
             incomeBracket: (row.incomeBracket as IncomeBracket | null) ?? null,
           }),
         })
+        setStatus('ready')
       }
     } catch (e) {
       console.warn('[profile] load error:', e)
+      if (isMountedRef.current) setStatus('error')
     } finally {
       loadingRef.current = false
     }
@@ -325,7 +289,6 @@ export default function ProfileScreen() {
   }, [loadProfile])
 
   // Web-only refresh: run a full sync then reload profile data.
-  // Separate from native onRefresh (which does NOT call syncOnLaunch).
   const webRefresh = useCallback(async () => {
     if (refreshing || sync.isSyncing) return
     setRefreshing(true)
@@ -339,70 +302,46 @@ export default function ProfileScreen() {
     }
   }, [db, loadProfile, refreshing, sync.isSyncing])
 
-  function handleChangeExam() {
-    Alert.alert(
-      'Change Exam',
-      'This will clear your current selection and restart onboarding.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await db.update(userSettings)
-                .set({ selectedListingSlug: '', lastSyncedAt: 0 })
-                .where(eq(userSettings.id, 1))
-              router.replace('/onboarding')
-            } catch {
-              Alert.alert('Error', 'Could not reset your selection. Please try again.')
-            }
-          },
-        },
-      ]
-    )
-  }
+  const retry = useCallback(() => {
+    setStatus('loading')
+    void loadProfile()
+  }, [loadProfile])
 
   async function handleExport() {
     try {
       const result = await exportUserData(db)
       if (result.status === 'saved') {
-        Alert.alert('Export Complete', `Saved as ${result.filename}`)
+        Alert.alert('Export complete', `Saved as ${result.filename}`)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not export data. Please try again.'
-      Alert.alert('Export Failed', msg)
+      Alert.alert('Export failed', msg)
     }
   }
 
   async function handleImport() {
     try {
       await importUserData(db)
-      Alert.alert('Import Successful', 'Your data has been restored.', [
+      Alert.alert('Import successful', 'Your data has been restored.', [
         { text: 'OK', onPress: () => void loadProfile() },
       ])
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not import data.'
-      Alert.alert('Import Failed', msg)
+      Alert.alert('Import failed', msg)
     }
   }
 
   // On web, sign-out routes to /auth/sign-in (the web login screen).
   // On native, it routes to /landing (the native welcome/Google sign-in screen).
   const postSignOutRoute = Platform.OS === 'web' ? '/auth/sign-in' : '/landing'
-
-  // Sign-IN entry (for users who skipped auth at startup) reuses the existing
-  // auth flow — no duplicated OAuth code. Same route map as sign-out.
+  // Sign-IN entry (for users who skipped auth at startup) reuses the existing auth flow.
   const signInRoute = postSignOutRoute
 
-  // Confirm helper — react-native-web's Alert.alert is a NO-OP (buttons never
-  // render, onPress never fires), so destructive actions silently did nothing on
-  // web. On web we use the synchronous window.confirm(); on native we keep the
-  // existing two-button Alert.alert flow. The destructive action runs only after
-  // a TRUE confirm on BOTH platforms. (Native behavior unchanged.)
+  // react-native-web's Alert.alert is a NO-OP, so destructive actions use
+  // window.confirm() on web and the two-button Alert on native. The action
+  // runs only after a TRUE confirm on both platforms.
   function confirmDestructive(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
     if (Platform.OS === 'web') {
-      // typeof guard so this can never throw if window is unavailable.
       const ok = typeof window !== 'undefined' ? window.confirm(`${title}\n\n${message}`) : false
       if (ok) onConfirm()
       return
@@ -429,11 +368,9 @@ export default function ProfileScreen() {
     )
   }
 
-  // Web reset is a FULL wipe: clearing Drizzle tables alone doesn't reset a web
-  // user because the sql.js DB is persisted in IndexedDB and the Supabase session
-  // lives in localStorage. On web, clearWebData() deletes IndexedDB('iskotify') +
+  // Web reset is a FULL wipe: clearWebData() deletes IndexedDB('iskotify') +
   // sb-* localStorage keys, signs out, and hard-reloads to /auth/sign-in.
-  // Native keeps the original db.transaction wipe + signOut + route.
+  // Native keeps the db.transaction wipe + signOut + route.
   const resetTitle = Platform.OS === 'web' ? 'Clear data & start over?' : 'Reset App Data?'
   const resetMessage = Platform.OS === 'web'
     ? 'This will permanently delete ALL local data in this browser (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.'
@@ -446,9 +383,6 @@ export default function ProfileScreen() {
       Platform.OS === 'web' ? 'Clear & start over' : 'Reset Everything',
       async () => {
         if (Platform.OS === 'web') {
-          // Full web wipe (IndexedDB + localStorage + signOut + hard reload).
-          // clearWebData() performs window.location.replace itself, so no
-          // router.replace here.
           try {
             await clearWebData()
           } catch (err) {
@@ -475,143 +409,109 @@ export default function ProfileScreen() {
     )
   }
 
-  return (
-    <SafeAreaView style={s.root} edges={['top']}>
-      <WebTopSpacer />
-      <ScreenScroll
-        tabBarInset
-        padded
-        contentContainerStyle={{ paddingTop: spacing.md, gap: spacing.md }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={t.accent}
-            colors={[t.accent]}
-            progressBackgroundColor={t.surface}
-          />
-        }
-      >
-        {/* Header — Profile opens from the avatar (not a tab), so it carries its own Back. */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.xs }}>
-          <Pressable
-            onPress={() => (router.canGoBack?.() ? router.back() : router.replace('/'))}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => ({
-              width: 44, height: 44, marginLeft: -spacing.sm, alignItems: 'center', justifyContent: 'center',
-              borderRadius: radius.pill, backgroundColor: pressed ? t.surface2 : 'transparent',
-            })}
-          >
-            <Lineicons icon={ArrowLeftOutlined} size={22} color={t.textPrimary} />
-          </Pressable>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.title}>Profile</Text>
-            <Text style={s.subtitle}>Your account, focus list, and data</Text>
+  const rowIcon = (icon: typeof Gear1Outlined, color: string) => <Lineicons icon={icon} size={20} color={color} />
+  const divided = (i: number) => ({ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider })
+
+  // ── Identity ────────────────────────────────────────────────────────────────
+  let identity: React.ReactNode
+  if (status === 'loading') {
+    identity = (
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <Skeleton accessible label="Loading your profile" width={52} height={52} radius={radius.pill} />
+          <View style={{ flex: 1, gap: spacing.sm }}>
+            <Skeleton width="60%" height={22} />
+            <Skeleton width="40%" height={14} />
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
-            <Pressable
-              onPress={() => router.push('/settings')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                { width: 44, height: 44, borderRadius: radius.pill, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, alignItems: 'center', justifyContent: 'center' },
-                pressed ? { opacity: 0.7 } : null,
-              ]}
-            >
-              <Lineicons icon={Gear1Outlined} size={16} color={t.textSecondary} />
-            </Pressable>
+        </View>
+      </Card>
+    )
+  } else if (status === 'error') {
+    identity = (
+      <Card>
+        <ErrorState title="Couldn't load your profile" onRetry={retry} />
+      </Card>
+    )
+  } else {
+    identity = (
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <Avatar name={profile.fullName} size={52} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text style={textStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{profile.fullName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+              <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>{profile.school}</Text>
+              {profile.gradeLevel ? <Badge label={`G${profile.gradeLevel}`} tone="accent" /> : null}
+            </View>
+            <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>
+              {profile.listingTitle}
+            </Text>
           </View>
         </View>
 
-        {/* Identity card */}
-        <Card elevated>
-          <View style={s.avatarRow}>
-            <View style={s.avatar}>
-              <Lineicons icon={User4Outlined} size={22} color={t.textInverse} />
+        {profile.googleId ? (
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+              marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: t.divider,
+            }}
+          >
+            <View {...decorative}>
+              <Lineicons icon={GoogleOutlined} size={18} color={t.textSecondary} />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.name} numberOfLines={1}>{profile.fullName}</Text>
-              <View style={s.schoolRow}>
-                <Text style={s.school} numberOfLines={1}>{profile.school}</Text>
-                {profile.gradeLevel ? (
-                  <View style={s.gradeChip}>
-                    <Text style={s.gradeText}>G{profile.gradeLevel}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={s.listingRow}>
-                <Lineicons icon={SparkOutlined} size={12} color={t.accentText} />
-                <Text style={s.listingTitle} numberOfLines={1}>{profile.listingTitle}</Text>
-              </View>
+            <Text style={[textStyle('bodySm', t.textSecondary), { flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={2}>
+              {profile.email}
+            </Text>
+            <View
+              style={{
+                backgroundColor: t.successSurface, borderWidth: 1, borderColor: t.successBorder,
+                borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2,
+              }}
+            >
+              <Text style={[textStyle('caption', t.successStrong), { fontFamily: fonts.bodySemi }]} maxFontSizeMultiplier={1.6}>
+                Signed in
+              </Text>
             </View>
           </View>
+        ) : null}
+      </Card>
+    )
+  }
 
-          {/* Google account row */}
-          {profile.googleId ? (
-            <View style={s.googleRow}>
-              <View style={s.googleBadge}>
-                <Text style={s.googleBadgeText}>G</Text>
-              </View>
-              <Text style={s.googleEmail} numberOfLines={1}>{profile.email}</Text>
-              <View style={s.signedInBadge}>
-                <Text style={s.signedInText}>Signed in</Text>
-              </View>
-            </View>
-          ) : null}
-        </Card>
+  const primary = (
+    <View style={{ gap: spacing.xxl }}>
+      <View style={{ gap: spacing.md }}>
+        {identity}
 
         {/* Sign-in entry — only for users who skipped auth at startup (no googleId).
             Routes to the EXISTING auth flow; no duplicated OAuth code. */}
-        {!profile.googleId ? (
-          <Pressable
-            onPress={() => router.push(signInRoute)}
-            accessibilityRole="button"
-            accessibilityLabel="Sign in with Google to back up your progress"
-            style={({ pressed }) => [
-              {
-                backgroundColor: t.accentStrong,
-                borderRadius: radius.xl,
-                borderCurve: 'continuous',
-                padding: spacing.lg,
-                minHeight: 44,
-              },
-              pressed ? { opacity: 0.85 } : null,
-            ]}
-          >
-            <View style={s.signInCard}>
-              <View style={s.signInBadge}>
-                <Text style={s.signInBadgeText} maxFontSizeMultiplier={1.4}>G</Text>
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.signInTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                  Sign in with Google
-                </Text>
-                <Text style={s.signInSubtitle} numberOfLines={2} maxFontSizeMultiplier={1.4}>
-                  Save your data and restore it on any device
-                </Text>
-              </View>
-              <Text style={s.signInChevron} maxFontSizeMultiplier={1.4}>›</Text>
-            </View>
-          </Pressable>
+        {status === 'ready' && !profile.googleId ? (
+          <Card>
+            <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Back up your progress</Text>
+            <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: spacing.xs, marginBottom: spacing.md }]} maxFontSizeMultiplier={2}>
+              Save your data and restore it on any device
+            </Text>
+            <Button
+              label="Sign in with Google"
+              accessibilityLabel="Sign in with Google to back up your progress"
+              icon={<Lineicons icon={GoogleOutlined} size={18} color={t.textInverse} />}
+              onPress={() => router.push(signInRoute)}
+            />
+          </Card>
         ) : null}
+      </View>
 
-        {/* My Focus List */}
-        <Card elevated>
-          <SectionHeader
-            title="My Focus List"
-            actionLabel="+ Add More"
-            onAction={() => router.push('/(tabs)/explore')}
-          />
-
-          {focusListingsData.length > 1 ? (
-            <Text style={s.dragHint}>Long-press the ⠿ handle to drag and reorder</Text>
-          ) : null}
-
+      <View>
+        <SectionHeader
+          title="My Focus List"
+          subtitle={focusListingsData.length > 1 ? 'Long-press an exam to drag it, or use the up and down buttons.' : undefined}
+          actionLabel="Add more"
+          onAction={() => router.push('/(tabs)/explore')}
+        />
+        <Card padded={false} style={{ paddingHorizontal: spacing.sm }}>
           {focusListingsData.length === 0 ? (
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: spacing.sm }}>
-              No exams in focus. Tap &quot;+ Add More&quot; to get started.
+            <Text style={[textStyle('bodySm', t.textSecondary), { padding: spacing.md }]} maxFontSizeMultiplier={2}>
+              No exams in focus yet. Tap Add more to pick one.
             </Text>
           ) : (
             focusListingsData.map((item, idx) => (
@@ -629,70 +529,105 @@ export default function ProfileScreen() {
             ))
           )}
         </Card>
+      </View>
 
-        {/* Target Courses — editable; lets older-onboarding users add courses later */}
-        <TargetCoursesCard />
+      {/* Target Courses — editable; lets older-onboarding users add courses later */}
+      <TargetCoursesCard />
+    </View>
+  )
 
-        {/* Scholarship matching profile — editable income / GWA / province (matcher fields) */}
-        <ListCard
-          icon={<Text style={{ fontSize: typography.md }}>🎓</Text>}
-          iconBg={profile.scholarshipIncomplete ? t.warningSurface : t.successSurface}
-          title="Scholarship Profile"
-          subtitle={profile.scholarshipIncomplete ? 'Add income, GWA & province for better matches' : 'Complete — powering your scholarship matches'}
-          onPress={() => router.push('/profile/scholarship-info')}
+  const secondary = (
+    <View style={{ gap: spacing.xxl }}>
+      <Card padded={false} style={{ overflow: 'hidden' }}>
+        <ListRow
+          title="Progress and analytics"
+          subtitle="Readiness, accuracy, pace and mistakes"
+          leading={rowIcon(TrendUp1Outlined, t.accentText)}
+          onPress={() => router.push('/(tabs)/progress')}
         />
+        <View style={divided(1)}>
+          <ListRow
+            title="Scholarship profile"
+            subtitle={profile.scholarshipIncomplete ? 'Add income, GWA and province for better matches' : 'Complete. Powering your scholarship matches'}
+            leading={rowIcon(GraduationCap1Outlined, profile.scholarshipIncomplete ? t.warningStrong : t.successStrong)}
+            onPress={() => router.push('/profile/scholarship-info')}
+          />
+        </View>
+      </Card>
 
-        {/* Analytics section */}
-        <Card elevated>
-          <Pressable
-            style={({ pressed }) => [s.analyticsHeader, pressed ? { opacity: 0.7 } : null]}
-            onPress={() => setAnalyticsOpen(prev => !prev)}
-            accessibilityRole="button"
-            accessibilityLabel={analyticsOpen ? 'Collapse analytics' : 'Expand analytics'}
-          >
-            <Text style={s.secTitle}>Analytics</Text>
-            <Text style={s.analyticsChevron}>{analyticsOpen ? '▲' : '▼'}</Text>
-          </Pressable>
-          {analyticsOpen ? (
-            <View style={s.analyticsBody}>
-              <AnalyticsDashboard scrollable={false} />
-            </View>
-          ) : null}
+      <View>
+        <SectionHeader title="Your data" />
+        <Card padded={false} style={{ overflow: 'hidden' }}>
+          <ListRow
+            title="Export Data"
+            subtitle="Save your preferences as a JSON file"
+            leading={rowIcon(Download1Outlined, t.textSecondary)}
+            onPress={handleExport}
+          />
+          <View style={divided(1)}>
+            <ListRow
+              title="Import Data"
+              subtitle="Restore from a previously exported JSON file"
+              leading={rowIcon(Upload1Outlined, t.textSecondary)}
+              onPress={handleImport}
+            />
+          </View>
+          <View style={divided(1)}>
+            <ListRow
+              title="Sign Out"
+              subtitle="Sign out of your Google account on this device"
+              leading={rowIcon(ExitOutlined, t.textSecondary)}
+              onPress={handleSignOut}
+            />
+          </View>
+          <View style={divided(1)}>
+            <ListRow
+              title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
+              subtitle={Platform.OS === 'web'
+                ? 'Permanently delete all local data in this browser and start over'
+                : 'Permanently delete all local data on this device'}
+              leading={rowIcon(Trash3Outlined, t.danger)}
+              onPress={handleResetAppData}
+            />
+          </View>
         </Card>
+      </View>
+    </View>
+  )
 
-        {/* Action cards */}
-        <ListCard
-          icon={<Lineicons icon={Upload1Outlined} size={16} color={t.success} style={{ transform: [{ rotate: '180deg' }] }} />}
-          iconBg={t.successSurface}
-          title="Export Data"
-          subtitle="Save your preferences as a JSON file"
-          onPress={handleExport}
+  return (
+    <Screen
+      tabBarInset
+      width={bp === 'expanded' ? 'wide' : 'reading'}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={t.accent}
+          colors={[t.accent]}
+          progressBackgroundColor={t.surface}
         />
-        <ListCard
-          icon={<Lineicons icon={Upload1Outlined} size={16} color={t.textSecondary} />}
-          iconBg={t.surface2}
-          title="Import Data"
-          subtitle="Restore from a previously exported JSON file"
-          onPress={handleImport}
-        />
-        <ListCard
-          icon={<Text style={{ fontSize: typo.base, color: t.textSecondary }}>↪</Text>}
-          iconBg={t.surface2}
-          title="Sign Out"
-          subtitle="Sign out of your Google account on this device"
-          onPress={handleSignOut}
-        />
-        <ListCard
-          icon={<Text style={{ fontSize: typo.base, color: t.danger }}>⚠</Text>}
-          iconBg={t.dangerSurface}
-          title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
-          titleColor={t.danger}
-          subtitle={Platform.OS === 'web'
-            ? 'Permanently delete all local data in this browser and start over'
-            : 'Permanently delete all local data on this device'}
-          onPress={handleResetAppData}
-        />
-      </ScreenScroll>
-    </SafeAreaView>
+      }
+    >
+      {/* Profile opens from the avatar (not a tab), so it carries its own Back. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingTop: spacing.md, paddingBottom: spacing.lg }}>
+        <View style={{ marginLeft: -spacing.sm }}>
+          <IconButton
+            icon={ArrowLeftOutlined}
+            label="Back"
+            tone="primary"
+            onPress={() => (router.canGoBack?.() ? router.back() : router.replace('/'))}
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>Profile</Text>
+          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Your account, focus list and data</Text>
+        </View>
+        <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
+        <IconButton icon={Gear1Outlined} label="Settings" onPress={() => router.push('/settings')} />
+      </View>
+
+      <TwoColumn primary={primary} secondary={secondary} />
+    </Screen>
   )
 }
