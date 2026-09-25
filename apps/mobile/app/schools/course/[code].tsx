@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react'
-import {
-  StyleSheet, View, Text, Pressable, ActivityIndicator, FlatList,
-} from 'react-native'
+import { StyleSheet, View, Text, FlatList } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ArrowRightOutlined, Shield2CheckOutlined } from '@lineiconshq/free-icons'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -12,11 +12,15 @@ import {
   aiCareerImpact as aiImpactTable,
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, type Theme, type Typography } from '../../../theme/tokens'
+import { spacing, radius, textStyle, type Theme } from '../../../theme/tokens'
 import { Card } from '../../../components/ui/Card'
+import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { Skeleton } from '../../../components/ui/Skeleton'
+import { decorative } from '../../../components/ui/a11y'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
 import { cachedQuery } from '../../../services/queryCache'
 
 // ---------------------------------------------------------------------------
@@ -82,34 +86,21 @@ function byRank(a: RankingRow, b: RankingRow): number {
 
 type Styles = ReturnType<typeof makeStyles>
 
-function makeStyles(t: Theme, typo: Typography) {
+function makeStyles(t: Theme) {
   return StyleSheet.create({
     root:        { flex: 1, backgroundColor: t.bg },
-    topBar:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn:     { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow:   { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topTitle:    { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    heroTitle:   { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs },
-    heroSub:     { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    aiChip:      { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, alignSelf: 'flex-start' },
-    aiChipTxt:   { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    careerLink:  { marginTop: spacing.md, minHeight: 44, justifyContent: 'center' },
-    careerLinkTxt: { fontSize: typo.sm, color: t.accentText, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
-    sectionWrap: { marginTop: spacing.lg, marginBottom: spacing.xs },
-    rankCard:    { padding: spacing.md },
-    rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-    rankBadge:   { width: 28, height: 28, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', flexShrink: 0 },
-    rankNum:     { fontSize: typo.xs, fontWeight: '700', color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    schoolName:  { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    metaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-    metaChip:    { backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs / 2 },
-    metaTxt:     { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    highlight:   { color: t.textSecondary, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
-    loadMore:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md },
-    loadMoreTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    disclaimer:  { marginTop: spacing.lg, backgroundColor: t.warningSurface, borderWidth: 1, borderColor: 'rgba(245,158,11,0.20)', borderRadius: radius.md, padding: spacing.md },
-    disclaimerTxt: { fontSize: typo.xs, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    empty:       { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xl, fontStyle: 'italic' },
+    heroTitle:   textStyle('title', t.textPrimary),
+    heroSub:     { ...textStyle('body', t.textSecondary), marginTop: spacing.xs },
+    rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+    rankBadge:   { minWidth: 36, height: 36, paddingHorizontal: spacing.xs, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface2, flexShrink: 0 },
+    rankNum:     textStyle('label', t.textPrimary),
+    schoolName:  { ...textStyle('titleSm', t.textPrimary), flex: 1 },
+    metaRow:     { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.lg, rowGap: spacing.xs },
+    metaTxt:     textStyle('bodySm', t.textSecondary),
+    highlight:   { ...textStyle('label', t.textPrimary), fontVariant: ['tabular-nums'] },
+    disclaimer:  { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', marginTop: spacing.lg, backgroundColor: t.warningSurface, borderRadius: radius.sm, padding: spacing.md },
+    disclaimerTxt: { ...textStyle('bodySm', t.warningStrong), flex: 1 },
+    empty:       { ...textStyle('body', t.textSecondary), textAlign: 'center', marginTop: spacing.xl },
   })
 }
 
@@ -118,34 +109,30 @@ function makeStyles(t: Theme, typo: Typography) {
 // ---------------------------------------------------------------------------
 
 const RankCard = memo(function RankCard({ row, s }: { row: RankingRow; s: Styles }) {
+  const facts = [
+    row.region,
+    `Pass rate ${fmtPassRate(row.rawPassRate)}`,
+    `Wilson score ${fmtScore(row.wilsonScore)}`,
+    row.totalExaminees != null ? `${row.totalExaminees.toLocaleString()} examinees` : null,
+  ].filter(Boolean).join(', ')
   return (
-    <Card style={s.rankCard}>
+    <Card accessible accessibilityLabel={`Rank ${row.rank ?? 'unranked'}: ${row.schoolName}. ${facts}`}>
       <View style={s.rankHeader}>
         <View style={s.rankBadge}>
-          <Text style={s.rankNum} maxFontSizeMultiplier={1.4}>#{row.rank ?? '—'}</Text>
+          <Text style={s.rankNum} maxFontSizeMultiplier={1.4}>#{row.rank ?? '–'}</Text>
         </View>
-        <Text style={s.schoolName} numberOfLines={2} maxFontSizeMultiplier={1.4}>{row.schoolName}</Text>
+        <Text style={s.schoolName} numberOfLines={2} maxFontSizeMultiplier={1.6}>{row.schoolName}</Text>
       </View>
       <View style={s.metaRow}>
-        {row.region ? (
-          <View style={s.metaChip}>
-            <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>📍 {row.region}</Text>
-          </View>
-        ) : null}
-        <View style={s.metaChip}>
-          <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>
-            Pass rate: <Text style={s.highlight}>{fmtPassRate(row.rawPassRate)}</Text>
-          </Text>
-        </View>
-        <View style={s.metaChip}>
-          <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>
-            Wilson: <Text style={s.highlight}>{fmtScore(row.wilsonScore)}</Text>
-          </Text>
-        </View>
+        {row.region ? <Text style={s.metaTxt} maxFontSizeMultiplier={1.6}>{row.region}</Text> : null}
+        <Text style={s.metaTxt} maxFontSizeMultiplier={1.6}>
+          Pass rate <Text style={s.highlight}>{fmtPassRate(row.rawPassRate)}</Text>
+        </Text>
+        <Text style={s.metaTxt} maxFontSizeMultiplier={1.6}>
+          Wilson <Text style={s.highlight}>{fmtScore(row.wilsonScore)}</Text>
+        </Text>
         {row.totalExaminees != null ? (
-          <View style={s.metaChip}>
-            <Text style={s.metaTxt} maxFontSizeMultiplier={1.4}>{row.totalExaminees.toLocaleString()} examinees</Text>
-          </View>
+          <Text style={s.metaTxt} maxFontSizeMultiplier={1.6}>{row.totalExaminees.toLocaleString()} examinees</Text>
         ) : null}
       </View>
     </Card>
@@ -159,7 +146,7 @@ const RankCard = memo(function RankCard({ row, s }: { row: RankingRow; s: Styles
 export default function CourseSchoolsScreen() {
   const { code } = useLocalSearchParams<{ code: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
 
   const [data, setData] = useState<CourseData | null>(null)
@@ -221,7 +208,7 @@ export default function CourseSchoolsScreen() {
     return () => { alive = false }
   }, [db, code])
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
+  const s = useMemo(() => makeStyles(t), [t])
   // Web-only max-width centering for the rankings list (null on native/sm).
   const webWidth = useWebContentWidth()
 
@@ -251,58 +238,52 @@ export default function CourseSchoolsScreen() {
   const keyExtractor = useCallback((item: RankingRow) => item.id, [])
 
   const header = useMemo(() => (
-    <View>
-      <Card elevated>
-        <Text style={s.heroTitle} maxFontSizeMultiplier={1.4}>{courseLabel}</Text>
-        <Text style={s.heroSub} maxFontSizeMultiplier={1.4}>PRC board exam school rankings by Wilson-adjusted pass rate</Text>
-
+    <View style={{ gap: spacing.lg, marginBottom: spacing.sm }}>
+      <View style={{ gap: spacing.sm }}>
+        <Text accessibilityRole="header" style={s.heroTitle} maxFontSizeMultiplier={1.4}>{courseLabel}</Text>
+        <Text style={s.heroSub} maxFontSizeMultiplier={1.6}>Schools ranked by PRC board-exam pass rate, adjusted for class size (Wilson score)</Text>
         {aiRow?.aiSafetyScore != null ? (
-          <View style={s.aiChip}>
-            <Text style={s.aiChipTxt} maxFontSizeMultiplier={1.4}>
-              🤖 AI-Safe-Score {aiRow.aiSafetyScore}/5
-              {aiRow.aiSafetyLabel ? ` · ${aiRow.aiSafetyLabel}` : ''}
-            </Text>
-          </View>
+          <Badge
+            label={`AI-safe score ${aiRow.aiSafetyScore}/5${aiRow.aiSafetyLabel ? ` · ${aiRow.aiSafetyLabel}` : ''}`}
+            tone="neutral"
+          />
         ) : null}
-
         {taxonomy?.careerCourseId ? (
-          <Pressable
-            style={({ pressed }) => [s.careerLink, pressed && { opacity: 0.7 }]}
+          <Button
+            label="View career paths"
+            variant="ghost"
+            size="sm"
+            icon={<Lineicons icon={ArrowRightOutlined} size={14} color={t.accentText} />}
             onPress={() => router.push(`/career/${taxonomy.careerCourseId}` as never)}
-            accessibilityRole="link"
-          >
-            <Text style={s.careerLinkTxt} maxFontSizeMultiplier={1.4}>View career paths →</Text>
-          </Pressable>
+            style={{ marginLeft: -spacing.lg }}
+          />
         ) : null}
-      </Card>
-
-      <View style={s.sectionWrap}>
-        <SectionHeader title="School Rankings" subtitle={total > 0 ? `${total} schools ranked` : undefined} />
       </View>
+      <SectionHeader title="School rankings" subtitle={total > 0 ? `${total} schools ranked` : undefined} />
     </View>
-  ), [s, courseLabel, aiRow, taxonomy, total])
+  ), [s, t, courseLabel, aiRow, taxonomy, total])
 
   const footer = useMemo(() => (
     <View>
       {visibleCount < total ? (
-        <Pressable
+        <Button
           testID="load-more"
+          label={`Show more · ${visibleCount} of ${total}`}
+          variant="secondary"
+          fullWidth
           onPress={loadMore}
-          style={({ pressed }) => [s.loadMore, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={s.loadMoreTxt} maxFontSizeMultiplier={1.4}>
-            Show more · {visibleCount} of {total}
-          </Text>
-        </Pressable>
+        />
       ) : null}
       <View style={s.disclaimer}>
-        <Text style={s.disclaimerTxt} maxFontSizeMultiplier={1.4}>
-          ⚠ Rankings use historical PRC pass-rate data — verify on official PRC releases.
+        <View {...decorative} style={{ marginTop: 2 }}>
+          <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
+        </View>
+        <Text style={s.disclaimerTxt} maxFontSizeMultiplier={1.6}>
+          Rankings use historical PRC pass-rate data. Check official PRC releases before you decide.
         </Text>
       </View>
     </View>
-  ), [s, loadMore, visibleCount, total])
+  ), [s, t, loadMore, visibleCount, total])
 
   // ── No-code (redirecting) ──────────────────────────────────────────────────
 
@@ -313,17 +294,17 @@ export default function CourseSchoolsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
+        <DetailTopBar fallbackHref="/explore?section=courses" />
+        <View
+          accessible
+          accessibilityLabel="Loading rankings"
+          accessibilityState={{ busy: true }}
+          style={[{ gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm }, webWidth]}
+        >
+          <Skeleton width="70%" height={28} />
+          <Skeleton width="90%" height={14} />
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={88} radius={radius.xl} />)}
         </View>
-        <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
       </SafeAreaView>
     )
   }
@@ -332,18 +313,7 @@ export default function CourseSchoolsScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>Top Schools · {courseLabel}</Text>
-      </View>
-
+      <DetailTopBar fallbackHref="/explore?section=courses" />
       <FlatList
         testID="rankings-list"
         data={visible}
@@ -352,7 +322,7 @@ export default function CourseSchoolsScreen() {
         ListHeaderComponent={header}
         ListFooterComponent={footer}
         ListEmptyComponent={
-          <Text style={s.empty}>No ranking data available for this course yet.</Text>
+          <Text style={s.empty} maxFontSizeMultiplier={1.6}>No ranking data for this course yet.</Text>
         }
         onEndReached={onEndReached}
         onEndReachedThreshold={0.6}

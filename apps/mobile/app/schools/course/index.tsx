@@ -1,125 +1,70 @@
-import { useMemo } from 'react'
-import {
-  StyleSheet, View, Text, Pressable, ActivityIndicator,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View } from 'react-native'
 import { router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Book1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../../theme/ThemeContext'
 import { spacing } from '../../../theme/tokens'
-import { ScreenScroll } from '../../../components/ui/ScreenScroll'
+import { Screen } from '../../../components/ui/Screen'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
-import { ListCard } from '../../../components/ui/ListCard'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
+import { ListingCard } from '../../../components/explore/ListingCard'
+import { ExploreGrid, GridSkeleton, StaticGrid } from '../../../components/explore/ExploreGrid'
 import { useCourseTabOptions } from '../../../hooks/useCourseTabOptions'
+import type { CourseTabOption } from '../../../utils/courseTabs'
 
 // ---------------------------------------------------------------------------
-// Screen — data comes from the shared useCourseTabOptions hook (same source
-// as the Lists screen's Courses tab, cachedQuery-backed).
+// Course picker — data from the shared useCourseTabOptions hook (the same
+// cachedQuery-backed source as Explore → Courses).
 // ---------------------------------------------------------------------------
+
+const courseKey = (c: CourseTabOption) => c.courseTab
+const renderCourse = (opt: CourseTabOption) => (
+  <ListingCard
+    icon={Book1Outlined}
+    title={opt.label}
+    onPress={() => router.push(('/schools/course/' + opt.courseTab) as never)}
+    accessibilityHint="Opens the top schools for this course"
+  />
+)
 
 export default function CoursePickerScreen() {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const { targetOptions: targetTabs, allOptions: allCourseOptions, loading, dbEmpty } = useCourseTabOptions()
 
-  const s = useMemo(() => StyleSheet.create({
-    root:      { flex: 1, backgroundColor: t.bg },
-    topBar:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn:   { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topTitle:  { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    empty:     { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, marginTop: spacing.xl, fontStyle: 'italic' },
-    section:   { gap: spacing.sm },
-  }), [t, typo])
-
-  // ── Loading ────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-        </View>
-        <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
-      </SafeAreaView>
-    )
-  }
-
-  // ── DB-empty state ─────────────────────────────────────────────────────────
-
-  if (dbEmpty) {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-          <Text style={s.topTitle} numberOfLines={1}>Top Universities by Course</Text>
-        </View>
-        <Text style={s.empty}>
-          Course list is still loading — try again in a moment.
-        </Text>
-      </SafeAreaView>
-    )
-  }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>Top Universities by Course</Text>
-      </View>
-
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.sm }}>
-
-        {/* ── Your target courses ── */}
-        {targetTabs.length > 0 ? (
-          <View style={s.section}>
-            <SectionHeader title="Your target courses" />
-            {targetTabs.map(opt => (
-              <ListCard
-                key={opt.courseTab}
-                icon={<Text style={{ fontSize: 16 }}>★</Text>}
-                title={opt.label}
-                onPress={() => router.push(('/schools/course/' + opt.courseTab) as never)}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        {/* ── All courses ── */}
-        <View style={s.section}>
-          <SectionHeader title="All courses" />
-          {allCourseOptions.map(opt => (
-            <ListCard
-              key={opt.courseTab}
-              title={opt.label}
-              onPress={() => router.push(('/schools/course/' + opt.courseTab) as never)}
-            />
-          ))}
-        </View>
-
-      </ScreenScroll>
-    </SafeAreaView>
+    <Screen
+      scroll={false}
+      width="wide"
+      header={<DetailTopBar bare title="Top Universities by Course" fallbackHref="/explore?section=courses" />}
+    >
+      {loading ? (
+        <GridSkeleton label="Loading courses" />
+      ) : dbEmpty ? (
+        <EmptyState
+          icon={<Lineicons icon={Book1Outlined} size={26} color={t.textSecondary} />}
+          title="Courses are still syncing"
+          body="Course list is still loading — try again in a moment."
+        />
+      ) : (
+        <ExploreGrid
+          data={allCourseOptions}
+          keyExtractor={courseKey}
+          renderItem={renderCourse}
+          contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+          ListHeaderComponent={(
+            <View style={{ gap: spacing.sm }}>
+              {targetTabs.length > 0 ? (
+                <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+                  <SectionHeader title="Your target courses" />
+                  <StaticGrid items={targetTabs} keyExtractor={courseKey} renderItem={renderCourse} />
+                </View>
+              ) : null}
+              <SectionHeader title="All courses" subtitle="Schools ranked by PRC board-exam results" />
+            </View>
+          )}
+        />
+      )}
+    </Screen>
   )
 }

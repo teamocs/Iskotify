@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native'
 import SchoolsDirectoryScreen from '../schools/index'
 
 // ---------------------------------------------------------------------------
@@ -7,8 +7,10 @@ import SchoolsDirectoryScreen from '../schools/index'
 // ---------------------------------------------------------------------------
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), back: jest.fn() },
+  router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) },
 }))
+
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -28,6 +30,11 @@ const mockDb = (rows: any[] = []) => ({
 jest.mock('../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
+
+// Sync status under test (idle by default); flipping isSyncing true → false
+// makes the directory re-read (useSyncSettled).
+const mockSync: { value: { isSyncing: boolean; firstSyncDone: boolean } } = { value: { isSyncing: false, firstSyncDone: true } }
+jest.mock('../../hooks/useSyncStatus', () => ({ useSyncStatus: () => mockSync.value }))
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,33 +68,33 @@ function makeSchool(overrides?: Partial<{
 
 describe('SchoolsDirectoryScreen', () => {
   beforeEach(() => {
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
     const { useDb } = require('../../hooks/useDb')
     useDb.mockReturnValue(mockDb())
   })
 
   it('renders screen title', () => {
     render(<SchoolsDirectoryScreen />)
-    expect(screen.getByText('Schools Directory')).toBeTruthy()
+    expect(screen.getByRole('header', { name: 'Schools directory' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
   })
 
   it('renders search input', async () => {
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Search by name or acronym...')).toBeTruthy()
+      expect(screen.getByPlaceholderText('Search by name or acronym')).toBeTruthy()
     })
   })
 
-  it('renders Free Tuition filter chip', async () => {
+  it('renders the Free tuition filter as a checkbox chip', async () => {
     render(<SchoolsDirectoryScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('Free Tuition')).toBeTruthy()
-    })
+    expect(await screen.findByRole('checkbox', { name: 'Free tuition' })).toBeTruthy()
   })
 
   it('shows empty state when no schools', async () => {
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => {
-      expect(screen.getByText('No schools found.')).toBeTruthy()
+      expect(screen.getByText('No schools match')).toBeTruthy()
     })
   })
 
@@ -108,7 +115,7 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => expect(screen.getByText('UP Diliman')).toBeTruthy())
-    fireEvent.changeText(screen.getByPlaceholderText('Search by name or acronym...'), 'UST')
+    fireEvent.changeText(screen.getByPlaceholderText('Search by name or acronym'), 'UST')
     await waitFor(() => {
       expect(screen.queryByText('UP Diliman')).toBeNull()
       expect(screen.getByText('UST')).toBeTruthy()
@@ -120,7 +127,7 @@ describe('SchoolsDirectoryScreen', () => {
     useDb.mockReturnValue(mockDb([makeSchool({ dataConfidence: 'HIGH' })]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => {
-      expect(screen.getByText('HIGH')).toBeTruthy()
+      expect(screen.getByText('High confidence')).toBeTruthy()
     })
   })
 
@@ -129,7 +136,7 @@ describe('SchoolsDirectoryScreen', () => {
     useDb.mockReturnValue(mockDb([makeSchool({ dataConfidence: 'MEDIUM' })]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => {
-      expect(screen.getByText('MED')).toBeTruthy()
+      expect(screen.getByText('Medium confidence')).toBeTruthy()
     })
   })
 
@@ -144,7 +151,7 @@ describe('SchoolsDirectoryScreen', () => {
     })
   })
 
-  it('shows the "Requirements ✓" indicator only when requirements is a non-empty array', async () => {
+  it('shows the "Requirements listed" indicator only when requirements is a non-empty array', async () => {
     const { useDb } = require('../../hooks/useDb')
     useDb.mockReturnValue(mockDb([
       makeSchool({ id: 'has-reqs', name: 'Has Reqs U', requirements: '["Form 138"]' }),
@@ -155,7 +162,7 @@ describe('SchoolsDirectoryScreen', () => {
       expect(screen.getByText('Has Reqs U')).toBeTruthy()
       expect(screen.getByText('No Reqs U')).toBeTruthy()
     })
-    expect(screen.getAllByText('Requirements ✓')).toHaveLength(1)
+    expect(screen.getAllByText('Requirements listed')).toHaveLength(1)
   })
 
   it('Free Tuition filter includes SUC/LUC schools with no profile row (freeTuition null)', async () => {
@@ -168,7 +175,7 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => expect(screen.getByText('SUC No Profile')).toBeTruthy())
-    fireEvent.press(screen.getByText('Free Tuition'))
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Free tuition' }))
     await waitFor(() => {
       expect(screen.getByText('SUC No Profile')).toBeTruthy()
       expect(screen.queryByText('Private School')).toBeNull()
@@ -196,12 +203,107 @@ describe('SchoolsDirectoryScreen', () => {
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => expect(screen.getByText('Bicol University')).toBeTruthy())
     fireEvent.changeText(
-      screen.getByPlaceholderText('Search by name or acronym...'),
+      screen.getByPlaceholderText('Search by name or acronym'),
       'free tuition universities in bicol',
     )
     await waitFor(() => {
       expect(screen.getByText('Bicol University')).toBeTruthy()
       expect(screen.queryByText('UP Diliman')).toBeNull()
     })
+  })
+  // ── Redesign M2: states ───────────────────────────────────────────────────
+
+  it('shows a skeleton while the directory loads', () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue({ select: jest.fn(() => ({ from: jest.fn(() => ({ leftJoin: jest.fn(() => new Promise(() => {})) })) })) })
+    render(<SchoolsDirectoryScreen />)
+    expect(screen.getByTestId('explore-skeleton').props.accessibilityLabel).toBe('Loading schools')
+  })
+
+  it('a failed load offers a retry', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    let calls = 0
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          leftJoin: jest.fn(() => (calls++ === 0 ? Promise.reject(new Error('offline')) : Promise.resolve([makeSchool()]))),
+        })),
+      })),
+    })
+    render(<SchoolsDirectoryScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('University of the Philippines Diliman')).toBeTruthy()
+  })
+
+  it('when filters hide every school, the empty state offers to clear them', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([
+      makeSchool({ id: 'p', name: 'Private U', isSuc: false, isLuc: false, freeTuition: false, type: 'Private' }),
+    ]))
+    render(<SchoolsDirectoryScreen />)
+    await screen.findByText('Private U')
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Free tuition' }))
+    fireEvent.press(await screen.findByRole('button', { name: 'Clear filters' }))
+    expect(await screen.findByText('Private U')).toBeTruthy()
+  })
+
+  it('the type filter is a radio group with an "All types" choice, like Region', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([
+      makeSchool({ id: 's', name: 'State U', type: 'State University', isSuc: true }),
+      makeSchool({ id: 'p', name: 'Private U', type: 'Private', isSuc: false, isLuc: false, freeTuition: false }),
+    ]))
+    render(<SchoolsDirectoryScreen />)
+    await screen.findByText('Private U')
+    const checked = (name: string) => screen.getByRole('radio', { name }).props.accessibilityState?.selected
+    expect(checked('All types')).toBe(true)
+
+    fireEvent.press(screen.getByRole('radio', { name: 'SUC' }))
+    expect(checked('SUC')).toBe(true)
+    expect(checked('All types')).toBe(false)
+    expect(screen.queryByText('Private U')).toBeNull()
+
+    // Re-selecting the checked radio keeps it checked (radios do not toggle off).
+    fireEvent.press(screen.getByRole('radio', { name: 'SUC' }))
+    expect(checked('SUC')).toBe(true)
+    expect(screen.queryByText('Private U')).toBeNull()
+
+    fireEvent.press(screen.getByRole('radio', { name: 'All types' }))
+    expect(checked('All types')).toBe(true)
+    expect(checked('SUC')).toBe(false)
+    expect(await screen.findByText('Private U')).toBeTruthy()
+  })
+
+  it('applies only the latest load when an older one resolves later', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    const loads: ((rows: any[]) => void)[] = []
+    useDb.mockReturnValue({
+      select: jest.fn(() => ({
+        from: jest.fn(() => ({
+          leftJoin: jest.fn(() => new Promise<any[]>(resolve => { loads.push(resolve) })),
+        })),
+      })),
+    })
+    mockSync.value = { isSyncing: true, firstSyncDone: false }
+    const view = render(<SchoolsDirectoryScreen />)
+    expect(loads).toHaveLength(1)
+    // A sync settles while the first read is still in flight: a second read starts.
+    mockSync.value = { isSyncing: false, firstSyncDone: true }
+    view.rerender(<SchoolsDirectoryScreen />)
+    await waitFor(() => expect(loads).toHaveLength(2))
+    // The newer read lands first; the older one resolves afterwards with stale rows.
+    await act(async () => { loads[1]!([makeSchool({ id: 'new', name: 'Fresh School' })]) })
+    await act(async () => { loads[0]!([makeSchool({ id: 'old', name: 'Stale School' })]) })
+    expect(screen.getByText('Fresh School')).toBeTruthy()
+    expect(screen.queryByText('Stale School')).toBeNull()
+  })
+
+  it('a school card is one labelled button that opens the school', async () => {
+    const { router } = require('expo-router')
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([makeSchool()]))
+    render(<SchoolsDirectoryScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: /^University of the Philippines Diliman, UPD/ }))
+    expect(router.push).toHaveBeenCalledWith('/schools/up-diliman')
   })
 })

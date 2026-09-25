@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
-import {
-  StyleSheet, View, Text, Pressable,
-  ActivityIndicator,
-} from 'react-native'
+import { useState, useEffect, useMemo, Fragment } from 'react'
+import { StyleSheet, View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Shield2CheckOutlined, FileQuestionOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../../hooks/useDb'
 import {
   careerCountries as countriesTable,
@@ -17,8 +16,14 @@ import { countryCodeFromName } from '../../../utils/careerSlug'
 import { ScreenScroll } from '../../../components/ui/ScreenScroll'
 import { Card } from '../../../components/ui/Card'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { spacing, radius } from '../../../theme/tokens'
+import { Badge } from '../../../components/ui/Badge'
+import { ListRow } from '../../../components/ui/ListRow'
+import { Skeleton } from '../../../components/ui/Skeleton'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { ErrorState } from '../../../components/ui/ErrorState'
+import { decorative } from '../../../components/ui/a11y'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
+import { spacing, radius, textStyle } from '../../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,7 +63,7 @@ function fmtSalary(dest: DestRow): string {
   if (dest.salaryMin != null && dest.salaryMax != null) {
     return `$${dest.salaryMin.toLocaleString()}–${dest.salaryMax.toLocaleString()}/yr`
   }
-  return dest.salaryLocal ?? '—'
+  return dest.salaryLocal ?? 'Salary not listed'
 }
 
 function demandOrder(rating: string | null): number {
@@ -78,15 +83,17 @@ function demandOrder(rating: string | null): number {
 export default function CareerCountryScreen() {
   const { code } = useLocalSearchParams<{ code: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
   const [country, setCountry] = useState<CountryRow | null>(null)
   const [dests, setDests]     = useState<DestRow[]>([])
   const [courseNameMap, setCourseNameMap] = useState<Map<string, string>>(new Map())
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     async function load() {
+      setStatus('loading')
       const [countryRows, allDests, allCourses] = await Promise.all([
         db.select().from(countriesTable).where(eq(countriesTable.code, code)).limit(1),
         db.select().from(destinationsTable),
@@ -108,183 +115,118 @@ export default function CareerCountryScreen() {
         .sort((a, b) => demandOrder(b.demandRating) - demandOrder(a.demandRating))
       setDests(matched)
 
-      setLoading(false)
+      setStatus('ready')
     }
-    void load()
-  }, [db, code])
+    load().catch((e: unknown) => {
+      console.warn('[country] load failed:', e)
+      setStatus('error')
+    })
+  }, [db, code, attempt])
 
   const s = useMemo(() => StyleSheet.create({
-    root:          { flex: 1, backgroundColor: t.bg },
-    topBar:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn:       { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    backArrow:     { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topTitle:      { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    pageTitle:     { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: spacing.sm },
-    regionBadge:   { alignSelf: 'flex-start', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.25)', marginBottom: spacing.sm },
-    regionTxt:     { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '700' },
-    whyTxt:        { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-    infoRow:       { flexDirection: 'row', marginBottom: spacing.sm },
-    infoLabel:     { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold', width: 110, flexShrink: 0 },
-    infoValue:     { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 17 },
-    destTopRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-    destCourse:    { fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', flex: 1, marginRight: spacing.sm },
-    destDemand:    { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold', color: t.success, flexShrink: 0 },
-    destSalary:    { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', fontWeight: '600', marginBottom: 3 },
-    destTimeline:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    destLink:      { marginTop: spacing.sm, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
-    destLinkTxt:   { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_400Regular', textDecorationLine: 'underline' },
-    disclaimer:    { backgroundColor: t.warningSurface, borderColor: 'rgba(245,158,11,0.20)' },
-    disclaimerTxt: { fontSize: typo.xs, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 17 },
-    empty:         { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60, fontSize: typo.sm },
-    emptySection:  { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontStyle: 'italic' },
-  }), [t, typo])
+    root:     { flex: 1, backgroundColor: t.bg },
+    title:    textStyle('title', t.textPrimary),
+    whyTxt:   textStyle('body', t.textSecondary),
+    infoLbl:  textStyle('label', t.textSecondary),
+    infoVal:  textStyle('body', t.textPrimary),
+    empty:    textStyle('bodySm', t.textSecondary),
+  }), [t])
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+  // ── Loading / error / missing ──────────────────────────────────────────────
 
-  if (loading) {
+  if (status !== 'ready' || country === null) {
     return (
       <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-        </View>
-        <ActivityIndicator color={t.accent} style={{ marginTop: 60 }} />
+        <DetailTopBar fallbackHref="/explore?section=destinations" />
+        <ScreenScroll tabBarInset={false}>
+          {status === 'loading' ? (
+            <View accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+              <Skeleton width="60%" height={28} />
+              <Skeleton height={120} radius={radius.xl} />
+              <Skeleton height={180} radius={radius.xl} />
+            </View>
+          ) : status === 'error' ? (
+            <ErrorState title="Couldn't load this country" onRetry={() => setAttempt(a => a + 1)} />
+          ) : (
+            <EmptyState
+              icon={<Lineicons icon={FileQuestionOutlined} size={26} color={t.textSecondary} />}
+              title="We couldn't find this country"
+              actionLabel="Back to Explore"
+              onAction={() => router.replace('/explore?section=destinations')}
+            />
+          )}
+        </ScreenScroll>
       </SafeAreaView>
     )
   }
 
-  // ── Empty state ─────────────────────────────────────────────────────────────
-
-  if (country === null) {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-        </View>
-        <Text style={s.empty}>Country not found.</Text>
-      </SafeAreaView>
-    )
-  }
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const profileRows: [string, string | null][] = [
+    ['Immigration', country.immigrationSystem],
+    ['Language', country.languageRequired],
+    ['PR and citizenship', country.prPathway],
+    ['Notes', country.notes],
+  ]
 
   return (
     <SafeAreaView style={s.root}>
-      <WebTopSpacer />
+      <DetailTopBar fallbackHref="/explore?section=destinations" />
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.sm }}>
 
-      {/* Top bar */}
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>{country.name ?? code}</Text>
-      </View>
-
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.md }}>
-
-        {/* ── Hero ── */}
-        <Card elevated>
-          <Text style={s.pageTitle}>{country.name ?? code}</Text>
-          {country.region ? (
-            <View style={s.regionBadge}>
-              <Text style={s.regionTxt}>{country.region}</Text>
-            </View>
-          ) : null}
-          {country.whyDemand ? (
-            <Text style={s.whyTxt}>
-              {country.whyDemand}
-            </Text>
-          ) : null}
-        </Card>
-
-        {/* ── Country info ── */}
-        <View>
-          <SectionHeader title="Country Profile" />
-          <Card elevated>
-            {country.immigrationSystem ? (
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>Immigration</Text>
-                <Text style={s.infoValue}>{country.immigrationSystem}</Text>
-              </View>
-            ) : null}
-            {country.languageRequired ? (
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>Language req.</Text>
-                <Text style={s.infoValue}>{country.languageRequired}</Text>
-              </View>
-            ) : null}
-            {country.prPathway ? (
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>PR / Citizenship</Text>
-                <Text style={s.infoValue}>{country.prPathway}</Text>
-              </View>
-            ) : null}
-            {country.notes ? (
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>Notes</Text>
-                <Text style={s.infoValue}>{country.notes}</Text>
-              </View>
-            ) : null}
-          </Card>
+        <View style={{ gap: spacing.sm }}>
+          {country.region ? <Badge label={country.region} tone="neutral" /> : null}
+          <Text accessibilityRole="header" style={s.title} maxFontSizeMultiplier={1.4}>{country.name ?? code}</Text>
+          {country.whyDemand ? <Text style={s.whyTxt} maxFontSizeMultiplier={1.6}>{country.whyDemand}</Text> : null}
         </View>
 
-        {/* ── Courses in demand ── */}
-        <View style={{ gap: spacing.md }}>
-          <SectionHeader title="Courses in demand here" />
-          {dests.length > 0 ? dests.map(dest => (
-            <Card key={dest.id} elevated>
-              <View style={s.destTopRow}>
-                <Text style={s.destCourse} numberOfLines={2}>
-                  {dest.courseId != null
-                    ? (courseNameMap.get(dest.courseId) ?? dest.courseId)
-                    : '—'}
-                </Text>
-                {dest.demandRating ? (
-                  <Text style={s.destDemand}>{dest.demandRating}</Text>
-                ) : null}
-              </View>
-              <Text style={s.destSalary}>{fmtSalary(dest)}</Text>
-              {dest.timelineMonths != null ? (
-                <Text style={s.destTimeline}>{dest.timelineMonths} mo timeline</Text>
-              ) : null}
-              {dest.courseId ? (
-                <Pressable
-                  style={({ pressed }) => [s.destLink, pressed && { opacity: 0.7 }]}
-                  accessibilityRole="button"
-                  onPress={() => router.push(`/career/${dest.courseId}?country=${code}` as never)}
-                >
-                  <Text style={s.destLinkTxt}>View course details →</Text>
-                </Pressable>
-              ) : null}
+        <View>
+          <SectionHeader title="Courses in demand here" subtitle="Highest demand first" />
+          {dests.length > 0 ? (
+            <Card padded={false} style={{ overflow: 'hidden' }}>
+              {dests.map((dest, i) => {
+                const name = dest.courseId != null ? (courseNameMap.get(dest.courseId) ?? dest.courseId) : 'Unnamed course'
+                const sub = [fmtSalary(dest), dest.timelineMonths != null ? `${dest.timelineMonths}-month timeline` : null]
+                  .filter(Boolean).join(' · ')
+                return (
+                  <Fragment key={dest.id}>
+                    {i > 0 ? <View style={{ height: 1, backgroundColor: t.divider, marginLeft: spacing.lg }} /> : null}
+                    <ListRow
+                      title={name}
+                      subtitle={sub}
+                      trailing={dest.demandRating ? <Badge label={dest.demandRating} tone="success" /> : undefined}
+                      onPress={dest.courseId ? () => router.push(`/career/${dest.courseId}?country=${code}` as never) : undefined}
+                      accessibilityHint="Opens the course's career paths"
+                    />
+                  </Fragment>
+                )
+              })}
             </Card>
-          )) : (
-            <Text style={s.emptySection}>No course data found for this country yet.</Text>
+          ) : (
+            <Text style={s.empty} maxFontSizeMultiplier={1.6}>No course data for this country yet.</Text>
           )}
         </View>
 
-        {/* ── Disclaimer ── */}
-        <Card style={s.disclaimer}>
-          <Text style={s.disclaimerTxt}>
-            Verify all pathways, salary ranges, and immigration rules with DMW/POEA and official government sources before making any career decisions.
+        {profileRows.some(([, v]) => v) ? (
+          <View>
+            <SectionHeader title="Country profile" />
+            <Card style={{ gap: spacing.md }}>
+              {profileRows.filter(([, v]) => v).map(([label, value]) => (
+                <View key={label} style={{ gap: 2 }}>
+                  <Text style={s.infoLbl} maxFontSizeMultiplier={1.6}>{label}</Text>
+                  <Text style={s.infoVal} maxFontSizeMultiplier={1.6}>{value}</Text>
+                </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
+
+        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', padding: spacing.md, borderRadius: radius.sm, backgroundColor: t.warningSurface }}>
+          <View {...decorative} style={{ marginTop: 2 }}>
+            <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
+          </View>
+          <Text style={[textStyle('bodySm', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>
+            Check pathways, salary ranges and immigration rules with DMW and official government sources before you decide.
           </Text>
-        </Card>
+        </View>
 
       </ScreenScroll>
     </SafeAreaView>

@@ -1,202 +1,206 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-} from 'react-native'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { View, Text } from 'react-native'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ClipboardOutlined, Megaphone1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { useDb } from '../../hooks/useDb'
-import { admissionsUpdates, notes as notesTable, listings as listingsTable, focusListings } from '../../db/schema'
+import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
+import { admissionsUpdates, notes as notesTable } from '../../db/schema'
 import {
   sortBySeverityThenDate,
   upcomingEvents,
   daysUntil,
   type FeedItem,
 } from '../../utils/admissionsFeed'
-import { NewsDetailModal } from '../../components/updates/NewsDetailModal'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { Card } from '../../components/ui/Card'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { Badge } from '../../components/ui/Badge'
-import { ListCard } from '../../components/ui/ListCard'
-import { CalendarStrip } from '../../components/calendar/CalendarStrip'
-import { DateActionSheet } from '../../components/calendar/DateActionSheet'
-import { MonthSheet } from '../../components/calendar/MonthSheet'
-import { spacing, radius, typography } from '../../theme/tokens'
+import { NewsDetailModal } from '../updates/NewsDetailModal'
+import { ScreenScroll } from '../ui/ScreenScroll'
+import { Card } from '../ui/Card'
+import { SectionHeader } from '../ui/SectionHeader'
+import { Badge } from '../ui/Badge'
+import { ListRow } from '../ui/ListRow'
+import { Skeleton } from '../ui/Skeleton'
+import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
+import { CalendarStrip } from '../calendar/CalendarStrip'
+import { DateActionSheet } from '../calendar/DateActionSheet'
+import { MonthSheet } from '../calendar/MonthSheet'
+import { radius, spacing, textStyle } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
-import type { QuickReminderPayload } from '../../components/calendar/QuickReminderForm'
+import type { QuickReminderPayload } from '../calendar/QuickReminderForm'
+import type { BadgeSpec } from './exploreModel'
+import { useLatestRequest } from './useLatestRequest'
 
-// ── Severity badge config ──────────────────────────────────────────────────────
+// ── Severity ───────────────────────────────────────────────────────────────────
 
 type SeverityKey = 'urgent' | 'important' | 'info' | 'no_change'
 
-const SEVERITY_CONFIG: Record<
-  SeverityKey,
-  { label: string; tone: 'accent' | 'neutral' | 'success' | 'warning' | 'danger' }
-> = {
+const SEVERITY: Record<SeverityKey, BadgeSpec> = {
   urgent:    { label: 'Urgent', tone: 'danger' },
   important: { label: 'Important', tone: 'warning' },
-  info:      { label: 'Info', tone: 'accent' },
-  no_change: { label: 'No Change', tone: 'success' },
+  info:      { label: 'Info', tone: 'neutral' },
+  no_change: { label: 'No change', tone: 'success' },
 }
 
-function getSeverityConfig(severity: string) {
-  return SEVERITY_CONFIG[severity as SeverityKey] ?? SEVERITY_CONFIG.info
+function severityBadge(severity: string): BadgeSpec {
+  return SEVERITY[severity as SeverityKey] ?? SEVERITY.info
 }
 
-// ── Upcoming Events section ────────────────────────────────────────────────────
+/** How soon an ISO event date is. Red only for today/tomorrow; amber within a week. */
+function eventWhen(days: number): BadgeSpec {
+  if (days === 0) return { label: 'Today', tone: 'danger' }
+  if (days === 1) return { label: 'Tomorrow', tone: 'danger' }
+  return { label: `In ${days} days`, tone: days <= 7 ? 'warning' : 'neutral' }
+}
 
-function UpcomingEventsSection({ items }: { items: FeedItem[] }) {
-  const { theme: t, typo } = useTheme()
-  const events = upcomingEvents(items).slice(0, 8)
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-  if (events.length === 0) return null
-
+/** A small calendar leaf — month over a tabular day number. Decorative (ListRow hides it). */
+function DateTile({ iso }: { iso: string }) {
+  const { theme: t } = useTheme()
+  const [, m, d] = iso.split('-').map(Number)
   return (
-    <View style={styles.section}>
-      <SectionHeader title="UPCOMING EVENTS" />
-      <View style={styles.cardStack}>
-        {events.map((item) => {
-          const days = daysUntil(item.eventDate!)
-          const daysLabel = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
-          return (
-            <Card key={item.id} elevated>
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  {item.schoolName != null && item.schoolName.length > 0 ? (
-                    <Text style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs }]}>
-                      {item.schoolName}
-                    </Text>
-                  ) : null}
-                  <Text style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base }]}>
-                    {item.title}
-                  </Text>
-                </View>
-                {item.eventType != null && item.eventType.length > 0 ? (
-                  <Badge label={item.eventType} tone="accent" />
-                ) : null}
-              </View>
-              <View style={styles.row}>
-                <Text style={[styles.dateText, { color: t.textTertiary, fontSize: typo.xs }]}>
-                  {item.eventDate}
-                </Text>
-                <Text style={[styles.daysLabel, { color: t.accentText, fontSize: typo.xs }]}>
-                  {daysLabel}
-                </Text>
-              </View>
-            </Card>
-          )
-        })}
-      </View>
+    <View
+      style={{
+        width: 44, minHeight: 48, borderRadius: radius.sm, borderCurve: 'continuous',
+        borderWidth: 1, borderColor: t.border, backgroundColor: t.surface,
+        alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xs,
+      }}
+    >
+      <Text style={[textStyle('caption', t.accentText), { textTransform: 'uppercase' }]} maxFontSizeMultiplier={1.2}>
+        {MONTHS[(m ?? 1) - 1]}
+      </Text>
+      <Text style={textStyle('numeric', t.textPrimary)} maxFontSizeMultiplier={1.2}>{d}</Text>
     </View>
   )
 }
 
-// ── News section ───────────────────────────────────────────────────────────────
-
-function NewsSection({ items }: { items: FeedItem[] }) {
-  const { theme: t, typo } = useTheme()
-  const [selected, setSelected] = useState<FeedItem | null>(null)
-  const sorted = sortBySeverityThenDate(items).slice(0, 12)
-
-  return (
-    <View style={styles.section}>
-      <SectionHeader title="ADMISSIONS NEWS" />
-      <View style={styles.cardStack}>
-        {sorted.map((item) => {
-          const cfg = getSeverityConfig(item.severity)
-          return (
-            <Pressable
-              key={item.id}
-              accessibilityRole="button"
-              onPress={() => setSelected(item)}
-              style={({ pressed }) => [styles.pressableCard, pressed ? { opacity: 0.7 } : null]}
-            >
-              <Card elevated>
-                <View style={styles.row}>
-                  <Badge label={cfg.label} tone={cfg.tone} />
-                  {item.schoolName != null && item.schoolName.length > 0 ? (
-                    <Text
-                      style={[styles.schoolName, { color: t.textSecondary, fontSize: typo.xs, marginLeft: spacing.sm }]}
-                      numberOfLines={1}
-                    >
-                      {item.schoolName}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text
-                  style={[styles.cardTitle, { color: t.textPrimary, fontSize: typo.base, marginTop: spacing.xs }]}
-                  numberOfLines={2}
-                >
-                  {item.title}
-                </Text>
-                <Text
-                  style={[styles.bodyPreview, { color: t.textSecondary, fontSize: typo.xs }]}
-                  numberOfLines={1}
-                >
-                  {item.body}
-                </Text>
-              </Card>
-            </Pressable>
-          )
-        })}
-      </View>
-      {selected !== null ? (
-        <NewsDetailModal item={selected} onClose={() => setSelected(null)} />
-      ) : null}
-    </View>
-  )
-}
-
-// ── Results Tracker entry card ─────────────────────────────────────────────────
-
-function ResultsTrackerCard() {
+/** Rows grouped in one card with hairlines between them. */
+function RowGroup({ children }: { children: React.ReactNode[] }) {
   const { theme: t } = useTheme()
   return (
-    <ListCard
-      icon={<Text style={{ fontSize: typography.xl }}>📋</Text>}
-      iconBg={t.accentSurface}
-      title="Results Tracker"
-      subtitle="Track school results you're waiting on"
-      onPress={() => router.push('/results-tracker')}
-    />
+    <Card padded={false} style={{ overflow: 'hidden' }}>
+      {children.map((row, i) => (
+        <Fragment key={i}>
+          {i > 0 ? <View style={{ height: 1, backgroundColor: t.divider, marginLeft: spacing.lg }} /> : null}
+          {row}
+        </Fragment>
+      ))}
+    </Card>
+  )
+}
+
+// ── Sections ───────────────────────────────────────────────────────────────────
+
+function UpcomingDates({ items }: { items: FeedItem[] }) {
+  const events = upcomingEvents(items).slice(0, 8)
+  if (events.length === 0) return null
+  return (
+    <View>
+      <SectionHeader title="Upcoming dates" subtitle="Exam days, deadlines and result releases" />
+      <RowGroup>
+        {events.map(item => {
+          const when = eventWhen(daysUntil(item.eventDate!))
+          const sub = [item.schoolName, item.eventType].filter(Boolean).join(' · ')
+          return (
+            <ListRow
+              key={item.id}
+              leading={<DateTile iso={item.eventDate!} />}
+              title={item.title}
+              subtitle={sub || undefined}
+              trailing={<Badge label={when.label} tone={when.tone} />}
+              accessibilityLabel={`${item.title}, ${item.eventDate}, ${when.label}${sub ? `, ${sub}` : ''}`}
+            />
+          )
+        })}
+      </RowGroup>
+    </View>
+  )
+}
+
+function AdmissionsNews({ items, onOpen }: { items: FeedItem[]; onOpen: (item: FeedItem) => void }) {
+  const { theme: t } = useTheme()
+  const sorted = useMemo(() => sortBySeverityThenDate(items).slice(0, 12), [items])
+  return (
+    <View>
+      <SectionHeader title="Admissions news" subtitle="From schools and scholarship offices, most urgent first" />
+      {sorted.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Lineicons icon={Megaphone1Outlined} size={26} color={t.textSecondary} />}
+            title="No admissions news yet"
+            body="School announcements, exam dates and result releases show up here as they are published."
+          />
+        </Card>
+      ) : (
+        <RowGroup>
+          {sorted.map(item => {
+            const sev = severityBadge(item.severity)
+            const sub = [item.schoolName, item.body].filter(Boolean).join(' · ')
+            return (
+              <ListRow
+                key={item.id}
+                title={item.title}
+                subtitle={sub || undefined}
+                trailing={<Badge label={sev.label} tone={sev.tone} />}
+                onPress={() => onOpen(item)}
+                accessibilityLabel={`${sev.label}: ${item.title}${item.schoolName ? `, ${item.schoolName}` : ''}`}
+                accessibilityHint="Opens the full announcement"
+              />
+            )
+          })}
+        </RowGroup>
+      )}
+    </View>
+  )
+}
+
+function NewsSkeleton() {
+  return (
+    <View testID="news-skeleton" accessible accessibilityLabel="Loading admissions news" accessibilityState={{ busy: true }} style={{ gap: spacing.md }}>
+      <Skeleton width="40%" height={18} />
+      {[0, 1, 2].map(i => (
+        <View key={i} style={{ gap: spacing.sm }}>
+          <Skeleton width="85%" height={16} />
+          <Skeleton width="60%" height={12} />
+        </View>
+      ))}
+    </View>
   )
 }
 
 // ── Explore › News & dates ─────────────────────────────────────────────────────
 
 /**
- * The former Updates tab, now Explore's "News & dates" section (redesign M1):
- * calendar strip, results tracker, upcoming events and admissions news.
- * Explore owns the screen header and safe area; this renders the body only.
+ * The former Updates tab, now Explore's "News & dates" section: calendar
+ * strip, results tracker, upcoming dates and admissions news. Explore owns the
+ * screen header and safe area; this renders the body only. On desktop the
+ * dates column sits beside the news column.
  */
 export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const db = useDb()
+  const twoUp = columnCount(useBreakpoint()) === 2
   const [items, setItems] = useState<FeedItem[]>([])
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [selected, setSelected] = useState<FeedItem | null>(null)
 
-  // Calendar state (moved from Home)
+  // Calendar state
   const [activeDayMs, setActiveDayMs] = useState<number | null>(null)
   const [showMonth, setShowMonth] = useState(false)
-
-  // Use cached home stats for calendar data (cheap — same 'home:stats' cache)
   const { importantDayIndices, practiceDayIndices, noteReminders, refresh } = useHomeStats()
-
-  // Derive important/practice/reminder day sets
   const importantDays = useMemo(() => new Set(importantDayIndices), [importantDayIndices])
   const practiceDays = useMemo(() => new Set(practiceDayIndices), [practiceDayIndices])
   const reminderDays = useMemo(
     () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
-    [noteReminders]
+    [noteReminders],
   )
 
-  // ── Reminder handlers (moved from Home) ──────────────────────────────────────
+  // ── Reminders ────────────────────────────────────────────────────────────────
 
-  async function handleSaveReminder(payload: QuickReminderPayload) {
+  async function insertReminder(payload: QuickReminderPayload): Promise<string> {
     const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
     await db.insert(notesTable).values({
@@ -214,34 +218,19 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
     try {
       await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
     } catch (err) {
-      console.warn('[updates/reminder] schedule failed:', err)
+      console.warn('[news/reminder] schedule failed:', err)
     }
     setActiveDayMs(null)
     void refresh()
+    return id
+  }
+
+  async function handleSaveReminder(payload: QuickReminderPayload) {
+    await insertReminder(payload)
   }
 
   async function handleSaveAndOpenEditor(payload: QuickReminderPayload) {
-    const id = `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    const now = Date.now()
-    await db.insert(notesTable).values({
-      id,
-      title: payload.title,
-      content: payload.content,
-      type: payload.type,
-      isPinned: false,
-      isArchived: false,
-      isTrashed: false,
-      reminderAt: payload.reminderAt,
-      createdAt: now,
-      updatedAt: now,
-    })
-    try {
-      await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
-    } catch (err) {
-      console.warn('[updates/reminder] schedule failed:', err)
-    }
-    setActiveDayMs(null)
-    void refresh()
+    const id = await insertReminder(payload)
     router.push(`/notes/${id}`)
   }
 
@@ -249,7 +238,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
     await db.update(notesTable)
       .set({ reminderAt: null, updatedAt: Date.now() })
       .where(eq(notesTable.id, noteId))
-    try { await cancelNoteReminder(noteId) } catch {}
+    try { await cancelNoteReminder(noteId) } catch { /* already cancelled */ }
     void refresh()
   }
 
@@ -265,10 +254,15 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
 
   // ── Admissions feed ───────────────────────────────────────────────────────────
 
+  // Mount, header refresh and retry can overlap: apply only the newest read,
+  // and nothing after unmount.
+  const beginLoad = useLatestRequest()
   const loadFeed = useCallback(async () => {
+    const isCurrent = beginLoad()
     try {
       const rows = await db.select().from(admissionsUpdates)
-      const mapped: FeedItem[] = rows.map((r) => {
+      if (!isCurrent()) return
+      setItems(rows.map((r): FeedItem => {
         let sources: { label?: string; url: string }[] = []
         try {
           const parsed = JSON.parse(r.sources ?? '[]')
@@ -288,12 +282,14 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
           actionRequired: r.actionRequired ?? null,
           sources,
         }
-      })
-      setItems(mapped)
-    } catch {
-      // table not yet migrated — show empty state gracefully
+      }))
+      setStatus('ready')
+    } catch (e) {
+      if (!isCurrent()) return
+      console.warn('[news] feed load failed:', e)
+      setStatus('error')
     }
-  }, [db])
+  }, [db, beginLoad])
 
   useEffect(() => { void loadFeed() }, [loadFeed])
 
@@ -304,26 +300,60 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
     void Promise.all([loadFeed(), refresh()])
   }, [refreshKey, loadFeed, refresh])
 
+  const retry = useCallback(() => {
+    setStatus('loading')
+    void loadFeed()
+  }, [loadFeed])
+
+  const datesColumn = (
+    <View style={{ gap: spacing.xl }}>
+      <View testID="updates-calendar-strip">
+        <CalendarStrip
+          importantDays={importantDays}
+          practiceDays={practiceDays}
+          reminderDays={reminderDays}
+          onDayPress={setActiveDayMs}
+          onHeaderPress={() => setShowMonth(true)}
+        />
+      </View>
+      <RowGroup>
+        {[
+          <ListRow
+            key="tracker"
+            leading={(
+              <View style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                <Lineicons icon={ClipboardOutlined} size={20} color={t.textSecondary} />
+              </View>
+            )}
+            title="Results Tracker"
+            subtitle="Track school results you're waiting on"
+            onPress={() => router.push('/results-tracker')}
+          />,
+        ]}
+      </RowGroup>
+      {status === 'ready' ? <UpcomingDates items={items} /> : null}
+    </View>
+  )
+
+  const newsColumn = status === 'loading' ? <NewsSkeleton />
+    : status === 'error' ? <ErrorState title="Couldn't load admissions news" onRetry={retry} />
+    : <AdmissionsNews items={items} onOpen={setSelected} />
+
   return (
-    <View style={styles.container}>
-      <ScreenScroll tabBarInset padded={false} contentContainerStyle={styles.content}>
-
-        {/* Calendar strip — moved from Home */}
-        <View style={styles.calendarWrap} testID="updates-calendar-strip">
-          <CalendarStrip
-            importantDays={importantDays}
-            practiceDays={practiceDays}
-            reminderDays={reminderDays}
-            onDayPress={setActiveDayMs}
-            onHeaderPress={() => setShowMonth(true)}
-          />
+    <View style={{ flex: 1 }}>
+      <ScreenScroll tabBarInset padded={false} contentContainerStyle={{ paddingTop: spacing.xs }}>
+        <View
+          testID="news-columns"
+          style={twoUp
+            ? { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xxl }
+            : { flexDirection: 'column', gap: spacing.xl }}
+        >
+          <View style={twoUp ? { flex: 2, minWidth: 0 } : undefined}>{datesColumn}</View>
+          <View style={twoUp ? { flex: 3, minWidth: 0 } : undefined}>{newsColumn}</View>
         </View>
-
-        <ResultsTrackerCard />
-        <UpcomingEventsSection items={items} />
-        {items.length > 0 ? <NewsSection items={items} /> : null}
       </ScreenScroll>
 
+      {selected !== null ? <NewsDetailModal item={selected} onClose={() => setSelected(null)} /> : null}
       <DateActionSheet
         visible={activeDayMs != null}
         dayStartMs={activeDayMs ?? 0}
@@ -348,65 +378,3 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  title: {
-    fontFamily: 'Outfit_700Bold',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontWeight: '400',
-  },
-  content: {
-    paddingTop: spacing.sm,
-    gap: spacing.xl,
-  },
-  calendarWrap: {
-    paddingVertical: spacing.sm,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  cardStack: {
-    gap: spacing.md,
-  },
-  cardTitle: {
-    fontWeight: '600',
-    fontFamily: 'Outfit_600SemiBold',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  schoolName: {
-    fontWeight: '500',
-    fontFamily: 'Lexend_500Medium',
-    flexShrink: 1,
-  },
-  dateText: {
-    fontWeight: '400',
-    fontFamily: 'Lexend_400Regular',
-  },
-  daysLabel: {
-    fontWeight: '600',
-    fontFamily: 'Lexend_600SemiBold',
-    marginLeft: 'auto',
-  },
-  bodyPreview: {
-    fontWeight: '400',
-    fontFamily: 'Lexend_400Regular',
-  },
-  pressableCard: {
-    borderRadius: radius.xl,
-    borderCurve: 'continuous',
-  },
-})

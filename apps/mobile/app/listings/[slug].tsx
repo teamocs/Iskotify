@@ -1,26 +1,39 @@
-import { useState, useEffect, useMemo } from 'react'
-import {
-  StyleSheet, View, Text, Pressable,
-  Linking, ActivityIndicator,
-} from 'react-native'
+import { useState, useEffect, useCallback } from 'react'
+import { View, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import {
+  Bookmark1Outlined, Bell1Outlined, Pencil1Outlined, ArrowAngularTopRightOutlined,
+  GraduationCap1Outlined, HourglassOutlined, FileQuestionOutlined, CheckCircle1Outlined,
+} from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
+import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
 import { listings as listingsTable, resultWatches } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 import { SuggestDateCorrectionModal } from '../../components/SuggestDateCorrectionModal'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
+import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
+import { Chip } from '../../components/ui/Chip'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { AppButton } from '../../components/ui/AppButton'
-import { spacing, radius } from '../../theme/tokens'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
+import { Disclosure } from '../../components/explore/Disclosure'
+import { LinkRow } from '../../components/explore/LinkRow'
+import { externalLinkProps } from '../../components/explore/externalLink'
+import { daysUntilDate, fmtLongDate, matchBadge } from '../../components/explore/exploreModel'
+import { radius, spacing, textStyle } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
 import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
-import { matchScholarship } from '../../utils/scholarshipMatch'
+import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
 import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
 
 interface FullListing {
@@ -53,261 +66,164 @@ interface FullListing {
   scholarshipMeta: string
 }
 
-function fmtDate(ts: number | null | undefined): string {
-  if (!ts) return 'TBA'
-  return new Date(ts).toLocaleDateString('en-PH', {
-    weekday: 'short', month: 'long', day: 'numeric', year: 'numeric',
-  })
+type Status = 'loading' | 'ready' | 'missing' | 'error'
+
+function parseJson<T>(raw: string | null | undefined, fallback: T): T {
+  try { return (JSON.parse(raw ?? '') as T) ?? fallback } catch { return fallback }
 }
 
-function daysUntil(ts: number | null | undefined): number | null {
-  if (!ts) return null
-  return Math.ceil((ts - Date.now()) / 86_400_000)
+function peso(n: number): string {
+  return `₱${n.toLocaleString('en-PH')}`
 }
 
-// ── Collapsible section ─────────────────────────────────────────────────────
-interface CollapsibleSectionProps {
-  title: string
-  preview: string
-  children: React.ReactNode
-  defaultExpanded?: boolean
+function preview(text: string, max = 60): string {
+  const flat = text.replace(/\n/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max).trimEnd()}…` : flat
 }
 
-function CollapsibleSection({ title, preview, children, defaultExpanded = false }: CollapsibleSectionProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  const { theme: t, typo } = useTheme()
+// ── Small local pieces ────────────────────────────────────────────────────────
+
+/** Label/value line inside the key-facts panel and detail disclosures. */
+function FactRow({ label, value }: { label: string; value: string }) {
+  const { theme: t } = useTheme()
   return (
-    <View style={{ marginTop: spacing.xl }}>
-      <Pressable
-        onPress={() => setExpanded(v => !v)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={({ pressed }) => [
-          {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: spacing.sm,
-            opacity: pressed ? 0.7 : 1,
-          },
-        ]}
-      >
-        <View style={{ flex: 1, minWidth: 0, marginRight: spacing.sm }}>
-          <Text style={{ fontSize: typo.md, fontFamily: 'Outfit_700Bold', color: t.textPrimary }}>
-            {title}
-          </Text>
-          {!expanded && preview ? (
-            <Text
-              style={{ fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 2 }}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.4}
-            >
-              {preview}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={{ fontSize: typo.md, color: t.textTertiary, fontFamily: 'Lexend_400Regular' }}>
-          {expanded ? '↑' : '↓'}
-        </Text>
-      </Pressable>
-      {expanded ? children : null}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: spacing.xs }}>
+      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{label}</Text>
+      <Text style={[textStyle('label', t.textPrimary), { textAlign: 'right', flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{value}</Text>
     </View>
   )
 }
 
+/** A reason line with a drawn dot, not a "•" glyph. */
+function Bullet({ children, color }: { children: string; color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
+      <View {...decorative} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: color, marginTop: 8 }} />
+      <Text style={[textStyle('bodySm', color), { flex: 1 }]} maxFontSizeMultiplier={1.6}>{children}</Text>
+    </View>
+  )
+}
+
+/**
+ * The page's one maroon action when it leaves the app (apply on the official
+ * site). Mirrors Button's primary variant, but as a link: a real <a href> on
+ * web (the shared Button always announces as a button).
+ */
+function PrimaryLinkButton({ label, url }: { label: string; url: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <Pressable
+      {...externalLinkProps(url)}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      accessibilityHint="Opens in your browser"
+      style={(state) => {
+        const { pressed, focused } = state as WebPressableState
+        return [
+          {
+            minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+            paddingHorizontal: spacing.xl, borderRadius: radius.lg, borderCurve: 'continuous',
+            backgroundColor: pressed ? t.accentPressed : t.accent,
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <Text style={textStyle('button', t.textInverse)} maxFontSizeMultiplier={2}>{label}</Text>
+      <View {...decorative}>
+        <Lineicons icon={ArrowAngularTopRightOutlined} size={16} color={t.textInverse} />
+      </View>
+    </Pressable>
+  )
+}
+
+function DetailSkeleton() {
+  return (
+    <View testID="listing-skeleton" accessible accessibilityLabel="Loading" accessibilityState={{ busy: true }} style={{ gap: spacing.lg, paddingTop: spacing.md }}>
+      <Skeleton width={96} height={20} radius={radius.pill} />
+      <Skeleton width="80%" height={28} />
+      <Skeleton width="50%" height={14} />
+      <Skeleton height={160} radius={radius.xl} />
+      <Skeleton height={48} radius={radius.lg} />
+    </View>
+  )
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
 export default function ListingDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
+  const { theme: t } = useTheme()
+  const twoUp = columnCount(useBreakpoint()) === 2
   const [listing, setListing] = useState<FullListing | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<Status>('loading')
+  const [attempt, setAttempt] = useState(0)
   const [acquiredCount, setAcquiredCount] = useState(0)
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null)
-  const [matchMoreExpanded, setMatchMoreExpanded] = useState(false)
+  const [reasonsOpen, setReasonsOpen] = useState(false)
+  const [profileIncomplete, setProfileIncomplete] = useState(false)
   const [watchingResults, setWatchingResults] = useState(false)
   const [hasBlueprint, setHasBlueprint] = useState(false)
   const [showDateCorrection, setShowDateCorrection] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
   const focusPriority = getPriority(slug)
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-    backArrow: { color: t.textSecondary, fontSize: 26, lineHeight: 30 },
-    topBarTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    empty: { textAlign: 'center', color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 60 },
-    hero: { marginTop: spacing.md, borderWidth: 1 },
-    heroExam: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
-    heroScholar: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.22)' },
-    heroTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.md },
-    typeIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-    examIcon: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)' },
-    scholarIcon: { backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)' },
-    heroTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', lineHeight: 22, marginBottom: 2 },
-    heroProvider: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-    typeBadge: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-    examBadge: { backgroundColor: t.accentSurface, borderColor: 'rgba(128,0,0,0.30)' },
-    scholarBadge: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.22)' },
-    typeTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    statusBadge: { backgroundColor: 'rgba(245,158,11,0.12)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.25)', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-    statusTxt: { fontSize: typo.xs, fontWeight: '700', color: t.warning, fontFamily: 'Lexend_600SemiBold', textTransform: 'capitalize' },
-    regionBadge: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-    regionTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    countdownCard: { marginTop: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1 },
-    countdownNormal: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.20)' },
-    countdownUrgent: { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.22)' },
-    countdownNum: { fontSize: typo.h1, fontWeight: '700', fontFamily: 'Outfit_700Bold', letterSpacing: -1 },
-    countdownLabel: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    section: { marginTop: spacing.xl },
-    datesGrid: { gap: spacing.sm },
-    dateCard: { backgroundColor: t.surface, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: t.border },
-    dateLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
-    dateVal: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    suggestCorrectBtn: { alignSelf: 'flex-start', marginTop: spacing.sm, paddingVertical: spacing.xs, minHeight: 36, justifyContent: 'center' },
-    suggestCorrectTxt: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
-    bodyText: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19 },
-    grantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.20)', borderRadius: radius.md, padding: spacing.md },
-    grantLabel: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    grantVal: { fontSize: typo.lg, fontWeight: '700', color: t.success, fontFamily: 'Outfit_700Bold' },
-    linkBtn: { marginTop: spacing.md, borderWidth: 1, borderColor: t.divider, borderRadius: radius.lg, borderCurve: 'continuous', paddingVertical: spacing.md, alignItems: 'center' },
-    linkBtnTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    focusRemoveBtn: {
-      marginTop: spacing.md,
-      backgroundColor: 'rgba(128,0,0,0.12)',
-      borderWidth: 2,
-      borderColor: '#831626',
-      borderRadius: radius.lg,
-      borderCurve: 'continuous',
-      paddingVertical: spacing.md,
-      alignItems: 'center',
-    },
-    focusRemoveTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.accentText },
-    focusAddBtn: {
-      marginTop: spacing.md,
-      backgroundColor: 'rgba(128,0,0,0.82)',
-      borderRadius: radius.lg,
-      borderCurve: 'continuous',
-      paddingVertical: spacing.md,
-      alignItems: 'center',
-    },
-    focusAddTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.md, color: t.textInverse },
-    watchBtn: {
-      marginTop: spacing.md,
-      borderWidth: 1,
-      borderColor: t.divider,
-      borderRadius: radius.lg,
-      borderCurve: 'continuous',
-      paddingVertical: spacing.md,
-      alignItems: 'center',
-    },
-    watchBtnActive: {
-      borderColor: 'rgba(34,197,94,0.35)',
-      backgroundColor: 'rgba(34,197,94,0.08)',
-    },
-    watchBtnTxt: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
-    },
-    watchBtnTxtActive: {
-      color: t.success,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    // --- scholarship enrichment styles ---
-    matchBlock: { marginTop: spacing.md, borderWidth: 1 },
-    matchEligible: { backgroundColor: 'rgba(34,197,94,0.08)', borderColor: 'rgba(34,197,94,0.25)' },
-    matchMaybe: { backgroundColor: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)' },
-    matchIneligible: { backgroundColor: 'rgba(239,68,68,0.07)', borderColor: 'rgba(239,68,68,0.22)' },
-    matchPillRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
-    matchPill: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-    matchPillEligible: { backgroundColor: 'rgba(34,197,94,0.18)' },
-    matchPillMaybe: { backgroundColor: 'rgba(245,158,11,0.18)' },
-    matchPillIneligible: { backgroundColor: 'rgba(239,68,68,0.18)' },
-    matchPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    matchPillTxtEligible: { color: t.success },
-    matchPillTxtMaybe: { color: t.warning },
-    matchPillTxtIneligible: { color: t.danger },
-    matchReason: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 2 },
-    matchMoreBtn: {
-      marginTop: spacing.xs,
-      paddingVertical: spacing.xs,
-      alignSelf: 'flex-start',
-    },
-    matchMoreTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
-    detailGrid: { gap: spacing.sm },
-    detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: t.border },
-    detailRowLabel: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1 },
-    detailRowVal: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold', textAlign: 'right' },
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-    chip: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: spacing.xs },
-    chipTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    serviceWarning: { marginTop: spacing.md, backgroundColor: 'rgba(245,158,11,0.10)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.30)', borderRadius: radius.md, padding: spacing.md },
-    serviceWarningTxt: { fontSize: typo.sm, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 18 },
-    cautionLine: { fontSize: typo.xs, color: t.warning, fontFamily: 'Lexend_400Regular', lineHeight: 17, marginTop: 3 },
-    verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-    verifiedBadgePill: { borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3, borderWidth: 1 },
-    verifiedPillOn: { backgroundColor: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.25)' },
-    verifiedPillOff: { backgroundColor: t.surface, borderColor: t.border },
-    verifiedPillTxt: { fontSize: typo.xs, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    verifiedNote: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', flex: 1, lineHeight: 15 },
-    otherBenefitLine: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: 19, marginTop: 2 },
-    // Divider between above-the-fold and lower section
-    lowerDivider: { marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: t.divider },
-  }), [t, typo])
 
   useEffect(() => {
-    async function load() {
-      const [listingRows, watchRows, settings] = await Promise.all([
-        db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        db.select({ slug: resultWatches.slug }).from(resultWatches).where(eq(resultWatches.slug, slug)).limit(1),
-        getSettings(db),
-      ])
-      const l = listingRows[0] ?? null
-      setListing(l as FullListing | null)
-      setWatchingResults(watchRows.length > 0)
+    let alive = true
+    setStatus('loading')
+    void (async () => {
+      try {
+        const [listingRows, watchRows, settings] = await Promise.all([
+          db.select().from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
+          db.select({ slug: resultWatches.slug }).from(resultWatches).where(eq(resultWatches.slug, slug)).limit(1),
+          getSettings(db),
+        ])
+        if (!alive) return
+        const l = (listingRows[0] ?? null) as FullListing | null
+        setListing(l)
+        setWatchingResults(watchRows.length > 0)
 
-      if (l && l.type === 'scholarship') {
-        let meta: Record<string, unknown> = {}
-        try { meta = JSON.parse((l as FullListing).scholarshipMeta) } catch {}
-        const hucExcluded = !!meta.huc_excluded
-        const targetYearLevels: string[] = Array.isArray(meta.target_year_levels)
-          ? (meta.target_year_levels as unknown[]).map(String)
-          : []
-        const matchInput = {
-          scope: ((l as FullListing).scope ?? 'national') as 'national' | 'regional' | 'provincial' | 'city' | 'school',
-          isVerified: (l as FullListing).isVerified ?? false,
-          incomeCeiling: (l as FullListing).incomeCeiling ?? null,
-          gwaRequirement: (l as FullListing).gwaRequirement ?? null,
-          serviceObligationYears: (l as FullListing).serviceObligationYears ?? null,
-          province: (l as FullListing).province ?? null,
-          city: (l as FullListing).city ?? null,
-          targetYearLevels,
-          hucExcluded,
+        if (l && l.type === 'scholarship') {
+          setProfileIncomplete(scholarshipProfileIncomplete({
+            gwa: settings.gwa ?? null, province: settings.province ?? null, incomeBracket: settings.incomeBracket ?? null,
+          }))
+          const meta = parseJson<Record<string, unknown>>(l.scholarshipMeta, {})
+          const studentProfile: StudentProfile = {
+            gradeLevel: settings.gradeLevel ?? undefined,
+            incomeBracket: settings.incomeBracket ?? undefined,
+            gwa: settings.gwa ?? undefined,
+            province: settings.province ?? null,
+            city: settings.city ?? null,
+          }
+          setMatchResult(matchScholarship({
+            scope: (l.scope ?? 'national') as 'national' | 'regional' | 'provincial' | 'city' | 'school',
+            isVerified: l.isVerified ?? false,
+            incomeCeiling: l.incomeCeiling ?? null,
+            gwaRequirement: l.gwaRequirement ?? null,
+            serviceObligationYears: l.serviceObligationYears ?? null,
+            province: l.province ?? null,
+            city: l.city ?? null,
+            targetYearLevels: Array.isArray(meta.target_year_levels) ? (meta.target_year_levels as unknown[]).map(String) : [],
+            hucExcluded: !!meta.huc_excluded,
+          }, studentProfile))
         }
-        const studentProfile: StudentProfile = {
-          gradeLevel: settings.gradeLevel ?? undefined,
-          incomeBracket: settings.incomeBracket ?? undefined,
-          gwa: settings.gwa ?? undefined,
-          province: settings.province ?? null,
-          city: settings.city ?? null,
-        }
-        setMatchResult(matchScholarship(matchInput, studentProfile))
+        setStatus(l ? 'ready' : 'missing')
+
+        // Non-blocking: does this exam have a published mock blueprint?
+        listPublishedBlueprintSlugs(db)
+          .then(slugs => { if (alive) setHasBlueprint(slugs.includes(slug)) })
+          .catch(() => { /* the mock CTA simply won't appear */ })
+      } catch (e) {
+        console.warn('[listing] load failed:', e)
+        if (alive) setStatus('error')
       }
+    })()
+    return () => { alive = false }
+  }, [db, slug, attempt])
 
-      setLoading(false)
-
-      // Non-blocking: check if this listing has a published blueprint.
-      listPublishedBlueprintSlugs(db).then(slugs => {
-        setHasBlueprint(slugs.includes(slug))
-      }).catch(() => { /* ignore — CTA simply won't appear */ })
-    }
-    void load()
-  }, [db, slug])
-
-  async function toggleResultWatch() {
+  const toggleResultWatch = useCallback(async () => {
     if (!listing) return
     if (watchingResults) {
       await db.delete(resultWatches).where(eq(resultWatches.slug, listing.slug))
@@ -316,469 +232,306 @@ export default function ListingDetailScreen() {
       await db.insert(resultWatches).values({ slug: listing.slug, addedAt: Date.now() }).onConflictDoNothing()
       setWatchingResults(true)
     }
-  }
+  }, [db, listing, watchingResults])
 
-  if (loading) {
+  const isScholarship = listing?.type === 'scholarship'
+  const fallbackHref = isScholarship ? '/explore?section=scholarships' : '/explore?section=universities'
+
+  // ── Non-ready states ────────────────────────────────────────────────────────
+
+  if (status !== 'ready' || !listing) {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-        </View>
-        <ActivityIndicator color="#fff" style={{ marginTop: 60 }} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+        <DetailTopBar fallbackHref={fallbackHref} />
+        <ScreenScroll tabBarInset={false}>
+          {status === 'loading' ? <DetailSkeleton /> : status === 'error' ? (
+            <ErrorState title="Couldn't load this listing" onRetry={() => setAttempt(a => a + 1)} />
+          ) : (
+            <EmptyState
+              icon={<Lineicons icon={FileQuestionOutlined} size={26} color={t.textSecondary} />}
+              title="We couldn't find this listing"
+              body="It may have been removed or renamed since your last sync."
+              actionLabel="Back to Explore"
+              onAction={() => router.replace('/explore')}
+            />
+          )}
+        </ScreenScroll>
       </SafeAreaView>
     )
   }
 
-  if (!listing) {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={s.backArrow}>‹</Text>
-          </Pressable>
-        </View>
-        <Text style={s.empty}>Listing not found.</Text>
-      </SafeAreaView>
-    )
-  }
+  // ── Derived ─────────────────────────────────────────────────────────────────
 
   const isExam = listing.type === 'exam'
-  const isScholarship = listing.type === 'scholarship'
-  const keyDate = listing.examDate ?? listing.deadline
-  const daysLeft = daysUntil(keyDate)
-  let requirements: string[] = []
-  try { requirements = JSON.parse(listing.requirements) } catch {}
-
-  // Parse scholarshipMeta once for render
-  let scholarshipMeta: Record<string, unknown> = {}
-  if (isScholarship) {
-    try { scholarshipMeta = JSON.parse(listing.scholarshipMeta) } catch {}
-  }
-  const otherBenefits: string[] = isScholarship && Array.isArray(scholarshipMeta.other_benefits)
-    ? (scholarshipMeta.other_benefits as unknown[]).map(String)
-    : []
-
-  // Match reasons/warnings split: first 2 visible, rest behind "More"
-  const visibleReasons = matchResult ? matchResult.reasons.slice(0, 2) : []
-  const hiddenReasons = matchResult ? matchResult.reasons.slice(2) : []
-  const hasMoreReasons = hiddenReasons.length > 0 || (matchResult ? matchResult.warnings.length > 0 : false)
-
-  // Collapsible section preview builders
-  const aboutPreview = listing.description
-    ? listing.description.slice(0, 60).replace(/\n/g, ' ').trim() + (listing.description.length > 60 ? '…' : '')
-    : ''
-
-  const detailsPreview = (() => {
-    const parts: string[] = []
-    if (listing.incomeCeiling != null) parts.push(`₱${listing.incomeCeiling.toLocaleString()}/yr`)
-    if (listing.gwaRequirement != null) parts.push(`GWA ${listing.gwaRequirement}`)
-    return parts.join(' · ')
-  })()
-
-  const benefitsPreview = (() => {
-    if (listing.grantAmount) return `₱${listing.grantAmount}`
-    if (otherBenefits.length > 0) return otherBenefits[0] ?? ''
-    if (listing.coverage) return listing.coverage.slice(0, 60).trim() + (listing.coverage.length > 60 ? '…' : '')
-    return ''
-  })()
-
+  const keyDate = isExam ? (listing.examDate ?? listing.deadline) : (listing.deadline ?? listing.examDate)
+  const daysLeft = daysUntilDate(keyDate)
+  const requirements = parseJson<unknown[]>(listing.requirements, []).map(String)
+  const meta = isScholarship ? parseJson<Record<string, unknown>>(listing.scholarshipMeta, {}) : {}
+  const otherBenefits: string[] = Array.isArray(meta.other_benefits) ? (meta.other_benefits as unknown[]).map(String) : []
   const hasBenefits = !!(listing.coverage || listing.grantAmount || otherBenefits.length > 0)
+  const match = matchResult ? matchBadge(matchResult.status) : null
+  const extraReasons = matchResult ? [...matchResult.reasons.slice(2)] : []
+  const warnings = matchResult?.warnings ?? []
+  const obligation = listing.serviceObligationYears ?? 0
+
+  const benefitsPreview = listing.grantAmount ? `₱${listing.grantAmount} grant`
+    : listing.monthlyStipend != null ? `${peso(listing.monthlyStipend)} monthly stipend`
+    : otherBenefits[0] ?? preview(listing.coverage)
+
+  const countdownLabel = isExam ? 'days until the exam' : 'days left to apply'
+  const dateLabel = isExam ? 'Exam date' : 'Application deadline'
+
+  // ── Blocks ──────────────────────────────────────────────────────────────────
+
+  const hero = (
+    <View style={{ gap: spacing.sm }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+        <Badge label={isExam ? 'Entrance exam' : 'Scholarship'} tone="neutral" />
+        {listing.status && listing.status !== 'active' ? (
+          <Badge label={listing.status.charAt(0).toUpperCase() + listing.status.slice(1)} tone="warning" />
+        ) : null}
+      </View>
+      <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
+        {listing.title}
+      </Text>
+      {listing.provider || listing.region ? (
+        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          {[listing.provider, listing.region].filter(Boolean).join(' · ')}
+        </Text>
+      ) : null}
+    </View>
+  )
+
+  // 1. Deadline first, 2. eligibility — the two facts a student decides on.
+  const keyFacts = (
+    <Card testID="listing-key-facts" style={{ gap: spacing.md }}>
+      {daysLeft != null && daysLeft >= 0 ? (
+        <View
+          accessible
+          accessibilityLabel={daysLeft === 0 ? `${isExam ? 'Exam' : 'Deadline'} is today` : `${daysLeft} ${countdownLabel}`}
+          style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}
+        >
+          <Text style={textStyle('numericLg', daysLeft <= 7 ? t.warning : t.textPrimary)} maxFontSizeMultiplier={1.3}>
+            {daysLeft === 0 ? 'Today' : String(daysLeft)}
+          </Text>
+          {daysLeft === 0 ? null : (
+            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{countdownLabel}</Text>
+          )}
+        </View>
+      ) : daysLeft != null ? (
+        <Badge label={isExam ? 'This exam date has passed' : 'The deadline has passed'} tone="neutral" />
+      ) : null}
+
+      <View>
+        {keyDate ? <FactRow label={dateLabel} value={fmtLongDate(keyDate)} /> : null}
+        {isExam && listing.deadline && listing.examDate ? (
+          <FactRow label="Application deadline" value={fmtLongDate(listing.deadline)} />
+        ) : null}
+        {listing.resultsDate ? <FactRow label="Results expected" value={fmtLongDate(listing.resultsDate)} /> : null}
+        {!keyDate ? (
+          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>Dates to be announced.</Text>
+        ) : null}
+      </View>
+      <Button
+        label="Suggest a date correction"
+        variant="ghost"
+        size="sm"
+        icon={<Lineicons icon={Pencil1Outlined} size={14} color={t.accentText} />}
+        onPress={() => setShowDateCorrection(true)}
+        style={{ marginLeft: -spacing.lg }}
+      />
+
+      <View style={{ height: 1, backgroundColor: t.divider }} />
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>Eligibility</Text>
+        {isScholarship ? (
+          match && matchResult && !profileIncomplete ? (
+            <View style={{ gap: spacing.sm }}>
+              <Badge label={match.label} tone={match.tone} />
+              {matchResult.reasons.slice(0, 2).map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
+              {reasonsOpen ? (
+                <>
+                  {extraReasons.map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
+                  {warnings.map(w => <Bullet key={w} color={t.warning}>{w}</Bullet>)}
+                </>
+              ) : null}
+              {extraReasons.length + warnings.length > 0 ? (
+                <Button
+                  label={reasonsOpen ? 'Show fewer reasons' : `Show ${extraReasons.length + warnings.length} more`}
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => setReasonsOpen(v => !v)}
+                  style={{ marginLeft: -spacing.lg }}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View style={{ gap: spacing.sm }}>
+              <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+                Add your GWA, family income and province to see if you qualify.
+              </Text>
+              <Button label="Complete profile" variant="secondary" size="sm" onPress={() => router.push('/profile/scholarship-info')} />
+            </View>
+          )
+        ) : (
+          <View>
+            <FactRow label="Open to" value={listing.region || 'Students nationwide'} />
+            {listing.provider ? <FactRow label="Given by" value={listing.provider} /> : null}
+          </View>
+        )}
+        {isScholarship && obligation > 0 ? (
+          <View
+            style={{
+              flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+              padding: spacing.md, borderRadius: radius.sm, backgroundColor: t.warningSurface,
+            }}
+          >
+            <View {...decorative} style={{ marginTop: 2 }}>
+              <Lineicons icon={HourglassOutlined} size={16} color={t.warningStrong} />
+            </View>
+            <Text style={[textStyle('bodySm', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>
+              Requires {obligation} year{obligation === 1 ? '' : 's'} of service after graduation.
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </Card>
+  )
+
+  // 3. One primary action, then the save action (Focus).
+  const primary = isExam ? (
+    hasBlueprint ? (
+      <Button
+        label="Take a mock exam"
+        size="lg"
+        fullWidth={!twoUp}
+        icon={<Lineicons icon={GraduationCap1Outlined} size={18} color={t.textInverse} />}
+        onPress={() => router.push(`/practice/exam/${slug}`)}
+      />
+    ) : (
+      <Button label="Practise for this exam" size="lg" fullWidth={!twoUp} onPress={() => router.push('/(tabs)/practice')} />
+    )
+  ) : listing.externalUrl ? (
+    <PrimaryLinkButton label="Apply on the official site" url={listing.externalUrl} />
+  ) : null
+
+  const actions = (
+    <View testID="listing-actions" style={{ gap: spacing.sm }}>
+      {primary}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        <Button
+          label={inFocus ? `In Focus #${focusPriority}` : 'Add to Focus'}
+          accessibilityLabel={inFocus ? `In Focus #${focusPriority}. Remove from Focus` : 'Add to Focus'}
+          accessibilityHint={inFocus ? undefined : 'Pins it to Today with a countdown'}
+          variant="secondary"
+          icon={<Lineicons icon={inFocus ? CheckCircle1Outlined : Bookmark1Outlined} size={16} color={t.accentText} />}
+          onPress={() => (inFocus ? removeListing(slug) : addListing(slug))}
+        />
+        {isExam ? (
+          <Button
+            label={watchingResults ? 'Watching results' : 'Watch results'}
+            accessibilityHint={watchingResults ? 'Stops tracking this exam in the Results Tracker' : 'Adds this exam to the Results Tracker'}
+            variant="ghost"
+            icon={<Lineicons icon={Bell1Outlined} size={16} color={t.accentText} />}
+            onPress={() => { void toggleResultWatch() }}
+          />
+        ) : null}
+      </View>
+    </View>
+  )
+
+  const requirementsBlock = requirements.length > 0 ? (
+    <View>
+      <SectionHeader title={`Requirements (${acquiredCount}/${requirements.length})`} subtitle="Tick each document as you get it" />
+      <RequirementsChecklist listingSlug={slug} requirements={requirements} onAcquiredCountChange={setAcquiredCount} />
+    </View>
+  ) : null
+
+  const details = (
+    <View>
+      {listing.description ? (
+        <Disclosure title="About" preview={preview(listing.description)}>
+          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{listing.description}</Text>
+        </Disclosure>
+      ) : null}
+
+      {isScholarship ? (
+        <Disclosure
+          title="Scholarship details"
+          preview={[
+            listing.incomeCeiling != null ? `Income up to ${peso(listing.incomeCeiling)}/yr` : null,
+            listing.gwaRequirement != null ? `GWA ${listing.gwaRequirement}` : null,
+          ].filter(Boolean).join(' · ')}
+        >
+          <View style={{ gap: spacing.sm }}>
+            <View>
+              {listing.incomeCeiling != null ? <FactRow label="Income ceiling" value={`${peso(listing.incomeCeiling)} a year`} /> : null}
+              {listing.gwaRequirement != null ? <FactRow label="Minimum GWA" value={`${listing.gwaRequirement}%`} /> : null}
+              {listing.monthlyStipend != null ? <FactRow label="Monthly stipend" value={peso(listing.monthlyStipend)} /> : null}
+              {listing.applicationWindow ? <FactRow label="Application window" value={listing.applicationWindow} /> : null}
+            </View>
+            {listing.scope || listing.province || listing.city ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                {listing.scope ? <Chip label={listing.scope.charAt(0).toUpperCase() + listing.scope.slice(1)} /> : null}
+                {listing.province ? <Chip label={listing.province} /> : null}
+                {listing.city ? <Chip label={listing.city} /> : null}
+              </View>
+            ) : null}
+          </View>
+        </Disclosure>
+      ) : null}
+
+      {hasBenefits ? (
+        <Disclosure title={isExam ? 'Coverage' : 'Benefits'} preview={benefitsPreview}>
+          <View style={{ gap: spacing.sm }}>
+            {listing.grantAmount ? <FactRow label="Grant amount" value={`₱${listing.grantAmount}`} /> : null}
+            {listing.coverage ? (
+              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{listing.coverage}</Text>
+            ) : null}
+            {otherBenefits.map(b => <Bullet key={b} color={t.textSecondary}>{b}</Bullet>)}
+          </View>
+        </Disclosure>
+      ) : null}
+
+      <View style={{ borderTopWidth: 1, borderTopColor: t.divider, paddingTop: spacing.lg, gap: spacing.sm }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
+          <Badge label={listing.isVerified ? 'Verified' : 'Unverified'} tone={listing.isVerified ? 'success' : 'neutral'} />
+          <Text style={[textStyle('caption', t.textSecondary), { flex: 1, minWidth: 180 }]} maxFontSizeMultiplier={1.6}>
+            Details change every year. Check the official site before you apply.
+          </Text>
+        </View>
+        {listing.externalUrl && isExam ? (
+          <LinkRow label="Official website" url={listing.externalUrl} />
+        ) : null}
+      </View>
+    </View>
+  )
+
+  const main = (
+    <View style={{ gap: spacing.xl }}>
+      {hero}
+      {keyFacts}
+      {actions}
+      {requirementsBlock}
+    </View>
+  )
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-
-      {/* Top bar */}
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={s.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={s.topBarTitle} numberOfLines={1}>{listing.title}</Text>
-      </View>
-
-      <ScreenScroll tabBarInset={false}>
-
-        {/* ── ABOVE THE FOLD ─────────────────────────────────────── */}
-
-        {/* Hero card */}
-        <Card elevated style={[s.hero, isExam ? s.heroExam : s.heroScholar]}>
-          <View style={s.heroTop}>
-            <View style={[s.typeIcon, isExam ? s.examIcon : s.scholarIcon]}>
-              <Text style={{ fontSize: 22 }}>{isExam ? '📋' : '🎓'}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.heroTitle}>{listing.title}</Text>
-              {listing.provider ? <Text style={s.heroProvider}>{listing.provider}</Text> : null}
-            </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <DetailTopBar fallbackHref={fallbackHref} />
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.sm }}>
+        {twoUp ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xxl }}>
+            <View style={{ flex: 3, minWidth: 0 }}>{main}</View>
+            <View style={{ flex: 2, minWidth: 0 }}>{details}</View>
           </View>
-          <View style={s.badgeRow}>
-            <View style={[s.typeBadge, isExam ? s.examBadge : s.scholarBadge]}>
-              <Text style={[s.typeTxt, { color: isExam ? t.accentText : t.success }]}>
-                {isExam ? 'Exam' : 'Scholarship'}
-              </Text>
-            </View>
-            {listing.status !== 'active' ? (
-              <View style={s.statusBadge}>
-                <Text style={s.statusTxt}>{listing.status}</Text>
-              </View>
-            ) : null}
-            {listing.region ? (
-              <View style={s.regionBadge}>
-                <Text style={s.regionTxt}>📍 {listing.region}</Text>
-              </View>
-            ) : null}
+        ) : (
+          <View style={{ gap: spacing.xl }}>
+            {main}
+            {details}
           </View>
-        </Card>
-
-        {/* Match status block — scholarships only, not 'unknown' */}
-        {isScholarship && matchResult && matchResult.status !== 'unknown' ? (
-          <Card
-            elevated
-            style={[
-              s.matchBlock,
-              matchResult.status === 'eligible' ? s.matchEligible
-                : matchResult.status === 'maybe' ? s.matchMaybe
-                : s.matchIneligible,
-            ]}
-          >
-            <View style={s.matchPillRow}>
-              <View style={[
-                s.matchPill,
-                matchResult.status === 'eligible' ? s.matchPillEligible
-                  : matchResult.status === 'maybe' ? s.matchPillMaybe
-                  : s.matchPillIneligible,
-              ]}>
-                <Text style={[
-                  s.matchPillTxt,
-                  matchResult.status === 'eligible' ? s.matchPillTxtEligible
-                    : matchResult.status === 'maybe' ? s.matchPillTxtMaybe
-                    : s.matchPillTxtIneligible,
-                ]}>
-                  {matchResult.status === 'eligible' ? '✓ Eligible'
-                    : matchResult.status === 'maybe' ? 'Maybe'
-                    : 'Not Eligible'}
-                </Text>
-              </View>
-            </View>
-            {/* First 2 reasons always visible */}
-            {visibleReasons.map((r) => (
-              <Text key={r} style={s.matchReason}>• {r}</Text>
-            ))}
-            {/* Remaining reasons + warnings behind inline "More" expand */}
-            {matchMoreExpanded ? (
-              <>
-                {hiddenReasons.map((r) => (
-                  <Text key={r} style={s.matchReason}>• {r}</Text>
-                ))}
-                {matchResult.warnings.map((w) => (
-                  <Text key={w} style={s.cautionLine}>⚠ {w}</Text>
-                ))}
-              </>
-            ) : null}
-            {hasMoreReasons ? (
-              <Pressable
-                onPress={() => setMatchMoreExpanded(v => !v)}
-                style={({ pressed }) => [s.matchMoreBtn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: matchMoreExpanded }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={s.matchMoreTxt}>
-                  {matchMoreExpanded ? 'Show less ↑' : `More (${hiddenReasons.length + matchResult.warnings.length}) ↓`}
-                </Text>
-              </Pressable>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {/* Service obligation warning — safety info, always visible */}
-        {isScholarship && (listing.serviceObligationYears ?? 0) > 0 ? (
-          <View style={s.serviceWarning}>
-            <Text style={s.serviceWarningTxt}>
-              ⚠️ Requires {listing.serviceObligationYears} year{listing.serviceObligationYears === 1 ? '' : 's'} of service after graduation.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Days countdown */}
-        {daysLeft !== null && daysLeft > 0 ? (
-          <Card
-            elevated
-            style={[s.countdownCard, daysLeft < 30 ? s.countdownUrgent : s.countdownNormal]}
-          >
-            <Text style={[s.countdownNum, { color: daysLeft < 30 ? t.accentText : t.success }]}>{daysLeft}</Text>
-            <Text style={s.countdownLabel}>days until {isExam ? 'exam' : 'deadline'}</Text>
-          </Card>
-        ) : null}
-
-        {/* Key dates */}
-        <View style={s.section}>
-          <SectionHeader title="Key Dates" />
-          <Card elevated>
-            <View style={s.datesGrid}>
-              {listing.examDate ? (
-                <View style={s.dateCard}>
-                  <Text style={s.dateLabel}>Exam Date</Text>
-                  <Text style={s.dateVal}>{fmtDate(listing.examDate)}</Text>
-                </View>
-              ) : null}
-              {listing.deadline ? (
-                <View style={s.dateCard}>
-                  <Text style={s.dateLabel}>Application Deadline</Text>
-                  <Text style={s.dateVal}>{fmtDate(listing.deadline)}</Text>
-                </View>
-              ) : null}
-              {!listing.examDate && !listing.deadline ? (
-                <Text style={s.bodyText}>Dates to be announced.</Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={() => setShowDateCorrection(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Suggest a correction to these dates"
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              style={({ pressed }) => [s.suggestCorrectBtn, pressed && { opacity: 0.6 }]}
-            >
-              <Text style={s.suggestCorrectTxt} maxFontSizeMultiplier={1.4}>✎ Suggest a correction</Text>
-            </Pressable>
-          </Card>
-        </View>
-
-        {/* ── PRIMARY CTAs — directly after Key Dates ─────────────── */}
-
-        {/* Exams: "📝 Take Mock Exam" (if hasBlueprint) + Add-to-Focus */}
-        {isExam ? (
-          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-            {hasBlueprint ? (
-              <AppButton
-                label="📝 Take Mock Exam"
-                onPress={() => router.push(`/practice/exam/${slug}`)}
-              />
-            ) : null}
-            {inFocus ? (
-              <Pressable
-                style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
-                onPress={() => removeListing(slug)}
-                accessibilityRole="button"
-              >
-                <Text style={s.focusRemoveTxt}>
-                  ✓ In Focus #{focusPriority} — Tap to Remove
-                </Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
-                onPress={() => addListing(slug)}
-                accessibilityRole="button"
-              >
-                <Text style={s.focusAddTxt}>+ Add to Focus</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-
-        {/* Scholarships: Add-to-Focus only (no mock exam) */}
-        {isScholarship ? (
-          <View style={{ marginTop: spacing.md }}>
-            {inFocus ? (
-              <Pressable
-                style={({ pressed }) => [s.focusRemoveBtn, pressed && { opacity: 0.8 }]}
-                onPress={() => removeListing(slug)}
-                accessibilityRole="button"
-              >
-                <Text style={s.focusRemoveTxt}>
-                  ✓ In Focus #{focusPriority} — Tap to Remove
-                </Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={({ pressed }) => [s.focusAddBtn, pressed && { opacity: 0.8 }]}
-                onPress={() => addListing(slug)}
-                accessibilityRole="button"
-              >
-                <Text style={s.focusAddTxt}>+ Add to Focus</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-
-        {/* Requirements checklist — positioned after primary CTA */}
-        {requirements.length > 0 ? (
-          <View style={s.section}>
-            <SectionHeader title={`Requirements (${acquiredCount}/${requirements.length})`} />
-            <RequirementsChecklist
-              listingSlug={slug}
-              requirements={requirements}
-              onAcquiredCountChange={(a) => setAcquiredCount(a)}
-            />
-          </View>
-        ) : null}
-
-        {/* ── LOWER SECTION (disclosure) ───────────────────────────── */}
-        <View style={s.lowerDivider} />
-
-        {/* Watch results toggle — exams only (moved to lower section) */}
-        {isExam ? (
-          <Pressable
-            style={({ pressed }) => [s.watchBtn, watchingResults && s.watchBtnActive, pressed && { opacity: 0.8 }]}
-            onPress={toggleResultWatch}
-            accessibilityRole="button"
-            accessibilityLabel={watchingResults ? 'Stop watching results' : 'Watch results'}
-          >
-            <Text style={[s.watchBtnTxt, watchingResults && s.watchBtnTxtActive]}>
-              {watchingResults ? '✓ Watching results' : '🔔 Watch results'}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Start practice CTA — exams only (moved to lower section) */}
-        {isExam ? (
-          <View style={{ marginTop: spacing.md }}>
-            <AppButton
-              label="⚡ Start Practicing for this Exam"
-              onPress={() => router.push('/(tabs)/practice')}
-              variant="secondary"
-            />
-          </View>
-        ) : null}
-
-        {/* About — collapsible, preview = first ~60 chars */}
-        {listing.description ? (
-          <CollapsibleSection
-            title="About"
-            preview={aboutPreview}
-          >
-            <Card elevated>
-              <Text style={s.bodyText}>{listing.description}</Text>
-            </Card>
-          </CollapsibleSection>
-        ) : null}
-
-        {/* Scholarship Details — collapsible, preview = income ceiling + GWA */}
-        {isScholarship ? (
-          <CollapsibleSection
-            title="Scholarship Details"
-            preview={detailsPreview}
-          >
-            <Card elevated>
-              <View style={s.detailGrid}>
-                {listing.incomeCeiling != null ? (
-                  <View style={s.detailRow}>
-                    <Text style={s.detailRowLabel}>Income Ceiling</Text>
-                    <Text style={s.detailRowVal}>₱{listing.incomeCeiling.toLocaleString()}/yr</Text>
-                  </View>
-                ) : null}
-                {listing.gwaRequirement != null ? (
-                  <View style={s.detailRow}>
-                    <Text style={s.detailRowLabel}>Minimum GWA</Text>
-                    <Text style={s.detailRowVal}>{listing.gwaRequirement}%</Text>
-                  </View>
-                ) : null}
-                {listing.monthlyStipend != null ? (
-                  <View style={s.detailRow}>
-                    <Text style={s.detailRowLabel}>Monthly Stipend</Text>
-                    <Text style={[s.detailRowVal, { color: t.success }]}>₱{listing.monthlyStipend.toLocaleString()}/mo</Text>
-                  </View>
-                ) : null}
-                {listing.applicationWindow ? (
-                  <View style={s.detailRow}>
-                    <Text style={s.detailRowLabel}>Application Window</Text>
-                    <Text style={s.detailRowVal}>{listing.applicationWindow}</Text>
-                  </View>
-                ) : null}
-              </View>
-              {/* Scope / region / province chips */}
-              {(listing.scope || listing.province || listing.city) ? (
-                <View style={[s.chipRow, { marginTop: spacing.sm }]}>
-                  {listing.scope ? (
-                    <View style={s.chip}>
-                      <Text style={s.chipTxt}>{listing.scope.charAt(0).toUpperCase() + listing.scope.slice(1)}</Text>
-                    </View>
-                  ) : null}
-                  {listing.province ? (
-                    <View style={s.chip}>
-                      <Text style={s.chipTxt}>📍 {listing.province}</Text>
-                    </View>
-                  ) : null}
-                  {listing.city ? (
-                    <View style={s.chip}>
-                      <Text style={s.chipTxt}>🏙 {listing.city}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-            </Card>
-          </CollapsibleSection>
-        ) : null}
-
-        {/* Benefits / Coverage — collapsible, preview = grant amount or first benefit */}
-        {hasBenefits ? (
-          <CollapsibleSection
-            title={isExam ? 'Coverage' : 'Benefits'}
-            preview={benefitsPreview}
-          >
-            <Card elevated>
-              {listing.grantAmount ? (
-                <View style={s.grantRow}>
-                  <Text style={s.grantLabel}>Grant Amount</Text>
-                  <Text style={s.grantVal}>₱{listing.grantAmount}</Text>
-                </View>
-              ) : null}
-              {listing.coverage ? <Text style={[s.bodyText, { marginTop: spacing.xs }]}>{listing.coverage}</Text> : null}
-              {otherBenefits.map((b, i) => (
-                <Text key={b} style={[s.otherBenefitLine, { marginTop: i === 0 ? spacing.xs : 2 }]}>• {b}</Text>
-              ))}
-            </Card>
-          </CollapsibleSection>
-        ) : null}
-
-        {/* Official website + Verified badge — bottom of screen */}
-        {isScholarship ? (
-          <View style={{ marginTop: spacing.xl }}>
-            <View style={s.verifiedBadge}>
-              <View style={[s.verifiedBadgePill, listing.isVerified ? s.verifiedPillOn : s.verifiedPillOff]}>
-                <Text style={[s.verifiedPillTxt, { color: listing.isVerified ? t.success : t.textTertiary }]}>
-                  {listing.isVerified ? '✓ Verified' : 'Unverified'}
-                </Text>
-              </View>
-              <Text style={s.verifiedNote}>Details change yearly — verify on the official site.</Text>
-            </View>
-            {listing.externalUrl ? (
-              <Pressable
-                style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.8 }]}
-                onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
-                accessibilityRole="button"
-              >
-                <Text style={s.linkBtnTxt}>Official Website ↗</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : listing.externalUrl ? (
-          <Pressable
-            style={({ pressed }) => [s.linkBtn, { marginTop: spacing.xl }, pressed && { opacity: 0.8 }]}
-            onPress={() => listing.externalUrl && Linking.openURL(listing.externalUrl)}
-            accessibilityRole="button"
-          >
-            <Text style={s.linkBtnTxt}>Official Website ↗</Text>
-          </Pressable>
-        ) : null}
-
+        )}
       </ScreenScroll>
 
       <SuggestDateCorrectionModal
