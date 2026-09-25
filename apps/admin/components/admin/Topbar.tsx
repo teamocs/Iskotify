@@ -1,39 +1,36 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { SyncNowButton } from './SyncNowButton'
 import { ExportButtons } from './ExportButtons'
 import { useAdminDrawer } from '../../contexts/AdminDrawerContext'
+import { IconButton } from '@/components/ui/Button'
 
 interface Props {
+  /** The page's one h1. Pages should not repeat it as their own heading. */
   title: string
   showSyncButton?: boolean
   /** When set, renders CSV/JSON export links (e.g. "/api/admin/listings/export"). */
   exportHref?: string
+  /** Page-level actions, right-aligned. */
+  actions?: ReactNode
 }
 
-export function Topbar({ title, showSyncButton = false, exportHref }: Props) {
-  const { openDrawer } = useAdminDrawer()
+export function Topbar({ title, showSyncButton = false, exportHref, actions }: Props) {
+  const { openDrawer, openShortcuts } = useAdminDrawer()
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between px-4 md:px-6 h-[52px] bg-white/90 backdrop-blur-[20px] saturate-[180%] border-b border-black/[0.08] flex-shrink-0">
+    <header className="sticky top-0 z-40 flex h-[52px] flex-shrink-0 items-center gap-2 border-b border-subtle bg-surface px-4 md:px-6">
+      <IconButton icon="menu" label="Open navigation" onClick={openDrawer} size="md" className="-ml-2 md:hidden" />
+      <h1 className="min-w-0 flex-1 truncate font-heading text-[17px] font-semibold tracking-tight text-ink">
+        {title}
+      </h1>
       <div className="flex items-center gap-2">
-        <button
-          onClick={openDrawer}
-          aria-label="Open menu"
-          className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-2 -ml-1.5"
-        >
-          <span className="text-xl">☰</span>
-        </button>
-        <h1 className="font-heading font-bold text-[15px] md:text-[17px] text-ink tracking-tight">
-          {title}
-        </h1>
+        {actions}
+        {exportHref && <ExportButtons baseHref={exportHref} />}
+        {showSyncButton && <SyncNowButton />}
+        <IconButton icon="keyboard" label="Keyboard shortcuts" onClick={openShortcuts} className="hidden sm:inline-flex" />
       </div>
-      {(showSyncButton || exportHref) && (
-        <div className="flex items-center gap-2">
-          {exportHref && <ExportButtons baseHref={exportHref} />}
-          {showSyncButton && <SyncNowButton />}
-        </div>
-      )}
     </header>
   )
 }

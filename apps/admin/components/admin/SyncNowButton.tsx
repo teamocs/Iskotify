@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { triggerSync } from '@/app/admin/actions'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button } from '@/components/ui/Button'
 
 export function SyncNowButton() {
   const [isPending, startTransition] = useTransition()
@@ -22,13 +23,10 @@ export function SyncNowButton() {
     })
   }
 
+  // Secondary: the page's primary (maroon) action belongs to the page itself.
   return (
-    <button
-      onClick={handleSync}
-      disabled={isPending}
-      className="rounded-[980px] px-4 py-1.5 text-[13px] font-medium bg-maroon text-white hover:bg-maroon-light transition-colors disabled:opacity-60 shadow-sm"
-    >
-      {isPending ? '⏳ Syncing…' : '🔄 Sync Now'}
-    </button>
+    <Button size="sm" icon="refresh" loading={isPending} onClick={handleSync}>
+      {isPending ? 'Syncing…' : 'Sync now'}
+    </Button>
   )
 }

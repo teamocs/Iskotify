@@ -5,7 +5,8 @@ import { ListingsView } from '../ListingsView'
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/listings',
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
 }))
 
 const base = {
@@ -48,7 +49,9 @@ const mockLogs = [
 ]
 
 describe('ListingsView', () => {
-  it('renders all four stat cards', () => {
+  // The four stat cards became one summary strip whose counts are links that
+  // set the status filter in the URL.
+  it('summarises totals as filter links', () => {
     const html = renderToStaticMarkup(
       React.createElement(ListingsView, {
         listings: mockListings,
@@ -57,16 +60,15 @@ describe('ListingsView', () => {
         active: 10,
         upcoming: 5,
         lastSync: '2025-01-01T12:00:00Z',
-        health: { label: 'Synced OK', accent: 'text-green-700' },
+        health: { label: 'Healthy', tone: 'success' },
       })
     )
-    expect(html).toContain('Total Listings')
-    expect(html).toContain('Active')
-    expect(html).toContain('Upcoming')
-    expect(html).toContain('Last Sync')
+    expect(html).toContain('Total')
     expect(html).toContain('42')
-    expect(html).toContain('10')
-    expect(html).toContain('5')
+    expect(html).toContain('href="?status=active"')
+    expect(html).toContain('href="?status=upcoming"')
+    expect(html).toContain('Last sync')
+    expect(html).toContain('Healthy')
   })
 
   it('renders the listing table', () => {
@@ -78,9 +80,10 @@ describe('ListingsView', () => {
         active: 1,
         upcoming: 0,
         lastSync: null,
-        health: { label: 'No syncs yet', accent: 'text-[#6e6e73]' },
+        health: { label: 'Never synced', tone: 'neutral' },
       })
     )
     expect(html).toContain('Scholar A')
+    expect(html).not.toMatch(/text-\[#|text-gray-/)
   })
 })

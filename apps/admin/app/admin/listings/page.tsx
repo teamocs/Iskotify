@@ -3,6 +3,7 @@ import { Topbar } from '@/components/admin/Topbar'
 import { ListingsView } from '@/components/admin/ListingsView'
 import type { Listing } from '@iskotify/utils'
 import type { SyncLog } from '@/components/admin/SyncPanel'
+import type { BadgeTone } from '@/components/ui/Badge'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,19 +27,19 @@ export default async function ListingsPage() {
   const upcomingCount = listings.filter(l => l.status === 'upcoming').length
   const lastSyncTime = logs[0]?.created_at ?? null
 
-  function syncHealth() {
-    if (!lastSyncTime) return { label: 'Never synced', accent: 'text-gray-400' }
+  function syncHealth(): { label: string; tone: BadgeTone } {
+    if (!lastSyncTime) return { label: 'Never synced', tone: 'neutral' }
     const hrs = (Date.now() - new Date(lastSyncTime).getTime()) / 3600_000
-    if (hrs < 12) return { label: 'Healthy', accent: 'text-success' }
-    if (hrs < 24) return { label: 'Stale', accent: 'text-warning' }
-    return { label: 'Very stale', accent: 'text-danger' }
+    if (hrs < 12) return { label: 'Healthy', tone: 'success' }
+    if (hrs < 24) return { label: 'Stale', tone: 'warning' }
+    return { label: 'Very stale', tone: 'danger' }
   }
 
   const health = syncHealth()
 
   return (
     <>
-      <Topbar title="All Listings" showSyncButton exportHref="/api/admin/listings/export" />
+      <Topbar title="All listings" showSyncButton exportHref="/api/admin/listings/export" />
       <ListingsView
         listings={listings}
         logs={logs}

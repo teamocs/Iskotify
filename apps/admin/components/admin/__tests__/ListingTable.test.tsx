@@ -2,7 +2,12 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+let search = ''
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/admin/listings',
+  useSearchParams: () => new URLSearchParams(search),
+}))
 
 import { ListingTable } from '../ListingTable'
 
@@ -43,49 +48,71 @@ const mockListings = [
   { ...base, id: '3', title: 'Scholar C', type: 'scholarship' as const, status: 'closed' as const,  deadline: null, provider: '' },
 ]
 
+const render = (q: string) => {
+  search = q
+  return renderToStaticMarkup(React.createElement(ListingTable, { listings: mockListings }))
+}
+
+// Filters now live in the URL (type and status are separate facets), so the
+// cases below drive the table through search params rather than a prop.
 describe('ListingTable', () => {
-  it('renders all rows when filter is All', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(ListingTable, { listings: mockListings, filter: 'All', onFilterChange: () => {} })
-    )
+  it('renders all rows with no filter', () => {
+    const html = render('')
     expect(html).toContain('Scholar A')
     expect(html).toContain('Exam B')
     expect(html).toContain('Scholar C')
   })
 
-  it('renders only active rows when filter is Active', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(ListingTable, { listings: mockListings, filter: 'Active', onFilterChange: () => {} })
-    )
+  it('status=active shows only active rows', () => {
+    const html = render('status=active')
     expect(html).toContain('Scholar A')
     expect(html).not.toContain('Exam B')
     expect(html).not.toContain('Scholar C')
   })
 
-  it('renders only scholarship rows when filter is Scholarships', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(ListingTable, { listings: mockListings, filter: 'Scholarships', onFilterChange: () => {} })
-    )
+  it('type=scholarship shows only scholarships', () => {
+    const html = render('type=scholarship')
     expect(html).toContain('Scholar A')
     expect(html).not.toContain('Exam B')
     expect(html).toContain('Scholar C')
   })
 
-  it('renders only exam rows when filter is Exams', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(ListingTable, { listings: mockListings, filter: 'Exams', onFilterChange: () => {} })
-    )
+  it('type=exam shows only exams', () => {
+    const html = render('type=exam')
     expect(html).not.toContain('Scholar A')
     expect(html).toContain('Exam B')
     expect(html).not.toContain('Scholar C')
   })
 
-  it('renders only upcoming rows when filter is Upcoming', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(ListingTable, { listings: mockListings, filter: 'Upcoming', onFilterChange: () => {} })
-    )
+  it('status=upcoming shows only upcoming rows', () => {
+    const html = render('status=upcoming')
     expect(html).toContain('Exam B')
     expect(html).not.toContain('Scholar A')
     expect(html).not.toContain('Scholar C')
+  })
+
+  it('combines type and status (active scholarships)', () => {
+    const html = render('type=scholarship&status=closed')
+    expect(html).toContain('Scholar C')
+    expect(html).not.toContain('Scholar A')
+  })
+
+  it('searches by title', () => {
+    const html = render('q=exam')
+    expect(html).toContain('Exam B')
+    expect(html).not.toContain('Scholar A')
+  })
+
+  it('opens a listing from a real button in the first cell and names icon actions', () => {
+    const html = render('')
+    expect(html).toMatch(/<tr[^>]*>\s*<t[dh][^>]*>\s*<button[^>]*type="button"[^>]*>[\s\S]*?Scholar A/)
+    expect(html).toContain('aria-label="Delete Scholar A"')
+    expect(html).not.toMatch(/[✏️🗑]/u)
+  })
+
+  it('writes status and type in words, never colour alone', () => {
+    const html = render('')
+    expect(html).toContain('Scholarship')
+    expect(html).toContain('Upcoming')
   })
 })
