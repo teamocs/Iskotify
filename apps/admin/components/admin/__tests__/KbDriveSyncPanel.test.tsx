@@ -37,6 +37,11 @@ describe('KbDriveSyncPanel', () => {
     expect(html).not.toContain('Publish drafts')
   })
 
+  it('offers the full missing-figures list for download when figures are missing', () => {
+    expect(render([file({})])).toContain('/api/kb/missing-figures?driveFileId=f1')
+    expect(render([file({ rows_missing_media: 0 })])).not.toContain('/api/kb/missing-figures')
+  })
+
   it('shows when a file was last published', () => {
     const html = render([file({ published_at: '2026-09-25T03:00:00Z' })])
     expect(html).toMatch(/Published/)

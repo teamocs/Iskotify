@@ -130,7 +130,18 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
                     {f.status === 'imported' && (
                       <>
                         {f.rows_imported} questions
-                        {f.rows_missing_media > 0 && <> · <span className="text-warning-strong">{f.rows_missing_media} missing figures</span></>}
+                        {f.rows_missing_media > 0 && (
+                          <>
+                            {' · '}<span className="text-warning-strong">{f.rows_missing_media} missing figures</span>
+                            {' · '}
+                            <a
+                              href={`/api/kb/missing-figures?driveFileId=${encodeURIComponent(f.drive_file_id)}`}
+                              className="text-maroon font-medium underline underline-offset-2 hover:no-underline"
+                            >
+                              Download list
+                            </a>
+                          </>
+                        )}
                         {f.imported_at && <> · synced {fmt(f.imported_at)}</>}
                         {f.published_at && <> · Published {fmt(f.published_at)}</>}
                       </>

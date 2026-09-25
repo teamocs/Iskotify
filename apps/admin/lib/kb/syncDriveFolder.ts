@@ -47,6 +47,12 @@ export interface SyncOptions {
   maxSheetBytes?: number
 }
 
+export interface MissingFigure {
+  question_id: string
+  file: string
+  caption: string
+}
+
 export interface FileOutcome {
   driveFileId: string
   name: string
@@ -216,7 +222,7 @@ export async function syncDriveFolder(
       const notes = [
         redrafted ? `${redrafted} live question(s) changed in the sheet and went back to draft — review and publish again` : '',
         rejected.length ? `${rejected.length} row(s) rejected: ${rejected.slice(0, 5).map(r => `${r.localId} (${r.reason})`).join('; ')}` : '',
-        missing.length ? `${missing.length} missing figure(s): ${[...new Set(missing)].slice(0, 5).join(', ')}` : '',
+        missing.length ? `${missing.length} missing figure(s): ${[...new Set(missing.map(m => m.file))].slice(0, 5).join(', ')}` : '',
       ].filter(Boolean)
       outcome.rows = rows.length
       outcome.missingMedia = missing.length
@@ -228,6 +234,7 @@ export async function syncDriveFolder(
         rows_total: parsed.data.length,
         rows_imported: rows.length,
         rows_missing_media: missing.length,
+        missing_figures: missing,
         rows_drafted: rows.filter(r => r.status === '').length,
         question_ids: rows.map(r => r.question_id),
         message: outcome.message ?? null,
@@ -247,7 +254,8 @@ export async function syncDriveFolder(
 /**
  * Resolve each row's FigureFile relative to its CSV's folder, upload it once per
  * run, and set image_url/alt/size. Rows without a figure get explicit nulls so a
- * figure removed from the sheet is cleared too. Returns the missing file names.
+ * figure removed from the sheet is cleared too. Returns every question whose
+ * figure is missing, with the file it expects and its caption.
  */
 async function attachFigures(
   rows: KbRow[],
@@ -256,8 +264,8 @@ async function attachFigures(
   cache: Map<string, { url: string; width: number | null; height: number | null }>,
   drive: DriveGateway,
   media: MediaStore,
-): Promise<string[]> {
-  const missing: string[] = []
+): Promise<MissingFigure[]> {
+  const missing: MissingFigure[] = []
   for (const row of rows) {
     row.image_url = null
     row.image_alt = row.figure_caption || null
@@ -268,14 +276,14 @@ async function attachFigures(
     const img = images.get(pathKey(csv.path, row.figure_file))
     const contentType = img ? mimeForExt(img.name) : null
     if (!img || !contentType || (img.size ?? 0) > MAX_FIGURE_BYTES) {
-      missing.push(row.figure_file)
+      missing.push({ question_id: row.question_id, file: row.figure_file, caption: row.figure_caption })
       continue
     }
     let stored = cache.get(img.id)
     if (!stored) {
       const bytes = await drive.downloadBytes(img)
       if (!bytes || bytes.length === 0 || bytes.length > MAX_FIGURE_BYTES) {
-        missing.push(row.figure_file)
+        missing.push({ question_id: row.question_id, file: row.figure_file, caption: row.figure_caption })
         continue
       }
       const ext = img.name.split('.').pop()!.toLowerCase()

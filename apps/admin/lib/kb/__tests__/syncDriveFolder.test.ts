@@ -87,6 +87,10 @@ describe('syncDriveFolder', () => {
     expect(q['UPCAT-SCI-005']).toMatchObject({ has_visual: true, image_url: null })
     expect(res.imported[0]).toMatchObject({ missingMedia: 1 })
     expect(rows('kb_drive_files')[0]).toMatchObject({ rows_missing_media: 1 })
+    // Full list (not just the first 5 in the note) so the author knows exactly what to upload.
+    expect(rows('kb_drive_files')[0]!.missing_figures).toEqual([
+      { question_id: 'upcat-science-600-questions:UPCAT-SCI-005', file: 'diagrams/missing.png', caption: 'A cell' },
+    ])
   })
 
   it('skips files whose checksum matches the ledger without downloading them', async () => {
