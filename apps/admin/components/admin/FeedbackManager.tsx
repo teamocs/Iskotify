@@ -66,13 +66,15 @@ interface ViewProps {
   selected: string[]
   onSelectedChange: (ids: string[]) => void
   bulkBusy: boolean
+  /** Outcome of the last bulk action, announced to screen readers. */
+  bulkResult?: string
   onBulk: (status: ReviewStatus) => void
   onRetry: () => void
   onSetStatus: (id: string, status: ReviewStatus) => void
   onDelete: (r: AppFeedback) => void
 }
 
-export function FeedbackView({ rows, loading, error, selected, onSelectedChange, bulkBusy, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
+export function FeedbackView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -124,6 +126,7 @@ export function FeedbackView({ rows, loading, error, selected, onSelectedChange,
   return (
     <div className="overflow-hidden rounded-md border border-subtle bg-surface">
       <DataTable
+        announcement={bulkResult}
         label="Feedback"
         rows={rows}
         columns={columns}
@@ -165,6 +168,7 @@ export function FeedbackManager() {
         selected={queue.selected}
         onSelectedChange={queue.setSelected}
         bulkBusy={queue.bulkBusy}
+        bulkResult={queue.bulkResult}
         onBulk={queue.applyBulk}
         onRetry={queue.reload}
         onSetStatus={queue.setStatus}

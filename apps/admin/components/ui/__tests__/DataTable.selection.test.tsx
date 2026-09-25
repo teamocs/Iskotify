@@ -119,3 +119,17 @@ describe('DataTable server mode', () => {
     expect(html).toContain('No matches')
   })
 })
+
+// Bulk results must reach screen readers even after the selection (and its
+// bar) is cleared, so the live region is always rendered.
+describe('DataTable announcement', () => {
+  it('always renders a polite status region, empty until there is something to say', () => {
+    const html = render()
+    expect(html).toMatch(/role="status"[^>]*aria-live="polite"[^>]*><\/p>|aria-live="polite"[^>]*role="status"[^>]*><\/p>/)
+  })
+
+  it('announces the bulk result text with no rows selected', () => {
+    const html = render({ announcement: '2 marked resolved, 1 failed' })
+    expect(html).toMatch(/role="status"[^>]*>2 marked resolved, 1 failed<\/p>|aria-live="polite"[^>]*>2 marked resolved, 1 failed<\/p>/)
+  })
+})

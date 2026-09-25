@@ -100,6 +100,8 @@ interface ViewProps {
   selected: string[]
   onSelectedChange: (ids: string[]) => void
   bulkBusy: boolean
+  /** Outcome of the last bulk action, announced to screen readers. */
+  bulkResult?: string
   onBulk: (status: ReviewStatus) => void
   onRetry: () => void
   onViewScreenshot: (r: AppBugReport) => void
@@ -107,7 +109,7 @@ interface ViewProps {
   onDelete: (r: AppBugReport) => void
 }
 
-export function AppReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, onBulk, onRetry, onViewScreenshot, onSetStatus, onDelete }: ViewProps) {
+export function AppReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onViewScreenshot, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -194,6 +196,7 @@ export function AppReportsView({ rows, loading, error, selected, onSelectedChang
   return (
     <div className="overflow-hidden rounded-md border border-subtle bg-surface">
       <DataTable
+        announcement={bulkResult}
         label="Bug reports"
         rows={rows}
         columns={columns}
@@ -236,6 +239,7 @@ export function AppReportsManager() {
         selected={queue.selected}
         onSelectedChange={queue.setSelected}
         bulkBusy={queue.bulkBusy}
+        bulkResult={queue.bulkResult}
         onBulk={queue.applyBulk}
         onRetry={queue.reload}
         onViewScreenshot={setLightbox}

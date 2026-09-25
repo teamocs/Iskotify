@@ -380,6 +380,9 @@ export function DataTableManager({ config }: Props) {
       const res = await fetch(listUrl)
       if (id !== fetchCountRef.current) return
       const body = await res.json().catch(() => ({}))
+      // Re-check after the body is read: a newer request may have finished
+      // while this one was still parsing, and must not be overwritten.
+      if (id !== fetchCountRef.current) return
       if (!res.ok) {
         setLoadError(body.error ?? 'Failed to load')
         return

@@ -60,6 +60,10 @@ interface DataTableProps<T> {
    * appears only while something is selected.
    */
   selection?: TableSelection<T>
+  /** Outcome of the last bulk action ("2 marked resolved, 1 failed"), read to
+   *  screen readers by an always-present live region, so it is heard even after
+   *  the selection and its bar are cleared. */
+  announcement?: string
   /** Let the operator hide columns; the choice is kept in the URL (`hide=`). */
   columnChooser?: boolean
   /**
@@ -114,7 +118,7 @@ function serverPage<T>(total: number, page: number, pageSize: number, rows: T[])
 export function DataTable<T>({
   label, rows, columns, rowKey, filters = [], searchable = true, searchPlaceholder,
   pageSize = 25, paramPrefix = '', defaultSort = null, loading = false,
-  emptyTitle, emptyDescription, emptyAction, toolbar, selection, columnChooser = false, server,
+  emptyTitle, emptyDescription, emptyAction, toolbar, selection, announcement, columnChooser = false, server,
 }: DataTableProps<T>) {
   const params = useSearchParams()
   const pathname = usePathname()
@@ -159,6 +163,7 @@ export function DataTable<T>({
 
   return (
     <div className="flex flex-col">
+      <p role="status" aria-live="polite" className="sr-only">{announcement ?? ''}</p>
       {(searchable || filters.length > 0 || toolbar || columnChooser) && (
         <div className="flex flex-wrap items-end gap-3 px-4 py-3 border-b border-subtle">
           {searchable && (

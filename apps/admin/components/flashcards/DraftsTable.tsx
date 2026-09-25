@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PublishModal } from './PublishModal'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
@@ -145,14 +145,21 @@ export function DraftsTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
 
+  // Manual reloads (retry, after bulk publish) can overlap the 5s poll; only
+  // the newest request may write state.
+  const fetchCountRef = useRef(0)
+
   async function fetchDrafts() {
+    const id = ++fetchCountRef.current
     try {
       const res = await fetch('/api/flashcards/drafts')
       const body = await res.json()
+      if (id !== fetchCountRef.current) return
       if (!res.ok) throw new Error(body.error ?? 'Failed to load drafts')
       setError(null)
       setDrafts(body.drafts)
     } catch (e: any) {
+      if (id !== fetchCountRef.current) return
       setError(e?.message ?? 'Failed to load drafts')
     }
   }

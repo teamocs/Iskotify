@@ -84,6 +84,7 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singul
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkResult, setBulkResult] = useState('')
   const loadId = useRef(0)
 
   const reload = useCallback(async () => {
@@ -152,6 +153,7 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singul
     const outcome = await patchStatuses(listUrl, selected, status)
     setBulkBusy(false)
     const { ok, message } = bulkMessage(outcome, noun)
+    setBulkResult(message)
     if (ok) notifySuccess(message)
     else notifyError(message)
     // Keep only what failed selected, so a retry is one click.
@@ -159,5 +161,5 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, noun, singul
     if (outcome.ok.length > 0) afterChange()
   }
 
-  return { rows, loading, error, reload, selected, setSelected, bulkBusy, applyBulk, setStatus, remove, afterChange }
+  return { rows, loading, error, reload, selected, setSelected, bulkBusy, bulkResult, applyBulk, setStatus, remove, afterChange }
 }

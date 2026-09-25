@@ -424,6 +424,8 @@ interface ViewProps {
   selected: string[]
   onSelectedChange: (ids: string[]) => void
   bulkBusy: boolean
+  /** Outcome of the last bulk action, announced to screen readers. */
+  bulkResult?: string
   onBulk: (status: ReviewStatus) => void
   onRetry: () => void
   onEdit: (r: QuestionReport) => void
@@ -431,7 +433,7 @@ interface ViewProps {
   onDelete: (r: QuestionReport) => void
 }
 
-export function ReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
+export function ReportsView({ rows, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
   if (error) {
     return (
       <ErrorBanner
@@ -509,6 +511,7 @@ export function ReportsView({ rows, loading, error, selected, onSelectedChange, 
   return (
     <div className="overflow-hidden rounded-md border border-subtle bg-surface">
       <DataTable
+        announcement={bulkResult}
         label="Reported questions"
         rows={rows}
         columns={columns}
@@ -551,6 +554,7 @@ export function ReportsManager() {
         selected={queue.selected}
         onSelectedChange={queue.setSelected}
         bulkBusy={queue.bulkBusy}
+        bulkResult={queue.bulkResult}
         onBulk={queue.applyBulk}
         onRetry={queue.reload}
         onEdit={setEditing}
