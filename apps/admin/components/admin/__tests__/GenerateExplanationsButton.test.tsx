@@ -28,4 +28,11 @@ describe('GenerateExplanationsButton', () => {
     expect(html).not.toContain('disabled=""')
     expect(html).not.toContain(' disabled>')
   })
+
+  it('uses no emoji as icons in its default label', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(GenerateExplanationsButton, { source: 'flashcards' }),
+    )
+    expect(html).not.toMatch(/\p{Extended_Pictographic}/u)
+  })
 })

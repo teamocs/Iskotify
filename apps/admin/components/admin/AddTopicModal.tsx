@@ -3,21 +3,33 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Dialog } from '@/components/ui/Dialog'
+import { Field, controlClass } from '@/components/ui/Field'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Props {
   subjectId: string
   onClose: () => void
 }
 
+/** A topic needs a name; returns the message to show, or undefined when valid. */
+export function validateTopicName(name: string): string | undefined {
+  return name.trim() ? undefined : 'Enter a topic name.'
+}
+
 export function AddTopicModal({ subjectId, onClose }: Props) {
   const [name, setName] = useState('')
+  const [nameError, setNameError] = useState<string | undefined>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) return
+  async function handleSubmit() {
+    if (saving) return
+    const invalid = validateTopicName(name)
+    setNameError(invalid)
+    if (invalid) return
     setSaving(true)
     setError('')
     try {
@@ -44,48 +56,30 @@ export function AddTopicModal({ subjectId, onClose }: Props) {
     }
   }
 
-  const inputCls = 'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink'
-  const labelCls = 'block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1'
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
-          <h2 className="font-heading font-bold text-[17px] text-ink">Add Topic</h2>
-          <button onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">✕</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className={labelCls}>Topic name</label>
-            <input aria-label="Topic name"
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Algebra Basics"
-              className={inputCls}
-              autoFocus
-            />
-          </div>
-          {error && <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>}
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || saving}
-              className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Add Topic'}
-            </button>
-          </div>
-        </form>
+    <Dialog
+      open
+      size="sm"
+      onClose={() => { if (!saving) onClose() }}
+      title="Add topic"
+      onSubmit={handleSubmit}
+      dirty={name !== ''}
+      footer={close => (
+        <>
+          <Button onClick={close} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={saving}>{saving ? 'Saving…' : 'Add topic'}</Button>
+        </>
+      )}
+    >
+      <div className="space-y-3">
+        {error && <ErrorBanner title="Couldn’t add the topic" message={error} />}
+        <Field label="Topic name" required error={nameError}>
+          {p => (
+            <input {...p} type="text" autoFocus value={name} placeholder="e.g. Algebra basics"
+              onChange={e => setName(e.target.value)} className={controlClass} />
+          )}
+        </Field>
       </div>
-    </div>
+    </Dialog>
   )
 }

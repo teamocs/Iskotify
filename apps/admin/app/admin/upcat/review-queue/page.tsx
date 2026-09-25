@@ -2,29 +2,27 @@
 //
 // Task F — Distractor Review Queue. Authored upcat_questions seed content is
 // curated, not AI-generated, so it is never auto-rewritten (see task brief).
-// Instead this is a READ-ONLY view: it runs the pure flagWeakOptions()
-// heuristics (apps/admin/lib/heuristics/flagWeakOptions.ts) over every
-// published question and lists the ones that fail — length asymmetry,
-// duplicate/near-duplicate options, "none/all of the above", numeric
-// outliers — so a human can fix them by hand (via the existing
-// /api/upcat-questions/[id] PATCH route, the CSV re-import flow, or directly
-// in Supabase). No new migration needed — this is a plain SELECT.
+// Instead this view runs the pure flagWeakOptions() heuristics
+// (apps/admin/lib/heuristics/flagWeakOptions.ts) over every question and
+// lists the ones that fail — length asymmetry, duplicate/near-duplicate
+// options, "none/all of the above", numeric outliers — so a human can fix
+// them in the Edit drawer (which saves through the existing
+// /api/upcat-questions/[id] PATCH route) or dismiss a flag that is fine as
+// written. Dismissals are shared by the team (question_flag_dismissals,
+// migration 059, via /api/admin/question-flags) and match on an options
+// fingerprint, so an edit brings a still-weak flag back.
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
-import { flagWeakOptions, type WeakOptionFlag } from '@/lib/heuristics/flagWeakOptions'
+import { PageBody } from '@/components/ui/Page'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ReviewQueueTable, type ReviewItem } from '@/components/admin/ReviewQueueTable'
+import { flagWeakOptions } from '@/lib/heuristics/flagWeakOptions'
+import type { DismissalRow } from '@/lib/admin/reviewQueue'
 
 export const dynamic = 'force-dynamic'
 
-// Keeps this a cheap read — upcat_questions is a few thousand rows at most,
-// and a review queue is meant to be worked down over time, not paginated.
+// Keeps this a cheap read — upcat_questions is a few thousand rows at most.
 const SCAN_LIMIT = 2000
-
-const FLAG_LABELS: Record<WeakOptionFlag, string> = {
-  length_asymmetry: 'Short option (< 40% of longest)',
-  duplicate_options: 'Duplicate / near-duplicate options',
-  none_or_all_of_above: '"None/All of the above"',
-  numeric_outlier: 'Numeric outlier',
-}
 
 interface QuestionRow {
   question_id: string
@@ -37,90 +35,63 @@ interface QuestionRow {
   status: string
 }
 
+const INTRO =
+  'Curated Question Bank options aren’t rewritten automatically. This queue flags questions whose options fail cheap ' +
+  'heuristics (a length giveaway, a near-duplicate pair, “none/all of the above”, or a numeric outlier) so you can fix ' +
+  'them by hand or dismiss a flag that is fine as written.'
+
 export default async function ReviewQueuePage() {
   const db = createServerClient()
 
-  const { data: rows } = await db
-    .from('upcat_questions')
-    .select('question_id, question_text, options, correct_index, main_subject, topic, subtest, status')
-    .order('question_id')
-    .limit(SCAN_LIMIT)
+  const [{ data: rows, error }, dismissalsRes] = await Promise.all([
+    db
+      .from('upcat_questions')
+      .select('question_id, question_text, options, correct_index, main_subject, topic, subtest, status')
+      .order('question_id')
+      .limit(SCAN_LIMIT),
+    db.from('question_flag_dismissals').select('question_id, options_fingerprint'),
+  ])
+  const dismissals = (dismissalsRes.data ?? []) as DismissalRow[]
 
   const scanned = (rows ?? []) as QuestionRow[]
-  const flagged = scanned
-    .map(row => ({ row, result: flagWeakOptions(Array.isArray(row.options) ? row.options : []) }))
-    .filter(({ result }) => !result.clean)
+  const flagged: ReviewItem[] = scanned.flatMap(row => {
+    const options = Array.isArray(row.options) ? row.options : []
+    const result = flagWeakOptions(options)
+    return result.clean
+      ? []
+      : [{
+          question_id: row.question_id,
+          question_text: row.question_text,
+          options,
+          correct_index: row.correct_index,
+          main_subject: row.main_subject,
+          topic: row.topic,
+          flags: result.flags,
+        }]
+  })
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <Topbar title="Distractor Review Queue" />
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-        <div>
-          <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">Distractor Review Queue</h2>
-          <p className="text-ink-muted text-sm mt-1 max-w-3xl">
-            Curated Question Bank options aren&apos;t rewritten automatically — this list flags questions whose
-            options fail cheap heuristics (a length giveaway, a near-duplicate pair, a &quot;none/all of the
-            above&quot;, or a numeric outlier) so a human can fix them by hand.
-          </p>
-          <p className="text-ink-muted text-xs mt-2">
-            {flagged.length} flagged out of {scanned.length} scanned
-            {scanned.length >= SCAN_LIMIT ? ` (capped at ${SCAN_LIMIT})` : ''}.
-          </p>
-        </div>
-
-        {flagged.length === 0 ? (
-          <div className="rounded-xl border border-success/25 bg-success-soft px-4 py-6 text-center text-success-strong text-sm">
-            🎉 No flagged questions. Nothing needs review right now.
-          </div>
+      <PageBody intro={INTRO}>
+        {error ? (
+          <ErrorBanner title="Couldn’t load the Question Bank" message={error.message} />
         ) : (
-          <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm border-collapse min-w-[720px]">
-              <thead>
-                <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">ID</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Subject / Topic</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Question</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Options</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Flags</th>
-                </tr>
-              </thead>
-              <tbody>
-                {flagged.map(({ row, result }) => (
-                  <tr key={row.question_id} className="border-b border-[#f3f4f6] last:border-0 align-top hover:bg-[#f9fafb]">
-                    <td className="px-4 py-3 font-mono text-xs text-ink-muted whitespace-nowrap">{row.question_id}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      <div className="text-ink-muted">{row.main_subject ?? '—'}</div>
-                      <div className="text-ink-subtle">{row.topic ?? '—'}</div>
-                    </td>
-                    <td className="px-4 py-3 text-ink max-w-xs">{row.question_text}</td>
-                    <td className="px-4 py-3 text-ink-muted">
-                      <ul className="space-y-0.5">
-                        {(row.options ?? []).map((opt, i) => (
-                          <li key={i} className={i === row.correct_index ? 'font-semibold text-success' : ''}>
-                            {String.fromCharCode(65 + i)}. {opt}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {result.flags.map(flag => (
-                          <span
-                            key={flag}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warning-soft text-warning-strong"
-                          >
-                            {FLAG_LABELS[flag]}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {dismissalsRes.error && (
+              <ErrorBanner
+                title="Couldn’t load dismissed flags"
+                message={`Every flag is shown, including ones the team dismissed. ${dismissalsRes.error.message}`}
+              />
+            )}
+            <p className="text-xs text-ink-muted tabular-nums">
+              {flagged.length} flagged out of {scanned.length} scanned
+              {scanned.length >= SCAN_LIMIT ? ` (capped at ${SCAN_LIMIT})` : ''}.
+            </p>
+            <ReviewQueueTable items={flagged} dismissals={dismissals} />
+          </>
         )}
-      </div>
+      </PageBody>
     </div>
   )
 }

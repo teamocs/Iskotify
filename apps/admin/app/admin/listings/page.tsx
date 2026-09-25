@@ -2,7 +2,7 @@ import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { ListingsView } from '@/components/admin/ListingsView'
 import type { Listing } from '@iskotify/utils'
-import type { SyncLog } from '@/components/admin/SyncPanel'
+import type { SyncLog } from '@/lib/admin/syncLog'
 import type { BadgeTone } from '@/components/ui/Badge'
 
 export const dynamic = 'force-dynamic'

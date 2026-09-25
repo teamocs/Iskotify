@@ -50,4 +50,22 @@ describe('ApkUrlForm', () => {
     expect(html).not.toContain('bg-red-50')
     expect(html).not.toContain('bg-green-50')
   })
+
+  it('is a real form so Enter submits, with a submit button', () => {
+    const html = renderToStaticMarkup(React.createElement(ApkUrlForm, { currentUrl: '' }))
+    expect(html).toMatch(/<form[^>]*novalidate/i)
+    expect(html).toMatch(/<button type="submit"[^>]*>[\s\S]*Save link/)
+  })
+
+  it('wires the hint to the input through aria-describedby (Field)', () => {
+    const html = renderToStaticMarkup(React.createElement(ApkUrlForm, { currentUrl: '' }))
+    expect(html).toContain('aria-describedby="apk-url-input-hint"')
+    expect(html).toContain('id="apk-url-input-hint"')
+    expect(html).toContain('>APK download link<')
+  })
+
+  it('uses no raw white or arbitrary colours', () => {
+    const html = renderToStaticMarkup(React.createElement(ApkUrlForm, { currentUrl: '' }))
+    expect(html).not.toMatch(/bg-white|text-white|black\/|rounded-\[/)
+  })
 })

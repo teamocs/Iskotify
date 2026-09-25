@@ -1,6 +1,8 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { PostHogDashboardForm } from '@/components/admin/PostHogDashboardForm'
+import { PageBody } from '@/components/ui/Page'
+import { Card } from '@/components/ui/Card'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,42 +26,34 @@ export default async function AnalyticsPage() {
   return (
     <>
       <Topbar title="Analytics" />
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4">
-        <div>
-          <h2 className="text-ink font-heading font-bold text-xl tracking-tight">Product analytics</h2>
-          <p className="text-ink-muted text-sm mt-0.5">
-            Live usage from the Iskotify app &amp; web mirror, powered by PostHog.
-          </p>
-        </div>
-
+      <PageBody intro="Live usage from the Iskotify app and web mirror, powered by PostHog.">
         {dashboardUrl ? (
-          <div className="bg-white rounded-[16px] border border-black/[0.05] shadow-[0_2px_8px_rgba(0,0,0,0.06)] overflow-hidden">
+          <Card flush>
             <iframe
               src={dashboardUrl}
               title="PostHog dashboard"
-              className="w-full"
-              style={{ height: '78vh', border: 'none' }}
+              className="block w-full border-0"
+              style={{ height: '78vh' }}
               allow="fullscreen"
             />
-          </div>
+          </Card>
         ) : (
-          <div className="rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-4 space-y-2">
-            <p className="text-[13px] font-semibold text-warning-strong">No dashboard linked yet</p>
-            <ol className="list-decimal list-inside text-[13px] text-warning-strong space-y-1">
+          <Card title="No dashboard linked yet">
+            <ol className="list-decimal list-inside space-y-1 text-ui text-ink-muted">
               <li>Create a free PostHog account and project, then set the app keys (see the app&apos;s .env).</li>
-              <li>In PostHog, build a dashboard, open <span className="font-medium">Share</span>, enable sharing, and copy the embed/share URL.</li>
+              <li>In PostHog, build a dashboard, open <span className="font-medium text-ink">Share</span>, enable sharing, and copy the embed/share URL.</li>
               <li>Paste it below — it appears here for the whole team, no redeploy needed.</li>
             </ol>
-          </div>
+          </Card>
         )}
 
         {/* Embed-link config (stored in app_config, no redeploy needed) */}
         <PostHogDashboardForm currentUrl={dashboardUrl} />
 
-        <p className="text-[12px] text-ink-subtle">
+        <p className="text-xs text-ink-muted">
           Full insights, funnels, and retention live in your PostHog project. This page embeds one shared dashboard for quick team access.
         </p>
-      </div>
+      </PageBody>
     </>
   )
 }

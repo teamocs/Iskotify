@@ -43,4 +43,9 @@ describe('RegenerateDistractorsPanel', () => {
     const html = renderToStaticMarkup(React.createElement(RegenerateDistractorsPanel, { subjects: [] }))
     expect(html).toContain('All subjects')
   })
+
+  it('uses no emoji as icons', () => {
+    const html = renderToStaticMarkup(React.createElement(RegenerateDistractorsPanel, { subjects }))
+    expect(html).not.toMatch(/\p{Extended_Pictographic}/u)
+  })
 })

@@ -54,4 +54,29 @@ describe('ConfirmDialog', () => {
     expect(html).not.toContain('bg-danger')
     expect(html).toContain('bg-maroon')
   })
+
+  it('is built on the shared Dialog: a real h2 title, small width, and a Close button', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmDialog, { message: 'Delete this row?', onConfirm: vi.fn(), onCancel: vi.fn() })
+    )
+    const id = html.match(/aria-labelledby="([^"]+)"/)![1]
+    expect(html).toMatch(new RegExp(`<h2 id="${id}"[^>]*>Are you sure\\?</h2>`))
+    expect(html).toContain('max-w-sm')
+    expect(html).toContain('aria-label="Close"')
+  })
+
+  it('uses the Button primitive (pill buttons), Cancel before the confirm action', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmDialog, { message: 'Delete this row?', onConfirm: vi.fn(), onCancel: vi.fn() })
+    )
+    expect(html).toMatch(/<button type="button" class="[^"]*rounded-pill[^"]*border-strong[^"]*">Cancel<\/button>/)
+    expect(html.indexOf('>Cancel<')).toBeLessThan(html.indexOf('>Delete<'))
+  })
+
+  it('uses no raw colours', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ConfirmDialog, { message: 'Delete this row?', onConfirm: vi.fn(), onCancel: vi.fn() })
+    )
+    expect(html).not.toMatch(/bg-white|bg-black|text-white|rgba\(|\[#/)
+  })
 })

@@ -1,26 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { DEFAULT_UPDATE_EMAIL_TEMPLATE } from '@/lib/updateRollout'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Field, controlClass } from '@/components/ui/Field'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Props {
   initialTemplate: string
 }
 
-// NOTE: This is a Next.js DOM component — react-doctor rn-no-raw-text alerts
-// are false positives here (they apply to React Native, not the web admin).
+const NETWORK_ERROR = 'Network error. Check your connection and try again.'
 
 export function UpdateEmailTemplateForm({ initialTemplate }: Props) {
   const router = useRouter()
   const [template, setTemplate] = useState(initialTemplate)
   const [saving, setSaving] = useState(false)
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
-  async function handleSave() {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setSaving(true)
-    setStatus(null)
+    setServerError(null)
+    setSuccess(null)
 
     try {
       const res = await fetch('/api/admin/update-email-template', {
@@ -32,17 +37,17 @@ export function UpdateEmailTemplateForm({ initialTemplate }: Props) {
 
       if (!json.ok) {
         const message = json.error ?? 'Failed to save. Please try again.'
-        setStatus({ type: 'error', message })
+        setServerError(message)
         notifyError(message)
       } else {
         const message = 'Email template saved successfully.'
-        setStatus({ type: 'success', message })
+        setSuccess(message)
         notifySuccess(message)
         router.refresh()
       }
     } catch {
-      setStatus({ type: 'error', message: 'Network error. Check your connection and try again.' })
-      notifyError('Network error. Check your connection and try again.')
+      setServerError(NETWORK_ERROR)
+      notifyError(NETWORK_ERROR)
     } finally {
       setSaving(false)
     }
@@ -50,83 +55,41 @@ export function UpdateEmailTemplateForm({ initialTemplate }: Props) {
 
   function handleReset() {
     setTemplate(DEFAULT_UPDATE_EMAIL_TEMPLATE)
-    setStatus(null)
+    setServerError(null)
+    setSuccess(null)
   }
 
   return (
-    <div className="rounded-[12px] border border-black/[0.07] bg-surface-3 px-4 py-4 space-y-3">
-      <p className="text-[12px] font-semibold text-ink uppercase tracking-wide">
-        Update email template
-      </p>
-
-      <div className="space-y-2">
-        <label
-          htmlFor="update-email-template-input"
-          className="block text-[13px] text-ink-muted"
-        >
-          Edit the email body sent to existing users about the update. Use{' '}
-          <code className="text-[12px] font-mono text-maroon">{'{{name}}'}</code> for the
-          recipient&rsquo;s name and{' '}
-          <code className="text-[12px] font-mono text-maroon">{'{{apk_url}}'}</code> for the
-          update download link — they are filled in automatically when the email is sent.
-        </label>
-        <textarea
-          id="update-email-template-input"
-          aria-label="Update email template"
-          value={template}
-          onChange={(e) => {
-            setTemplate(e.target.value)
-            setStatus(null)
-          }}
-          disabled={saving}
-          rows={14}
-          className={[
-            'w-full rounded-[8px] border px-3 py-2 text-[12px] font-mono leading-relaxed text-ink',
-            'placeholder-ink-subtle outline-none transition-colors resize-y',
-            'focus:border-maroon focus:ring-1 focus:ring-maroon/30',
-            saving ? 'border-black/10 bg-white/60 cursor-not-allowed' : 'border-black/[0.12] bg-white',
-          ].join(' ')}
-        />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className={[
-            'rounded-[980px] px-4 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-60',
-            'bg-maroon text-white hover:bg-maroon-light',
-          ].join(' ')}
-        >
-          {saving ? 'Saving…' : 'Save template'}
-        </button>
-        <button
-          type="button"
-          onClick={handleReset}
-          disabled={saving}
-          className={[
-            'rounded-[980px] px-4 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-60',
-            'border border-black/[0.12] bg-white text-ink-muted hover:bg-black/[0.03]',
-          ].join(' ')}
-        >
-          Reset to default
-        </button>
-      </div>
-
-      {/* Accessible live region for status messages */}
-      <div aria-live="polite" aria-atomic="true">
-        {status?.type === 'error' && (
-          <p className="text-[12px] text-danger bg-danger-soft rounded-[8px] px-3 py-2" role="alert">
-            {status.message}
-          </p>
+    <form noValidate onSubmit={handleSubmit} className="space-y-3">
+      {serverError && <ErrorBanner title="Couldn’t save the template" message={serverError} />}
+      <Field
+        id="update-email-template-input"
+        label="Update email template"
+        hint={
+          <>
+            The email body sent to existing users about the update. Use{' '}
+            <code className="font-mono text-ink">{'{{name}}'}</code> for the recipient&rsquo;s name and{' '}
+            <code className="font-mono text-ink">{'{{apk_url}}'}</code> for the update download link; both are
+            filled in when the email is sent.
+          </>
+        }
+      >
+        {p => (
+          <textarea
+            {...p}
+            value={template}
+            onChange={e => { setTemplate(e.target.value); setSuccess(null) }}
+            disabled={saving}
+            rows={14}
+            className={`${controlClass} h-auto py-2 font-mono text-xs leading-relaxed resize-y`}
+          />
         )}
-        {status?.type === 'success' && (
-          <p className="text-[12px] text-success bg-success-soft rounded-[8px] px-3 py-2">
-            {status.message}
-          </p>
-        )}
+      </Field>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" loading={saving}>{saving ? 'Saving…' : 'Save template'}</Button>
+        <Button size="sm" variant="ghost" onClick={handleReset} disabled={saving}>Reset to default</Button>
+        <p aria-live="polite" aria-atomic="true" className="text-ui text-success">{success}</p>
       </div>
-    </div>
+    </form>
   )
 }

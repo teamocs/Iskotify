@@ -24,6 +24,8 @@ const mockRange = vi.fn()
 let lastInsertArg: unknown
 let lastUpdateArg: unknown
 let lastUpdateEqVal: unknown
+let orderCalls: [string, unknown][] = []
+let orCalls: string[] = []
 
 function makeChain(table: string): any {
   if (table === 'profiles') {
@@ -38,8 +40,8 @@ function makeChain(table: string): any {
   return {
     select(_cols: string, _opts?: unknown) {
       return {
-        or(_filter: string) { return this },
-        order(_col: string) { return this },
+        or(filter: string) { orCalls.push(filter); return this },
+        order(col: string, opts?: unknown) { orderCalls.push([col, opts]); return this },
         range(from: number, to: number) {
           return Promise.resolve(mockRange(from, to))
         },
@@ -177,6 +179,51 @@ describe('GET /api/admin/data/[table]', () => {
     const { GET } = await import('../[table]/route')
     const res = await GET(makeGetReq('upcat_facts', '?search=foo'), makeContext('upcat_facts'))
     expect(res.status).toBe(200)
+  })
+
+  describe('sort and paging', () => {
+    beforeEach(() => { orderCalls = []; orCalls = [] })
+
+    async function get(qs: string) {
+      adminUser()
+      mockRange.mockResolvedValueOnce({ data: [], count: 120, error: null })
+      const { GET } = await import('../[table]/route')
+      return GET(makeGetReq('upcat_facts', qs), makeContext('upcat_facts'))
+    }
+
+    it('orders by an allowed column, then by the id so pages stay stable', async () => {
+      const res = await get('?sort=valid_year&dir=desc')
+      expect(res.status).toBe(200)
+      expect(orderCalls).toEqual([['valid_year', { ascending: false }], ['id', { ascending: true }]])
+    })
+
+    it('defaults dir to ascending', async () => {
+      await get('?sort=topic')
+      expect(orderCalls[0]).toEqual(['topic', { ascending: true }])
+    })
+
+    it('ignores a column that is not configured for the table', async () => {
+      await get('?sort=password_hash&dir=desc')
+      expect(orderCalls).toEqual([['id', { ascending: true }]])
+    })
+
+    it('ignores an unknown dir value (asc)', async () => {
+      await get('?sort=topic&dir=sideways')
+      expect(orderCalls[0]).toEqual(['topic', { ascending: true }])
+    })
+
+    it('sorting by the id column orders once, in the requested direction', async () => {
+      await get('?sort=id&dir=desc')
+      expect(orderCalls).toEqual([['id', { ascending: false }]])
+    })
+
+    it('still pages (0-based, 50 rows) and searches alongside a sort', async () => {
+      const res = await get('?sort=topic&page=2&search=cutoff')
+      expect(mockRange).toHaveBeenCalledWith(100, 149)
+      expect(orCalls[0]).toContain('topic.ilike.%cutoff%')
+      const json = await res.json()
+      expect(json.count).toBe(120)
+    })
   })
 
   it('sanitizes injection chars before building .or() — structural chars stripped', async () => {

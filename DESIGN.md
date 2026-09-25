@@ -100,6 +100,74 @@ Radii `sm 10 · md 16 · lg 22 · pill 980` · shadows `sm` and `card`.
 
 ---
 
+## Admin console (`apps/admin`)
+
+The console is a desk tool used every day by Review Masters Bicol content staff.
+It is tuned for **density, speed and the keyboard**, in the light theme only.
+Maroon marks **one primary action per screen**. Everything else is secondary
+or ghost. Built in phases A1 (primitives, sidebar, Inbox home) and A2 (every
+page moved onto them).
+
+### Admin tokens (`apps/admin/tailwind.config.ts`, extending the preset)
+
+The ratios below are WCAG contrast values computed from the hex values. For
+alpha tokens they are computed after compositing over white.
+
+| Class | Value | Role | Measured |
+|---|---|---|---|
+| `bg-maroon-hover` | `#660000` | hover and pressed state on maroon fills | white on it 13.42 |
+| `bg-surface-hover` | `#f3f3f5` | row hover, ghost-button hover | `ink-subtle` on it 4.58 |
+| `bg-neutral-soft` | `rgba(0,0,0,.06)` | neutral badge, skeleton, code chip (background only) | `ink-muted` 6.50 · `ink` 14.77 |
+| `bg-maroon-dim` | preset | selected row, bulk-action bar | `ink` 14.40 · `ink-muted` 6.34 · `maroon` 9.37 |
+| `bg-scrim` | `rgba(0,0,0,.40)` | backdrop behind a Dialog or Drawer | none |
+| `border-subtle` | `rgba(0,0,0,.08)` | hairlines between rows and around cards (decorative) | none |
+| `border-strong` | `rgba(0,0,0,.16)` | edge of a secondary button | none |
+| `border-control` | `#8a8a8e` | boundary of a form control | 3.44 on white, 3.16 on `surface-2` (meets the 1.4.11 3:1 minimum) |
+| `text-ui` | 13px / 20px | dense UI text: tables, nav, secondary buttons | 12px (`text-xs`) is the floor |
+| `shadow-overlay` | two-layer | floating layers only (Dialog, Drawer) | Cards use a border, not a shadow |
+| `sidebar-ink` / `sidebar-ink-muted` | `#f5f5f7` / `#a1a1a6` | text on the dark sidebar `#1d1d1f` | 15.46 / 6.54 on the background, 10.42 / 5.42 on active or hover |
+
+### Primitives (`apps/admin/components/ui`)
+
+| Primitive | Contract |
+|---|---|
+| `Topbar` (`components/admin`) | Holds the page's **only** `h1`. Page actions go on the right. A page never repeats its title as an `h1` or `h2` in the body. |
+| `PageBody` | The scrolling area under the Topbar. Standard gutter. `intro` takes one orienting sentence, not a heading. `width` is `full`, `wide` or `narrow`. |
+| `Card` | A bordered region. Given a `title` it becomes a labelled `<section>` with an `h2` (or an `h3`). Use `flush` for full-bleed tables. Never nest cards. |
+| `Button` / `IconButton` / `buttonClass` | Variants `primary`, `secondary`, `ghost` and `danger`. `loading` announces the busy state and keeps the label. `IconButton` requires a `label`, which becomes its accessible name and tooltip. |
+| `Badge` | The text carries the status and the tone only reinforces it. Tones: `neutral`, `success`, `warning`, `danger`, `info`, `brand`. |
+| `Field` + `controlClass` | Render-prop. Ties label↔control with `htmlFor`/`id`, and hint and error with `aria-describedby`. An error sets `aria-invalid` and `role="alert"` and sits **next to its field**. `required` sets the attribute and adds an `aria-hidden` `*`. |
+| `Dialog` / `Drawer` | Modal contract: labelled, `aria-modal`, focus moved in, trapped and restored, Escape and the scrim close it. `onSubmit` turns the panel into a real `<form noValidate>`, so Enter submits and a `type="submit"` footer button is the submit; the default action is prevented. `dirty` makes every close path (Escape, scrim, ✕, and the guarded `close` passed to a `footer={close => …}` function) ask **"Discard unsaved changes?"** first, with Keep editing focused. It also arms the browser's leave-page prompt. |
+| `DiscardChangesDialog`, `closeOrConfirm` | The same guard for full-page forms (for example Cancel on the new-flashcard page). |
+| `ConfirmDialog` (`components/admin`) | Destructive yes/no, built on `Dialog` as an `alertdialog`. Cancel is focused first. |
+| `DataTable` | The console's one table. Search (`q`), sort (`sort=-col`), filters, page and hidden columns (`hide=a,b`) live in the **URL**, so a view survives a refresh and can be shared; `paramPrefix` namespaces two tables on one page. Headers are human labels, the header is sticky, and sortable headers are buttons with `aria-sort`. "No data" and "no matches" are different states. `loading` shows skeleton rows. `selection` (controlled ids, `rowLabel`, `actions`) adds labelled row checkboxes, a select-all for the current page, and a bulk bar that appears only while something is selected. `columnChooser` adds a Columns disclosure; one column always stays visible. Rows are plain `<tr>`: the primary action is a real button or link in the first data cell. |
+| `EmptyState` / `ErrorBanner` | An empty state says what belongs here and how it gets here. A failed query renders `ErrorBanner` (`role="alert"`), **never** an empty list. |
+| `Icon` / `Kbd` | One inline icon set: 24-unit grid, 1.75 stroke, `currentColor`, decorative by default. No emoji or Unicode glyphs as icons. The one exception is the ✓ glyph that marks a correct answer next to its colour, backed by screen-reader text. |
+| `useFocusTrap` + `trapStack` | Overlays can stack (a Drawer with a discard prompt on top). Only the topmost trap reacts to Escape and Tab. |
+
+### Page rules
+
+- Every route under `app/admin` renders `Topbar` (the `h1`), then `PageBody`, then
+  `Card` sections or a `DataTable`.
+- `app/admin/error.tsx` is the route error boundary. It names the failure, offers
+  **Try again** (`reset`) and **Back to Home**, and shows the error digest as a
+  reference.
+- Bulk status changes (reported questions, bug reports, feedback) call the same
+  per-item route for each selected id. They report one summary toast, name any
+  partial failures, clear the selection and call `router.refresh()`.
+
+### Enforcement
+
+`apps/admin/lib/__tests__/noRawColours.test.ts` scans `app/admin/**` and
+`components/{admin,ui,flashcards}/**`. It fails on arbitrary colour classes
+(`-[#…]`), on raw `#rrggbb`/`#rgb` inside string literals, and on the stock
+`gray-*`, `slate-*` and `purple-*` palettes. Exceptions go in its `ALLOWED` list
+with a reason, and an entry that no longer matches anything fails as well. The
+landing page (`components/landing`) and the email template (`lib/email`) are out
+of scope.
+
+---
+
 ## Native tokens (`apps/mobile/theme/tokens.ts`)
 
 Reach them through `useTheme()`; never import `darkTheme` / `lightTheme` directly

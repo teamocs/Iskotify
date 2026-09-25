@@ -2,6 +2,12 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect, vi } from 'vitest'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/admin/flashcards',
+  useSearchParams: () => new URLSearchParams(''),
+}))
+
 vi.mock('next/link', () => ({
   default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) =>
     React.createElement('a', { href, className }, children),
@@ -49,13 +55,15 @@ describe('SubjectsView', () => {
     expect(html).toContain('DOST-SEI')
   })
 
-  it('renders View, Edit, Delete buttons for each subject', () => {
+  // The subject name is now the link that opens it (was a separate "View").
+  it('renders an open link plus labelled Edit and Delete actions for each subject', () => {
     const html = renderToStaticMarkup(
       React.createElement(SubjectsView, { subjects, listings })
     )
-    expect(html).toContain('View')
-    expect(html).toContain('Edit')
-    expect(html).toContain('Delete')
+    expect(html).toContain('href="/admin/flashcards/subjects/sub1"')
+    expect(html).toContain('href="/admin/flashcards/subjects/sub2"')
+    expect(html).toContain('aria-label="Edit Science"')
+    expect(html).toContain('aria-label="Delete Science"')
   })
 
   it('renders empty state when subjects array is empty', () => {

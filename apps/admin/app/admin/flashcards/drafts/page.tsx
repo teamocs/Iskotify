@@ -1,34 +1,28 @@
 import Link from 'next/link'
 import { Topbar } from '@/components/admin/Topbar'
 import { DraftsTable } from '@/components/flashcards/DraftsTable'
+import { PageBody } from '@/components/ui/Page'
+import { buttonClass } from '@/components/ui/Button'
+import { Icon } from '@/components/ui/Icon'
 
 export default function DraftsPage() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <Topbar title="Drafts" />
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-ink font-heading font-bold text-2xl tracking-tight">
-                Unpublished topics
-              </h2>
-              <p className="text-ink-muted text-sm mt-1">
-                Every topic with <code className="mx-0.5 px-1.5 py-0.5 rounded bg-surface-2 text-[12px]">status=&apos;draft&apos;</code> across all sources.
-                Tag exam/scholarship slugs and publish to ship the cards to mobile users.
-              </p>
-            </div>
-            <Link
-              href="/admin/upcat/import"
-              className="inline-flex items-center rounded-[980px] bg-maroon hover:bg-[#9a0a1f] text-white px-4 py-2 text-sm font-semibold shadow-sm whitespace-nowrap"
-            >
-              + Import CSV
-            </Link>
-          </div>
-
-          <DraftsTable />
-        </div>
-      </div>
+      <Topbar
+        title="Drafts"
+        actions={
+          <Link href="/admin/upcat/import" className={buttonClass({ size: 'sm' })}>
+            <Icon name="upload" />
+            Import CSV
+          </Link>
+        }
+      />
+      <PageBody
+        width="wide"
+        intro="Every unpublished topic, from any source. Select topics and publish them with exam or scholarship tags to ship their cards to the mobile app."
+      >
+        <DraftsTable />
+      </PageBody>
     </div>
   )
 }

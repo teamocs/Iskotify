@@ -1,17 +1,21 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddCardModal } from './AddCardModal'
 import { GenerateMoreModal } from './GenerateMoreModal'
-import { renameTopic, deleteTopic, updateCard, deleteCard } from '@/lib/admin/topicsApi'
+import { RenameTopicDialog } from './RenameTopicDialog'
+import { ConfirmDialog } from './ConfirmDialog'
+import { EditCardDialog, type EditableCard } from './cardForm'
+import { deleteTopic, deleteCard } from '@/lib/admin/topicsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { Button, IconButton } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Icon } from '@/components/ui/Icon'
 
-interface Card {
-  id: string
-  question: string
-  answer: string
-  explanation: string | null
+interface Card extends EditableCard {
   listing_slugs?: string[]
 }
 
@@ -29,33 +33,32 @@ interface Props {
   subjectName: string
 }
 
-const textareaCls =
-  'w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink resize-none'
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const short = (s: string) => (s.length > 60 ? `${s.slice(0, 57)}…` : s)
+
+const TH = 'px-4 py-2 text-left text-xs font-medium text-ink-muted'
+const TD = 'px-4 py-2.5 align-top'
 
 export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }: Props) {
   const router = useRouter()
+  const panelId = useId()
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const [cards, setCards] = useState<Card[]>([])
   const [renaming, setRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState(topic.name)
-  const [renameSaving, setRenameSaving] = useState(false)
-  const [renameError, setRenameError] = useState('')
   const [deletingTopic, setDeletingTopic] = useState(false)
   const [topicDeleteSaving, setTopicDeleteSaving] = useState(false)
-  const [topicDeleteError, setTopicDeleteError] = useState('')
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  // Starts true when the topic opens with the page, so the first paint says
+  // "loading" rather than a misleading "no cards".
+  const [loading, setLoading] = useState(defaultOpen)
+  const [loadError, setLoadError] = useState('')
+  const [editingCard, setEditingCard] = useState<Card | null>(null)
+  const [deletingCard, setDeletingCard] = useState<Card | null>(null)
   const [saving, setSaving] = useState(false)
   const [addingCard, setAddingCard] = useState(false)
   const [generateMoreOpen, setGenerateMoreOpen] = useState(false)
   const [localCardCount, setLocalCardCount] = useState(topic.cardCount)
-  const [editQ, setEditQ] = useState('')
-  const [editA, setEditA] = useState('')
-  const [editExp, setEditExp] = useState('')
-  const [error, setError] = useState('')
 
   const abortRef = React.useRef<AbortController | null>(null)
 
@@ -65,6 +68,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     abortRef.current = controller
 
     setLoading(true)
+    setLoadError('')
     try {
       const res = await fetch(
         `/api/flashcards/subjects/${subjectId}/cards?topic_id=${topic.id}&page=${pageNum}&limit=10`,
@@ -77,12 +81,12 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
           setHasMore(data.hasMore)
           setPage(pageNum)
         } else {
-          setError('Failed to load cards')
+          setLoadError('Failed to load cards')
         }
       }
-    } catch (e) {
+    } catch {
       if (!controller.signal.aborted) {
-        setError('Failed to load cards')
+        setLoadError('Failed to load cards')
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -102,48 +106,12 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
     // Intentionally runs only on isOpen change, not on every loadCards re-creation
   }, [isOpen])
 
-  function startRename() {
-    setRenameValue(topic.name)
-    setRenameError('')
-    setRenaming(true)
-    setDeletingTopic(false)
-  }
-
-  async function saveRename() {
-    if (!renameValue.trim()) return
-    setRenameSaving(true)
-    setRenameError('')
-    try {
-      const result = await renameTopic(topic.id, renameValue)
-      if (!result.ok) {
-        setRenameError(result.error)
-        notifyError(result.error)
-        return
-      }
-      setRenaming(false)
-      notifySuccess('Topic renamed')
-      router.refresh()
-    } catch {
-      setRenameError('Network error')
-      notifyError('Network error')
-    } finally {
-      setRenameSaving(false)
-    }
-  }
-
-  function startDeleteTopic() {
-    setTopicDeleteError('')
-    setDeletingTopic(true)
-    setRenaming(false)
-  }
-
   async function confirmDeleteTopic() {
+    if (topicDeleteSaving) return
     setTopicDeleteSaving(true)
-    setTopicDeleteError('')
     try {
       const result = await deleteTopic(topic.id)
       if (!result.ok) {
-        setTopicDeleteError(result.error)
         notifyError(result.error)
         return
       }
@@ -151,415 +119,183 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
       notifySuccess('Topic deleted')
       router.refresh()
     } catch {
-      setTopicDeleteError('Network error')
       notifyError('Network error')
     } finally {
       setTopicDeleteSaving(false)
     }
   }
 
-  function startEdit(card: Card) {
-    setError('')
-    setEditingId(card.id)
-    setEditQ(card.question)
-    setEditA(card.answer)
-    setEditExp(card.explanation ?? '')
-    setDeletingId(null)
-  }
-
-  async function saveEdit() {
-    if (!editingId) return
-    setError('')
+  async function confirmDeleteCard() {
+    if (!deletingCard || saving) return
+    const id = deletingCard.id
     setSaving(true)
     try {
-      const result = await updateCard(editingId, {
-        question: editQ.trim(),
-        answer: editA.trim(),
-        explanation: editExp.trim() || null,
-      })
+      const result = await deleteCard(id)
       if (!result.ok) {
-        setError(result.error)
         notifyError(result.error)
         return
       }
-      setCards(prev =>
-        prev.map(c =>
-          c.id === editingId
-            ? { ...c, question: editQ.trim(), answer: editA.trim(), explanation: editExp.trim() || null }
-            : c
-        )
-      )
-      setEditingId(null)
-      notifySuccess('Card saved')
-    } catch {
-      setError('Network error')
-      notifyError('Network error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deletingId) return
-    setError('')
-    setSaving(true)
-    try {
-      const result = await deleteCard(deletingId)
-      if (!result.ok) {
-        setError(result.error)
-        notifyError(result.error)
-        return
-      }
-      setCards(prev => prev.filter(c => c.id !== deletingId))
+      setCards(prev => prev.filter(c => c.id !== id))
       setLocalCardCount(prev => Math.max(0, prev - 1))
-      setDeletingId(null)
+      setDeletingCard(null)
       notifySuccess('Card deleted')
     } catch {
-      setError('Network error')
       notifyError('Network error')
     } finally {
       setSaving(false)
     }
   }
 
+  const showTable = cards.length > 0 || (loading && !loadError)
+
   return (
-    <div className="bg-white border border-[#e5e7eb] rounded-2xl overflow-hidden">
-      {/* Accordion header */}
-      <div className="flex items-center justify-between px-5 py-4 gap-3">
-        {renaming ? (
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <input
-              autoFocus
-              aria-label="Topic name"
-              value={renameValue}
-              onChange={e => setRenameValue(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); saveRename() }
-                if (e.key === 'Escape') { setRenaming(false); setRenameError('') }
-              }}
-              className="flex-1 min-w-0 px-3 py-1.5 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-            />
-            {renameError && <p className="text-xs text-danger flex-shrink-0">{renameError}</p>}
-            <button
-              onClick={saveRename}
-              disabled={renameSaving || !renameValue.trim()}
-              className="text-xs font-semibold text-maroon hover:text-maroon-light disabled:opacity-50 flex-shrink-0"
-            >
-              {renameSaving ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              onClick={() => { setRenaming(false); setRenameError('') }}
-              className="text-xs text-ink-muted hover:text-ink flex-shrink-0"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
+    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      {/* Disclosure header: the topic name opens and closes its cards */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+        <h2 className="min-w-0 flex-1 text-sm">
           <button
-            className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
-            onClick={() => setIsOpen(o => !o)}
+            type="button"
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            onClick={() => {
+              if (!isOpen && cards.length === 0) setLoading(true)
+              setIsOpen(o => !o)
+            }}
+            className="flex w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left hover:text-maroon"
           >
-            <span
-              className={`text-ink-subtle transition-transform text-sm inline-block flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
-            >
-              ›
-            </span>
-            <span className="font-medium text-ink truncate">{topic.name}</span>
-            <span className="text-xs text-ink-muted flex-shrink-0">({localCardCount} cards)</span>
+            <Icon name="chevron-right" className={`flex-shrink-0 text-ink-subtle transition-transform motion-reduce:transition-none ${isOpen ? 'rotate-90' : ''}`} />
+            <span className="truncate font-medium text-ink">{topic.name}</span>
+            <span className="flex-shrink-0 text-xs text-ink-muted tabular-nums">{plural(localCardCount, 'card')}</span>
+            {topic.status === 'draft' && <Badge tone="warning">Draft</Badge>}
           </button>
-        )}
-        {!renaming && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {isOpen && (
-              <>
-                <button
-                  onClick={() => setGenerateMoreOpen(true)}
-                  className="text-xs px-3 py-1 rounded-full bg-ink text-white hover:bg-black"
-                >
-                  ✨ Generate more with AI
-                </button>
-                <button
-                  onClick={() => setAddingCard(true)}
-                  className="text-xs font-medium text-maroon hover:text-maroon-light px-3 py-1 rounded-[980px] border border-maroon/20 hover:bg-maroon/5"
-                >
-                  + Add Card
-                </button>
-              </>
-            )}
-            <button
-              onClick={startRename}
-              className="text-xs text-ink-muted hover:text-ink"
-            >
-              Rename
-            </button>
-            <button
-              onClick={startDeleteTopic}
-              className="text-xs text-ink-muted hover:text-danger"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+        </h2>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {isOpen && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setGenerateMoreOpen(true)}>
+                Generate with AI
+              </Button>
+              <Button size="sm" icon="plus" onClick={() => setAddingCard(true)}>
+                Add card
+              </Button>
+            </>
+          )}
+          <IconButton icon="pencil" label={`Rename ${topic.name}`} onClick={() => setRenaming(true)} />
+          <IconButton
+            icon="trash"
+            label={`Delete ${topic.name}`}
+            onClick={() => setDeletingTopic(true)}
+            className="hover:bg-danger-soft hover:text-danger-strong"
+          />
+        </div>
       </div>
 
-      {/* Delete topic confirm banner */}
-      {deletingTopic && (
-        <div className="px-5 py-3 bg-danger-soft border-t border-danger/15 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-danger">
-              Delete <strong>{topic.name}</strong>? This will permanently remove{' '}
-              <strong>{localCardCount} card{localCardCount !== 1 ? 's' : ''}</strong>.
-            </p>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <button
-                onClick={confirmDeleteTopic}
-                disabled={topicDeleteSaving}
-                className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
-              >
-                Yes, delete
-              </button>
-              <button
-                onClick={() => { setDeletingTopic(false); setTopicDeleteError('') }}
-                className="text-xs text-ink-muted hover:text-ink"
-              >
-                Cancel
-              </button>
+      {isOpen && (
+        <div id={panelId} className="border-t border-subtle">
+          {loadError && (
+            <div className="p-3">
+              <ErrorBanner
+                title="Couldn’t load cards"
+                message={loadError}
+                action={<Button size="sm" onClick={() => loadCards(1, true)}>Try again</Button>}
+              />
             </div>
-          </div>
-          {topicDeleteError && (
-            <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger border border-danger/25">
-              {topicDeleteError}
-            </p>
+          )}
+
+          {showTable && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[40rem] border-collapse text-ui">
+                <caption className="sr-only">Cards in {topic.name}</caption>
+                <thead>
+                  <tr className="border-b border-subtle bg-surface-2">
+                    <th scope="col" className={`${TH} w-[35%]`}>Question</th>
+                    <th scope="col" className={`${TH} w-[30%]`}>Answer</th>
+                    <th scope="col" className={TH}>Explanation</th>
+                    <th scope="col" className={`${TH} w-20`}><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cards.map(card => (
+                    <tr key={card.id} className="border-b border-subtle last:border-0 hover:bg-surface-hover">
+                      <td className={`${TD} text-ink`}>{card.question}</td>
+                      <td className={`${TD} text-ink-muted`}>{card.answer}</td>
+                      <td className={`${TD} text-ink-muted`}>{card.explanation || <span className="text-ink-subtle">—</span>}</td>
+                      <td className={`${TD} text-right`}>
+                        <span className="inline-flex gap-1">
+                          <IconButton icon="pencil" label={`Edit card: ${short(card.question)}`} onClick={() => setEditingCard(card)} />
+                          <IconButton
+                            icon="trash"
+                            label={`Delete card: ${short(card.question)}`}
+                            onClick={() => setDeletingCard(card)}
+                            className="hover:bg-danger-soft hover:text-danger-strong"
+                          />
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {loading && (
+                    <tr aria-busy="true">
+                      <td colSpan={4} className={`${TD} text-ink-muted`}>
+                        <span className="inline-flex items-center gap-2" role="status">
+                          <Icon name="loader" className="animate-spin" /> Loading cards…
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && !loadError && cards.length === 0 && (
+            <EmptyState
+              icon="list"
+              title="No cards in this topic yet"
+              description="Add a card by hand, or generate a batch with AI."
+            />
+          )}
+
+          {!loading && hasMore && (
+            <div className="border-t border-subtle px-2 py-1.5">
+              <Button size="sm" variant="ghost" icon="chevron-down" onClick={() => loadCards(page + 1)}>
+                Load more cards
+              </Button>
+            </div>
           )}
         </div>
       )}
 
-      {isOpen && (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block border-t border-[#f3f4f6]">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-[#f9fafb] border-b border-[#f3f4f6]">
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[35%]">
-                    Question
-                  </th>
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[35%]">
-                    Answer
-                  </th>
-                  <th className="px-5 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-ink-muted w-[20%]">
-                    Explanation
-                  </th>
-                  <th className="px-5 py-2 w-[10%]" />
-                </tr>
-              </thead>
-              <tbody>
-                {cards.map(card =>
-                  editingId === card.id ? (
-                    <tr key={card.id} className="border-b border-[#f3f4f6] bg-surface-3">
-                      <td className="px-5 py-3">
-                        <textarea
-                          aria-label="Question"
-                          value={editQ}
-                          onChange={e => setEditQ(e.target.value)}
-                          className={textareaCls}
-                          rows={2}
-                        />
-                      </td>
-                      <td className="px-5 py-3">
-                        <textarea
-                          aria-label="Answer"
-                          value={editA}
-                          onChange={e => setEditA(e.target.value)}
-                          className={textareaCls}
-                          rows={2}
-                        />
-                      </td>
-                      <td className="px-5 py-3">
-                        <textarea
-                          aria-label="Explanation"
-                          value={editExp}
-                          onChange={e => setEditExp(e.target.value)}
-                          className={textareaCls}
-                          rows={2}
-                        />
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-col gap-1">
-                          {error && (
-                            <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger mb-1">
-                              {error}
-                            </p>
-                          )}
-                          <button
-                            onClick={saveEdit}
-                            disabled={saving || !editQ.trim() || !editA.trim()}
-                            className="text-xs font-medium text-maroon hover:text-maroon-light disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => { setEditingId(null); setError('') }}
-                            className="text-xs text-ink-muted hover:text-ink"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={card.id} className="border-b border-[#f3f4f6] last:border-0 hover:bg-[#f9fafb]">
-                      <td className="px-5 py-3 text-ink">{card.question}</td>
-                      <td className="px-5 py-3 text-ink-muted">{card.answer}</td>
-                      <td className="px-5 py-3 text-ink-muted">{card.explanation}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-col gap-1">
-                          <button
-                            onClick={() => startEdit(card)}
-                            className="text-xs text-ink-muted hover:text-ink"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
-                            className="text-xs text-ink-muted hover:text-danger"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+      {renaming && (
+        <RenameTopicDialog topicId={topic.id} currentName={topic.name} onClose={() => setRenaming(false)} />
+      )}
 
-          {/* Mobile cards */}
-          <div className="md:hidden border-t border-[#f3f4f6] divide-y divide-[#f3f4f6]">
-            {cards.map(card => (
-              <div key={card.id} className="p-4">
-                {editingId === card.id ? (
-                  <div className="space-y-2">
-                    <textarea
-                      aria-label="Question"
-                      value={editQ}
-                      onChange={e => setEditQ(e.target.value)}
-                      className={textareaCls}
-                      rows={2}
-                      placeholder="Question"
-                    />
-                    <textarea
-                      aria-label="Answer"
-                      value={editA}
-                      onChange={e => setEditA(e.target.value)}
-                      className={textareaCls}
-                      rows={2}
-                      placeholder="Answer"
-                    />
-                    <textarea
-                      aria-label="Explanation"
-                      value={editExp}
-                      onChange={e => setEditExp(e.target.value)}
-                      className={textareaCls}
-                      rows={2}
-                      placeholder="Explanation (optional)"
-                    />
-                    {error && (
-                      <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger">
-                        {error}
-                      </p>
-                    )}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={saveEdit}
-                        disabled={saving || !editQ.trim() || !editA.trim()}
-                        className="text-xs font-medium text-maroon disabled:opacity-50"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => { setEditingId(null); setError('') }}
-                        className="text-xs text-ink-muted"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="font-medium text-ink text-sm">{card.question}</p>
-                    <p className="text-sm text-ink-muted mt-1">{card.answer}</p>
-                    {card.explanation && (
-                      <p className="text-xs text-ink-muted mt-1">{card.explanation}</p>
-                    )}
-                    <div className="flex gap-3 mt-2 justify-end">
-                      <button
-                        onClick={() => startEdit(card)}
-                        className="text-xs text-ink-muted hover:text-ink"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => { setDeletingId(card.id); setEditingId(null); setError('') }}
-                        className="text-xs text-ink-muted hover:text-danger"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+      {deletingTopic && (
+        <ConfirmDialog
+          message={`Delete "${topic.name}"? This permanently removes ${plural(localCardCount, 'card')}.`}
+          confirmLabel={topicDeleteSaving ? 'Deleting…' : 'Delete topic'}
+          onConfirm={confirmDeleteTopic}
+          onCancel={() => { if (!topicDeleteSaving) setDeletingTopic(false) }}
+        />
+      )}
 
-          {/* Delete confirm banner */}
-          {deletingId && (
-            <div className="px-5 py-3 bg-danger-soft border-t border-danger/15 flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm text-danger">Delete this card? This cannot be undone.</p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={confirmDelete}
-                    disabled={saving}
-                    className="text-xs font-semibold text-danger hover:text-danger-strong disabled:opacity-50"
-                  >
-                    Yes, delete
-                  </button>
-                  <button
-                    onClick={() => { setDeletingId(null); setError('') }}
-                    className="text-xs text-ink-muted hover:text-ink"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-              {error && (
-                <p className="bg-danger-soft rounded-[10px] px-3 py-2 text-sm text-danger border border-danger/25">
-                  {error}
-                </p>
-              )}
-            </div>
-          )}
+      {editingCard && (
+        <EditCardDialog
+          card={editingCard}
+          onClose={() => setEditingCard(null)}
+          onSaved={saved => {
+            setCards(prev => prev.map(c => (c.id === saved.id ? { ...c, ...saved } : c)))
+            setEditingCard(null)
+          }}
+        />
+      )}
 
-          {/* Loading / empty / load-more */}
-          {loading && (
-            <p className="px-5 py-4 text-sm text-ink-muted border-t border-[#f3f4f6]">Loading…</p>
-          )}
-          {!loading && cards.length === 0 && (
-            <p className="px-5 py-4 text-sm text-ink-muted border-t border-[#f3f4f6]">
-              No cards yet. Use &quot;+ Add Card&quot; to create the first one.
-            </p>
-          )}
-          {!loading && hasMore && (
-            <button
-              onClick={() => loadCards(page + 1)}
-              className="w-full px-5 py-3 text-sm text-maroon hover:bg-[#f9fafb] border-t border-[#f3f4f6] text-left transition-colors"
-            >
-              Load more…
-            </button>
-          )}
-        </>
+      {deletingCard && (
+        <ConfirmDialog
+          message={`Delete the card "${short(deletingCard.question)}"? This cannot be undone.`}
+          confirmLabel={saving ? 'Deleting…' : 'Delete card'}
+          onConfirm={confirmDeleteCard}
+          onCancel={() => { if (!saving) setDeletingCard(null) }}
+        />
       )}
 
       {addingCard && (

@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Listing } from '@iskotify/utils'
 import { saveListing } from '@/lib/admin/listingsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { isDirty } from '@/lib/admin/formDirty'
+import { Drawer } from '@/components/ui/Drawer'
+import { Field, controlClass } from '@/components/ui/Field'
+import { Button } from '@/components/ui/Button'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   listing: Listing | null   // null = new listing
@@ -32,20 +38,14 @@ const EMPTY = {
   meta_target_year_levels: '',
   meta_other_benefits: '',
   meta_raw_json: '',
-  meta_raw_error: '',
-  meta_show_raw: false,
-  meta_open: false,
 }
+
+type ListingForm = typeof EMPTY
 
 function nullableNumber(val: string): number | null {
   if (val === '' || val === null || val === undefined) return null
   const n = Number(val)
   return isNaN(n) ? null : n
-}
-
-function epochToDateStr(ms: number | null | undefined): string {
-  if (!ms) return ''
-  try { return new Date(ms).toISOString().slice(0, 10) } catch { return '' }
 }
 
 function parseMetaFields(metaJson: unknown): {
@@ -90,12 +90,12 @@ function buildMetaPayload(
   }
 }
 
-export function ListingDrawer({ listing, onClose }: Props) {
-  const parsedMeta = listing?.scholarship_meta != null
+function toForm(listing: Listing | null): ListingForm {
+  if (!listing) return EMPTY
+  const parsedMeta = listing.scholarship_meta != null
     ? parseMetaFields(listing.scholarship_meta)
     : { huc_excluded: false, target_year_levels: '', other_benefits: '' }
-
-  const [form, setForm] = useState(listing ? {
+  return {
     type: listing.type,
     title: listing.title,
     slug: listing.slug,
@@ -109,7 +109,6 @@ export function ListingDrawer({ listing, onClose }: Props) {
     status: listing.status,
     grant_amount: listing.grant_amount?.toString() ?? '',
     external_url: listing.external_url ?? '',
-    // Scholarship typed fields
     province: listing.province ?? '',
     city: listing.city ?? '',
     scope: listing.scope ?? 'national',
@@ -120,54 +119,108 @@ export function ListingDrawer({ listing, onClose }: Props) {
     service_obligation_years: listing.service_obligation_years?.toString() ?? '',
     has_entrance_exam: listing.has_entrance_exam ?? false,
     application_window: listing.application_window ?? '',
-    // Scholarship meta
     meta_huc_excluded: parsedMeta.huc_excluded,
     meta_target_year_levels: parsedMeta.target_year_levels,
     meta_other_benefits: parsedMeta.other_benefits,
     meta_raw_json: '',
-    meta_raw_error: '',
-    meta_show_raw: false,
-    meta_open: false,
-  } : EMPTY)
-  const [error, setError] = useState('')
+  }
+}
+
+type RequiredKey = 'type' | 'status' | 'title' | 'slug' | 'provider' | 'region'
+const REQUIRED_LABELS: Record<RequiredKey, string> = {
+  type: 'Type', status: 'Status', title: 'Title', slug: 'Slug', provider: 'Provider / org', region: 'Region',
+}
+
+/** The fields the listings API refuses to save without, as per-field messages. */
+export function validateListingForm(form: Pick<ListingForm, RequiredKey>): Partial<Record<RequiredKey, string>> {
+  const errors: Partial<Record<RequiredKey, string>> = {}
+  for (const key of Object.keys(REQUIRED_LABELS) as RequiredKey[]) {
+    if (!String(form[key] ?? '').trim()) errors[key] = `${REQUIRED_LABELS[key]} is required.`
+  }
+  return errors
+}
+
+type Errors = Partial<Record<keyof ListingForm, string>>
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3 border-t border-subtle pt-4">
+      <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function Check({ id, label, checked, onChange, hint }: { id: string; label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="h-4 w-4 cursor-pointer accent-maroon" />
+      <label htmlFor={id} className="cursor-pointer text-sm text-ink">
+        {label}
+        {hint && <span className="ml-1 text-xs text-ink-muted">{hint}</span>}
+      </label>
+    </div>
+  )
+}
+
+export function ListingDrawer({ listing, onClose }: Props) {
+  const formId = useId()
+  const fid = (name: string) => `${formId}-${name}`
+  const [initial] = useState(() => toForm(listing))
+  const [form, setForm] = useState<ListingForm>(initial)
+  const [metaOpen, setMetaOpen] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
+  const [errors, setErrors] = useState<Errors>({})
+  const [serverError, setServerError] = useState('')
   const [saving, setSaving] = useState(false)
   const router = useRouter()
+  const dirty = isDirty(form, initial)
 
-  function set(field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-      setForm(f => ({ ...f, [field]: e.target.value }))
+  function set<K extends keyof ListingForm>(field: K, value: ListingForm[K]) {
+    setForm(f => ({ ...f, [field]: value }))
+    setErrors(e => {
+      if (!e[field]) return e
+      const next = { ...e }
+      delete next[field]
+      return next
+    })
   }
+  const text = (field: keyof ListingForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => set(field, e.target.value as never)
 
-  function setCheck(field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm(f => ({ ...f, [field]: e.target.checked }))
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
+  async function handleSubmit() {
+    setServerError('')
+    const found: Errors = validateListingForm(form)
 
     // Validate scholarship meta raw JSON if shown
     let scholarship_meta: Record<string, unknown> | null = null
     if (form.type === 'scholarship') {
       const result = buildMetaPayload(
-        form.meta_huc_excluded as boolean,
-        form.meta_target_year_levels as string,
-        form.meta_other_benefits as string,
-        form.meta_show_raw as boolean,
-        form.meta_raw_json as string,
+        form.meta_huc_excluded,
+        form.meta_target_year_levels,
+        form.meta_other_benefits,
+        showRaw,
+        form.meta_raw_json,
       )
       if (result.error) {
-        setForm(f => ({ ...f, meta_raw_error: result.error }))
-        return
+        found.meta_raw_json = result.error
+        setMetaOpen(true)
       }
       scholarship_meta = result.meta
+    }
+
+    setErrors(found)
+    const first = Object.keys(found)[0]
+    if (first) {
+      // The raw JSON field may only mount on this render; focus what exists now.
+      document.getElementById(fid(first))?.focus()
+      return
     }
 
     setSaving(true)
     const payload: Record<string, unknown> = {
       ...form,
-      grant_amount: nullableNumber(form.grant_amount as string),
+      grant_amount: nullableNumber(form.grant_amount),
       deadline: form.deadline || null,
       exam_date: form.exam_date || null,
       results_date: form.results_date || null,
@@ -176,10 +229,10 @@ export function ListingDrawer({ listing, onClose }: Props) {
       city: form.city || null,
       scope: form.scope,
       is_verified: form.is_verified,
-      income_ceiling: nullableNumber(form.income_ceiling as string),
-      gwa_requirement: nullableNumber(form.gwa_requirement as string),
-      monthly_stipend: nullableNumber(form.monthly_stipend as string),
-      service_obligation_years: nullableNumber(form.service_obligation_years as string),
+      income_ceiling: nullableNumber(form.income_ceiling),
+      gwa_requirement: nullableNumber(form.gwa_requirement),
+      monthly_stipend: nullableNumber(form.monthly_stipend),
+      service_obligation_years: nullableNumber(form.service_obligation_years),
       has_entrance_exam: form.has_entrance_exam,
       application_window: form.application_window || null,
     }
@@ -192,14 +245,11 @@ export function ListingDrawer({ listing, onClose }: Props) {
     delete payload.meta_target_year_levels
     delete payload.meta_other_benefits
     delete payload.meta_raw_json
-    delete payload.meta_raw_error
-    delete payload.meta_show_raw
-    delete payload.meta_open
 
     try {
       const result = await saveListing(payload, listing?.id)
       if (!result.ok) {
-        setError(result.error)
+        setServerError(result.error)
         notifyError(result.error)
         return
       }
@@ -207,242 +257,186 @@ export function ListingDrawer({ listing, onClose }: Props) {
       router.refresh()
       onClose()
     } catch {
-      setError('Network error')
+      setServerError('Network error')
       notifyError('Network error')
     } finally {
       setSaving(false)
     }
   }
 
-  const inputCls = "w-full px-3 py-2 rounded-[10px] border border-black/[0.08] text-sm bg-surface-3 focus:outline-none focus:ring-2 focus:ring-maroon/20 focus:border-maroon text-ink"
-  const labelCls = "block text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1"
-  const sectionCls = "pt-2"
-  const sectionTitleCls = "text-[11px] font-bold text-ink uppercase tracking-wider pb-2 border-b border-black/[0.06] mb-3"
+  const input = (field: keyof ListingForm, label: string, type: string, opts: { required?: boolean; placeholder?: string; extra?: Record<string, string> } = {}) => (
+    <Field key={field} id={fid(field)} label={label} required={opts.required} error={errors[field]}>
+      {p => (
+        <input
+          {...p}
+          type={type}
+          value={form[field] as string}
+          onChange={text(field)}
+          placeholder={opts.placeholder}
+          {...opts.extra}
+          className={`${controlClass} ${type === 'number' || type === 'date' ? 'tabular-nums' : ''}`}
+        />
+      )}
+    </Field>
+  )
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <button
-        type="button"
-        aria-label="Close drawer"
-        className="flex-1 bg-black/20 backdrop-blur-sm border-0 p-0 cursor-default"
-        onClick={onClose}
-      />
-      <div className="w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.08]">
-          <h2 className="font-heading font-bold text-lg text-ink">
-            {listing ? 'Edit Listing' : 'Add Listing'}
-          </h2>
-          <button onClick={onClose} className="text-ink-subtle hover:text-ink text-xl">✕</button>
-        </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Type</label>
-              <select aria-label="Type" value={form.type} onChange={set('type')} className={inputCls}>
+    <Drawer
+      open
+      onClose={onClose}
+      width="lg"
+      title={listing ? 'Edit listing' : 'Add listing'}
+      onSubmit={handleSubmit}
+      dirty={dirty}
+      footer={close => (
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button type="submit" variant="primary" loading={saving}>
+            {saving ? 'Saving…' : listing ? 'Save changes' : 'Create listing'}
+          </Button>
+        </>
+      )}
+    >
+      <div className="space-y-4">
+        {serverError && <ErrorBanner title="Couldn’t save this listing" message={serverError} />}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id={fid('type')} label="Type" required error={errors.type}>
+            {p => (
+              <select {...p} value={form.type} onChange={text('type')} className={controlClass}>
                 <option value="scholarship">Scholarship</option>
                 <option value="exam">Exam</option>
               </select>
-            </div>
-            <div>
-              <label className={labelCls}>Status</label>
-              <select aria-label="Status" value={form.status} onChange={set('status')} className={inputCls}>
+            )}
+          </Field>
+          <Field id={fid('status')} label="Status" required error={errors.status}>
+            {p => (
+              <select {...p} value={form.status} onChange={text('status')} className={controlClass}>
                 <option value="active">Active</option>
                 <option value="upcoming">Upcoming</option>
                 <option value="closed">Closed</option>
               </select>
-            </div>
-          </div>
-          {([
-            ['title', 'Title', 'text'],
-            ['slug', 'Slug', 'text'],
-            ['provider', 'Provider / Org', 'text'],
-            ['region', 'Region', 'text'],
-            ['external_url', 'External URL', 'url'],
-            ['deadline', 'Deadline', 'date'],
-            ['exam_date', 'Exam Date', 'date'],
-            ['results_date', 'Results Date', 'date'],
-            ['grant_amount', 'Grant Amount (₱)', 'number']
-          ] as [string, string, string][]).map(([field, label, type]) => (
-            <div key={field}>
-              <label htmlFor={`listing-${field}`} className={labelCls}>{label}</label>
-              <input id={`listing-${field}`} type={type} value={(form as any)[field]} onChange={set(field)} className={inputCls} />
-            </div>
-          ))}
-          <div>
-            <label className={labelCls}>Description</label>
-            <textarea aria-label="Description" value={form.description} onChange={set('description')} rows={3} className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Coverage</label>
-            <textarea aria-label="Coverage" value={form.coverage} onChange={set('coverage')} rows={2} className={inputCls} />
-          </div>
+            )}
+          </Field>
+        </div>
 
-          {/* Scholarship details */}
-          <div className={sectionCls}>
-            <p className={sectionTitleCls}>Scholarship Details</p>
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Scope</label>
-                <select aria-label="Scope" value={form.scope} onChange={set('scope')} className={inputCls}>
-                  <option value="national">National</option>
-                  <option value="regional">Regional</option>
-                  <option value="provincial">Provincial</option>
-                  <option value="city">City</option>
-                  <option value="school">School</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Province</label>
-                  <input aria-label="Province" type="text" value={form.province as string} onChange={set('province')} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>City</label>
-                  <input aria-label="City" type="text" value={form.city as string} onChange={set('city')} className={inputCls} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Income Ceiling (₱/yr)</label>
-                  <input aria-label="Income Ceiling (₱/yr)" type="number" min="0" value={form.income_ceiling as string} onChange={set('income_ceiling')} className={inputCls} placeholder="e.g. 400000" />
-                </div>
-                <div>
-                  <label className={labelCls}>GWA Requirement (%)</label>
-                  <input aria-label="GWA Requirement (%)" type="number" min="0" max="100" step="0.01" value={form.gwa_requirement as string} onChange={set('gwa_requirement')} className={inputCls} placeholder="e.g. 85" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Monthly Stipend (₱/mo)</label>
-                  <input aria-label="Monthly Stipend (₱/mo)" type="number" min="0" value={form.monthly_stipend as string} onChange={set('monthly_stipend')} className={inputCls} placeholder="e.g. 7000" />
-                </div>
-                <div>
-                  <label className={labelCls}>Service Obligation (yrs)</label>
-                  <input aria-label="Service Obligation (yrs)" type="number" min="0" step="1" value={form.service_obligation_years as string} onChange={set('service_obligation_years')} className={inputCls} placeholder="e.g. 2" />
-                </div>
-              </div>
-              <div>
-                <label className={labelCls}>Application Window</label>
-                <input aria-label="Application Window" type="text" value={form.application_window as string} onChange={set('application_window')} className={inputCls} placeholder="e.g. Jan 1 – Mar 31 annually" />
-              </div>
-              <div className="flex items-center gap-4 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.is_verified as boolean}
-                    onChange={setCheck('is_verified')}
-                    className="w-4 h-4 rounded accent-maroon"
-                  />
-                  <span className="text-sm text-ink">Verified</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.has_entrance_exam as boolean}
-                    onChange={setCheck('has_entrance_exam')}
-                    className="w-4 h-4 rounded accent-maroon"
-                  />
-                  <span className="text-sm text-ink">Has Entrance Exam</span>
-                </label>
-              </div>
-            </div>
-          </div>
+        {input('title', 'Title', 'text', { required: true })}
+        {input('slug', 'Slug', 'text', { required: true })}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {input('provider', 'Provider / org', 'text', { required: true })}
+          {input('region', 'Region', 'text', { required: true })}
+        </div>
+        {input('external_url', 'External URL', 'url')}
+        <div className="grid gap-3 sm:grid-cols-3">
+          {input('deadline', 'Deadline', 'date')}
+          {input('exam_date', 'Exam date', 'date')}
+          {input('results_date', 'Results date', 'date')}
+        </div>
+        {input('grant_amount', 'Grant amount (₱)', 'number')}
 
-          {/* Scholarship Meta — only for scholarships */}
-          {form.type === 'scholarship' && (
-            <div className={sectionCls}>
+        <Field id={fid('description')} label="Description">
+          {p => <textarea {...p} value={form.description} onChange={text('description')} rows={3} className={`${controlClass} h-auto py-2`} />}
+        </Field>
+        <Field id={fid('coverage')} label="Coverage">
+          {p => <textarea {...p} value={form.coverage} onChange={text('coverage')} rows={2} className={`${controlClass} h-auto py-2`} />}
+        </Field>
+
+        <Section title="Scholarship details">
+          <Field id={fid('scope')} label="Scope">
+            {p => (
+              <select {...p} value={form.scope} onChange={text('scope')} className={controlClass}>
+                <option value="national">National</option>
+                <option value="regional">Regional</option>
+                <option value="provincial">Provincial</option>
+                <option value="city">City</option>
+                <option value="school">School</option>
+              </select>
+            )}
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {input('province', 'Province', 'text')}
+            {input('city', 'City', 'text')}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {input('income_ceiling', 'Income ceiling (₱/yr)', 'number', { placeholder: 'e.g. 400000', extra: { min: '0' } })}
+            {input('gwa_requirement', 'GWA requirement (%)', 'number', { placeholder: 'e.g. 85', extra: { min: '0', max: '100', step: '0.01' } })}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {input('monthly_stipend', 'Monthly stipend (₱/mo)', 'number', { placeholder: 'e.g. 7000', extra: { min: '0' } })}
+            {input('service_obligation_years', 'Service obligation (yrs)', 'number', { placeholder: 'e.g. 2', extra: { min: '0', step: '1' } })}
+          </div>
+          {input('application_window', 'Application window', 'text', { placeholder: 'e.g. Jan 1 – Mar 31 annually' })}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Check id={fid('is_verified')} label="Verified" checked={form.is_verified} onChange={v => set('is_verified', v)} />
+            <Check id={fid('has_entrance_exam')} label="Has entrance exam" checked={form.has_entrance_exam} onChange={v => set('has_entrance_exam', v)} />
+          </div>
+        </Section>
+
+        {form.type === 'scholarship' && (
+          <section className="space-y-3 border-t border-subtle pt-4">
+            <h3>
               <button
                 type="button"
-                onClick={() => setForm(f => ({ ...f, meta_open: !(f.meta_open as boolean) }))}
-                className="w-full flex items-center justify-between pb-2 border-b border-black/[0.06] mb-3"
+                aria-expanded={metaOpen}
+                aria-controls={fid('meta')}
+                onClick={() => setMetaOpen(o => !o)}
+                className="flex w-full items-center justify-between text-sm font-semibold text-ink"
               >
-                <p className={sectionTitleCls.replace('mb-3', '').replace('border-b border-black/[0.06] pb-2', '').trim()}>
-                  Scholarship Meta
-                </p>
-                <span className="text-ink-subtle text-xs">{form.meta_open ? '▲ collapse' : '▼ expand'}</span>
+                Scholarship meta
+                <Icon name={metaOpen ? 'chevron-up' : 'chevron-down'} className="text-ink-muted" />
               </button>
-              {form.meta_open && (
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.meta_huc_excluded as boolean}
-                      onChange={setCheck('meta_huc_excluded')}
-                      className="w-4 h-4 rounded accent-maroon"
-                    />
-                    <span className="text-sm text-ink">HUC Excluded</span>
-                    <span className="text-[10px] text-ink-subtle">(highly urbanized cities ineligible)</span>
-                  </label>
-                  <div>
-                    <label className={labelCls}>Target Year Levels (comma-separated)</label>
-                    <input aria-label="Target Year Levels (comma-separated)"
-                      type="text"
-                      value={form.meta_target_year_levels as string}
-                      onChange={set('meta_target_year_levels')}
-                      className={inputCls}
-                      placeholder="e.g. Grade 12, Freshman"
-                    />
-                    <p className="text-[10px] text-ink-subtle mt-1">Stored as an array. E.g. Grade 12, Freshman</p>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Other Benefits (comma-separated)</label>
-                    <input aria-label="Other Benefits (comma-separated)"
-                      type="text"
-                      value={form.meta_other_benefits as string}
-                      onChange={set('meta_other_benefits')}
-                      className={inputCls}
-                      placeholder="e.g. Free uniform, Monthly stipend"
-                    />
-                    <p className="text-[10px] text-ink-subtle mt-1">Stored as an array.</p>
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setForm(f => ({
-                        ...f,
-                        meta_show_raw: !(f.meta_show_raw as boolean),
-                        meta_raw_error: '',
-                      }))}
-                      className="text-[11px] text-maroon underline"
-                    >
-                      {form.meta_show_raw ? 'Hide Advanced JSON' : 'Advanced JSON'}
-                    </button>
-                    {form.meta_show_raw && (
-                      <div className="mt-2">
-                        <label className={labelCls}>Raw JSON (structured fields above take precedence on save)</label>
-                        <textarea aria-label="Raw JSON (structured fields above take precedence on save)"
-                          value={form.meta_raw_json as string}
-                          onChange={(e) => {
-                            setForm(f => ({ ...f, meta_raw_json: e.target.value, meta_raw_error: '' }))
-                            try { JSON.parse(e.target.value || '{}') }
-                            catch { setForm(f => ({ ...f, meta_raw_error: 'Invalid JSON' })) }
-                          }}
-                          rows={4}
-                          className={inputCls + ' font-mono text-xs'}
-                          placeholder='{"huc_excluded": false, "target_year_levels": [], "other_benefits": []}'
-                        />
-                        {(form.meta_raw_error as string) && (
-                          <p className="text-xs text-danger mt-1">{form.meta_raw_error as string}</p>
-                        )}
-                      </div>
+            </h3>
+            {metaOpen && (
+              <div id={fid('meta')} className="space-y-3">
+                <Check
+                  id={fid('meta_huc_excluded')}
+                  label="HUC excluded"
+                  hint="(highly urbanized cities ineligible)"
+                  checked={form.meta_huc_excluded}
+                  onChange={v => set('meta_huc_excluded', v)}
+                />
+                <Field id={fid('meta_target_year_levels')} label="Target year levels" hint="Comma-separated; stored as a list. E.g. Grade 12, Freshman">
+                  {p => <input {...p} type="text" value={form.meta_target_year_levels} onChange={text('meta_target_year_levels')} className={controlClass} placeholder="e.g. Grade 12, Freshman" />}
+                </Field>
+                <Field id={fid('meta_other_benefits')} label="Other benefits" hint="Comma-separated; stored as a list.">
+                  {p => <input {...p} type="text" value={form.meta_other_benefits} onChange={text('meta_other_benefits')} className={controlClass} placeholder="e.g. Free uniform, Monthly stipend" />}
+                </Field>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setShowRaw(s => !s); setErrors(e => ({ ...e, meta_raw_json: undefined })) }}
+                >
+                  {showRaw ? 'Hide advanced JSON' : 'Advanced JSON'}
+                </Button>
+                {showRaw && (
+                  <Field
+                    id={fid('meta_raw_json')}
+                    label="Raw JSON"
+                    hint="The structured fields above take precedence on save."
+                    error={errors.meta_raw_json}
+                  >
+                    {p => (
+                      <textarea
+                        {...p}
+                        value={form.meta_raw_json}
+                        onChange={e => {
+                          const v = e.target.value
+                          set('meta_raw_json', v)
+                          try { JSON.parse(v || '{}') }
+                          catch { setErrors(er => ({ ...er, meta_raw_json: 'Invalid JSON' })) }
+                        }}
+                        rows={4}
+                        className={`${controlClass} h-auto py-2 font-mono text-xs`}
+                        placeholder='{"huc_excluded": false, "target_year_levels": [], "other_benefits": []}'
+                      />
                     )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {error && <p className="text-sm text-danger bg-danger-soft rounded-[10px] px-3 py-2">{error}</p>}
-        </form>
-        <div className="px-6 py-4 border-t border-black/[0.08] flex gap-2 justify-end">
-          <button type="button" onClick={onClose} className="px-5 py-2 rounded-[980px] text-sm font-medium border border-black/[0.08] text-ink hover:bg-surface-2">
-            Cancel
-          </button>
-          <button onClick={handleSubmit as any} disabled={saving} className="px-5 py-2 rounded-[980px] text-sm font-medium bg-maroon text-white hover:bg-maroon-light disabled:opacity-50">
-            {saving ? 'Saving…' : listing ? 'Save Changes' : 'Create Listing'}
-          </button>
-        </div>
+                  </Field>
+                )}
+              </div>
+            )}
+          </section>
+        )}
       </div>
-    </div>
+    </Drawer>
   )
 }

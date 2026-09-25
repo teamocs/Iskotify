@@ -12,13 +12,16 @@ describe('AddTopicModal', () => {
       React.createElement(AddTopicModal, { subjectId: 'sub-1', onClose: vi.fn() })
     )
     expect(html).toContain('Topic name')
-    expect(html).toContain('Add Topic')
+    expect(html).toContain('Add topic')
   })
 
-  it('save button is disabled in initial empty state', () => {
+  // A blank name is caught on submit with an inline error (validateTopicName),
+  // so the submit stays enabled.
+  it('submit is enabled in the initial empty state and the name is required', () => {
     const html = renderToStaticMarkup(
       React.createElement(AddTopicModal, { subjectId: 'sub-1', onClose: vi.fn() })
     )
-    expect(html).toContain('disabled')
+    expect(html).toMatch(/<button type="submit"(?![^>]*disabled="")[^>]*>/)
+    expect(html).toMatch(/<input[^>]*required=""/)
   })
 })

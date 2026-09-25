@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useState, type ChangeEvent, type DragEvent } from 'react'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   onFileSelected: (file: File) => void
@@ -14,6 +15,11 @@ interface Props {
   label?: string
 }
 
+/**
+ * Drop a file or pick one. The whole zone is the file input's <label>, and the
+ * input is only visually hidden, so Tab reaches it and Enter/Space opens the
+ * picker; the focus ring shows on the zone.
+ */
 export function CsvDropzone({
   onFileSelected,
   disabled,
@@ -23,60 +29,64 @@ export function CsvDropzone({
   accept = '.csv,text/csv',
   label = 'Drop CSV here or click to browse',
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
 
   function handlePicked(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (f) onFileSelected(f)
+    // Let the same file be picked again after an edit.
+    e.target.value = ''
   }
 
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
+  function handleDrop(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault()
     setDragOver(false)
+    if (disabled) return
     const f = e.dataTransfer.files?.[0]
     if (f) onFileSelected(f)
   }
 
-  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+  function handleDragOver(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault()
-    setDragOver(true)
+    if (!disabled) setDragOver(true)
   }
 
   return (
-    <div
-      onClick={() => !disabled && inputRef.current?.click()}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={() => setDragOver(false)}
-      className={`
-        cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition bg-white
-        ${dragOver ? 'border-maroon bg-[#fff5f6]' : 'border-black/[0.12]'}
-        ${disabled ? 'opacity-50 pointer-events-none' : 'hover:border-maroon/60'}
-      `}
-    >
-      <div className="text-3xl mb-2">📄</div>
-      <div className="text-ink font-semibold mb-1 font-heading">{label}</div>
-      <div className="text-ink-muted text-sm">{hint}</div>
+    <div className="space-y-2">
+      <label
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setDragOver(false)}
+        className={[
+          'flex flex-col items-center gap-1 rounded-md border-2 border-dashed px-6 py-8 text-center transition-colors',
+          'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-maroon',
+          dragOver ? 'border-maroon bg-maroon-dim' : 'border-strong bg-surface',
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-maroon hover:bg-surface-hover',
+        ].join(' ')}
+      >
+        <span className="mb-1 flex h-10 w-10 items-center justify-center rounded-sm bg-neutral-soft text-ink-muted">
+          <Icon name="upload" size={20} />
+        </span>
+        <span className="font-heading text-sm font-semibold text-ink">{label}</span>
+        <span className="text-ui text-ink-muted">{hint}</span>
+        <input
+          type="file"
+          accept={accept}
+          className="sr-only"
+          onChange={handlePicked}
+          disabled={disabled}
+        />
+      </label>
       {sampleHref && (
         <a
           href={sampleHref}
-          onClick={e => e.stopPropagation()}
           download
-          className="inline-block mt-4 text-sm text-maroon font-medium underline hover:text-maroon-light"
+          className="inline-flex items-center gap-1 text-ui font-medium text-maroon underline underline-offset-2 hover:text-maroon-hover"
         >
+          <Icon name="download" size={14} />
           {sampleLabel}
         </a>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        aria-label="Choose a CSV file to upload"
-        accept={accept}
-        className="hidden"
-        onChange={handlePicked}
-        disabled={disabled}
-      />
     </div>
   )
 }
