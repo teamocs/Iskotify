@@ -34,10 +34,14 @@ export function Skeleton({ width = '100%', height = 16, radius = radii.sm, acces
       opacity.setValue(1)
       return
     }
+    // isInteraction: false — without the native driver (web) an endless pulse
+    // would otherwise hold an InteractionManager handle open, and loads queued
+    // with runAfterInteractions would never run while the skeleton shows.
+    const native = Platform.OS !== 'web'
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.55, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(opacity, { toValue: 0.55, duration: 700, useNativeDriver: native, isInteraction: false }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: native, isInteraction: false }),
       ]),
     )
     pulse.start()
