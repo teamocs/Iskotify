@@ -195,6 +195,43 @@ describe('PracticeScreen (redesign M2)', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Resume mock' }))
       expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
     })
+
+    // Review finding (MEDIUM): resume detection only looked at the focus mock,
+    // so an unfinished run of any other published mock was invisible here.
+    it('resumes an unfinished run of a non-focus mock', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => key === 'exam:acet'
+        ? { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1 }, updatedAt: 1000 }
+        : null)
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Finish your ACET mock' })).toBeTruthy())
+      expect(screen.getByText('1 of 2 answered. Your answers and timer were saved.')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Resume mock' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/acet')
+    })
+
+    it('resumes the most recently updated run when several mocks are unfinished', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => {
+        if (key === 'exam:upcat') return { runKey: key, questionIds: ['a', 'b', 'c'], answers: { 0: 1 }, updatedAt: 1000 }
+        if (key === 'exam:acet') return { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1, 1: 0 }, updatedAt: 5000 }
+        return null
+      })
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Finish your ACET mock' })).toBeTruthy())
+      expect(mockLoadRun).toHaveBeenCalledWith('exam:upcat')
+      expect(mockLoadRun).toHaveBeenCalledWith('exam:acet')
+    })
+
+    it('ignores empty saved runs', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([ACET])
+      mockLoadRun.mockResolvedValue({ runKey: 'exam:acet', questionIds: [], answers: {}, updatedAt: 1 })
+      await renderSettled()
+      expect(screen.queryByRole('header', { name: 'Finish your ACET mock' })).toBeNull()
+      expect(within(screen.getByTestId('practice-mocks')).queryByText('In progress')).toBeNull()
+    })
   })
 
   describe('mock exams', () => {
@@ -214,6 +251,18 @@ describe('PracticeScreen (redesign M2)', () => {
       expect(within(section).queryByText('EXTRA')).toBeNull()
       fireEvent.press(within(section).getByRole('button', { name: 'See all' }))
       expect(router.push).toHaveBeenCalledWith('/practice/exam')
+    })
+
+    it('badges every mock row that has an unfinished run as "In progress"', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      mockLoadRun.mockImplementation(async (key: string) => key === 'exam:acet'
+        ? { runKey: key, questionIds: ['a', 'b'], answers: { 0: 1 }, updatedAt: 1000 }
+        : null)
+      await renderSettled()
+      const section = screen.getByTestId('practice-mocks')
+      await waitFor(() => expect(within(section).getAllByText('In progress')).toHaveLength(1))
+      expect(within(section).getByRole('button', { name: /^ACET, .*, in progress$/ })).toBeTruthy()
+      expect(within(section).getByRole('button', { name: /^UPCAT, / }).props.accessibilityLabel).not.toMatch(/in progress/)
     })
 
     it('opens a mock from its row', async () => {

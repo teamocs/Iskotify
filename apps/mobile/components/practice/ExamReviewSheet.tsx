@@ -55,11 +55,19 @@ export function ExamReviewSheet({
   // Review finding #4: move accessibility focus onto the title every time the
   // sheet opens — otherwise a screen reader user's focus stays wherever it
   // was on the exam screen behind this full-screen modal.
-  // Native only: react-native-web's findNodeHandle THROWS (and took the whole
-  // app down on web when this sheet opened). On web, RNW's Modal moves focus
-  // into the dialog and traps it.
+  // Native: findNodeHandle + setAccessibilityFocus. On web, findNodeHandle
+  // THROWS (it took the whole app down when this sheet opened), and RNW's
+  // ModalFocusTrap focuses the first focusable descendant (a question cell),
+  // skipping the title and summary. So on web the title is programmatically
+  // focusable (tabIndex -1) and focused directly; the ref is the DOM node
+  // there. This effect runs after the trap's (child effects run first), so the
+  // title wins, and the trap leaves it alone because it sits inside the modal.
   useEffect(() => {
-    if (!visible || Platform.OS === 'web') return
+    if (!visible) return
+    if (Platform.OS === 'web') {
+      titleRef.current?.focus()
+      return
+    }
     const handle = findNodeHandle(titleRef.current)
     AccessibilityInfo.setAccessibilityFocus(handle ?? 0)
   }, [visible])
@@ -114,7 +122,14 @@ export function ExamReviewSheet({
               style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: radius.pill, backgroundColor: t.divider, marginBottom: spacing.md }}
             />
           ) : null}
-          <Text ref={titleRef} style={textStyle('headline', t.textPrimary)} accessibilityRole="header" maxFontSizeMultiplier={1.4}>
+          <Text
+            ref={titleRef}
+            style={textStyle('headline', t.textPrimary)}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+            // RN's Text types omit tabIndex; RNW forwards it to the DOM.
+            {...(Platform.OS === 'web' ? ({ tabIndex: -1 } as object) : null)}
+          >
             Review your answers
           </Text>
           <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: 2, marginBottom: spacing.lg }]} maxFontSizeMultiplier={1.4}>

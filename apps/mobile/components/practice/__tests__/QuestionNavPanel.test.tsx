@@ -53,4 +53,26 @@ describe('QuestionNavPanel (desktop side panel)', () => {
     fireEvent.press(locked)
     expect(base.onJump).not.toHaveBeenCalled()
   })
+
+  // Review finding (HIGH): react-native-web 0.21 ignores the nested
+  // accessibilityState prop, so on web the current/locked state never reached
+  // the DOM. The grid passes aria-selected / aria-disabled instead (RN maps
+  // them natively; RNW writes them to the DOM).
+  describe('web-safe ARIA props', () => {
+    const cellProps = (label: string) =>
+      screen.UNSAFE_getAllByProps({ accessibilityLabel: label }).find(n => typeof n.type !== 'string')!.props
+
+    it('marks the current cell with aria-selected, not accessibilityState', () => {
+      render(<QuestionNavPanel {...base} />)
+      expect(cellProps('Question 3, unanswered')['aria-selected']).toBe(true)
+      expect(cellProps('Question 4, unanswered')['aria-selected']).toBe(false)
+      expect(cellProps('Question 3, unanswered').accessibilityState).toBeUndefined()
+    })
+
+    it('marks locked cells with aria-disabled', () => {
+      render(<QuestionNavPanel {...base} floorIdx={2} />)
+      expect(cellProps('Question 1, answered')['aria-disabled']).toBe(true)
+      expect(cellProps('Question 3, unanswered')['aria-disabled']).toBe(false)
+    })
+  })
 })

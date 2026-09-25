@@ -215,5 +215,28 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
       expect(screen.getByRole('progressbar', { name: 'Math score' })).toBeTruthy()
       expect(screen.getByText('2/2 correct · 100%')).toBeTruthy()
     })
+
+    // Review finding (HIGH): react-native-web 0.21 ignores the nested
+    // accessibilityState prop, so the accordion's expanded state never reached
+    // the DOM. It now travels as aria-expanded.
+    it('exposes the review accordion expanded state as aria-expanded', async () => {
+      await startExam()
+      fireEvent.press(screen.getByText('4'))
+      fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
+      await screen.findByRole('header', { name: 'Tapos na! Mock complete.' })
+
+      const header = () => screen.UNSAFE_getAllByProps({ accessibilityLabel: 'Math, 1 to review' })
+        .find(n => typeof n.type !== 'string')!
+      expect(header().props['aria-expanded']).toBe(false)
+      expect(header().props.accessibilityState).toBeUndefined()
+      expect(screen.getByRole('button', { name: 'Math, 1 to review', expanded: false })).toBeTruthy()
+
+      fireEvent.press(screen.getByRole('button', { name: 'Math, 1 to review' }))
+      expect(header().props['aria-expanded']).toBe(true)
+      expect(screen.getByRole('button', { name: 'Math, 1 to review', expanded: true })).toBeTruthy()
+    })
   })
 })

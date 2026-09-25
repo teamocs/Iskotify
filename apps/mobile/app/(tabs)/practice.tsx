@@ -28,6 +28,7 @@ import { TwoColumn } from '../../components/ui/TwoColumn'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { ListRow } from '../../components/ui/ListRow'
 import { StatNumber } from '../../components/ui/StatNumber'
+import { Badge } from '../../components/ui/Badge'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
@@ -49,6 +50,8 @@ import { confirmAction } from '../../utils/confirmAction'
 // Readiness grids and My Focus live on Today/Progress now (no duplication).
 
 type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error' }
+
+type InProgressRun = { slug: string; title: string; answered: number; total: number; updatedAt: number }
 
 const CACHE_KEYS = ['practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list'] as const
 
@@ -169,24 +172,44 @@ export default function PracticeScreen() {
     [orderedBlueprints, focusSlugs],
   )
 
-  // An unfinished run of the focus mock takes priority over everything else.
-  const [resume, setResume] = useState<NextPracticeInput['resume'] | undefined>(undefined)
+  // Unfinished runs of ANY published mock. The most recently saved one takes
+  // priority over everything else in the next step; every one gets an
+  // "In progress" badge on its row.
+  const [inProgress, setInProgress] = useState<Map<string, InProgressRun> | undefined>(undefined)
+  const blueprintSlugsKey = orderedBlueprints.map(b => b.slug).join('|')
   useEffect(() => {
     if (blueprints.status === 'loading') return
-    if (!focusBlueprint) { setResume(null); return }
+    if (orderedBlueprints.length === 0) { setInProgress(new Map()); return }
     let cancelled = false
-    loadRun(runKeyFor('exam', focusBlueprint.slug))
-      .then(run => {
-        if (cancelled) return
-        setResume(run && run.questionIds.length > 0
-          ? { slug: focusBlueprint.slug, title: focusBlueprint.acronym, answered: Object.keys(run.answers ?? {}).length, total: run.questionIds.length }
-          : null)
-      })
-      .catch(() => { if (!cancelled) setResume(null) })
+    Promise.all(orderedBlueprints.map(b =>
+      loadRun(runKeyFor('exam', b.slug))
+        .then(run => (run && run.questionIds.length > 0
+          ? {
+            slug: b.slug,
+            title: b.acronym,
+            answered: Object.keys(run.answers ?? {}).length,
+            total: run.questionIds.length,
+            updatedAt: run.updatedAt ?? 0,
+          }
+          : null))
+        .catch(() => null),
+    )).then(runs => {
+      if (cancelled) return
+      setInProgress(new Map(runs.filter((r): r is InProgressRun => r !== null).map(r => [r.slug, r])))
+    })
     return () => { cancelled = true }
-    // loadRun is a fresh closure per render (thin hook wrapper); the slug is what matters.
+    // loadRun is a fresh closure per render (thin hook wrapper); the slugs are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blueprints.status, focusBlueprint?.slug, reloadKey])
+  }, [blueprints.status, blueprintSlugsKey, reloadKey])
+
+  const resume = useMemo<NextPracticeInput['resume'] | undefined>(() => {
+    if (inProgress === undefined) return undefined
+    let latest: InProgressRun | null = null
+    for (const r of inProgress.values()) {
+      if (!latest || r.updatedAt > latest.updatedAt) latest = r
+    }
+    return latest ? { slug: latest.slug, title: latest.title, answered: latest.answered, total: latest.total } : null
+  }, [inProgress])
 
   // Weakest practised topic in the first focus exam's scope (all topics when no focus).
   const weakTopic = useMemo(() => {
@@ -292,15 +315,19 @@ export default function PracticeScreen() {
         />
       ) : (
         <RowGroup>
-          {orderedBlueprints.slice(0, 4).map(b => (
-            <ListRow
-              key={b.slug}
-              title={b.acronym}
-              subtitle={`${b.name} · ${b.totalItems} items · ${minutes(b.totalTimeMinutes)}`}
-              accessibilityLabel={`${b.acronym}, ${b.name}, ${b.totalItems} items, ${minutes(b.totalTimeMinutes)}`}
-              onPress={() => go(`/practice/exam/${b.slug}`)}
-            />
-          ))}
+          {orderedBlueprints.slice(0, 4).map(b => {
+            const running = inProgress?.has(b.slug) ?? false
+            return (
+              <ListRow
+                key={b.slug}
+                title={b.acronym}
+                subtitle={`${b.name} · ${b.totalItems} items · ${minutes(b.totalTimeMinutes)}`}
+                accessibilityLabel={`${b.acronym}, ${b.name}, ${b.totalItems} items, ${minutes(b.totalTimeMinutes)}${running ? ', in progress' : ''}`}
+                trailing={running ? <Badge label="In progress" tone="accent" /> : undefined}
+                onPress={() => go(`/practice/exam/${b.slug}`)}
+              />
+            )
+          })}
         </RowGroup>
       )}
     </View>

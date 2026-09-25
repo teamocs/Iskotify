@@ -163,6 +163,44 @@ describe('ExamReviewSheet', () => {
       }
     })
 
+    // Review finding (HIGH): on web, RNW's ModalFocusTrap focuses the first
+    // focusable descendant, which is a question cell, so a keyboard or screen
+    // reader user skipped the title and the unanswered summary. On web the
+    // title is made programmatically focusable and focused when the sheet opens.
+    describe('on web', () => {
+      const MockNativeMethods = require('react-native/jest/MockNativeMethods').default
+      let restoreOS: { restore: () => void }
+      beforeEach(() => {
+        restoreOS = jest.replaceProperty(require('react-native').Platform, 'OS', 'web')
+        MockNativeMethods.focus.mockClear()
+      })
+      afterEach(() => restoreOS.restore())
+
+      const titleFocusCalls = () =>
+        (MockNativeMethods.focus.mock.contexts as any[]).filter(c => c?.props?.children === 'Review your answers').length
+
+      it('makes the title programmatically focusable (tabIndex -1)', () => {
+        render(<ExamReviewSheet {...baseProps} visible />)
+        expect(screen.getByText('Review your answers').props.tabIndex).toBe(-1)
+      })
+
+      it('focuses the title when the sheet opens, and again on each reopen', () => {
+        const { rerender } = render(<ExamReviewSheet {...baseProps} visible={false} />)
+        expect(titleFocusCalls()).toBe(0)
+        rerender(<ExamReviewSheet {...baseProps} visible />)
+        expect(titleFocusCalls()).toBe(1)
+        rerender(<ExamReviewSheet {...baseProps} visible={false} />)
+        rerender(<ExamReviewSheet {...baseProps} visible />)
+        expect(titleFocusCalls()).toBe(2)
+        expect(focusSpy).not.toHaveBeenCalled()
+      })
+    })
+
+    it('leaves the native title out of the tab order (native focus is unchanged)', () => {
+      render(<ExamReviewSheet {...baseProps} visible />)
+      expect(screen.getByText('Review your answers').props.tabIndex).toBeUndefined()
+    })
+
     it('does not steal focus while the sheet is closed', () => {
       render(<ExamReviewSheet {...baseProps} visible={false} />)
       expect(focusSpy).not.toHaveBeenCalled()

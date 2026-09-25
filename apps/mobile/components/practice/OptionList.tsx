@@ -20,7 +20,9 @@ export interface OptionListProps {
  * Answer choices for every practice engine. Each choice is a full-width row at
  * least 48 tall (Android's target). The selected choice is told apart three
  * ways, never by colour alone: a thicker outline, a filled letter badge, and a
- * check mark at the end — plus `selected` for assistive tech.
+ * check mark at the end — plus radio semantics (`aria-checked`) for assistive
+ * tech. The aria-* prop, not the nested accessibilityState, because
+ * react-native-web 0.21 drops accessibilityState before it reaches the DOM.
  *
  * A fixed 2pt border on every row (tinted only when selected) keeps the rows
  * from shifting by a pixel when the selection moves.
@@ -29,14 +31,14 @@ export function OptionList({ options, selectedIndex, onSelect, disabled = false 
   const { theme: t } = useTheme()
 
   return (
-    <View style={{ gap: spacing.sm }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel="Answer choices" style={{ gap: spacing.sm }}>
       {options.map((o, oi) => {
         const selected = selectedIndex === oi
         return (
           <Pressable
             key={oi}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityRole="radio"
+            aria-checked={selected}
             onPress={() => { if (!disabled) onSelect(oi) }}
             style={(state) => {
               const { pressed, focused } = state as WebPressableState

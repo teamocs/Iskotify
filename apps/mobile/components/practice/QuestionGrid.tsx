@@ -24,7 +24,8 @@ export const CELL = 48
  * State never rides on colour alone:
  * - answered → filled tint AND a small bar under the number;
  * - flagged  → a drawn flag in the corner;
- * - current  → a 2pt ring, exposed as `selected` to assistive tech;
+ * - current  → a 2pt ring, exposed as `aria-selected` to assistive tech (aria-*
+ *   props, not accessibilityState, which react-native-web 0.21 drops);
  * and every cell's name spells its state out ("Question 5, unanswered, flagged").
  */
 export const QuestionGrid = memo(function QuestionGrid({
@@ -46,7 +47,8 @@ export const QuestionGrid = memo(function QuestionGrid({
             disabled={locked}
             accessibilityRole="button"
             accessibilityLabel={label}
-            accessibilityState={{ selected: current, disabled: locked }}
+            aria-selected={current}
+            aria-disabled={locked}
             style={(state) => {
               const { pressed, focused } = state as WebPressableState
               return [

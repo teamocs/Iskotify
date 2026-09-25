@@ -443,13 +443,13 @@ describe('BlueprintExam', () => {
       // index 1 — resume must land ON Q3, not silently drift to some other
       // question at the stale index.
       await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
-      expect(screen.getByRole('button', { name: '12' }).props.accessibilityState.selected).toBe(true)
+      expect(screen.getByRole('radio', { name: '12', checked: true })).toBeTruthy()
 
       // Q1's answer (index 0, unaffected by the compaction) must still be
       // intact after navigating back to it.
       fireEvent.press(screen.getByText('Back'))
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
-      expect(screen.getByRole('button', { name: '2' }).props.accessibilityState.selected).toBe(true)
+      expect(screen.getByRole('radio', { name: '2', checked: true })).toBeTruthy()
     })
 
     it('does not offer Resume when no saved run exists', async () => {

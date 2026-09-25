@@ -384,11 +384,11 @@ describe('UpcatExam', () => {
 
     // idx 2 pointed at Q3; after compaction ([Q1, Q3]) Q3 sits at index 1.
     await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
-    expect(screen.getByRole('button', { name: '12' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.getByRole('radio', { name: '12', checked: true })).toBeTruthy()
 
     fireEvent.press(screen.getByText('Back'))
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
-    expect(screen.getByRole('button', { name: '2' }).props.accessibilityState.selected).toBe(true)
+    expect(screen.getByRole('radio', { name: '2', checked: true })).toBeTruthy()
   })
 
   // Review finding #2 (HIGH): submit() stays in phase 'exam' through its

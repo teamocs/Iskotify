@@ -164,7 +164,7 @@ function ReviewAccordion({ reviewSections, questions, answers, initiallyExpanded
               onPress={() => toggle(sec.sectionName)}
               accessibilityRole="button"
               accessibilityLabel={`${sec.sectionName}, ${reviewLine}`}
-              accessibilityState={{ expanded: isOpen }}
+              aria-expanded={isOpen}
               style={(state) => {
                 const { pressed, focused } = state as WebPressableState
                 return [
