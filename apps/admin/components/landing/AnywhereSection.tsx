@@ -4,7 +4,7 @@ import { SECTION_Y, WRAP } from './styles'
 const ITEMS = [
   {
     icon: Wifi,
-    title: 'Works offline',
+    title: 'Works offline on Android',
     body: 'On the Android app, questions, flashcards and your progress live on your phone, so you can study without data. The web app needs a connection to open, then saves your answers as you go.',
   },
   {
