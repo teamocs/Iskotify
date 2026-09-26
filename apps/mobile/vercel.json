@@ -5,6 +5,7 @@
   "framework": null,
   "cleanUrls": true,
   "git": { "deploymentEnabled": { "master": true, "**": false } },
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages ../../pnpm-lock.yaml ../../package.json",
   "rewrites": [
     { "source": "/auth/sign-in", "destination": "/auth/sign-in.html" },
     { "source": "/auth/callback", "destination": "/auth/callback.html" },
