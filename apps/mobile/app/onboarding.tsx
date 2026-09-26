@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { View, Text, SectionList, ActivityIndicator, ScrollView, Platform } from 'react-native'
+import { View, Text, SectionList, ActivityIndicator, ScrollView, Platform, BackHandler } from 'react-native'
 // RN Image is fine for this bundled brand artwork.
 // react-doctor-disable-next-line react-doctor/rn-prefer-expo-image
 import { Image } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, type Href } from 'expo-router'
 import { supabase } from '../services/supabase'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
@@ -42,6 +42,8 @@ import { buildPreAssessFromUpcat } from '../utils/preAssessmentSource'
 import { prefetchSessionImages } from '../utils/prefetchQuestionImages'
 import { canonicalizeRegion } from '../utils/region'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
+import { flushWebPersist } from '../db/webPersist'
+import { afterOnboardingHref } from '../components/walkthrough/tourFlow'
 
 function parseJsonArray(s: string | null | undefined): string[] {
   try { const v = JSON.parse(s ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
@@ -168,6 +170,10 @@ export default function OnboardingScreen() {
   // Only moves forward (see furthestStep), so Back + Continue never rewinds it.
   const furthestRef = useRef<string>('')
 
+  // When the guided tour was first shown (user_settings.tour_seen_at). Finishing
+  // opens it only while this is 0, so it appears once.
+  const tourSeenRef = useRef<number>(0)
+
   // Resume: prefill every saved answer (Google sign-in seeds the name; an
   // interrupted onboarding saved each answer as it went) and open on the step
   // after the furthest one reached. A finished onboarding goes to the app.
@@ -194,6 +200,7 @@ export default function OnboardingScreen() {
           setGwaText(restored.gwaText)
           setProvince(restored.province)
           furthestRef.current = s.onboardingStep ?? ''
+          tourSeenRef.current = Number(s.tourSeenAt ?? 0)
         }
         const resume = resumeStep({
           fullName: s?.fullName,
@@ -223,14 +230,17 @@ export default function OnboardingScreen() {
 
   // Best-effort upsert of profile fields. The UI never waits on it: the
   // expo-sqlite driver runs synchronously, so the row is written before the
-  // next question renders, and a failure only logs.
+  // next question renders, and a failure only logs. On web the database lives
+  // in memory (sql.js) and reaches IndexedDB only on a 2s debounce or an async
+  // pagehide save that a reload beats, so each answer is flushed right away —
+  // otherwise a refresh mid-onboarding restarted at the name question.
   const saveProfile = useCallback((patch: Partial<typeof userSettings.$inferInsert>) => {
     void Promise.resolve(
       db.insert(userSettings)
         .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
         .onConflictDoUpdate({ target: userSettings.id, set: patch }),
     )
-      .then(() => invalidate('settings:'))
+      .then(() => { invalidate('settings:'); flushWebPersist() })
       .catch((e: unknown) => console.warn('[onboarding] persist error:', e))
   }, [db])
 
@@ -425,6 +435,7 @@ export default function OnboardingScreen() {
         console.warn('[onboarding] focus row persist error:', e)
       }
     }
+    flushWebPersist()
     void supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         void supabase.from('profiles')
@@ -561,23 +572,47 @@ export default function OnboardingScreen() {
     }
   }
 
+  // Finished: the guided tour the first time, Today after that.
+  const leaveOnboarding = useCallback(() => {
+    router.replace(afterOnboardingHref(tourSeenRef.current) as Href)
+  }, [])
+
   // Auto-continue when sync finishes while the gate is showing.
   useEffect(() => {
     if (gateVisible && syncStatus === 'done') {
-      if (aliveRef.current) router.replace('/welcome')
+      if (aliveRef.current) leaveOnboarding()
     }
-  }, [gateVisible, syncStatus])
+  }, [gateVisible, syncStatus, leaveOnboarding])
 
   function finishOnboarding() {
     capture('onboarding_completed')
     // Finished: a relaunch or a stray link back here goes straight to the app.
     saveProfile({ onboardingStep: reached('done') })
     if (syncStatus === 'done' || syncStatus === 'idle') {
-      router.replace('/welcome')
+      leaveOnboarding()
     } else {
       setGateVisible(true)
     }
   }
+
+  // Android Back steps back one question (the same place the on-screen Back
+  // button goes) instead of leaving onboarding — it was replaced into the
+  // stack, so the system Back used to close the app mid-flow. Where the screen
+  // has no Back (the first question, mid-check, the gate) the system handles it.
+  const backTarget: StepId | null = gateVisible || assessDone
+    ? null
+    : step === 'check' ? (assessIdx === 0 ? prevStep('check') : null) : prevStep(step)
+  const backTargetRef = useRef(backTarget)
+  backTargetRef.current = backTarget
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const to = backTargetRef.current
+      if (!to) return false
+      setStep(to)
+      return true
+    })
+    return () => sub.remove()
+  }, [])
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -615,7 +650,7 @@ export default function OnboardingScreen() {
                 <Button
                   label="Continue anyway"
                   variant="ghost"
-                  onPress={() => router.replace('/(tabs)')}
+                  onPress={leaveOnboarding}
                   accessibilityHint="Skips setup for now and finishes it next time you open the app"
                   fullWidth
                 />

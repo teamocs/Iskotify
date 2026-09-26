@@ -124,6 +124,10 @@ export const userSettings = sqliteTable('user_settings', {
   // Furthest onboarding step reached (a StepId, or 'done'); '' = no marker yet.
   // Drives resume past skipped optional steps — see components/onboarding/flow.ts.
   onboardingStep: text('onboarding_step').notNull().default(''),
+  // When the guided tour (app/tour.tsx) was first shown, epoch ms; 0 = never.
+  // It opens automatically after onboarding only while this is 0. Device-local:
+  // pullUserData doesn't restore it, and the launch gates never route to the tour.
+  tourSeenAt: integer('tour_seen_at').notNull().default(0),
 })
 
 export const userProgress = sqliteTable('user_progress', {

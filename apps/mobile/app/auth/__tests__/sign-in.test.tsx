@@ -318,3 +318,31 @@ describe('SignInScreen — redesign M2', () => {
     resolve({ ok: true, data: undefined })
   })
 })
+
+describe('SignInScreen — no idle flash after success', () => {
+  // The gate in _layout routes on the auth event after pulling the student's
+  // data. Until then the form must stay busy, not snap back to an idle "Sign in"
+  // button the student can press again.
+  it('keeps the submit button busy after a successful sign-in', async () => {
+    mockSignInWithEmail.mockResolvedValue({ ok: true, data: undefined })
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
+    const signInButtons = screen.getAllByText('Sign in')
+    fireEvent.press(signInButtons[signInButtons.length - 1])
+    await waitFor(() => expect(mockSignInWithEmail).toHaveBeenCalled())
+    await new Promise(r => setTimeout(r, 0))
+    expect(aria(screen.getByRole('button', { name: 'Sign in' }), 'aria-busy')).toBe(true)
+  })
+
+  it('still returns to idle when sign-in fails', async () => {
+    mockSignInWithEmail.mockResolvedValue({ ok: false, error: 'Nope.' })
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
+    const signInButtons = screen.getAllByText('Sign in')
+    fireEvent.press(signInButtons[signInButtons.length - 1])
+    await waitFor(() => expect(screen.getByText('Nope.')).toBeTruthy())
+    expect(aria(screen.getByRole('button', { name: 'Sign in' }), 'aria-busy')).toBe(false)
+  })
+})

@@ -94,6 +94,10 @@ export default function SignInScreen() {
     if (!validateFields()) return
     setLoading(true)
     setFormError('')
+    // On success the web entry gate routes on the auth event, after pulling
+    // the student's data. Until it does, the button stays busy: an idle
+    // "Sign in" in that gap looked like nothing had happened.
+    let routing = false
     try {
       if (mode === 'sign-up') {
         const result = await signUpWithEmail(email.trim(), password)
@@ -102,17 +106,17 @@ export default function SignInScreen() {
           return
         }
         if (result.data.needsEmailConfirm) setSignUpSuccess(true)
-        // Otherwise onAuthStateChange fires → _layout routes.
+        else routing = true
       } else {
         const result = await signInWithEmail(email.trim(), password)
         if (!result.ok) {
           setFormError(result.error)
           return
         }
-        // On success, supabase.auth.onAuthStateChange fires → _layout routes.
+        routing = true
       }
     } finally {
-      setLoading(false)
+      if (!routing) setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, email, password])

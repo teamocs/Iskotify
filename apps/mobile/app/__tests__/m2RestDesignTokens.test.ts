@@ -10,6 +10,11 @@ import path from 'path'
 
 const FILES = [
   'app/welcome.tsx',
+  'app/tour.tsx',
+  'components/walkthrough/TourCard.tsx',
+  'components/walkthrough/TourVisuals.tsx',
+  'components/walkthrough/TourControls.tsx',
+  'components/auth/BrandPanel.tsx',
   'app/landing.tsx',
   'app/onboarding.tsx',
   'app/auth/sign-in.tsx',

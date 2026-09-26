@@ -13,12 +13,13 @@ import { aria } from '../../test-utils/aria'
 
 const mockBack = jest.fn()
 const mockReplace = jest.fn()
+const mockPush = jest.fn()
 let mockCanGoBack = true
 jest.mock('expo-router', () => ({
   router: {
     back: (...a: unknown[]) => mockBack(...a),
     replace: (...a: unknown[]) => mockReplace(...a),
-    push: jest.fn(),
+    push: (...a: unknown[]) => mockPush(...a),
     canGoBack: () => mockCanGoBack,
   },
 }))
@@ -96,6 +97,43 @@ describe('Help copy matches the current app', () => {
     expect(aria(q, 'aria-expanded')).toBe(false)
     fireEvent.press(q)
     expect(aria(screen.getByRole('button', { name: 'Can I use Iskotify offline?' }), 'aria-expanded')).toBe(true)
+  })
+})
+
+describe('Help: the tour comes first', () => {
+  it('offers "Take the tour" before any question, and opens the tour as a replay from Help', () => {
+    render(<HelpScreen />)
+    const buttons = screen.getAllByRole('button')
+    const tourIdx = buttons.findIndex(b => /Take the tour/.test(String(b.props.accessibilityLabel ?? '')))
+    const firstQuestion = buttons.findIndex(b => b.props.accessibilityLabel === 'Can I use Iskotify offline?')
+    expect(tourIdx).toBeGreaterThanOrEqual(0)
+    expect(tourIdx).toBeLessThan(firstQuestion)
+    fireEvent.press(buttons[tourIdx]!)
+    expect(mockPush).toHaveBeenCalledWith('/tour?from=help')
+  })
+})
+
+describe('Help: task-based sections', () => {
+  it('groups questions under getting started, practice and mocks, offline use, and account and sync', () => {
+    render(<HelpScreen />)
+    const h2 = screen.getAllByRole('header').filter(h => aria(h, 'aria-level') === 2).map(h => String(h.props.children))
+    for (const title of ['Getting started', 'Practice and mock exams', 'Offline use', 'Account and sync']) {
+      expect(h2).toContain(title)
+    }
+  })
+
+  it('answers what happens to a mock exam when the student leaves it', () => {
+    render(<HelpScreen />)
+    const q = screen.getByRole('button', { name: /leave a mock exam/i })
+    fireEvent.press(q)
+    expect(screen.getByText(/Resume where you left off/)).toBeTruthy()
+  })
+
+  it('keeps the Estimated Admission Score honest (an estimate, historical cutoffs, no promise)', () => {
+    render(<HelpScreen />)
+    fireEvent.press(screen.getByRole('button', { name: /Estimated Admission Score/ }))
+    expect(screen.getByText(/historical cutoffs/)).toBeTruthy()
+    expect(screen.queryByText(/will qualify|your UPG is/i)).toBeNull()
   })
 })
 

@@ -6,9 +6,7 @@ import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import {
-  Pencil1Outlined, GraduationCap1Outlined, CalendarDaysOutlined, GoogleOutlined,
-} from '@lineiconshq/free-icons'
+import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { supabase } from '../services/supabase'
 import { pullUserData, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
@@ -20,16 +18,8 @@ import { radius, spacing, textStyle } from '../theme/tokens'
 import { useBreakpoint, pagePadding } from '../hooks/useBreakpoint'
 import { Button } from '../components/ui/Button'
 import { BrandBlock } from '../components/auth/AuthLayout'
+import { BrandPanel, PROMISE, VALUE } from '../components/auth/BrandPanel'
 import { decorative } from '../components/ui/a11y'
-
-type Icon = typeof Pencil1Outlined
-
-// Three honest jobs the app does — no invented numbers, no retired AI claims.
-const VALUE: { icon: Icon; title: string; body: string }[] = [
-  { icon: Pencil1Outlined, title: 'Practice for the exam', body: 'Mock exams, flashcards and a quick daily sprint, even offline.' },
-  { icon: GraduationCap1Outlined, title: 'Find schools and scholarships', body: 'Deadlines, requirements and the ones you can apply for.' },
-  { icon: CalendarDaysOutlined, title: 'Know what to do today', body: 'A study plan paced to your exam date, one step at a time.' },
-]
 
 /**
  * Native first impression (web visitors land on /auth/sign-in). One screen:
@@ -141,6 +131,59 @@ export default function LandingScreen() {
     }
   }
 
+  const actions = (
+    <View style={{ gap: spacing.sm }}>
+      {error ? (
+        <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
+          {error}
+        </Text>
+      ) : null}
+      <Button
+        label={signingIn ? 'Opening Google…' : 'Continue with Google'}
+        accessibilityLabel="Continue with Google"
+        onPress={() => void handleGoogleSignIn()}
+        loading={signingIn}
+        icon={<Lineicons icon={GoogleOutlined} size={18} color={t.textInverse} />}
+        size="lg"
+        fullWidth
+      />
+      <Button
+        label="Start without an account"
+        variant="ghost"
+        onPress={() => router.replace('/onboarding')}
+        accessibilityHint="You can sign in later from your profile"
+        fullWidth
+      />
+      <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center', marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
+        Signing in backs up your progress so you can switch phones without losing it.
+      </Text>
+    </View>
+  )
+
+  // Wide windows (large tablets): the brand panel carries the promise and the
+  // three jobs; the other half is just the way in.
+  if (bp === 'expanded') {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
+        <View style={{ flex: 1, flexDirection: 'row', padding: spacing.lg, gap: spacing.lg }}>
+          <View style={{ flex: 5, maxWidth: 720 }}><BrandPanel /></View>
+          <ScrollView style={{ flex: 6 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.xxxl }}>
+            <View style={{ width: '100%', maxWidth: 440, alignSelf: 'center', paddingHorizontal: pagePadding(bp), gap: spacing.xxl }}>
+              <BrandBlock align="start" />
+              <View style={{ gap: spacing.sm }}>
+                <Text style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>Tara, simulan na natin.</Text>
+                <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+                  Free, and it works offline once you are set up.
+                </Text>
+              </View>
+              {actions}
+            </View>
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
@@ -154,7 +197,7 @@ export default function LandingScreen() {
           <View style={{ gap: spacing.xxl }}>
             <BrandBlock align="start" />
             <Text style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.8}>
-              Free practice for UPCAT and other college entrance exams.
+              {PROMISE}
             </Text>
             <View style={{ gap: spacing.lg }}>
               {VALUE.map(v => (
@@ -177,32 +220,7 @@ export default function LandingScreen() {
             </View>
           </View>
 
-          <View style={{ gap: spacing.sm }}>
-            {error ? (
-              <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
-                {error}
-              </Text>
-            ) : null}
-            <Button
-              label={signingIn ? 'Opening Google…' : 'Continue with Google'}
-              accessibilityLabel="Continue with Google"
-              onPress={() => void handleGoogleSignIn()}
-              loading={signingIn}
-              icon={<Lineicons icon={GoogleOutlined} size={18} color={t.textInverse} />}
-              size="lg"
-              fullWidth
-            />
-            <Button
-              label="Start without an account"
-              variant="ghost"
-              onPress={() => router.replace('/onboarding')}
-              accessibilityHint="You can sign in later from your profile"
-              fullWidth
-            />
-            <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center', marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
-              Signing in backs up your progress so you can switch phones without losing it.
-            </Text>
-          </View>
+          {actions}
         </View>
       </ScrollView>
     </SafeAreaView>

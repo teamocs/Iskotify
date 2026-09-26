@@ -5,6 +5,7 @@
  * first unanswered required question.
  */
 import React from 'react'
+import { BackHandler } from 'react-native'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native'
 import OnboardingScreen from '../onboarding'
 import { userSettings } from '../../db/schema'
@@ -56,6 +57,14 @@ jest.mock('../../services/sync', () => ({
   pushUserData: jest.fn().mockResolvedValue(undefined),
 }))
 
+const mockFlushWeb = jest.fn()
+jest.mock('../../db/webPersist', () => ({
+  flushWebPersist: () => mockFlushWeb(),
+  scheduleWebPersist: jest.fn(),
+}))
+
+let mockBackHandler: (() => boolean) | null = null
+
 jest.mock('../../hooks/useAiEnhancement', () => ({
   runEnhancement: jest.fn().mockResolvedValue(undefined),
 }))
@@ -105,6 +114,11 @@ beforeEach(() => {
   mockFocusRows = []
   mockInserts.length = 0
   mockSyncImpl = () => Promise.resolve()
+  mockBackHandler = null
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, h) => {
+    mockBackHandler = h as () => boolean
+    return { remove: jest.fn() }
+  })
   const { supabase } = require('../../services/supabase')
   supabase.from.mockImplementation(() => makeBuilder([]))
 })
@@ -204,6 +218,38 @@ describe('Onboarding: one question per step', () => {
   it('has no Back button on the first question', async () => {
     await renderFresh()
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+  })
+})
+
+describe('Onboarding: Android Back', () => {
+  it('steps back one question instead of leaving onboarding', async () => {
+    await renderFresh()
+    fireEvent.changeText(screen.getByLabelText('Full name'), 'Juan')
+    pressContinue()
+    await flush()
+    expect(screen.getByRole('header', { name: 'What grade are you in?' })).toBeTruthy()
+    let handled = false
+    act(() => { handled = mockBackHandler!() })
+    expect(handled).toBe(true)
+    expect(screen.getByRole('header', { name: 'What should we call you?' })).toBeTruthy()
+    // The typed name is kept.
+    expect(screen.getByLabelText('Full name').props.value).toBe('Juan')
+  })
+
+  it('on the first question it lets the system handle Back', async () => {
+    await renderFresh()
+    expect(mockBackHandler!()).toBe(false)
+  })
+})
+
+describe('Onboarding: web persistence', () => {
+  // The web build keeps SQLite in memory (sql.js) and only writes IndexedDB on
+  // a 2s debounce or an async pagehide save, which a reload beats. Each answer
+  // is flushed right away so a reload resumes where the student stopped.
+  it('flushes every saved answer to durable storage straight away', async () => {
+    await renderFresh()
+    await answerNameAndGrade()
+    expect(mockFlushWeb.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 })
 
@@ -390,13 +436,13 @@ describe('Onboarding: goals and the readiness gate', () => {
     await act(async () => { resolveSync() })
   })
 
-  it('sync resolving while the gate is visible continues to the welcome tour', async () => {
+  it('sync resolving while the gate is visible continues to the tour', async () => {
     let resolveSync!: () => void
     const pending = new Promise<void>(res => { resolveSync = res })
     await advanceToCheck({ syncImpl: () => pending })
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
     await act(async () => { resolveSync(); await Promise.resolve() })
-    expect(router.replace).toHaveBeenCalledWith('/welcome')
+    expect(router.replace).toHaveBeenCalledWith('/tour?from=onboarding')
   })
 
   it('sync error explains itself, and Try again / Continue anyway both work', async () => {
@@ -415,20 +461,33 @@ describe('Onboarding: goals and the readiness gate', () => {
     expect(syncOnLaunch.mock.calls.length).toBeGreaterThan(before)
   })
 
-  it('Continue anyway from the error state enters the app', async () => {
+  it('Continue anyway from the error state still shows the tour first', async () => {
     let rejectSync!: (e: Error) => void
     const failing = new Promise<void>((_, rej) => { rejectSync = rej })
     await advanceToCheck({ syncImpl: () => failing })
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
     await act(async () => { rejectSync(new Error('network')); await Promise.resolve() })
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: /Continue anyway/ })) })
-    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+    expect(router.replace).toHaveBeenCalledWith('/tour?from=onboarding')
   })
 
-  it('finishing after sync already resolved goes straight to the welcome tour', async () => {
+  it('the tour shows only once: a student who has seen it goes straight to Today', async () => {
+    // Resumes on the last step (the quick check) with a tour already seen.
+    mockSavedSettings = [{
+      id: 1, fullName: 'Test', gradeLevel: 11, onboardingStep: 'province', tourSeenAt: 1_758_000_000_000,
+      targetExams: '[{"schoolId":"upd","schoolName":"UP","examAcronym":"UPCAT"}]',
+    }]
+    await renderFresh()
+    expect(screen.getByText('Step 9 of 9')).toBeTruthy()
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/(tabs)'))
+    expect(router.replace).not.toHaveBeenCalledWith('/tour?from=onboarding')
+  })
+
+  it('finishing after sync already resolved goes straight to the tour', async () => {
     await advanceToCheck({ syncImpl: () => Promise.resolve() })
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })) })
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/welcome'))
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith('/tour?from=onboarding'))
     expect(screen.queryByText('Hang tight, almost there')).toBeNull()
     // Marked finished, so a relaunch never re-enters the flow.
     const steps = mockInserts.filter(i => i.table === userSettings).map(i => i.values.onboardingStep)
