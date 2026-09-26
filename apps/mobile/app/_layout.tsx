@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Platform, View, Image, InteractionManager, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { Stack, router } from 'expo-router'
+import { Stack, router, type Href } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
 import { SQLiteProvider } from 'expo-sqlite'
@@ -32,6 +32,7 @@ import { notes as notesTable, userSettings, focusListings as focusListingsTable 
 import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
+import { runWebEntryGate } from '../components/auth/webEntryGate'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 import { initAnalytics, identifyUser, resetAnalytics } from '../lib/analytics'
@@ -152,107 +153,57 @@ function AppInit({ onReady }: { onReady: () => void }) {
     // before the local DB, so an unauthenticated visitor always lands on the
     // sign-in screen. Native keeps its original local-DB-first flow below.
     if (Platform.OS === 'web') {
-      // Declared outside try so they're in scope for the freshTabsEntry check below.
-      let webSettings: (typeof userSettings)['$inferSelect'] | undefined
-      let webTarget: string | undefined
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-
-        if (!session) {
-          // No session → sign-in screen
-          router.replace('/auth/sign-in')
-          onReady()
-          return
+      // Pull the student's backup, then decide where a signed-in student
+      // belongs. Also kicks off the catalog sync (listings/flashcards/subjects/
+      // upcat/career/university) the SAME way native does, non-blocking:
+      // syncOnLaunch invalidates the queryCache so screens re-render when the
+      // data lands. Only an onboarded student landing in the tabs with an empty
+      // local DB (a fresh browser) keeps the "Setting up your data" overlay;
+      // everyone else has it pre-dismissed via markFirstSyncDone.
+      const resolveTarget = async (reason: 'launch' | 'signed-in') => {
+        if (reason === 'signed-in') {
+          const { data: { session } } = await supabase.auth.getSession()
+          const u = session?.user
+          if (u) identifyUser(u.id, { email: u.email ?? undefined })
         }
-
-        // Session exists — pull latest user data from Supabase (non-fatal)
-        try {
-          await pullUserData(db)
-        } catch (e) {
-          console.warn('[layout] web pullUserData (non-fatal):', e)
-        }
-
-        // Route based on local DB state (populated by pullUserData above)
+        try { await pullUserData(db) } catch (e) { console.warn('[layout] web pullUserData (non-fatal):', e) }
         const [rows, focusRows] = await Promise.all([
           db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
           db.select().from(focusListingsTable).limit(1),
         ])
         const settings = rows[0]
-        webSettings = settings
         const hasFocus = hasOnboardingFocus({
           selectedListingSlug: settings?.selectedListingSlug,
           focusCount: focusRows.length,
           targetExams: settings?.targetExams,
         })
         const target = webEntryTarget(true, settings?.fullName, hasFocus)
-        webTarget = target
-        if (target !== '/(tabs)') {
-          router.replace(target)
-        }
-        // else: returning user — Stack shows tabs automatically
-      } catch (e) {
-        console.error('[layout] web init error:', e)
-        router.replace('/auth/sign-in')
-      } finally {
-        onReady()
+        const freshTabsEntry = target === '/(tabs)' && Number(settings?.lastSyncedAt ?? 0) === 0
+        if (!freshTabsEntry) markFirstSyncDone()
+        void syncOnLaunch(db)
+          .then(() => { void runEnhancement(db) })
+          .catch(e => console.warn('[layout] web bg sync:', e))
+        return target
       }
 
-      // ── Web: pull the catalog (listings/flashcards/subjects/topics/upcat/
-      // career/university) the SAME way native does. Without this the web init
-      // branch only ran pullUserData (per-user backup) and every catalog-backed
-      // screen rendered empty. Web has no InteractionManager guarantees, so we
-      // fire it AFTER onReady() (non-blocking) — syncOnLaunch invalidates the
-      // queryCache, so screens re-render once the data lands. Fire-and-forget.
-
-      // Only the "Setting up your data" overlay-eligible case is an authenticated
-      // user landing directly in the tabs with an empty local DB (e.g. a fresh
-      // browser/device). For onboarding-bound new users and returning users who
-      // already have local data, suppress the overlay by pre-marking firstSyncDone.
-      const freshTabsEntry = webTarget === '/(tabs)' && Number(webSettings?.lastSyncedAt ?? 0) === 0
-      if (!freshTabsEntry) markFirstSyncDone()
-
-      void syncOnLaunch(db)
-        .then(() => { void runEnhancement(db) })
-        .catch(e => console.warn('[layout] web bg sync:', e))
-
-      // Subscribe to auth state changes on web so sign-in/sign-out re-routes.
-      // This subscription is long-lived for the app's lifetime — no cleanup
-      // needed (supabase-js handles it; the app will re-mount after signOut).
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (event === 'SIGNED_IN' && session) {
-            if (session.user) identifyUser(session.user.id, { email: session.user.email ?? undefined })
-            try { await pullUserData(db) } catch { /* non-fatal */ }
-            const [rows, focusRows] = await Promise.all([
-              db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
-              db.select().from(focusListingsTable).limit(1),
-            ])
-            const settings = rows[0]
-            const hasFocus = hasOnboardingFocus({
-              selectedListingSlug: settings?.selectedListingSlug,
-              focusCount: focusRows.length,
-              targetExams: settings?.targetExams,
-            })
-            const target = webEntryTarget(true, settings?.fullName, hasFocus)
-            // Only the "Setting up your data" overlay-eligible case is an authenticated
-            // user landing directly in the tabs with an empty local DB (e.g. a fresh
-            // browser/device after sign-in). Suppress the overlay for all other routes.
-            const freshTabsEntrySignIn = target === '/(tabs)' && Number(settings?.lastSyncedAt ?? 0) === 0
-            if (!freshTabsEntrySignIn) markFirstSyncDone()
-            // Fresh sign-in on web: pull the catalog too (non-blocking).
-            void syncOnLaunch(db)
-              .then(() => { void runEnhancement(db) })
-              .catch(e => console.warn('[layout] web signed-in sync:', e))
-            router.replace(target)
-          } else if (event === 'SIGNED_OUT') {
-            resetAnalytics()
-            router.replace('/auth/sign-in')
-          }
-        }
-      )
-      // Subscription cleanup when component unmounts (e.g. during HMR)
-      return () => subscription.unsubscribe()
+      // The gate always subscribes to auth changes — including for a visitor
+      // who arrives signed out, so signing in on the form routes them on — and
+      // leaves auth pages that explain themselves (?error=link, an expired
+      // reset link) where they are. See components/auth/webEntryGate.ts.
+      return runWebEntryGate({
+        hasSession: async () => !!(await supabase.auth.getSession()).data.session,
+        resolveTarget,
+        subscribe: (listener) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (event, session) => listener(event, !!session),
+          )
+          return () => subscription.unsubscribe()
+        },
+        currentPath: () => (typeof window !== 'undefined' ? window.location.pathname : '/'),
+        replace: (href) => router.replace(href as Href),
+        onReady,
+        onSignedOut: () => resetAnalytics(),
+      })
     }
 
     // ── Native: original local-DB-first routing ────────────────────────────

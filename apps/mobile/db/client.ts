@@ -616,6 +616,12 @@ export const MIGRATIONS = [
   // empty answer (skipping is valid), so resume reads this marker. Device-local:
   // pullUserData doesn't restore it (a restored profile already has a focus).
   `ALTER TABLE user_settings ADD COLUMN onboarding_step TEXT NOT NULL DEFAULT ''`,
+
+  // ── Guided tour: shown once after onboarding ────────────────────────────────
+  // Epoch ms of the first showing; 0 = never. Device-local (not restored by
+  // pullUserData), so a returning student on a new phone is never auto-toured:
+  // only finishing onboarding opens it. Replayable from Help.
+  `ALTER TABLE user_settings ADD COLUMN tour_seen_at INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

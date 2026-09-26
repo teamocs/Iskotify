@@ -1,42 +1,62 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, act } from '@testing-library/react-native'
 import WelcomeScreen from '../welcome'
 
+const mockRedirect = jest.fn()
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn() },
+  Redirect: ({ href }: { href: string }) => { mockRedirect(href); return null },
 }))
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: any) => children,
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}))
+let mockSettings: Record<string, unknown>[] = []
+let mockFail = false
+jest.mock('../../hooks/useDb', () => {
+  const db = {
+    select: jest.fn(() => ({
+      from: jest.fn(() => {
+        const chain: Record<string, unknown> = {}
+        chain.where = jest.fn(() => chain)
+        chain.limit = jest.fn(() => (mockFail ? Promise.reject(new Error('db')) : Promise.resolve(mockSettings)))
+        return chain
+      }),
+    })),
+  }
+  return { useDb: () => db }
+})
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  mockSettings = []
+  mockFail = false
+})
+
+async function renderWelcome() {
+  render(<WelcomeScreen />)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+}
 
 /**
- * Welcome (redesign M2): one calm screen after onboarding instead of a
- * four-slide carousel. It maps the four real destinations and ends in the one
- * next step. No swiping pager, so nothing to miss and nothing that animates.
+ * /welcome was the one-screen summary after onboarding. The paged tour
+ * (app/tour.tsx) replaced it; the route stays so an in-flight navigation or an
+ * old link still lands somewhere sensible instead of a 404: the tour the first
+ * time, Today once the tour has been seen (it never auto-opens twice).
  */
 describe('WelcomeScreen', () => {
-  it('greets the student with the approved tagline', () => {
-    render(<WelcomeScreen />)
-    expect(screen.getByRole('header', { name: /You're all set/ })).toBeTruthy()
-    expect(screen.getByText('Para sa mga Iskolar ng Bayan')).toBeTruthy()
+  it('forwards to the tour, as the post-onboarding step, when the tour has not been seen', async () => {
+    mockSettings = [{ id: 1, tourSeenAt: 0 }]
+    await renderWelcome()
+    expect(mockRedirect).toHaveBeenLastCalledWith('/tour?from=onboarding')
   })
 
-  it('maps the four real destinations: Today, Practice, Explore, Progress', () => {
-    render(<WelcomeScreen />)
-    for (const name of ['Today', 'Practice', 'Explore', 'Progress']) {
-      expect(screen.getByRole('header', { name })).toBeTruthy()
-    }
-    expect(screen.queryByText(/\bLists\b|\bUpdates\b|Home — your dashboard/)).toBeNull()
+  it('goes to Today when the tour has already been seen', async () => {
+    mockSettings = [{ id: 1, tourSeenAt: 1_700_000_000_000 }]
+    await renderWelcome()
+    expect(mockRedirect).toHaveBeenLastCalledWith('/(tabs)')
+    expect(mockRedirect).not.toHaveBeenCalledWith('/tour?from=onboarding')
   })
 
-  it('ends in one primary action that enters the app on Today', () => {
-    const { router } = require('expo-router')
-    render(<WelcomeScreen />)
-    fireEvent.press(screen.getByRole('button', { name: 'Start studying' }))
-    expect(router.replace).toHaveBeenCalledWith('/(tabs)')
+  it('falls back to the tour when the setting cannot be read', async () => {
+    mockFail = true
+    await renderWelcome()
+    expect(mockRedirect).toHaveBeenLastCalledWith('/tour?from=onboarding')
   })
 })

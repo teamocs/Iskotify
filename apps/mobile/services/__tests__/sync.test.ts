@@ -240,7 +240,8 @@ function makeTestDb(): DrizzleClient {
       ai_provider TEXT NOT NULL DEFAULT 'local',
       daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
-      onboarding_step TEXT NOT NULL DEFAULT ''
+      onboarding_step TEXT NOT NULL DEFAULT '',
+      tour_seen_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -692,7 +693,8 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       ai_provider TEXT NOT NULL DEFAULT 'local',
       daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
-      onboarding_step TEXT NOT NULL DEFAULT ''
+      onboarding_step TEXT NOT NULL DEFAULT '',
+      tour_seen_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
