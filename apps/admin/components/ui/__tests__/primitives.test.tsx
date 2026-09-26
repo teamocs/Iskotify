@@ -8,7 +8,7 @@ import { EmptyState } from '../EmptyState'
 import { ErrorBanner } from '../ErrorBanner'
 import { Field, controlClass } from '../Field'
 import { Icon } from '../Icon'
-import { nextFocusIndex } from '../useFocusTrap'
+import { isTabbable, nextFocusIndex } from '../useFocusTrap'
 
 const RAW_COLOUR = /(?:bg|text|border|ring|outline|shadow|from|to|via|fill|stroke)-\[(?:#|rgba?\()/
 
@@ -177,5 +177,25 @@ describe('nextFocusIndex (focus trap)', () => {
   })
   it('does nothing when there is nothing to focus', () => {
     expect(nextFocusIndex(0, -1, false)).toBeNull()
+  })
+})
+
+describe('isTabbable (focus trap candidates)', () => {
+  // Minimal element stand-ins: the trap only asks for the tabindex attribute
+  // and whether an ancestor (or the element) is `hidden`.
+  const el = ({ tabindex = null as string | null, hiddenAncestor = false } = {}) => ({
+    getAttribute: (name: string) => (name === 'tabindex' ? tabindex : null),
+    closest: (sel: string) => (sel === '[hidden]' && hiddenAncestor ? {} : null),
+  })
+
+  it('accepts an ordinary focusable element', () => {
+    expect(isTabbable(el())).toBe(true)
+    expect(isTabbable(el({ tabindex: '0' }))).toBe(true)
+  })
+  it('rejects roving-tabindex elements (tabindex="-1"), e.g. menu items', () => {
+    expect(isTabbable(el({ tabindex: '-1' }))).toBe(false)
+  })
+  it('rejects elements inside a [hidden] subtree, e.g. a closed row menu', () => {
+    expect(isTabbable(el({ hiddenAncestor: true }))).toBe(false)
   })
 })

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { PublishModal } from './PublishModal'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { Button, buttonClass } from '@/components/ui/Button'
@@ -66,7 +67,7 @@ const COLUMNS: Column<Draft>[] = [
     ),
   },
   { id: 'subject', header: 'Subject', sortValue: d => d.subject_name, cell: d => <span className="text-ink-muted">{d.subject_name}</span> },
-  { id: 'cards', header: 'Cards', align: 'right', sortValue: d => d.total_cards, cell: d => d.total_cards },
+  { id: 'cards', header: 'Cards', numeric: true, sortValue: d => d.total_cards, cell: d => d.total_cards },
   { id: 'distractors', header: 'Distractors', sortValue: d => (d.total_cards ? readyCount(d) / d.total_cards : 1), cell: d => <DistractorsCell draft={d} /> },
   { id: 'source', header: 'Source', sortValue: d => d.source_type, cell: d => <Badge tone={SOURCE[d.source_type]?.tone}>{SOURCE[d.source_type]?.label ?? d.source_type}</Badge> },
   {
@@ -110,7 +111,7 @@ export function DraftsTableView({ drafts, error, selected, onSelectedChange, onP
           action={<Button size="sm" onClick={onRetry}>Try again</Button>}
         />
       )}
-      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
         <DataTable
           label="Drafts"
           rows={drafts ?? []}

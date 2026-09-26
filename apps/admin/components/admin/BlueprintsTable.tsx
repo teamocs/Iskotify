@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { buttonClass } from '@/components/ui/Button'
@@ -44,16 +45,16 @@ const columns: Column<BlueprintRow>[] = [
     ),
   },
   { id: 'acronym', header: 'Acronym', sortValue: b => b.acronym, cell: b => <span className="text-ink-muted">{b.acronym || '—'}</span> },
-  { id: 'items', header: 'Items', align: 'right', sortValue: b => b.total_items, cell: b => <span className="tabular-nums">{b.total_items}</span> },
+  { id: 'items', header: 'Items', numeric: true, sortValue: b => b.total_items, cell: b => <span className="tabular-nums">{b.total_items}</span> },
   {
     id: 'time',
     header: 'Time limit',
-    align: 'right',
+    numeric: true,
     sortValue: b => b.total_time_minutes,
     cell: b => <span className="whitespace-nowrap tabular-nums text-ink-muted">{b.total_time_minutes} min</span>,
   },
   { id: 'status', header: 'Status', sortValue: b => status(b.status).label, cell: b => <Badge tone={status(b.status).tone}>{status(b.status).label}</Badge> },
-  { id: 'order', header: 'Order', align: 'right', sortValue: b => b.display_order, cell: b => <span className="tabular-nums text-ink-muted">{b.display_order}</span> },
+  { id: 'order', header: 'Order', numeric: true, sortValue: b => b.display_order, cell: b => <span className="tabular-nums text-ink-muted">{b.display_order}</span> },
   {
     id: 'actions',
     header: 'Actions',
@@ -69,7 +70,7 @@ const columns: Column<BlueprintRow>[] = [
 
 export function BlueprintsTable({ blueprints }: { blueprints: BlueprintRow[] }) {
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       <DataTable
         label="Exam blueprints"
         rows={blueprints}

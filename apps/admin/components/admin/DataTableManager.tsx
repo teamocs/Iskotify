@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { parseTableState, type SortState } from '@/lib/table/tableState'
 import type { DataTableConfig, DataTableColumnConfig } from '@/lib/dataTables'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { isDirty } from '@/lib/admin/formDirty'
 import { useDebounce } from '@/lib/useDebounce'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
@@ -345,16 +347,18 @@ export function DataTableManager({ config }: Props) {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResultState | null>(null)
 
-  // Text ids lead the table; server-generated ids (uuid/int) trail it.
-  const idConfigured = config.columns.some(c => c.name === config.idColumn)
-  const idCol: DataTableColumnConfig = { name: config.idColumn, label: humanizeColumnName(config.idColumn), type: 'text' }
-  const ordered: DataTableColumnConfig[] = [
-    ...(!idConfigured && config.idType === 'text' ? [idCol] : []),
-    ...config.columns,
-    ...(!idConfigured && config.idType !== 'text' ? [idCol] : []),
-  ]
-  // The route sorts by any configured column or the id; JSON columns aren't meaningfully sortable.
-  const sortable = ordered.filter(c => c.type !== 'json').map(c => c.name)
+  const { ordered, sortable } = useMemo(() => {
+    // Text ids lead the table; server-generated ids (uuid/int) trail it.
+    const idConfigured = config.columns.some(c => c.name === config.idColumn)
+    const idCol: DataTableColumnConfig = { name: config.idColumn, label: humanizeColumnName(config.idColumn), type: 'text' }
+    const ordered: DataTableColumnConfig[] = [
+      ...(!idConfigured && config.idType === 'text' ? [idCol] : []),
+      ...config.columns,
+      ...(!idConfigured && config.idType !== 'text' ? [idCol] : []),
+    ]
+    // The route sorts by any configured column or the id; JSON columns aren't meaningfully sortable.
+    return { ordered, sortable: ordered.filter(c => c.type !== 'json').map(c => c.name) }
+  }, [config])
 
   // The table writes q/sort/page to the URL; the server does the work, one page at a time.
   const params = useSearchParams()
@@ -395,52 +399,58 @@ export function DataTableManager({ config }: Props) {
   /** Refetch the current page (after a save, delete or import, or Try again). */
   const fetchRows = () => setNonce(n => n + 1)
 
-  const idOf = (row: Row) => String(row[config.idColumn] ?? '')
+  const idOf = useCallback((row: Row) => String(row[config.idColumn] ?? ''), [config.idColumn])
 
-  // The first configured, non-id column usually names the row ("Name", "Title").
-  const nameColumn = config.columns.find(c => c.name !== config.idColumn && (c.type === 'text' || c.type === 'textarea'))
-  const rowName = (row: Row) => {
+  const rowName = useCallback((row: Row) => {
+    // The first configured, non-id column usually names the row ("Name", "Title").
+    const nameColumn = config.columns.find(c => c.name !== config.idColumn && (c.type === 'text' || c.type === 'textarea'))
     const named = config.idType === 'text' ? idOf(row) : nameColumn ? textOf(row[nameColumn.name]) : ''
     return named || idOf(row) || 'row'
-  }
+  }, [config.columns, config.idColumn, config.idType, idOf])
 
   const searchCols = config.searchColumns
 
-  const dataColumns: Column<Row>[] = ordered.map((col, i) => ({
-    id: col.name,
-    header: headerLabel(col.label),
-    align: col.type === 'number' ? 'right' : undefined,
-    // Presence marks the header sortable; the server does the sorting.
-    sortValue: sortable.includes(col.name) ? (r: Row) => textOf(r[col.name]) : undefined,
-    cell: i === 0
-      ? (r: Row) => (
-          <button
-            type="button"
-            onClick={() => setDrawer({ row: r })}
-            title={textOf(r[col.name])}
-            className="block max-w-[14rem] truncate text-left font-medium text-ink underline-offset-2 hover:underline"
-          >
-            {textOf(r[col.name]) || 'Untitled'}
-          </button>
-        )
-      : (r: Row) => <Cell value={r[col.name]} type={col.type} />,
-  }))
+  // Built from the config alone (plus stable setters), so memoised rows can skip re-rendering.
+  const columns = useMemo<Column<Row>[]>(() => {
+    const dataColumns: Column<Row>[] = ordered.map((col, i) => ({
+      id: col.name,
+      header: headerLabel(col.label),
+      numeric: col.type === 'number',
+      // Presence marks the header sortable; the server does the sorting.
+      sortValue: sortable.includes(col.name) ? (r: Row) => textOf(r[col.name]) : undefined,
+      cell: i === 0
+        ? (r: Row) => (
+            <button
+              type="button"
+              onClick={() => setDrawer({ row: r })}
+              title={textOf(r[col.name])}
+              className="block max-w-[14rem] truncate text-left font-medium text-ink underline-offset-2 hover:underline"
+            >
+              {textOf(r[col.name]) || 'Untitled'}
+            </button>
+          )
+        : (r: Row) => <Cell value={r[col.name]} type={col.type} />,
+    }))
 
-  const columns: Column<Row>[] = [
-    ...dataColumns,
-    {
-      id: 'actions',
-      header: 'Actions',
-      hideHeader: true,
-      align: 'right',
-      cell: r => (
-        <span className="inline-flex gap-1">
-          <IconButton icon="pencil" label={`Edit ${rowName(r)}`} onClick={() => setDrawer({ row: r })} />
-          <IconButton icon="trash" label={`Delete ${rowName(r)}`} onClick={() => setDeleteTarget(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
-        </span>
-      ),
-    },
-  ]
+    return [
+      ...dataColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        hideHeader: true,
+        align: 'right',
+        cell: r => (
+          <RowActions
+            label={`Actions for ${rowName(r)}`}
+            items={[
+              { label: 'Edit', name: `Edit ${rowName(r)}`, icon: 'pencil', onSelect: () => setDrawer({ row: r }) },
+              { label: 'Delete', name: `Delete ${rowName(r)}`, icon: 'trash', tone: 'danger', onSelect: () => setDeleteTarget(r) },
+            ]}
+          />
+        ),
+      },
+    ]
+  }, [ordered, sortable, rowName])
 
   function onSaved() {
     setDrawer(null)
@@ -522,15 +532,11 @@ export function DataTableManager({ config }: Props) {
         </div>
       )}
 
-      {loadError ? (
-        <ErrorBanner
-          title={`Couldn’t load ${config.label}`}
-          message={loadError}
-          action={<Button size="sm" icon="refresh" onClick={() => fetchRows()}>Try again</Button>}
-        />
-      ) : (
-        <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
           <DataTable
+            error={loadError}
+            onRetry={fetchRows}
+            errorTitle={`Couldn’t load ${config.label}`}
             label={config.label}
             rows={rows}
             columns={columns}
@@ -567,7 +573,6 @@ export function DataTableManager({ config }: Props) {
             }
           />
         </div>
-      )}
 
       {drawer && (
         <RowDrawer

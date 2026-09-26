@@ -1,6 +1,7 @@
 import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { Card } from '@/components/ui/Card'
+import { TABLE_FRAME, THead, Table, TableRegion, Td, Th, Tr } from '@/components/ui/Table'
 import { DATA_TABLE_MAP, type DataTableConfig, type DataTableColumnConfig } from '@/lib/dataTables'
 import { exportColumnNames } from '@/lib/dataTables/serialization'
 
@@ -49,32 +50,33 @@ function FormatTable({ config }: { config: DataTableConfig }) {
   const order = exportColumnNames(config)
   const byName = new Map(config.columns.map(c => [c.name, c]))
   return (
-    <div className="overflow-x-auto rounded-sm border border-subtle">
-      <table className="w-full min-w-[520px] text-ui">
-        <caption className="sr-only">{config.label} columns</caption>
-        <thead className="border-b border-subtle bg-surface-3">
+    <div className={TABLE_FRAME}>
+    <TableRegion label={`${config.label} columns`}>
+      <Table caption={`${config.label} columns`} density="compact" className="min-w-[520px]">
+        <THead>
           <tr>
-            {['Column', 'Type', 'Required', 'Notes'].map(h => (
-              <th key={h} scope="col" className="px-3 py-2 text-left text-xs font-semibold text-ink-muted">{h}</th>
+            {['Column', 'Type', 'Required', 'Notes'].map((h, i) => (
+              <Th key={h} pin={i === 0 ? 'first' : undefined}>{h}</Th>
             ))}
           </tr>
-        </thead>
-        <tbody className="divide-y divide-subtle">
+        </THead>
+        <tbody>
           {order.map(name => {
             const col = byName.get(name)
             const type = col?.type ?? 'text'
             const required = name === config.idColumn || !!col?.required
             return (
-              <tr key={name}>
-                <td className="px-3 py-1.5 font-mono text-xs text-ink">{name}</td>
-                <td className="px-3 py-1.5 text-ink-muted">{TYPE_LABEL[type]}</td>
-                <td className="px-3 py-1.5 text-ink-muted">{required ? 'Yes' : ''}</td>
-                <td className="px-3 py-1.5 text-xs text-ink-muted">{col ? colNote(col, config) : ''}</td>
-              </tr>
+              <Tr key={name}>
+                <Td pin="first" className="font-mono text-xs">{name}</Td>
+                <Td className="text-ink-muted">{TYPE_LABEL[type]}</Td>
+                <Td className="text-ink-muted">{required ? 'Yes' : <span className="sr-only">No</span>}</Td>
+                <Td className="text-xs text-ink-muted">{col ? colNote(col, config) : ''}</Td>
+              </Tr>
             )
           })}
         </tbody>
-      </table>
+      </Table>
+    </TableRegion>
     </div>
   )
 }

@@ -66,7 +66,7 @@ describe('FeedbackView table', () => {
     const html = view({ total: 60 })
     expect(html).toContain('Too many ads')
     expect(html).toContain('Love the flashcards')
-    expect(html).toContain('Showing 51–52 of 60')
+    expect(html).toContain('51–52 of 60')
   })
 
   it('renders an error banner instead of an empty table when loading fails', () => {

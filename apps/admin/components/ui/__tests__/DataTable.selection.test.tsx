@@ -107,7 +107,7 @@ describe('DataTable server mode', () => {
     const html = renderToStaticMarkup(
       <DataTable<Row> label="Things" rows={pageRows} columns={columns} rowKey={r => r.id} pageSize={50} server={{ total: 120 }} />,
     )
-    expect(html).toContain('Showing 51–52 of 120')
+    expect(html).toContain('51–52 of 120')
     expect(html).toContain('Page 2 of 3')
   })
 

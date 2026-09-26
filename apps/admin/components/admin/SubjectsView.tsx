@@ -1,12 +1,14 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createSubject as createSubjectRequest, updateSubject, deleteSubject } from '@/lib/admin/subjectsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
-import { Button, IconButton, buttonClass } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { Field, controlClass } from '@/components/ui/Field'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -213,7 +215,8 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     }
   }
 
-  const columns: Column<SubjectRow>[] = [
+  // Depends only on the listings prop (and stable setters), so memoised rows can skip re-rendering.
+  const columns = useMemo<Column<SubjectRow>[]>(() => [
     {
       id: 'name',
       header: 'Subject',
@@ -226,8 +229,8 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
         </>
       ),
     },
-    { id: 'topics', header: 'Topics', align: 'right', sortValue: s => s.topics.length, cell: s => <span className="tabular-nums text-ink-muted">{s.topics.length}</span> },
-    { id: 'cards', header: 'Cards', align: 'right', sortValue: s => s.totalCards, cell: s => <span className="tabular-nums text-ink-muted">{s.totalCards}</span> },
+    { id: 'topics', header: 'Topics', numeric: true, sortValue: s => s.topics.length, cell: s => <span className="tabular-nums text-ink-muted">{s.topics.length}</span> },
+    { id: 'cards', header: 'Cards', numeric: true, sortValue: s => s.totalCards, cell: s => <span className="tabular-nums text-ink-muted">{s.totalCards}</span> },
     {
       id: 'status',
       header: 'Status',
@@ -240,17 +243,20 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
       hideHeader: true,
       align: 'right',
       cell: s => (
-        <span className="inline-flex gap-1">
-          <IconButton icon="pencil" label={`Edit ${s.name}`} onClick={() => setFormFor(s)} />
-          <IconButton icon="trash" label={`Delete ${s.name}`} onClick={() => setDeletingSubject(s)} className="hover:bg-danger-soft hover:text-danger-strong" />
-        </span>
+        <RowActions
+          label={`Actions for ${s.name}`}
+          items={[
+            { label: 'Edit', name: `Edit ${s.name}`, icon: 'pencil', onSelect: () => setFormFor(s) },
+            { label: 'Delete', name: `Delete ${s.name}`, icon: 'trash', tone: 'danger', onSelect: () => setDeletingSubject(s) },
+          ]}
+        />
       ),
     },
-  ]
+  ], [listings])
 
   return (
     <div data-testid="subjects-view">
-      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
         <DataTable
           label="Subjects"
           rows={subjects}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { RowActions, type RowAction } from '@/components/ui/RowActions'
 import type { FilterDef } from '@/components/ui/DataTable'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { parseTableState, type TableState } from '@/lib/table/tableState'
@@ -48,6 +49,42 @@ export function BulkStatusActions({ busy, onApply }: { busy: boolean; onApply: (
         </Button>
       ))}
     </>
+  )
+}
+
+/**
+ * A queue row's actions: the one frequent move (Resolve) stays visible, every
+ * other status change, `extra` actions and Delete live in the row's menu.
+ */
+export function QueueRowActions({ name, status, onSetStatus, onDelete, deleteLabel, extra = [] }: {
+  /** Short text naming the row, used in accessible names ("Mark reviewed: Wrong answer…"). */
+  name: string
+  status: ReviewStatus
+  onSetStatus: (status: ReviewStatus) => void
+  onDelete: () => void
+  /** "Delete report", "Delete feedback"… */
+  deleteLabel: string
+  extra?: RowAction[]
+}) {
+  const items: RowAction[] = [
+    ...REVIEW_STATUSES.filter(s => s !== status).map(s => ({
+      label: `Mark ${s}`,
+      name: `Mark ${s}: ${name}`,
+      icon: s === 'resolved' ? ('check' as const) : undefined,
+      onSelect: () => onSetStatus(s),
+    })),
+    ...extra,
+    { label: deleteLabel, name: `${deleteLabel}: ${name}`, icon: 'trash', tone: 'danger', onSelect: onDelete },
+  ]
+  return (
+    <span className="inline-flex items-center gap-1">
+      {status !== 'resolved' && (
+        <Button size="sm" variant="ghost" icon="check" className="-my-1.5" aria-label={`Resolve: ${name}`} onClick={() => onSetStatus('resolved')}>
+          Resolve
+        </Button>
+      )}
+      <RowActions label={`More actions for ${name}`} items={items} />
+    </span>
   )
 }
 
@@ -123,7 +160,7 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, spec, noun, 
     router.refresh()
   }, [reload, router])
 
-  async function setStatus(id: string, status: ReviewStatus) {
+  const setStatus = useCallback(async (id: string, status: ReviewStatus) => {
     try {
       const res = await fetch(`${listUrl}/${id}`, {
         method: 'PATCH',
@@ -140,10 +177,10 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, spec, noun, 
     } catch {
       notifyError('Network error')
     }
-  }
+  }, [listUrl, singular, afterChange])
 
   /** Resolves true when the row was deleted. */
-  async function remove(id: string): Promise<boolean> {
+  const remove = useCallback(async (id: string): Promise<boolean> => {
     try {
       const res = await fetch(`${listUrl}/${id}`, { method: 'DELETE' })
       if (!res.ok) {
@@ -159,7 +196,7 @@ export function useStatusQueue<T extends { id: string }>({ listUrl, spec, noun, 
       notifyError('Network error')
       return false
     }
-  }
+  }, [listUrl, singular, afterChange])
 
   async function applyBulk(status: ReviewStatus) {
     if (selected.length === 0) return

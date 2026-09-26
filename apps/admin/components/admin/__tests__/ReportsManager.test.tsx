@@ -79,7 +79,7 @@ describe('ReportsView table', () => {
     const html = view({ total: 230 })
     expect(html).toContain('Solve for x')
     expect(html).toContain('capital of Camarines Sur')
-    expect(html).toContain('Showing 1–2 of 230')
+    expect(html).toContain('1–2 of 230')
     expect(html).toContain('Page 1 of 5')
   })
 

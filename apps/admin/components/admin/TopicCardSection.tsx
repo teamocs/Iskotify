@@ -14,6 +14,8 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME, THead, Table, TableRegion, Td, Th, Tr } from '@/components/ui/Table'
 
 interface Card extends EditableCard {
   listing_slugs?: string[]
@@ -36,8 +38,6 @@ interface Props {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const short = (s: string) => (s.length > 60 ? `${s.slice(0, 57)}…` : s)
 
-const TH = 'px-4 py-2 text-left text-xs font-medium text-ink-muted'
-const TD = 'px-4 py-2.5 align-top'
 
 export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }: Props) {
   const router = useRouter()
@@ -152,7 +152,7 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
   const showTable = cards.length > 0 || (loading && !loadError)
 
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       {/* Disclosure header: the topic name opens and closes its cards */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
         <h2 className="min-w-0 flex-1 text-sm">
@@ -206,48 +206,45 @@ export function TopicCardSection({ subjectId, topic, defaultOpen, subjectName }:
           )}
 
           {showTable && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] border-collapse text-ui">
-                <caption className="sr-only">Cards in {topic.name}</caption>
-                <thead>
-                  <tr className="border-b border-subtle bg-surface-2">
-                    <th scope="col" className={`${TH} w-[35%]`}>Question</th>
-                    <th scope="col" className={`${TH} w-[30%]`}>Answer</th>
-                    <th scope="col" className={TH}>Explanation</th>
-                    <th scope="col" className={`${TH} w-20`}><span className="sr-only">Actions</span></th>
+            <TableRegion label={`Cards in ${topic.name}`} busy={loading}>
+              <Table caption={`Cards in ${topic.name}`} className="min-w-[40rem]">
+                <THead>
+                  <tr>
+                    <Th className="w-[35%]">Question</Th>
+                    <Th className="w-[30%]">Answer</Th>
+                    <Th>Explanation</Th>
+                    <Th align="right" className="w-12"><span className="sr-only">Actions</span></Th>
                   </tr>
-                </thead>
+                </THead>
                 <tbody>
                   {cards.map(card => (
-                    <tr key={card.id} className="border-b border-subtle last:border-0 hover:bg-surface-hover">
-                      <td className={`${TD} text-ink`}>{card.question}</td>
-                      <td className={`${TD} text-ink-muted`}>{card.answer}</td>
-                      <td className={`${TD} text-ink-muted`}>{card.explanation || <span className="text-ink-subtle">—</span>}</td>
-                      <td className={`${TD} text-right`}>
-                        <span className="inline-flex gap-1">
-                          <IconButton icon="pencil" label={`Edit card: ${short(card.question)}`} onClick={() => setEditingCard(card)} />
-                          <IconButton
-                            icon="trash"
-                            label={`Delete card: ${short(card.question)}`}
-                            onClick={() => setDeletingCard(card)}
-                            className="hover:bg-danger-soft hover:text-danger-strong"
-                          />
-                        </span>
-                      </td>
-                    </tr>
+                    <Tr key={card.id}>
+                      <Td>{card.question}</Td>
+                      <Td className="text-ink-muted">{card.answer}</Td>
+                      <Td className="text-ink-muted">{card.explanation || <span className="text-ink-subtle">—</span>}</Td>
+                      <Td align="right">
+                        <RowActions
+                          label={`Actions for card: ${short(card.question)}`}
+                          items={[
+                            { label: 'Edit', name: `Edit card: ${short(card.question)}`, icon: 'pencil', onSelect: () => setEditingCard(card) },
+                            { label: 'Delete', name: `Delete card: ${short(card.question)}`, icon: 'trash', tone: 'danger', onSelect: () => setDeletingCard(card) },
+                          ]}
+                        />
+                      </Td>
+                    </Tr>
                   ))}
                   {loading && (
-                    <tr aria-busy="true">
-                      <td colSpan={4} className={`${TD} text-ink-muted`}>
+                    <Tr>
+                      <Td colSpan={4} className="text-ink-muted">
                         <span className="inline-flex items-center gap-2" role="status">
                           <Icon name="loader" className="animate-spin" /> Loading cards…
                         </span>
-                      </td>
-                    </tr>
+                      </Td>
+                    </Tr>
                   )}
                 </tbody>
-              </table>
-            </div>
+              </Table>
+            </TableRegion>
           )}
 
           {!loading && !loadError && cards.length === 0 && (

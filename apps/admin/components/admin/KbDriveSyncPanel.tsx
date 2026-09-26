@@ -121,7 +121,7 @@ export function KbDriveSyncPanel({ files }: { files: KbDriveFile[] }) {
       ),
     },
     { id: 'status', header: 'Status', sortValue: f => STATUS[f.status].label, cell: f => <Badge tone={STATUS[f.status].tone}>{STATUS[f.status].label}</Badge> },
-    { id: 'questions', header: 'Questions', align: 'right', sortValue: f => f.rows_imported, cell: f => (f.status === 'imported' ? f.rows_imported : '—') },
+    { id: 'questions', header: 'Questions', numeric: true, sortValue: f => f.rows_imported, cell: f => (f.status === 'imported' ? f.rows_imported : '—') },
     {
       id: 'missing',
       header: 'Missing figures',

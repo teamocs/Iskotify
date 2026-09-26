@@ -57,7 +57,7 @@ describe('ReviewQueueTable', () => {
     expect(html).toContain('>Flag<')
     expect(html).toContain('>Subject<')
     expect(html).toContain('None/All of the above')
-    expect(html).toContain('<option value="Science">Science</option>')
+    expect(html).toContain('<option value="Science">Science (1)</option>')
     const onlyScience = render('subject=Science')
     expect(onlyScience).toContain('S002')
     expect(onlyScience).not.toContain('M001')
