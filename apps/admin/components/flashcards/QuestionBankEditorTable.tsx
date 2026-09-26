@@ -54,6 +54,7 @@ export const QuestionBankEditorTable = memo(function QuestionBankEditorTable({
       <Table caption="Question bank rows. Edit a cell to fix it; problems are listed in the last column." className="min-w-full" density="compact">
         <THead>
           <tr>
+            {/* The row-number header is `numeric` to align right over its numeric cells. */}
             {HEADERS.map((h, i) => (
               <Th key={h} pin={i === 0 ? 'first' : undefined} numeric={i === 0}>{h}</Th>
             ))}

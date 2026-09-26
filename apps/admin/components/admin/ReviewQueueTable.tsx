@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { WeakOptionFlag } from '@/lib/heuristics/flagWeakOptions'
 import {
@@ -37,6 +37,8 @@ const letter = (i: number) => String.fromCharCode(65 + i)
 
 const FLAGS_API = '/api/admin/question-flags'
 
+const flagBody = (item: ReviewItem) => ({ question_id: item.question_id, options_fingerprint: optionsFingerprint(item.options) })
+
 /**
  * The queue itself. Dismissals are shared by the whole team (server table
  * question_flag_dismissals); this component applies them optimistically and
@@ -59,16 +61,14 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
     setDismissed(serverSignature ? serverSignature.split('\n') : [])
   }
 
-  const body = (item: ReviewItem) => ({ question_id: item.question_id, options_fingerprint: optionsFingerprint(item.options) })
-
-  async function dismiss(item: ReviewItem) {
+  const dismiss = useCallback(async (item: ReviewItem) => {
     const key = dismissalKey(item.question_id, item.options)
     setDismissed(d => addDismissal(d, key))
     setLastDismissed(item)
     const result = await apiRequest(FLAGS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body(item)),
+      body: JSON.stringify(flagBody(item)),
     })
     if (!result.ok) {
       setDismissed(d => removeDismissal(d, key))
@@ -77,13 +77,13 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
       return
     }
     router.refresh()
-  }
+  }, [router])
 
-  async function restore(item: ReviewItem) {
+  const restore = useCallback(async (item: ReviewItem) => {
     const key = dismissalKey(item.question_id, item.options)
     setDismissed(d => removeDismissal(d, key))
     setLastDismissed(null)
-    const { question_id, options_fingerprint } = body(item)
+    const { question_id, options_fingerprint } = flagBody(item)
     const qs = new URLSearchParams({ question_id, options_fingerprint }).toString()
     const result = await apiRequest(`${FLAGS_API}?${qs}`, { method: 'DELETE' })
     if (!result.ok) {
@@ -92,10 +92,10 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
       return
     }
     router.refresh()
-  }
+  }, [router])
 
-  const split = partitionByDismissal(items, dismissed)
-  const dismissedIds = new Set(split.dismissed.map(i => i.question_id))
+  const split = useMemo(() => partitionByDismissal(items, dismissed), [items, dismissed])
+  const dismissedIds = useMemo(() => new Set(split.dismissed.map(i => i.question_id)), [split])
   const rows = showDismissed ? items : split.active
 
   const subjects = Array.from(new Set(items.map(i => i.main_subject).filter((s): s is string => Boolean(s)))).sort()
@@ -112,7 +112,8 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
     },
   ]
 
-  const columns: Column<ReviewItem>[] = [
+  // Stable until the dismissed set changes, so memoised rows can skip re-rendering.
+  const columns = useMemo<Column<ReviewItem>[]>(() => [
     {
       id: 'id',
       header: 'Question ID',
@@ -209,7 +210,7 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
         )
       },
     },
-  ]
+  ], [dismissedIds, dismiss, restore])
 
   return (
     <>

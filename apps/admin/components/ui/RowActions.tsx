@@ -16,11 +16,52 @@ export interface RowAction {
 
 const ITEM_HEIGHT = 36
 
+type OpenAt = 'first' | 'last'
+
+/**
+ * Keydown on the closed menu button. Enter and Space are handled here, not by
+ * the button's native click, so the key never also activates the item that
+ * receives focus.
+ */
+export function handleTriggerKeyDown(key: string, fx: { preventDefault: () => void; open: (at: OpenAt) => void }) {
+  const at: OpenAt | null = key === 'Enter' || key === ' ' || key === 'ArrowDown' ? 'first' : key === 'ArrowUp' ? 'last' : null
+  if (!at) return
+  fx.preventDefault()
+  fx.open(at)
+}
+
+/**
+ * Keydown inside the open menu. `current` is the focused item's index among
+ * the enabled items (-1 when the menu itself has focus), `count` how many
+ * there are.
+ *
+ * Tab moves focus to the button *before* the menu is hidden, and does not
+ * prevent the default: hiding a subtree that holds focus blurs to <body>, so
+ * the order matters, and Tab (or Shift+Tab) then carries on from the button.
+ */
+export function handleMenuKeyDown(
+  key: string,
+  current: number,
+  count: number,
+  fx: { preventDefault: () => void; focusItem: (index: number) => void; focusTrigger: () => void; close: () => void },
+) {
+  const go = (n: number) => {
+    fx.preventDefault()
+    if (count > 0) fx.focusItem((n + count) % count)
+  }
+  if (key === 'ArrowDown') go(current + 1)
+  else if (key === 'ArrowUp') go(current === -1 ? count - 1 : current - 1)
+  else if (key === 'Home') go(0)
+  else if (key === 'End') go(count - 1)
+  else if (key === 'Escape') { fx.preventDefault(); fx.focusTrigger(); fx.close() }
+  else if (key === 'Tab') { fx.focusTrigger(); fx.close() }
+}
+
 /**
  * A row's overflow ("kebab") menu, following the WAI-ARIA menu button
  * pattern: Enter, Space or ArrowDown opens it on the first item, ArrowUp on
  * the last; arrows, Home and End move; Escape closes and returns focus to the
- * button; Tab closes. The menu is fixed-positioned, so the table's scroll
+ * button; Tab returns focus to the button, closes, and moves on from it. The menu is fixed-positioned, so the table's scroll
  * container never clips it, and stays in the DOM (`hidden`) while closed.
  */
 export function RowActions({ label, items, className }: { label: string; items: RowAction[]; className?: string }) {
@@ -37,7 +78,7 @@ export function RowActions({ label, items, className }: { label: string; items: 
     if (restoreFocus) buttonRef.current?.focus()
   }, [])
 
-  function openMenu(focus: 'first' | 'last') {
+  function openMenu(focus: OpenAt) {
     const r = buttonRef.current?.getBoundingClientRect()
     if (r) {
       const height = items.length * ITEM_HEIGHT + 8
@@ -74,20 +115,22 @@ export function RowActions({ label, items, className }: { label: string; items: 
   }, [open, close])
 
   function onButtonKey(e: KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); openMenu('first') }
-    if (e.key === 'ArrowUp') { e.preventDefault(); openMenu('last') }
+    handleTriggerKeyDown(e.key, { preventDefault: () => e.preventDefault(), open: openMenu })
+  }
+
+  // Firefox activates a button on Space keyup even when keydown was prevented.
+  function onButtonKeyUp(e: KeyboardEvent) {
+    if (e.key === ' ') e.preventDefault()
   }
 
   function onMenuKey(e: KeyboardEvent) {
     const els = itemEls()
-    const i = els.indexOf(document.activeElement as HTMLButtonElement)
-    const go = (n: number) => { e.preventDefault(); els[(n + els.length) % els.length]?.focus() }
-    if (e.key === 'ArrowDown') go(i + 1)
-    else if (e.key === 'ArrowUp') go(i - 1)
-    else if (e.key === 'Home') go(0)
-    else if (e.key === 'End') go(els.length - 1)
-    else if (e.key === 'Escape') { e.preventDefault(); close(true) }
-    else if (e.key === 'Tab') close(false)
+    handleMenuKeyDown(e.key, els.indexOf(document.activeElement as HTMLButtonElement), els.length, {
+      preventDefault: () => e.preventDefault(),
+      focusItem: i => els[i]?.focus(),
+      focusTrigger: () => buttonRef.current?.focus(),
+      close: () => close(false),
+    })
   }
 
   // Destructive items last, whatever order they were given in.
@@ -105,6 +148,7 @@ export function RowActions({ label, items, className }: { label: string; items: 
         aria-controls={menuId}
         onClick={() => (open ? close(false) : openMenu('first'))}
         onKeyDown={onButtonKey}
+        onKeyUp={onButtonKeyUp}
         className={[
           '-my-1 inline-flex h-7 w-7 items-center justify-center rounded-sm text-ink-muted transition-colors duration-150',
           'hover:bg-surface-hover hover:text-ink aria-expanded:bg-surface-hover aria-expanded:text-ink',
@@ -127,7 +171,7 @@ export function RowActions({ label, items, className }: { label: string; items: 
         {ordered.map((item, i) => {
           const danger = item.tone === 'danger'
           return (
-            <Fragment key={item.label}>
+            <Fragment key={`${i}:${item.label}`}>
               {danger && i > 0 && <div role="separator" className="my-1 border-t border-subtle" />}
               <button
                 type="button"

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createSubject as createSubjectRequest, updateSubject, deleteSubject } from '@/lib/admin/subjectsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
@@ -215,7 +215,8 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
     }
   }
 
-  const columns: Column<SubjectRow>[] = [
+  // Depends only on the listings prop (and stable setters), so memoised rows can skip re-rendering.
+  const columns = useMemo<Column<SubjectRow>[]>(() => [
     {
       id: 'name',
       header: 'Subject',
@@ -251,7 +252,7 @@ export function SubjectsView({ subjects: initialSubjects, listings }: Props) {
         />
       ),
     },
-  ]
+  ], [listings])
 
   return (
     <div data-testid="subjects-view">

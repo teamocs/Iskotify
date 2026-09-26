@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Listing } from '@iskotify/utils'
 import { ListingDrawer } from './ListingDrawer'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -55,7 +55,8 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
     router.refresh()
   }
 
-  const columns: Column<Listing>[] = [
+  // Closes over state setters only (stable), so it is built once.
+  const columns = useMemo<Column<Listing>[]>(() => [
     {
       id: 'title',
       header: 'Listing',
@@ -98,7 +99,7 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
         />
       ),
     },
-  ]
+  ], [])
 
   return (
     <>

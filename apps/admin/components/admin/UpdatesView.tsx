@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { AdmissionsUpdate } from '@/app/admin/updates/page'
 import { saveUpdate, deleteUpdate } from '@/lib/admin/updatesApi'
@@ -296,7 +296,8 @@ export function UpdatesView({ updates }: Props) {
     }
   }
 
-  const columns: Column<AdmissionsUpdate>[] = [
+  // Closes over state setters only (stable), so it is built once.
+  const columns = useMemo<Column<AdmissionsUpdate>[]>(() => [
     {
       id: 'title',
       header: 'Update',
@@ -346,7 +347,7 @@ export function UpdatesView({ updates }: Props) {
         />
       ),
     },
-  ]
+  ], [])
 
   return (
     <>

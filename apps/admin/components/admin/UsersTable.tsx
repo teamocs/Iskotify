@@ -24,6 +24,32 @@ function fmtDate(iso: string) {
 
 const YES_NO = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
 
+// Closes over nothing, so it is built once and memoised rows can skip re-rendering.
+const COLUMNS: Column<UserRow>[] = [
+  {
+    id: 'email', header: 'Email',
+    sortValue: r => r.email, searchValue: r => r.email,
+    cell: r => <span className="font-medium text-ink break-all">{r.email}</span>,
+  },
+  {
+    id: 'role', header: 'Role', sortValue: r => r.role,
+    cell: r => <Badge tone={ROLE_TONE[r.role] ?? 'neutral'}>{roleLabel(r.role)}</Badge>,
+  },
+  {
+    id: 'confirmed', header: 'Email confirmed', sortValue: r => r.confirmed,
+    cell: r => (r.confirmed ? <Badge tone="success">Confirmed</Badge> : <Badge tone="warning">Unconfirmed</Badge>),
+  },
+  {
+    id: 'joined', header: 'Joined',
+    sortValue: r => (r.created_at ? new Date(r.created_at) : null),
+    cell: r => <span className="whitespace-nowrap tabular-nums text-ink-muted">{fmtDate(r.created_at)}</span>,
+  },
+  {
+    id: 'appdata', header: 'App data', sortValue: r => r.hasAppData,
+    cell: r => <span className={r.hasAppData ? 'text-ink' : 'text-ink-muted'}>{r.hasAppData ? 'Saved in cloud' : 'None'}</span>,
+  },
+]
+
 export function UsersTable({ rows }: { rows: UserRow[] }) {
   const roles = Array.from(new Set(rows.map(r => r.role))).sort()
 
@@ -45,37 +71,12 @@ export function UsersTable({ rows }: { rows: UserRow[] }) {
     },
   ]
 
-  const columns: Column<UserRow>[] = [
-    {
-      id: 'email', header: 'Email',
-      sortValue: r => r.email, searchValue: r => r.email,
-      cell: r => <span className="font-medium text-ink break-all">{r.email}</span>,
-    },
-    {
-      id: 'role', header: 'Role', sortValue: r => r.role,
-      cell: r => <Badge tone={ROLE_TONE[r.role] ?? 'neutral'}>{roleLabel(r.role)}</Badge>,
-    },
-    {
-      id: 'confirmed', header: 'Email confirmed', sortValue: r => r.confirmed,
-      cell: r => (r.confirmed ? <Badge tone="success">Confirmed</Badge> : <Badge tone="warning">Unconfirmed</Badge>),
-    },
-    {
-      id: 'joined', header: 'Joined',
-      sortValue: r => (r.created_at ? new Date(r.created_at) : null),
-      cell: r => <span className="whitespace-nowrap tabular-nums text-ink-muted">{fmtDate(r.created_at)}</span>,
-    },
-    {
-      id: 'appdata', header: 'App data', sortValue: r => r.hasAppData,
-      cell: r => <span className={r.hasAppData ? 'text-ink' : 'text-ink-muted'}>{r.hasAppData ? 'Saved in cloud' : 'None'}</span>,
-    },
-  ]
-
   return (
     <div className={TABLE_FRAME}>
       <DataTable
         label="Users"
         rows={rows}
-        columns={columns}
+        columns={COLUMNS}
         rowKey={r => r.id}
         filters={filters}
         searchPlaceholder="Search by email"
