@@ -55,7 +55,7 @@ for body copy. De-emphasize with weight, size, or spacing instead.
 
 `maroon` (`#800000`, 10.95:1 on white) · `maroon-light` (`#a00000`) ·
 `maroon-dim` / `maroon-mid` tints · `surface` / `surface-2` / `surface-3` ·
-`sidebar` (`#1d1d1f`).
+`sidebar` (`#1d1d1f` in the preset; the admin console overrides it to the light `#fafafa`, see below).
 
 ### Status colours — three roles, and picking wrong is a contrast bug
 
@@ -125,7 +125,10 @@ alpha tokens they are computed after compositing over white.
 | `border-control` | `#8a8a8e` | boundary of a form control | 3.44 on white, 3.16 on `surface-2` (meets the 1.4.11 3:1 minimum) |
 | `text-ui` | 13px / 20px | dense UI text: tables, nav, secondary buttons | 12px (`text-xs`) is the floor |
 | `shadow-overlay` | two-layer | floating layers only (Dialog, Drawer) | Cards use a border, not a shadow |
-| `sidebar-ink` / `sidebar-ink-muted` | `#f5f5f7` / `#a1a1a6` | text on the dark sidebar `#1d1d1f` | 15.46 / 6.54 on the background, 10.42 / 5.42 on active or hover |
+| `bg-sidebar` | `#fafafa` | the light sidebar panel (a second neutral beside the white Topbar and the `surface-2` workspace) | none |
+| `sidebar-ink` / `sidebar-ink-muted` | `#1d1d1f` / `#55555a` | text on the sidebar | 16.12 / 7.10 on the background, 14.60 / 6.43 on hover, 13.76 / 6.06 on active |
+| `bg-sidebar-hover` / `bg-sidebar-active` | `rgba(0,0,0,.045)` / `rgba(128,0,0,.08)` | nav row hover / current page. Active also sets `font-semibold` and a maroon icon (8.96), so it never relies on colour alone | see above |
+| `bg-tooltip` / `text-tooltip-ink` / `text-tooltip-muted` | `#1d1d1f` / `#ffffff` / `#a1a1a6` | rail tooltip chip, its label, and its hint | 16.83 / 6.54 |
 
 ### Primitives (`apps/admin/components/ui`)
 
@@ -144,6 +147,7 @@ alpha tokens they are computed after compositing over white.
 | `Table` primitives / `RowActions` | `TableRegion`, `Table`, `THead`, `Th`, `Td`, `Tr` (in `Table.tsx`) are what `DataTable` is built from; tables that cannot be a `DataTable` (the question-bank editor grid, the guide's column references, a topic's cards) use them directly. `RowActions` is the row's overflow menu (WAI-ARIA menu button: arrows, Home/End, Escape returns focus). The one frequent action stays inline (Resolve, Approve, Dismiss, Publish); secondary and destructive ones go in the menu, danger last. Give an item a `name` ("Delete Scholar A") when the row must be named. |
 | `EmptyState` / `ErrorBanner` | An empty state says what belongs here and how it gets here. A failed query renders `ErrorBanner` (`role="alert"`), **never** an empty list. |
 | `Icon` / `Kbd` | One inline icon set: 24-unit grid, 1.75 stroke, `currentColor`, decorative by default. No emoji or Unicode glyphs as icons. The one exception is the ✓ glyph that marks a correct answer next to its colour, backed by screen-reader text. |
+| Sidebar (`components/admin/{Sidebar,SidebarContent,MobileSidebar,RailTooltip}`) | Grouped `<nav aria-label="Admin">`, current page `aria-current="page"`. Collapses to a 56px icon rail with **Ctrl/Cmd+B** or the Collapse row (visible key hint); the state persists in the `admin_sidebar` cookie that the layout reads, so the first paint is right. In the rail, items keep sr-only labels and show a fixed-position tooltip on hover **and** focus (Escape dismisses). **No native `title` tooltips anywhere in the sidebar.** The nav scrolls in `.sidebar-scroll` (globals.css): thin, transparent thumb until hover/focus, edge fade when there is more. Below `md` the same content is a focus-trapped drawer. Queue counts stream in from `lib/admin/navBadges` (head counts only). |
 | `useFocusTrap` + `trapStack` | Overlays can stack (a Drawer with a discard prompt on top). Only the topmost trap reacts to Escape and Tab. |
 
 ### Page rules

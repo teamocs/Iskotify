@@ -22,6 +22,10 @@ describe('RowActions (the row overflow menu)', () => {
     expect(html).toMatch(/<button[^>]*aria-expanded="false"/)
   })
 
+  it('shows no native title tooltip on the trigger', () => {
+    expect(html).not.toMatch(/<button[^>]*aria-label="Actions for Alpha"[^>]*title=|<button[^>]*title="Actions for Alpha"/)
+  })
+
   it('points the button at a menu of menuitems that is hidden until opened', () => {
     const controls = html.match(/aria-controls="([^"]+)"/)![1]
     expect(html).toMatch(new RegExp(`<div[^>]*id="${controls}"[^>]*role="menu"|<div[^>]*role="menu"[^>]*id="${controls}"`))

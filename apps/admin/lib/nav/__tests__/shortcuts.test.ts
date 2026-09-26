@@ -62,3 +62,11 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget(null)).toBe(false)
   })
 })
+
+describe('SHORTCUT_LIST', () => {
+  it('documents the sidebar toggle as a chord (keys held together)', async () => {
+    const { SHORTCUT_LIST } = await import('../shortcuts')
+    const toggle = SHORTCUT_LIST.find(s => s.label === 'Collapse or expand the sidebar')
+    expect(toggle).toEqual({ keys: ['Ctrl', 'B'], label: 'Collapse or expand the sidebar', chord: true })
+  })
+})

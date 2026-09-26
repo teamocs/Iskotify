@@ -18,12 +18,16 @@ export const INITIAL_SHORTCUT_STATE: ShortcutState = { pendingSince: null }
 /** How long "g" waits for its second key. */
 export const SEQUENCE_TIMEOUT_MS = 1500
 
-export const SHORTCUT_LIST: { keys: string[]; label: string }[] = [
+/** `chord`: keys held together (Ctrl+B). Otherwise keys are pressed in sequence (g then h). */
+export const SHORTCUT_LIST: { keys: string[]; label: string; chord?: boolean }[] = [
   { keys: ['g', 'h'], label: `Go to ${GO_SHORTCUTS.h.label}` },
   { keys: ['g', 'c'], label: `Go to ${GO_SHORTCUTS.c.label}` },
   { keys: ['g', 'i'], label: `Go to ${GO_SHORTCUTS.i.label}` },
   { keys: ['/'], label: 'Focus search' },
   { keys: ['?'], label: 'Show keyboard shortcuts' },
+  // Handled by AdminShell, not resolveShortcut: it is a modifier chord, and the
+  // sequence listener ignores every Ctrl/Cmd chord by design.
+  { keys: ['Ctrl', 'B'], label: 'Collapse or expand the sidebar', chord: true },
 ]
 
 export function resolveShortcut(

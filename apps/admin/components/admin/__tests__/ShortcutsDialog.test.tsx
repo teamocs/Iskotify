@@ -16,6 +16,13 @@ describe('ShortcutsDialog', () => {
     expect(html).toMatch(/<dl/)
   })
 
+  it('joins chord keys with "+", not "then"', () => {
+    const html = renderToStaticMarkup(<ShortcutsDialog open onClose={() => {}} />)
+    expect(html).toContain('Collapse or expand the sidebar')
+    expect(html).toMatch(/<kbd[^>]*>Ctrl<\/kbd>[\s\S]{0,120}?\+[\s\S]{0,120}?<kbd[^>]*>B<\/kbd>/)
+    expect(html).not.toMatch(/<kbd[^>]*>Ctrl<\/kbd>[\s\S]{0,120}?then/)
+  })
+
   it('renders nothing while closed', () => {
     expect(renderToStaticMarkup(<ShortcutsDialog open={false} onClose={() => {}} />)).toBe('')
   })

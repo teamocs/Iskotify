@@ -49,6 +49,13 @@ describe('IconButton', () => {
     expect(html).toContain('aria-label="Edit DOST-SEI"')
     expect(html).toMatch(/<svg[^>]*aria-hidden="true"/)
   })
+
+  // Owner request: no native browser tooltips on the console's icon buttons.
+  // The aria-label names the button; a title only when a caller passes one.
+  it('adds no native title tooltip by default', () => {
+    expect(renderToStaticMarkup(<IconButton icon="pencil" label="Edit DOST-SEI" />)).not.toContain('title=')
+    expect(renderToStaticMarkup(<IconButton icon="pencil" label="Edit" title="Edit (E)" />)).toContain('title="Edit (E)"')
+  })
 })
 
 describe('Badge', () => {
