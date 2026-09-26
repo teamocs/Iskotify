@@ -170,6 +170,8 @@ describe('feature sections', () => {
   it('Anywhere: offline, backed up, phone/tablet/desktop, accessible, guided tour', () => {
     const s = sectionHtml('anywhere').replace(/<[^>]+>/g, ' ')
     expect(s).toMatch(/offline/i)
+    // The web app needs a connection to open, so the heading itself scopes offline to Android.
+    expect(s).toMatch(/Works offline on Android/)
     expect(s).toMatch(/backed up to your account/i)
     expect(s).toMatch(/phone, tablet (and|&) (desktop|computer)/i)
     expect(s).toMatch(/screen reader/i)
