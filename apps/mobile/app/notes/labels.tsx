@@ -1,175 +1,147 @@
-import { useState, useMemo } from 'react'
-import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { Stack, router } from 'expo-router'
+import { useState } from 'react'
+import { View, Text } from 'react-native'
+import { Stack } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { CheckOutlined, XmarkOutlined, Pencil1Outlined, Trash3Outlined } from '@lineiconshq/free-icons'
+import { Bookmark1Outlined, PlusOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, textStyle } from '../../theme/tokens'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { confirmAction } from '../../utils/confirmAction'
+import { Screen } from '../../components/ui/Screen'
+import { PageTitle } from '../../components/ui/PageTitle'
 import { Card } from '../../components/ui/Card'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { spacing, radius } from '../../theme/tokens'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { heading } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 
 export default function LabelsScreen() {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const { labels, createLabel, renameLabel, deleteLabel } = useNoteLabels()
   const [newLabelName, setNewLabelName] = useState('')
+  const [createError, setCreateError] = useState<string | undefined>()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [renameError, setRenameError] = useState<string | undefined>()
 
   const handleCreate = async () => {
-    if (!newLabelName.trim()) return
+    const name = newLabelName.trim()
+    if (!name) return
     try {
-      await createLabel(newLabelName)
+      await createLabel(name)
       setNewLabelName('')
+      setCreateError(undefined)
     } catch {
-      Alert.alert('Label already exists', `"${newLabelName.trim()}" already exists.`)
+      setCreateError(`"${name}" already exists.`)
     }
   }
 
+  const startRename = (id: string, name: string) => {
+    setEditingId(id)
+    setEditingName(name)
+    setRenameError(undefined)
+  }
+
   const handleRename = async (id: string) => {
-    if (!editingName.trim()) { setEditingId(null); return }
+    const name = editingName.trim()
+    if (!name) { setEditingId(null); return }
     try {
-      await renameLabel(id, editingName)
+      await renameLabel(id, name)
       setEditingId(null)
+      setRenameError(undefined)
     } catch {
-      Alert.alert('Label already exists', `"${editingName.trim()}" already exists.`)
+      setRenameError(`"${name}" already exists.`)
     }
   }
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert('Delete Label', `Delete "${name}"? This removes it from all notes.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => void deleteLabel(id) },
-    ])
+    confirmAction(
+      'Delete label',
+      `Delete "${name}"? It is removed from every note. The notes themselves stay.`,
+      'Delete',
+      () => void deleteLabel(id),
+      { destructive: true },
+    )
   }
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xs },
-    back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    backTxt: { fontSize: typo.h3, color: t.textPrimary, lineHeight: typo.h3 },
-    title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    subtitle: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
-    createRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    createInput: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular', backgroundColor: t.surfaceSubtle, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 44 },
-    createBtn: { minHeight: 44, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.accent },
-    createBtnTxt: { color: t.textInverse, fontFamily: 'Outfit_700Bold', fontSize: typo.base },
-    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, gap: spacing.md },
-    rowDivider: { borderTopWidth: 1, borderTopColor: t.divider },
-    labelName: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
-    editInput: { flex: 1, fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular', borderBottomWidth: 1, borderBottomColor: t.accent, paddingVertical: spacing.xs },
-    rowBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    empty: { paddingVertical: spacing.xxl, alignItems: 'center' },
-    emptyTxt: { fontSize: typo.base, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-  }), [t, typo])
-
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
+    <Screen header={<DetailTopBar bare fallbackHref="/notes" />}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={s.topBar}>
-        <Pressable
-          style={({ pressed }) => [s.back, pressed ? { opacity: 0.6 } : null]}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <Text style={s.backTxt}>‹</Text>
-        </Pressable>
-        <View>
-          <Text style={s.title}>Labels</Text>
-        </View>
-      </View>
-      <ScreenScroll tabBarInset={false} padded keyboardShouldPersistTaps="handled">
-        <Card elevated style={{ gap: spacing.md, marginTop: spacing.sm }}>
-          <SectionHeader title="New label" />
-          <View style={s.createRow}>
-            <TextInput
-              style={s.createInput}
-              placeholder="New label name…"
-              placeholderTextColor={t.textTertiary}
-              value={newLabelName}
-              onChangeText={setNewLabelName}
-              onSubmitEditing={handleCreate}
-              returnKeyType="done"
-            />
-            <Pressable
-              style={({ pressed }) => [s.createBtn, pressed ? { opacity: 0.85 } : null]}
-              onPress={handleCreate}
-              accessibilityRole="button"
-            >
-              <Text style={s.createBtnTxt}>Add</Text>
-            </Pressable>
-          </View>
-        </Card>
+      <PageTitle title="Labels" lead="Group notes by subject or exam. Add labels to a note from its toolbar." />
 
-        <View style={{ marginTop: spacing.xl }}>
-          <SectionHeader title="Your labels" />
-          <Card elevated padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            {labels.length === 0 ? (
-              <View style={s.empty}>
-                <Text style={s.emptyTxt}>No labels yet</Text>
+      <Card style={{ gap: spacing.md }}>
+        <TextField
+          label="New label"
+          placeholder="For example, UPCAT math"
+          value={newLabelName}
+          onChangeText={(v) => { setNewLabelName(v); if (createError) setCreateError(undefined) }}
+          onSubmitEditing={() => void handleCreate()}
+          returnKeyType="done"
+          error={createError}
+          maxLength={40}
+        />
+        <Button
+          label="Add label"
+          onPress={() => void handleCreate()}
+          disabled={!newLabelName.trim()}
+          icon={<Lineicons icon={PlusOutlined} size={18} color={t.textInverse} />}
+        />
+      </Card>
+
+      <View style={{ marginTop: spacing.xxl }}>
+        <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+          Your labels
+        </Text>
+        {labels.length === 0 ? (
+          <EmptyState
+            icon={<Lineicons icon={Bookmark1Outlined} size={26} color={t.textSecondary} />}
+            title="No labels yet"
+            body="Add one above, then tag notes with it from the note toolbar."
+          />
+        ) : (
+          <Card padded={false}>
+            {labels.map((label, index) => (
+              <View
+                key={label.id}
+                style={{
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm,
+                  borderTopWidth: index > 0 ? 1 : 0,
+                  borderTopColor: t.divider,
+                }}
+              >
+                {editingId === label.id ? (
+                  <View style={{ gap: spacing.sm, paddingVertical: spacing.sm }}>
+                    <TextField
+                      label="Label name"
+                      value={editingName}
+                      onChangeText={(v) => { setEditingName(v); if (renameError) setRenameError(undefined) }}
+                      onSubmitEditing={() => void handleRename(label.id)}
+                      autoFocus
+                      returnKeyType="done"
+                      error={renameError}
+                      maxLength={40}
+                    />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                      <Button size="sm" variant="secondary" label="Save" accessibilityLabel="Save label name" onPress={() => void handleRename(label.id)} />
+                      <Button size="sm" variant="ghost" label="Cancel" accessibilityLabel="Cancel renaming" onPress={() => setEditingId(null)} />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, minHeight: 44 }}>
+                    <Text style={[textStyle('body', t.textPrimary), { flex: 1, minWidth: 120 }]} maxFontSizeMultiplier={2}>
+                      {label.name}
+                    </Text>
+                    <Button size="sm" variant="ghost" label="Rename" accessibilityLabel={`Rename ${label.name}`} onPress={() => startRename(label.id, label.name)} />
+                    <Button size="sm" variant="ghost" label="Delete" accessibilityLabel={`Delete ${label.name}`} onPress={() => handleDelete(label.id, label.name)} />
+                  </View>
+                )}
               </View>
-            ) : (
-              labels.map((label, index) => (
-                <View key={label.id} style={[s.row, index > 0 ? s.rowDivider : null]}>
-                  {editingId === label.id ? (
-                    <>
-                      <TextInput
-                        style={s.editInput}
-                        value={editingName}
-                        onChangeText={setEditingName}
-                        onSubmitEditing={() => handleRename(label.id)}
-                        autoFocus
-                        returnKeyType="done"
-                      />
-                      <Pressable
-                        style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
-                        onPress={() => handleRename(label.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel="Save label name"
-                      >
-                        <Lineicons icon={CheckOutlined} size={20} color={t.accentText} />
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
-                        onPress={() => setEditingId(null)}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel renaming"
-                      >
-                        <Lineicons icon={XmarkOutlined} size={20} color={t.textSecondary} />
-                      </Pressable>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={s.labelName}>{label.name}</Text>
-                      <Pressable
-                        style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
-                        onPress={() => { setEditingId(label.id); setEditingName(label.name) }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Rename ${label.name}`}
-                      >
-                        <Lineicons icon={Pencil1Outlined} size={18} color={t.textSecondary} />
-                      </Pressable>
-                      <Pressable
-                        style={({ pressed }) => [s.rowBtn, pressed ? { opacity: 0.6 } : null]}
-                        onPress={() => handleDelete(label.id, label.name)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Delete ${label.name}`}
-                      >
-                        <Lineicons icon={Trash3Outlined} size={18} color={t.dangerStrong} />
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              ))
-            )}
+            ))}
           </Card>
-        </View>
-      </ScreenScroll>
-    </SafeAreaView>
+        )}
+      </View>
+    </Screen>
   )
 }

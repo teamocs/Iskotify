@@ -623,7 +623,7 @@ export default function ProfileScreen() {
           <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>Profile</Text>
           <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Your account, focus list and data</Text>
         </View>
-        <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />
+        <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />
         <IconButton icon={Gear1Outlined} label="Settings" onPress={() => router.push('/settings')} />
       </View>
 

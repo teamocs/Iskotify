@@ -654,7 +654,7 @@ export default function ExploreScreen() {
         <TabHeader
           title="Explore"
           subtitle="Schools, exams, scholarships, courses and dates"
-          actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} />}
+          actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />}
         />
       )}
     >

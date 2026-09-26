@@ -178,17 +178,18 @@ describe('Today', () => {
 
   // ── Header ────────────────────────────────────────────────────────────────
   describe('header', () => {
-    it('greets the student by first name (nested bold Text) as the screen heading', () => {
+    it('greets the student by first name, on its own line on a phone, as the screen heading', () => {
       mockUseHomeStats.mockReturnValue({ ...emptyStats, fullName: 'Ana Reyes' })
       render(<HomeScreen />)
-      expect(screen.getByText(/Good (morning|afternoon|evening), /)).toBeTruthy()
+      expect(screen.getByText(/^Good (morning|afternoon|evening),$/)).toBeTruthy()
       expect(screen.getByText('Ana')).toBeTruthy()
       expect(screen.getByRole('header', { name: /Good (morning|afternoon|evening), Ana/ })).toBeTruthy()
     })
 
     it('shows the date in sentence case, not an uppercase eyebrow', () => {
       render(<HomeScreen />)
-      const date = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
+      // Phones get the short form so it never splits beside the header controls.
+      const date = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())
       expect(screen.getByText(date)).toBeTruthy()
       expect(screen.queryByText(date.toUpperCase())).toBeNull()
     })

@@ -102,6 +102,16 @@ describe('SchoolProfileScreen', () => {
     expect(mockFocus.addListing).toHaveBeenCalledWith('upcat')
   })
 
+  // Bug (route audit 2026-09-26): a school whose type text is itself "SUC"
+  // showed two identical "SUC" badges (the type, then the isSuc flag).
+  it('never shows the same badge twice when the type already says SUC', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({ ...SCHOOL, type: 'SUC' }, PROFILE))
+    render(<SchoolProfileScreen />)
+    await screen.findByRole('header', { name: 'University of the Philippines Diliman' })
+    expect(screen.getAllByText('SUC')).toHaveLength(1)
+  })
+
   it('names difficulty in words, not dots alone', async () => {
     render(<SchoolProfileScreen />)
     expect(await screen.findByLabelText('Difficulty: 4 of 5')).toBeTruthy()

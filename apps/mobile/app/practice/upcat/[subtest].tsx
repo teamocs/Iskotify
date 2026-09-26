@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect, useRef } from 'react'
+import { View, Text, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -13,47 +12,49 @@ import { buildExam, scoreExam, SUBTESTS, type ExamQuestion, type Subtest, type R
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
-import { QuestionNavigator } from '../../../components/upcat/QuestionNavigator'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
-import { ReviewCard } from '../../../components/practice/ReviewCard'
 import { ReportQuestionModal } from '../../../components/practice/ReportQuestionModal'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
+import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
+import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
+import { SessionLoading, SessionEmpty, SessionError } from '../../../components/practice/SessionStates'
+import { RunnerFrame } from '../../../components/practice/runner/RunnerFrame'
+import { RunnerActions } from '../../../components/practice/runner/RunnerActions'
+import { RunnerReview } from '../../../components/practice/runner/RunnerReview'
 import { submitQuestionReport } from '../../../services/questionReports'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
+import { Screen } from '../../../components/ui/Screen'
+import { PageTitle } from '../../../components/ui/PageTitle'
+import { Button } from '../../../components/ui/Button'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { ProgressBar } from '../../../components/ui/ProgressBar'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
 import { useTheme } from '../../../theme/ThemeContext'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined, StopwatchOutlined } from '@lineiconshq/free-icons'
-import { decorative } from '../../../components/ui/a11y'
-import { spacing, radius } from '../../../theme/tokens'
+import { spacing, radius, textStyle } from '../../../theme/tokens'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
-type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
-
-function fmtTime(totalSecs: number): string {
-  const h = Math.floor(totalSecs / 3600)
-  const m = Math.floor((totalSecs % 3600) / 60)
-  const sec = totalSecs % 60
-  const mm = String(m).padStart(2, '0')
-  const ss = String(sec).padStart(2, '0')
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
-}
+type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results'
 
 export default function UpcatExam() {
   const { subtest: subtestParam, mode } = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  // Redesign M3: the question navigator is a side panel on expanded widths and
+  // a sheet (opened from the header) everywhere else.
+  const expanded = useBreakpoint() === 'expanded'
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
+  // Bumped by "Try again" after a failed question load to re-run the load effect.
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -85,12 +86,9 @@ export default function UpcatExam() {
   // Question pane (middle scroll zone) — reset to top whenever the question changes
   // so scroll offset never carries over between questions.
   const qPaneRef = useRef<ScrollView>(null)
-  // Fix 3: "Review mistakes" scrolls the results screen down to the Review section.
-  const resultsScrollRef = useRef<ScrollView>(null)
-  const reviewYRef = useRef(0)
-  const { height: winH } = useWindowDimensions()
-  // Web-only max-width centering for the vertical scroll zones (null on native/sm).
-  const webWidth = useWebContentWidth()
+  // Fix 3: "Review mistakes" (the results screen's primary action) opens every
+  // review section at once, as in the mock exam runner.
+  const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -172,13 +170,15 @@ export default function UpcatExam() {
         }
 
         buildFreshExam()
-      } catch {
-        // Unexpected failure: show results (empty) rather than hang on loading
-        setPhase('results')
+      } catch (err) {
+        // A read failure is not an empty bank: offer a retry rather than the
+        // "no questions" page (and never hang on loading).
+        console.warn('[practice] question load failed:', err)
+        setPhase('load-error')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subtestParam, mode])
+  }, [db, subtestParam, mode, loadAttempt])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's question ids, restoring answers/position/timer. The absolute-
@@ -249,8 +249,6 @@ export default function UpcatExam() {
   }, [leaveConfirmed])
   // Review finding #3: web-only tab-close warning + immediate persist flush.
   useBeforeUnloadWarning(phase === 'exam')
-
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
 
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (timer + tap)
@@ -340,147 +338,149 @@ export default function UpcatExam() {
     return () => clearInterval(id)
   }, [phase, endTime])
 
+  // ── Redesign M3: render ────────────────────────────────────────────────────
+  // Same frame as app/practice/exam/[slug].tsx: pages (<Screen>) around the
+  // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
+
   if (phase === 'loading') {
+    return <SessionLoading label="Loading exam" fallbackHref="/practice/upcat" />
+  }
+
+  if (phase === 'load-error') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loading}>Loading exam…</Text>
-      </SafeAreaView>
+      <SessionError
+        fallbackHref="/practice/upcat"
+        onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
+      />
     )
   }
 
   if (phase === 'resume-prompt') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}>
-          <Text style={s.emptyTitle}>Resume where you left off?</Text>
-          <Text style={s.emptyBody}>You have an in-progress attempt. Your answers and timer were saved.</Text>
-          <Pressable accessibilityRole="button" style={s.primaryBtn} onPress={resumeExam}>
-            <Text style={s.primaryBtnTxt}>Resume where you left off</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={startOver}>
-            <Text style={s.ghostTxt}>Start over</Text>
-          </Pressable>
+      <Screen header={<DetailTopBar bare fallbackHref="/practice/upcat" />}>
+        <PageTitle
+          title="Resume where you left off?"
+          lead="You have an in-progress attempt. Your answers and timer were saved."
+        />
+        <View style={{ gap: spacing.sm }}>
+          <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
+          <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
         </View>
-      </SafeAreaView>
+      </Screen>
     )
   }
 
   if (phase === 'results') {
+    if (questions.length === 0) {
+      return (
+        <SessionEmpty
+          title="No questions for this subtest yet"
+          body="Its questions are still being written. Check back soon, or practise another subtest in the meantime."
+          fallbackHref="/practice/upcat"
+          actionLabel="Back to UPCAT practice"
+        />
+      )
+    }
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const res = scoreExam(scored)
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
+    const label = subtestParam === 'all' ? 'the full mock' : (subtestParam ?? 'this subtest')
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <ScrollView
-          ref={resultsScrollRef}
-          contentContainerStyle={[{ padding: 14, paddingBottom: 40 }, webWidth]}
-          showsVerticalScrollIndicator={false}
-        >
+      <Screen>
+        <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
+          {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
+          <PageTitle
+            title="Tapos na! Practice complete."
+            lead={`Here is how ${label} went. Every session shows you what to practise next.`}
+          />
+
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
-          <ResultsScoreCard pct={pct} correct={res.overall.correct} total={res.overall.total} />
-
-          {scoreDelta ? (
-            <View style={s.deltaCard}>
-              <Text style={s.deltaText}>{scoreDelta}</Text>
-            </View>
-          ) : null}
-
-          <Text style={s.sectionLbl}>Per-subtest</Text>
-          {Object.entries(res.bySubtest).map(([st, b]) => (
-            <View key={st} style={s.subtestRow}>
-              <Text style={s.subtestName}>{st}</Text>
-              <Text style={s.subtestScore}>
-                {b.correct}/{b.total} · {Math.round((b.correct / b.total) * 100)}%
-              </Text>
-            </View>
-          ))}
-
-          <View onLayout={e => { reviewYRef.current = e.nativeEvent.layout.y }}>
-            <Text style={s.sectionLbl}>Review</Text>
+          <View style={{ gap: spacing.sm }}>
+            <ResultsScoreCard pct={pct} correct={res.overall.correct} total={res.overall.total} />
+            {scoreDelta ? (
+              <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg }}>
+                <Text style={[textStyle('bodySm', t.textPrimary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>{scoreDelta}</Text>
+              </View>
+            ) : null}
           </View>
-          {questions.map((q, i) => (
-            <ReviewCard
-              key={q.questionId}
-              index={i + 1}
-              questionText={q.questionText}
-              options={q.options}
-              correctIndex={q.correctIndex}
-              selectedIndex={answers[i]}
-              explanation={q.explanation}
-              optionExplanations={q.optionExplanations}
-              strategyTip={q.strategyTip}
-              imageUrl={q.imageUrl}
-              imageAlt={q.imageAlt}
-              imageWidth={q.imageWidth}
-              imageHeight={q.imageHeight}
-            />
-          ))}
+
+          <View>
+            <SectionHeader title="Per-subtest" subtitle="Your raw score in each subtest" />
+            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
+              {Object.entries(res.bySubtest).map(([st, b], i) => {
+                const stPct = b.total ? Math.round((b.correct / b.total) * 100) : 0
+                return (
+                  <View key={st} style={{ paddingVertical: spacing.md, gap: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md }}>
+                      <Text style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>{st}</Text>
+                      <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={2}>
+                        {b.correct}/{b.total} correct · {stPct}%
+                      </Text>
+                    </View>
+                    <ProgressBar value={stPct / 100} label={`${st} score`} />
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+
+          <RunnerReview
+            items={questions.map(q => ({
+              id: q.questionId,
+              sectionName: q.subtest,
+              questionText: q.questionText,
+              options: q.options,
+              correctIndex: q.correctIndex,
+              explanation: q.explanation,
+              optionExplanations: q.optionExplanations,
+              strategyTip: q.strategyTip,
+              imageUrl: q.imageUrl,
+              imageAlt: q.imageAlt,
+              imageWidth: q.imageWidth,
+              imageHeight: q.imageHeight,
+            }))}
+            answers={answers}
+            expandAll={reviewMistakesTapped}
+          />
 
           {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
-          <Pressable
-            accessibilityRole="button"
-            style={s.primaryBtn}
-            onPress={() => resultsScrollRef.current?.scrollTo({ y: reviewYRef.current, animated: true })}
-          >
-            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={s.ghostBtn}
-            onPress={() => router.replace(`/practice/upcat/${subtestParam}?mode=${mode}`)}
-          >
-            <Text style={s.ghostTxt}>Retake exam</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.replace('/practice/upcat')}>
-            <Text style={s.ghostTxt}>← Back to exams</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <View style={{ gap: spacing.sm }}>
+            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            <Button
+              label="Retake exam"
+              variant="secondary"
+              fullWidth
+              onPress={() => router.replace(`/practice/upcat/${subtestParam}?mode=${mode}`)}
+            />
+            <Button label="Back to exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/upcat')} />
+          </View>
+        </View>
+      </Screen>
     )
   }
 
   const q = questions[idx]!
   const sel = answers[idx]
   const answeredIdxs = new Set(Object.keys(answers).map(Number))
+  const flaggedIdxs = new Set(Object.keys(reported).map(Number))
   const isLast = idx === questions.length - 1
+  const jump = (i: number) => { if (!submitting) setIdx(i) }
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
-          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>
-          {subtestParam === 'all' ? 'Full Mock' : subtestParam}
-        </Text>
-        <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
-          <View {...decorative}><Lineicons icon={StopwatchOutlined} size={14} color={remaining <= 60 ? t.warningStrong : t.textSecondary} /></View>
-          <Text accessibilityLabel={`Time left: ${fmtTime(remaining)}`} style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>{fmtTime(remaining)}</Text>
-        </View>
-        <Text style={s.counter}>
-          {idx + 1}/{questions.length}
-        </Text>
-      </View>
-
-      <QuestionNavigator
-        total={questions.length}
-        currentIdx={idx}
-        answeredIdxs={answeredIdxs}
-        onJump={i => { if (!submitting) setIdx(i) }}
-      />
-
-      {/* Middle pane: passage + question text scroll; options live in their own fixed
-          zone below so they never jump as question/passage length changes. */}
-      <ScrollView
-        ref={qPaneRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingTop: spacing.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg }, webWidth]}
-        showsVerticalScrollIndicator={false}
-      >
+    <RunnerFrame
+      scrollRef={qPaneRef}
+      header={
+        <ExamFocusHeader
+          title={subtestParam === 'all' ? `Full mock · ${q.subtest}` : (subtestParam ?? q.subtest)}
+          position={idx + 1}
+          total={questions.length}
+          answered={answeredIdxs.size}
+          remaining={remaining}
+          onLeave={() => router.back()}
+          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+        />
+      }
+      question={
         <QuestionCard
           questionText={q.questionText}
           passageText={q.passageText}
@@ -491,68 +491,45 @@ export default function UpcatExam() {
           imageWidth={q.imageWidth}
           imageHeight={q.imageHeight}
         />
-      </ScrollView>
-
-      {/* Fixed options zone: capped at 42% of the window so the question pane keeps
-          the majority of the viewport; very long option lists scroll inside this zone. */}
-      <ScrollView style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }} contentContainerStyle={webWidth ?? undefined} showsVerticalScrollIndicator={false}>
-        <View style={{ paddingHorizontal: spacing.lg }}>
+      }
+      options={
         <OptionList
           options={q.options}
           selectedIndex={sel}
+          disabled={submitting}
           onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
         />
-        </View>
-      </ScrollView>
-
-      <View style={s.footer}>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0 || submitting}
-        >
-          <Text style={[s.footGhostTxt, (idx === 0 || submitting) && { opacity: 0.3 }]}>Back</Text>
-        </Pressable>
-        {isLast ? (
-          // Fix 2: the last question never submits directly anymore.
-          <Pressable
-            accessibilityRole="button"
-            style={[s.footBtnPrimary, submitting && s.footDisabled]}
-            disabled={submitting}
-            onPress={() => setReviewOpen(true)}
-          >
-            <Text style={s.footPrimaryTxt}>Review & submit</Text>
-          </Pressable>
-        ) : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              style={s.footBtnGhost}
-              onPress={() => setIdx(i => i + 1)}
-              disabled={submitting}
-            >
-              <Text style={s.footGhostTxt}>Skip</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
-              disabled={sel === undefined || submitting}
-              onPress={() => setIdx(i => i + 1)}
-            >
-              <Text style={s.footPrimaryTxt}>Next</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-
+      }
+      actions={
+        // Fix 2: the last question never submits directly — it opens the review sheet.
+        <RunnerActions
+          isLast={isLast}
+          canGoBack={idx > 0}
+          answered={sel !== undefined}
+          submitting={submitting}
+          onBack={() => setIdx(i => Math.max(0, i - 1))}
+          onSkip={() => setIdx(i => i + 1)}
+          onNext={() => setIdx(i => i + 1)}
+          onReview={() => setReviewOpen(true)}
+        />
+      }
+      navPanel={
+        <QuestionNavPanel
+          total={questions.length}
+          currentIdx={idx}
+          answeredIdxs={answeredIdxs}
+          flaggedIdxs={flaggedIdxs}
+          onJump={jump}
+        />
+      }
+    >
       <ExamReviewSheet
         visible={reviewOpen}
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
-        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
-        onJump={i => { if (!submitting) setIdx(i) }}
+        flaggedIdxs={flaggedIdxs}
+        onJump={jump}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />
@@ -577,154 +554,6 @@ export default function UpcatExam() {
           setReportIdx(null)
         }}
       />
-    </SafeAreaView>
+    </RunnerFrame>
   )
-}
-
-function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['theme'], typo: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['typo']) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    loading: {
-      color: t.textTertiary,
-      textAlign: 'center',
-      marginTop: 80,
-      fontFamily: 'Lexend_400Regular',
-    },
-    emptyTitle: { fontSize: typo.xl, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 4, textAlign: 'center' },
-    emptyBody: { fontSize: typo.md, color: t.textSecondary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 22, marginBottom: 12 },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    topTitle: {
-      flex: 1,
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    counter: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.accentText,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    timerPill: {
-      backgroundColor: t.surface2,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.pill,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    timerPillLow: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
-    timerTxt: {
-      fontSize: typo.xs,
-      fontWeight: '700',
-      color: t.textSecondary,
-      fontFamily: 'Outfit_700Bold',
-      fontVariant: ['tabular-nums'],
-    },
-    timerTxtLow: { color: t.warningStrong },
-    footer: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      padding: 14,
-      backgroundColor: t.bg,
-      borderTopWidth: 1,
-      borderColor: t.border,
-    },
-    footBtnGhost: {
-      paddingVertical: 13,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    footGhostTxt: {
-      fontSize: typo.sm,
-      fontWeight: '600',
-      color: t.textSecondary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    footBtnPrimary: {
-      flex: 1,
-      paddingVertical: 13,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      backgroundColor: t.accent,
-      alignItems: 'center',
-    },
-    footDisabled: { opacity: 0.4 },
-    footPrimaryTxt: {
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textInverse,
-      fontFamily: 'Outfit_700Bold',
-    },
-    deltaCard: {
-      backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 12,
-      borderCurve: 'continuous',
-      padding: spacing.md,
-      marginBottom: 18,
-      alignItems: 'center',
-    },
-    deltaText: {
-      fontSize: typo.sm,
-      fontWeight: '600',
-      color: t.accentText,
-      fontFamily: 'Lexend_600SemiBold',
-      textAlign: 'center',
-    },
-    sectionLbl: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textTertiary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      marginBottom: 8,
-      marginTop: 8,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    subtestRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      backgroundColor: t.surface2,
-      borderWidth: 1,
-      borderColor: t.divider,
-      borderRadius: 12,
-      borderCurve: 'continuous',
-      padding: spacing.md,
-      marginBottom: 6,
-    },
-    subtestName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
-    subtestScore: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    primaryBtn: {
-      backgroundColor: t.accent,
-      borderRadius: 16,
-      borderCurve: 'continuous',
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: spacing.sm,
-    },
-    primaryBtnTxt: {
-      color: t.textInverse,
-      fontWeight: '700',
-      fontSize: typo.md,
-      fontFamily: 'Outfit_700Bold',
-    },
-    ghostBtn: { paddingVertical: 12, alignItems: 'center' },
-    ghostTxt: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular' },
-  })
 }

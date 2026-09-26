@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { View, Text } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -8,7 +7,8 @@ import { Bell1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { resultWatches, listings as listingsTable } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
-import { ScreenScroll } from '../components/ui/ScreenScroll'
+import { Screen } from '../components/ui/Screen'
+import { PageTitle } from '../components/ui/PageTitle'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -129,9 +129,13 @@ export default function ResultsTrackerScreen() {
   const sorted = [...watches].sort((a, b) => (a.resultsDate ?? Infinity) - (b.resultsDate ?? Infinity))
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <DetailTopBar title="Results Tracker" fallbackHref="/explore?section=news" />
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.xs, gap: spacing.md }}>
+    <Screen header={<DetailTopBar bare fallbackHref="/explore?section=news" />} width="reading">
+      <PageTitle
+        testID="results-title"
+        title="Results tracker"
+        lead={sorted.length > 0 ? 'Results dates are estimates from past years.' : undefined}
+      />
+      <View style={{ gap: spacing.md }}>
         {status === 'loading' ? (
           <View testID="results-skeleton" accessible accessibilityLabel="Loading tracked results" aria-busy style={{ gap: spacing.md }}>
             <Skeleton height={140} radius={radius.xl} />
@@ -148,14 +152,9 @@ export default function ResultsTrackerScreen() {
             onAction={() => router.push('/explore?section=universities')}
           />
         ) : (
-          <>
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-              Results dates are estimates from past years.
-            </Text>
-            {sorted.map(w => <WatchCard key={w.slug} w={w} onRemove={removeWatch} />)}
-          </>
+          sorted.map(w => <WatchCard key={w.slug} w={w} onRemove={removeWatch} />)
         )}
-      </ScreenScroll>
-    </SafeAreaView>
+      </View>
+    </Screen>
   )
 }

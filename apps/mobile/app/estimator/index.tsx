@@ -1,24 +1,23 @@
-import { useMemo } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Text, View } from 'react-native'
 import { router } from 'expo-router'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Calculator1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, textStyle } from '../../theme/tokens'
+import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
 import { useAdmissionEstimate } from '../../hooks/useAdmissionEstimate'
 import { MIN_ANSWERS, type SubtestKey } from '../../utils/subtestReadiness'
 import { campusAccessibilityLabel, type CampusStatus } from '../../utils/admissionEstimate'
-import { Badge } from '../../components/ui/Badge'
+import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
 import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
+import { decorative, heading } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import {
   ScoreDisclaimerModal,
   ScoreDisclaimerNotice,
@@ -34,75 +33,62 @@ const SUBTEST_ROWS: { key: SubtestKey; label: string }[] = [
 ]
 
 const STATUS_GROUPS: CampusStatus[] = ['Likely', 'Possible', 'Unlikely']
-const STATUS_TONE: Record<CampusStatus, 'success' | 'warning' | 'neutral'> = {
-  Likely: 'success',
-  Possible: 'warning',
-  Unlikely: 'neutral',
+
+const TABULAR = { fontVariant: ['tabular-nums' as const] }
+
+type Theme = ReturnType<typeof useTheme>['theme']
+
+function CardHeading({ children }: { children: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+      {children}
+    </Text>
+  )
 }
 
 // ── Range bar (lower is better; the point sits inside the low–high band) ──────
+// Neutral ink: the estimate is a range, not a verdict.
 
-function RangeBar({
-  point,
-  low,
-  high,
-  t,
-  typo,
-}: {
-  point: number
-  low: number
-  high: number
-  t: ReturnType<typeof useTheme>['theme']
-  typo: ReturnType<typeof useTheme>['typo']
-}) {
+function RangeBar({ point, low, high, t }: { point: number; low: number; high: number; t: Theme }) {
   const MIN = 1.0
   const MAX = 5.0
-  const span = MAX - MIN
-  const pct = (v: number) => Math.max(0, Math.min(1, (v - MIN) / span))
+  const pct = (v: number) => Math.max(0, Math.min(1, (v - MIN) / (MAX - MIN)))
 
   return (
-    <View>
-      <Text
-        style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.xl, color: t.textPrimary, marginBottom: 4 }}
-        maxFontSizeMultiplier={1.6}
-      >
+    <View style={{ gap: spacing.xs }}>
+      <Text style={textStyle('numericLg', t.textPrimary)} maxFontSizeMultiplier={1.5}>
         {point.toFixed(2)}
       </Text>
-      <Text
-        style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: 10 }}
-        maxFontSizeMultiplier={1.6}
-      >
+      <Text style={[textStyle('bodySm', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
         Range {low.toFixed(2)}–{high.toFixed(2)} · lower is better
       </Text>
 
       <View
+        {...decorative}
         style={{
-          height: 12, backgroundColor: t.surface2, borderRadius: radius.sm,
-          marginVertical: spacing.xs, overflow: 'hidden',
+          height: 12, backgroundColor: t.surface2, borderRadius: radius.pill,
+          marginTop: spacing.sm, overflow: 'hidden',
         }}
       >
         <View
           style={{
             position: 'absolute', top: 0, bottom: 0,
             left: `${pct(low) * 100}%`, width: `${(pct(high) - pct(low)) * 100}%`,
-            backgroundColor: t.accentSurface,
+            backgroundColor: t.divider,
           }}
         />
         <View
           style={{
             position: 'absolute', top: 0, bottom: 0, left: `${pct(point) * 100}%`,
-            width: 3, backgroundColor: t.accent, borderRadius: 2, transform: [{ translateX: -1.5 }],
+            width: 3, backgroundColor: t.textPrimary, borderRadius: 2, transform: [{ translateX: -1.5 }],
           }}
         />
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }} maxFontSizeMultiplier={1.6}>
-          1.00 (best)
-        </Text>
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary }} maxFontSizeMultiplier={1.6}>
-          5.00 (worst)
-        </Text>
+        <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>1.00 (best)</Text>
+        <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>5.00 (worst)</Text>
       </View>
     </View>
   )
@@ -111,64 +97,11 @@ function RangeBar({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function EstimatorScreen() {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  const twoUp = columnCount(useBreakpoint()) === 2
   const { status, readiness, result, acknowledgeDisclaimer, reload } = useAdmissionEstimate()
 
-  const s = useMemo(
-    () =>
-      StyleSheet.create({
-        root: { flex: 1, backgroundColor: t.bg },
-        header: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: spacing.xl,
-          paddingTop: spacing.sm,
-          paddingBottom: spacing.md,
-          borderBottomWidth: 1,
-          borderBottomColor: t.border,
-        },
-        backBtn: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginRight: spacing.md },
-        title: { fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 },
-        content: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 60 },
-        card: {
-          backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-          borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.lg, marginBottom: spacing.md,
-        },
-        cardTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textPrimary, marginBottom: spacing.md },
-        campusRow: {
-          flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-          paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: t.border, gap: spacing.sm,
-        },
-        campusName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.textPrimary, flex: 1, flexShrink: 1 },
-        campusMeta: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginTop: 2 },
-        subtestRow: {
-          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-          paddingVertical: spacing.sm - 2,
-        },
-        subtestName: { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textSecondary },
-        subtestPct: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textPrimary },
-        unlockRow: {
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingVertical: spacing.sm, gap: spacing.sm,
-        },
-        unlockLabel: { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textPrimary, flex: 1 },
-        unlockBtn: {
-          minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md,
-          borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.accentSurface,
-        },
-        unlockBtnTxt: { fontFamily: 'Lexend_600SemiBold', fontSize: typo.sm, color: t.accentText },
-        emptyTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.xl, color: t.textPrimary, marginBottom: spacing.sm },
-        emptySubtitle: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.xxl, lineHeight: 20 },
-        primaryBtn: {
-          minHeight: 48, backgroundColor: t.accentStrong, borderRadius: radius.md, borderCurve: 'continuous',
-          paddingVertical: spacing.md, alignItems: 'center', justifyContent: 'center',
-        },
-        primaryBtnText: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
-        editLink: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.accentText, textDecorationLine: 'underline', marginTop: spacing.xs, minHeight: 44, textAlignVertical: 'center' },
-        eeasLine: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.xs, lineHeight: 19 },
-      }),
-    [t, typo],
-  )
+  const editGrades = () => router.push('/estimator/grades')
 
   const notReadyRows = readiness
     ? SUBTEST_ROWS.filter(row => readiness[row.key].needed > 0)
@@ -178,170 +111,207 @@ export default function EstimatorScreen() {
     ? STATUS_GROUPS.map(group => ({ group, rows: result.campuses.filter(c => c.status === group) })).filter(g => g.rows.length > 0)
     : []
 
-  return (
-    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <ScoreDisclaimerModal
-        visible={status === 'disclaimer'}
-        onAcknowledge={() => void acknowledgeDisclaimer()}
-      />
-
-      <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <Lineicons icon={ChevronLeftOutlined} size={18} color={t.textSecondary} />
-            <Text style={s.backBtn} maxFontSizeMultiplier={1.6}>Back</Text>
-          </View>
-        </TouchableOpacity>
-        <Text style={s.title} accessibilityRole="header" maxFontSizeMultiplier={1.4}>Estimated Admission Score</Text>
-      </View>
-
-      {status === 'loading' ? (
-        <View
-          accessible
-          accessibilityLabel="Loading your estimate"
-          aria-busy
-          style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md }}
-        >
-          <Skeleton height={120} radius={radius.lg} />
-          <Skeleton height={72} radius={radius.lg} />
-          <Skeleton height={72} radius={radius.lg} />
+  const body = (() => {
+    if (status === 'loading') {
+      return (
+        <View accessible accessibilityLabel="Loading your estimate" aria-busy style={{ gap: spacing.md }}>
+          <Skeleton height={140} radius={radius.xl} />
+          <Skeleton height={96} radius={radius.xl} />
+          <Skeleton height={96} radius={radius.xl} />
         </View>
-      ) : status === 'no-grades' ? (
-        <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
+      )
+    }
+
+    if (status === 'no-grades') {
+      return (
+        <>
           <ScoreDisclaimerNotice />
-          <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>No grades yet</Text>
-          <Text style={s.emptySubtitle} maxFontSizeMultiplier={1.6}>
-            Add your Grade 8–11 GWA to see your Estimated Admission Score, based on historical cutoffs.
-          </Text>
-          <Pressable
-            style={s.primaryBtn}
-            onPress={() => router.push('/estimator/grades')}
-            accessibilityRole="button"
-            accessibilityLabel="Add your grades"
-          >
-            <Text style={s.primaryBtnText} maxFontSizeMultiplier={1.4}>Add your grades</Text>
-          </Pressable>
-        </View>
-      ) : status === 'not-ready' ? (
-        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+          <EmptyState
+            icon={<Lineicons icon={Calculator1Outlined} size={24} color={t.textSecondary} />}
+            title="No grades yet"
+            body="Add your Grade 8–11 GWA to see your Estimated Admission Score, based on historical cutoffs."
+            actionLabel="Add your grades"
+            onAction={editGrades}
+          />
+        </>
+      )
+    }
+
+    if (status === 'not-ready' && readiness) {
+      return (
+        <>
           <ScoreDisclaimerNotice />
-          <View style={s.card}>
-            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Practice to unlock your estimate</Text>
-            <Text style={[s.emptySubtitle, { marginBottom: spacing.sm }]} maxFontSizeMultiplier={1.6}>
-              Your Estimated Admission Score unlocks once you've answered at least {MIN_ANSWERS} questions
+          <Card>
+            <CardHeading>Practice to unlock your estimate</CardHeading>
+            <Text style={[textStyle('body', t.textSecondary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+              Your Estimated Admission Score unlocks once you&apos;ve answered at least {MIN_ANSWERS} questions
               in each UPCAT subtest.
             </Text>
-            {notReadyRows.map(row => {
-              const r = readiness![row.key]
+            {notReadyRows.map((row, idx) => {
+              const r = readiness[row.key]
               return (
-                <View key={row.key} style={s.unlockRow}>
-                  <Text style={s.unlockLabel} maxFontSizeMultiplier={1.6}>
+                <View
+                  key={row.key}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
+                  }}
+                >
+                  <Text style={[textStyle('body', t.textPrimary), TABULAR, { flex: 1, minWidth: 160 }]} maxFontSizeMultiplier={2}>
                     {row.label}: {r.answered} of {MIN_ANSWERS} questions
                   </Text>
-                  <Pressable
-                    style={s.unlockBtn}
-                    onPress={() => router.push(`/practice/upcat/${row.label}?mode=quick` as never)}
-                    accessibilityRole="button"
+                  <Button
+                    label="Practice"
                     accessibilityLabel={`Practice ${row.label}`}
-                  >
-                    <Text style={s.unlockBtnTxt} maxFontSizeMultiplier={1.4}>Practice</Text>
-                  </Pressable>
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => router.push(`/practice/upcat/${row.label}?mode=quick` as never)}
+                  />
                 </View>
               )
             })}
+          </Card>
+          <View style={{ marginTop: spacing.lg }}>
+            <Button label="Edit grades" variant="ghost" onPress={editGrades} />
           </View>
-          <TouchableOpacity onPress={() => router.push('/estimator/grades')} accessibilityRole="button" accessibilityLabel="Edit grades">
-            <Text style={s.editLink} maxFontSizeMultiplier={1.6}>Edit grades →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      ) : status === 'ready' && result && readiness ? (
-        <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-          <ScoreDisclaimerNotice />
+        </>
+      )
+    }
 
-          <View style={s.card}>
-            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Estimated Admission Score</Text>
-            <Text style={[s.eeasLine, { marginBottom: spacing.sm }]} maxFontSizeMultiplier={1.6}>
-              Computed on this device, based on historical cutoffs — not your official UPG.
-            </Text>
-            <RangeBar point={result.point} low={result.low} high={result.high} t={t} typo={typo} />
-          </View>
+    if (status === 'ready' && result && readiness) {
+      const summary = (
+        <Card testID="estimate-summary" style={{ gap: spacing.md }}>
+          <CardHeading>Your estimate</CardHeading>
+          <RangeBar point={result.point} low={result.low} high={result.high} t={t} />
+          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+            Computed on this device, based on historical cutoffs — not your official UPG.
+          </Text>
+          <Button label="Edit grades" variant="secondary" onPress={editGrades} fullWidth />
+        </Card>
+      )
 
-          <View style={s.card}>
-            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Your Subtest Scores</Text>
-            {SUBTEST_ROWS.map(row => (
-              <View key={row.key} style={s.subtestRow}>
-                <Text style={s.subtestName} maxFontSizeMultiplier={1.6}>{row.label}</Text>
-                <Text style={s.subtestPct} maxFontSizeMultiplier={1.4}>{readiness[row.key].percent}%</Text>
-              </View>
-            ))}
-          </View>
-
-          {(result.eeas.palugit > 0 || result.eeas.pabigat > 0) ? (
-            <View style={s.card}>
-              <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Adjustments to your estimate</Text>
-              <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
-                A lower score is better, so a bonus subtracts and a distance adjustment adds.
+      const subtests = (
+        <Card>
+          <CardHeading>Your subtest scores</CardHeading>
+          {SUBTEST_ROWS.map((row, idx) => (
+            <View
+              key={row.key}
+              style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md,
+                minHeight: 44, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
+              }}
+            >
+              <Text style={[textStyle('body', t.textSecondary), { flex: 1 }]} maxFontSizeMultiplier={2}>{row.label}</Text>
+              <Text style={[textStyle('titleSm', t.textPrimary), TABULAR]} maxFontSizeMultiplier={1.6}>
+                {readiness[row.key].percent}%
               </Text>
-              {result.eeas.palugit > 0 ? (
-                <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
-                  Palugit (public-school / Indigenous Peoples bonus): −{result.eeas.palugit.toFixed(2)}
-                </Text>
-              ) : null}
-              {result.eeas.pabigat > 0 ? (
-                <Text style={s.eeasLine} maxFontSizeMultiplier={1.6}>
-                  Pabigat (distant target-campus adjustment): +{result.eeas.pabigat.toFixed(2)}
-                </Text>
-              ) : null}
             </View>
+          ))}
+        </Card>
+      )
+
+      const adjustments = (result.eeas.palugit > 0 || result.eeas.pabigat > 0) ? (
+        <Card style={{ gap: spacing.xs }}>
+          <CardHeading>Adjustments to your estimate</CardHeading>
+          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+            A lower score is better, so a bonus subtracts and a distance adjustment adds.
+          </Text>
+          {result.eeas.palugit > 0 ? (
+            <Text style={[textStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
+              Palugit (public-school / Indigenous Peoples bonus): −{result.eeas.palugit.toFixed(2)}
+            </Text>
           ) : null}
+          {result.eeas.pabigat > 0 ? (
+            <Text style={[textStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
+              Pabigat (distant target-campus adjustment): +{result.eeas.pabigat.toFixed(2)}
+            </Text>
+          ) : null}
+        </Card>
+      ) : null
 
-          <View style={s.card}>
-            <Text style={s.cardTitle} maxFontSizeMultiplier={1.4}>Per-Campus Outlook</Text>
-            {groupedCampuses.map(({ group, rows }) => (
-              <View key={group}>
-                <View style={{ marginTop: spacing.sm }}>
-                  <Badge label={group} tone={STATUS_TONE[group]} />
+      const outlook = (
+        <Card>
+          <CardHeading>Per-campus outlook</CardHeading>
+          <Text style={[textStyle('bodySm', t.textSecondary), { marginBottom: spacing.xs }]} maxFontSizeMultiplier={2}>
+            How your estimate compares with each campus&apos;s historical cutoff.
+          </Text>
+          {groupedCampuses.map(({ group, rows }) => (
+            <View key={group} style={{ marginTop: spacing.md }}>
+              <Text {...heading(3)} style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={2}>
+                {group}
+              </Text>
+              {rows.map((row, idx) => (
+                <View
+                  key={`${row.campus}-${row.program ?? ''}`}
+                  accessible
+                  accessibilityLabel={campusAccessibilityLabel(row)}
+                  style={{
+                    minHeight: 44, justifyContent: 'center', paddingVertical: spacing.sm, gap: 2,
+                    borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
+                  }}
+                >
+                  <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+                    {row.campus}{row.program ? ` – ${row.program}` : ''}
+                  </Text>
+                  <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
+                    Cutoff: {row.cutoff.toFixed(2)}{row.year != null ? ` (${row.year})` : ''}{row.isEstimate ? ' · estimate' : ''}
+                  </Text>
                 </View>
-                {rows.map((row, idx) => (
-                  <View
-                    key={`${row.campus}-${row.program ?? ''}`}
-                    style={[s.campusRow, idx === rows.length - 1 && { borderBottomWidth: 0 }]}
-                    accessible
-                    accessibilityLabel={campusAccessibilityLabel(row)}
-                  >
-                    <View style={{ flex: 1, flexShrink: 1 }}>
-                      <Text style={s.campusName} maxFontSizeMultiplier={1.6}>
-                        {row.campus}{row.program ? ` – ${row.program}` : ''}
-                      </Text>
-                      <Text style={s.campusMeta} maxFontSizeMultiplier={1.6}>
-                        Cutoff: {row.cutoff.toFixed(2)}{row.year != null ? ` (${row.year})` : ''}{row.isEstimate ? ' · estimate' : ''}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          ))}
+        </Card>
+      )
 
-          <TouchableOpacity onPress={() => router.push('/estimator/grades')} accessibilityRole="button" accessibilityLabel="Edit grades">
-            <Text style={s.editLink} maxFontSizeMultiplier={1.6}>Edit grades →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      ) : status === 'error' ? (
-        <View style={{ flex: 1, paddingHorizontal: spacing.xxl, justifyContent: 'center' }}>
+      const stack = { gap: spacing.lg }
+      return (
+        <>
+          <ScoreDisclaimerNotice />
+          {twoUp ? (
+            <TwoColumn
+              primary={<View style={stack}>{subtests}{adjustments}{outlook}</View>}
+              secondary={summary}
+            />
+          ) : (
+            // Phones and tablets lead with the result.
+            <View style={stack}>{summary}{subtests}{adjustments}{outlook}</View>
+          )}
+        </>
+      )
+    }
+
+    if (status === 'error') {
+      return (
+        <>
           <ScoreDisclaimerNotice />
           <ErrorState
             title="Estimate unavailable"
             body="Your grades and practice answers are still saved on this device. Try loading them again."
             onRetry={reload}
           />
-        </View>
-      ) : null}
-    </SafeAreaView>
+        </>
+      )
+    }
+
+    return null
+  })()
+
+  return (
+    <Screen
+      width={status === 'ready' ? 'wide' : 'reading'}
+      edges={['top', 'bottom']}
+      header={<DetailTopBar bare fallbackHref="/practice" />}
+    >
+      <ScoreDisclaimerModal
+        visible={status === 'disclaimer'}
+        onAcknowledge={() => void acknowledgeDisclaimer()}
+      />
+      <PageTitle
+        title="Estimated Admission Score"
+        lead="An unofficial estimate from your grades and practice, based on historical cutoffs."
+      />
+      {body}
+    </Screen>
   )
 }

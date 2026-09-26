@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { View, Text } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { inArray } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -11,7 +10,9 @@ import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { listings as listingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
-import { ScreenScroll } from '../../components/ui/ScreenScroll'
+import { Screen } from '../../components/ui/Screen'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { ProgressBar } from '../../components/ui/ProgressBar'
@@ -90,6 +91,7 @@ function ListingSection({ item }: { item: ListingRequirements }) {
 export default function RequirementsScreen() {
   const db = useDb()
   const { theme: t } = useTheme()
+  const bp = useBreakpoint()
   const { focusListings: focusListingsList } = useFocusListings()
 
   const [reqsBySlug, setReqsBySlug] = useState<Map<string, { requirements: string[] }>>(() => new Map())
@@ -138,32 +140,39 @@ export default function RequirementsScreen() {
     [focusListingsList, reqsBySlug],
   )
 
+  const twoUp = bp === 'expanded' && sections.length > 1
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <DetailTopBar title="Requirements" fallbackHref="/" />
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.xs }}>
-        {loading ? (
-          <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" aria-busy style={{ gap: spacing.lg }}>
-            <Skeleton height={160} radius={radius.xl} />
-            <Skeleton height={160} radius={radius.xl} />
-          </View>
-        ) : sections.length > 0 ? (
-          <>
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-              Documents for the exams and scholarships in your Focus. Tick each one as you get it.
-            </Text>
-            {sections.map(item => <ListingSection key={item.slug} item={item} />)}
-          </>
-        ) : (
-          <EmptyState
-            icon={<Lineicons icon={ClipboardOutlined} size={26} color={t.textSecondary} />}
-            title="Nothing to track yet"
-            body="Add an exam or scholarship to Focus from Explore, and its requirements show up here."
-            actionLabel="Browse Explore"
-            onAction={() => router.push('/explore')}
-          />
-        )}
-      </ScreenScroll>
-    </SafeAreaView>
+    <Screen header={<DetailTopBar bare fallbackHref="/" />} width={twoUp ? 'wide' : 'reading'}>
+      <PageTitle
+        title="Requirements"
+        lead={sections.length > 0 ? 'Documents for the exams and scholarships in your Focus. Tick each one as you get it.' : undefined}
+      />
+      {loading ? (
+        <View testID="requirements-skeleton" accessible accessibilityLabel="Loading requirements" aria-busy style={{ gap: spacing.lg }}>
+          <Skeleton height={160} radius={radius.xl} />
+          <Skeleton height={160} radius={radius.xl} />
+        </View>
+      ) : sections.length > 0 ? (
+        <View
+          testID="requirements-grid"
+          style={{ flexDirection: twoUp ? 'row' : 'column', flexWrap: twoUp ? 'wrap' : 'nowrap', gap: spacing.lg, alignItems: twoUp ? 'flex-start' : 'stretch' }}
+        >
+          {sections.map(item => (
+            <View key={item.slug} style={twoUp ? { flexBasis: '47%', flexGrow: 1, minWidth: 0 } : undefined}>
+              <ListingSection item={item} />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <EmptyState
+          icon={<Lineicons icon={ClipboardOutlined} size={26} color={t.textSecondary} />}
+          title="Nothing to track yet"
+          body="Add an exam or scholarship to Focus from Explore, and its requirements show up here."
+          actionLabel="Browse Explore"
+          onAction={() => router.push('/explore')}
+        />
+      )}
+    </Screen>
   )
 }

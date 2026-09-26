@@ -12,6 +12,12 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }))
 
+const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
 jest.mock('../../../hooks/useAdmissionEstimate')
 const mockUseAdmissionEstimate = useAdmissionEstimate as jest.Mock
 
@@ -65,8 +71,12 @@ function mockState(overrides: Partial<ReturnType<typeof useAdmissionEstimate>>) 
   })
 }
 
+function flat(style: unknown): Record<string, any> {
+  return Object.assign({}, ...[style].flat(Infinity as 1).filter(Boolean))
+}
+
 describe('EstimatorScreen', () => {
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => { jest.clearAllMocks(); mockBp.value = 'compact' })
 
   it('titles the screen with the approved term (PRODUCT.md), not "Estimator"', () => {
     mockState({ status: 'loading' })
@@ -170,5 +180,65 @@ describe('EstimatorScreen', () => {
     fireEvent.press(screen.getByText(/Edit grades/i))
     const { router } = require('expo-router')
     expect(router.push).toHaveBeenCalledWith('/estimator/grades')
+  })
+
+  // ── Redesign M3 ────────────────────────────────────────────────────────────
+  describe('redesign M3', () => {
+    it('makes the title the page h1 and gives a named 44pt back button', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      const h1 = screen.getByRole('header', { name: 'Estimated Admission Score' })
+      expect(h1.props['aria-level']).toBe(1)
+      expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
+    })
+
+    it('draws no arrow or glyph icons in text', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      expect(screen.queryByText(/[→←›⚠•]/)).toBeNull()
+    })
+
+    it('sets the estimate in tabular numerals', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      expect(flat(screen.getByText('2.35').props.style).fontVariant).toContain('tabular-nums')
+    })
+
+    it('explains the estimate is based on historical cutoffs beside the number', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      expect(screen.getByTestId('estimate-summary')).toBeTruthy()
+      expect(screen.getAllByText(/based on historical cutoffs/).length).toBeGreaterThan(0)
+    })
+
+    it('shows campus outlook groups in one neutral ink (no green/amber verdicts)', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      const ink = (txt: string) => flat(screen.getByText(txt).props.style).color
+      expect(ink('Likely')).toBe(ink('Unlikely'))
+      expect(ink('Possible')).toBe(ink('Unlikely'))
+    })
+
+    it('puts the score and its explanation in a side column on desktop', () => {
+      mockBp.value = 'expanded'
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      expect(flat(screen.getByTestId('two-column').props.style).flexDirection).toBe('row')
+      expect(flat(screen.getByTestId('screen-content').props.style).maxWidth).toBe(1040)
+    })
+
+    it('leads with the score on phones (result before the campus list)', () => {
+      mockState({ status: 'ready', readiness: READY_READINESS as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      expect(screen.queryByTestId('two-column')).toBeNull()
+      const json = JSON.stringify(screen.toJSON())
+      expect(json.indexOf('estimate-summary')).toBeLessThan(json.indexOf('Per-campus outlook'))
+    })
+
+    it('has at most one primary action in the no-grades state', () => {
+      mockState({ status: 'no-grades' })
+      render(<EstimatorScreen />)
+      expect(screen.getAllByRole('button', { name: /add your grades/i }).length).toBe(1)
+    })
   })
 })

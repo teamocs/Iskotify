@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Modal, KeyboardAvoidingView, Platform, Alert,
-} from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, Text, TextInput, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native'
 import { Stack, router, useLocalSearchParams } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -17,22 +13,29 @@ import {
   XmarkOutlined,
   Alarm1Outlined,
   PlusOutlined,
+  FileQuestionOutlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { noteInk } from '../../utils/noteInk'
+import { radius, spacing, textStyle } from '../../theme/tokens'
 import { useDb } from '../../hooks/useDb'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
-import { NOTE_COLORS, parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
+import { useSafeInsets } from '../../hooks/useSafeInsets'
+import { parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
 import { notes as notesTable } from '../../db/schema'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../components/ui/webMaxWidth'
-
-const COLOR_KEYS = [null, 'red', 'pink', 'orange', 'yellow', 'teal', 'green', 'cyan', 'blue', 'cerulean', 'purple', 'gray'] as const
+import { confirmAction } from '../../utils/confirmAction'
+import { Screen } from '../../components/ui/Screen'
+import { Sheet } from '../../components/ui/Sheet'
+import { Button } from '../../components/ui/Button'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { DetailTopBar, goBackOr } from '../../components/explore/DetailTopBar'
+import { NOTE_SWATCHES, noteSurface, noteSwatchBorder, noteTone } from '../../components/notes/noteTone'
 
 // ── Reminder quick-pick options ──────────────────────────────────────────────
 
-function getReminderOptions(): Array<{ label: string; sub: string; ms: number | null }> {
+function getReminderOptions(): { label: string; sub: string; ms: number }[] {
   const now = new Date()
   const inOneHour = new Date(now.getTime() + 60 * 60 * 1000)
   const tonight = new Date(now); tonight.setHours(21, 0, 0, 0)
@@ -41,11 +44,11 @@ function getReminderOptions(): Array<{ label: string; sub: string; ms: number | 
   const daysUntilMon = (8 - now.getDay()) % 7 || 7
   nextMonday.setDate(now.getDate() + daysUntilMon); nextMonday.setHours(9, 0, 0, 0)
 
-  const opts: Array<{ label: string; sub: string; ms: number | null }> = []
-  if (inOneHour > now) opts.push({ label: 'In 1 hour', sub: inOneHour.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), ms: inOneHour.getTime() })
+  const opts: { label: string; sub: string; ms: number }[] = []
+  opts.push({ label: 'In 1 hour', sub: inOneHour.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }), ms: inOneHour.getTime() })
   if (tonight > now) opts.push({ label: 'Tonight', sub: '9:00 PM', ms: tonight.getTime() })
-  opts.push({ label: 'Tomorrow morning', sub: tomorrow9.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' · 9:00 AM', ms: tomorrow9.getTime() })
-  opts.push({ label: 'Next week', sub: nextMonday.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + ' · 9:00 AM', ms: nextMonday.getTime() })
+  opts.push({ label: 'Tomorrow morning', sub: tomorrow9.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ', 9:00 AM', ms: tomorrow9.getTime() })
+  opts.push({ label: 'Next week', sub: nextMonday.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) + ', 9:00 AM', ms: nextMonday.getTime() })
   return opts
 }
 
@@ -55,12 +58,76 @@ function formatReminderFull(ms: number): string {
     ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+// ── Small controls ───────────────────────────────────────────────────────────
+
+/** 44pt icon button with a spoken name and a keyboard focus ring. */
+function ToolButton({ label, onPress, active, children }: {
+  label: string
+  onPress: () => void
+  active?: boolean
+  children: React.ReactNode
+}) {
+  const { theme: t } = useTheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressableState
+        return [
+          {
+            width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous',
+            alignItems: 'center', justifyContent: 'center',
+            backgroundColor: active ? t.accentSurface : pressed || hovered ? t.surface2 : 'transparent',
+          },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <View {...decorative}>{children}</View>
+    </Pressable>
+  )
+}
+
+/** A checklist tick box: 44pt target, 22pt drawn box. */
+function CheckBox({ checked, label, onPress }: { checked: boolean; label: string; onPress: () => void }) {
+  const { theme: t } = useTheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      aria-checked={checked}
+      style={(state) => {
+        const { focused } = state as WebPressableState
+        return [
+          { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
+          focusRing(t.focusRing, focused),
+        ]
+      }}
+    >
+      <View
+        {...decorative}
+        style={{
+          width: 22, height: 22, borderRadius: 6, borderWidth: 1.5,
+          borderColor: checked ? t.textSecondary : t.inputBorder,
+          backgroundColor: checked ? t.textSecondary : 'transparent',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {checked ? <Lineicons icon={CheckOutlined} size={14} color={t.surface} /> : null}
+      </View>
+    </Pressable>
+  )
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export default function NoteEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { theme: t, typo } = useTheme()
-  const insets = useSafeAreaInsets()
+  const { theme: t } = useTheme()
+  const insets = useSafeInsets()
   const db = useDb()
   const { labels, assignedLabelIds, assignLabel, unassignLabel } = useNoteLabels()
 
@@ -74,10 +141,9 @@ export default function NoteEditorScreen() {
   const [assignedIds, setAssignedIds] = useState<string[]>([])
   const [reminderAt, setReminderAt] = useState<number | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [missing, setMissing] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reminderOpts = useMemo(() => getReminderOptions(), [])
-  // Web-only max-width centering for the editor body (null on native/sm).
-  const webWidth = useWebContentWidth()
 
   // Load note on mount
   useEffect(() => {
@@ -86,7 +152,7 @@ export default function NoteEditorScreen() {
     void db.select().from(notesTable).where(eq(notesTable.id, id)).limit(1).then(rows => {
       if (cancelled) return
       const row = rows[0]
-      if (!row) return
+      if (!row) { setMissing(true); return }
       setTitle(row.title)
       setContent(row.content)
       setType(row.type as NoteType)
@@ -124,24 +190,26 @@ export default function NoteEditorScreen() {
   const handleArchive = useCallback(async () => {
     if (!id) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    await save(title, content, checkItems, color)
     await db.update(notesTable).set({ isArchived: true, updatedAt: Date.now() }).where(eq(notesTable.id, id))
-    router.back()
-  }, [id, db])
+    goBackOr('/notes')
+  }, [id, db, save, title, content, checkItems, color])
 
-  const handleDelete = useCallback(async () => {
-    Alert.alert('Move to Trash', 'Move this note to trash?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Move to Trash', style: 'destructive',
-        onPress: async () => {
-          if (!id) return
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-          await db.update(notesTable).set({ isTrashed: true, trashedAt: Date.now(), updatedAt: Date.now() }).where(eq(notesTable.id, id))
-          router.back()
-        },
+  const handleDelete = useCallback(() => {
+    confirmAction(
+      'Move to trash',
+      'Move this note to trash? Trash is emptied after 7 days.',
+      'Move to trash',
+      async () => {
+        if (!id) return
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        await save(title, content, checkItems, color)
+        await db.update(notesTable).set({ isTrashed: true, trashedAt: Date.now(), updatedAt: Date.now() }).where(eq(notesTable.id, id))
+        goBackOr('/notes')
       },
-    ])
-  }, [id, db])
+      { destructive: true },
+    )
+  }, [id, db, save, title, content, checkItems, color])
 
   const addCheckItem = useCallback(() => {
     const newItem: ChecklistItem = {
@@ -165,11 +233,12 @@ export default function NoteEditorScreen() {
   }, [])
 
   const toggleLabelAssign = useCallback(async (labelId: string) => {
+    if (!id) return
     if (assignedIds.includes(labelId)) {
-      await unassignLabel(id!, labelId)
+      await unassignLabel(id, labelId)
       setAssignedIds(prev => prev.filter(l => l !== labelId))
     } else {
-      await assignLabel(id!, labelId)
+      await assignLabel(id, labelId)
       setAssignedIds(prev => [...prev, labelId])
     }
   }, [assignedIds, id, assignLabel, unassignLabel])
@@ -188,252 +257,324 @@ export default function NoteEditorScreen() {
     }
   }, [id, db, title])
 
-  const bgColor = color ? NOTE_COLORS[color] : t.bg
-  const ink = noteInk(t, !!color)
-  const textCol = ink.text
-  const subCol = ink.sub
-  const now = Date.now()
-  const hasActiveReminder = reminderAt != null && reminderAt > now
-
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: bgColor },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-    backBtn: { padding: 8 },
-    backTxt: { fontSize: typo.lg, color: textCol },
-    titleInput: { flex: 1, fontSize: typo.lg, fontWeight: '700', color: textCol, fontFamily: 'Outfit_700Bold' },
-    reminderBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: 6, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: hasActiveReminder ? t.accentSurface : 'transparent', borderRadius: 10, borderWidth: hasActiveReminder ? 1 : 0, borderColor: t.accentBorder, alignSelf: 'flex-start' },
-    reminderBadgeTxt: { fontSize: typo.xs, color: t.accent, fontFamily: 'Lexend_500Medium' },
-    contentInput: { flex: 1, fontSize: typo.sm, color: textCol, fontFamily: 'Lexend_400Regular', lineHeight: 20, textAlignVertical: 'top', paddingHorizontal: 16, paddingBottom: 16, minHeight: 200 },
-    checkRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: 10 },
-    checkBox: { width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: textCol, alignItems: 'center', justifyContent: 'center' },
-    checkMark: { fontSize: typo.sm, color: textCol },
-    checkInput: { flex: 1, fontSize: typo.sm, color: textCol, fontFamily: 'Lexend_400Regular' },
-    checkedText: { textDecorationLine: 'line-through', color: subCol },
-    addItemBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
-    addItemTxt: { fontSize: typo.sm, color: subCol, fontFamily: 'Lexend_400Regular' },
-    toolbar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: ink.hairline, paddingHorizontal: 8, paddingVertical: 8, gap: 4 },
-    colorRow: { flexDirection: 'row', gap: 6, flex: 1 },
-    colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2 },
-    toolBtn: { padding: 10, borderRadius: 10 },
-    toolBtnActive: { backgroundColor: t.accentSurface },
-    // Sheet shared styles
-    backdrop: { flex: 1, backgroundColor: t.backdrop },
-    sheet: { backgroundColor: t.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Math.max(32, insets.bottom + 16), paddingTop: 12 },
-    sheetHandle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-    sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 16 },
-    sheetTitle: { fontSize: typo.lg, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    sheetCloseBtn: { padding: 4 },
-    // Label picker
-    labelRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle, gap: 12 },
-    labelName: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
-    checkCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5 },
-    checkCircleOn: { backgroundColor: t.accent, borderColor: t.accent, alignItems: 'center', justifyContent: 'center' },
-    checkCircleOff: { borderColor: t.textTertiary },
-    // Reminder picker
-    reminderOpt: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle, gap: 14 },
-    reminderOptIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    reminderOptLabel: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    reminderOptSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-    clearReminderBtn: { marginHorizontal: 20, marginTop: 12, paddingVertical: 14, borderRadius: 14, backgroundColor: t.dangerSurface, borderWidth: 1, borderColor: t.dangerBorder, alignItems: 'center' },
-    clearReminderTxt: { fontSize: typo.sm, color: t.dangerStrong, fontFamily: 'Lexend_500Medium' },
-  }), [t, typo, bgColor, textCol, subCol, ink.hairline, insets, hasActiveReminder])
-
+  const hasActiveReminder = reminderAt != null && reminderAt > Date.now()
   const unchecked = checkItems.filter(ci => !ci.isChecked)
   const checked = checkItems.filter(ci => ci.isChecked)
+  const tone = noteTone(color)
+  const webInput = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null
+
+  const header = <DetailTopBar bare fallbackHref="/notes" />
+
+  if (missing) {
+    return (
+      <Screen header={header}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <EmptyState
+          icon={<Lineicons icon={FileQuestionOutlined} size={26} color={t.textSecondary} />}
+          title="This note is gone"
+          body="It may have been deleted forever from the trash."
+          actionLabel="Back to notes"
+          onAction={() => router.replace('/notes' as never)}
+        />
+      </Screen>
+    )
+  }
+
+  if (!loaded) {
+    return (
+      <Screen header={header}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View accessible accessibilityLabel="Loading note" aria-busy style={{ gap: spacing.md, paddingTop: spacing.sm }}>
+          <Skeleton width="60%" height={32} />
+          <Skeleton height={240} radius={radius.xl} />
+        </View>
+      </Screen>
+    )
+  }
+
+  const checklistRow = (item: ChecklistItem) => (
+    <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: -spacing.md }}>
+      <CheckBox checked={item.isChecked} label={item.text || 'List item'} onPress={() => toggleCheck(item.id)} />
+      {item.isChecked ? (
+        <Text
+          style={[textStyle('body', t.textSecondary), { flex: 1, textDecorationLine: 'line-through' }]}
+          maxFontSizeMultiplier={2}
+        >
+          {item.text}
+        </Text>
+      ) : (
+        <TextInput
+          style={[textStyle('body', t.textPrimary), { flex: 1, minHeight: 44 }, webInput]}
+          value={item.text}
+          onChangeText={t2 => updateCheckText(item.id, t2)}
+          accessibilityLabel={item.text ? `Edit ${item.text}` : 'New list item'}
+          placeholder="List item"
+          placeholderTextColor={t.textTertiary}
+          onSubmitEditing={addCheckItem}
+          submitBehavior="submit"
+          maxFontSizeMultiplier={2}
+        />
+      )}
+      <ToolButton label={`Remove ${item.text || 'list item'}`} onPress={() => removeCheckItem(item.id)}>
+        <Lineicons icon={XmarkOutlined} size={16} color={t.textSecondary} />
+      </ToolButton>
+    </View>
+  )
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
+    <Screen
+      header={header}
+      scroll={false}
+      contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
+    >
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-
-        {/* Top bar */}
-        <View style={s.topBar}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-            <Text style={s.backTxt}>‹</Text>
-          </TouchableOpacity>
-          <TextInput
-            style={s.titleInput}
-            placeholder="Title"
-            placeholderTextColor={subCol}
-            value={title}
-            onChangeText={setTitle}
-            returnKeyType="next"
-          />
-        </View>
-
-        {/* Active reminder badge */}
-        {hasActiveReminder && (
-          <TouchableOpacity style={s.reminderBadge} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel={`Reminder set for ${formatReminderFull(reminderAt!)}. Change it.`}>
-            <Lineicons icon={Bell1Solid} size={12} color={t.accent} />
-            <Text style={s.reminderBadgeTxt}>{formatReminderFull(reminderAt!)}</Text>
-          </TouchableOpacity>
-        )}
-
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={webWidth ?? undefined} keyboardShouldPersistTaps="handled">
-          {type === 'text' ? (
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: noteSurface(t, color),
+            borderRadius: radius.xl,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: t.border,
+            overflow: 'hidden',
+          }}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}
+            keyboardShouldPersistTaps="handled"
+          >
             <TextInput
-              style={s.contentInput}
-              placeholder="Note…"
-              placeholderTextColor={subCol}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              textAlignVertical="top"
+              style={[textStyle('title', t.textPrimary), webInput]}
+              accessibilityLabel="Note title"
+              placeholder="Title"
+              placeholderTextColor={t.textTertiary}
+              value={title}
+              onChangeText={setTitle}
+              returnKeyType="next"
+              maxFontSizeMultiplier={1.6}
             />
-          ) : (
-            <View>
-              {unchecked.map(item => (
-                <View key={item.id} style={s.checkRow}>
-                  <TouchableOpacity style={s.checkBox} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} aria-checked={item.isChecked}>
-                    <Text style={s.checkMark}> </Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={s.checkInput}
-                    value={item.text}
-                    onChangeText={t2 => updateCheckText(item.id, t2)}
-                    placeholder="List item…"
-                    placeholderTextColor={subCol}
-                    onSubmitEditing={addCheckItem}
-                    blurOnSubmit={false}
+
+            {hasActiveReminder ? (
+              <Pressable
+                onPress={() => setShowReminderPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Reminder set for ${formatReminderFull(reminderAt!)}. Change it.`}
+                style={(state) => {
+                  const { focused } = state as WebPressableState
+                  return [
+                    {
+                      alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+                      minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill,
+                      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
+                    },
+                    focusRing(t.focusRing, focused),
+                  ]
+                }}
+              >
+                <View {...decorative}><Lineicons icon={Bell1Solid} size={14} color={t.accentText} /></View>
+                <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={2}>{formatReminderFull(reminderAt!)}</Text>
+              </Pressable>
+            ) : null}
+
+            {type === 'text' ? (
+              <TextInput
+                style={[textStyle('body', t.textPrimary), { minHeight: 240 }, webInput]}
+                accessibilityLabel="Note text"
+                placeholder="Start writing"
+                placeholderTextColor={t.textTertiary}
+                value={content}
+                onChangeText={setContent}
+                multiline
+                textAlignVertical="top"
+                maxFontSizeMultiplier={2}
+              />
+            ) : (
+              <View>
+                {unchecked.map(checklistRow)}
+                <View style={{ alignSelf: 'flex-start', marginLeft: -spacing.md }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    label="Add item"
+                    onPress={addCheckItem}
+                    icon={<Lineicons icon={PlusOutlined} size={16} color={t.accentText} />}
                   />
-                  <TouchableOpacity onPress={() => removeCheckItem(item.id)} accessibilityRole="button" accessibilityLabel={`Remove ${item.text || 'list item'}`}>
-                    <Lineicons icon={XmarkOutlined} size={16} color={subCol} />
-                  </TouchableOpacity>
                 </View>
-              ))}
-              <TouchableOpacity style={s.addItemBtn} onPress={addCheckItem} accessibilityRole="button" accessibilityLabel="Add item">
-                <Lineicons icon={PlusOutlined} size={18} color={subCol} />
-                <Text style={s.addItemTxt}>Add item</Text>
-              </TouchableOpacity>
-              {checked.length > 0 && (
-                <>
-                  <Text style={{ paddingHorizontal: 16, paddingTop: 8, fontSize: typo.xs, color: subCol, fontFamily: 'Lexend_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-                    {checked.length} checked
-                  </Text>
-                  {checked.map(item => (
-                    <View key={item.id} style={s.checkRow}>
-                      <TouchableOpacity style={[s.checkBox, { backgroundColor: subCol }]} onPress={() => toggleCheck(item.id)} accessibilityRole="checkbox" accessibilityLabel={item.text || 'List item'} aria-checked={item.isChecked}>
-                        <Text style={s.checkMark}>✓</Text>
-                      </TouchableOpacity>
-                      <Text style={[s.checkInput, s.checkedText]}>{item.text}</Text>
-                      <TouchableOpacity onPress={() => removeCheckItem(item.id)} accessibilityRole="button" accessibilityLabel={`Remove ${item.text || 'list item'}`}>
-                        <Lineicons icon={XmarkOutlined} size={16} color={subCol} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </>
-              )}
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Bottom toolbar */}
-        <View style={s.toolbar}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-            <View style={s.colorRow}>
-              {COLOR_KEYS.map(key => (
-                <TouchableOpacity
-                  key={String(key)}
-                  style={[
-                    s.colorDot,
-                    { backgroundColor: key ? NOTE_COLORS[key] : t.surface },
-                    { borderColor: color === key ? t.accent : (key ? noteInk(t, true).hairline : t.border) },
-                  ]}
-                  onPress={() => setColor(key)}
-                  accessibilityRole="radio"
-                  accessibilityLabel={key ? `${key} note colour` : 'Default note colour'}
-                  aria-checked={color === key}
-                />
-              ))}
-            </View>
+                {checked.length > 0 ? (
+                  <>
+                    <Text style={[textStyle('label', t.textSecondary), { marginTop: spacing.md }]} maxFontSizeMultiplier={2}>
+                      {`${checked.length} checked`}
+                    </Text>
+                    {checked.map(checklistRow)}
+                  </>
+                ) : null}
+              </View>
+            )}
           </ScrollView>
-          {/* Reminder */}
-          <TouchableOpacity style={[s.toolBtn, hasActiveReminder && s.toolBtnActive]} onPress={() => setShowReminderPicker(true)} accessibilityRole="button" accessibilityLabel={hasActiveReminder ? 'Reminder, set' : 'Reminder'}>
-            <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accent : textCol} />
-          </TouchableOpacity>
-          {/* Labels */}
-          <TouchableOpacity style={[s.toolBtn, assignedIds.length > 0 && s.toolBtnActive]} onPress={() => setShowLabelPicker(true)} accessibilityRole="button" accessibilityLabel={assignedIds.length > 0 ? `Labels, ${assignedIds.length} assigned` : 'Labels'}>
-            <Lineicons icon={Bookmark1Outlined} size={20} color={assignedIds.length > 0 ? t.accent : textCol} />
-          </TouchableOpacity>
-          {/* Archive */}
-          <TouchableOpacity style={s.toolBtn} onPress={handleArchive} accessibilityRole="button" accessibilityLabel="Archive note">
-            <Lineicons icon={BoxArchive1Outlined} size={20} color={textCol} />
-          </TouchableOpacity>
-          {/* Trash */}
-          <TouchableOpacity style={s.toolBtn} onPress={handleDelete} accessibilityRole="button" accessibilityLabel="Move note to trash">
-            <Lineicons icon={Trash3Outlined} size={20} color={t.danger} />
-          </TouchableOpacity>
-        </View>
 
+          {/* Toolbar: colour radios, then the note's actions — inside the column. */}
+          <View
+            style={{
+              flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+              columnGap: spacing.md, rowGap: spacing.xs,
+              borderTopWidth: 1, borderTopColor: t.border,
+              paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+            }}
+          >
+            <View
+              accessibilityRole="radiogroup"
+              accessibilityLabel="Note colour"
+              style={{ flexDirection: 'row', flexWrap: 'wrap' }}
+            >
+              {NOTE_SWATCHES.map(sw => {
+                const on = sw.tone === tone
+                return (
+                  <Pressable
+                    key={sw.tone}
+                    onPress={() => setColor(sw.key)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={sw.name}
+                    aria-checked={on}
+                    style={(state) => {
+                      const { focused } = state as WebPressableState
+                      return [
+                        { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+                        focusRing(t.focusRing, focused),
+                      ]
+                    }}
+                  >
+                    <View
+                      {...decorative}
+                      style={{
+                        width: 30, height: 30, borderRadius: radius.pill,
+                        borderWidth: on ? 2 : 1,
+                        borderColor: on ? t.accent : noteSwatchBorder(t, sw.key),
+                        backgroundColor: t.bg,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View style={{ flex: 1, backgroundColor: noteSurface(t, sw.key), alignItems: 'center', justifyContent: 'center' }}>
+                        {on ? <Lineicons icon={CheckOutlined} size={14} color={t.textPrimary} /> : null}
+                      </View>
+                    </View>
+                  </Pressable>
+                )
+              })}
+            </View>
+            <View style={{ flexDirection: 'row' }}>
+              <ToolButton
+                label={hasActiveReminder ? 'Reminder, set' : 'Reminder'}
+                active={hasActiveReminder}
+                onPress={() => setShowReminderPicker(true)}
+              >
+                <Lineicons icon={hasActiveReminder ? Bell1Solid : Bell1Outlined} size={20} color={hasActiveReminder ? t.accentText : t.textPrimary} />
+              </ToolButton>
+              <ToolButton
+                label={assignedIds.length > 0 ? `Labels, ${assignedIds.length} assigned` : 'Labels'}
+                active={assignedIds.length > 0}
+                onPress={() => setShowLabelPicker(true)}
+              >
+                <Lineicons icon={Bookmark1Outlined} size={20} color={assignedIds.length > 0 ? t.accentText : t.textPrimary} />
+              </ToolButton>
+              <ToolButton label="Archive note" onPress={() => void handleArchive()}>
+                <Lineicons icon={BoxArchive1Outlined} size={20} color={t.textPrimary} />
+              </ToolButton>
+              <ToolButton label="Move note to trash" onPress={handleDelete}>
+                <Lineicons icon={Trash3Outlined} size={20} color={t.dangerStrong} />
+              </ToolButton>
+            </View>
+          </View>
+        </View>
       </KeyboardAvoidingView>
 
-      {/* ── Label picker bottom sheet ─────────────────────────────────────── */}
-      <Modal visible={showLabelPicker} transparent animationType="slide" onRequestClose={() => setShowLabelPicker(false)} statusBarTranslucent>
-        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowLabelPicker(false)} accessibilityRole="button" accessibilityLabel="Close label picker" />
-        <View style={s.sheet}>
-          <View style={s.sheetHandle} />
-          <View style={s.sheetHeader}>
-            <Text style={s.sheetTitle}>Labels</Text>
-            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowLabelPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close">
-              <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
-            </TouchableOpacity>
+      <Sheet visible={showLabelPicker} title="Labels" onClose={() => setShowLabelPicker(false)}>
+        {labels.length === 0 ? (
+          <View style={{ gap: spacing.md, paddingVertical: spacing.sm }}>
+            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+              No labels yet. Create them on the Labels page.
+            </Text>
+            <Button
+              variant="secondary"
+              label="Manage labels"
+              onPress={() => { setShowLabelPicker(false); router.push('/notes/labels' as never) }}
+            />
           </View>
-          <ScrollView style={{ maxHeight: 380 }}>
-            {labels.length === 0 && (
-              <Text style={{ color: t.textTertiary, fontFamily: 'Lexend_400Regular', fontSize: typo.sm, paddingHorizontal: 20, paddingVertical: 12 }}>
-                No labels yet. Create labels from the Notes screen (label icon).
-              </Text>
-            )}
-            {labels.map(label => {
-              const on = assignedIds.includes(label.id)
-              return (
-                <TouchableOpacity key={label.id} style={s.labelRow} onPress={() => void toggleLabelAssign(label.id)} accessibilityRole="checkbox" accessibilityLabel={label.name} aria-checked={assignedIds.indexOf(label.id) !== -1}>
-                  <Text style={s.labelName}>{label.name}</Text>
-                  <View style={[s.checkCircle, on ? s.checkCircleOn : s.checkCircleOff]}>
-                    {on && <Lineicons icon={CheckOutlined} size={12} color={t.textInverse} />}
-                  </View>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-        </View>
-      </Modal>
+        ) : labels.map(label => {
+          const on = assignedIds.includes(label.id)
+          return (
+            <Pressable
+              key={label.id}
+              onPress={() => void toggleLabelAssign(label.id)}
+              accessibilityRole="checkbox"
+              accessibilityLabel={label.name}
+              aria-checked={on}
+              style={(state) => {
+                const { pressed, focused } = state as WebPressableState
+                return [
+                  {
+                    flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52,
+                    borderBottomWidth: 1, borderBottomColor: t.divider,
+                    backgroundColor: pressed ? t.surface2 : 'transparent',
+                  },
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
+            >
+              <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{label.name}</Text>
+              <View
+                {...decorative}
+                style={{
+                  width: 24, height: 24, borderRadius: 6, borderWidth: 1.5,
+                  borderColor: on ? t.accent : t.inputBorder,
+                  backgroundColor: on ? t.accent : 'transparent',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {on ? <Lineicons icon={CheckOutlined} size={14} color={t.textInverse} /> : null}
+              </View>
+            </Pressable>
+          )
+        })}
+      </Sheet>
 
-      {/* ── Reminder picker bottom sheet ──────────────────────────────────── */}
-      <Modal visible={showReminderPicker} transparent animationType="slide" onRequestClose={() => setShowReminderPicker(false)} statusBarTranslucent>
-        <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setShowReminderPicker(false)} accessibilityRole="button" accessibilityLabel="Close reminder picker" />
-        <View style={s.sheet}>
-          <View style={s.sheetHandle} />
-          <View style={s.sheetHeader}>
-            <Text style={s.sheetTitle}>Set Reminder</Text>
-            <TouchableOpacity style={s.sheetCloseBtn} onPress={() => setShowReminderPicker(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close">
-              <Lineicons icon={XmarkOutlined} size={18} color={t.textTertiary} />
-            </TouchableOpacity>
+      <Sheet visible={showReminderPicker} title="Set a reminder" onClose={() => setShowReminderPicker(false)}>
+        {reminderOpts.map(opt => {
+          const current = reminderAt != null && opt.ms === reminderAt
+          return (
+            <Pressable
+              key={opt.label}
+              onPress={() => void handleSetReminder(opt.ms)}
+              accessibilityRole="button"
+              accessibilityLabel={`${opt.label}, ${opt.sub}`}
+              style={(state) => {
+                const { pressed, focused } = state as WebPressableState
+                return [
+                  {
+                    flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 60,
+                    borderBottomWidth: 1, borderBottomColor: t.divider,
+                    backgroundColor: pressed ? t.surface2 : 'transparent',
+                  },
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
+            >
+              <View {...decorative}><Lineicons icon={Alarm1Outlined} size={20} color={t.accentText} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{opt.label}</Text>
+                <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{opt.sub}</Text>
+              </View>
+              {current ? <View {...decorative}><Lineicons icon={CheckOutlined} size={16} color={t.accentText} /></View> : null}
+            </Pressable>
+          )
+        })}
+        {hasActiveReminder ? (
+          <View style={{ marginTop: spacing.md }}>
+            <Button variant="danger" label="Remove reminder" fullWidth onPress={() => void handleSetReminder(null)} />
           </View>
-          <ScrollView style={{ maxHeight: 420 }}>
-            {reminderOpts.map((opt, i) => (
-              <TouchableOpacity key={i} style={[s.reminderOpt, i === reminderOpts.length - 1 && { borderBottomWidth: 0 }]} onPress={() => opt.ms != null && void handleSetReminder(opt.ms)} accessibilityRole="button" accessibilityLabel={opt.label}>
-                <View style={s.reminderOptIconWrap}>
-                  <Lineicons icon={Alarm1Outlined} size={20} color={t.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.reminderOptLabel}>{opt.label}</Text>
-                  <Text style={s.reminderOptSub}>{opt.sub}</Text>
-                </View>
-                {reminderAt != null && opt.ms === reminderAt && (
-                  <Lineicons icon={CheckOutlined} size={16} color={t.accent} />
-                )}
-              </TouchableOpacity>
-            ))}
-            {hasActiveReminder && (
-              <TouchableOpacity style={s.clearReminderBtn} onPress={() => void handleSetReminder(null)} accessibilityRole="button" accessibilityLabel="Clear reminder">
-                <Text style={s.clearReminderTxt}>Remove reminder</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        ) : null}
+      </Sheet>
+    </Screen>
   )
 }

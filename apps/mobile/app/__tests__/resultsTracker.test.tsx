@@ -50,9 +50,12 @@ describe('ResultsTrackerScreen', () => {
     mockDelete.mockClear()
   })
 
-  it('has its title as the header and a labelled back button', () => {
+  it('has its sentence-case title as the page heading, in the page column, and a labelled back button', () => {
     render(<ResultsTrackerScreen />)
-    expect(screen.getByRole('header', { name: 'Results Tracker' })).toBeTruthy()
+    // Route audit 2026-09-26: the title sat in a 1040-wide top bar while the
+    // content used a narrower column. Now it is the page's PageTitle.
+    expect(screen.getByRole('header', { name: 'Results tracker' })).toBeTruthy()
+    expect(screen.getByTestId('results-title')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
   })
 

@@ -170,7 +170,7 @@ export default function TodayScreen() {
         streakDays={streakDays}
         remindersOn={remindersOn}
         onOpenReminders={() => setRemindersOpen(true)}
-        refreshControl={<WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} />}
+        refreshControl={<WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />}
       />
 
       <TwoColumn

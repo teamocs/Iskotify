@@ -460,7 +460,7 @@ export default function PracticeScreen() {
             actions={(
               <>
                 {searchButton}
-                <WebRefreshButton onRefresh={() => reloadAll(true)} refreshing={refreshing} />
+                <WebRefreshButton onRefresh={() => reloadAll(true)} refreshing={refreshing} iconOnly={bp === 'compact'} />
               </>
             )}
           />

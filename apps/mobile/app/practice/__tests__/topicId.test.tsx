@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, act, fireEvent } from '@testing-library/react-native'
+import { render, screen, act, fireEvent, within } from '@testing-library/react-native'
 import QuizScreen from '../[topicId]'
 
 jest.mock('expo-router', () => ({
@@ -10,6 +10,14 @@ jest.mock('expo-router', () => ({
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
+
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
+
+const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
 
 // Shallow-render FlashcardExam so the test asserts on WHICH questions
 // (by id, in order) it was launched with — the thing "Due today" controls.
@@ -89,7 +97,7 @@ describe('[topicId] chooser — Due today (Task H)', () => {
     await act(async () => {})
 
     expect(screen.getByText('Due today (2)')).toBeTruthy()
-    fireEvent.press(screen.getByText('Due today (2)'))
+    fireEvent.press(screen.getByRole('button', { name: /Start review/ }))
 
     expect(screen.getByTestId('exam').props.children).toBe('exam:c2,c1')
   })
@@ -114,9 +122,68 @@ describe('[topicId] chooser — Due today (Task H)', () => {
     const n = Number(/Due today \((\d+)\)/.exec(label)![1])
     expect(n).toBe(1)
 
-    fireEvent.press(dueEl)
+    fireEvent.press(screen.getByRole('button', { name: /Start review/ }))
     const served = screen.getByTestId('exam').props.children as string
     const servedCount = served.replace('exam:', '').split(',').filter(Boolean).length
     expect(servedCount).toBe(n)
+  })
+})
+
+// Redesign M3: the chooser follows "One Next Step" — the recommended way in is
+// a hero with the screen's only primary button; the other modes are rows; the
+// topic name is the page's h1; desktop gets a second column of facts.
+describe('[topicId] chooser — redesign M3', () => {
+  beforeEach(() => {
+    mockBp.value = 'compact'
+    mockGetDueFlashcards.mockReset()
+    mockGetDueFlashcards.mockResolvedValue([])
+  })
+
+  it('titles the page with the topic name as the only level-1 heading', async () => {
+    mockDbInstance = makeDb([makeCardRow('c1'), makeCardRow('c2')])
+    render(<QuizScreen />)
+    await act(async () => {})
+    expect(screen.getByRole('header', { name: 'Algebra' })).toBeTruthy()
+  })
+
+  it('recommends the due cards first when some are due, with one primary action', async () => {
+    mockDbInstance = makeDb([makeCardRow('c1'), makeCardRow('c2')])
+    mockGetDueFlashcards.mockResolvedValue([{ flashcardId: 'c1', topicId: 't1', dueAt: 100 }])
+    render(<QuizScreen />)
+    await act(async () => {})
+    const hero = screen.getByTestId('chooser-recommended')
+    expect(within(hero).getByText('Due today (1)')).toBeTruthy()
+    fireEvent.press(within(hero).getByRole('button', { name: /Start review/ }))
+    expect(screen.getByTestId('exam').props.children).toBe('exam:c1')
+  })
+
+  it('recommends the quick set when nothing is due, and keeps Full as a row', async () => {
+    mockDbInstance = makeDb([makeCardRow('c1'), makeCardRow('c2')])
+    render(<QuizScreen />)
+    await act(async () => {})
+    const hero = screen.getByTestId('chooser-recommended')
+    expect(within(hero).getByText('Quick (15)')).toBeTruthy()
+    expect(within(hero).queryByText('Full')).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: /^Full,/ }))
+    expect(screen.getByTestId('exam').props.children).toMatch(/^exam:c[12],c[12]$/)
+  })
+
+  it('shows an empty state with one way back when the topic has no questions', async () => {
+    mockDbInstance = makeDb([])
+    render(<QuizScreen />)
+    await act(async () => {})
+    expect(screen.getByText('No questions in this topic yet')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Back to Practice' })).toBeTruthy()
+    expect(screen.queryByText(/←/)).toBeNull()
+  })
+
+  it('puts the facts beside the options on desktop', async () => {
+    mockBp.value = 'expanded'
+    mockDbInstance = makeDb([makeCardRow('c1'), makeCardRow('c2')])
+    render(<QuizScreen />)
+    await act(async () => {})
+    const row = screen.getByTestId('two-column')
+    expect(row.props.style.flexDirection).toBe('row')
+    expect(screen.getByText('In this topic')).toBeTruthy()
   })
 })

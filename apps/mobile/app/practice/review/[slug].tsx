@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -8,14 +7,21 @@ import { listings as listingsTable } from '../../../db/schema'
 import { usePracticeData, type Strength, type TopicRow } from '../../../hooks/usePracticeData'
 import { groupTopicsBySubject } from '../../../utils/groupTopicsBySubject'
 import { SubjectAccordion } from '../../../components/SubjectAccordion'
-import { ListCard } from '../../../components/ui/ListCard'
+import { ListRow } from '../../../components/ui/ListRow'
 import { Badge } from '../../../components/ui/Badge'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { ScreenScroll } from '../../../components/ui/ScreenScroll'
+import { Screen } from '../../../components/ui/Screen'
+import { TwoColumn } from '../../../components/ui/TwoColumn'
+import { Card } from '../../../components/ui/Card'
+import { Button } from '../../../components/ui/Button'
+import { PageTitle } from '../../../components/ui/PageTitle'
+import { heading } from '../../../components/ui/a11y'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
+import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined, Book1Outlined } from '@lineiconshq/free-icons'
-import { spacing } from '../../../theme/tokens'
+import { Book1Outlined } from '@lineiconshq/free-icons'
+import { spacing, textStyle } from '../../../theme/tokens'
 
 // Maps a topic strength to a design-system Badge tone (mirrors practice.tsx).
 const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
@@ -27,15 +33,14 @@ const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warnin
 function TopicCard({ row }: { row: TopicRow }) {
   const { theme: t } = useTheme()
   return (
-    <View style={{ marginBottom: spacing.sm }}>
-      <ListCard
-        icon={<Lineicons icon={Book1Outlined} size={18} color={t.accentText} />}
-        title={row.topic.name}
-        subtitle={`${row.cardCount} cards`}
-        trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
-        onPress={() => router.push(`/practice/${row.topic.id}`)}
-      />
-    </View>
+    <ListRow
+      leading={<Lineicons icon={Book1Outlined} size={18} color={t.textSecondary} />}
+      title={row.topic.name}
+      subtitle={`${row.cardCount} cards`}
+      trailing={<Badge label={row.strength} tone={STRENGTH_TONE[row.strength]} />}
+      accessibilityLabel={`${row.topic.name}, ${row.cardCount} cards, ${row.strength}`}
+      onPress={() => router.push(`/practice/${row.topic.id}`)}
+    />
   )
 }
 
@@ -46,22 +51,12 @@ function TopicCard({ row }: { row: TopicRow }) {
 export default function PracticeReviewScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
-  const { subjects, topicRows, topicIdsByListingSlug } = usePracticeData()
+  const { theme: t } = useTheme()
+  const { subjects, topicRows, topicIdsByListingSlug, loaded } = usePracticeData()
+  const twoUp = useBreakpoint() === 'expanded'
 
   const [listingTitle, setListingTitle] = useState('')
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
-    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -spacing.sm },
-    topTitle: { flex: 1, fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    subHint: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-    body: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-    emptyWrap: { paddingHorizontal: spacing.xxxl, paddingTop: 64, alignItems: 'center' },
-    emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
-    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', lineHeight: 20 },
-  }), [t, typo])
 
   useEffect(() => {
     let alive = true
@@ -112,48 +107,72 @@ export default function PracticeReviewScreen() {
     )
   }, [examTopicRows, topicRowById, subjects, slug, topicIdsByListingSlug])
 
-  return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>{listingTitle}</Text>
-      </View>
+  // One next step: the weakest practised topic, else the first new one.
+  const nextTopic = useMemo(() => {
+    const practised = examTopicRows.filter(r => r.accuracy != null).sort((a, b) => (a.accuracy ?? 0) - (b.accuracy ?? 0))
+    return practised[0] ?? examTopicRows[0] ?? null
+  }, [examTopicRows])
 
-      {examTopicRows.length > 0 ? (
-        // ScreenScroll: the accordion can exceed a screenful once subjects are
-        // expanded — without a scroll container the overflow was unreachable.
-        // Also gives this stack screen the web max-width for free.
-        <ScreenScroll tabBarInset={false} padded={false}>
-          <Text style={s.subHint} maxFontSizeMultiplier={1.4}>Pick a subject, then a topic to review.</Text>
-          <View style={s.body}>
-            <SubjectAccordion
-              groups={subjectGroups}
-              emptyText="No review topics for this exam yet."
-              initiallyExpanded="focused"
-              keyExtractor={(row) => row.topic.id}
-              renderRow={(row) => {
-                if (!row) return null
-                return <TopicCard row={row} />
-              }}
-            />
-          </View>
-        </ScreenScroll>
+  if (!loaded) return <SessionLoading label="Loading review topics" />
+
+  if (examTopicRows.length === 0) {
+    return (
+      <SessionEmpty
+        title="No review topics yet"
+        body="No review topics for this exam yet. Try a mock exam, or check back after syncing."
+      />
+    )
+  }
+
+  const hero = nextTopic ? (
+    <Card elevated testID="review-next-step" style={{ padding: spacing.xl, gap: spacing.md }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        {nextTopic.accuracy != null ? 'Start with your weakest topic' : 'Start here'}
+      </Text>
+      <View style={{ gap: spacing.xs }}>
+        <Text style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{nextTopic.topic.name}</Text>
+        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+          {nextTopic.accuracy != null
+            ? `${nextTopic.accuracy}% so far · ${nextTopic.cardCount} cards`
+            : `${nextTopic.cardCount} cards · not practised yet`}
+        </Text>
+      </View>
+      <Button
+        label={`Review ${nextTopic.topic.name}`}
+        size="lg"
+        fullWidth={!twoUp}
+        style={twoUp ? { alignSelf: 'flex-start' } : undefined}
+        onPress={() => router.push(`/practice/${nextTopic.topic.id}`)}
+      />
+    </Card>
+  ) : null
+
+  const topicsList = (
+    <View style={{ gap: spacing.sm }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>All topics</Text>
+      <Card padded={false} style={{ overflow: 'hidden' }}>
+        <SubjectAccordion
+          groups={subjectGroups}
+          emptyText="No review topics for this exam yet."
+          initiallyExpanded="focused"
+          keyExtractor={(row) => row.topic.id}
+          renderRow={(row) => (row ? <TopicCard row={row} /> : null)}
+        />
+      </Card>
+    </View>
+  )
+
+  return (
+    <Screen header={<DetailTopBar bare fallbackHref="/practice" />} width={twoUp ? 'wide' : 'reading'}>
+      <PageTitle title={listingTitle} lead="Pick a subject, then a topic to review." />
+      {twoUp ? (
+        <TwoColumn primary={topicsList} secondary={hero} />
       ) : (
-        <View style={s.emptyWrap}>
-          <Text style={s.emptyTitle} maxFontSizeMultiplier={1.4}>No review topics yet</Text>
-          <Text style={s.emptySub} maxFontSizeMultiplier={1.4}>
-            No review topics for this exam yet — try a mock exam or check back after syncing.
-          </Text>
+        <View style={{ gap: spacing.xxl }}>
+          {hero}
+          {topicsList}
         </View>
       )}
-    </SafeAreaView>
+    </Screen>
   )
 }

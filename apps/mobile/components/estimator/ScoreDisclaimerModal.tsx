@@ -1,16 +1,18 @@
-import { useMemo } from 'react'
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Modal, ScrollView, Text, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { spacing, textStyle } from '../../theme/tokens'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { Screen } from '../ui/Screen'
+import { PageTitle } from '../ui/PageTitle'
+import { Card } from '../ui/Card'
+import { Button } from '../ui/Button'
+import { InfoBanner } from '../ui/InfoBanner'
+import { heading } from '../ui/a11y'
 
-// ─── Full-screen non-dismissable disclaimer modal ────────────────────────────
+// ─── Full-screen non-dismissable disclaimer gate ─────────────────────────────
+// PRODUCT.md "Hard compliance": the EN/TL disclaimer must be accepted before
+// the first view of the Estimated Admission Score. The only way out is the
+// acknowledge button (onRequestClose is a no-op, there is no backdrop).
 
 interface ScoreDisclaimerModalProps {
   visible: boolean
@@ -30,105 +32,39 @@ const TL_TEXT =
   'magagaya. Palaging i-verify sa upcat.up.edu.ph. Hindi garantiya ng pagpasa ' +
   'ang estima na ito.'
 
-export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimerModalProps) {
-  const { theme: t, typo } = useTheme()
+function LanguageSection({ title, body, lang }: { title: string; body: string; lang: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <Card style={{ gap: spacing.sm }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+        {title}
+      </Text>
+      <Text
+        {...({ lang } as Record<string, unknown>)}
+        style={textStyle('body', t.textSecondary)}
+        maxFontSizeMultiplier={2}
+      >
+        {body}
+      </Text>
+    </Card>
+  )
+}
 
-  const s = useMemo(
-    () =>
-      StyleSheet.create({
-        safeArea: {
-          flex: 1,
-          backgroundColor: t.bg,
-        },
-        scroll: { flex: 1 },
-        scrollContent: {
-          paddingHorizontal: 24,
-          paddingTop: 32,
-          paddingBottom: 24,
-        },
-        warningBadge: {
-          alignSelf: 'flex-start',
-          backgroundColor: t.warningSurface,
-          borderWidth: 1,
-          borderColor: t.warning,
-          borderRadius: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          marginBottom: 20,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-        },
-        warningIcon: {
-          fontSize: typo.base,
-          color: t.warningStrong,
-        },
-        warningBadgeText: {
-          fontFamily: 'Lexend_500Medium',
-          fontSize: typo.xs,
-          color: t.warningStrong, // text ON warningSurface — use the strong role, not the DEFAULT one (DESIGN.md)
-          letterSpacing: 0.5,
-          textTransform: 'uppercase',
-        },
-        heading: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.xl,
-          color: t.textPrimary,
-          marginBottom: 20,
-          lineHeight: 30,
-        },
-        divider: {
-          height: 1,
-          backgroundColor: t.border,
-          marginBottom: 20,
-        },
-        langLabel: {
-          fontFamily: 'Lexend_500Medium',
-          fontSize: typo.xs,
-          color: t.textTertiary,
-          letterSpacing: 0.4,
-          textTransform: 'uppercase',
-          marginBottom: 8,
-        },
-        bodyText: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.sm,
-          color: t.textSecondary,
-          lineHeight: 22,
-          marginBottom: 24,
-        },
-        ackBtnWrapper: {
-          paddingHorizontal: 24,
-          paddingBottom: 16,
-          paddingTop: 8,
-          borderTopWidth: 1,
-          borderTopColor: t.border,
-          backgroundColor: t.bg,
-        },
-        ackBtn: {
-          // Was `t.warning` — white/textInverse text directly on the raw
-          // warning fill measures ≈1.7:1 in dark (WCAG AA failure, Sept 2026
-          // audit). accentStrong is an opaque maroon fill; textInverse
-          // already clears AA on it elsewhere in the app.
-          backgroundColor: t.accentStrong,
-          borderRadius: 14,
-          paddingVertical: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        ackBtnText: {
-          fontFamily: 'Outfit_700Bold',
-          fontSize: typo.md,
-          color: t.textInverse,
-        },
-        ackBtnSubtext: {
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.xs,
-          color: t.textInverse,
-          marginTop: 2,
-        },
-      }),
-    [t, typo],
+export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimerModalProps) {
+  const { theme: t } = useTheme()
+  const bp = useBreakpoint()
+  // Phones keep the action pinned under the text (it was a sticky footer
+  // before); wider windows put it at the end of the reading column.
+  const sticky = bp === 'compact'
+
+  const acknowledge = (
+    <Button
+      label="I understand / Naiintindihan ko"
+      accessibilityLabel="I understand — acknowledge disclaimer"
+      onPress={onAcknowledge}
+      size="lg"
+      fullWidth={sticky}
+    />
   )
 
   return (
@@ -139,40 +75,36 @@ export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimer
       // onRequestClose is a no-op: back button / gesture cannot dismiss this modal
       onRequestClose={() => {}}
     >
-      <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-          {/* Warning badge */}
-          <View style={s.warningBadge}>
-            <Text style={s.warningIcon}>&#9888;</Text>
-            <Text style={s.warningBadgeText}>Important Notice</Text>
-          </View>
-
-          <Text style={s.heading}>Score Estimate Disclaimer</Text>
-
-          <View style={s.divider} />
-
-          {/* English */}
-          <Text style={s.langLabel}>English</Text>
-          <Text style={s.bodyText}>{EN_TEXT}</Text>
-
-          {/* Filipino */}
-          <Text style={s.langLabel}>Filipino</Text>
-          <Text style={s.bodyText}>{TL_TEXT}</Text>
+      <Screen scroll={false} edges={['top', 'bottom']}>
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing.xxl, gap: spacing.lg }}
+        >
+          <PageTitle
+            title="Before you see your estimate"
+            lead="The Estimated Admission Score is based on historical cutoffs. Please read this note, in English or Filipino, first."
+          />
+          <LanguageSection title="English" body={EN_TEXT} lang="en" />
+          <LanguageSection title="Filipino" body={TL_TEXT} lang="fil" />
+          {sticky ? null : <View style={{ marginTop: spacing.sm }}>{acknowledge}</View>}
         </ScrollView>
 
-        {/* Acknowledge button — only way to exit */}
-        <View style={s.ackBtnWrapper}>
-          <Pressable
-            style={s.ackBtn}
-            onPress={onAcknowledge}
-            accessibilityRole="button"
-            accessibilityLabel="I understand — acknowledge disclaimer"
+        {sticky ? (
+          <View
+            testID="disclaimer-footer"
+            style={{
+              paddingTop: spacing.md,
+              paddingBottom: spacing.lg, // SafeAreaView (edges bottom) adds the inset
+              borderTopWidth: 1,
+              borderTopColor: t.divider,
+              backgroundColor: t.bg,
+            }}
           >
-            <Text style={s.ackBtnText}>I understand / Naiintindihan ko</Text>
-            <Text style={s.ackBtnSubtext}>Tap to continue</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+            {acknowledge}
+          </View>
+        ) : null}
+      </Screen>
     </Modal>
   )
 }
@@ -180,49 +112,17 @@ export function ScoreDisclaimerModal({ visible, onAcknowledge }: ScoreDisclaimer
 // ─── Permanent inline notice ─────────────────────────────────────────────────
 
 export function ScoreDisclaimerNotice() {
-  const { theme: t, typo } = useTheme()
-
-  const s = useMemo(
-    () =>
-      StyleSheet.create({
-        container: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          backgroundColor: t.warningSurface,
-          borderWidth: 1,
-          borderColor: t.warning,
-          borderRadius: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          marginHorizontal: 16,
-          marginBottom: 12,
-        },
-        icon: {
-          fontSize: typo.sm,
-          color: t.warningStrong,
-        },
-        text: {
-          flex: 1,
-          fontFamily: 'Lexend_400Regular',
-          fontSize: typo.xs,
-          color: t.warningStrong, // text ON warningSurface — strong role, not DEFAULT (DESIGN.md)
-          lineHeight: 16,
-        },
-      }),
-    [t, typo],
-  )
-
   return (
     <View
-      style={s.container}
+      accessible
       accessibilityRole="text"
-      accessibilityLabel="Unofficial estimate disclaimer"
+      accessibilityLabel="Unofficial estimate disclaimer: verify at upcat.up.edu.ph. Hindi opisyal na estima."
+      style={{ marginBottom: spacing.lg }}
     >
-      <Text style={s.icon}>&#9888;</Text>
-      <Text style={s.text}>
-        Unofficial estimate — verify at upcat.up.edu.ph{' · '}Hindi opisyal na estima
-      </Text>
+      <InfoBanner
+        tone="neutral"
+        message={'Unofficial estimate — verify at upcat.up.edu.ph · Hindi opisyal na estima'}
+      />
     </View>
   )
 }

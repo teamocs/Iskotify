@@ -10,6 +10,12 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
+const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
+jest.mock('../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -49,6 +55,7 @@ jest.mock('../../components/ui/InfoBanner', () => {
 
 describe('RequirementsScreen', () => {
   beforeEach(() => {
+    mockBp.value = 'compact'
     mockFocus = []
     mockRows = []
     mockPending = false
@@ -90,5 +97,28 @@ describe('RequirementsScreen', () => {
     render(<RequirementsScreen />)
     expect(await screen.findByText('UPCAT')).toBeTruthy()
     expect(await screen.findByText('0/2 done')).toBeTruthy()
+  })
+
+  // Route audit 2026-09-26: on desktop each checklist card stretched 1040px
+  // wide with the tick boxes a screen away from the "0/3 done" count.
+  it('on desktop, lays the checklists out two to a row instead of stretching one column', async () => {
+    mockBp.value = 'expanded'
+    mockFocus = [{ slug: 'upcat', title: 'UPCAT', type: 'exam' }, { slug: 'dost', title: 'DOST', type: 'scholarship' }]
+    mockRows = [
+      { slug: 'upcat', requirements: JSON.stringify(['Form 138']) },
+      { slug: 'dost', requirements: JSON.stringify(['ITR']) },
+    ]
+    render(<RequirementsScreen />)
+    await screen.findByText('UPCAT')
+    const grid = screen.getByTestId('requirements-grid')
+    expect(grid.props.style).toEqual(expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap' }))
+  })
+
+  it('on a phone, keeps one column', async () => {
+    mockFocus = [{ slug: 'upcat', title: 'UPCAT', type: 'exam' }]
+    mockRows = [{ slug: 'upcat', requirements: JSON.stringify(['Form 138']) }]
+    render(<RequirementsScreen />)
+    await screen.findByText('UPCAT')
+    expect(screen.getByTestId('requirements-grid').props.style.flexDirection).toBe('column')
   })
 })

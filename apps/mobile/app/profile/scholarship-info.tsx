@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { View, Text, Pressable, TextInput, ScrollView, Alert } from 'react-native'
+import { View, Text, Pressable, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { router } from 'expo-router'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ArrowLeftOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { getSettings, updateSettings } from '../../services/settings'
 import { pushUserData } from '../../services/sync'
@@ -13,13 +11,14 @@ import { PH_PROVINCES } from '../../data/phProvinces'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, textStyle } from '../../theme/tokens'
 import { Card } from '../../components/ui/Card'
-import { PillButton } from '../../components/ui/PillButton'
+import { Button } from '../../components/ui/Button'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { heading } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
+import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBreakpoint'
 import { FilterChip } from '../../components/ui/Chip'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { focusRing, type WebPressableState } from '../../components/ui/a11y'
-import { useWebContentWidth } from '../../components/ui/webMaxWidth'
 
 const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
   { label: '₱100k or below / yr', value: '<=100k' },
@@ -33,8 +32,9 @@ const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
 export default function ScholarshipInfoScreen() {
   const db = useDb()
   const { theme: t } = useTheme()
-  // Web-only max-width centering for the form scroll content (null on native/sm).
-  const webWidth = useWebContentWidth()
+  // A form reads best at the 720 reading measure on tablets and desktop.
+  const bp = useBreakpoint()
+  const column = bp === 'compact' ? null : { maxWidth: contentMaxWidth('reading'), alignSelf: 'center' as const }
 
   const [incomeBracket, setIncomeBracket] = useState<IncomeBracket | null>(null)
   const [incomePreferNotToSay, setIncomePreferNotToSay] = useState(false)
@@ -43,6 +43,7 @@ export default function ScholarshipInfoScreen() {
   const [province, setProvince] = useState('')
   const [provinceQuery, setProvinceQuery] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   // A failed load must not look like an empty form: saving it would wipe the
   // student's real values.
@@ -92,6 +93,7 @@ export default function ScholarshipInfoScreen() {
       return
     }
     setGwaError(null)
+    setSaveError(null)
     setSaving(true)
     try {
       await updateSettings(db, {
@@ -103,7 +105,7 @@ export default function ScholarshipInfoScreen() {
       router.back()
     } catch (e) {
       console.warn('[scholarship-info] save error:', e)
-      Alert.alert('Could not save', 'Please try again.')
+      setSaveError("Couldn't save. Check your connection and try again.")
     } finally {
       setSaving(false)
     }
@@ -111,38 +113,18 @@ export default function ScholarshipInfoScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
-      <WebTopSpacer />
-      <View style={[{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.sm }, webWidth]}>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={(state) => {
-            const { pressed, focused } = state as WebPressableState
-            return [
-              {
-                width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: pressed ? t.surface2 : 'transparent',
-              },
-              focusRing(t.focusRing, focused),
-            ]
-          }}
-        >
-          <Lineicons icon={ArrowLeftOutlined} size={22} color={t.textPrimary} />
-        </Pressable>
-        <Text accessibilityRole="header" style={[textStyle('title', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={1.4}>
-          Scholarship profile
-        </Text>
-      </View>
+      <DetailTopBar fallbackHref="/profile" />
 
       <KeyboardAwareScrollView
-        contentContainerStyle={[{ padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.md }, webWidth]}
+        contentContainerStyle={{ paddingHorizontal: pagePadding(bp), paddingBottom: spacing.xxxl }}
         keyboardShouldPersistTaps="handled"
         bottomOffset={20}
       >
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
-          These details power scholarship eligibility matching. All fields are optional — the more you add, the better your matches.
-        </Text>
+        <View testID="scholarship-form" style={[{ gap: spacing.md, width: '100%' }, column]}>
+        <PageTitle
+          title="Scholarship profile"
+          lead="These details power scholarship eligibility matching. All fields are optional, and the more you add, the better your matches."
+        />
 
         {!loaded ? (
           <View style={{ gap: spacing.md }}>
@@ -158,7 +140,7 @@ export default function ScholarshipInfoScreen() {
           <>
             {/* Income bracket */}
             <Card>
-              <Text accessibilityRole="header" style={labelStyle} maxFontSizeMultiplier={2}>Household income bracket</Text>
+              <Text {...heading(2)} style={labelStyle} maxFontSizeMultiplier={2}>Household income bracket</Text>
               <View
                 accessibilityRole="radiogroup"
                 accessibilityLabel="Household income bracket"
@@ -267,11 +249,15 @@ export default function ScholarshipInfoScreen() {
               </View>
             </Card>
 
+            {saveError ? (
+              <Text accessibilityRole="alert" style={textStyle('bodySm', t.dangerStrong)} maxFontSizeMultiplier={2}>{saveError}</Text>
+            ) : null}
             <View style={{ marginTop: spacing.sm }}>
-              <PillButton label={saving ? 'Saving…' : 'Save'} onPress={() => void handleSave()} fullWidth loading={saving} disabled={!loaded} />
+              <Button label="Save" accessibilityLabel="Save" size="lg" onPress={() => void handleSave()} fullWidth={bp === 'compact'} loading={saving} disabled={!loaded} />
             </View>
           </>
         )}
+        </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   )
