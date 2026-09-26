@@ -2,6 +2,7 @@
   "expo": {
     "name": "Iskotify",
     "slug": "iskotify",
+    "owner": "teamocsph",
     "scheme": "iskotify",
     "version": "1.7.0",
     "orientation": "portrait",
