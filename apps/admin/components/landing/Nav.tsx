@@ -2,38 +2,43 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { WEB_APP_URL } from '../../lib/links'
 
+// Root-relative anchors so the nav also works from /listings.
+const LINKS = [
+  { href: '/#practice', label: 'Practice' },
+  { href: '/#explore', label: 'Explore' },
+  { href: '/#progress', label: 'Progress' },
+  { href: '/#faq', label: 'FAQ' },
+]
+
 export function Nav() {
   return (
-    <nav className="sticky top-0 z-50 flex items-center justify-between px-6 h-[56px] bg-white/80 backdrop-blur-[20px] saturate-[180%] border-b border-black/[0.08]">
-      <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-        <Image src="/logo.svg" alt="Iskotify" width={28} height={28} className="rounded-[20%]" />
-        <span className="font-heading font-extrabold text-maroon text-lg tracking-tight">Iskotify</span>
-      </Link>
+    <header className="sticky top-0 z-50 border-b border-subtle bg-surface/85 backdrop-blur-xl backdrop-saturate-150">
+      <nav aria-label="Main" className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <Link href="/" className="flex min-h-11 shrink-0 items-center gap-2 rounded-sm">
+          <Image src="/logo.svg" alt="" width={28} height={28} className="rounded-[20%]" />
+          <span translate="no" className="font-heading text-lg font-extrabold tracking-[-0.02em] text-maroon">Iskotify</span>
+        </Link>
 
-      <div className="hidden md:flex items-center gap-7">
-        <a href="#features" className="text-sm text-ink-muted hover:text-ink transition-colors font-body">Features</a>
-        <a href="#how-it-works" className="text-sm text-ink-muted hover:text-ink transition-colors font-body">How It Works</a>
-        <a href="#testimonials" className="text-sm text-ink-muted hover:text-ink transition-colors font-body">Testimonials</a>
-        <a href="#faq" className="text-sm text-ink-muted hover:text-ink transition-colors font-body">FAQ</a>
-      </div>
+        <ul className="hidden items-center gap-1 md:flex">
+          {LINKS.map(l => (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                className="inline-flex min-h-11 items-center rounded-sm px-3 font-body text-sm text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
+              >
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
         <a
           href={WEB_APP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Try Iskotify on the web"
-          className="hidden sm:inline-flex items-center border border-maroon text-maroon rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-maroon/[0.06] transition-colors"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-sm bg-maroon px-4 font-body text-sm font-semibold text-ink-inverse transition-colors hover:bg-maroon-hover"
         >
-          Try on Web
+          Start studying
         </a>
-        <a
-          href="#download"
-          className="bg-maroon text-white rounded-[980px] px-5 py-2 text-sm font-medium hover:bg-maroon-light transition-colors"
-        >
-          Get the App
-        </a>
-      </div>
-    </nav>
+      </nav>
+    </header>
   )
 }

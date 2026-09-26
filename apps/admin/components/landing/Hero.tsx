@@ -1,218 +1,46 @@
-import Image from 'next/image'
 import { WEB_APP_URL } from '../../lib/links'
+import { Preview, SampleCaption, TodayScreen } from './AppPreviews'
+import { Android, ArrowRight } from './Icons'
+import { BTN_PRIMARY, BTN_SECONDARY, WRAP } from './styles'
 
 export function Hero() {
   return (
-    <section className="relative bg-surface-2 overflow-hidden py-16 md:py-24 px-6">
-      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-12 md:gap-16">
-
-        {/* Left column */}
-        <div className="flex-1 text-center md:text-left">
-          <p className="text-xs tracking-[0.14em] text-maroon font-semibold uppercase mb-4 font-body">
-            Para sa mga Iskolar ng Bayan
-          </p>
-          <h1 className="font-heading font-extrabold text-ink text-4xl md:text-5xl lg:text-[3.25rem] leading-[1.08] tracking-tight mb-5">
-            Your Scholarship &amp; Exam Journey —{' '}
-            <span className="text-maroon">Made Effortlessly Simple</span>
+    <section id="top" aria-labelledby="hero-title" className="overflow-hidden bg-surface-2 pb-20 pt-12 md:pb-28 md:pt-20">
+      <div className={`${WRAP} grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-20`}>
+        <div>
+          <h1
+            id="hero-title"
+            className="max-w-3xl font-heading text-[2.75rem] font-extrabold leading-[1.02] tracking-[-0.03em] text-ink text-balance sm:text-6xl lg:text-7xl"
+          >
+            Know your <span className="text-maroon">one next step</span>, every day.
           </h1>
-          <p className="text-ink-muted text-base md:text-lg mb-8 max-w-lg font-body leading-relaxed">
-            Find scholarships, track deadlines, and prepare for your qualifying exams — all in one place.
+          <p className="mt-6 max-w-xl font-body text-lg leading-relaxed text-ink-muted text-pretty md:text-xl">
+            A study coach built for UPCAT and other college entrance exams. Free entrance-exam practice and a
+            scholarship finder, in one app.
           </p>
 
-          {/* Primary CTAs — start the free Android trial, or open the web app */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start mb-7">
-            <a
-              href="#early-access"
-              aria-label="Request early access to the free Iskotify Android app"
-              className="inline-flex items-center justify-center gap-2 bg-maroon text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-maroon-light transition-colors shadow-sm"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M3.18 23.76c.3.17.64.22.99.14l12.49-7.21-2.79-2.79-10.69 9.86zM.35 1.09A1.5 1.5 0 0 0 0 2.06v19.88a1.5 1.5 0 0 0 .35.97l.05.05 11.14-11.14v-.26L.4 1.04l-.05.05zM23.15 10.56l-2.79-1.61-3.12 3.12 3.12 3.12 2.81-1.62c.8-.46.8-1.55-.02-2.01zM4.17.1l12.49 7.21-2.79 2.79L3.18.24A1.18 1.18 0 0 1 4.17.1z" />
-              </svg>
-              Start for free
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <a href={WEB_APP_URL} className={BTN_PRIMARY}>
+              Start studying free
+              <ArrowRight className="size-5" />
             </a>
-            <a
-              href={WEB_APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Open the Iskotify web app"
-              className="inline-flex items-center justify-center gap-2 border border-maroon text-maroon rounded-xl px-6 py-3 text-sm font-medium hover:bg-maroon/[0.06] transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-              Try on Web
+            <a href="#early-access" className={BTN_SECONDARY}>
+              <Android className="size-5" />
+              Get Android early access
             </a>
           </div>
-
-          {/* Social proof strip */}
-          <div className="flex items-center gap-3 justify-center md:justify-start flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <span className="text-maroon">✓</span>
-              <span className="font-medium text-ink text-sm font-body">Free on Early access</span>
-            </div>
-            <span className="text-ink-subtle">·</span>
-            <span className="text-ink-muted text-sm font-body">No subscription</span>
-            <span className="text-ink-subtle">·</span>
-            <span className="text-ink-muted text-sm font-body">Be among the first 🎉</span>
-          </div>
+          <p className="mt-4 font-body text-sm text-ink-muted">
+            Opens in your browser, no install. The Android app is in early access.
+          </p>
         </div>
 
-        {/*
-          Right column — 3D phone mockup mirroring the current Home dashboard.
-          aria-hidden because it is an illustration: every string inside it is a
-          screenshot of app chrome, and a screen reader would otherwise read ~40
-          disconnected fragments ("Monday, June 16", "Explore", "Universities")
-          between the hero copy and the rest of the page. The type inside also
-          runs down to 6px, which is why it must never be treated as content.
-        */}
-        <div className="flex-shrink-0 flex justify-center" style={{ perspective: '1000px' }} aria-hidden="true">
-          <div style={{ transform: 'rotateY(-18deg) rotateX(4deg)', transformStyle: 'preserve-3d' }}>
-            {/* Phone body */}
-            <div className="bg-[#0f0f1a] rounded-[40px] w-[220px] h-[460px] border-[6px] border-[#2a2a3a] shadow-2xl relative overflow-hidden">
-              {/* Notch */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-5 bg-[#0f0f1a] rounded-b-[14px] z-10" />
-
-              {/* App screen — light theme (the app's default look) */}
-              <div className="absolute inset-0 bg-[#faf7f5] flex flex-col pt-7 px-2.5 pb-0 overflow-hidden">
-
-                {/* Status bar */}
-                <div className="flex justify-between items-center px-1 mb-1.5">
-                  <span className="text-ink text-[9px] font-semibold font-body">9:41</span>
-                  <div className="flex gap-1 items-center">
-                    <div className="w-3 h-1.5 rounded-sm bg-ink/50" />
-                    <div className="w-3 h-1.5 rounded-[2px] border border-ink/50 relative">
-                      <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-ink/50 rounded-r-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* (1) Header row: logo tile (left) + action tiles (right) */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-7 h-7 rounded-[8px] bg-white border border-black/[0.06] flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                    <Image src="/logo.svg" alt="Iskotify" width={16} height={16} className="rounded-[4px]" />
-                  </div>
-                  <div className="flex gap-1.5">
-                    {/* Bell (notifications — "on" = maroon) */}
-                    <div className="w-7 h-7 rounded-[8px] bg-white border border-black/[0.06] flex items-center justify-center">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#800000" strokeWidth="2.2" aria-hidden="true">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
-                      </svg>
-                    </div>
-                    {/* Profile */}
-                    <div className="w-7 h-7 rounded-[8px] bg-white border border-black/[0.06] flex items-center justify-center">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" strokeWidth="2.2" aria-hidden="true">
-                        <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-                      </svg>
-                    </div>
-                    {/* Settings */}
-                    <div className="w-7 h-7 rounded-[8px] bg-white border border-black/[0.06] flex items-center justify-center">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6e6e73" strokeWidth="2.2" aria-hidden="true">
-                        <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* (1b) Date + greeting */}
-                <p className="text-ink-subtle text-[6px] font-semibold font-body uppercase tracking-[0.12em] mb-0.5">Monday, June 16</p>
-                <p className="text-ink text-[13px] font-body leading-tight mb-3">
-                  Good morning, <span className="font-extrabold font-heading">Chris</span>!
-                </p>
-
-                {/* (2) Explore — 2×2 quick-links into the Lists tabs */}
-                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">Explore</p>
-                <div className="grid grid-cols-2 gap-1.5 mb-3">
-                  {[
-                    { e: '🎓', l: 'Universities' },
-                    { e: '🏅', l: 'Scholarships' },
-                    { e: '📈', l: 'Courses' },
-                    { e: '🌏', l: 'Destinations' },
-                  ].map((it) => (
-                    <div key={it.l} className="flex items-center gap-1 bg-white border border-black/[0.06] rounded-[7px] px-1.5 py-1.5">
-                      <span className="text-[8px] leading-none">{it.e}</span>
-                      <span className="text-ink text-[6px] font-body font-medium">{it.l}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* (3) My Focus — readiness progress-bar cards + add-target ghost */}
-                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">My Focus</p>
-                <div className="flex flex-col gap-1.5 mb-3">
-                  {[
-                    { t: 'UPCAT', sub: '57 days · exam', pct: 72, w: 'w-[72%]', fill: 'bg-[#16a34a]/15', color: 'text-success' },
-                    { t: 'DOST-SEI', sub: '21 days · scholarship', pct: 45, w: 'w-[45%]', fill: 'bg-[#d97706]/15', color: 'text-warning' },
-                  ].map((f) => (
-                    <div key={f.t} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[8px] px-1.5 py-2">
-                      <div className={`absolute left-0 top-0 bottom-0 ${f.w} ${f.fill}`} />
-                      <div className="relative flex items-center gap-1">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-ink text-[7px] font-body font-semibold leading-tight truncate">{f.t}</p>
-                          <p className="text-ink-subtle text-[5px] font-body leading-tight">{f.sub}</p>
-                        </div>
-                        <span className={`text-[10px] font-extrabold font-heading ${f.color}`}>{f.pct}%</span>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="border border-dashed border-black/15 rounded-[8px] py-1.5 flex items-center justify-center">
-                    <span className="text-ink-subtle text-[6px] font-body font-semibold">＋ Add exam or scholarship</span>
-                  </div>
-                </div>
-
-                {/* (4) Subjects to improve — vertical readiness fill, distinct color per subject */}
-                <p className="text-ink text-[7px] font-bold font-heading mb-1.5">Subjects to improve</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { n: 'Math', pct: 48, h: 'h-[48%]', dot: 'bg-[#3b82f6]', fill: 'bg-[#3b82f6]/15' },
-                    { n: 'Science', pct: 61, h: 'h-[61%]', dot: 'bg-[#8b5cf6]', fill: 'bg-[#8b5cf6]/15' },
-                    { n: 'Reading', pct: 55, h: 'h-[55%]', dot: 'bg-[#0d9488]', fill: 'bg-[#0d9488]/15' },
-                  ].map((sub) => (
-                    <div key={sub.n} className="relative overflow-hidden bg-white border border-black/[0.06] rounded-[7px] h-[54px] p-1.5 flex flex-col justify-between">
-                      <div className={`absolute left-0 right-0 bottom-0 ${sub.h} ${sub.fill}`} />
-                      <div className={`relative w-1.5 h-1.5 rounded-full ${sub.dot}`} />
-                      <span className="relative text-ink text-[6px] font-body font-semibold">{sub.n}</span>
-                      <span className="relative text-ink text-[8px] font-extrabold font-heading leading-none">{sub.pct}%</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* (5) Bottom nav — Home / Review / Exams / Updates */}
-                <div className="mt-auto flex justify-around items-center pt-1 pb-1 border-t border-black/[0.06]">
-                  {/* Home (active) */}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#800000" strokeWidth="2.4" aria-hidden="true">
-                    <path d="M3 11l9-8 9 8M5 10v10h14V10" />
-                  </svg>
-                  {/* Review */}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0b0b5" strokeWidth="2.2" aria-hidden="true">
-                    <path d="M4 5h16M4 12h16M4 19h10" />
-                  </svg>
-                  {/* Exams */}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0b0b5" strokeWidth="2.2" aria-hidden="true">
-                    <path d="M6 2h9l5 5v15H6zM14 2v6h6" />
-                  </svg>
-                  {/* Updates */}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b0b0b5" strokeWidth="2.2" aria-hidden="true">
-                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Subtle bottom reflection */}
-            <div
-              className="mx-6 h-8 rounded-b-[30px] opacity-20"
-              style={{
-                background: 'linear-gradient(to bottom, rgba(128,0,0,0.4), transparent)',
-                filter: 'blur(8px)',
-              }}
-            />
-          </div>
+        <div className="flex flex-col items-center">
+          <Preview label="Sample Today screen: one next step, an Algebra drill of 15 questions, above the day's plan and an upcoming scholarship deadline.">
+            <TodayScreen />
+          </Preview>
+          <SampleCaption />
         </div>
       </div>
-
-      {/* Decorative background shapes */}
-      <div className="pointer-events-none absolute -top-32 -right-32 w-[480px] h-[480px] rounded-full bg-maroon/[0.05] blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 -left-20 w-[320px] h-[320px] rounded-full bg-maroon/[0.04] blur-2xl" />
     </section>
   )
 }

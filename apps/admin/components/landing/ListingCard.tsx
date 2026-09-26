@@ -1,3 +1,4 @@
+import { Award, Pencil } from './Icons'
 import type { Listing } from '@iskotify/utils'
 
 const STATUS_STYLES: Record<string, { badge: string; label: string }> = {
@@ -6,9 +7,9 @@ const STATUS_STYLES: Record<string, { badge: string; label: string }> = {
   closed:   { badge: 'bg-ink-subtle/10 text-ink-muted',     label: 'Closed' },
 }
 
-const TYPE_STYLES: Record<string, { badge: string; label: string; accent: string; iconBg: string; icon: string }> = {
-  scholarship: { badge: 'bg-maroon-dim text-maroon', label: 'Scholarship', accent: 'bg-maroon', iconBg: 'bg-maroon/10', icon: '🎓' },
-  exam:        { badge: 'bg-info-soft text-info-strong', label: 'Exam',        accent: 'bg-info', iconBg: 'bg-info-soft', icon: '📝' },
+const TYPE_STYLES: Record<string, { badge: string; label: string; accent: string; iconBg: string; icon: 'scholarship' | 'exam' }> = {
+  scholarship: { badge: 'bg-maroon-dim text-maroon', label: 'Scholarship', accent: 'bg-maroon', iconBg: 'bg-maroon/10', icon: 'scholarship' },
+  exam:        { badge: 'bg-info-soft text-info-strong', label: 'Exam',        accent: 'bg-info', iconBg: 'bg-info-soft', icon: 'exam' },
 }
 
 function formatDeadline(listing: Listing): string {
@@ -37,36 +38,36 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
       {/* Top accent + icon row */}
       <div className="px-5 pt-5 pb-4 flex items-start gap-3">
-        <div className={`flex-shrink-0 w-10 h-10 rounded-[12px] ${type.iconBg} flex items-center justify-center text-lg`}>
-          {type.icon}
+        <div className={`flex-shrink-0 w-10 h-10 rounded-sm ${type.iconBg} flex items-center justify-center ${type.icon === 'exam' ? 'text-info-strong' : 'text-maroon'}`}>
+          {type.icon === 'exam' ? <Pencil className="size-5" /> : <Award className="size-5" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-1.5 mb-2">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${type.badge}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${type.badge}`}>
               {type.label}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${status.badge}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status.badge}`}>
               {status.label}
             </span>
           </div>
-          <h3 className="font-heading font-bold text-[13.5px] text-ink leading-snug line-clamp-2">
+          <h3 className="font-heading font-bold text-base text-ink leading-snug line-clamp-2">
             {listing.title}
           </h3>
         </div>
       </div>
 
       {/* Divider */}
-      <div className="mx-5 h-px bg-black/[0.05]" />
+      <div className="mx-5 h-px bg-neutral-soft" />
 
       {/* Details */}
       <div className="px-5 py-4 flex-1 flex flex-col gap-2">
-        <p className="text-[11.5px] text-ink-muted font-body">{listing.provider}</p>
+        <p className="text-sm text-ink-muted font-body">{listing.provider}</p>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11.5px] font-semibold text-ink font-body">{formatAmount(listing)}</span>
+          <span className="text-sm font-semibold text-ink font-body">{formatAmount(listing)}</span>
           {listing.region && (
             <>
               <span className="text-ink-subtle">·</span>
-              <span className="text-[11px] text-ink-muted font-body truncate">{listing.region}</span>
+              <span className="text-sm text-ink-muted font-body truncate">{listing.region}</span>
             </>
           )}
         </div>
@@ -74,7 +75,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
       {/* Footer */}
       <div className="px-5 pb-5 flex items-center justify-between gap-2">
-        <span className={`text-[11px] font-semibold font-body ${isClosed ? 'text-ink-muted' : 'text-maroon'}`}>
+        <span className={`text-sm font-semibold font-body ${isClosed ? 'text-ink-muted' : 'text-maroon'}`}>
           {formatDeadline(listing)}
         </span>
         {!isClosed && (
@@ -82,9 +83,9 @@ export function ListingCard({ listing }: { listing: Listing }) {
             href={listing.external_url || '#'}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-shrink-0 bg-maroon text-white rounded-[10px] px-3 py-1.5 text-[11px] font-semibold font-body hover:bg-maroon-light transition-colors"
+            className="inline-flex min-h-11 flex-shrink-0 items-center bg-maroon text-ink-inverse rounded-sm px-4 text-sm font-semibold font-body hover:bg-maroon-hover transition-colors"
           >
-            Apply →
+            Apply<span className="sr-only"> to {listing.title} (opens in a new tab)</span>
           </a>
         )}
       </div>

@@ -14,10 +14,9 @@ vi.mock('next/link', () => ({
 
 import { Nav } from '../Nav'
 import { Hero } from '../Hero'
-import { Testimonials } from '../Testimonials'
-import { FAQ } from '../FAQ'
+import { FAQ, faqs } from '../FAQ'
 import { FooterCTA } from '../FooterCTA'
-import { Features } from '../Features'
+import { PracticeSection } from '../PracticeSection'
 import { EarlyAccessForm } from '../EarlyAccessForm'
 
 // The web app URL the landing buttons fall back to when no env var is set
@@ -25,200 +24,148 @@ import { EarlyAccessForm } from '../EarlyAccessForm'
 // renders into the markup.
 const WEB_APP_URL = 'https://app.iskotify.ph'
 
+const render = (c: React.FC) => renderToStaticMarkup(React.createElement(c))
+
+// Guards carried over from the pre-launch pricing and honesty passes: no paid
+// tiers, no store badges, no invented stats, no retired AI chat.
+describe.each([
+  ['Nav', Nav],
+  ['Hero', Hero],
+  ['FAQ', FAQ],
+  ['FooterCTA', FooterCTA],
+  ['PracticeSection', PracticeSection],
+] as const)('%s honesty guards', (_name, Component) => {
+  let html: string
+  beforeAll(() => { html = render(Component) })
+
+  it('shows no old price or lifetime tagline', () => {
+    expect(html).not.toContain('₱129')
+    expect(html).not.toMatch(/Lifetime access|one-time payment|Free forever|completely free/i)
+  })
+
+  it('shows no App Store / Google Play badges', () => {
+    expect(html).not.toContain('App Store')
+    expect(html).not.toContain('Google Play')
+  })
+
+  it('shows no invented stats', () => {
+    expect(html).not.toContain('4.8')
+    expect(html).not.toContain('10K+')
+  })
+
+  it('no longer markets Kuya Baw / AI chat', () => {
+    expect(html).not.toMatch(/Ask Kuya Baw|AI Coach|AI Companion|study companion/)
+  })
+
+  it('does not use the elongated pill class on buttons', () => {
+    expect(html).not.toContain('rounded-[980px]')
+  })
+})
+
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 describe('Nav', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Nav)) })
+  beforeAll(() => { html = render(Nav) })
 
-  it('renders a "Try on Web" button', () => {
-    expect(html).toContain('Try on Web')
+  it('puts the web app behind the one primary nav action', () => {
+    expect(html).toContain(`href="${WEB_APP_URL}"`)
+    expect(html).toContain('Start studying')
   })
 
-  it('links "Try on Web" to the web app', () => {
-    expect(html).toContain(WEB_APP_URL)
+  it('uses root-relative anchors so it works from /listings too', () => {
+    expect(html).toContain('href="/#practice"')
+    expect(html).not.toContain('#testimonials')
   })
 })
 
 // ─── Hero ───────────────────────────────────────────────────────────────────
 describe('Hero', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Hero)) })
+  beforeAll(() => { html = render(Hero) })
 
-  it('does not use the elongated pill class', () => {
-    expect(html).not.toContain('rounded-[980px]')
+  it('points "Start studying free" at the web app', () => {
+    expect(html).toMatch(new RegExp(`href="${WEB_APP_URL}"[^>]*>\\s*Start studying free`))
   })
 
-  it('uses properly-sized rounded-xl on CTA buttons', () => {
-    expect(html).toContain('rounded-xl')
-  })
-
-  it('shows Early Access pricing (free)', () => {
-    expect(html).toContain('Early access')
-    expect(html).toContain('Start for free')
-  })
-
-  it('no longer shows the old one-time price', () => {
-    expect(html).not.toContain('₱129')
-  })
-
-  it('shows no-subscription messaging', () => {
-    expect(html).toContain('No subscription')
-  })
-
-  it('shows early-adopter call-to-action', () => {
-    expect(html).toContain('Be among the first')
-  })
-
-  it('has a "Try on Web" button pointing at the web app', () => {
-    expect(html).toContain('Try on Web')
-    expect(html).toContain(WEB_APP_URL)
-  })
-
-  it('points the Android "Start for free" CTA at the early-access form', () => {
+  it('keeps Android early access as the secondary action', () => {
     expect(html).toContain('href="#early-access"')
+    expect(html).toContain('Get Android early access')
   })
 
-  it('no longer shows App Store / Google Play download badges', () => {
-    expect(html).not.toContain('App Store')
-    expect(html).not.toContain('Google Play')
+  it('previews the current Today screen (One Next Step, 4-tab bar)', () => {
+    expect(html).toContain('Your next step')
+    for (const tab of ['Today', 'Practice', 'Explore', 'Progress']) expect(html).toContain(tab)
   })
 
-  it('does not show fake rating stat', () => {
-    expect(html).not.toContain('4.8')
+  it('drops the old Home dashboard mock', () => {
+    expect(html).not.toMatch(/My Focus|Subjects to improve|Quick Practice|Weak Areas|Days Left/)
   })
 
-  it('does not show fake student count', () => {
-    expect(html).not.toContain('10K+')
-  })
-
-  it('does not show "Free to Use"', () => {
-    expect(html).not.toContain('Free to Use')
-  })
-
-  // Mockup fidelity — the phone mockup must mirror the CURRENT Home dashboard,
-  // not the old one. Guard against regressing to the previous design.
-  it('mockup reflects the current Home sections', () => {
-    expect(html).toContain('My Focus')
-    expect(html).toContain('Subjects to improve')
-  })
-
-  it('mockup drops the old dashboard design', () => {
-    expect(html).not.toContain('Quick Practice')
-    expect(html).not.toContain('Weak Areas')
-    expect(html).not.toContain('Days Left')
-  })
-
-  // Kuya Baw / AI-chat marketing was retired — the mock app has no chat FAB
-  // or Kuya hero band (real app: 4-tab bar, focus-tile home, no chat).
-  it('no longer markets Kuya Baw / AI chat in the mock', () => {
-    expect(html).not.toContain('Ask Kuya Baw')
-    expect(html).not.toContain('Kuya Baw')
-    expect(html).not.toContain('AI Coach')
-  })
-})
-
-// ─── Testimonials ───────────────────────────────────────────────────────────
-describe('Testimonials', () => {
-  let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Testimonials)) })
-
-  it('shows empty-state heading', () => {
-    expect(html).toContain('Be the first to review Iskotify')
-  })
-
-  it('does not show fake student names', () => {
-    expect(html).not.toContain('Maria Santos')
-    expect(html).not.toContain('Juan dela Cruz')
-    expect(html).not.toContain('Ana Reyes')
-  })
-
-  it('has a feedback CTA', () => {
-    expect(html).toContain('Share your feedback')
-  })
-
-  it('no longer shows App Store / Google Play review CTAs', () => {
-    expect(html).not.toContain('App Store')
-    expect(html).not.toContain('Google Play')
+  it('labels the preview as a sample', () => {
+    expect(html).toContain('role="img"')
+    expect(html).toContain('Sample screen')
   })
 })
 
 // ─── FAQ ────────────────────────────────────────────────────────────────────
 describe('FAQ', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(FAQ)) })
+  beforeAll(() => { html = render(FAQ) })
+
+  it('is native <details> disclosure (no client JS)', () => {
+    expect(html.match(/<details/g)).toHaveLength(faqs.length)
+    expect(html.match(/<summary/g)).toHaveLength(faqs.length)
+  })
 
   it('mentions Early Access pricing', () => {
     expect(html).toContain('Early Access')
   })
 
-  it('no longer mentions the old one-time payment price', () => {
-    expect(html).not.toContain('₱129')
-    expect(html).not.toContain('one-time payment')
+  it('re-states the estimate disclaimer', () => {
+    expect(html).toContain('Estimated Admission Score')
+    expect(html).toMatch(/historical cutoffs/)
+    expect(html).toMatch(/cannot tell you whether you will get in/)
   })
 
-  it('does not say the app is completely free', () => {
-    expect(html).not.toContain('completely free')
+  it('says the Android app is not on the Play Store yet', () => {
+    expect(html).toMatch(/not yet on the Play Store/)
   })
 
-  it('does not dangle a misleading "for free" download claim', () => {
-    expect(html).not.toContain('for free')
-  })
-
-  it('no longer points to App Store / Google Play', () => {
-    expect(html).not.toContain('App Store')
-    expect(html).not.toContain('Google Play')
+  it('no longer calls early access a "free trial"', () => {
+    expect(html).not.toMatch(/free trial/i)
   })
 })
 
 // ─── FooterCTA ──────────────────────────────────────────────────────────────
 describe('FooterCTA', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(FooterCTA)) })
+  beforeAll(() => { html = render(FooterCTA) })
 
-  it('does not use the elongated pill class', () => {
-    expect(html).not.toContain('rounded-[980px]')
+  it('closes on the approved tagline', () => {
+    expect(html).toContain('Para sa mga Iskolar ng Bayan.')
   })
 
-  it('uses rounded-xl on CTA buttons', () => {
-    expect(html).toContain('rounded-xl')
+  it('makes the web app the primary action', () => {
+    expect(html).toMatch(new RegExp(`href="${WEB_APP_URL}"[^>]*>\\s*Start studying free`))
   })
 
-  it('shows the "Start for free on Early access" tagline', () => {
-    expect(html).toContain('Start for free on Early access')
+  it('points Android early access at the form on the home page', () => {
+    expect(html).toContain('href="/#early-access"')
   })
 
-  it('no longer shows the old ₱129 / lifetime tagline', () => {
-    expect(html).not.toContain('₱129')
-    expect(html).not.toContain('Lifetime access')
+  it('no longer says "Start free trial"', () => {
+    expect(html).not.toContain('Start free trial')
   })
 
-  it('does not say "Free forever"', () => {
-    expect(html).not.toContain('Free forever')
-  })
-
-  it('removes App Store / Google Play download badges', () => {
-    expect(html).not.toContain('App Store')
-    expect(html).not.toContain('Google Play')
-  })
-
-  it('offers an Android free-trial CTA', () => {
-    expect(html).toContain('Start free trial')
-  })
-
-  it('points the Android free-trial CTA at the early-access form', () => {
-    expect(html).toContain('href="#early-access"')
-  })
-
-  it('has a "Try on Web" button pointing at the web app', () => {
-    expect(html).toContain('Try on Web')
-    expect(html).toContain(WEB_APP_URL)
+  it('keeps the legal and contact links', () => {
+    for (const href of ['/privacy', '/terms', '/contact']) expect(html).toContain(`href="${href}"`)
   })
 })
 
 // ─── EarlyAccessForm ────────────────────────────────────────────────────────
 describe('EarlyAccessForm', () => {
   let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(EarlyAccessForm)) })
+  beforeAll(() => { html = render(EarlyAccessForm) })
 
   it('renders the "Request early access" submit button', () => {
     expect(html).toContain('Request early access')
@@ -233,31 +180,5 @@ describe('EarlyAccessForm', () => {
   it('explains the free early-access offer', () => {
     expect(html).toContain('free early access')
     expect(html).not.toContain('August 2, 2026')
-  })
-})
-
-// ─── Features ───────────────────────────────────────────────────────────────
-describe('Features', () => {
-  let html: string
-  beforeAll(() => { html = renderToStaticMarkup(React.createElement(Features)) })
-
-  it('no longer markets Kuya Baw / AI chat', () => {
-    expect(html).not.toContain('Kuya Baw')
-    expect(html).not.toContain('AI Companion')
-    expect(html).not.toContain('study companion')
-  })
-
-  it('replaces the retired benefit card with the study-plan/analytics card', () => {
-    expect(html).toContain('Smart study plan &amp; progress analytics')
-    expect(html).toContain('spaced-repetition flashcards')
-  })
-
-  it('keeps the career AI-impact and AI-proof course copy', () => {
-    expect(html).toContain('AI-proof course')
-    expect(html).toContain('AI&#x27;s impact')
-  })
-
-  it('keeps the AI flashcards exam-prep copy', () => {
-    expect(html).toContain('AI flashcards')
   })
 })

@@ -1,100 +1,69 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { WEB_APP_URL } from '../../lib/links'
+import { Android, ArrowRight } from './Icons'
+import { WRAP } from './styles'
+
+const FOOTER_LINK =
+  'inline-flex min-h-11 items-center rounded-sm px-2 font-body text-sm text-ink-inverse/75 transition-colors hover:text-ink-inverse'
 
 export function FooterCTA() {
   return (
     <>
-      {/* Download CTA section */}
-      <section
-        id="download"
-        className="relative bg-gradient-to-br from-maroon via-[#9a0000] to-[#5a0000] py-20 px-6 overflow-hidden"
-      >
-        {/* Decorative background circles */}
-        <div className="pointer-events-none absolute -top-20 -left-20 w-64 h-64 rounded-full bg-white/[0.04] blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-16 right-1/3 w-80 h-80 rounded-full bg-white/[0.03] blur-3xl" />
-
-        <div className="max-w-6xl mx-auto relative">
-          <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
-            {/* Kuya Baw mascot — left */}
-            <div className="flex-shrink-0 order-first">
-              <Image
-                src="/kuya-baw-waving.png"
-                alt="Kuya Baw"
-                width={120}
-                height={120}
-                className="drop-shadow-2xl"
-              />
-            </div>
-
-            {/* Text + buttons */}
-            <div className="flex-1 text-center md:text-left">
-              <h2 className="font-heading font-extrabold text-white text-3xl md:text-4xl lg:text-5xl leading-tight mb-4">
-                Start Your Scholarship Journey Today
-              </h2>
-              <p className="text-red-200 font-body text-base mb-8">
-                Start for free on Early access · No subscription ever.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                <a
-                  href="#early-access"
-                  aria-label="Request early access to the free Iskotify Android app"
-                  className="inline-flex items-center justify-center gap-2 bg-white text-maroon rounded-xl px-6 py-3 text-sm font-semibold hover:bg-danger-soft transition-colors shadow-sm"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M3.18 23.76c.3.17.64.22.99.14l12.49-7.21-2.79-2.79-10.69 9.86zM.35 1.09A1.5 1.5 0 0 0 0 2.06v19.88a1.5 1.5 0 0 0 .35.97l.05.05 11.14-11.14v-.26L.4 1.04l-.05.05zM23.15 10.56l-2.79-1.61-3.12 3.12 3.12 3.12 2.81-1.62c.8-.46.8-1.55-.02-2.01zM4.17.1l12.49 7.21-2.79 2.79L3.18.24A1.18 1.18 0 0 1 4.17.1z" />
-                  </svg>
-                  Start free trial — Android
-                </a>
-                <a
-                  href={WEB_APP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Open the Iskotify web app"
-                  className="inline-flex items-center justify-center gap-2 border border-white/45 text-white rounded-xl px-6 py-3 text-sm font-medium hover:bg-white/10 transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                  Try on Web
-                </a>
-              </div>
-              <p className="text-red-200/80 font-body text-xs mt-4">
-                Android Early Access · Also available in your browser · iOS coming soon
-              </p>
-            </div>
-
+      <section id="start" aria-labelledby="start-title" className="bg-maroon py-20 md:py-28">
+        <div className={`${WRAP} flex flex-col items-center text-center`}>
+          <Image src="/kuya-baw-waving.png" alt="" width={96} height={96} className="drop-shadow-xl" />
+          <h2
+            id="start-title"
+            className="mt-6 max-w-4xl font-heading text-[2.5rem] font-extrabold leading-[1.02] tracking-[-0.03em] text-ink-inverse text-balance md:text-7xl"
+          >
+            Para sa mga Iskolar ng Bayan.
+          </h2>
+          <p className="mt-5 max-w-xl font-body text-lg leading-relaxed text-ink-inverse/85">
+            Start with today&apos;s step. Free entrance-exam practice and a scholarship finder, ready in your browser.
+            Kaya mo &apos;to.
+          </p>
+          <div className="mt-9 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
+            <a
+              href={WEB_APP_URL}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-sm bg-surface px-6 font-body text-base font-semibold text-maroon shadow-sm transition-colors hover:bg-surface-2"
+            >
+              Start studying free
+              <ArrowRight className="size-5" />
+            </a>
+            <Link
+              href="/#early-access"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-sm border border-ink-inverse/40 px-6 font-body text-base font-semibold text-ink-inverse transition-colors hover:bg-ink-inverse/10"
+            >
+              <Android className="size-5" />
+              Android early access
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#5a0000] border-t border-white/10 px-6 py-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="bg-maroon-hover py-6">
+        <div className={`${WRAP} flex flex-col items-center justify-between gap-4 sm:flex-row`}>
           <div className="flex items-center gap-2">
-            <Image src="/logo.svg" alt="Iskotify" width={20} height={20} className="rounded-[20%]" />
-            <span className="text-white/60 font-body text-sm">© 2026 Iskotify. All rights reserved.</span>
+            <Image src="/logo.svg" alt="" width={20} height={20} className="rounded-[20%]" />
+            <span className="font-body text-sm text-ink-inverse/75">© 2026 Iskotify</span>
           </div>
-          <nav className="flex items-center gap-5">
-            <Link href="/privacy" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
-              Privacy Policy
-            </Link>
-            <Link href="/terms" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
-              Terms of Service
-            </Link>
-            <Link href="/contact" className="text-white/50 hover:text-white/80 text-sm font-body transition-colors">
-              Contact
-            </Link>
-            <a
-              href="https://www.facebook.com/share/g/193aUvEccE/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Join the private Iskotify beta community on Facebook"
-              className="text-white/50 hover:text-white/80 text-sm font-body transition-colors"
-            >
-              Community
-            </a>
+          <nav aria-label="Footer">
+            <ul className="flex flex-wrap items-center justify-center gap-x-3">
+              <li><Link href="/privacy" className={FOOTER_LINK}>Privacy Policy</Link></li>
+              <li><Link href="/terms" className={FOOTER_LINK}>Terms of Service</Link></li>
+              <li><Link href="/contact" className={FOOTER_LINK}>Contact</Link></li>
+              <li>
+                <a
+                  href="https://www.facebook.com/share/g/193aUvEccE/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={FOOTER_LINK}
+                >
+                  Community<span className="sr-only"> (Facebook group, opens in a new tab)</span>
+                </a>
+              </li>
+            </ul>
           </nav>
         </div>
       </footer>

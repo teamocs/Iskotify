@@ -192,7 +192,7 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
               className={`flex-shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold font-body transition-colors ${
                 active
                   ? 'bg-maroon text-white'
-                  : 'bg-[#f3f4f6] text-ink-muted hover:bg-[#e5e7eb]'
+                  : 'bg-neutral-soft text-ink-muted hover:bg-surface-hover'
               }`}
             >
               {tt.label} ({tt.count})
@@ -269,7 +269,7 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
                   <h3 className="font-heading font-bold text-[15px] text-ink leading-snug line-clamp-2">
                     {c.name}
                   </h3>
-                  <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-[11px] font-semibold font-body">
+                  <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-xs font-semibold font-body">
                     {c.cluster}
                   </span>
                 </div>
@@ -308,7 +308,7 @@ export function ListingsExplorer({ listings, courses, destinations }: Props) {
                     )}
                   </div>
                   {d.courseCount > 0 && (
-                    <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-[11px] font-semibold font-body">
+                    <span className="self-start rounded-full bg-maroon-dim text-maroon px-2.5 py-1 text-xs font-semibold font-body">
                       {d.courseCount} course{d.courseCount === 1 ? '' : 's'} in demand
                     </span>
                   )}

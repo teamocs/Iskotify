@@ -1,102 +1,72 @@
-'use client'
+import { Plus } from './Icons'
+import { H2, SECTION_Y } from './styles'
 
-import { useState } from 'react'
+type FAQItem = { question: string; answer: string }
 
-type FAQItem = {
-  question: string
-  answer: string
-}
-
-const faqs: FAQItem[] = [
+// Answers follow the current app (Today · Practice · Explore · Progress) and
+// the mobile Help screen. No admission promises; the estimate stays an estimate.
+export const faqs: FAQItem[] = [
   {
     question: 'How much does Iskotify cost?',
     answer:
-      'Iskotify is free to use during Early Access — no subscription and no hidden fees. Start now and get full access to scholarships and exam content while we build toward launch.',
+      'It is free during Early Access: no subscription and no hidden fees. You can start studying in your browser right now.',
+  },
+  {
+    question: 'Which exams can I practice for?',
+    answer:
+      'Iskotify is built around UPCAT, and its mock exams follow the blueprints of other college entrance exams too, such as ACET, DCAT and USTET. Pick the ones you are taking during setup, and Today paces your practice to your exam date.',
+  },
+  {
+    question: 'Is the Estimated Admission Score my real score?',
+    answer:
+      'No. It is an estimate based on historical cutoffs, your grades and your practice answers, computed on your device. It cannot tell you whether you will get in, and it gets steadier the more questions you answer in each subject.',
+  },
+  {
+    question: 'What happens if I leave a mock exam halfway?',
+    answer:
+      'Your answers are saved on your device as you go. Open the same mock exam again and choose Resume to pick up where you left off.',
+  },
+  {
+    question: 'Can I use Iskotify offline?',
+    answer:
+      'Yes, on the Android app: practice questions, flashcards and your progress are stored on your phone. Connect now and then to get new questions and updates. The web app needs a connection to open.',
+  },
+  {
+    question: 'Will I lose my progress if I change phones?',
+    answer:
+      'Not if you sign in. Sign in with Google and your progress is backed up to your account; sign in on the new phone and it comes back.',
   },
   {
     question: 'Which scholarships are listed?',
     answer:
-      'We list CHED, DOST, GSIS, and hundreds of private scholarships. Updated weekly from official sources so you always have the latest information.',
+      'Government scholarships such as CHED and DOST, plus private and school grants, gathered from official sources. Explore shows the ones that match your course, school and province.',
   },
   {
-    question: 'Which exams does it cover?',
+    question: 'How do I get the app?',
     answer:
-      'UPCAT, ACET, DCAT, USTET, AdMU ACET, and more. New exams are added regularly based on student demand.',
-  },
-  {
-    question: 'Is my data secure?',
-    answer:
-      'Yes. We use industry-standard encryption for all data in transit and at rest. We never sell your personal data to third parties.',
-  },
-  {
-    question: 'How can I get Iskotify?',
-    answer:
-      'Iskotify is in Early Access on Android — start a free trial and install it directly. You can also use the full app in any browser with the web version. iOS support is on the way.',
+      'Use it in any browser at app.iskotify.ph, on your phone, tablet or computer. The Android app is in early access and not yet on the Play Store: sign up below and we will email it to you. iOS is not available yet.',
   },
 ]
 
-function AccordionItem({ item, isOpen, onToggle }: { item: FAQItem; isOpen: boolean; onToggle: () => void }) {
-  return (
-    <div className="border-b border-[#f0f0f0] last:border-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-4 py-5 text-left group"
-        aria-expanded={isOpen}
-      >
-        <span className="font-heading font-semibold text-ink text-base group-hover:text-maroon transition-colors">
-          {item.question}
-        </span>
-        <span
-          className={[
-            'flex-shrink-0 w-6 h-6 rounded-full border border-[#d2d2d7] flex items-center justify-center transition-transform duration-200',
-            isOpen ? 'rotate-45 border-maroon' : '',
-          ].join(' ')}
-          aria-hidden="true"
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M5 1v8M1 5h8" stroke={isOpen ? '#800000' : '#6e6e73'} strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </span>
-      </button>
-
-      <div
-        className={[
-          'overflow-hidden transition-all duration-300 ease-in-out',
-          isOpen ? 'max-h-48 opacity-100 pb-5' : 'max-h-0 opacity-0',
-        ].join(' ')}
-      >
-        <p className="text-ink-muted font-body text-sm leading-relaxed">{item.answer}</p>
-      </div>
-    </div>
-  )
-}
-
 export function FAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null)
-
-  function toggle(index: number) {
-    setOpenIndex(openIndex === index ? null : index)
-  }
-
   return (
-    <section id="faq" className="bg-surface-2 py-20 px-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-12">
-          <p className="text-[10px] font-body font-semibold uppercase tracking-[0.14em] text-maroon mb-3">FAQ</p>
-          <h2 className="font-heading font-bold text-ink text-3xl md:text-4xl leading-tight">
-            Frequently Asked Questions
-          </h2>
-        </div>
+    <section id="faq" aria-labelledby="faq-title" className={`bg-surface ${SECTION_Y}`}>
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
+        <h2 id="faq-title" className={H2}>
+          Questions students ask
+        </h2>
 
-        <div className="bg-white rounded-[24px] px-6 shadow-[0_8px_32px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]">
-          {faqs.map((faq, index) => (
-            <AccordionItem
-              key={faq.question}
-              item={faq}
-              isOpen={openIndex === index}
-              onToggle={() => toggle(index)}
-            />
+        <div className="mt-10 border-t border-subtle">
+          {faqs.map(item => (
+            <details key={item.question} className="group border-b border-subtle">
+              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-4 font-heading text-lg font-semibold text-ink transition-colors hover:text-maroon [&::-webkit-details-marker]:hidden">
+                {item.question}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-pill border border-strong text-ink-muted transition-transform duration-200 group-open:rotate-45 group-open:border-maroon group-open:text-maroon">
+                  <Plus className="size-4" />
+                </span>
+              </summary>
+              <p className="max-w-prose pb-6 font-body text-base leading-relaxed text-ink-muted">{item.answer}</p>
+            </details>
           ))}
         </div>
       </div>
