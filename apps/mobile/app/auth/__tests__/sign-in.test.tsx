@@ -30,6 +30,12 @@ jest.mock('../../../services/webAuth', () => ({
   isValidPassword: (v: string) => v.length >= 8,
 }))
 
+const mockCheckPwnedPassword = jest.fn()
+jest.mock('../../../services/pwnedPasswords', () => ({
+  ...jest.requireActual('../../../services/pwnedPasswords'),
+  checkPwnedPassword: (...args: any[]) => mockCheckPwnedPassword(...args),
+}))
+
 // One Tap no-op in tests
 jest.mock('../../../hooks/useGoogleOneTap', () => ({
   useGoogleOneTap: () => undefined,
@@ -37,6 +43,7 @@ jest.mock('../../../hooks/useGoogleOneTap', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks()
+  mockCheckPwnedPassword.mockResolvedValue({ checked: true, breached: false, count: 0 })
 })
 
 import SignInScreen from '../sign-in'
@@ -403,5 +410,85 @@ describe('SignInScreen — no idle flash after success', () => {
     fireEvent.press(signInButtons[signInButtons.length - 1])
     await waitFor(() => expect(screen.getByText('Nope.')).toBeTruthy())
     expect(aria(screen.getByRole('button', { name: 'Sign in' }), 'aria-busy')).toBe(false)
+  })
+})
+
+// ── Leaked-password check (HIBP) on sign-up ──────────────────────────────────
+
+const BREACHED = 'This password has appeared in a known data breach. Please choose a different one.'
+
+function fillSignUp(password = 'password123') {
+  fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
+  fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+  fireEvent.changeText(screen.getByPlaceholderText('At least 8 characters'), password)
+}
+function pressCreate() {
+  fireEvent.press(screen.getByRole('button', { name: 'Create account' }))
+}
+
+describe('SignInScreen — leaked-password check on sign-up', () => {
+  it('a breached password blocks sign-up with an inline error on the password field', async () => {
+    mockCheckPwnedPassword.mockResolvedValue({ checked: true, breached: true, count: 9659365 })
+    render(<SignInScreen />)
+    fillSignUp()
+    pressCreate()
+    expect(await screen.findByText(BREACHED)).toBeTruthy()
+    expect(mockCheckPwnedPassword).toHaveBeenCalledWith('password123')
+    expect(mockSignUpWithEmail).not.toHaveBeenCalled()
+    expect(aria(screen.getByLabelText('Password'), 'aria-invalid')).toBe(true)
+    // The form stays usable: the button is idle again.
+    expect(aria(screen.getByRole('button', { name: 'Create account' }), 'aria-busy')).toBe(false)
+  })
+
+  it('choosing a different password clears the error and lets sign-up proceed', async () => {
+    mockCheckPwnedPassword.mockResolvedValueOnce({ checked: true, breached: true, count: 3 })
+    mockSignUpWithEmail.mockResolvedValue({ ok: true, data: { needsEmailConfirm: true } })
+    render(<SignInScreen />)
+    fillSignUp()
+    pressCreate()
+    expect(await screen.findByText(BREACHED)).toBeTruthy()
+    fireEvent.changeText(screen.getByLabelText('Password'), 'a-much-better-passphrase')
+    expect(screen.queryByText(BREACHED)).toBeNull()
+    pressCreate()
+    await waitFor(() =>
+      expect(mockSignUpWithEmail).toHaveBeenCalledWith('user@example.com', 'a-much-better-passphrase'),
+    )
+  })
+
+  it('an HIBP outage (unchecked) still lets sign-up proceed', async () => {
+    mockCheckPwnedPassword.mockResolvedValue({ checked: false, breached: false, count: 0 })
+    mockSignUpWithEmail.mockResolvedValue({ ok: true, data: { needsEmailConfirm: true } })
+    render(<SignInScreen />)
+    fillSignUp()
+    pressCreate()
+    await waitFor(() => expect(mockSignUpWithEmail).toHaveBeenCalledWith('user@example.com', 'password123'))
+    expect(screen.queryByText(BREACHED)).toBeNull()
+  })
+
+  it('an unexpected rejection from the check still lets sign-up proceed', async () => {
+    mockCheckPwnedPassword.mockRejectedValue(new Error('boom'))
+    mockSignUpWithEmail.mockResolvedValue({ ok: true, data: { needsEmailConfirm: true } })
+    render(<SignInScreen />)
+    fillSignUp()
+    pressCreate()
+    await waitFor(() => expect(mockSignUpWithEmail).toHaveBeenCalled())
+  })
+
+  it('does not check on sign-in (existing passwords are not re-screened)', async () => {
+    mockSignInWithEmail.mockResolvedValue({ ok: false, error: 'Nope.' })
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
+    fireEvent.press(screen.getByRole('button', { name: 'Sign in' }))
+    await waitFor(() => expect(mockSignInWithEmail).toHaveBeenCalled())
+    expect(mockCheckPwnedPassword).not.toHaveBeenCalled()
+  })
+
+  it('does not check a password that fails the length rule', async () => {
+    render(<SignInScreen />)
+    fillSignUp('short')
+    pressCreate()
+    expect(await screen.findByText('Password must be at least 8 characters.')).toBeTruthy()
+    expect(mockCheckPwnedPassword).not.toHaveBeenCalled()
   })
 })
