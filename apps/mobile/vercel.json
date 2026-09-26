@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @iskotify/mobile...",
   "framework": null,
+  "cleanUrls": true,
   "git": { "deploymentEnabled": { "master": true, "**": false } },
   "rewrites": [
     { "source": "/auth/sign-in", "destination": "/auth/sign-in.html" },
@@ -14,10 +15,14 @@
     { "source": "/listings/:slug", "destination": "/listings/[slug].html" },
     { "source": "/notes/:id", "destination": "/notes/[id].html" },
     { "source": "/practice/deck/:deckId", "destination": "/practice/deck/[deckId].html" },
+    { "source": "/practice/review/:slug", "destination": "/practice/review/[slug].html" },
+    { "source": "/practice/start/:slug", "destination": "/practice/start/[slug].html" },
     { "source": "/practice/exam/:slug", "destination": "/practice/exam/[slug].html" },
     { "source": "/practice/listing/:slug", "destination": "/practice/listing/[slug].html" },
     { "source": "/practice/upcat/:subtest", "destination": "/practice/upcat/[subtest].html" },
-    { "source": "/schools/:slug", "destination": "/schools/[slug].html" }
+    { "source": "/schools/course/:code", "destination": "/schools/course/[code].html" },
+    { "source": "/schools/:slug", "destination": "/schools/[slug].html" },
+    { "source": "/practice/:topicId", "destination": "/practice/[topicId].html" }
   ],
   "headers": [
     {
