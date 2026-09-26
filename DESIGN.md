@@ -390,6 +390,7 @@ One guard per redesigned area:
 - `apps/mobile/app/(tabs)/__tests__/m2DesignTokens.test.ts` — Today, Progress, Profile
 - `apps/mobile/components/explore/__tests__/designLint.test.ts` — Explore, listings, schools, career
 - `apps/mobile/components/practice/__tests__/practiceAreaTokens.test.ts` — Practice, exam runner, results, notes, estimator
+- `apps/mobile/app/__tests__/m3AppScreensDesign.test.ts` — M3: practice choosers and runners, notes, subjects, estimator, requirements, scholarship profile, results tracker and their shared components; also requires every listed screen to lay out through `Screen` / `TwoColumn` / `useBreakpoint`, and every tab's web refresh control to be icon-only on phones
 
 Each enforces the same rules on the files it scans:
 - No raw hex colours (`#rrggbb`) or `rgba()` literals — all colours from `useTheme()` tokens

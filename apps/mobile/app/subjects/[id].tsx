@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
-import { View, Text, Pressable, FlatList } from 'react-native'
+import { useState, useEffect, useMemo, memo } from 'react'
+import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq, and } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
@@ -8,11 +8,17 @@ import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined, Books2Outlined } from '@lineiconshq/free-icons'
 import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { StatNumber } from '../../components/ui/StatNumber'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 import { spacing, radius, textStyle } from '../../theme/tokens'
 import { cachedQuery, invalidate } from '../../services/queryCache'
 import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
@@ -172,73 +178,91 @@ export default function SubjectDetailsScreen() {
 
   const accent = useMemo(() => subjectColor(id ?? '').accent, [id])
 
-  const renderItem = useCallback(({ item }: { item: TopicRow }) => <TopicProgressRow row={item} />, [])
-  const keyExtractor = useCallback((item: TopicRow) => item.id, [])
-
   // ── No-id (redirecting) ──────────────────────────────────────────────────
   if (!id) return null
 
-  const subjectName = state.status === 'ready' ? state.data.subjectName : null
+  const header = <DetailTopBar bare fallbackHref="/practice" />
 
-  const header = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.xs }}>
-      <Pressable
-        onPress={() => router.back()}
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        style={(state) => {
-          const { pressed, focused } = state as WebPressableState
-          return [
-            { width: 44, height: 44, marginLeft: -spacing.sm, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' },
-            focusRing(t.focusRing, focused),
-          ]
-        }}
-      >
-        <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
-      </Pressable>
-      {/* The subject's identity colour, as a small marker (decorative). */}
-      <View {...decorative} style={{ width: 10, height: 10, borderRadius: radius.pill, backgroundColor: accent }} />
-      <Text accessibilityRole="header" style={[textStyle('headline', t.textPrimary), { flex: 1 }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-        {subjectName ?? 'Subject'}
-      </Text>
+  if (state.status === 'loading') {
+    return (
+      <Screen header={header} width="wide">
+        <View accessible accessibilityLabel="Loading topics" aria-busy style={{ gap: spacing.sm, paddingTop: spacing.md }}>
+          <Skeleton height={32} width="40%" radius={radius.sm} />
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
+        </View>
+      </Screen>
+    )
+  }
+
+  if (state.status === 'error') {
+    return (
+      <Screen header={header}>
+        <ErrorState title="Couldn't load this subject" onRetry={() => { _invalidateSubject(id); setAttempt(n => n + 1) }} />
+      </Screen>
+    )
+  }
+
+  const { subjectName, rows } = state.data
+  const practised = rows.filter(r => r.bestPct != null)
+  const average = practised.length > 0
+    ? Math.round(practised.reduce((sum, r) => sum + (r.bestPct as number), 0) / practised.length)
+    : null
+  // Rows are sorted lowest readiness first, so the first row is the next step.
+  const next = rows[0] as TopicRow | undefined
+
+  const title = (
+    <PageTitle
+      title={subjectName}
+      lead="Readiness per topic, lowest first. Tap a topic to practise it."
+      trailing={
+        // The subject's identity colour, as a small marker (decorative).
+        <View {...decorative} style={{ width: 12, height: 12, borderRadius: radius.pill, backgroundColor: accent }} />
+      }
+    />
+  )
+
+  if (rows.length === 0) {
+    return (
+      <Screen header={header}>
+        {title}
+        <EmptyState
+          icon={<Lineicons icon={Books2Outlined} size={24} color={t.textSecondary} />}
+          title="No topics in this subject yet."
+          body="Topics appear here once their questions download to this device."
+        />
+      </Screen>
+    )
+  }
+
+  const topics = (
+    <View testID="topics-list" style={{ gap: spacing.sm }}>
+      {rows.map(row => <TopicProgressRow key={row.id} row={row} />)}
     </View>
   )
 
+  const summary = (
+    <Card style={{ gap: spacing.lg }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+        Subject summary
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xl }}>
+        <StatNumber label="Topics practised" value={practised.length} unit={`of ${rows.length}`} />
+        {/* Value and unit as separate texts so the number stays tabular. */}
+        <StatNumber label="Average readiness" value={average ?? 'None yet'} unit={average != null ? '%' : undefined} />
+      </View>
+      {next ? <Button
+        label={`Practise ${next.name}`}
+        accessibilityHint="Opens practice for the topic that needs the most work"
+        onPress={() => router.push(`/practice/${next.id}`)}
+        fullWidth
+      /> : null}
+    </Card>
+  )
+
   return (
-    <Screen scroll={false} header={header}>
-      {state.status === 'loading' ? (
-        <View accessible accessibilityLabel="Loading topics" aria-busy style={{ gap: spacing.sm, paddingTop: spacing.md }}>
-          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
-        </View>
-      ) : state.status === 'error' ? (
-        <ErrorState title="Couldn't load this subject" onRetry={() => { _invalidateSubject(id); setAttempt(n => n + 1) }} />
-      ) : (
-        <FlatList
-          testID="topics-list"
-          style={{ flex: 1 }}
-          data={state.data.rows}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          ListHeaderComponent={
-            <Text style={[textStyle('bodySm', t.textSecondary), { marginBottom: spacing.xs }]} maxFontSizeMultiplier={1.8}>
-              Readiness per topic, lowest first. Tap a topic to practise it.
-            </Text>
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon={<Lineicons icon={Books2Outlined} size={24} color={t.textSecondary} />}
-              title="No topics in this subject yet."
-              body="Topics appear here once their questions download to this device."
-            />
-          }
-          initialNumToRender={12}
-          maxToRenderPerBatch={12}
-          windowSize={11}
-          removeClippedSubviews
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ gap: spacing.sm, paddingTop: spacing.md }}
-        />
-      )}
+    <Screen header={header} width="wide">
+      {title}
+      <TwoColumn primary={topics} secondary={summary} />
     </Screen>
   )
 }

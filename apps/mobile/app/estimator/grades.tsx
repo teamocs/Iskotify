@@ -1,21 +1,20 @@
 import { useEffect, useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  ActivityIndicator,
-} from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, Pressable, Switch } from 'react-native'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { CheckOutlined } from '@lineiconshq/free-icons'
-import { decorative } from '../../components/ui/a11y'
+import { spacing, radius, textStyle } from '../../theme/tokens'
+import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
+import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { FilterChip } from '../../components/ui/Chip'
+import { Skeleton } from '../../components/ui/Skeleton'
+import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { getSettings, updateSettings } from '../../services/settings'
 import { validateGwa, gwaFailingWarning } from '../../utils/estimatorInputs'
 
@@ -72,7 +71,8 @@ function warningForGwaText(text: string): string | null {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function EstimatorGradesScreen() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  const twoUp = columnCount(useBreakpoint()) === 2
 
   // GWA text state
   const [g8Text, setG8Text] = useState('')
@@ -158,297 +158,205 @@ export default function EstimatorGradesScreen() {
     }
   }
 
-  // ── Styles (derived from theme tokens) ───────────────────────────────────
-  const labelStyle = {
-    fontFamily: 'Lexend_500Medium' as const,
-    fontSize: typo.sm,
-    color: t.textSecondary,
-    marginBottom: 6,
-  }
-
-  const inputStyle = {
-    backgroundColor: t.surface,
-    borderWidth: 1,
-    borderColor: t.border,
-    borderRadius: 14,
-    paddingHorizontal: 14 as number,
-    paddingVertical: 13 as number,
-    fontFamily: 'Lexend_400Regular' as const,
-    fontSize: typo.base,
-    color: t.textPrimary,
-  }
-
-  const errorTextStyle = {
-    fontFamily: 'Lexend_400Regular' as const,
-    fontSize: typo.sm,
-    color: t.danger,
-    marginTop: 4,
-  }
-
   // Non-blocking notice (Finding 5): 0 < GWA < 60 is almost always a typo —
   // DepEd's passing mark is 60 — but it's a value validateGwa() still accepts,
   // so this never withholds saving. Only shown when there's no blocking error.
-  const warningTextStyle = {
-    fontFamily: 'Lexend_400Regular' as const,
-    fontSize: typo.sm,
-    color: t.warning,
-    marginTop: 4,
-  }
   const g8Warning = g8Error ? null : warningForGwaText(g8Text)
   const g9Warning = g9Error ? null : warningForGwaText(g9Text)
   const g10Warning = g10Error ? null : warningForGwaText(g10Text)
   const g11Warning = g11Error ? null : warningForGwaText(g11Text)
 
-  const sectionHeadStyle = {
-    fontFamily: 'Lexend_600SemiBold' as const,
-    fontSize: typo.xs,
-    color: t.textTertiary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1,
-    marginBottom: 12,
-    marginTop: 28,
-  }
+  const header = <DetailTopBar bare fallbackHref="/estimator" />
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={t.textPrimary} />
-      </SafeAreaView>
+      <Screen header={header} edges={['top', 'bottom']}>
+        <View accessible accessibilityLabel="Loading your grades" aria-busy style={{ gap: spacing.md, paddingTop: spacing.lg }}>
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={72} radius={radius.md} />)}
+        </View>
+      </Screen>
     )
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      {/* ── Header ── */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: t.border,
-      }}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginRight: 12 }}>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>
-          Your Grades
-        </Text>
-        <TouchableOpacity
-          onPress={() => void handleSave()}
-          disabled={saving}
-          style={{
-            backgroundColor: saving ? t.surface2 : t.accentStrong,
-            borderRadius: 12,
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-          }}
-        >
-          {saving ? (
-            <ActivityIndicator color={t.textPrimary} size="small" />
-          ) : (
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.textInverse }}>Save</Text>
-          )}
-        </TouchableOpacity>
+  const gwaFields: {
+    label: string; placeholder: string; value: string; error: string | null; warning: string | null
+    onChange: (text: string) => void; last?: boolean
+  }[] = [
+    { label: 'Grade 8 GWA (optional)', placeholder: 'e.g. 88.5', value: g8Text, error: g8Error, warning: g8Warning,
+      onChange: text => { setG8Text(text); setG8Error(null) } },
+    { label: 'Grade 9 GWA', placeholder: 'e.g. 90.0', value: g9Text, error: g9Error, warning: g9Warning,
+      onChange: text => { setG9Text(text); setG9Error(null) } },
+    { label: 'Grade 10 GWA', placeholder: 'e.g. 91.5', value: g10Text, error: g10Error, warning: g10Warning,
+      onChange: text => { setG10Text(text); setG10Error(null) } },
+    { label: 'Grade 11 GWA', placeholder: 'e.g. 92.0', value: g11Text, error: g11Error, warning: g11Warning,
+      onChange: text => { setG11Text(text); setG11Error(null) }, last: true },
+  ]
+
+  const sectionHead = (title: string) => (
+    <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginTop: spacing.xxl, marginBottom: spacing.md }]} maxFontSizeMultiplier={2}>
+      {title}
+    </Text>
+  )
+
+  const save = (
+    <Button label="Save" onPress={() => void handleSave()} loading={saving} size="lg" fullWidth />
+  )
+
+  const form = (
+    <View>
+      <View style={{ gap: spacing.lg }}>
+        {gwaFields.map(f => (
+          <View key={f.label} style={{ gap: spacing.xs }}>
+            <TextField
+              label={f.label}
+              placeholder={f.placeholder}
+              value={f.value}
+              onChangeText={f.onChange}
+              keyboardType="decimal-pad"
+              returnKeyType={f.last ? 'done' : 'next'}
+              error={f.error ?? undefined}
+            />
+            {f.warning ? (
+              <Text style={textStyle('bodySm', t.warningStrong)} maxFontSizeMultiplier={2}>{f.warning}</Text>
+            ) : null}
+          </View>
+        ))}
       </View>
 
-      <KeyboardAwareScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 48 }}
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1 }}
-        bottomOffset={20}
-      >
-        {/* ── GWA Section ── */}
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: 20, lineHeight: 19 }}>
-          Enter your General Weighted Average (GWA) per grade year. All are on a 0–100 scale; decimals allowed.
-        </Text>
+      {sectionHead('School type')}
+      <View accessibilityRole="radiogroup" accessibilityLabel="School type" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        {SCHOOL_TYPE_OPTIONS.map(opt => (
+          <FilterChip
+            key={opt.value}
+            testID={`school-type-chip-${opt.value}`}
+            label={opt.label}
+            selected={schoolType === opt.value}
+            onPress={() => setSchoolType(prev => prev === opt.value ? null : opt.value)}
+          />
+        ))}
+      </View>
 
-        {/* Grade 8 (optional) */}
-        <Text style={labelStyle}>Grade 8 GWA <Text style={{ color: t.textTertiary }}>(optional)</Text></Text>
-        <TextInput
-          style={[inputStyle, g8Error ? { borderColor: t.danger } : {}]}
-          placeholder="e.g. 88.5"
-          placeholderTextColor={t.textTertiary}
-          value={g8Text}
-          onChangeText={text => { setG8Text(text); setG8Error(null) }}
-          keyboardType="decimal-pad"
-          returnKeyType="next"
-        />
-        {g8Error ? <Text style={errorTextStyle}>{g8Error}</Text> : null}
-        {g8Warning ? <Text style={warningTextStyle}>{g8Warning}</Text> : null}
-
-        {/* Grade 9 */}
-        <Text style={[labelStyle, { marginTop: 16 }]}>Grade 9 GWA</Text>
-        <TextInput
-          style={[inputStyle, g9Error ? { borderColor: t.danger } : {}]}
-          placeholder="e.g. 90.0"
-          placeholderTextColor={t.textTertiary}
-          value={g9Text}
-          onChangeText={text => { setG9Text(text); setG9Error(null) }}
-          keyboardType="decimal-pad"
-          returnKeyType="next"
-        />
-        {g9Error ? <Text style={errorTextStyle}>{g9Error}</Text> : null}
-        {g9Warning ? <Text style={warningTextStyle}>{g9Warning}</Text> : null}
-
-        {/* Grade 10 */}
-        <Text style={[labelStyle, { marginTop: 16 }]}>Grade 10 GWA</Text>
-        <TextInput
-          style={[inputStyle, g10Error ? { borderColor: t.danger } : {}]}
-          placeholder="e.g. 91.5"
-          placeholderTextColor={t.textTertiary}
-          value={g10Text}
-          onChangeText={text => { setG10Text(text); setG10Error(null) }}
-          keyboardType="decimal-pad"
-          returnKeyType="next"
-        />
-        {g10Error ? <Text style={errorTextStyle}>{g10Error}</Text> : null}
-        {g10Warning ? <Text style={warningTextStyle}>{g10Warning}</Text> : null}
-
-        {/* Grade 11 */}
-        <Text style={[labelStyle, { marginTop: 16 }]}>Grade 11 GWA</Text>
-        <TextInput
-          style={[inputStyle, g11Error ? { borderColor: t.danger } : {}]}
-          placeholder="e.g. 92.0"
-          placeholderTextColor={t.textTertiary}
-          value={g11Text}
-          onChangeText={text => { setG11Text(text); setG11Error(null) }}
-          keyboardType="decimal-pad"
-          returnKeyType="done"
-        />
-        {g11Error ? <Text style={errorTextStyle}>{g11Error}</Text> : null}
-        {g11Warning ? <Text style={warningTextStyle}>{g11Warning}</Text> : null}
-
-        {/* ── School Type ── */}
-        <Text style={sectionHeadStyle}>School Type</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {SCHOOL_TYPE_OPTIONS.map(opt => {
-            const active = schoolType === opt.value
-            return (
-              <TouchableOpacity
-                key={opt.value}
-                testID={`school-type-chip-${opt.value}`}
-                onPress={() => setSchoolType(prev => prev === opt.value ? null : opt.value)}
-                style={{
-                  minHeight: 44,
-                  justifyContent: 'center',
-                  paddingVertical: 9,
-                  paddingHorizontal: 14,
-                  borderRadius: 20,
-                  backgroundColor: active ? t.accent : t.surface2,
-                  borderWidth: 1,
-                  borderColor: active ? t.accent : t.border,
-                }}
-              >
-                <Text style={{
-                  fontFamily: 'Lexend_500Medium',
-                  fontSize: typo.sm,
-                  color: active ? t.textInverse : t.textSecondary,
-                }}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
+      {sectionHead('Indigenous Peoples')}
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+            I am a member of an Indigenous People
+          </Text>
+          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+            For the EEAS palugit (bonus points)
+          </Text>
         </View>
+        <Switch
+          value={isIndigenous}
+          onValueChange={setIsIndigenous}
+          accessibilityLabel="I am a member of an Indigenous People"
+          trackColor={{ false: t.inputBorder, true: t.accent }}
+          thumbColor={t.surfaceRaised}
+        />
+      </Card>
 
-        {/* ── Indigenous Peoples ── */}
-        <Text style={sectionHeadStyle}>Indigenous Peoples</Text>
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: t.surface,
-          borderWidth: 1,
-          borderColor: t.border,
-          borderRadius: 14,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          gap: 12,
-        }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.base, color: t.textPrimary }}>
-              I am a member of an Indigenous People
-            </Text>
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 3 }}>
-              For the EEAS palugit (bonus points)
+      {sectionHead('Target campus')}
+      <View accessibilityRole="radiogroup" accessibilityLabel="Target campus" style={{ gap: spacing.sm }}>
+        {CAMPUS_OPTIONS.map(campus => {
+          const active = targetCampus === campus
+          return (
+            <Pressable
+              key={campus}
+              onPress={() => setTargetCampus(prev => prev === campus ? null : campus)}
+              accessibilityRole="radio"
+              accessibilityLabel={campus}
+              aria-checked={active}
+              style={(state) => {
+                const { pressed, hovered, focused } = state as WebPressableState
+                return [
+                  {
+                    minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                    paddingHorizontal: spacing.lg,
+                    backgroundColor: active ? t.accentSurface : pressed || hovered ? t.surface2 : t.surface,
+                    borderWidth: active ? 2 : 1,
+                    borderColor: active ? t.accent : t.border,
+                    borderRadius: radius.md, borderCurve: 'continuous',
+                  },
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
+            >
+              <View
+                {...decorative}
+                style={{
+                  width: 20, height: 20, borderRadius: radius.pill,
+                  borderWidth: active ? 6 : 2,
+                  borderColor: active ? t.accent : t.inputBorder,
+                  backgroundColor: t.surface,
+                }}
+              />
+              <Text style={[textStyle(active ? 'titleSm' : 'body', active ? t.accentText : t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>
+                {campus}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+    </View>
+  )
+
+  const schoolTypeLabel = SCHOOL_TYPE_OPTIONS.find(o => o.value === schoolType)?.label ?? 'Not set'
+  const summaryRows: [string, string][] = [
+    ['Grade 8', g8Text.trim() || 'Not set'],
+    ['Grade 9', g9Text.trim() || 'Not set'],
+    ['Grade 10', g10Text.trim() || 'Not set'],
+    ['Grade 11', g11Text.trim() || 'Not set'],
+    ['School type', schoolTypeLabel],
+    ['Indigenous Peoples', isIndigenous ? 'Yes' : 'No'],
+    ['Target campus', targetCampus ?? 'Not set'],
+  ]
+
+  const summary = (
+    <Card style={{ gap: spacing.md }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Your entries</Text>
+      <View>
+        {summaryRows.map(([k, v], idx) => (
+          <View
+            key={k}
+            accessible
+            accessibilityLabel={`${k}: ${v}`}
+            style={{
+              flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm,
+              borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
+            }}
+          >
+            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{k}</Text>
+            <Text
+              style={[textStyle('label', t.textPrimary), { fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' }]}
+              maxFontSizeMultiplier={2}
+            >
+              {v}
             </Text>
           </View>
-          <Switch
-            value={isIndigenous}
-            onValueChange={setIsIndigenous}
-            trackColor={{ false: t.border, true: t.accentStrong }}
-            thumbColor={isIndigenous ? t.accent : t.surface2}
-          />
-        </View>
+        ))}
+      </View>
+      <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>
+        Saved on this device. They feed your Estimated Admission Score, based on historical cutoffs.
+      </Text>
+      {save}
+    </Card>
+  )
 
-        {/* ── Target Campus ── */}
-        <Text style={sectionHeadStyle}>Target Campus</Text>
-        <View style={{ gap: 8 }}>
-          {CAMPUS_OPTIONS.map(campus => {
-            const active = targetCampus === campus
-            return (
-              <TouchableOpacity
-                key={campus}
-                onPress={() => setTargetCampus(prev => prev === campus ? null : campus)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: active ? t.accentSurface : t.surface,
-                  borderWidth: active ? 2 : 1,
-                  borderColor: active ? t.accent : t.border,
-                  borderRadius: 14,
-                  paddingHorizontal: 16,
-                  paddingVertical: 13,
-                  gap: 10,
-                }}
-              >
-                <View style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  borderWidth: active ? 6 : 2,
-                  borderColor: active ? t.accent : t.border,
-                  backgroundColor: active ? t.textInverse : 'transparent',
-                }} />
-                <Text style={{
-                  fontFamily: active ? 'Outfit_600SemiBold' : 'Lexend_400Regular',
-                  fontSize: typo.base,
-                  color: active ? t.accentText : t.textPrimary,
-                  flex: 1,
-                }}>
-                  {campus}
-                </Text>
-                {active ? (
-                  <View {...decorative}><Lineicons icon={CheckOutlined} size={16} color={t.accentText} /></View>
-                ) : null}
-              </TouchableOpacity>
-            )
-          })}
+  return (
+    <Screen header={header} width={twoUp ? 'wide' : 'reading'} edges={['top', 'bottom']}>
+      <PageTitle
+        title="Your grades"
+        lead="Enter your General Weighted Average (GWA) per grade year. All are on a 0–100 scale; decimals allowed."
+      />
+      {twoUp ? (
+        <TwoColumn primary={form} secondary={summary} />
+      ) : (
+        <View style={{ gap: spacing.xxl }}>
+          {form}
+          {save}
         </View>
-
-        {/* ── Bottom Save Button ── */}
-        <TouchableOpacity
-          onPress={() => void handleSave()}
-          disabled={saving}
-          style={{
-            marginTop: 32,
-            backgroundColor: saving ? t.surface2 : t.accentStrong,
-            borderRadius: 16,
-            paddingVertical: 15,
-            alignItems: 'center',
-          }}
-        >
-          {saving ? (
-            <ActivityIndicator color={t.textPrimary} size="small" />
-          ) : (
-            <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse }}>
-              Save
-            </Text>
-          )}
-        </TouchableOpacity>
-      </KeyboardAwareScrollView>
-    </SafeAreaView>
+      )}
+    </Screen>
   )
 }

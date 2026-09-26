@@ -265,7 +265,9 @@ export default function SchoolProfileScreen() {
   const hero = (
     <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-        {school.type ? <Badge label={school.type} tone="neutral" /> : null}
+        {/* The type text can itself be "SUC"/"LUC" — don't repeat the flag badge. */}
+        {school.type && !((school.isSuc && /^suc$/i.test(school.type.trim())) || (school.isLuc && /^luc$/i.test(school.type.trim())))
+          ? <Badge label={school.type} tone="neutral" /> : null}
         {school.isSuc ? <Badge label="SUC" tone="accent" /> : null}
         {school.isLuc ? <Badge label="LUC" tone="accent" /> : null}
         {profile?.freeTuition ? <Badge label="Free tuition" tone="success" /> : null}

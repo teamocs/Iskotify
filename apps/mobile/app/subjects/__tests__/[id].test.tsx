@@ -18,6 +18,16 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../../../hooks/useDb', () => ({ useDb: jest.fn() }))
 
+const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
+function flat(style: unknown): Record<string, any> {
+  return Object.assign({}, ...[style].flat(Infinity as 1).filter(Boolean))
+}
+
 // The session aggregates are unit-tested in services/__tests__; here we control
 // their output so the screen's compose + sort can be asserted. The screen now
 // also loads getSubjectSessionPercentages (subject-level mock bests) so a subject
@@ -66,6 +76,7 @@ function setBest(
 describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockBp.value = 'compact'
     const { _clearForTests } = require('../../../services/queryCache')
     _clearForTests()
     const { useLocalSearchParams } = require('expo-router')
@@ -243,5 +254,47 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
       expect(screen.getAllByRole('progressbar').length).toBe(2)
     })
   })
-})
 
+  // ── Redesign M3: DetailTopBar + PageTitle, summary beside topics on desktop ──
+  describe('redesign M3', () => {
+    it('titles the page with the subject name as the h1 and a named back button', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([{ topicId: 't1', bestPct: 80 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      expect(screen.getByRole('header', { name: 'Mathematics' }).props['aria-level']).toBe(1)
+      expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
+    })
+
+    it('summarises the subject: topics practised and average readiness', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([{ topicId: 't1', bestPct: 80 }, { topicId: 't2', bestPct: 40 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      expect(screen.getByLabelText('Topics practised: 2 of 3')).toBeTruthy()
+      expect(screen.getByLabelText('Average readiness: 60 %')).toBeTruthy()
+    })
+
+    it('puts the topics and the summary side by side on desktop', async () => {
+      mockBp.value = 'expanded'
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([{ topicId: 't1', bestPct: 80 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      expect(flat(screen.getByTestId('two-column').props.style).flexDirection).toBe('row')
+      expect(flat(screen.getByTestId('screen-content').props.style).maxWidth).toBe(1040)
+    })
+
+    it('stacks to one column on phones', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([{ topicId: 't1', bestPct: 80 }])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      expect(flat(screen.getByTestId('two-column').props.style).flexDirection).toBe('column')
+    })
+  })
+})

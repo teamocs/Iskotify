@@ -1,6 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect } from 'react'
 import { router } from 'expo-router'
 import { inArray } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -12,12 +10,10 @@ import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnh
 import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
-import { decorative } from '../../../components/ui/a11y'
-import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
+import { SessionEmpty, SessionLoading, SessionPreparing } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,22 +36,12 @@ type Phase = 'loading' | 'enhancing' | 'exam' | 'empty'
  */
 export default function DueReviewScreen() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
-    emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxxl },
-    icon: { width: 72, height: 72, backgroundColor: t.warningSurface, borderWidth: 1, borderColor: t.warningBorder, borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg },
-    emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: spacing.xs },
-    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: spacing.xxl },
-    ghostBtn: { paddingVertical: spacing.md, alignItems: 'center' },
-    ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-  }), [t, typo])
 
   useEffect(() => {
     async function load() {
@@ -116,52 +102,23 @@ export default function DueReviewScreen() {
     void load()
   }, [db])
 
-  if (phase === 'loading') {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loadingTxt}>Loading due cards…</Text>
-      </SafeAreaView>
-    )
-  }
+  if (phase === 'loading') return <SessionLoading label="Loading due cards" />
 
-  if (phase === 'enhancing') {
-    const pct = enhanceProgress.total > 0
-      ? Math.round((enhanceProgress.done / enhanceProgress.total) * 100)
-      : 0
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loadingTxt}>Preparing quiz options…</Text>
-        <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
-          {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
-        </Text>
-        <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
-          Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
-        </Text>
-      </SafeAreaView>
-    )
-  }
+  if (phase === 'enhancing') return <SessionPreparing done={enhanceProgress.done} total={enhanceProgress.total} />
 
   if (phase === 'empty') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.emptyWrap}>
-          <View style={s.icon} {...decorative}><Lineicons icon={CheckCircle1Outlined} size={32} color={t.warningStrong} /></View>
-          <Text style={s.emptyTitle}>All caught up!</Text>
-          <Text style={s.emptySub}>No cards are due for review right now.</Text>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
-            <Text style={s.ghostBtnTxt}>← Back</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <SessionEmpty
+        title="All caught up"
+        body="No cards are due for review right now. Come back tomorrow, or practise a topic."
+        icon={<Lineicons icon={CheckCircle1Outlined} size={24} color={t.textSecondary} />}
+      />
     )
   }
 
   return (
     <FlashcardExam
-      title="Due Today"
+      title="Due today"
       questions={examQuestions}
       deckId="__due__"
       onExit={() => router.back()}

@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { inArray, eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -10,16 +8,11 @@ import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../uti
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
-import { useTheme } from '../../../theme/ThemeContext'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Layers1Outlined } from '@lineiconshq/free-icons'
-import { decorative } from '../../../components/ui/a11y'
-import { spacing, radius } from '../../../theme/tokens'
 import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
+import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
+import { SessionEmpty, SessionLoading, SessionPreparing } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,9 +34,6 @@ function shuffle<T>(arr: T[]): T[] {
 export default function DeckQuizScreen() {
   const { deckId, listingSlug } = useLocalSearchParams<{ deckId: string; listingSlug?: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
-  // Web-only max-width centering for the chooser scroll content (null on native/sm).
-  const webWidth = useWebContentWidth()
 
   const [deckName, setDeckName] = useState('')
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
@@ -61,26 +51,6 @@ export default function DeckQuizScreen() {
   const dedupedQuestions = useMemo(() => dedupeByStem(allQuestions), [allQuestions])
   const dueQuestions = useMemo(() => pickQuestions(allQuestions, 'due', dueAtById), [allQuestions, dueAtById])
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    loadingTxt: { color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginTop: 80, fontSize: typo.md },
-    emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-    emptyTitle: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
-    emptySub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center', marginBottom: spacing.xxl },
-    chooserContent: { alignItems: 'center' as const, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 40 },
-    icon: { width: 72, height: 72, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.xl, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-    title: { fontSize: typo.h3, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', textAlign: 'center', marginBottom: 6 },
-    sub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginBottom: 28, textAlign: 'center' },
-    choiceCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: 18, width: '100%', marginBottom: spacing.md },
-    choiceTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold', marginBottom: 2 },
-    choiceSub: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-    // "Due today" chooser option (Task H) — warning-toned, same convention as
-    // the practice-tab "Review due cards" row.
-    dueChoiceCard: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
-    dueChoiceTitle: { color: t.warning },
-    ghostBtn: { paddingVertical: spacing.md, width: '100%', alignItems: 'center' },
-    ghostBtnTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular' },
-  }), [t, typo])
 
   // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -158,47 +128,18 @@ export default function DeckQuizScreen() {
     void load()
   }, [db, deckId])
 
-  // ── Phase: loading ────────────────────────────────────────────────────────────
+  // ── Phase: loading / preparing / empty ─────────────────────────────────────
 
-  if (phase === 'loading') {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loadingTxt}>Loading deck…</Text>
-      </SafeAreaView>
-    )
-  }
+  if (phase === 'loading') return <SessionLoading label="Loading deck" />
 
-  if (phase === 'enhancing') {
-    const pct = enhanceProgress.total > 0
-      ? Math.round((enhanceProgress.done / enhanceProgress.total) * 100)
-      : 0
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loadingTxt}>Preparing quiz options…</Text>
-        <Text style={[s.loadingTxt, { marginTop: 8, fontSize: typo.sm }]}>
-          {enhanceProgress.done} / {enhanceProgress.total} cards · {pct}%
-        </Text>
-        <Text style={[s.loadingTxt, { marginTop: 16, fontSize: typo.xs, paddingHorizontal: 32 }]}>
-          Using the on-device AI to generate multiple-choice options. This runs only the first time you practice each card.
-        </Text>
-      </SafeAreaView>
-    )
-  }
+  if (phase === 'enhancing') return <SessionPreparing done={enhanceProgress.done} total={enhanceProgress.total} />
 
   if (phase === 'empty') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={s.emptyWrap}>
-          <Text style={s.emptyTitle}>No MCQ cards</Text>
-          <Text style={s.emptySub}>This deck has no multiple-choice questions.</Text>
-          <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
-            <Text style={s.ghostBtnTxt}>← Back to Decks</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <SessionEmpty
+        title="This deck has no questions yet"
+        body="Add topics with multiple-choice cards to this deck, or practise a topic directly."
+      />
     )
   }
 
@@ -224,37 +165,14 @@ export default function DeckQuizScreen() {
     setPhase('exam')
   }
 
-  const dueCount = dueQuestions.length
-
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <ScrollView contentContainerStyle={[s.chooserContent, webWidth]} showsVerticalScrollIndicator={false}>
-        <View style={s.icon} {...decorative}><Lineicons icon={Layers1Outlined} size={32} color={t.accentText} /></View>
-        <Text style={s.title}>{deckName}</Text>
-        <Text style={s.sub}>{dedupedQuestions.length} cards available</Text>
-
-        {dueCount > 0 ? (
-          <Pressable accessibilityRole="button" style={[s.choiceCard, s.dueChoiceCard]} onPress={() => choose('due')}>
-            <Text style={[s.choiceTitle, s.dueChoiceTitle]}>Due today ({dueCount})</Text>
-            <Text style={s.choiceSub}>Cards scheduled for review, most overdue first</Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('quick')}>
-          <Text style={s.choiceTitle}>Quick (15)</Text>
-          <Text style={s.choiceSub}>~15 sampled questions, shuffled</Text>
-        </Pressable>
-
-        <Pressable accessibilityRole="button" style={s.choiceCard} onPress={() => choose('full')}>
-          <Text style={s.choiceTitle}>Full</Text>
-          <Text style={s.choiceSub}>All {Math.min(dedupedQuestions.length, 60)} questions, in order</Text>
-        </Pressable>
-
-        <Pressable accessibilityRole="button" style={s.ghostBtn} onPress={() => router.back()}>
-          <Text style={s.ghostBtnTxt}>← Back</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+    <FlashcardModeChooser
+      title={deckName}
+      noun="deck"
+      total={dedupedQuestions.length}
+      dueCount={dueQuestions.length}
+      fallbackHref="/practice"
+      onChoose={choose}
+    />
   )
 }

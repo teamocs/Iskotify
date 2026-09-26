@@ -1,6 +1,5 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, Share } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useRef, useEffect } from 'react'
+import { View, Share } from 'react-native'
 import { useDb } from '../../hooks/useDb'
 import { submitQuestionReport } from '../../services/questionReports'
 import { ReportQuestionModal } from './ReportQuestionModal'
@@ -8,15 +7,23 @@ import { useRecordSession } from '../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../hooks/useRecordAttempts'
 import { useRecordProgress } from '../../hooks/useRecordProgress'
 import { useRecordSrs } from '../../hooks/useRecordSrs'
-import { QuestionNavigator } from '../upcat/QuestionNavigator'
 import { QuestionCard } from './QuestionCard'
 import { OptionList } from './OptionList'
-import { ReviewCard } from './ReviewCard'
 import { ExamReviewSheet } from './ExamReviewSheet'
 import { ResultsScoreCard } from './ResultsScoreCard'
+import { QuestionNavPanel } from './QuestionNavPanel'
+import { RunnerFrame } from './runner/RunnerFrame'
+import { RunnerActions } from './runner/RunnerActions'
+import { RunnerReview } from './runner/RunnerReview'
+import { PracticeFocusHeader } from './runner/PracticeFocusHeader'
+import { Screen } from '../ui/Screen'
+import { PageTitle } from '../ui/PageTitle'
+import { Button } from '../ui/Button'
+import { EmptyState } from '../ui/EmptyState'
 import { useTheme } from '../../theme/ThemeContext'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
+import { FileQuestionOutlined } from '@lineiconshq/free-icons'
 import { spacing } from '../../theme/tokens'
 import type { QuizQuestion } from '../../utils/mcDistractors'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../utils/attemptTiming'
@@ -38,7 +45,9 @@ export interface FlashcardExamProps {
 
 export function FlashcardExam({ title, questions, listingSlug, subtest, topicId, deckId, onExit }: FlashcardExamProps) {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  // Redesign M3: navigator as a side panel on expanded widths, a sheet elsewhere.
+  const expanded = useBreakpoint() === 'expanded'
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { recordProgress } = useRecordProgress()
@@ -53,9 +62,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const startRef = useState(() => Date.now())[0]
   // Fix 2: last-question review sheet (never submits directly).
   const [reviewOpen, setReviewOpen] = useState(false)
-  // Fix 3: "Review mistakes" scrolls the results screen down to the Review section.
-  const resultsScrollRef = useRef<ScrollView>(null)
-  const reviewYRef = useRef(0)
+  // Fix 3: "Review mistakes" (the results screen's primary action) opens the review.
+  const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
 
   // Task D: per-question timing + attempt sessionKey. Unlike the routed exam
   // screens (which remount on retake via router.replace), FlashcardExam is a
@@ -75,24 +83,18 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
     timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
   }, [idx])
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
   // ── Empty guard ────────────────────────────────────────────────────────────
   if (questions.length === 0) {
     return (
-      <SafeAreaView style={s.root}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Text style={s.emptyTxt}>No questions available</Text>
-          <Pressable
-            style={[s.ghostBtn, { marginTop: 16 }]}
-            onPress={onExit}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={s.ghostTxt}>← Back</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <Screen>
+        <EmptyState
+          icon={<Lineicons icon={FileQuestionOutlined} size={24} color={t.textSecondary} />}
+          title="No questions available"
+          body="There is nothing to practise in this set yet."
+          actionLabel="Go back"
+          onAction={onExit}
+        />
+      </Screen>
     )
   }
 
@@ -177,93 +179,72 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   }
 
   // ── Results screen ─────────────────────────────────────────────────────────
+  // Redesign M3: a page (<Screen>), same as the mock exam runner's results.
   if (phase === 'results') {
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
     const pct = Math.round((score / questions.length) * 100)
 
     return (
-      <SafeAreaView style={s.root}>
-        <ScrollView
-          ref={resultsScrollRef}
-          contentContainerStyle={{ padding: 14, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-        >
+      <Screen>
+        <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
+          {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
+          <PageTitle title="Tapos na! Quiz complete." lead={`Here is how ${title} went.`} />
+
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
           <ResultsScoreCard pct={pct} correct={score} total={questions.length} />
 
-          <View onLayout={e => { reviewYRef.current = e.nativeEvent.layout.y }}>
-            <Text style={s.sectionLbl}>Review</Text>
-          </View>
-          {questions.map((q, i) => (
-            <ReviewCard
-              key={q.id ?? i}
-              index={i + 1}
-              questionText={q.stem}
-              options={q.options}
-              correctIndex={q.answerIndex}
-              selectedIndex={answers[i]}
-              explanation={q.explanation}
-              optionExplanations={q.optionExplanations}
-              strategyTip={q.strategyTip}
-              imageUrl={q.imageUrl}
-              imageAlt={q.imageAlt}
-              imageWidth={q.imageWidth}
-              imageHeight={q.imageHeight}
-            />
-          ))}
+          <RunnerReview
+            items={questions.map((q, i) => ({
+              id: q.id ?? String(i),
+              sectionName: title,
+              questionText: q.stem,
+              options: q.options,
+              correctIndex: q.answerIndex,
+              explanation: q.explanation,
+              optionExplanations: q.optionExplanations,
+              strategyTip: q.strategyTip,
+              imageUrl: q.imageUrl,
+              imageAlt: q.imageAlt,
+              imageWidth: q.imageWidth,
+              imageHeight: q.imageHeight,
+            }))}
+            answers={answers}
+            expandAll={reviewMistakesTapped}
+          />
 
           {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
-          <Pressable
-            style={s.primaryBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Review mistakes"
-            onPress={() => resultsScrollRef.current?.scrollTo({ y: reviewYRef.current, animated: true })}
-          >
-            <Text style={s.primaryBtnTxt}>Review mistakes</Text>
-          </Pressable>
-
-          <Pressable
-            style={s.ghostBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Retake exam"
-            onPress={() => {
-              setAnswers({})
-              setIdx(0)
-              setReported({})
-              setPhase('exam')
-              // New attempt on the same mounted instance: fresh sessionKey +
-              // timing baseline so the retake's rows don't blend with the
-              // previous run's (see attemptStartRef/timingRef declaration above).
-              const now = Date.now()
-              attemptStartRef.current = now
-              timingRef.current = createTimingState(0, now)
-              submittedRef.current = false
-            }}
-          >
-            <Text style={s.ghostTxt}>Retake exam</Text>
-          </Pressable>
-
-          <Pressable
-            style={[s.primaryBtn, { marginTop: spacing.sm, backgroundColor: t.surface, borderWidth: 1, borderColor: t.accentBorder }]}
-            accessibilityRole="button"
-            accessibilityLabel={`Share your score of ${pct} percent`}
-            onPress={() =>
-              void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify!` })
-            }
-          >
-            <Text style={[s.primaryBtnTxt, { color: t.accentText }]}>Share score</Text>
-          </Pressable>
-
-          <Pressable
-            style={s.ghostBtn}
-            onPress={onExit}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={s.ghostTxt}>← Back</Text>
-          </Pressable>
-        </ScrollView>
-      </SafeAreaView>
+          <View style={{ gap: spacing.sm }}>
+            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            <Button
+              label="Retake exam"
+              variant="secondary"
+              fullWidth
+              onPress={() => {
+                setAnswers({})
+                setIdx(0)
+                setReported({})
+                setReviewMistakesTapped(false)
+                setPhase('exam')
+                // New attempt on the same mounted instance: fresh sessionKey +
+                // timing baseline so the retake's rows don't blend with the
+                // previous run's (see attemptStartRef/timingRef declaration above).
+                const now = Date.now()
+                attemptStartRef.current = now
+                timingRef.current = createTimingState(0, now)
+                submittedRef.current = false
+              }}
+            />
+            <Button
+              label="Share score"
+              variant="secondary"
+              fullWidth
+              accessibilityLabel={`Share your score of ${pct} percent`}
+              onPress={() => void Share.share({ message: `I scored ${pct}% on ${title} in Iskotify!` })}
+            />
+            <Button label="Go back" variant="ghost" fullWidth onPress={onExit} />
+          </View>
+        </View>
+      </Screen>
     )
   }
 
@@ -271,35 +252,23 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const q = questions[idx]!
   const sel = answers[idx]
   const answeredIdxs = new Set(Object.keys(answers).map(Number))
+  const flaggedIdxs = new Set(Object.keys(reported).map(Number))
   const isLast = idx === questions.length - 1
 
   return (
-    <SafeAreaView style={s.root}>
-      <View style={s.topBar}>
-        <Pressable
-          onPress={onExit}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Exit exam"
-        >
-          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={s.counter}>
-          {idx + 1}/{questions.length}
-        </Text>
-      </View>
-
-      <QuestionNavigator
-        total={questions.length}
-        currentIdx={idx}
-        answeredIdxs={answeredIdxs}
-        onJump={setIdx}
-      />
-
-      <ScrollView contentContainerStyle={{ paddingTop: spacing.lg, paddingBottom: 120, paddingHorizontal: spacing.lg, gap: spacing.lg }} showsVerticalScrollIndicator={false}>
+    <RunnerFrame
+      header={
+        <PracticeFocusHeader
+          title={title}
+          position={idx + 1}
+          total={questions.length}
+          answered={answeredIdxs.size}
+          onLeave={onExit}
+          leaveLabel="Exit exam"
+          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+        />
+      }
+      question={
         <QuestionCard
           questionText={q.stem}
           reported={reported[idx]}
@@ -309,61 +278,43 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           imageWidth={q.imageWidth}
           imageHeight={q.imageHeight}
         />
-        <OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />
-      </ScrollView>
-
-      <View style={s.footer}>
-        <Pressable
-          style={s.footBtnGhost}
-          onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0}
-          accessibilityRole="button"
-          accessibilityLabel="Previous question"
-          aria-disabled={idx === 0}
-        >
-          <Text style={[s.footGhostTxt, idx === 0 && { opacity: 0.3 }]}>Back</Text>
-        </Pressable>
-        {isLast ? (
-          // Fix 2: the last question never submits directly anymore — it
-          // opens a review sheet with an explicit, confirmed "Submit exam".
-          <Pressable
-            style={s.footBtnPrimary}
-            onPress={() => setReviewOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Review answers before submitting"
-          >
-            <Text style={s.footPrimaryTxt}>Review & submit</Text>
-          </Pressable>
-        ) : (
-          <>
-            <Pressable
-              style={s.footBtnGhost}
-              onPress={() => setIdx(i => i + 1)}
-              accessibilityRole="button"
-              accessibilityLabel="Skip this question"
-            >
-              <Text style={s.footGhostTxt}>Skip</Text>
-            </Pressable>
-            <Pressable
-              style={[s.footBtnPrimary, sel === undefined && s.footDisabled]}
-              disabled={sel === undefined}
-              onPress={() => setIdx(i => i + 1)}
-              accessibilityRole="button"
-              accessibilityLabel="Next question"
-              aria-disabled={sel === undefined}
-            >
-              <Text style={s.footPrimaryTxt}>Next</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-
+      }
+      options={<OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />}
+      actions={
+        // Fix 2: the last question never submits directly — it opens a review
+        // sheet with an explicit, confirmed "Submit exam".
+        <RunnerActions
+          isLast={isLast}
+          canGoBack={idx > 0}
+          answered={sel !== undefined}
+          onBack={() => setIdx(i => Math.max(0, i - 1))}
+          onSkip={() => setIdx(i => i + 1)}
+          onNext={() => setIdx(i => i + 1)}
+          onReview={() => setReviewOpen(true)}
+          labels={{
+            back: 'Previous question',
+            skip: 'Skip this question',
+            next: 'Next question',
+            review: 'Review answers before submitting',
+          }}
+        />
+      }
+      navPanel={
+        <QuestionNavPanel
+          total={questions.length}
+          currentIdx={idx}
+          answeredIdxs={answeredIdxs}
+          flaggedIdxs={flaggedIdxs}
+          onJump={setIdx}
+        />
+      }
+    >
       <ExamReviewSheet
         visible={reviewOpen}
         total={questions.length}
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
-        flaggedIdxs={new Set(Object.keys(reported).map(Number))}
+        flaggedIdxs={flaggedIdxs}
         onJump={setIdx}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
@@ -374,105 +325,6 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
         onClose={() => setReportIdx(null)}
         onSubmit={submitReport}
       />
-    </SafeAreaView>
+    </RunnerFrame>
   )
-}
-
-function makeStyles(
-  t: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['theme'],
-  typo: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['typo'],
-) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    emptyTxt: {
-      color: t.textTertiary,
-      textAlign: 'center',
-      fontSize: typo.md,
-      fontFamily: 'Lexend_400Regular',
-    },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    topTitle: {
-      flex: 1,
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    counter: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.accentText,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    footer: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      flexDirection: 'row',
-      gap: spacing.sm,
-      padding: 14,
-      backgroundColor: t.bg,
-      borderTopWidth: 1,
-      borderColor: t.border,
-    },
-    footBtnGhost: {
-      paddingVertical: 13,
-      paddingHorizontal: 16,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    footGhostTxt: {
-      fontSize: typo.sm,
-      fontWeight: '600',
-      color: t.textSecondary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    footBtnPrimary: {
-      flex: 1,
-      paddingVertical: 13,
-      borderRadius: 14,
-      backgroundColor: t.accent,
-      alignItems: 'center',
-    },
-    footDisabled: { opacity: 0.4 },
-    footPrimaryTxt: {
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textInverse,
-      fontFamily: 'Outfit_700Bold',
-    },
-    sectionLbl: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textTertiary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      marginBottom: 8,
-      marginTop: 8,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    primaryBtn: {
-      backgroundColor: t.accent,
-      borderRadius: 16,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    primaryBtnTxt: {
-      color: t.textInverse,
-      fontWeight: '700',
-      fontSize: typo.md,
-      fontFamily: 'Outfit_700Bold',
-    },
-    ghostBtn: { paddingVertical: 12, alignItems: 'center' },
-    ghostTxt: { color: t.textTertiary, fontSize: typo.sm, fontFamily: 'Lexend_400Regular' },
-  })
 }

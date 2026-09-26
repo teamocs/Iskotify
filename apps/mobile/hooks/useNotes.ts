@@ -84,6 +84,12 @@ function mapRow(r: typeof notesTable.$inferSelect): Note {
 
 export interface UseNotes {
   notes: Note[]
+  /** True until the first load for this filter settles. */
+  loading: boolean
+  /** The last load failed (the list is then not "empty", it is unknown). */
+  error: boolean
+  /** Run the load again (retry after an error). */
+  reload: () => void
   createNote: (type: NoteType) => Promise<string>
   updateNote: (id: string, patch: Partial<Pick<Note, 'title' | 'content' | 'color' | 'isPinned'>>) => Promise<void>
   deleteNote: (id: string) => Promise<void>
@@ -99,29 +105,43 @@ export interface UseNotes {
 export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): UseNotes {
   const db = useDb()
   const [notesList, setNotesList] = useState<Note[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  const fetchNotes = useCallback(async (): Promise<Note[]> => {
+    let rows: (typeof notesTable.$inferSelect)[]
+    if (filter === 'active') {
+      rows = await db.select().from(notesTable)
+        .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false)))
+        .orderBy(desc(notesTable.isPinned), desc(notesTable.updatedAt))
+    } else if (filter === 'archived') {
+      rows = await db.select().from(notesTable)
+        .where(and(eq(notesTable.isArchived, true), eq(notesTable.isTrashed, false)))
+        .orderBy(desc(notesTable.updatedAt))
+    } else {
+      rows = await db.select().from(notesTable)
+        .where(eq(notesTable.isTrashed, true))
+        .orderBy(desc(notesTable.updatedAt))
+    }
+    return rows.map(mapRow)
+  }, [db, filter])
+
+  // Load on focus; a failed query is an error state, not an empty list.
+  const load = useCallback((isCancelled: () => boolean) => {
+    setError(false)
+    fetchNotes().then(
+      list => { if (!isCancelled()) { setNotesList(list); setLoading(false) } },
+      () => { if (!isCancelled()) { setError(true); setLoading(false) } },
+    )
+  }, [fetchNotes])
 
   useFocusEffect(useCallback(() => {
     let cancelled = false
-    async function load() {
-      let rows: (typeof notesTable.$inferSelect)[]
-      if (filter === 'active') {
-        rows = await db.select().from(notesTable)
-          .where(and(eq(notesTable.isArchived, false), eq(notesTable.isTrashed, false)))
-          .orderBy(desc(notesTable.isPinned), desc(notesTable.updatedAt))
-      } else if (filter === 'archived') {
-        rows = await db.select().from(notesTable)
-          .where(and(eq(notesTable.isArchived, true), eq(notesTable.isTrashed, false)))
-          .orderBy(desc(notesTable.updatedAt))
-      } else {
-        rows = await db.select().from(notesTable)
-          .where(eq(notesTable.isTrashed, true))
-          .orderBy(desc(notesTable.updatedAt))
-      }
-      if (!cancelled) setNotesList(rows.map(mapRow))
-    }
-    void load()
+    load(() => cancelled)
     return () => { cancelled = true }
-  }, [db, filter]))
+  }, [load]))
+
+  const reload = useCallback(() => load(() => false), [load])
 
   const createNote = useCallback(async (type: NoteType): Promise<string> => {
     const id = makeNoteId()
@@ -226,6 +246,9 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
 
   return {
     notes: notesList,
+    loading,
+    error,
+    reload,
     createNote,
     updateNote,
     deleteNote,

@@ -1,11 +1,19 @@
 import React from 'react'
 import { render, screen, act, fireEvent } from '@testing-library/react-native'
 import EstimatorGradesScreen from '../grades'
+import { aria } from '../../../test-utils/aria'
 
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn() } }))
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }))
+
+const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
+jest.mock('../../../hooks/useBreakpoint', () => {
+  const actual = jest.requireActual('../../../hooks/useBreakpoint')
+  return { ...actual, useBreakpoint: () => mockBp.value }
+})
 
 const mockGetSettings = jest.fn()
 const mockUpdateSettings = jest.fn()
@@ -26,6 +34,7 @@ function flattenStyle(style: unknown): Record<string, unknown> {
 describe('EstimatorGradesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    mockBp.value = 'compact'
     mockGetSettings.mockResolvedValue({})
     mockUpdateSettings.mockResolvedValue(undefined)
   })
@@ -65,5 +74,68 @@ describe('EstimatorGradesScreen', () => {
     render(<EstimatorGradesScreen />)
     await act(async () => {})
     expect(screen.queryByText(/Below 60 is a failing grade/i)).toBeNull()
+  })
+
+  // ── Redesign M3 ────────────────────────────────────────────────────────────
+  describe('redesign M3', () => {
+    it('shows a skeleton, not a bare spinner, while saved grades load', () => {
+      mockGetSettings.mockReturnValue(new Promise(() => {}))
+      render(<EstimatorGradesScreen />)
+      expect(screen.getByLabelText('Loading your grades')).toBeTruthy()
+    })
+
+    it('titles the page as an h1 with a named back button', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      expect(screen.getByRole('header', { name: 'Your grades' }).props['aria-level']).toBe(1)
+      expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
+    })
+
+    it('labels every GWA field (the label is the accessible name)', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      for (const g of ['Grade 8 GWA (optional)', 'Grade 9 GWA', 'Grade 10 GWA', 'Grade 11 GWA']) {
+        expect(screen.getByLabelText(g)).toBeTruthy()
+      }
+    })
+
+    it('has exactly one Save action', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      expect(screen.getAllByRole('button', { name: 'Save' }).length).toBe(1)
+    })
+
+    it('exposes school type and target campus as radio choices with aria-checked', async () => {
+      mockGetSettings.mockResolvedValue({ targetCampus: 'UP Cebu', schoolType: 'private' })
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      expect(aria(screen.getByRole('radio', { name: 'UP Cebu' }), 'aria-checked')).toBe(true)
+      expect(aria(screen.getByRole('radio', { name: 'UP Diliman' }), 'aria-checked')).toBe(false)
+      expect(aria(screen.getByRole('radio', { name: 'Private' }), 'aria-checked')).toBe(true)
+      fireEvent.press(screen.getByRole('radio', { name: 'UP Diliman' }))
+      expect(aria(screen.getByRole('radio', { name: 'UP Diliman' }), 'aria-checked')).toBe(true)
+    })
+
+    it('gives each campus choice a 44pt target', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      const row = screen.getByRole('radio', { name: 'UP Manila' })
+      const style = flattenStyle(typeof row.props.style === 'function' ? row.props.style({ pressed: false }) : row.props.style)
+      expect(style.minHeight as number).toBeGreaterThanOrEqual(44)
+    })
+
+    it('uses sentence-case section headings', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      expect(screen.getByRole('header', { name: 'School type' })).toBeTruthy()
+      expect(screen.getByRole('header', { name: 'Target campus' })).toBeTruthy()
+    })
+
+    it('puts the saved-grades summary beside the form on desktop', async () => {
+      mockBp.value = 'expanded'
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      expect(flattenStyle(screen.getByTestId('two-column').props.style).flexDirection).toBe('row')
+    })
   })
 })

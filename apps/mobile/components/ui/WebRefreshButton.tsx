@@ -8,6 +8,12 @@ import { decorative, focusRing, type WebPressableState } from './a11y'
 interface WebRefreshButtonProps {
   onRefresh: () => void | Promise<void>
   refreshing: boolean
+  /**
+   * Drop the visible label and draw a 44pt circle (the spoken name stays
+   * "Refresh data"). For crowded phone headers where a labelled pill would
+   * squeeze the page heading.
+   */
+  iconOnly?: boolean
 }
 
 /**
@@ -15,7 +21,7 @@ interface WebRefreshButtonProps {
  * sync icon plus a visible "Refresh" label, so the button reads as an action
  * rather than a stray glyph; the label says "Refreshing" while it runs.
  */
-function WebRefreshButtonInner({ onRefresh, refreshing }: WebRefreshButtonProps) {
+function WebRefreshButtonInner({ onRefresh, refreshing, iconOnly = false }: WebRefreshButtonProps) {
   const { theme: t } = useTheme()
 
   return (
@@ -31,11 +37,12 @@ function WebRefreshButtonInner({ onRefresh, refreshing }: WebRefreshButtonProps)
         return [
           {
             minHeight: 44,
+            ...(iconOnly ? { width: 44, paddingHorizontal: 0 } : null),
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
             gap: spacing.sm,
-            paddingHorizontal: spacing.md,
+            ...(iconOnly ? null : { paddingHorizontal: spacing.md }),
             borderRadius: radius.pill,
             borderWidth: 1,
             borderColor: t.border,
@@ -53,9 +60,11 @@ function WebRefreshButtonInner({ onRefresh, refreshing }: WebRefreshButtonProps)
           <Lineicons icon={SyncOutlined} size={18} color={t.textSecondary} />
         </View>
       )}
-      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-        {refreshing ? 'Refreshing' : 'Refresh'}
-      </Text>
+      {iconOnly ? null : (
+        <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          {refreshing ? 'Refreshing' : 'Refresh'}
+        </Text>
+      )}
     </Pressable>
   )
 }

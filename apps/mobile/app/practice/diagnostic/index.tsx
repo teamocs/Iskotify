@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect, useRef } from 'react'
+import { View, Text, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -15,20 +14,24 @@ import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import type { PreAssessQuestion } from '../../../data/preAssessment'
-import { Card } from '../../../components/ui/Card'
-import { Badge } from '../../../components/ui/Badge'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
-import { ReviewCard } from '../../../components/practice/ReviewCard'
-import { PillButton } from '../../../components/ui/PillButton'
-import { ScreenScroll } from '../../../components/ui/ScreenScroll'
-import { WebTopSpacer } from '../../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
+import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
+import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
+import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
+import { SessionLoading, SessionEmpty } from '../../../components/practice/SessionStates'
+import { RunnerFrame } from '../../../components/practice/runner/RunnerFrame'
+import { RunnerActions } from '../../../components/practice/runner/RunnerActions'
+import { RunnerReview } from '../../../components/practice/runner/RunnerReview'
+import { Screen } from '../../../components/ui/Screen'
+import { PageTitle } from '../../../components/ui/PageTitle'
+import { Button } from '../../../components/ui/Button'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { ProgressBar } from '../../../components/ui/ProgressBar'
+import { DetailTopBar } from '../../../components/explore/DetailTopBar'
 import { useTheme } from '../../../theme/ThemeContext'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined, StopwatchOutlined } from '@lineiconshq/free-icons'
-import { decorative } from '../../../components/ui/a11y'
 import { spacing, radius, textStyle } from '../../../theme/tokens'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
@@ -43,12 +46,6 @@ type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
 // Redesign M2: results are neutral — no tone-coloured percent or badges (a
 // green/red score reads as pass/fail, which PRODUCT.md rules out).
 
-function fmtTime(totalSecs: number): string {
-  const m = Math.floor(totalSecs / 60)
-  const sec = totalSecs % 60
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
 /**
  * Diagnostic exam — a short, standalone 10-questions/subtest assessment that seeds
  * per-subject preparedness. Reachable from home tiles/subject cards (optionally
@@ -59,7 +56,10 @@ function fmtTime(totalSecs: number): string {
 export default function DiagnosticExam() {
   const { subject: subjectParam } = useLocalSearchParams<{ subject?: string }>()
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
+  // Redesign M3: the question navigator is a side panel on expanded widths and
+  // a sheet (opened from the header) everywhere else.
+  const expanded = useBreakpoint() === 'expanded'
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
@@ -88,8 +88,6 @@ export default function DiagnosticExam() {
   const submittedRef = useRef(false)
   const submitRef = useRef<() => void>(() => {})
   const qPaneRef = useRef<ScrollView>(null)
-  const { height: winH } = useWindowDimensions()
-  const webWidth = useWebContentWidth()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -232,8 +230,6 @@ export default function DiagnosticExam() {
   // Review finding #3: web-only tab-close warning + immediate persist flush.
   useBeforeUnloadWarning(phase === 'exam')
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
   async function submit() {
     if (submittedRef.current) return // guard against double-submit (timer + tap)
     submittedRef.current = true
@@ -291,346 +287,171 @@ export default function DiagnosticExam() {
     return () => clearInterval(id)
   }, [phase, endTime])
 
+  // ── Redesign M3: render ────────────────────────────────────────────────────
+  // Same frame as app/practice/exam/[slug].tsx: pages (<Screen>) around the
+  // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
+
   if (phase === 'loading') {
-    return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Text style={s.loading}>Loading diagnostic…</Text>
-      </SafeAreaView>
-    )
+    return <SessionLoading label="Loading diagnostic" fallbackHref="/(tabs)" />
   }
 
   if (phase === 'resume-prompt') {
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}>
-          <Text style={s.title}>Resume where you left off?</Text>
-          <Text style={s.emptyTxt}>You have an in-progress diagnostic. Your answers and timer were saved.</Text>
-          <PillButton label="Resume where you left off" variant="primary" fullWidth onPress={resumeExam} />
-          <PillButton label="Start over" variant="secondary" fullWidth onPress={startOver} />
+      <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
+        <PageTitle
+          title="Resume where you left off?"
+          lead="You have an in-progress diagnostic. Your answers and timer were saved."
+        />
+        <View style={{ gap: spacing.sm }}>
+          <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
+          <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
         </View>
-      </SafeAreaView>
+      </Screen>
     )
   }
 
   if (phase === 'results') {
+    if (questions.length === 0) {
+      return (
+        <SessionEmpty
+          title="No diagnostic questions yet"
+          body="The question bank is still syncing. Check back soon, or practise a subject in the meantime."
+          fallbackHref="/(tabs)"
+          actionLabel="Back to Home"
+        />
+      )
+    }
     const score = scoreDiagnostic(questions, answers)
     const overallPct = score.overall.total ? Math.round((score.overall.correct / score.overall.total) * 100) : 0
     const weakest = weakestSubject(score.bySubject)
     return (
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <ScreenScroll tabBarInset={false}>
-          <Text style={s.title}>Diagnostic results</Text>
+      <Screen>
+        <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
+          <PageTitle
+            title="Diagnostic results"
+            lead="Your starting point in each subject. It shapes what Practice suggests next."
+          />
 
-          <Card padded elevated style={s.overallCard}>
-            <Text style={s.overallPct}>
-              {overallPct}%
-            </Text>
-            <Text style={s.overallSub}>
-              {score.overall.correct}/{score.overall.total} correct overall
-            </Text>
-          </Card>
+          {/* Neutral: the same ink at any score, never a pass/fail colour. */}
+          <ResultsScoreCard pct={overallPct} correct={score.overall.correct} total={score.overall.total} />
 
-          <Text style={s.sectionLbl}>Per-subject readiness</Text>
-          {Object.entries(score.bySubject).map(([subject, b]) => {
-            const pct = b.total ? Math.round((b.correct / b.total) * 100) : 0
-            return (
-              <View key={subject} style={s.subjectRow}>
-                <Text style={s.subjectName}>{subject}</Text>
-                <View style={s.subjectRight}>
-                  <Text style={s.subjectScore}>{b.correct}/{b.total}</Text>
-                  <Badge label={`${pct}%`} tone="neutral" />
-                </View>
-              </View>
-            )
-          })}
-          {Object.keys(score.bySubject).length === 0 ? (
-            <Text style={s.emptyTxt}>No questions were answered.</Text>
-          ) : null}
-
-          {questions.length > 0 ? (
-            <>
-              <Text style={s.sectionLbl}>Review</Text>
-              {questions.map((q, i) => (
-                <ReviewCard
-                  key={q.id ?? i}
-                  index={i + 1}
-                  questionText={q.stem}
-                  options={q.options}
-                  correctIndex={q.answerIndex}
-                  selectedIndex={answers[i]}
-                  explanation={q.explanation}
-                  optionExplanations={q.optionExplanations}
-                  strategyTip={q.strategyTip}
-                  imageUrl={q.imageUrl}
-                  imageAlt={q.imageAlt}
-                  imageWidth={q.imageWidth}
-                  imageHeight={q.imageHeight}
-                />
-              ))}
-            </>
-          ) : null}
-
-          <View style={s.ctaGroup}>
-            <PillButton
-              label="Back to Home"
-              variant="secondary"
-              fullWidth
-              onPress={() => router.replace('/(tabs)')}
-            />
-            <PillButton
-              label={weakest ? `Practice weakest subject (${weakest})` : 'Practice weak subjects'}
-              variant="primary"
-              fullWidth
-              onPress={() => router.push('/practice/review/upcat')}
-            />
+          <View>
+            <SectionHeader title="Per-subject readiness" />
+            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
+              {Object.entries(score.bySubject).map(([subject, b], i) => {
+                const pct = b.total ? Math.round((b.correct / b.total) * 100) : 0
+                return (
+                  <View key={subject} style={{ paddingVertical: spacing.md, gap: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md }}>
+                      <Text style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>{subject}</Text>
+                      <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={2}>
+                        {b.correct}/{b.total} correct · {pct}%
+                      </Text>
+                    </View>
+                    <ProgressBar value={pct / 100} label={`${subject} readiness`} />
+                  </View>
+                )
+              })}
+            </View>
           </View>
-        </ScreenScroll>
-      </SafeAreaView>
+
+          <RunnerReview
+            items={questions.map((q, i) => ({
+              id: q.id ?? String(i),
+              sectionName: q.subject,
+              questionText: q.stem,
+              options: q.options,
+              correctIndex: q.answerIndex,
+              explanation: q.explanation,
+              optionExplanations: q.optionExplanations,
+              strategyTip: q.strategyTip,
+              imageUrl: q.imageUrl,
+              imageAlt: q.imageAlt,
+              imageWidth: q.imageWidth,
+              imageHeight: q.imageHeight,
+            }))}
+            answers={answers}
+          />
+
+          <View style={{ gap: spacing.sm }}>
+            <Button
+              label={weakest ? `Practice weakest subject (${weakest})` : 'Practice weak subjects'}
+              onPress={() => router.push('/practice/review/upcat')}
+              fullWidth
+              size="lg"
+            />
+            <Button label="Back to Home" variant="secondary" fullWidth onPress={() => router.replace('/(tabs)')} />
+          </View>
+        </View>
+      </Screen>
     )
   }
 
   const q = questions[idx]!
   const sel = answers[idx]
+  const answeredIdxs = new Set(Object.keys(answers).map(Number))
   const isLast = idx === questions.length - 1
+  const jump = (i: number) => { if (!submitting) setIdx(i) }
 
   return (
-    <SafeAreaView style={s.root}>
-      <WebTopSpacer />
-      <View style={s.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Leave exam" onPress={() => router.back()} hitSlop={10}>
-          <Lineicons icon={ChevronLeftOutlined} size={24} color={t.textSecondary} />
-        </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>
-          {subjectParam ?? 'Diagnostic'}
-        </Text>
-        <View style={[s.timerPill, remaining <= 60 && s.timerPillLow]}>
-          <View {...decorative}><Lineicons icon={StopwatchOutlined} size={14} color={remaining <= 60 ? t.warningStrong : t.textSecondary} /></View>
-          <Text accessibilityLabel={`Time left: ${fmtTime(remaining)}`} style={[s.timerTxt, remaining <= 60 && s.timerTxtLow]}>{fmtTime(remaining)}</Text>
-        </View>
-        <Text style={s.counter}>
-          {idx + 1}/{questions.length}
-        </Text>
-      </View>
-
-      <ScrollView
-        ref={qPaneRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={[{ paddingTop: spacing.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg }, webWidth]}
-        showsVerticalScrollIndicator={false}
-      >
+    <RunnerFrame
+      scrollRef={qPaneRef}
+      header={
+        // The subject names the run in the header (the question card carries
+        // no coloured eyebrow above the stem).
+        <ExamFocusHeader
+          title={q.subject || subjectParam || 'Diagnostic'}
+          position={idx + 1}
+          total={questions.length}
+          answered={answeredIdxs.size}
+          remaining={remaining}
+          onLeave={() => router.back()}
+          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+        />
+      }
+      question={
         <QuestionCard
           questionText={q.stem}
-          subjectTag={q.subject}
           imageUrl={q.imageUrl}
           imageAlt={q.imageAlt}
           imageWidth={q.imageWidth}
           imageHeight={q.imageHeight}
         />
-      </ScrollView>
-
-      {/* Fixed options zone: capped at 42% of the window so the question pane keeps
-          the majority of the viewport; very long option lists scroll inside this zone. */}
-      <ScrollView
-        style={{ flexGrow: 0, maxHeight: winH * 0.42, marginTop: spacing.sm, marginBottom: spacing.sm }}
-        contentContainerStyle={[{ paddingHorizontal: spacing.lg }, webWidth]}
-        showsVerticalScrollIndicator={false}
-      >
+      }
+      options={
         <OptionList
           options={q.options}
           selectedIndex={sel}
+          disabled={submitting}
           onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
         />
-      </ScrollView>
-
-      <View style={s.footer}>
-        <Pressable
-          accessibilityRole="button"
-          style={s.footBtnGhost}
-          onPress={() => setIdx(i => Math.max(0, i - 1))}
-          disabled={idx === 0 || submitting}
-        >
-          <Text style={[s.footGhostTxt, (idx === 0 || submitting) && { opacity: 0.3 }]}>Back</Text>
-        </Pressable>
-        {isLast ? (
-          // Fix 2: the last question never submits directly anymore.
-          <Pressable
-            accessibilityRole="button"
-            style={[s.footBtnPrimary, submitting && s.footDisabled]}
-            disabled={submitting}
-            onPress={() => setReviewOpen(true)}
-          >
-            <Text style={s.footPrimaryTxt}>Review & submit</Text>
-          </Pressable>
-        ) : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              style={s.footBtnGhost}
-              onPress={() => setIdx(i => i + 1)}
-              disabled={submitting}
-            >
-              <Text style={s.footGhostTxt}>Skip</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              style={[s.footBtnPrimary, (sel === undefined || submitting) && s.footDisabled]}
-              disabled={sel === undefined || submitting}
-              onPress={() => setIdx(i => i + 1)}
-            >
-              <Text style={s.footPrimaryTxt}>Next</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-
+      }
+      actions={
+        // Fix 2: the last question never submits directly — it opens the review sheet.
+        <RunnerActions
+          isLast={isLast}
+          canGoBack={idx > 0}
+          answered={sel !== undefined}
+          submitting={submitting}
+          onBack={() => setIdx(i => Math.max(0, i - 1))}
+          onSkip={() => setIdx(i => i + 1)}
+          onNext={() => setIdx(i => i + 1)}
+          onReview={() => setReviewOpen(true)}
+        />
+      }
+      navPanel={
+        <QuestionNavPanel total={questions.length} currentIdx={idx} answeredIdxs={answeredIdxs} onJump={jump} />
+      }
+    >
       <ExamReviewSheet
         visible={reviewOpen}
         total={questions.length}
         currentIdx={idx}
-        answeredIdxs={new Set(Object.keys(answers).map(Number))}
-        onJump={i => { if (!submitting) setIdx(i) }}
+        answeredIdxs={answeredIdxs}
+        onJump={jump}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />
-    </SafeAreaView>
+    </RunnerFrame>
   )
-}
-
-function makeStyles(t: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['theme'], typo: ReturnType<typeof import('../../../theme/ThemeContext').useTheme>['typo']) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    loading: {
-      color: t.textTertiary,
-      textAlign: 'center',
-      marginTop: 80,
-      fontFamily: 'Lexend_400Regular',
-    },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      gap: 8,
-    },
-    topTitle: {
-      flex: 1,
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-    },
-    counter: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.accentText,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    timerPill: {
-      backgroundColor: t.surface2,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.pill,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    timerPillLow: { backgroundColor: t.warningSurface, borderColor: t.warningBorder },
-    timerTxt: {
-      fontSize: typo.xs,
-      fontWeight: '700',
-      color: t.textSecondary,
-      fontFamily: 'Outfit_700Bold',
-      fontVariant: ['tabular-nums'],
-    },
-    timerTxtLow: { color: t.warningStrong },
-    footer: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      padding: 14,
-      backgroundColor: t.bg,
-      borderTopWidth: 1,
-      borderColor: t.border,
-    },
-    footBtnGhost: {
-      paddingVertical: 13,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      borderWidth: 1,
-      borderColor: t.border,
-    },
-    footGhostTxt: {
-      fontSize: typo.sm,
-      fontWeight: '600',
-      color: t.textSecondary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    footBtnPrimary: {
-      flex: 1,
-      paddingVertical: 13,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      backgroundColor: t.accent,
-      alignItems: 'center',
-    },
-    footDisabled: { opacity: 0.4 },
-    footPrimaryTxt: {
-      fontSize: typo.md,
-      fontWeight: '700',
-      color: t.textInverse,
-      fontFamily: 'Outfit_700Bold',
-    },
-    title: {
-      fontSize: typo.h3,
-      fontWeight: '700',
-      color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
-      marginBottom: spacing.md,
-    },
-    overallCard: { alignItems: 'center', marginBottom: spacing.lg },
-    overallPct: { ...textStyle('display', t.textPrimary), fontVariant: ['tabular-nums'] },
-    overallSub: {
-      fontSize: typo.sm,
-      color: t.textTertiary,
-      marginTop: 2,
-      fontFamily: 'Lexend_400Regular',
-    },
-    sectionLbl: {
-      fontSize: typo.sm,
-      fontWeight: '700',
-      color: t.textTertiary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      marginBottom: 8,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    subjectRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      backgroundColor: t.surface2,
-      borderWidth: 1,
-      borderColor: t.divider,
-      borderRadius: 12,
-      borderCurve: 'continuous',
-      padding: spacing.md,
-      marginBottom: 6,
-    },
-    subjectName: { fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_600SemiBold', flex: 1 },
-    subjectRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    subjectScore: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      fontFamily: 'Lexend_600SemiBold',
-    },
-    emptyTxt: {
-      fontSize: typo.sm,
-      color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
-      marginTop: spacing.sm,
-    },
-    ctaGroup: { marginTop: spacing.xl, gap: spacing.sm },
-  })
 }

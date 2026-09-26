@@ -72,6 +72,16 @@ describe('WebRefreshButton — web', () => {
     expect(screen.getByRole('button', { name: /refresh data/i, disabled: true })).toBeTruthy()
   })
 
+  it('iconOnly: a 44pt circle with no visible label, still named "Refresh data"', () => {
+    const { StyleSheet } = require('react-native')
+    render(<WebRefreshButton onRefresh={jest.fn()} refreshing={false} iconOnly />)
+    const btn = screen.getByRole('button', { name: /refresh data/i })
+    expect(screen.queryByText('Refresh')).toBeNull()
+    const flat = StyleSheet.flatten(btn.props.style)
+    expect(flat.width).toBeGreaterThanOrEqual(44)
+    expect(flat.minHeight).toBeGreaterThanOrEqual(44)
+  })
+
   it('does NOT call onRefresh when not refreshing and pressed', () => {
     // When not refreshing, pressing DOES call onRefresh
     const onRefresh = jest.fn()

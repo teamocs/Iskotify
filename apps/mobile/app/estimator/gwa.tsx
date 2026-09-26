@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
-import { View, Text, TextInput, Pressable } from 'react-native'
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
-import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { GraduationCap1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
+import { GraduationCap1Outlined, PlusOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
+import { useTheme } from '../../theme/ThemeContext'
+import { spacing, radius, textStyle } from '../../theme/tokens'
+import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
+import { Screen } from '../../components/ui/Screen'
+import { TwoColumn } from '../../components/ui/TwoColumn'
+import { PageTitle } from '../../components/ui/PageTitle'
 import { Card } from '../../components/ui/Card'
-import { AppButton } from '../../components/ui/AppButton'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../components/ui/webMaxWidth'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { computeGwa, latinHonor, hasDisqualifyingGrade, totalUnits, isValidGrade, isValidUnits, type GwaSubject } from '../../utils/gwa'
 
 interface Row { id: string; grade: string; units: string }
@@ -22,9 +24,8 @@ function newRow(): Row {
 }
 
 export default function GwaCalculatorScreen() {
-  const { theme: t, typo } = useTheme()
-  // Web-only max-width centering for the form scroll content (null on native/sm).
-  const webWidth = useWebContentWidth()
+  const { theme: t } = useTheme()
+  const twoUp = columnCount(useBreakpoint()) === 2
   const [rows, setRows] = useState<Row[]>(() => [newRow(), newRow(), newRow()])
 
   const parsed: GwaSubject[] = useMemo(
@@ -43,137 +44,134 @@ export default function GwaCalculatorScreen() {
   function removeRow(id: string) { setRows(prev => (prev.length > 1 ? prev.filter(r => r.id !== id) : prev)) }
   function reset() { setRows([newRow(), newRow(), newRow()]) }
 
-  const labelStyle = { fontFamily: 'Lexend_500Medium' as const, fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.xs + 2 }
-  const inputStyle = {
-    backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md,
-    paddingHorizontal: spacing.md, paddingVertical: 11, fontFamily: 'Lexend_400Regular' as const,
-    fontSize: typo.base, color: t.textPrimary,
-  }
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <WebTopSpacer />
-      {/* Header */}
-      <View style={{
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.sm,
-        paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: t.border,
-      }}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          style={({ pressed }) => [{ marginRight: spacing.md }, pressed ? { opacity: 0.7 } : null]}
-        >
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary }}>← Back</Text>
-        </Pressable>
-        <Text style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h3, color: t.textPrimary, flex: 1 }}>GWA Calculator</Text>
-        <Pressable
-          onPress={reset}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
-        >
-          <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.textTertiary }}>Reset</Text>
-        </Pressable>
-      </View>
-
-      <KeyboardAwareScrollView
-        contentContainerStyle={[{ paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxxl + spacing.lg }, webWidth]}
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1 }}
-        bottomOffset={20}
+  const summary = (
+    <Card testID="gwa-summary" style={{ gap: spacing.sm }}>
+      <Text {...heading(2)} style={textStyle('titleSm', t.textSecondary)} maxFontSizeMultiplier={2}>Your GWA</Text>
+      <Text
+        style={textStyle('numericLg', t.textPrimary)}
+        maxFontSizeMultiplier={1.5}
+        accessibilityLiveRegion="polite"
       >
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textSecondary, marginBottom: spacing.lg, lineHeight: 19 }}>
-          Enter each subject&apos;s grade on the UP scale (1.00 highest – 5.00 fail) and its units. Your
-          General Weighted Average is the units-weighted average: GWA = Σ(grade × units) ÷ Σ(units).
+        {gwa != null ? gwa.toFixed(4) : '—'}
+      </Text>
+      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        {units > 0 ? `${units} total units` : 'Add grades and units to see it'}
+      </Text>
+      {honor != null ? (
+        <View style={{
+          alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+          backgroundColor: t.surface2, borderRadius: radius.pill,
+          paddingHorizontal: spacing.md, minHeight: 32,
+        }}>
+          <View {...decorative}><Lineicons icon={GraduationCap1Outlined} size={16} color={t.textPrimary} /></View>
+          <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>{honor}</Text>
+        </View>
+      ) : null}
+      {gwa != null && honor == null && disqualified ? (
+        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          A grade below 3.00 makes you ineligible for Latin honors.
         </Text>
+      ) : null}
+      <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
+        Latin honors (cumulative): Summa Cum Laude ≤ 1.20 · Magna Cum Laude ≤ 1.45 · Cum Laude ≤ 1.75,
+        with no grade below 3.00. This is an unofficial estimate.
+      </Text>
+    </Card>
+  )
 
-        {/* Result card */}
-        <Card elevated style={{ marginBottom: spacing.xxl, alignItems: 'center' }}>
-          <Text style={{ fontFamily: 'Lexend_500Medium', fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 1 }}>
-            Your GWA
-          </Text>
-          <Text maxFontSizeMultiplier={1.4} style={{ fontFamily: 'Outfit_700Bold', fontSize: typo.h1, color: t.textPrimary, marginTop: spacing.xs }}>
-            {gwa != null ? gwa.toFixed(4) : '—'}
-          </Text>
-          <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 2 }}>
-            {units > 0 ? `${units} total units` : 'Add grades and units below'}
-          </Text>
-          {honor != null ? (
-            <View style={{
-              marginTop: spacing.md, backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
-              flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-              borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.xs + 2,
-            }}>
-              <Lineicons icon={GraduationCap1Outlined} size={16} color={t.accentText} />
-              <Text style={{ fontFamily: 'Outfit_600SemiBold', fontSize: typo.sm, color: t.accentText }}>{honor}</Text>
-            </View>
-          ) : null}
-          {gwa != null && honor == null && disqualified ? (
-            <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.sm + 2, textAlign: 'center' }}>
-              A grade below 3.00 makes you ineligible for Latin honors.
+  const form = (
+    <View style={{ gap: spacing.lg }}>
+      {rows.map((row, idx) => {
+        const n = idx + 1
+        const gradeErr = row.grade.trim() !== '' && !isValidGrade(parseFloat(row.grade))
+        const unitsErr = row.units.trim() !== '' && !isValidUnits(parseFloat(row.units))
+        const canRemove = rows.length > 1
+        return (
+          <View key={row.id} style={{ gap: spacing.xs }}>
+            <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+              Subject {n}
             </Text>
-          ) : null}
-        </Card>
-
-        {/* Subject rows */}
-        {rows.map((row, idx) => {
-          const gradeErr = row.grade.trim() !== '' && !isValidGrade(parseFloat(row.grade))
-          const unitsErr = row.units.trim() !== '' && !isValidUnits(parseFloat(row.units))
-          return (
-            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm + 2, marginBottom: spacing.md + 2 }}>
-              <View style={{ flex: 1.4 }}>
-                {idx === 0 ? <Text style={labelStyle}>Grade (1.00–5.00)</Text> : null}
-                <TextInput
-                  style={[inputStyle, gradeErr ? { borderColor: t.dangerBorder, borderWidth: 2 } : {}]}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+              <View style={{ flex: 1.4, minWidth: 0 }}>
+                <TextField
+                  label="Grade"
+                  accessibilityLabel={`Subject ${n} grade`}
                   placeholder="e.g. 1.25"
-                  placeholderTextColor={t.textTertiary}
                   value={row.grade}
                   onChangeText={text => updateRow(row.id, { grade: text })}
                   keyboardType="decimal-pad"
+                  error={gradeErr ? 'Enter a grade between 1.00 and 5.00.' : undefined}
                 />
               </View>
-              <View style={{ flex: 1 }}>
-                {idx === 0 ? <Text style={labelStyle}>Units</Text> : null}
-                <TextInput
-                  style={[inputStyle, unitsErr ? { borderColor: t.dangerBorder, borderWidth: 2 } : {}]}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <TextField
+                  label="Units"
+                  accessibilityLabel={`Subject ${n} units`}
                   placeholder="e.g. 3"
-                  placeholderTextColor={t.textTertiary}
                   value={row.units}
                   onChangeText={text => updateRow(row.id, { units: text })}
                   keyboardType="decimal-pad"
+                  error={unitsErr ? 'Enter units above 0.' : undefined}
                 />
               </View>
               <Pressable
                 onPress={() => removeRow(row.id)}
-                disabled={rows.length <= 1}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                disabled={!canRemove}
                 accessibilityRole="button"
-                accessibilityLabel="Remove subject"
-                style={({ pressed }) => [
-                  {
-                    width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border,
-                    opacity: rows.length <= 1 ? 0.4 : 1,
-                  },
-                  pressed && rows.length > 1 ? { opacity: 0.7 } : null,
-                ]}
+                accessibilityLabel={`Remove subject ${n}`}
+                aria-disabled={!canRemove}
+                style={(state) => {
+                  const { pressed, hovered, focused } = state as WebPressableState
+                  return [
+                    {
+                      // Sits level with the input under its label.
+                      marginTop: 22, width: 48, height: 48, borderRadius: radius.md, borderCurve: 'continuous',
+                      alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: (pressed || hovered) && canRemove ? t.surface2 : 'transparent',
+                      opacity: canRemove ? 1 : 0.4,
+                    },
+                    focusRing(t.focusRing, focused),
+                  ]
+                }}
               >
-                <Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} />
+                <View {...decorative}><Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} /></View>
               </Pressable>
             </View>
-          )
-        })}
+          </View>
+        )
+      })}
 
-        <View style={{ marginTop: spacing.xs + 2 }}>
-          <AppButton label="+ Add subject" onPress={addRow} variant="secondary" />
-        </View>
+      <Button
+        label="Add subject"
+        onPress={addRow}
+        variant="secondary"
+        icon={<Lineicons icon={PlusOutlined} size={18} color={t.accentText} />}
+      />
+    </View>
+  )
 
-        <Text style={{ fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginTop: spacing.lg, lineHeight: 17 }}>
-          Latin honors (cumulative): Summa Cum Laude ≤ 1.20 · Magna Cum Laude ≤ 1.45 · Cum Laude ≤ 1.75,
-          with no grade below 3.00. This is an unofficial estimate.
-        </Text>
-      </KeyboardAwareScrollView>
-    </SafeAreaView>
+  return (
+    <Screen
+      width={twoUp ? 'wide' : 'reading'}
+      edges={['top', 'bottom']}
+      header={
+        <DetailTopBar
+          bare
+          fallbackHref="/estimator"
+          actions={<Button label="Reset" variant="ghost" size="sm" onPress={reset} />}
+        />
+      }
+    >
+      <PageTitle
+        title="GWA calculator"
+        lead="Enter each subject's grade on the UP scale (1.00 is highest, 5.00 lowest) and its units. GWA = Σ(grade × units) ÷ Σ(units)."
+      />
+      {twoUp ? (
+        <TwoColumn primary={form} secondary={summary} />
+      ) : (
+        // Phones: the live result sits above the rows it summarises.
+        <View style={{ gap: spacing.xl }}>{summary}{form}</View>
+      )}
+    </Screen>
   )
 }

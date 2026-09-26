@@ -1,9 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
-import {
-  View, Text, TextInput, ScrollView,
-  StyleSheet, Pressable, Alert, Modal,
-} from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, Text, Pressable } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
@@ -13,153 +9,64 @@ import {
   MapPin5Outlined,
   Pencil1Outlined,
   CheckSquare2Outlined,
-  XmarkOutlined,
-  Bell1Outlined,
   PlusOutlined,
+  Search1Outlined,
+  Notebook1Outlined,
 } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { noteInk } from '../../utils/noteInk'
-import { spacing, radius } from '../../theme/tokens'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { WebTopSpacer } from '../../components/ui/WebTopSpacer'
-import { useWebContentWidth } from '../../components/ui/webMaxWidth'
-import { useNotes, NOTE_COLORS, type Note, type NoteType } from '../../hooks/useNotes'
+import { radius, spacing, textStyle } from '../../theme/tokens'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useSafeInsets } from '../../hooks/useSafeInsets'
+import { useNotes, type Note, type NoteType } from '../../hooks/useNotes'
+import { confirmAction } from '../../utils/confirmAction'
+import { Screen } from '../../components/ui/Screen'
+import { PageTitle } from '../../components/ui/PageTitle'
+import { Button } from '../../components/ui/Button'
+import { TextField } from '../../components/ui/TextField'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { ErrorState } from '../../components/ui/ErrorState'
+import { ListRow } from '../../components/ui/ListRow'
+import { Sheet } from '../../components/ui/Sheet'
+import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
+import { NoteCard } from '../../components/notes/NoteCard'
+import { NotesGrid, NotesSectionHeading, NotesSkeleton } from '../../components/notes/NotesGrid'
 
-function formatReminderShort(ms: number): string {
-  const d = new Date(ms)
-  const now = new Date()
-  const isToday = d.toDateString() === now.toDateString()
-  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1)
-  const isTomorrow = d.toDateString() === tomorrow.toDateString()
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  if (isToday) return `Today ${time}`
-  if (isTomorrow) return `Tomorrow ${time}`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${time}`
-}
-
-function NoteCard({
-  note,
-  onPress,
-  onLongPress,
-  selected,
-}: {
-  note: Note
-  onPress: () => void
-  onLongPress: () => void
-  selected: boolean
-}) {
-  const { theme: t, typo } = useTheme()
-  const bg = note.color ? NOTE_COLORS[note.color] : t.surface
-  const ink = noteInk(t, !!note.color)
-  const textColor = ink.text
-  const subColor = ink.sub
-  const now = Date.now()
-  const hasReminder = note.reminderAt != null && note.reminderAt > now
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={note.title || 'Untitled note'}
-      accessibilityHint="Double tap to open. Long press to select."
-      style={({ pressed }) => [
-        {
-          backgroundColor: bg,
-          borderRadius: radius.lg,
-          borderCurve: 'continuous',
-          padding: spacing.md,
-          borderWidth: selected ? 2 : 1,
-          borderColor: selected ? t.accent : ink.hairline,
-          flex: 1,
-          boxShadow: t.shadowSm,
-          opacity: pressed ? 0.85 : 1,
-        },
-      ]}
-    >
-      {note.isPinned ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs }}>
-          <Lineicons icon={MapPin5Outlined} size={12} color={subColor} />
-          <Text style={{ fontSize: typo.xs, color: subColor }}>Pinned</Text>
-        </View>
-      ) : null}
-      {note.title.length > 0 ? (
-        <Text
-          style={{ fontSize: typo.sm, fontWeight: '700', color: textColor, fontFamily: 'Outfit_700Bold', marginBottom: spacing.xs }}
-          numberOfLines={2}
-        >
-          {note.title}
-        </Text>
-      ) : null}
-      {note.type === 'text' && note.content.length > 0 ? (
-        <Text
-          style={{ fontSize: typo.xs, color: subColor, fontFamily: 'Lexend_400Regular', lineHeight: 16 }}
-          numberOfLines={4}
-        >
-          {note.content}
-        </Text>
-      ) : null}
-      {note.type === 'checklist' ? (() => {
-        try {
-          const items = JSON.parse(note.content) as Array<{ text: string; isChecked: boolean }>
-          return (
-            <View style={{ gap: 3 }}>
-              {items.slice(0, 5).map((item, i) => (
-                <Text key={i} style={{ fontSize: typo.xs, color: item.isChecked ? subColor : textColor, fontFamily: 'Lexend_400Regular', textDecorationLine: item.isChecked ? 'line-through' : 'none' }} numberOfLines={1}>
-                  {item.isChecked ? '✓ ' : '○ '}{item.text}
-                </Text>
-              ))}
-              {items.length > 5 ? (
-                <Text style={{ fontSize: typo.xs, color: subColor, fontFamily: 'Lexend_400Regular' }}>
-                  +{items.length - 5} more
-                </Text>
-              ) : null}
-            </View>
-          )
-        } catch { return null }
-      })() : null}
-      {hasReminder ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, paddingTop: 6, borderTopWidth: 1, borderTopColor: note.color ? ink.hairline : t.surfaceSubtle }}>
-          <Lineicons icon={Bell1Outlined} size={12} color={subColor} />
-          <Text style={{ fontSize: typo.xs, color: subColor, fontFamily: 'Lexend_400Regular' }}>
-            {formatReminderShort(note.reminderAt!)}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
-  )
-}
+const NAV = [
+  { label: 'Archive', href: '/notes/archive', icon: BoxArchive1Outlined },
+  { label: 'Trash', href: '/notes/trash', icon: Trash3Outlined },
+  { label: 'Labels', href: '/notes/labels', icon: Bookmark1Outlined },
+] as const
 
 export default function NotesScreen() {
-  const { theme: t, typo } = useTheme()
-  const insets = useSafeAreaInsets()
-  // Web-only max-width centering for the notes grid (null on native/sm).
-  const webWidth = useWebContentWidth()
-  const { notes, createNote, archiveNote, deleteNote, updateNote } = useNotes('active')
+  const { theme: t } = useTheme()
+  const bp = useBreakpoint()
+  const insets = useSafeInsets()
+  const phone = bp === 'compact'
+  const { notes, loading, error, reload, createNote, archiveNote, deleteNote, updateNote } = useNotes('active')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [fabSheetOpen, setFabSheetOpen] = useState(false)
+  const [chooserOpen, setChooserOpen] = useState(false)
+  const selecting = selected.size > 0
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return notes as Note[]
-    const q = search.toLowerCase()
-    return (notes as Note[]).filter(n =>
-      n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)
-    )
+    const q = search.trim().toLowerCase()
+    if (!q) return notes
+    return notes.filter(n => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
   }, [notes, search])
 
   const pinned = filtered.filter(n => n.isPinned)
   const others = filtered.filter(n => !n.isPinned)
 
   const handleCreate = useCallback(async (type: NoteType) => {
-    setFabSheetOpen(false)
+    setChooserOpen(false)
     const id = await createNote(type)
     router.push(`/notes/${id}` as never)
   }, [createNote])
 
   const handlePress = useCallback((note: Note) => {
-    if (selected.size > 0) {
+    if (selecting) {
       setSelected(prev => {
         const next = new Set(prev)
         if (next.has(note.id)) next.delete(note.id)
@@ -169,7 +76,7 @@ export default function NotesScreen() {
     } else {
       router.push(`/notes/${note.id}` as never)
     }
-  }, [selected])
+  }, [selecting])
 
   const handleLongPress = useCallback((note: Note) => {
     setSelected(prev => new Set(prev).add(note.id))
@@ -177,224 +84,211 @@ export default function NotesScreen() {
 
   const clearSelection = useCallback(() => setSelected(new Set()), [])
 
-  const bulkArchive = useCallback(async () => {
-    for (const id of selected) await archiveNote(id)
-    clearSelection()
-  }, [selected, archiveNote, clearSelection])
-
-  const bulkDelete = useCallback(async () => {
-    Alert.alert('Move to Trash', `Move ${selected.size} note(s) to trash?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Move', style: 'destructive',
-        onPress: async () => {
-          for (const id of selected) await deleteNote(id)
-          clearSelection()
-        },
-      },
-    ])
-  }, [selected, deleteNote, clearSelection])
-
   const bulkPin = useCallback(async () => {
     for (const id of selected) await updateNote(id, { isPinned: true })
     clearSelection()
   }, [selected, updateNote, clearSelection])
 
-  const s = useMemo(() => StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
-    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-    title: { fontSize: typo.h2, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    headerBtns: { flexDirection: 'row', gap: spacing.sm },
-    iconBtn: { width: 40, height: 40, backgroundColor: t.surface2, borderRadius: radius.sm, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    searchBar: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.lg, paddingVertical: 11, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
-    content: { paddingHorizontal: spacing.md, paddingBottom: 100 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    cardWrap: { width: '48%' },
-    empty: { paddingVertical: 48, alignItems: 'center' },
-    emptyTxt: { fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', textAlign: 'center' },
-    fab: { position: 'absolute', bottom: insets.bottom + 40, right: spacing.xxl, width: 64, height: 64, borderRadius: radius.pill, backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center', boxShadow: t.shadowMd },
-    // Selection bar
-    selBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: Math.max(spacing.lg, insets.bottom + spacing.md), gap: spacing.sm },
-    selCount: { flex: 1, fontSize: typo.sm, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
-    selBtn: { width: 44, height: 44, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    selBtnDanger: { borderColor: t.dangerBorder, backgroundColor: t.dangerSurface },
-    pressed: { opacity: 0.7 },
-    // Bottom sheet
-    backdrop: { flex: 1, backgroundColor: t.backdrop },
-    sheet: { backgroundColor: t.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingBottom: Math.max(spacing.xxxl, insets.bottom + spacing.lg), paddingTop: spacing.md },
-    sheetHandle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.xl },
-    sheetTitle: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold', paddingHorizontal: spacing.xl, marginBottom: spacing.sm },
-    sheetOption: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderBottomWidth: 1, borderBottomColor: t.surfaceSubtle },
-    sheetOptionLabel: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-    sheetOptionSub: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 },
-    sheetIconWrap: { width: 44, height: 44, borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, alignItems: 'center', justifyContent: 'center' },
-    cancelBtn: { marginHorizontal: spacing.lg, marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: radius.md, borderCurve: 'continuous', backgroundColor: t.surface2, alignItems: 'center', borderWidth: 1, borderColor: t.border },
-    cancelTxt: { fontSize: typo.md, color: t.textPrimary, fontFamily: 'Lexend_500Medium' },
-  }), [t, typo, insets])
+  const bulkArchive = useCallback(async () => {
+    for (const id of selected) await archiveNote(id)
+    clearSelection()
+  }, [selected, archiveNote, clearSelection])
+
+  const bulkDelete = useCallback(() => {
+    const ids = [...selected]
+    confirmAction(
+      'Move to trash',
+      `Move ${ids.length} ${ids.length === 1 ? 'note' : 'notes'} to trash? Trash is emptied after 7 days.`,
+      'Move to trash',
+      async () => {
+        for (const id of ids) await deleteNote(id)
+        clearSelection()
+      },
+      { destructive: true },
+    )
+  }, [selected, deleteNote, clearSelection])
 
   const renderGrid = (items: Note[]) => (
-    <View style={s.grid}>
-      {items.map(note => (
-        <View key={note.id} style={s.cardWrap}>
-          <NoteCard
-            note={note}
-            onPress={() => handlePress(note)}
-            onLongPress={() => handleLongPress(note)}
-            selected={selected.has(note.id)}
-          />
-        </View>
-      ))}
+    <NotesGrid
+      items={items}
+      keyOf={n => n.id}
+      renderItem={note => (
+        <NoteCard
+          note={note}
+          onPress={() => handlePress(note)}
+          onLongPress={() => handleLongPress(note)}
+          selected={selecting ? selected.has(note.id) : undefined}
+        />
+      )}
+    />
+  )
+
+  const selectionBar = (
+    <View
+      style={{
+        flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm,
+        minHeight: 56, paddingVertical: spacing.sm,
+      }}
+    >
+      <Text
+        accessibilityLiveRegion="polite"
+        style={[textStyle('titleSm', t.textPrimary), { flexGrow: 1 }]}
+        maxFontSizeMultiplier={2}
+      >
+        {`${selected.size} selected`}
+      </Text>
+      <Button size="sm" variant="secondary" label="Pin" onPress={() => void bulkPin()}
+        icon={<Lineicons icon={MapPin5Outlined} size={16} color={t.accentText} />} />
+      <Button size="sm" variant="secondary" label="Archive" onPress={() => void bulkArchive()}
+        icon={<Lineicons icon={BoxArchive1Outlined} size={16} color={t.accentText} />} />
+      <Button size="sm" variant="danger" label="Move to trash" onPress={bulkDelete}
+        icon={<Lineicons icon={Trash3Outlined} size={16} color={t.dangerStrong} />} />
+      <Button size="sm" variant="ghost" label="Cancel" onPress={clearSelection} accessibilityLabel="Clear selection" />
     </View>
   )
 
+  const newNoteIcon = <Lineicons icon={PlusOutlined} size={18} color={t.textInverse} />
+
+  let body: React.ReactNode
+  if (loading && notes.length === 0) {
+    body = <NotesSkeleton />
+  } else if (error && notes.length === 0) {
+    body = <ErrorState title="Couldn't load your notes" body="Your notes are saved on this device. Try again." onRetry={reload} />
+  } else if (notes.length === 0) {
+    body = (
+      <EmptyState
+        icon={<Lineicons icon={Notebook1Outlined} size={26} color={t.textSecondary} />}
+        title="No notes yet"
+        body="Keep formulas, reminders and checklists for your review here. Use New note to write your first one."
+      />
+    )
+  } else if (filtered.length === 0) {
+    body = (
+      <EmptyState
+        icon={<Lineicons icon={Search1Outlined} size={26} color={t.textSecondary} />}
+        title="No matching notes"
+        body={`Nothing in your notes matches "${search.trim()}".`}
+      />
+    )
+  } else {
+    body = (
+      <View style={{ gap: spacing.xl }}>
+        {pinned.length > 0 ? (
+          <View>
+            <NotesSectionHeading title="Pinned" />
+            {renderGrid(pinned)}
+          </View>
+        ) : null}
+        {others.length > 0 ? (
+          <View>
+            {pinned.length > 0 ? <NotesSectionHeading title="Other notes" /> : null}
+            {renderGrid(others)}
+          </View>
+        ) : null}
+      </View>
+    )
+  }
+
   return (
     <EdgeSwipeNavigator>
-      <SafeAreaView style={s.root}>
-        <WebTopSpacer />
-        <Stack.Screen options={{ animation: 'slide_from_left', headerShown: false }} />
+      <Stack.Screen options={{ animation: 'slide_from_left', headerShown: false }} />
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
+        <Screen
+          width="wide"
+          header={selecting ? selectionBar : <DetailTopBar bare fallbackHref="/practice" />}
+          contentContainerStyle={phone ? { paddingBottom: 56 + spacing.xxl } : undefined}
+        >
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', columnGap: spacing.lg }}>
+            <View style={{ flexShrink: 1, flexGrow: 1 }}>
+              <PageTitle title="Notes" lead="Formulas, reminders and checklists for your review." />
+            </View>
+            {!phone ? (
+              <Button label="New note" onPress={() => setChooserOpen(true)} icon={newNoteIcon} style={{ marginTop: spacing.xs }} />
+            ) : null}
+          </View>
 
-        <View style={s.header}>
-          <View style={s.titleRow}>
-            <Text style={s.title}>Notes</Text>
-            <View style={s.headerBtns}>
-              <Pressable
-                style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
-                onPress={() => router.push('/notes/archive' as never)}
-                accessibilityRole="button"
-                accessibilityLabel="Archived notes"
-              >
-                <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
-                onPress={() => router.push('/notes/trash' as never)}
-                accessibilityRole="button"
-                accessibilityLabel="Deleted notes"
-              >
-                <Lineicons icon={Trash3Outlined} size={18} color={t.textSecondary} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [s.iconBtn, pressed ? s.pressed : null]}
-                onPress={() => router.push('/notes/labels' as never)}
-                accessibilityRole="button"
-                accessibilityLabel="Labels"
-              >
-                <Lineicons icon={Bookmark1Outlined} size={18} color={t.textSecondary} />
-              </Pressable>
+          <View
+            style={{
+              flexDirection: phone ? 'column' : 'row',
+              alignItems: phone ? 'stretch' : 'flex-end',
+              gap: spacing.md,
+              marginBottom: spacing.xl,
+            }}
+          >
+            <View style={{ flex: phone ? undefined : 1 }}>
+              <TextField
+                label="Search notes"
+                placeholder="Title or text"
+                value={search}
+                onChangeText={setSearch}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+            </View>
+            <View
+              accessibilityRole="toolbar"
+              accessibilityLabel="Other note lists"
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginLeft: phone ? -spacing.md : 0 }}
+            >
+              {NAV.map(item => (
+                <Button
+                  key={item.href}
+                  size="sm"
+                  variant="ghost"
+                  label={item.label}
+                  onPress={() => router.push(item.href as never)}
+                  icon={<Lineicons icon={item.icon} size={16} color={t.accentText} />}
+                />
+              ))}
             </View>
           </View>
-          <TextInput
-            style={s.searchBar}
-            placeholder="Search notes…"
-            placeholderTextColor={t.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
 
-        <ScrollView contentContainerStyle={[s.content, webWidth]} showsVerticalScrollIndicator={false}>
-          {filtered.length === 0 ? (
-            <View style={s.empty}>
-              <Text style={s.emptyTxt}>
-                {search ? 'No notes match your search' : 'Tap + to create your first note'}
-              </Text>
-            </View>
-          ) : null}
+          {body}
+        </Screen>
 
-          {pinned.length > 0 ? (
-            <>
-              <SectionHeader title="Pinned" />
-              {renderGrid(pinned)}
-            </>
-          ) : null}
-
-          {pinned.length > 0 && others.length > 0 ? (
-            <View style={{ marginTop: spacing.lg }}>
-              <SectionHeader title="Other notes" />
-            </View>
-          ) : null}
-
-          {others.length > 0 ? renderGrid(others) : null}
-        </ScrollView>
-
-        {/* FAB */}
-        {selected.size === 0 ? (
+        {phone && !selecting ? (
           <Pressable
-            style={({ pressed }) => [s.fab, pressed ? s.pressed : null]}
-            onPress={() => setFabSheetOpen(true)}
+            testID="notes-fab"
+            onPress={() => setChooserOpen(true)}
             onLongPress={() => void handleCreate('text')}
             accessibilityRole="button"
             accessibilityLabel="New note"
-            accessibilityHint="Long press to create a text note straight away"
+            accessibilityHint="Long press to start a text note straight away."
+            style={(state) => {
+              const { pressed, focused } = state as WebPressableState
+              return [
+                {
+                  position: 'absolute', right: spacing.xl, bottom: insets.bottom + spacing.xl,
+                  width: 56, height: 56, borderRadius: radius.pill,
+                  alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: pressed ? t.accentPressed : t.accent,
+                  boxShadow: t.shadowMd,
+                },
+                focusRing(t.focusRing, focused),
+              ]
+            }}
           >
-            <Lineicons icon={PlusOutlined} size={28} color={t.textInverse} />
+            <View {...decorative}><Lineicons icon={PlusOutlined} size={24} color={t.textInverse} /></View>
           </Pressable>
         ) : null}
 
-        {/* Selection action bar */}
-        {selected.size > 0 ? (
-          <View style={s.selBar}>
-            <Text style={s.selCount}>{selected.size} selected</Text>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkPin} accessibilityRole="button" accessibilityLabel="Pin selected notes">
-              <Lineicons icon={MapPin5Outlined} size={18} color={t.textSecondary} />
-            </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={bulkArchive} accessibilityRole="button" accessibilityLabel="Archive selected notes">
-              <Lineicons icon={BoxArchive1Outlined} size={18} color={t.textSecondary} />
-            </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, s.selBtnDanger, pressed ? s.pressed : null]} onPress={bulkDelete} accessibilityRole="button" accessibilityLabel="Delete selected notes">
-              <Lineicons icon={Trash3Outlined} size={18} color={t.danger} />
-            </Pressable>
-            <Pressable style={({ pressed }) => [s.selBtn, pressed ? s.pressed : null]} onPress={clearSelection} accessibilityRole="button" accessibilityLabel="Clear selection">
-              <Lineicons icon={XmarkOutlined} size={18} color={t.textSecondary} />
-            </Pressable>
-          </View>
-        ) : null}
-
-        {/* iOS-style FAB bottom sheet */}
-        <Modal
-          visible={fabSheetOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setFabSheetOpen(false)}
-          statusBarTranslucent
-        >
-          <Pressable
-            style={s.backdrop}
-            onPress={() => setFabSheetOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
+        <Sheet visible={chooserOpen} title="New note" onClose={() => setChooserOpen(false)}>
+          <ListRow
+            leading={<Lineicons icon={Pencil1Outlined} size={20} color={t.accentText} />}
+            title="Text note"
+            subtitle="Write freely"
+            onPress={() => void handleCreate('text')}
+            showChevron={false}
           />
-          <View style={s.sheet}>
-            <View style={s.sheetHandle} />
-            <Text style={s.sheetTitle}>New Note</Text>
-
-            <Pressable style={({ pressed }) => [s.sheetOption, pressed ? s.pressed : null]} onPress={() => void handleCreate('text')} accessibilityRole="button" accessibilityLabel="Text note, write freely in a rich text note">
-              <View style={s.sheetIconWrap}>
-                <Lineicons icon={Pencil1Outlined} size={20} color={t.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.sheetOptionLabel}>Text Note</Text>
-                <Text style={s.sheetOptionSub}>Write freely in a rich text note</Text>
-              </View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [s.sheetOption, { borderBottomWidth: 0 }, pressed ? s.pressed : null]} onPress={() => void handleCreate('checklist')} accessibilityRole="button" accessibilityLabel="Checklist, create a to-do or checklist note">
-              <View style={s.sheetIconWrap}>
-                <Lineicons icon={CheckSquare2Outlined} size={20} color={t.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.sheetOptionLabel}>Checklist</Text>
-                <Text style={s.sheetOptionSub}>Create a to-do or checklist note</Text>
-              </View>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [s.cancelBtn, pressed ? s.pressed : null]} onPress={() => setFabSheetOpen(false)} accessibilityRole="button" accessibilityLabel="Cancel">
-              <Text style={s.cancelTxt}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Modal>
-      </SafeAreaView>
+          <ListRow
+            leading={<Lineicons icon={CheckSquare2Outlined} size={20} color={t.accentText} />}
+            title="Checklist"
+            subtitle="A to-do list you can tick off"
+            onPress={() => void handleCreate('checklist')}
+            showChevron={false}
+          />
+        </Sheet>
+      </View>
     </EdgeSwipeNavigator>
   )
 }

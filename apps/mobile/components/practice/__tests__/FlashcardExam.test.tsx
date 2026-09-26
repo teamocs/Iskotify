@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, fireEvent, screen, act } from '@testing-library/react-native'
+import { render, fireEvent, screen, act, within } from '@testing-library/react-native'
 import { Share, Alert } from 'react-native'
 import { FlashcardExam } from '../FlashcardExam'
 import type { QuizQuestion } from '../../../utils/mcDistractors'
@@ -50,6 +50,13 @@ jest.mock('../../upcat/QuestionNavigator', () => ({
     const { Text } = require('react-native')
     return <Text testID="qnav">{`Q${currentIdx + 1}/${total}`}</Text>
   },
+}))
+
+// Redesign M3: the runner's frame changes with the window size class.
+let mockBp: 'compact' | 'medium' | 'expanded' = 'compact'
+jest.mock('../../../hooks/useBreakpoint', () => ({
+  ...jest.requireActual('../../../hooks/useBreakpoint'),
+  useBreakpoint: () => mockBp,
 }))
 
 // SafeAreaView — just render children
@@ -492,5 +499,86 @@ describe('FlashcardExam', () => {
     expect(submitQuestionReport).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Report this question' })).toBeTruthy()
     expect(screen.queryByText('Reported')).toBeNull()
+  })
+})
+
+// ── Redesign M3: the focus-mode frame shared with exam/[slug].tsx ────────────
+describe('FlashcardExam focus-mode frame (redesign M3)', () => {
+  const flat = (el: any) => Object.assign({}, ...[el.props.style].flat(Infinity).filter(Boolean))
+  afterEach(() => { mockBp = 'compact' })
+
+  it('orients with "Question n of N" and an answered-progress bar, and has no timer', () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    expect(screen.getByText('Question 1 of 3')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Answered 0 of 3' })).toBeTruthy()
+    fireEvent.press(screen.getByText('4'))
+    expect(screen.getByRole('progressbar', { name: 'Answered 1 of 3' })).toBeTruthy()
+    expect(screen.queryByText(/^\d{1,2}:\d{2}$/)).toBeNull()
+  })
+
+  it('has a 44pt, named Exit control that calls onExit', () => {
+    const onExit = jest.fn()
+    render(<FlashcardExam {...DEFAULT_PROPS} onExit={onExit} />)
+    const exit = screen.getByRole('button', { name: 'Exit exam' })
+    expect(flat(exit).minWidth ?? flat(exit).width).toBeGreaterThanOrEqual(44)
+    fireEvent.press(exit)
+    expect(onExit).toHaveBeenCalled()
+  })
+
+  it('on phones opens the navigator as a sheet from the header (no 30px strip)', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    expect(screen.queryByTestId('qnav')).toBeNull()
+    expect(screen.queryByTestId('question-nav-panel')).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+    expect(await screen.findByText('Review your answers')).toBeTruthy()
+  })
+
+  it('on expanded widths shows the navigator as a side panel with 44pt cells and the current cell named', () => {
+    mockBp = 'expanded'
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    const panel = screen.getByTestId('question-nav-panel')
+    expect(screen.queryByRole('button', { name: 'All questions' })).toBeNull()
+    const cells = within(panel).getAllByLabelText(/^Question \d+, /)
+    expect(cells).toHaveLength(3)
+    for (const c of cells) expect(flat(c).minWidth ?? flat(c).width).toBeGreaterThanOrEqual(44)
+    expect(within(panel).getByLabelText('Question 1, unanswered, current question')).toBeTruthy()
+    fireEvent.press(within(panel).getByLabelText('Question 3, unanswered'))
+    expect(screen.getByText('Color of the sky?')).toBeTruthy()
+  })
+
+  it('caps the reading column at 720 with the options under the question and the footer inside it', () => {
+    mockBp = 'expanded'
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    const col = screen.getByTestId('runner-reading-column')
+    expect(flat(col).maxWidth).toBeLessThanOrEqual(720)
+    expect(within(col).getByText('What is 2 + 2?')).toBeTruthy()
+    expect(within(col).getAllByRole('radio')).toHaveLength(4)
+    const footer = screen.getByTestId('runner-footer')
+    expect(flat(footer).maxWidth).toBeLessThanOrEqual(720)
+    expect(within(footer).getByRole('button', { name: 'Next question' })).toBeTruthy()
+  })
+
+  it('shows the empty case as a page with one way back (no glyph arrow)', () => {
+    const onExit = jest.fn()
+    render(<FlashcardExam {...DEFAULT_PROPS} questions={[]} onExit={onExit} />)
+    expect(screen.getByTestId('screen-scroll')).toBeTruthy()
+    expect(screen.queryByText(/←/)).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
+    expect(onExit).toHaveBeenCalled()
+  })
+
+  it('shows results on a titled page with a way back that calls onExit', async () => {
+    const onExit = jest.fn()
+    render(<FlashcardExam {...DEFAULT_PROPS} onExit={onExit} />)
+    fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+    fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+    const alertSpy = Alert.alert as jest.Mock
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+    await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
+    expect(await screen.findByRole('header', { name: 'Tapos na! Quiz complete.' })).toBeTruthy()
+    expect(screen.getByTestId('screen-scroll')).toBeTruthy()
+    expect(screen.queryByText(/←/)).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
+    expect(onExit).toHaveBeenCalled()
   })
 })

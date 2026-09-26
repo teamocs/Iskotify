@@ -3,12 +3,14 @@ import { render, screen, act, fireEvent } from '@testing-library/react-native'
 import DueReviewScreen from '../index'
 
 jest.mock('expo-router', () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true },
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
+
+jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
 // Shallow-render FlashcardExam so the test asserts on WHICH questions (by id,
 // in order) and which deckId sentinel it was launched with.
@@ -60,7 +62,8 @@ describe('DueReviewScreen (Task H)', () => {
     mockDbInstance = makeDb([])
     render(<DueReviewScreen />)
     await act(async () => {})
-    expect(screen.getByText('All caught up!')).toBeTruthy()
+    expect(screen.getByText('All caught up')).toBeTruthy()
+    expect(screen.getByText('No cards are due for review right now. Come back tomorrow, or practise a topic.')).toBeTruthy()
     expect(screen.queryByTestId('exam')).toBeNull()
   })
 
@@ -74,16 +77,27 @@ describe('DueReviewScreen (Task H)', () => {
     await act(async () => {})
 
     const exam = screen.getByTestId('exam')
-    expect(exam.props.children).toBe('Due Today|__due__|c2,c1')
+    expect(exam.props.children).toBe('Due today|__due__|c2,c1')
   })
 
-  it('"← Back" from the empty state navigates back', async () => {
+  it('the empty state offers one way back, a named button (no glyph)', async () => {
     mockGetDueFlashcards.mockResolvedValue([])
     mockDbInstance = makeDb([])
     render(<DueReviewScreen />)
     await act(async () => {})
     const { router } = require('expo-router')
-    fireEvent.press(screen.getByText('← Back'))
+    expect(screen.queryByText(/←/)).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Back to Practice' }))
     expect(router.back).toHaveBeenCalled()
+  })
+})
+
+describe('DueReviewScreen — loading (redesign M3)', () => {
+  it('shows a labelled skeleton, not a bare loading line, while the queue loads', () => {
+    mockGetDueFlashcards.mockReturnValue(new Promise(() => {}))
+    mockDbInstance = makeDb([])
+    render(<DueReviewScreen />)
+    expect(screen.getByLabelText('Loading due cards')).toBeTruthy()
+    expect(screen.queryByText('Loading due cards…')).toBeNull()
   })
 })

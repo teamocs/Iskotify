@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react-native'
 import { Alert } from 'react-native'
 import UpcatExam from '../[subtest]'
 
@@ -32,6 +32,13 @@ jest.mock('../../../../components/upcat/QuestionNavigator', () => ({
     const { Text } = require('react-native')
     return <Text testID="qnav">{`Q${currentIdx + 1}/${total}`}</Text>
   },
+}))
+
+// Redesign M3: the runner's frame changes with the window size class.
+let mockBp: 'compact' | 'medium' | 'expanded' = 'compact'
+jest.mock('../../../../hooks/useBreakpoint', () => ({
+  ...jest.requireActual('../../../../hooks/useBreakpoint'),
+  useBreakpoint: () => mockBp,
 }))
 
 jest.mock('../../../../services/questionReports', () => ({
@@ -117,6 +124,7 @@ describe('UpcatExam', () => {
 
   beforeEach(() => {
     jest.useRealTimers()
+    mockBp = 'compact'
     mockPush.mockReset()
     mockReplace.mockReset()
     mockRouterBack.mockClear()
@@ -447,6 +455,125 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
     // Fresh start — the previously-saved answer must not carry over.
-    expect(screen.getByTestId('qnav')).toHaveTextContent('Q1/1')
+    // (Redesign M3: the 30px QuestionNavigator strip is gone; the header's
+    // "Question n of N" is the position readout now.)
+    expect(screen.getByText('Question 1 of 1')).toBeTruthy()
+    expect(screen.queryByRole('radio', { checked: true })).toBeNull()
+  })
+
+  // ── Redesign M3: the focus-mode frame shared with exam/[slug].tsx ──────────
+  describe('focus-mode frame (redesign M3)', () => {
+    const flat = (el: any) => Object.assign({}, ...[el.props.style].flat(Infinity).filter(Boolean))
+    const TWO = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+      { questionId: 'Q2', subtest: 'Mathematics', questionText: '2+2?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 3, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    async function start() {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = TWO
+      render(<UpcatExam />)
+      await waitFor(() => expect(screen.getByText('Question 1 of 2')).toBeTruthy())
+    }
+
+    it('loads behind an announced skeleton, not a bare line of text', async () => {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = TWO
+      render(<UpcatExam />)
+      expect(screen.getByLabelText('Loading exam')).toBeTruthy()
+      expect(screen.queryByText(/Loading exam…/)).toBeNull()
+      await waitFor(() => expect(screen.getByText('Question 1 of 2')).toBeTruthy())
+    })
+
+    it('says so on a page with one way back when the subtest has no questions', async () => {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = []
+      render(<UpcatExam />)
+      expect(await screen.findByText('No questions for this subtest yet')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Back to UPCAT practice' }))
+      expect(mockReplace).toHaveBeenCalledWith('/practice/upcat')
+    })
+
+    it('asks to resume on a titled page', async () => {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = TWO
+      mockLoadRun.mockResolvedValue({
+        runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+        questionIds: ['Q1'], sectionNames: ['Mathematics'], answers: {}, idx: 0, sectionIdx: 0, floorIdx: 0,
+        endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+      })
+      render(<UpcatExam />)
+      expect(await screen.findByRole('header', { name: 'Resume where you left off?' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Resume where you left off' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Start over' })).toBeTruthy()
+    })
+
+    it('reads the time left as a named tabular timer with no glyph in the text', async () => {
+      await start()
+      expect(screen.getByLabelText(/^Time left: \d{2}:\d{2}$/)).toBeTruthy()
+      const clock = screen.getByText(/\d{2}:\d{2}/)
+      expect(String(clock.props.children)).toMatch(/^\d{1,2}:\d{2}$/)
+      expect(flat(clock).fontVariant).toEqual(['tabular-nums'])
+      expect(JSON.stringify(screen.toJSON())).not.toMatch(/⏱/)
+    })
+
+    it('has a 44pt, named Leave control', async () => {
+      await start()
+      const leave = screen.getByRole('button', { name: 'Leave exam' })
+      expect(flat(leave).minWidth ?? flat(leave).width).toBeGreaterThanOrEqual(44)
+    })
+
+    it('on phones keeps the navigator in a sheet opened from the header (no 30px strip)', async () => {
+      await start()
+      expect(screen.queryByTestId('qnav')).toBeNull()
+      expect(screen.queryByTestId('question-nav-panel')).toBeNull()
+      fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+      expect(await screen.findByText('Review your answers')).toBeTruthy()
+    })
+
+    it('on expanded widths shows the navigator as a side panel with 44pt cells and the current cell named', async () => {
+      mockBp = 'expanded'
+      await start()
+      const panel = screen.getByTestId('question-nav-panel')
+      expect(screen.queryByRole('button', { name: 'All questions' })).toBeNull()
+      const cells = within(panel).getAllByLabelText(/^Question \d+, /)
+      expect(cells).toHaveLength(2)
+      for (const c of cells) {
+        expect(flat(c).minWidth ?? flat(c).width).toBeGreaterThanOrEqual(44)
+        expect(flat(c).minHeight ?? flat(c).height).toBeGreaterThanOrEqual(44)
+      }
+      expect(within(panel).getByLabelText('Question 1, unanswered, current question')).toBeTruthy()
+      fireEvent.press(within(panel).getByLabelText('Question 2, unanswered'))
+      await waitFor(() => expect(screen.getByText('Question 2 of 2')).toBeTruthy())
+    })
+
+    it('caps the reading column at 720 and puts the options directly under the question', async () => {
+      mockBp = 'expanded'
+      await start()
+      const col = screen.getByTestId('runner-reading-column')
+      expect(flat(col).maxWidth).toBeLessThanOrEqual(720)
+      expect(within(col).getByRole('radio', { name: '4' })).toBeTruthy()
+    })
+
+    it('keeps Back / Skip / Next inside the capped column, not stretched across the window', async () => {
+      mockBp = 'expanded'
+      await start()
+      const footer = screen.getByTestId('runner-footer')
+      expect(flat(footer).maxWidth).toBeLessThanOrEqual(720)
+      expect(within(footer).getByRole('button', { name: 'Next' })).toBeTruthy()
+      expect(within(footer).getByRole('button', { name: 'Skip' })).toBeTruthy()
+      expect(within(footer).getByRole('button', { name: 'Back' })).toBeTruthy()
+    })
+
+    it('shows results on a titled page with a neutral score', async () => {
+      await start()
+      fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
+      expect(await screen.findByRole('header', { name: 'Tapos na! Practice complete.' })).toBeTruthy()
+      expect(screen.getByTestId('screen-scroll')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Back to exams' })).toBeTruthy()
+    })
   })
 })
+

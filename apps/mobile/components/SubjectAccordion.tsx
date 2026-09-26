@@ -1,7 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import type { SubjectGroup } from '../utils/groupTopicsBySubject'
 import { useTheme } from '../theme/ThemeContext'
+import { spacing, textStyle } from '../theme/tokens'
+import { decorative, focusRing, type WebPressableState } from './ui/a11y'
 
 interface Props<T> {
   groups: SubjectGroup<T>[]
@@ -21,21 +25,17 @@ export function SubjectAccordion<T>({
   const { theme: t } = useTheme()
 
   const styles = useMemo(() => StyleSheet.create({
-    emptyContainer: { paddingVertical: 24, paddingHorizontal: 16, alignItems: 'center' },
-    emptyText: { color: t.textTertiary, fontSize: 14, textAlign: 'center' },
+    emptyContainer: { paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg, alignItems: 'center' },
     group: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.divider },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      gap: 8,
+      minHeight: 56,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      gap: spacing.md,
     },
-    chevron: { fontSize: 12, color: t.textSecondary, width: 14 },
-    name: { fontSize: 16, fontWeight: '700', color: t.textPrimary, flex: 1 },
-    summary: { fontSize: 12, color: t.textTertiary },
-    body: { paddingLeft: 12, paddingBottom: 8 },
-    rowWrap: { paddingHorizontal: 4 },
+    body: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   }), [t])
 
   const initial = useMemo<Record<string, boolean>>(() => {
@@ -64,7 +64,9 @@ export function SubjectAccordion<T>({
   if (groups.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{emptyText ?? 'Nothing to show'}</Text>
+        <Text style={[textStyle('body', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+          {emptyText ?? 'Nothing to show'}
+        </Text>
       </View>
     )
   }
@@ -80,19 +82,33 @@ export function SubjectAccordion<T>({
         return (
           <View key={group.subjectId} style={styles.group}>
             <Pressable
-              style={styles.header}
+              style={(state) => {
+                const { pressed, hovered, focused } = state as WebPressableState
+                return [
+                  styles.header,
+                  pressed || hovered ? { backgroundColor: t.surface2 } : null,
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
               onPress={() => toggle(group.subjectId)}
               accessibilityRole="button"
+              accessibilityLabel={group.summary ? `${group.subjectName}, ${group.summary}` : group.subjectName}
               aria-expanded={isOpen}
             >
-              <Text style={styles.chevron}>{isOpen ? '▼' : '▶'}</Text>
-              <Text style={styles.name}>{group.subjectName}</Text>
-              {group.summary ? <Text style={styles.summary}>{group.summary}</Text> : null}
+              <View {...decorative} style={{ transform: [{ rotate: isOpen ? '-90deg' : '180deg' }] }}>
+                <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textSecondary} />
+              </View>
+              <Text style={[textStyle('titleSm', t.textPrimary), { flex: 1, minWidth: 0 }]} maxFontSizeMultiplier={2}>
+                {group.subjectName}
+              </Text>
+              {group.summary ? (
+                <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>{group.summary}</Text>
+              ) : null}
             </Pressable>
             {isOpen ? (
               <View style={styles.body}>
                 {group.rows.map((row, idx) => (
-                  <View key={keyExtractor ? keyExtractor(row, idx) : idx} style={styles.rowWrap}>
+                  <View key={keyExtractor ? keyExtractor(row, idx) : idx}>
                     {renderRow(row)}
                   </View>
                 ))}
