@@ -103,7 +103,19 @@ describe('privacy policy content (shared by the app and the website)', () => {
     expect(rights).not.toMatch(/removes your progress, settings and focus list;/)
   })
 
-  it('never names an operating company', () => {
+  it('names Online Creative Solutions as the operator and the organisation responsible for your data', () => {
+    const who = JSON.stringify(PRIVACY_SECTIONS.find(s => s.title === 'Who we are'))
+    expect(who).toContain('“we” and “us” means Online Creative Solutions, who runs the Iskotify app and website')
+    expect(who).toMatch(/personal information controller/)
+    expect(who).not.toMatch(/the Iskotify team/)
+    // The owner's exact name only: no invented legal suffix.
     expect(text).not.toMatch(/\b(Inc\.|Corporation|Corp\.|OPC|Ltd\.?)\b/)
+  })
+})
+
+describe('on-device AI model wording', () => {
+  it('does not claim students type into the model', () => {
+    expect(text).not.toMatch(/what you type into it/)
+    expect(text).toMatch(/answer choices/)
   })
 })

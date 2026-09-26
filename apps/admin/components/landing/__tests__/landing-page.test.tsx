@@ -15,6 +15,11 @@ import { describe, it, expect, vi, beforeAll } from 'vitest'
 vi.mock('next/image', () => ({
   default: ({ alt, src }: { alt: string; src: string }) => React.createElement('img', { alt, src }),
 }))
+// The metadata test reads app/layout.tsx's metadataBase; its fonts need a stand-in.
+vi.mock('next/font/google', () => ({
+  Outfit: () => ({ variable: 'font-heading' }),
+  Lexend: () => ({ variable: 'font-body' }),
+}))
 vi.mock('next/link', () => ({
   default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) =>
     React.createElement('a', { href, className }, children),
@@ -216,6 +221,14 @@ describe('landing metadata', () => {
     expect(String(metadata.openGraph?.description)).toMatch(/scholarship/i)
     expect(metadata.openGraph?.images).toBeTruthy()
     expect(String(metadata.twitter?.description)).toMatch(/scholarship/i)
+  })
+
+  it('declares iskotify.ph/ as the canonical and Open Graph URL', async () => {
+    expect(metadata.alternates?.canonical).toBe('/')
+    expect((metadata.openGraph as { url?: string } | undefined)?.url).toBe('/')
+    // Relative URLs resolve against the root layout's metadataBase.
+    const { metadata: root } = await import('../../../app/layout')
+    expect(String(root.metadataBase)).toBe('https://iskotify.ph/')
   })
 })
 

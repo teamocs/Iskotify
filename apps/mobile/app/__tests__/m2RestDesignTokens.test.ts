@@ -1,5 +1,5 @@
 // Redesign M2 guard for the remaining screens (first run, auth, settings,
-// help/about/privacy) and the shared primitives they lean on. Same contract as
+// help/about/privacy/terms) and the shared primitives they lean on. Same contract as
 // app/(tabs)/__tests__/m2DesignTokens.test.ts: every colour through useTheme(),
 // every text size through a textStyle role, no hard-coded font names, and
 // drawn icons (Lineicons), never emoji or a Unicode glyph standing in for one.
@@ -26,6 +26,7 @@ const FILES = [
   'app/help.tsx',
   'app/about.tsx',
   'app/privacy.tsx',
+  'app/terms.tsx',
   'components/auth/AuthLayout.tsx',
   'components/onboarding/StepShell.tsx',
   'components/onboarding/ChoiceRow.tsx',

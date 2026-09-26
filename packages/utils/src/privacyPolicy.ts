@@ -41,7 +41,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
   {
     title: 'Who we are',
     blocks: [
-      'Iskotify is a study app for Filipino students getting ready for college entrance exams and scholarships. In this policy, “we” and “us” means the Iskotify team, who runs the app and the Iskotify website.',
+      'Iskotify is a study app for Filipino students getting ready for college entrance exams and scholarships. In this policy, “we” and “us” means Online Creative Solutions, who runs the Iskotify app and website.',
+      'Online Creative Solutions is responsible for your personal data in Iskotify. Under the Data Privacy Act, that makes us the “personal information controller”.',
       'This policy covers the Iskotify app, on your phone or on the web, and the Iskotify website. It follows the Philippine Data Privacy Act of 2012 (Republic Act No. 10173).',
     ],
   },
@@ -139,7 +140,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           { label: 'Google', text: 'handles Google sign-in if you choose it. Google’s Gemini AI ranks results for the words you type in scholarship search. Google Places looks up a school name you type that isn’t on our list.' },
           { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device.' },
           { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on.' },
-          { label: 'Hugging Face', text: 'hosts the optional on-device AI model. If you download it from Settings, Hugging Face sees the download request. The model then runs on your phone, and what you type into it stays there.' },
+          { label: 'Hugging Face', text: 'hosts the optional on-device AI model. If you download it from Settings, Hugging Face sees the download request. The model then runs on your phone to write extra answer choices for practice questions, and nothing from it is sent back.' },
           { label: 'Expo', text: 'delivers app updates to your phone.' },
           { label: 'Resend', text: 'sends early access emails, so it gets your name and email address.' },
           { label: 'Upstash', text: 'briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour.' },

@@ -23,7 +23,10 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
+  // Relative to the root layout's metadataBase, so both resolve to https://iskotify.ph/.
+  alternates: { canonical: '/' },
   openGraph: {
+    url: '/',
     title: TITLE,
     description: DESCRIPTION,
     siteName: 'Iskotify',

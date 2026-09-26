@@ -94,7 +94,16 @@ describe('SettingsScreen', () => {
     render(<SettingsScreen />)
     expect(screen.getByRole('button', { name: 'About Iskotify' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Help and support' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Privacy and terms' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Privacy and terms' })).toBeNull()
+  })
+
+  it('opens the privacy policy and the terms of service from their own rows', () => {
+    const { router } = require('expo-router')
+    render(<SettingsScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Privacy policy' }))
+    expect(router.push).toHaveBeenCalledWith('/privacy')
+    fireEvent.press(screen.getByRole('button', { name: 'Terms of service' }))
+    expect(router.push).toHaveBeenCalledWith('/terms')
   })
 
   it('only offers Exit app on Android, where it works', () => {
@@ -161,5 +170,12 @@ describe('SettingsScreen', () => {
     expect(screen.queryByText('AI Model Download Sheet')).toBeNull()
     fireEvent.press(screen.getByRole('button', { name: /On-device AI model/ }))
     expect(screen.getByText('AI Model Download Sheet')).toBeTruthy()
+  })
+
+  // The model writes extra practice answer choices; its search side is dormant.
+  it('describes the on-device model by what it does', () => {
+    render(<SettingsScreen />)
+    expect(screen.queryByText(/smarter search/)).toBeNull()
+    expect(screen.getByText(/answer choices/)).toBeTruthy()
   })
 })

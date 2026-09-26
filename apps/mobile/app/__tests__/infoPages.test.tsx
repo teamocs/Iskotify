@@ -9,8 +9,10 @@ import { render, screen, fireEvent } from '@testing-library/react-native'
 import HelpScreen from '../help'
 import AboutScreen from '../about'
 import PrivacyScreen from '../privacy'
+import TermsScreen from '../terms'
 import { aria } from '../../test-utils/aria'
 import { PRIVACY_LAST_UPDATED, PRIVACY_SECTIONS } from '@iskotify/utils/privacy-policy'
+import { TERMS_LAST_UPDATED, TERMS_SECTIONS } from '@iskotify/utils/terms-of-service'
 
 const mockBack = jest.fn()
 const mockReplace = jest.fn()
@@ -50,7 +52,8 @@ beforeEach(() => {
 const PAGES = [
   ['Help', HelpScreen, 'Help and support'],
   ['About', AboutScreen, 'About Iskotify'],
-  ['Privacy', PrivacyScreen, 'Privacy and terms'],
+  ['Privacy', PrivacyScreen, 'Privacy policy'],
+  ['Terms', TermsScreen, 'Terms of service'],
 ] as const
 
 describe.each(PAGES)('%s page', (_n, Page, title) => {
@@ -163,6 +166,43 @@ describe('Privacy copy (shared with the website via @iskotify/utils/privacy-poli
   it('names the National Privacy Commission and shows the contact address as copyable text', () => {
     render(<PrivacyScreen />)
     expect(allText()).toMatch(/National Privacy Commission at privacy\.gov\.ph/)
+    expect(screen.getByText('teamocsph@gmail.com').props.selectable).toBe(true)
+  })
+})
+
+describe('Terms copy (shared with the website via @iskotify/utils/terms-of-service)', () => {
+  const allText = () => JSON.stringify(screen.toJSON())
+
+  it('renders every shared section heading, after "The short version"', () => {
+    render(<TermsScreen />)
+    const h2 = screen.getAllByRole('header').filter(h => aria(h, 'aria-level') === 2).map(h => String(h.props.children))
+    expect(h2).toEqual(['The short version', ...TERMS_SECTIONS.map(s => s.title)])
+  })
+
+  it('shows the same "last updated" date as the website', () => {
+    render(<TermsScreen />)
+    expect(screen.getByText(`Last updated: ${TERMS_LAST_UPDATED}`)).toBeTruthy()
+    expect(TERMS_LAST_UPDATED).toBe('September 26, 2026')
+  })
+
+  it('names Online Creative Solutions and never mentions Calendar sync, payments rules or continued use', () => {
+    render(<TermsScreen />)
+    expect(allText()).toMatch(/Online Creative Solutions/)
+    expect(allText()).not.toMatch(/Google Calendar|non-refundable|continued use/i)
+  })
+
+  it('opens the privacy policy from its in-text link', () => {
+    render(<TermsScreen />)
+    // Named in "Students under 18", "Your content" and "Your privacy": each one is a link.
+    const links = screen.getAllByRole('link', { name: 'Privacy Policy' })
+    expect(links.length).toBeGreaterThanOrEqual(3)
+    for (const link of links) fireEvent.press(link)
+    expect(mockPush).toHaveBeenCalledTimes(links.length)
+    expect(mockPush).toHaveBeenCalledWith('/privacy')
+  })
+
+  it('shows the contact address as copyable text', () => {
+    render(<TermsScreen />)
     expect(screen.getByText('teamocsph@gmail.com').props.selectable).toBe(true)
   })
 })
