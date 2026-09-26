@@ -38,3 +38,10 @@ describe('public privacy page (text shared with the app via @iskotify/utils/priv
     expect(html).toContain('href="/terms"')
   })
 })
+
+describe('privacy page metadata', () => {
+  it('sets a canonical URL of /privacy', async () => {
+    const { metadata } = await import('../page')
+    expect(metadata.alternates?.canonical).toBe('/privacy')
+  })
+})

@@ -38,7 +38,7 @@ function Block({ block }: { block: PrivacyBlock }) {
 
 export default function PrivacyScreen() {
   return (
-    <InfoPage title="Privacy and terms" lead={`Privacy policy. Last updated: ${PRIVACY_LAST_UPDATED}`}>
+    <InfoPage title="Privacy policy" lead={`Privacy policy. Last updated: ${PRIVACY_LAST_UPDATED}`}>
       <InfoSection title="The short version">
         <Bullets items={PRIVACY_SUMMARY.map(text => ({ text }))} />
       </InfoSection>

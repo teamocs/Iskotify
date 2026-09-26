@@ -8,6 +8,7 @@ import {
   SparkOutlined,
   QuestionMarkCircleOutlined,
   Shield2Outlined,
+  ClipboardOutlined,
   ExitOutlined,
   Bug1Outlined,
   Comment1Outlined,
@@ -260,7 +261,7 @@ export default function SettingsScreen() {
       <Group title="Offline tools">
         <ListRow
           title="On-device AI model"
-          subtitle="Download it for smarter search without internet"
+          subtitle="Writes extra answer choices for practice questions, offline"
           leading={<IconTile icon={Download1Outlined} />}
           onPress={() => setModelDownloadVisible(true)}
         />
@@ -277,7 +278,9 @@ export default function SettingsScreen() {
         <Divider />
         <ListRow title="Help and support" leading={<IconTile icon={QuestionMarkCircleOutlined} />} onPress={() => router.push('/help')} />
         <Divider />
-        <ListRow title="Privacy and terms" leading={<IconTile icon={Shield2Outlined} />} onPress={() => router.push('/privacy')} />
+        <ListRow title="Privacy policy" leading={<IconTile icon={Shield2Outlined} />} onPress={() => router.push('/privacy')} />
+        <Divider />
+        <ListRow title="Terms of service" leading={<IconTile icon={ClipboardOutlined} />} onPress={() => router.push('/terms')} />
       </Group>
 
       {/* BackHandler.exitApp only works on Android; elsewhere the row would do nothing. */}

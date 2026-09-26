@@ -12,6 +12,10 @@
     "./privacy-policy": {
       "types": "./src/privacyPolicy.ts",
       "default": "./src/privacyPolicy.ts"
+    },
+    "./terms-of-service": {
+      "types": "./src/termsOfService.ts",
+      "default": "./src/termsOfService.ts"
     }
   },
   "scripts": {

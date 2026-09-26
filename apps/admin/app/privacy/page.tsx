@@ -17,6 +17,7 @@ import {
 export const metadata: Metadata = {
   title: 'Privacy Policy — Iskotify',
   description: 'What Iskotify collects, why, who it’s shared with, and your rights under the Data Privacy Act of 2012.',
+  alternates: { canonical: '/privacy' },
 }
 
 const LINK_CLASS = 'text-maroon underline'
