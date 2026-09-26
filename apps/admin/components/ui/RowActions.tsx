@@ -142,7 +142,6 @@ export function RowActions({ label, items, className }: { label: string; items: 
         ref={buttonRef}
         type="button"
         aria-label={label}
-        title={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}

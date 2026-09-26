@@ -13,7 +13,7 @@ export function ShortcutList() {
           <dd className="flex items-center gap-1 text-xs text-ink-muted">
             {s.keys.map((k, i) => (
               <span key={k} className="flex items-center gap-1">
-                {i > 0 && <span>then</span>}
+                {i > 0 && <span>{s.chord ? '+' : 'then'}</span>}
                 <Kbd>{k}</Kbd>
               </span>
             ))}

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Icon } from '@/components/ui/Icon'
 
 interface BreadcrumbItem {
   label: string
@@ -9,24 +10,29 @@ interface Props {
   items: BreadcrumbItem[]
 }
 
+/** WAI-ARIA breadcrumb: a labelled nav, an ordered list, the current page marked. */
 export function Breadcrumb({ items }: Props) {
   return (
-    <nav className="flex items-center gap-1 text-sm text-ink-muted flex-wrap">
-      {items.map((item, idx) => {
-        const isLast = idx === items.length - 1
-        return (
-          <span key={idx} className="flex items-center gap-1">
-            {idx > 0 && <span className="text-ink-subtle">›</span>}
-            {isLast || !item.href ? (
-              <span className={isLast ? 'font-semibold text-ink' : ''}>{item.label}</span>
-            ) : (
-              <Link href={item.href} className="hover:text-ink transition-colors">
-                {item.label}
-              </Link>
-            )}
-          </span>
-        )
-      })}
+    <nav aria-label="Breadcrumb">
+      <ol className="flex flex-wrap items-center gap-1 text-sm text-ink-muted">
+        {items.map((item, idx) => {
+          const isLast = idx === items.length - 1
+          return (
+            <li key={idx} className="flex items-center gap-1">
+              {idx > 0 && <Icon name="chevron-right" size={14} className="text-ink-subtle" />}
+              {isLast ? (
+                <span aria-current="page" className="font-semibold text-ink">{item.label}</span>
+              ) : item.href ? (
+                <Link href={item.href} className="rounded-sm transition-colors hover:text-ink">
+                  {item.label}
+                </Link>
+              ) : (
+                <span>{item.label}</span>
+              )}
+            </li>
+          )
+        })}
+      </ol>
     </nav>
   )
 }

@@ -73,7 +73,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ref={ref}
       type={type}
       aria-label={label}
-      title={title ?? label}
+      title={title}
       className={[BASE, VARIANTS[variant], ICON_ONLY[size], 'rounded-sm', className].filter(Boolean).join(' ')}
       {...rest}
     >

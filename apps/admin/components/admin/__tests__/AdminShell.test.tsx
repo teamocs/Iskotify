@@ -35,4 +35,20 @@ describe('AdminShell', () => {
     )
     expect(html).toContain('page content')
   })
+
+  it('renders the sidebar expanded by default', () => {
+    const html = renderToStaticMarkup(<AdminShell userEmail="a@b.c"><div /></AdminShell>)
+    expect(html).toMatch(/id="admin-sidebar"[^>]*data-state="expanded"/)
+  })
+
+  it('renders the persisted rail on first paint, so there is no flash on reload', () => {
+    const html = renderToStaticMarkup(<AdminShell userEmail="a@b.c" defaultCollapsed><div /></AdminShell>)
+    expect(html).toMatch(/id="admin-sidebar"[^>]*data-state="collapsed"/)
+  })
+
+  it('keeps the mobile drawer expanded even when the desktop rail is persisted', () => {
+    const html = renderToStaticMarkup(<AdminShell userEmail="a@b.c" defaultCollapsed><div /></AdminShell>)
+    const drawer = html.slice(html.indexOf('aria-label="Admin navigation"'))
+    expect(drawer).not.toContain('data-rail-tip')
+  })
 })

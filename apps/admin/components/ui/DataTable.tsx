@@ -259,7 +259,6 @@ function Pill({ children, removeLabel, onRemove }: { children: ReactNode; remove
       <button
         type="button"
         aria-label={removeLabel}
-        title={removeLabel}
         onClick={onRemove}
         className="inline-flex h-6 w-6 items-center justify-center rounded-pill text-ink-muted hover:bg-surface hover:text-ink"
       >

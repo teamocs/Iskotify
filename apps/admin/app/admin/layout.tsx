@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createAuthClient } from '@/lib/supabase'
 import { createServerClient } from '@iskotify/utils'
 import { AdminShell } from '@/components/admin/AdminShell'
+import { SIDEBAR_COOKIE, parseSidebarMode } from '@/lib/nav/sidebarState'
+import { loadNavBadges } from '@/lib/admin/navBadges'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   let user = null
@@ -39,5 +42,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     )
   }
 
-  return <AdminShell userEmail={user.email ?? ''}>{children}</AdminShell>
+  // The rail is rendered from the cookie on the server: no expanded-then-collapsed flash.
+  const defaultCollapsed = parseSidebarMode((await cookies()).get(SIDEBAR_COOKIE)?.value) === 'collapsed'
+  // Not awaited: the shell streams now and the queue badges fill in when the counts land.
+  const badges = loadNavBadges()
+
+  return (
+    <AdminShell userEmail={user.email ?? ''} defaultCollapsed={defaultCollapsed} badges={badges}>
+      {children}
+    </AdminShell>
+  )
 }
