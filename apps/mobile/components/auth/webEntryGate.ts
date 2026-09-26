@@ -1,5 +1,8 @@
 import { webGateRedirect, type EntryTarget } from '../../utils/webEntryTarget'
 
+/** Where a signed-in student goes when their saved state can't be read. */
+export const UNKNOWN_STATE_TARGET: EntryTarget = '/onboarding'
+
 export interface WebGateDeps {
   /** Whether a Supabase session exists right now. */
   hasSession(): Promise<boolean>
@@ -30,9 +33,19 @@ export async function runWebEntryGate(d: WebGateDeps): Promise<() => void> {
     if (href) d.replace(href)
   }
 
+  // A session exists but the student's state could not be read. Onboarding is
+  // the safe place when that state is unknown: it resumes from whatever was
+  // saved, and sends a student who already finished it on to Today. Sending
+  // them back to the sign-in form (or leaving them there) would be a dead end.
+  const resolveSafely = (reason: 'launch' | 'signed-in'): Promise<EntryTarget> =>
+    d.resolveTarget(reason).catch((e: unknown) => {
+      console.warn(`[webEntryGate] ${reason} routing failed, falling back to onboarding:`, e)
+      return UNKNOWN_STATE_TARGET
+    })
+
   try {
     const signedIn = await d.hasSession()
-    go(signedIn ? await d.resolveTarget('launch') : '/auth/sign-in')
+    go(signedIn ? await resolveSafely('launch') : '/auth/sign-in')
   } catch (e) {
     console.error('[webEntryGate] launch check failed:', e)
     go('/auth/sign-in')
@@ -42,9 +55,7 @@ export async function runWebEntryGate(d: WebGateDeps): Promise<() => void> {
 
   return d.subscribe((event, hasSession) => {
     if (event === 'SIGNED_IN' && hasSession) {
-      d.resolveTarget('signed-in')
-        .then(go)
-        .catch(e => console.warn('[webEntryGate] sign-in routing failed:', e))
+      void resolveSafely('signed-in').then(go)
     } else if (event === 'SIGNED_OUT') {
       d.onSignedOut()
       d.replace('/auth/sign-in')

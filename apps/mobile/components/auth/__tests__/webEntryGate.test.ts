@@ -105,6 +105,37 @@ describe('runWebEntryGate', () => {
     expect(deps.onReady).toHaveBeenCalled()
   })
 
+  // Review finding (HIGH): a sign-in whose routing threw (a failed local DB
+  // read) only logged, leaving the student on a permanently busy button.
+  // Onboarding is the safe target when the student's state is unknown: it
+  // resumes from what was saved and sends a finished student on to Today.
+  it('SIGNED_IN: routing that throws still moves the student on, to onboarding', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const { deps, replace, fire } = makeDeps({
+      path: '/auth/sign-in',
+      resolveTarget: jest.fn().mockRejectedValue(new Error('db read failed')),
+    })
+    await runWebEntryGate(deps)
+    fire('SIGNED_IN')
+    await flush()
+    expect(replace).toHaveBeenCalledWith('/onboarding')
+    warn.mockRestore()
+  })
+
+  it('launch with a session: routing that throws goes to onboarding, not back to the sign-in form', async () => {
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const { deps, replace } = makeDeps({
+      path: '/auth/sign-in',
+      hasSession: jest.fn().mockResolvedValue(true),
+      resolveTarget: jest.fn().mockRejectedValue(new Error('db read failed')),
+    })
+    await runWebEntryGate(deps)
+    expect(replace).toHaveBeenCalledWith('/onboarding')
+    expect(deps.onReady).toHaveBeenCalled()
+    err.mockRestore(); warn.mockRestore()
+  })
+
   it('returns an unsubscribe for the auth listener', async () => {
     const unsub = jest.fn()
     const { deps } = makeDeps({ subscribe: jest.fn(() => unsub) })

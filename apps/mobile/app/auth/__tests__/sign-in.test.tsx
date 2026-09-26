@@ -3,7 +3,7 @@
  * Runs under the 'mobile' jest project (jest-expo preset).
  */
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +148,65 @@ describe('SignInScreen — sign-in success', () => {
     await waitFor(() => {
       expect(mockSignInWithEmail).toHaveBeenCalledWith('user@example.com', 'password123')
     })
+  })
+})
+
+// ── Sign-in succeeds but routing never happens ───────────────────────────────
+
+/**
+ * Review finding (HIGH): after a successful sign-in the button stays busy
+ * until the web entry gate routes on the auth event. If that routing failed
+ * or hung, the student sat on a busy button forever. The screen now gives it
+ * a bounded wait, then re-enables the button with a clear retry message.
+ */
+describe('SignInScreen — sign-in succeeds but the app never opens', () => {
+  beforeEach(() => { jest.useFakeTimers() })
+  afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers() })
+
+  async function signIn() {
+    mockSignInWithEmail.mockResolvedValue({ ok: true, data: undefined })
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
+    fireEvent.press(screen.getByRole('button', { name: 'Sign in' }))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  }
+
+  it('stays busy while routing is in flight', async () => {
+    await signIn()
+    expect(screen.getByText('Signing in…')).toBeTruthy()
+    act(() => { jest.advanceTimersByTime(3000) })
+    expect(screen.getByText('Signing in…')).toBeTruthy()
+  })
+
+  it('after the wait, re-enables the button and says what to do', async () => {
+    await signIn()
+    act(() => { jest.advanceTimersByTime(8000) })
+    expect(screen.queryByText('Signing in…')).toBeNull()
+    const btn = screen.getByRole('button', { name: 'Sign in' })
+    expect(aria(btn, 'aria-busy')).not.toBe(true)
+    expect(aria(btn, 'aria-disabled')).not.toBe(true)
+    expect(screen.getByText("Couldn't open the app")).toBeTruthy()
+    expect(screen.getByRole('alert')).toHaveTextContent(/signed in, but we couldn't open the app.*try again/i)
+  })
+
+  it('the student can retry: pressing Sign in again signs in again', async () => {
+    await signIn()
+    act(() => { jest.advanceTimersByTime(8000) })
+    fireEvent.press(screen.getByRole('button', { name: 'Sign in' }))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(mockSignInWithEmail).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaving the screen (the gate routed) cancels the timer', async () => {
+    const set = jest.spyOn(global, 'setTimeout')
+    const clear = jest.spyOn(global, 'clearTimeout')
+    await signIn()
+    const armed = set.mock.calls.findIndex(c => c[1] === 8000)
+    expect(armed).toBeGreaterThanOrEqual(0)
+    const id = set.mock.results[armed]!.value
+    screen.unmount()
+    expect(clear).toHaveBeenCalledWith(id)
   })
 })
 

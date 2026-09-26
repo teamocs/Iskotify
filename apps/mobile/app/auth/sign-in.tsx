@@ -12,7 +12,7 @@
  * field), and a 44pt show/hide password toggle. Submit is disabled only while
  * the request runs and announces aria-busy.
  */
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { View, Text, TextInput, Pressable } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -36,6 +36,13 @@ import { focusRing, heading, type WebPressableState } from '../../components/ui/
 type Mode = 'sign-in' | 'sign-up'
 
 // Why the student was sent back here (set by /auth/callback on failure).
+// How long a successful sign-in waits for the web entry gate to open the app
+// before the button comes back. Routing pulls the student's backup first, so
+// it is given a generous window; past it, something failed or hung.
+const ROUTING_TIMEOUT_MS = 8000
+const ROUTING_STALLED =
+  "You're signed in, but we couldn't open the app. Check your connection and try again."
+
 const RETURN_REASONS: Record<string, string> = {
   link: "That sign-in link didn't work or has expired. Please sign in again.",
 }
@@ -74,6 +81,21 @@ export default function SignInScreen() {
 
   const passwordRef = useRef<TextInput>(null)
 
+  // Bounded wait for the gate to route after a successful sign-in. Cleared
+  // when the screen goes away (the gate routed), or on the next attempt. The
+  // gate can route before signInWithEmail resolves, so nothing is armed once
+  // the screen has unmounted.
+  const mounted = useRef(true)
+  const routingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearRoutingTimer = () => {
+    if (routingTimer.current) clearTimeout(routingTimer.current)
+    routingTimer.current = null
+  }
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; clearRoutingTimer() }
+  }, [])
+
   function validateFields(): boolean {
     let valid = true
     setEmailError('')
@@ -92,11 +114,13 @@ export default function SignInScreen() {
 
   const handleSubmit = useCallback(async () => {
     if (!validateFields()) return
+    clearRoutingTimer()
     setLoading(true)
     setFormError('')
     // On success the web entry gate routes on the auth event, after pulling
     // the student's data. Until it does, the button stays busy: an idle
-    // "Sign in" in that gap looked like nothing had happened.
+    // "Sign in" in that gap looked like nothing had happened. If routing never
+    // happens, the wait is bounded: the button comes back with a retry message.
     let routing = false
     try {
       if (mode === 'sign-up') {
@@ -117,6 +141,13 @@ export default function SignInScreen() {
       }
     } finally {
       if (!routing) setLoading(false)
+      else if (mounted.current) {
+        routingTimer.current = setTimeout(() => {
+          routingTimer.current = null
+          setLoading(false)
+          setFormError(ROUTING_STALLED)
+        }, ROUTING_TIMEOUT_MS)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, email, password])
@@ -290,7 +321,7 @@ export default function SignInScreen() {
           ) : null}
 
           {formError ? (
-            <StatusPanel tone="danger" title={isSignUp ? "Couldn't create your account" : "Couldn't sign you in"}>
+            <StatusPanel tone="danger" title={formError === ROUTING_STALLED ? "Couldn't open the app" : isSignUp ? "Couldn't create your account" : "Couldn't sign you in"}>
               <Text accessibilityRole="alert" style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={2}>
                 {formError}
               </Text>

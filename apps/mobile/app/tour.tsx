@@ -21,6 +21,16 @@ import {
   TOUR_CARDS, TOUR_LENGTH, keyAction, parseTourSource, swipeAction, tourExit,
 } from '../components/walkthrough/tourFlow'
 
+type TourKeyEvent = {
+  key: string
+  altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean
+  defaultPrevented?: boolean
+  target?: { tagName?: string; isContentEditable?: boolean } | null
+  preventDefault?: () => void
+}
+// Fields where arrow keys move the caret or the choice, not the tour.
+const EDITABLE_TAGS = ['INPUT', 'TEXTAREA', 'SELECT']
+
 /**
  * The guided tour: six full-screen cards, one at a time. Opens once right
  * after onboarding (/tour?from=onboarding) and is replayable from Help
@@ -112,19 +122,31 @@ export default function TourScreen() {
     return () => sub.remove()
   }, [go])
 
-  // Web: arrow keys move between cards (not while typing anywhere).
+  // Web: arrow keys move between cards, read only inside the tour's own
+  // region (focused on mount, so they work straight away). Never a
+  // document-level listener, which also caught a screen reader's browse-mode
+  // arrows; and never a modified arrow (Alt+Arrow is the browser's
+  // back/forward) or one typed into an editable field.
+  const regionRef = useRef<View>(null)
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
-      const a = keyAction(e.key)
-      if (a === 'next' && indexRef.current < TOUR_LENGTH - 1) { e.preventDefault(); go(1) }
-      if (a === 'back') { e.preventDefault(); go(-1) }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    if (Platform.OS !== 'web') return
+    ;(regionRef.current as unknown as { focus?: () => void } | null)?.focus?.()
+  }, [])
+  const onKeyDown = useCallback((e: TourKeyEvent) => {
+    if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
+    const el = e.target
+    if (el?.isContentEditable || (el?.tagName && EDITABLE_TAGS.includes(el.tagName))) return
+    const a = keyAction(e.key)
+    if (a === 'next' && indexRef.current < TOUR_LENGTH - 1) { e.preventDefault?.(); go(1) }
+    if (a === 'back' && indexRef.current > 0) { e.preventDefault?.(); go(-1) }
   }, [go])
+  // RN's View types omit onKeyDown and a -1 tabIndex on web; RNW forwards both.
+  const region = {
+    ref: regionRef,
+    testID: 'tour-region',
+    style: { flex: 1, outlineWidth: 0 },
+    ...(Platform.OS === 'web' ? ({ tabIndex: -1, onKeyDown } as object) : null),
+  }
 
   // Native: swipe left/right between cards.
   const pan = useMemo(() => PanResponder.create({
@@ -176,6 +198,7 @@ export default function TourScreen() {
   if (compact) {
     return (
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
+        <View {...region}>
         <View style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: gutter }}>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginRight: -spacing.sm, paddingTop: spacing.xs }}>
             {skip}
@@ -186,6 +209,7 @@ export default function TourScreen() {
           </ScrollView>
           <View style={{ paddingBottom: spacing.md, paddingTop: spacing.sm }}>{controls}</View>
         </View>
+        </View>
       </SafeAreaView>
     )
   }
@@ -193,6 +217,7 @@ export default function TourScreen() {
   // Desktop / large tablet: one card, illustration beside the words.
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
+      <View {...region}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: gutter }}>
         <View
           {...swipe}
@@ -210,6 +235,7 @@ export default function TourScreen() {
           </View>
         </View>
       </ScrollView>
+      </View>
     </SafeAreaView>
   )
 }

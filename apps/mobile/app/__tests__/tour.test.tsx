@@ -200,3 +200,78 @@ describe('Tour: replay from Help', () => {
     expect(mockDismissTo).toHaveBeenCalledWith('/explore')
   })
 })
+
+/**
+ * Review finding (MEDIUM): arrow keys were read from a document-level
+ * listener, so Alt+Arrow (browser back/forward) and a screen reader's
+ * browse-mode arrows anywhere on the page moved the tour. Keys are now read
+ * only inside the tour's own region, and only when unmodified.
+ */
+describe('Tour: arrow keys on web', () => {
+  const RN = require('react-native') as typeof import('react-native')
+  let restoreOS: { restore: () => void }
+  const docListeners: ((e: unknown) => void)[] = []
+  const g = globalThis as { document?: unknown }
+  let hadDocument = false
+  let prevDocument: unknown
+
+  beforeEach(() => {
+    restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')
+    docListeners.length = 0
+    hadDocument = 'document' in g
+    prevDocument = g.document
+    g.document = {
+      addEventListener: (type: string, l: (e: unknown) => void) => { if (type === 'keydown') docListeners.push(l) },
+      removeEventListener: jest.fn(),
+    }
+  })
+  afterEach(() => {
+    restoreOS.restore()
+    if (hadDocument) g.document = prevDocument
+    else delete g.document
+  })
+
+  const key = (k: string, mods: Partial<Record<'altKey' | 'metaKey' | 'ctrlKey' | 'shiftKey', boolean>> = {}) => ({
+    key: k, altKey: false, metaKey: false, ctrlKey: false, shiftKey: false, ...mods,
+    target: { tagName: 'DIV' }, preventDefault: jest.fn(),
+  })
+  const region = () => screen.getByTestId('tour-region')
+
+  it('the tour region is programmatically focusable (tabIndex -1)', async () => {
+    await renderTour()
+    expect(region().props.tabIndex).toBe(-1)
+  })
+
+  it('an arrow key with focus inside the tour moves the card', async () => {
+    await renderTour()
+    act(() => { fireEvent(region(), 'keyDown', key('ArrowRight')) })
+    expect(screen.getByText('2 of 6')).toBeTruthy()
+    act(() => { fireEvent(region(), 'keyDown', key('ArrowLeft')) })
+    expect(screen.getByText('1 of 6')).toBeTruthy()
+  })
+
+  it('Alt+ArrowLeft (browser back) and other modified arrows are not intercepted', async () => {
+    await renderTour()
+    act(() => { fireEvent(region(), 'keyDown', key('ArrowRight')) })
+    expect(screen.getByText('2 of 6')).toBeTruthy()
+    for (const mod of ['altKey', 'metaKey', 'ctrlKey', 'shiftKey'] as const) {
+      const e = key('ArrowLeft', { [mod]: true })
+      act(() => { fireEvent(region(), 'keyDown', e) })
+      expect(e.preventDefault).not.toHaveBeenCalled()
+    }
+    expect(screen.getByText('2 of 6')).toBeTruthy()
+  })
+
+  it('an arrow key typed into an editable field does not move the card', async () => {
+    await renderTour()
+    const e = { ...key('ArrowRight'), target: { tagName: 'DIV', isContentEditable: true } }
+    act(() => { fireEvent(region(), 'keyDown', e) })
+    expect(screen.getByText('1 of 6')).toBeTruthy()
+  })
+
+  it('an arrow key outside the tour region does nothing', async () => {
+    await renderTour()
+    act(() => { docListeners.forEach(l => l(key('ArrowRight'))) })
+    expect(screen.getByText('1 of 6')).toBeTruthy()
+  })
+})
