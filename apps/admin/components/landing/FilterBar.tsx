@@ -46,7 +46,7 @@ export function FilterBar({ listings, onFilter }: Props) {
           className={`rounded-[980px] px-4 py-1 text-xs font-medium transition-colors ${
             activeType === f
               ? 'bg-maroon text-white'
-              : 'bg-[#f3f4f6] text-ink-muted hover:bg-[#e5e7eb]'
+              : 'bg-neutral-soft text-ink-muted hover:bg-surface-hover'
           }`}
         >
           {f}

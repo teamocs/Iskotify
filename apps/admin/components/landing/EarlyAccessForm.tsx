@@ -41,8 +41,8 @@ export function EarlyAccessForm() {
   }
 
   const inputClass =
-    'w-full rounded-xl border border-[#d2d2d7] bg-white px-4 py-3 text-sm font-body text-ink placeholder:text-ink-subtle focus:border-maroon focus:outline-none focus:ring-2 focus:ring-maroon/20 transition-colors'
-  const labelClass = 'block text-xs font-body font-semibold text-ink mb-1.5'
+    'w-full min-h-12 rounded-sm border border-control bg-surface px-4 py-3 text-base font-body text-ink placeholder:text-ink-subtle focus:border-maroon focus:outline-none focus:ring-2 focus:ring-maroon/20 transition-colors'
+  const labelClass = 'block text-sm font-body font-semibold text-ink mb-1.5'
 
   if (status === 'success') {
     return (
@@ -50,10 +50,9 @@ export function EarlyAccessForm() {
         <div
           role="status"
           aria-live="polite"
-          className="rounded-2xl border border-maroon/20 bg-maroon/[0.05] px-6 py-8 text-center"
+          className="rounded-md border border-maroon/20 bg-maroon-dim px-6 py-8 text-center"
         >
-          <span className="text-3xl" aria-hidden="true">🎉</span>
-          <h3 className="font-heading font-bold text-ink text-xl mt-3 mb-2">
+          <h3 className="font-heading font-bold text-ink text-xl mb-2">
             You&apos;re on the list!
           </h3>
           <p className="text-ink-muted font-body text-sm leading-relaxed">
@@ -101,6 +100,7 @@ export function EarlyAccessForm() {
             name="email"
             type="email"
             autoComplete="email"
+            spellCheck={false}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
@@ -153,13 +153,13 @@ export function EarlyAccessForm() {
           type="submit"
           disabled={submitting}
           aria-busy={submitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-maroon px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-maroon-light disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-sm bg-maroon px-6 text-base font-semibold text-ink-inverse transition-colors hover:bg-maroon-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? 'Requesting…' : 'Request early access'}
         </button>
 
         <p className="text-center text-xs font-body text-ink-subtle">
-          Free · No subscription · We&apos;ll only email you about your early-access access.
+          Free · No subscription · We&apos;ll only email you about early access.
         </p>
       </form>
     </div>
