@@ -22,12 +22,19 @@ jest.mock('../../../services/webAuth', () => ({
   isValidPassword: (v: string) => v.length >= 8,
 }))
 
+const mockCheckPwnedPassword = jest.fn()
+jest.mock('../../../services/pwnedPasswords', () => ({
+  ...jest.requireActual('../../../services/pwnedPasswords'),
+  checkPwnedPassword: (p: string) => mockCheckPwnedPassword(p),
+}))
+
 import ResetPasswordScreen from '../reset-password'
 import { aria } from '../../../test-utils/aria'
 
 beforeEach(() => {
   jest.clearAllMocks()
   mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'u' } } } })
+  mockCheckPwnedPassword.mockResolvedValue({ checked: true, breached: false, count: 0 })
 })
 
 describe('ResetPasswordScreen', () => {
@@ -82,5 +89,52 @@ describe('ResetPasswordScreen', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Set new password' }))
     await waitFor(() => expect(mockUpdatePassword).toHaveBeenCalledWith('password123'))
     expect(await screen.findByRole('header', { name: 'Password updated' })).toBeTruthy()
+  })
+})
+
+describe('ResetPasswordScreen — leaked-password check', () => {
+  const BREACHED = 'This password has appeared in a known data breach. Please choose a different one.'
+
+  async function submit(pw = 'password123') {
+    fireEvent.changeText(await screen.findByLabelText('New password'), pw)
+    fireEvent.changeText(screen.getByLabelText('Confirm new password'), pw)
+    fireEvent.press(screen.getByRole('button', { name: 'Set new password' }))
+  }
+
+  it('a breached password blocks the update with an inline error on the new-password field', async () => {
+    mockCheckPwnedPassword.mockResolvedValue({ checked: true, breached: true, count: 12 })
+    render(<ResetPasswordScreen />)
+    await submit()
+    expect(await screen.findByText(BREACHED)).toBeTruthy()
+    expect(mockCheckPwnedPassword).toHaveBeenCalledWith('password123')
+    expect(mockUpdatePassword).not.toHaveBeenCalled()
+    expect(aria(screen.getByLabelText('New password'), 'aria-invalid')).toBe(true)
+    expect(aria(screen.getByRole('button', { name: 'Set new password' }), 'aria-busy')).toBe(false)
+  })
+
+  it('an HIBP outage still lets the reset proceed', async () => {
+    mockCheckPwnedPassword.mockResolvedValue({ checked: false, breached: false, count: 0 })
+    mockUpdatePassword.mockResolvedValue({ ok: true, data: undefined })
+    render(<ResetPasswordScreen />)
+    await submit()
+    await waitFor(() => expect(mockUpdatePassword).toHaveBeenCalledWith('password123'))
+    expect(await screen.findByRole('header', { name: 'Password updated' })).toBeTruthy()
+  })
+
+  it('an unexpected rejection from the check still lets the reset proceed', async () => {
+    mockCheckPwnedPassword.mockRejectedValue(new Error('boom'))
+    mockUpdatePassword.mockResolvedValue({ ok: true, data: undefined })
+    render(<ResetPasswordScreen />)
+    await submit()
+    await waitFor(() => expect(mockUpdatePassword).toHaveBeenCalledWith('password123'))
+  })
+
+  it('does not check when the passwords do not match', async () => {
+    render(<ResetPasswordScreen />)
+    fireEvent.changeText(await screen.findByLabelText('New password'), 'password123')
+    fireEvent.changeText(screen.getByLabelText('Confirm new password'), 'password124')
+    fireEvent.press(screen.getByRole('button', { name: 'Set new password' }))
+    expect(await screen.findByText("These passwords don't match. Type the same password in both fields.")).toBeTruthy()
+    expect(mockCheckPwnedPassword).not.toHaveBeenCalled()
   })
 })

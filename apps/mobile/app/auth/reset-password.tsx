@@ -16,6 +16,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { spacing, textStyle } from '../../theme/tokens'
 import { supabase } from '../../services/supabase'
 import { updatePassword, isValidPassword } from '../../services/webAuth'
+import { checkPwnedPassword, BREACHED_PASSWORD_MESSAGE } from '../../services/pwnedPasswords'
 import { AuthLayout, BrandBlock, StatusPanel } from '../../components/auth/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
@@ -78,6 +79,13 @@ export default function ResetPasswordScreen() {
     setLoading(true)
     setFormError('')
     try {
+      // Leaked-password check (HIBP k-anonymity). Fails open: only a positive
+      // "breached" answer blocks; an outage or error lets the reset continue.
+      const pwned = await checkPwnedPassword(password).catch(() => null)
+      if (pwned?.breached) {
+        setPasswordError(BREACHED_PASSWORD_MESSAGE)
+        return
+      }
       const result = await updatePassword(password)
       if (!result.ok) {
         setFormError(result.error)

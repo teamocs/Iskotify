@@ -28,6 +28,7 @@ import {
   isValidEmail,
   isValidPassword,
 } from '../../services/webAuth'
+import { checkPwnedPassword, BREACHED_PASSWORD_MESSAGE } from '../../services/pwnedPasswords'
 import { AuthLayout, BrandBlock, StatusPanel } from '../../components/auth/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
@@ -124,6 +125,13 @@ export default function SignInScreen() {
     let routing = false
     try {
       if (mode === 'sign-up') {
+        // Leaked-password check (HIBP k-anonymity). Fails open: only a positive
+        // "breached" answer blocks; an outage or error lets sign-up continue.
+        const pwned = await checkPwnedPassword(password).catch(() => null)
+        if (pwned?.breached) {
+          setPasswordError(BREACHED_PASSWORD_MESSAGE)
+          return
+        }
         const result = await signUpWithEmail(email.trim(), password)
         if (!result.ok) {
           setFormError(result.error)
