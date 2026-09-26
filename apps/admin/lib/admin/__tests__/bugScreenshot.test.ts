@@ -42,6 +42,13 @@ describe('bugScreenshotPath', () => {
     expect(bugScreenshotPath('https://evil.example.com/x.png')).toBeNull()
   })
 
+  it('refuses paths with empty segments (// or a trailing slash)', () => {
+    expect(bugScreenshotPath('a//b.png')).toBeNull()
+    expect(bugScreenshotPath('folder/')).toBeNull()
+    expect(bugScreenshotPath('https://abcd.supabase.co/storage/v1/object/public/app-bug-reports/a//b.png')).toBeNull()
+    expect(bugScreenshotPath('https://abcd.supabase.co/storage/v1/object/public/app-bug-reports//b.png')).toBeNull()
+  })
+
   it('refuses paths that try to climb out of the bucket', () => {
     expect(bugScreenshotPath('../secret.png')).toBeNull()
     expect(bugScreenshotPath('a/../../b.png')).toBeNull()

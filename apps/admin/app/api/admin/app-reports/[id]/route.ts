@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { BUG_SCREENSHOT_BUCKET, bugScreenshotPath } from '@/lib/admin/bugScreenshot'
 
 export const runtime = 'nodejs'
 
@@ -56,6 +57,9 @@ export async function PATCH(
 }
 
 // DELETE /api/admin/app-reports/[id]
+// Deletes the report AND its screenshot object (the privacy policy promises we
+// delete what a student sends when asked). The screenshot removal is
+// best-effort: a storage failure is logged but never blocks deleting the row.
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -66,6 +70,21 @@ export async function DELETE(
 
   const { id } = await params
 
+  // Read the screenshot reference before the row (and with it the reference) is
+  // gone. Best-effort too: a failed lookup never blocks deleting the report.
+  let screenshotPath: string | null = null
+  try {
+    const { data: report, error: readError } = await supabase
+      .from('app_bug_reports')
+      .select('image_url')
+      .eq('id', id)
+      .maybeSingle()
+    if (readError) console.error('[admin/app-reports/[id] DELETE] screenshot lookup error:', readError)
+    screenshotPath = bugScreenshotPath((report as { image_url?: string | null } | null)?.image_url)
+  } catch (err) {
+    console.error('[admin/app-reports/[id] DELETE] screenshot lookup threw:', err)
+  }
+
   const { error } = await supabase
     .from('app_bug_reports')
     .delete()
@@ -74,6 +93,15 @@ export async function DELETE(
   if (error) {
     console.error('[admin/app-reports/[id] DELETE] supabase error:', error)
     return NextResponse.json({ error: 'Database error' }, { status: 500 })
+  }
+
+  if (screenshotPath) {
+    try {
+      const { error: removeError } = await supabase.storage.from(BUG_SCREENSHOT_BUCKET).remove([screenshotPath])
+      if (removeError) console.error('[admin/app-reports/[id] DELETE] screenshot remove failed:', screenshotPath, removeError)
+    } catch (err) {
+      console.error('[admin/app-reports/[id] DELETE] screenshot remove threw:', screenshotPath, err)
+    }
   }
 
   return NextResponse.json({ ok: true })

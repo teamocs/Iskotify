@@ -15,7 +15,8 @@ const PUBLIC_URL_MARKER = `/storage/v1/object/public/${BUG_SCREENSHOT_BUCKET}/`
  * The object path inside the bug-report bucket for a stored image_url, or null
  * when there is none or it points anywhere else. Accepts a bare path (new rows)
  * or an old public URL (extracts the part after the bucket name, decoded, minus
- * any query string). Rejects "..", so a stored value can't reach other objects.
+ * any query string). Rejects "..", "." and empty segments, so a stored value
+ * can't reach other objects.
  */
 export function bugScreenshotPath(imageUrl: string | null | undefined): string | null {
   const value = imageUrl?.trim()
@@ -32,7 +33,8 @@ export function bugScreenshotPath(imageUrl: string | null | undefined): string |
     path = value
   }
 
-  path = path.replace(/^\/+/, '')
-  if (!path || path.split('/').some(seg => seg === '..' || seg === '.')) return null
+  // Every segment must be a real name: no "", ".", or "..". So "a//b", "a/",
+  // "/a" and anything climbing out of the bucket are all refused.
+  if (!path || path.split('/').some(seg => seg === '' || seg === '..' || seg === '.')) return null
   return path
 }

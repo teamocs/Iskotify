@@ -175,15 +175,18 @@ export function AppReportsView({ rows, total, loading, error, selected, onSelect
     {
       id: 'screenshot',
       header: 'Screenshot',
+      // A placeholder, never a thumbnail: image_url is a private-bucket path (or
+      // an old public URL) and must not become an image src. The lightbox shows
+      // the picture through a short-lived signed URL.
       cell: r => r.image_url ? (
         <button
           type="button"
           onClick={() => onViewScreenshot(r)}
           aria-label={`View screenshot for ${shortLabel(r)} bug report`}
-          className="block h-12 w-12 overflow-hidden rounded-sm border border-subtle bg-surface-2 hover:border-strong"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm border border-subtle bg-surface-2 px-2 py-1 text-xs font-medium text-ink-muted hover:border-strong hover:text-ink"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={r.image_url} alt="" className="h-full w-full object-cover" />
+          <Icon name="image" />
+          Screenshot
         </button>
       ) : (
         <span className="text-ink-subtle">—</span>

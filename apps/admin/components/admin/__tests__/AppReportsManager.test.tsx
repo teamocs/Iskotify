@@ -90,6 +90,46 @@ describe('AppReportsView table', () => {
   })
 })
 
+describe('screenshots never load from the stored image_url', () => {
+  const LEGACY = 'https://abcd.supabase.co/storage/v1/object/public/app-bug-reports/legacy.png'
+  const PATH = '1727000000000-ab12cd34.png'
+  const shotRows = [bug({ id: 's1', image_url: LEGACY }), bug({ id: 's2', screen: 'Home', image_url: PATH })]
+  const srcs = (html: string) => [...html.matchAll(/\bsrc(?:set)?="([^"]*)"/g)].map(m => m[1] ?? '')
+
+  it('the queue table puts no image_url in any src', () => {
+    const html = view({ rows: shotRows, total: shotRows.length })
+    for (const src of srcs(html)) {
+      expect(src).not.toContain('legacy.png')
+      expect(src).not.toContain(PATH)
+    }
+    expect(html).not.toContain(LEGACY)
+    expect(html).not.toContain(PATH)
+  })
+
+  it('the queue shows a Screenshot button (icon + label) that opens the signed-URL lightbox', () => {
+    const opened: string[] = []
+    const html = view({ rows: shotRows, total: shotRows.length, onViewScreenshot: r => opened.push(r.id) })
+    expect(html).toMatch(/<button[^>]*aria-label="View screenshot for Flashcards bug report"/)
+    expect(html).toMatch(/<button[^>]*aria-label="View screenshot for Home bug report"[^>]*>[\s\S]*?Screenshot<\/button>/)
+    expect(html).not.toMatch(/<img/)
+  })
+
+  it('the lightbox puts no image_url in any src while loading, on error, or once signed', () => {
+    const SIGNED = 'https://abcd.supabase.co/storage/v1/object/sign/app-bug-reports/legacy.png?token=t'
+    for (const r of shotRows) {
+      const html = [
+        renderToStaticMarkup(<ScreenshotLightbox report={r} onClose={noop} />),
+        renderToStaticMarkup(<ScreenshotDialog report={r} state={{ status: 'loading' }} onClose={noop} />),
+        renderToStaticMarkup(<ScreenshotDialog report={r} state={{ status: 'error' }} onClose={noop} />),
+      ].join('')
+      expect(srcs(html)).toEqual([])
+      const ready = renderToStaticMarkup(<ScreenshotDialog report={r} state={{ status: 'ready', url: SIGNED }} onClose={noop} />)
+      expect(srcs(ready).map(s => s.replace(/&amp;/g, '&'))).toEqual([SIGNED])
+      expect(ready).not.toContain(r.image_url!)
+    }
+  })
+})
+
 describe('ScreenshotDialog (the lightbox view)', () => {
   const SIGNED = 'https://x.supabase.co/storage/v1/object/sign/app-bug-reports/shot.png?token=abc'
 
