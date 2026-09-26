@@ -72,8 +72,11 @@ function imageMeta(uri: string): { contentType: string; ext: string } {
 }
 
 /**
- * Best-effort screenshot upload. Returns a public URL on success or null on ANY
- * failure (read error, network, RLS) — an image must never block the text report.
+ * Best-effort screenshot upload. Returns the object PATH inside the private
+ * 'app-bug-reports' bucket on success, or null on ANY failure (read error,
+ * network, RLS). An image must never block the text report. The bucket is
+ * private (migration 062), so there is no public URL: the admin console signs a
+ * short-lived link from this path when a staff member opens the screenshot.
  */
 async function uploadBugImage(uri: string): Promise<string | null> {
   try {
@@ -84,9 +87,7 @@ async function uploadBugImage(uri: string): Promise<string | null> {
     const { contentType, ext } = imageMeta(uri)
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`
     const { error } = await supabase.storage.from(BUG_BUCKET).upload(path, bytes, { contentType })
-    if (error) return null
-    const { data } = supabase.storage.from(BUG_BUCKET).getPublicUrl(path)
-    return data?.publicUrl ?? null
+    return error ? null : path
   } catch {
     return null
   }
@@ -100,14 +101,16 @@ async function uploadBugImage(uri: string): Promise<string | null> {
 export async function submitBugReport(input: BugReportInput): Promise<boolean> {
   try {
     const userId = await currentUserId()
-    let imageUrl: string | null = null
+    // image_url holds the storage object path (older rows hold a full public URL;
+    // the admin console handles both).
+    let imagePath: string | null = null
     if (input.imageUri) {
-      imageUrl = await uploadBugImage(input.imageUri)
+      imagePath = await uploadBugImage(input.imageUri)
     }
     const { error } = await supabase.from('app_bug_reports').insert({
       screen: input.screen.trim() || 'General',
       description: input.description.trim().slice(0, DESCRIPTION_MAX_CHARS),
-      image_url: imageUrl,
+      image_url: imagePath,
       app_version: APP_VERSION,
       platform: Platform.OS,
       user_id: userId,

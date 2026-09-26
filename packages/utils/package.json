@@ -8,6 +8,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./privacy-policy": {
+      "types": "./src/privacyPolicy.ts",
+      "default": "./src/privacyPolicy.ts"
     }
   },
   "scripts": {

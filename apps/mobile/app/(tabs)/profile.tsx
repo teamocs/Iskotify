@@ -30,10 +30,11 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { exportUserData, importUserData } from '../../services/export'
+import { resetStudyData } from '../../services/resetStudyData'
 import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
 import { clearWebData } from '../../services/webReset'
-import { userSettings, listings, userProgress, practiceSessions, focusListings, savedDecks, userRequirements, coachPhrases } from '../../db/schema'
+import { userSettings, listings } from '../../db/schema'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
@@ -370,11 +371,12 @@ export default function ProfileScreen() {
 
   // Web reset is a FULL wipe: clearWebData() deletes IndexedDB('iskotify') +
   // sb-* localStorage keys, signs out, and hard-reloads to /auth/sign-in.
-  // Native keeps the db.transaction wipe + signOut + route.
+  // Native clears every study table (services/resetStudyData.ts; notes are
+  // kept) + signOut + route.
   const resetTitle = Platform.OS === 'web' ? 'Clear data & start over?' : 'Reset App Data?'
   const resetMessage = Platform.OS === 'web'
     ? 'This will permanently delete ALL local data in this browser (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.'
-    : 'This will permanently delete ALL local data on this device (progress, focus listings, settings) and sign you out. Your cloud backup (if you signed in) is unaffected.'
+    : 'This permanently deletes all your study data on this device: progress, practice sessions, answer history, flashcard reviews, study plan, focus list and settings. It also signs you out. Your notes are kept; you can delete them from Notes. Want a copy? Use Export Data first. Your cloud backup (if you signed in) is unaffected.'
 
   function handleResetAppData() {
     confirmDestructive(
@@ -391,15 +393,7 @@ export default function ProfileScreen() {
           return
         }
         try {
-          await db.transaction((tx) => {
-            tx.delete(userProgress).run()
-            tx.delete(practiceSessions).run()
-            tx.delete(focusListings).run()
-            tx.delete(savedDecks).run()
-            tx.delete(userSettings).run()
-            tx.delete(userRequirements).run()
-            tx.delete(coachPhrases).run()
-          })
+          await resetStudyData(db)
           await supabase.auth.signOut()
         } catch (err) {
           console.warn('[profile] reset failed:', err)
@@ -585,7 +579,7 @@ export default function ProfileScreen() {
               title={Platform.OS === 'web' ? 'Clear data & sign out' : 'Reset App Data'}
               subtitle={Platform.OS === 'web'
                 ? 'Permanently delete all local data in this browser and start over'
-                : 'Permanently delete all local data on this device'}
+                : 'Delete your study data on this device. Notes are kept'}
               leading={rowIcon(Trash3Outlined, t.danger)}
               onPress={handleResetAppData}
             />

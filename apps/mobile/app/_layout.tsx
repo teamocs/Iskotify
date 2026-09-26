@@ -139,12 +139,13 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
   const initialize = useCallback(async () => {
     // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set. Runs on
-    // every platform; identify an existing session so events tie to the user.
+    // every platform; identify an existing session by account ID only (never
+    // email or name) so events tie to the user.
     initAnalytics()
     supabase.auth.getSession()
       .then(({ data }) => {
         const u = data.session?.user
-        if (u) identifyUser(u.id, { email: u.email ?? undefined })
+        if (u) identifyUser(u.id)
       })
       .catch(() => { /* non-fatal */ })
 
@@ -164,7 +165,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
         if (reason === 'signed-in') {
           const { data: { session } } = await supabase.auth.getSession()
           const u = session?.user
-          if (u) identifyUser(u.id, { email: u.email ?? undefined })
+          if (u) identifyUser(u.id)
         }
         try { await pullUserData(db) } catch (e) { console.warn('[layout] web pullUserData (non-fatal):', e) }
         const [rows, focusRows] = await Promise.all([

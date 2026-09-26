@@ -350,6 +350,21 @@ describe('ProfileScreen — interactions', () => {
     await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
     alertSpy.mockRestore()
   })
+
+  it('Reset App Data confirmation says notes are kept, how to delete them, and suggests Export Data first', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Reset App Data'))
+    const message = String(alertSpy.mock.calls[0]?.[1] ?? '')
+    expect(message).toMatch(/answer history/)
+    expect(message).toMatch(/flashcard/)
+    expect(message).toMatch(/study plan/)
+    expect(message).toMatch(/Your notes are kept/)
+    expect(message).toMatch(/delete them from Notes/)
+    expect(message).toMatch(/Export Data first/)
+    expect(message).not.toMatch(/ALL local data/)
+    alertSpy.mockRestore()
+  })
 })
 
 // ── WEB platform behavior ──────────────────────────────────────────────────────
