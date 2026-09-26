@@ -440,6 +440,21 @@ describe('DiagnosticExam', () => {
       await waitFor(() => expect(screen.getByText('Question 1 of 2')).toBeTruthy())
     })
 
+    it('a failed question load offers a retry (not the empty results page), and Try again reloads', async () => {
+      mockSearchParams = { subject: 'Science' }
+      mockBankRows = TWO
+      mockLoadRun.mockRejectedValueOnce(new Error('storage unavailable'))
+      render(<DiagnosticExam />)
+      expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy()
+      expect(screen.getByText("Couldn't load the questions")).toBeTruthy()
+      expect(mockLoadRun).toHaveBeenCalledTimes(1)
+
+      fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
+      await waitFor(() => expect(screen.getByText('Question 1 of 2')).toBeTruthy())
+      expect(mockLoadRun).toHaveBeenCalledTimes(2)
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+    })
+
     it('asks to resume on a titled page', async () => {
       mockSearchParams = { subject: 'Science' }
       mockBankRows = TWO

@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import GwaCalculatorScreen from '../gwa'
 
 jest.mock('expo-router', () => ({ router: { back: jest.fn(), push: jest.fn(), replace: jest.fn() } }))
@@ -12,6 +12,22 @@ const mockBp = { value: 'compact' as 'compact' | 'medium' | 'expanded' }
 jest.mock('../../../hooks/useBreakpoint', () => {
   const actual = jest.requireActual('../../../hooks/useBreakpoint')
   return { ...actual, useBreakpoint: () => mockBp.value }
+})
+
+// iOS keyboard regression: the form must scroll inside react-native-keyboard-
+// controller's KeyboardAwareScrollView (not <Screen>'s plain ScrollView), so
+// the focused field is lifted above the keyboard. The stand-in records its
+// props and tags itself so a test can tell it apart from a plain ScrollView.
+const mockKasProps: Record<string, unknown>[] = []
+jest.mock('react-native-keyboard-controller', () => {
+  const React = require('react')
+  const { ScrollView } = require('react-native')
+  return {
+    KeyboardAwareScrollView: (p: Record<string, unknown>) => {
+      mockKasProps.push(p)
+      return React.createElement(ScrollView, { ...p, testID: 'keyboard-aware-scroll' })
+    },
+  }
 })
 
 function flat(style: unknown): Record<string, any> {
@@ -88,5 +104,26 @@ describe('GwaCalculatorScreen (redesign M3)', () => {
     render(<GwaCalculatorScreen />)
     const json = JSON.stringify(screen.toJSON())
     expect(json.indexOf('Your GWA')).toBeLessThan(json.indexOf('Subject 1 grade'))
+  })
+  describe('keyboard (iOS regression)', () => {
+    beforeEach(() => { mockKasProps.length = 0 })
+
+    it('scrolls the rows in a KeyboardAwareScrollView with a bottomOffset, not a plain ScrollView', () => {
+      render(<GwaCalculatorScreen />)
+      const kas = screen.getByTestId('keyboard-aware-scroll')
+      expect(within(kas).getByLabelText('Subject 3 units')).toBeTruthy()
+      expect(screen.queryByTestId('screen-scroll')).toBeNull()
+      const last = mockKasProps[mockKasProps.length - 1]!
+      expect(last.bottomOffset as number).toBeGreaterThan(0)
+      expect(last.keyboardShouldPersistTaps).toBe('handled')
+    })
+
+    it('keeps the live-GWA side column on desktop inside the keyboard-aware scroller', () => {
+      mockBp.value = 'expanded'
+      render(<GwaCalculatorScreen />)
+      const kas = screen.getByTestId('keyboard-aware-scroll')
+      expect(within(kas).getByTestId('gwa-summary')).toBeTruthy()
+      expect(within(kas).getByTestId('two-column')).toBeTruthy()
+    })
   })
 })

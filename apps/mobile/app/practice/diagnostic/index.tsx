@@ -19,7 +19,7 @@ import { OptionList } from '../../../components/practice/OptionList'
 import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
 import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
 import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
-import { SessionLoading, SessionEmpty } from '../../../components/practice/SessionStates'
+import { SessionLoading, SessionEmpty, SessionError } from '../../../components/practice/SessionStates'
 import { RunnerFrame } from '../../../components/practice/runner/RunnerFrame'
 import { RunnerActions } from '../../../components/practice/runner/RunnerActions'
 import { RunnerReview } from '../../../components/practice/runner/RunnerReview'
@@ -41,7 +41,7 @@ import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../
 import { buildPreAssessFromUpcat, type UpcatLocalRow } from '../../../utils/preAssessmentSource'
 import { PRE_ASSESS_QUESTIONS } from '../../../data/preAssessment'
 
-type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
+type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results'
 
 // Redesign M2: results are neutral — no tone-coloured percent or badges (a
 // green/red score reads as pass/fail, which PRODUCT.md rules out).
@@ -65,6 +65,8 @@ export default function DiagnosticExam() {
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
+  // Bumped by "Try again" after a failed question load to re-run the load effect.
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [questions, setQuestions] = useState<PreAssessQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -148,13 +150,15 @@ export default function DiagnosticExam() {
         }
 
         buildFreshExam()
-      } catch {
-        // Unexpected failure: show results (empty) rather than hang on loading
-        setPhase('results')
+      } catch (err) {
+        // A read failure is not an empty bank: offer a retry rather than the
+        // "no questions" page (and never hang on loading).
+        console.warn('[practice] question load failed:', err)
+        setPhase('load-error')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subjectParam])
+  }, [db, subjectParam, loadAttempt])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's ids. The diagnostic's question pool mixes bank rows (real
@@ -293,6 +297,15 @@ export default function DiagnosticExam() {
 
   if (phase === 'loading') {
     return <SessionLoading label="Loading diagnostic" fallbackHref="/(tabs)" />
+  }
+
+  if (phase === 'load-error') {
+    return (
+      <SessionError
+        fallbackHref="/(tabs)"
+        onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
+      />
+    )
   }
 
   if (phase === 'resume-prompt') {

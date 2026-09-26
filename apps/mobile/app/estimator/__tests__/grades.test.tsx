@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, act, fireEvent } from '@testing-library/react-native'
+import { render, screen, act, fireEvent, within } from '@testing-library/react-native'
 import EstimatorGradesScreen from '../grades'
 import { aria } from '../../../test-utils/aria'
 
@@ -22,6 +22,22 @@ jest.mock('../../../services/settings', () => ({
   updateSettings: (...a: any[]) => mockUpdateSettings(...a),
 }))
 jest.mock('../../../hooks/useDb', () => ({ useDb: () => ({}) }))
+
+// iOS keyboard regression: the form must scroll inside react-native-keyboard-
+// controller's KeyboardAwareScrollView (not <Screen>'s plain ScrollView), so
+// the focused field is lifted above the keyboard. The stand-in records its
+// props and tags itself so a test can tell it apart from a plain ScrollView.
+const mockKasProps: Record<string, unknown>[] = []
+jest.mock('react-native-keyboard-controller', () => {
+  const React = require('react')
+  const { ScrollView } = require('react-native')
+  return {
+    KeyboardAwareScrollView: (p: Record<string, unknown>) => {
+      mockKasProps.push(p)
+      return React.createElement(ScrollView, { ...p, testID: 'keyboard-aware-scroll' })
+    },
+  }
+})
 
 /** Flattens an RN style prop (array of objects/falsy) into one plain object. */
 function flattenStyle(style: unknown): Record<string, unknown> {
@@ -136,6 +152,31 @@ describe('EstimatorGradesScreen', () => {
       render(<EstimatorGradesScreen />)
       await act(async () => {})
       expect(flattenStyle(screen.getByTestId('two-column').props.style).flexDirection).toBe('row')
+    })
+  })
+
+  describe('keyboard (iOS regression)', () => {
+    beforeEach(() => { mockKasProps.length = 0 })
+
+    it('scrolls the form in a KeyboardAwareScrollView with a bottomOffset, not a plain ScrollView', async () => {
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      const kas = screen.getByTestId('keyboard-aware-scroll')
+      expect(within(kas).getByLabelText('Grade 11 GWA')).toBeTruthy()
+      expect(within(kas).getByRole('button', { name: 'Save' })).toBeTruthy()
+      expect(screen.queryByTestId('screen-scroll')).toBeNull()
+      const last = mockKasProps[mockKasProps.length - 1]!
+      expect(last.bottomOffset as number).toBeGreaterThan(0)
+      expect(last.keyboardShouldPersistTaps).toBe('handled')
+    })
+
+    it('keeps the two-column desktop layout inside the keyboard-aware scroller', async () => {
+      mockBp.value = 'expanded'
+      render(<EstimatorGradesScreen />)
+      await act(async () => {})
+      const kas = screen.getByTestId('keyboard-aware-scroll')
+      expect(flattenStyle(within(kas).getByTestId('two-column').props.style).flexDirection).toBe('row')
+      expect(within(kas).getByText('Your entries')).toBeTruthy()
     })
   })
 })

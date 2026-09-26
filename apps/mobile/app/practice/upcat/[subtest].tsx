@@ -19,7 +19,7 @@ import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { ResultsScoreCard } from '../../../components/practice/ResultsScoreCard'
 import { ExamFocusHeader } from '../../../components/practice/ExamFocusHeader'
 import { QuestionNavPanel } from '../../../components/practice/QuestionNavPanel'
-import { SessionLoading, SessionEmpty } from '../../../components/practice/SessionStates'
+import { SessionLoading, SessionEmpty, SessionError } from '../../../components/practice/SessionStates'
 import { RunnerFrame } from '../../../components/practice/runner/RunnerFrame'
 import { RunnerActions } from '../../../components/practice/runner/RunnerActions'
 import { RunnerReview } from '../../../components/practice/runner/RunnerReview'
@@ -39,7 +39,7 @@ import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
-type Phase = 'loading' | 'resume-prompt' | 'exam' | 'results'
+type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results'
 
 export default function UpcatExam() {
   const { subtest: subtestParam, mode } = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
@@ -53,6 +53,8 @@ export default function UpcatExam() {
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
 
   const [phase, setPhase] = useState<Phase>('loading')
+  // Bumped by "Try again" after a failed question load to re-run the load effect.
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
@@ -168,13 +170,15 @@ export default function UpcatExam() {
         }
 
         buildFreshExam()
-      } catch {
-        // Unexpected failure: show results (empty) rather than hang on loading
-        setPhase('results')
+      } catch (err) {
+        // A read failure is not an empty bank: offer a retry rather than the
+        // "no questions" page (and never hang on loading).
+        console.warn('[practice] question load failed:', err)
+        setPhase('load-error')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subtestParam, mode])
+  }, [db, subtestParam, mode, loadAttempt])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's question ids, restoring answers/position/timer. The absolute-
@@ -340,6 +344,15 @@ export default function UpcatExam() {
 
   if (phase === 'loading') {
     return <SessionLoading label="Loading exam" fallbackHref="/practice/upcat" />
+  }
+
+  if (phase === 'load-error') {
+    return (
+      <SessionError
+        fallbackHref="/practice/upcat"
+        onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
+      />
+    )
   }
 
   if (phase === 'resume-prompt') {

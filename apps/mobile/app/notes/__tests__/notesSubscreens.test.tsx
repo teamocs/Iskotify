@@ -85,6 +85,10 @@ describe('Archive', () => {
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Unarchive Note a1' })) })
     expect(mockHook.unarchiveNote).toHaveBeenCalledWith('a1')
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Move Note a1 to trash' })) })
+    // Like every other trash entry point, it confirms first (web-safe confirmAction).
+    expect(mockConfirm).toHaveBeenCalledTimes(1)
+    expect(mockHook.deleteNote).not.toHaveBeenCalled()
+    await act(async () => { mockConfirm.mock.calls[0][3]() })
     expect(mockHook.deleteNote).toHaveBeenCalledWith('a1')
   })
 

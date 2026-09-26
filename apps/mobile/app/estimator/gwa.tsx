@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, PlusOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
@@ -154,6 +155,8 @@ export default function GwaCalculatorScreen() {
     <Screen
       width={twoUp ? 'wide' : 'reading'}
       edges={['top', 'bottom']}
+      // Keyboard-aware on iOS: see the KeyboardAwareScrollView below.
+      scroll={false}
       header={
         <DetailTopBar
           bare
@@ -162,6 +165,14 @@ export default function GwaCalculatorScreen() {
         />
       }
     >
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        bottomOffset={20}
+      >
       <PageTitle
         title="GWA calculator"
         lead="Enter each subject's grade on the UP scale (1.00 is highest, 5.00 lowest) and its units. GWA = Σ(grade × units) ÷ Σ(units)."
@@ -172,6 +183,7 @@ export default function GwaCalculatorScreen() {
         // Phones: the live result sits above the rows it summarises.
         <View style={{ gap: spacing.xl }}>{summary}{form}</View>
       )}
+      </KeyboardAwareScrollView>
     </Screen>
   )
 }

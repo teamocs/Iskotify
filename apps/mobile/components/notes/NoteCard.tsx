@@ -21,7 +21,7 @@ interface Props {
   /** Opens the note. Omit for a read-only preview (trash). */
   onPress?: () => void
   onLongPress?: () => void
-  /** Selection mode: whether this card is selected (aria-selected). Undefined outside selection. */
+  /** Selection mode: whether this card is checked (role checkbox + aria-checked). Undefined outside selection. */
   selected?: boolean
   /** Extra controls under the preview (archive / trash rows). */
   footer?: React.ReactNode
@@ -37,6 +37,7 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
   const hasReminder = note.reminderAt != null && note.reminderAt > Date.now()
   const items = note.type === 'checklist' ? parseChecklistItems(note.content) : []
   const name = note.title || 'Untitled note'
+  const selecting = selected !== undefined
 
   const body = (
     <>
@@ -115,10 +116,12 @@ export function NoteCard({ note, onPress, onLongPress, selected, footer }: Props
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
-        accessibilityRole="button"
+        // Bulk selection: the card is a checkbox (the app's multi-select
+        // convention); aria-selected is not valid on role="button".
+        accessibilityRole={selecting ? 'checkbox' : 'button'}
         accessibilityLabel={name}
-        accessibilityHint={onLongPress ? 'Opens the note. Long press to select.' : 'Opens the note.'}
-        aria-selected={selected}
+        accessibilityHint={selecting ? undefined : onLongPress ? 'Opens the note. Long press to select.' : 'Opens the note.'}
+        aria-checked={selecting ? selected : undefined}
         style={(state) => {
           const { pressed, hovered, focused } = state as WebPressableState
           return [

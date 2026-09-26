@@ -8,11 +8,12 @@ import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
 import { ProgressBar } from '../ui/ProgressBar'
 import { EmptyState } from '../ui/EmptyState'
+import { ErrorState } from '../ui/ErrorState'
 import { PageTitle } from '../ui/PageTitle'
 import { DetailTopBar, goBackOr } from '../explore/DetailTopBar'
 
 /**
- * The three "not a session yet" states every practice launcher shares, on
+ * The "not a session yet" states every practice launcher shares, on
  * the same page frame (back button, 720 reading column) so a phone and a
  * desktop browser both get a composed page instead of a lone line of text.
  */
@@ -87,6 +88,30 @@ export function SessionEmpty({ title, body, fallbackHref = '/practice', icon, ac
         actionLabel={actionLabel}
         onAction={() => goBackOr(fallbackHref)}
       />
+    </Frame>
+  )
+}
+
+interface ErrorProps {
+  onRetry: () => void
+  title?: string
+  body?: string
+  fallbackHref?: string
+}
+
+/**
+ * The questions failed to load (a read error, not an empty bank): say so and
+ * offer a retry, instead of the "no questions yet" page, which would be untrue.
+ */
+export function SessionError({
+  onRetry,
+  title = "Couldn't load the questions",
+  body = 'Something went wrong reading them on this device. Try again. Your saved progress is safe.',
+  fallbackHref = '/practice',
+}: ErrorProps) {
+  return (
+    <Frame fallbackHref={fallbackHref}>
+      <ErrorState title={title} body={body} onRetry={onRetry} />
     </Frame>
   )
 }

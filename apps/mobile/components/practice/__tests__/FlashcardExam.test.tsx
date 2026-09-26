@@ -2,6 +2,7 @@ import React from 'react'
 import { render, fireEvent, screen, act, within } from '@testing-library/react-native'
 import { Share, Alert } from 'react-native'
 import { FlashcardExam } from '../FlashcardExam'
+import { aria } from '../../../test-utils/aria'
 import type { QuizQuestion } from '../../../utils/mcDistractors'
 
 /** Fix 2: the last question opens a review sheet instead of submitting
@@ -580,5 +581,30 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
     expect(screen.queryByText(/←/)).toBeNull()
     fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
     expect(onExit).toHaveBeenCalled()
+  })
+  it('disables the options and actions while submit() is in flight, like the other runners', async () => {
+    let resolveAttempts!: () => void
+    mockRecordAttempts.mockImplementationOnce(
+      () => new Promise<void>(resolve => { resolveAttempts = () => resolve(undefined) }),
+    )
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+
+    await reviewAndConfirmSubmit()
+
+    // Still on the runner (recordAttempts is pending) — everything is inert.
+    expect(screen.getByText('Color of the sky?')).toBeTruthy()
+    expect(aria(screen.getByRole('button', { name: 'Previous question' }), 'aria-disabled')).toBe(true)
+    expect(aria(screen.getByRole('button', { name: 'Review answers before submitting' }), 'aria-disabled')).toBe(true)
+    fireEvent.press(screen.getByText('Red')) // would flip the answer if not disabled
+    expect(aria(screen.getByRole('radio', { name: /Blue/ }), 'aria-checked')).toBe(true)
+    expect(aria(screen.getByRole('radio', { name: /Red/ }), 'aria-checked')).toBe(false)
+
+    await act(async () => { resolveAttempts() })
+    expect(await screen.findByText('3/3 correct')).toBeTruthy()
   })
 })

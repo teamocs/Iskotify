@@ -172,12 +172,12 @@ describe('Notes list', () => {
     expect(mockPush).toHaveBeenCalledWith('/notes/new-id')
   })
 
-  it('selection mode: long press selects (aria-selected), bar offers named Pin / Archive / Move to trash', async () => {
+  it('selection mode: long press selects (cards become checkboxes, aria-checked), bar offers named Pin / Archive / Move to trash', async () => {
     render(<NotesScreen />)
     const card = screen.getByRole('button', { name: /Physics formulas/ })
     fireEvent(card, 'longPress')
-    expect(screen.getByRole('button', { name: /Physics formulas/, selected: true })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Requirements/, selected: false })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: /Physics formulas/, checked: true })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: /Requirements/, checked: false })).toBeTruthy()
     expect(screen.getByText('1 selected')).toBeTruthy()
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Pin' })) })
     expect(mockHook.updateNote).toHaveBeenCalledWith('n1', { isPinned: true })

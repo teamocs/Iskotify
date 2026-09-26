@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, Switch } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
@@ -97,9 +98,11 @@ export default function EstimatorGradesScreen() {
 
   // ── Load saved settings on mount ──────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false
     async function load() {
       try {
         const s = await getSettings(db)
+        if (cancelled) return
         if (s.hsGwaG8 != null) setG8Text(String(s.hsGwaG8))
         if (s.hsGwaG9 != null) setG9Text(String(s.hsGwaG9))
         if (s.hsGwaG10 != null) setG10Text(String(s.hsGwaG10))
@@ -110,10 +113,11 @@ export default function EstimatorGradesScreen() {
       } catch (e) {
         console.warn('[estimator/grades] load error:', e)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     void load()
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -344,7 +348,18 @@ export default function EstimatorGradesScreen() {
   )
 
   return (
-    <Screen header={header} width={twoUp ? 'wide' : 'reading'} edges={['top', 'bottom']}>
+    // Keyboard-aware on iOS: <Screen>'s own ScrollView can't lift the focused
+    // field above the keyboard, so the page scrolls in KeyboardAwareScrollView
+    // (as app/profile/scholarship-info.tsx does) inside Screen's column.
+    <Screen header={header} width={twoUp ? 'wide' : 'reading'} edges={['top', 'bottom']} scroll={false}>
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        bottomOffset={20}
+      >
       <PageTitle
         title="Your grades"
         lead="Enter your General Weighted Average (GWA) per grade year. All are on a 0–100 scale; decimals allowed."
@@ -357,6 +372,7 @@ export default function EstimatorGradesScreen() {
           {save}
         </View>
       )}
+      </KeyboardAwareScrollView>
     </Screen>
   )
 }

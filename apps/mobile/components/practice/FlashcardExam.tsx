@@ -79,6 +79,9 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // attemptStartRef/timingRef on retake (same reasoning: reused instance,
   // not a remount).
   const submittedRef = useRef(false)
+  // Disables the options and actions while submit() awaits, matching the
+  // routed runners (see exam/[slug].tsx's submitting flag). Reset on retake.
+  const [submitting, setSubmitting] = useState(false)
   useEffect(() => {
     timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
   }, [idx])
@@ -102,6 +105,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (re-tap after a mid-submit failure)
     submittedRef.current = true
+    setSubmitting(true)
     const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
 
     // Task D: per-question attempt rows + the user_progress producer fix,
@@ -159,6 +163,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
       startTime: startRef,
       subtest,
     })
+    setSubmitting(false)
     setPhase('results')
   }
 
@@ -232,6 +237,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
                 attemptStartRef.current = now
                 timingRef.current = createTimingState(0, now)
                 submittedRef.current = false
+                setSubmitting(false)
               }}
             />
             <Button
@@ -254,6 +260,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   const answeredIdxs = new Set(Object.keys(answers).map(Number))
   const flaggedIdxs = new Set(Object.keys(reported).map(Number))
   const isLast = idx === questions.length - 1
+  const jump = (i: number) => { if (!submitting) setIdx(i) }
 
   return (
     <RunnerFrame
@@ -279,7 +286,14 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           imageHeight={q.imageHeight}
         />
       }
-      options={<OptionList options={q.options} selectedIndex={sel} onSelect={oi => setAnswers(a => ({ ...a, [idx]: oi }))} />}
+      options={
+        <OptionList
+          options={q.options}
+          selectedIndex={sel}
+          disabled={submitting}
+          onSelect={oi => { if (!submitting) setAnswers(a => ({ ...a, [idx]: oi })) }}
+        />
+      }
       actions={
         // Fix 2: the last question never submits directly — it opens a review
         // sheet with an explicit, confirmed "Submit exam".
@@ -287,6 +301,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           isLast={isLast}
           canGoBack={idx > 0}
           answered={sel !== undefined}
+          submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
           onSkip={() => setIdx(i => i + 1)}
           onNext={() => setIdx(i => i + 1)}
@@ -305,7 +320,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           currentIdx={idx}
           answeredIdxs={answeredIdxs}
           flaggedIdxs={flaggedIdxs}
-          onJump={setIdx}
+          onJump={jump}
         />
       }
     >
@@ -315,7 +330,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
         currentIdx={idx}
         answeredIdxs={answeredIdxs}
         flaggedIdxs={flaggedIdxs}
-        onJump={setIdx}
+        onJump={jump}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
       />

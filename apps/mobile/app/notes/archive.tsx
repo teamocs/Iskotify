@@ -13,6 +13,7 @@ import { ErrorState } from '../../components/ui/ErrorState'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { NoteCard } from '../../components/notes/NoteCard'
 import { NotesGrid, NotesSkeleton } from '../../components/notes/NotesGrid'
+import { confirmAction } from '../../utils/confirmAction'
 
 export default function ArchiveScreen() {
   const { theme: t } = useTheme()
@@ -39,7 +40,13 @@ export default function ArchiveScreen() {
               variant="danger"
               label="Trash"
               accessibilityLabel={`Move ${name} to trash`}
-              onPress={() => void deleteNote(note.id)}
+              onPress={() => confirmAction(
+                'Move to trash',
+                `Move "${name}" to trash? Trash is emptied after 7 days.`,
+                'Move to trash',
+                () => void deleteNote(note.id),
+                { destructive: true },
+              )}
               icon={<Lineicons icon={Trash3Outlined} size={16} color={t.dangerStrong} />}
             />
           </View>
