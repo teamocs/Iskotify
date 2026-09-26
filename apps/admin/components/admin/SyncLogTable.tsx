@@ -17,9 +17,9 @@ const COLUMNS: Column<SyncLog>[] = [
     cell: l => <span className="whitespace-nowrap tabular-nums text-ink-muted">{new Date(l.created_at).toLocaleString('en-PH')}</span>,
   },
   { id: 'status', header: 'Status', sortValue: l => l.status, cell: l => <Badge tone={STATUS[l.status]?.tone ?? 'neutral'}>{STATUS[l.status]?.label ?? l.status}</Badge> },
-  { id: 'synced', header: 'Synced', align: 'right', sortValue: l => l.synced, cell: l => <span className="font-medium">{l.synced}</span> },
-  { id: 'skipped', header: 'Skipped', align: 'right', sortValue: l => l.skipped, cell: l => l.skipped },
-  { id: 'closed', header: 'Closed', align: 'right', sortValue: l => l.closed, cell: l => l.closed },
+  { id: 'synced', header: 'Synced', numeric: true, sortValue: l => l.synced, cell: l => <span className="font-medium">{l.synced}</span> },
+  { id: 'skipped', header: 'Skipped', numeric: true, sortValue: l => l.skipped, cell: l => l.skipped },
+  { id: 'closed', header: 'Closed', numeric: true, sortValue: l => l.closed, cell: l => l.closed },
   { id: 'message', header: 'Message', searchValue: l => l.message ?? '', cell: l => <span className="text-ink-muted">{l.message ?? '—'}</span> },
 ]
 

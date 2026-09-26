@@ -1,14 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
-import { Button, IconButton } from '@/components/ui/Button'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
 import { FEEDBACK_QUEUE, QUEUE_PAGE_SIZE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
-import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
+import { BulkStatusActions, ClampText, QueueRowActions, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -78,17 +77,8 @@ interface ViewProps {
 }
 
 export function FeedbackView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onSetStatus, onDelete }: ViewProps) {
-  if (error) {
-    return (
-      <ErrorBanner
-        title="Couldn’t load feedback"
-        message={error}
-        action={<Button size="sm" icon="refresh" onClick={onRetry}>Try again</Button>}
-      />
-    )
-  }
-
-  const columns: Column<AppFeedback>[] = [
+  // Memoised so a selection change re-renders only the rows whose checkbox flipped.
+  const columns = useMemo<Column<AppFeedback>[]>(() => [
     {
       id: 'message',
       header: 'Message',
@@ -109,26 +99,23 @@ export function FeedbackView({ rows, total, loading, error, selected, onSelected
       header: 'Actions',
       hideHeader: true,
       align: 'right',
-      cell: r => {
-        const name = shortLabel(r)
-        return (
-          <span className="inline-flex items-center gap-1">
-            {r.status !== 'reviewed' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark reviewed: ${name}`} onClick={() => onSetStatus(r.id, 'reviewed')}>Reviewed</Button>
-            )}
-            {r.status !== 'resolved' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark resolved: ${name}`} onClick={() => onSetStatus(r.id, 'resolved')}>Resolved</Button>
-            )}
-            <IconButton icon="trash" label={`Delete feedback: ${name}`} onClick={() => onDelete(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
-          </span>
-        )
-      },
+      cell: r => (
+        <QueueRowActions
+          name={shortLabel(r)}
+          status={r.status}
+          onSetStatus={s => onSetStatus(r.id, s)}
+          onDelete={() => onDelete(r)}
+          deleteLabel="Delete feedback"
+        />
+      ),
     },
-  ]
+  ], [onSetStatus, onDelete])
 
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       <DataTable
+        error={error}
+        onRetry={onRetry}
         announcement={bulkResult}
         label="Feedback"
         rows={rows}

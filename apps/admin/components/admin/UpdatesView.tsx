@@ -6,11 +6,13 @@ import type { AdmissionsUpdate } from '@/app/admin/updates/page'
 import { saveUpdate, deleteUpdate } from '@/lib/admin/updatesApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { isDirty } from '@/lib/admin/formDirty'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
-import { Button, IconButton } from '@/components/ui/Button'
+import { Button } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -335,17 +337,20 @@ export function UpdatesView({ updates }: Props) {
       hideHeader: true,
       align: 'right',
       cell: u => (
-        <span className="inline-flex gap-1">
-          <IconButton icon="pencil" label={`Edit ${u.title}`} onClick={() => setDrawerUpdate(u)} />
-          <IconButton icon="trash" label={`Delete ${u.title}`} onClick={() => setDeleteTarget(u)} className="hover:bg-danger-soft hover:text-danger-strong" />
-        </span>
+        <RowActions
+          label={`Actions for ${u.title}`}
+          items={[
+            { label: 'Edit', name: `Edit ${u.title}`, icon: 'pencil', onSelect: () => setDrawerUpdate(u) },
+            { label: 'Delete', name: `Delete ${u.title}`, icon: 'trash', tone: 'danger', onSelect: () => setDeleteTarget(u) },
+          ]}
+        />
       ),
     },
   ]
 
   return (
     <>
-      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
         <DataTable
           label="Admissions updates"
           rows={updates}

@@ -7,9 +7,11 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { useRouter } from 'next/navigation'
 import { deleteListing } from '@/lib/admin/listingsApi'
 import { notifySuccess, notifyError } from '@/lib/toast'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
-import { Button, IconButton } from '@/components/ui/Button'
+import { Button } from '@/components/ui/Button'
 
 const TYPE: Record<Listing['type'], { label: string; tone: BadgeTone }> = {
   scholarship: { label: 'Scholarship', tone: 'brand' },
@@ -87,17 +89,20 @@ export function ListingTable({ listings }: { listings: Listing[] }) {
       hideHeader: true,
       align: 'right',
       cell: l => (
-        <span className="inline-flex gap-1">
-          <IconButton icon="pencil" label={`Edit ${l.title}`} onClick={() => setDrawerListing(l)} />
-          <IconButton icon="trash" label={`Delete ${l.title}`} onClick={() => setDeleteTarget(l)} className="hover:bg-danger-soft hover:text-danger-strong" />
-        </span>
+        <RowActions
+          label={`Actions for ${l.title}`}
+          items={[
+            { label: 'Edit', name: `Edit ${l.title}`, icon: 'pencil', onSelect: () => setDrawerListing(l) },
+            { label: 'Delete', name: `Delete ${l.title}`, icon: 'trash', tone: 'danger', onSelect: () => setDeleteTarget(l) },
+          ]}
+        />
       ),
     },
   ]
 
   return (
     <>
-      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
         <DataTable
           label="Listings"
           rows={listings}

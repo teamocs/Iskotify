@@ -1,17 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
-import { Button, IconButton, buttonClass } from '@/components/ui/Button'
+import { Button, buttonClass } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { Icon } from '@/components/ui/Icon'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
 import { APP_REPORTS_QUEUE, QUEUE_PAGE_SIZE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
-import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
+import { BulkStatusActions, ClampText, QueueRowActions, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -110,17 +110,8 @@ interface ViewProps {
 }
 
 export function AppReportsView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onViewScreenshot, onSetStatus, onDelete }: ViewProps) {
-  if (error) {
-    return (
-      <ErrorBanner
-        title="Couldn’t load bug reports"
-        message={error}
-        action={<Button size="sm" icon="refresh" onClick={onRetry}>Try again</Button>}
-      />
-    )
-  }
-
-  const columns: Column<AppBugReport>[] = [
+  // Memoised so a selection change re-renders only the rows whose checkbox flipped.
+  const columns = useMemo<Column<AppBugReport>[]>(() => [
     {
       id: 'screen',
       header: 'Screen',
@@ -176,26 +167,23 @@ export function AppReportsView({ rows, total, loading, error, selected, onSelect
       header: 'Actions',
       hideHeader: true,
       align: 'right',
-      cell: r => {
-        const name = shortLabel(r)
-        return (
-          <span className="inline-flex items-center gap-1">
-            {r.status !== 'reviewed' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark reviewed: ${name}`} onClick={() => onSetStatus(r.id, 'reviewed')}>Reviewed</Button>
-            )}
-            {r.status !== 'resolved' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark resolved: ${name}`} onClick={() => onSetStatus(r.id, 'resolved')}>Resolved</Button>
-            )}
-            <IconButton icon="trash" label={`Delete bug report: ${name}`} onClick={() => onDelete(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
-          </span>
-        )
-      },
+      cell: r => (
+        <QueueRowActions
+          name={shortLabel(r)}
+          status={r.status}
+          onSetStatus={s => onSetStatus(r.id, s)}
+          onDelete={() => onDelete(r)}
+          deleteLabel="Delete bug report"
+        />
+      ),
     },
-  ]
+  ], [onSetStatus, onDelete, onViewScreenshot])
 
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       <DataTable
+        error={error}
+        onRetry={onRetry}
         announcement={bulkResult}
         label="Bug reports"
         rows={rows}

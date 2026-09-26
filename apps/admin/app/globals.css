@@ -97,3 +97,23 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Table rows (components/ui/Table). Each cell paints the row's tint over an
+ * opaque surface, so a pinned (sticky) column covers what scrolls beneath it
+ * and still shows the same hover / focus / selected state as the rest of the
+ * row. Selected keeps its tint on hover: a darker maroon wash would drop
+ * ink-subtle below 4.5:1.
+ */
+.dt-row { --dt-tint: transparent; }
+.dt-row:hover,
+.dt-row:focus-within { --dt-tint: theme('colors.surface.hover'); }
+.dt-row[data-tone="danger"] { --dt-tint: theme('colors.danger.soft'); }
+.dt-row[data-selected="true"] { --dt-tint: theme('colors.maroon.dim'); }
+.dt-row > td {
+  background: linear-gradient(var(--dt-tint), var(--dt-tint)), theme('colors.surface.DEFAULT');
+}
+
+/* The hairline that separates a pinned column from the columns scrolling under
+   it, drawn only once the table has scrolled sideways (TableRegion). */
+[data-scrolled="true"] .dt-pin-edge { box-shadow: inset -1px 0 0 theme('borderColor.strong'); }

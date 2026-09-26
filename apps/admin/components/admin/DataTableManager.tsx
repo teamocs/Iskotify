@@ -7,6 +7,8 @@ import type { DataTableConfig, DataTableColumnConfig } from '@/lib/dataTables'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { isDirty } from '@/lib/admin/formDirty'
 import { useDebounce } from '@/lib/useDebounce'
+import { RowActions } from '@/components/ui/RowActions'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
@@ -409,7 +411,7 @@ export function DataTableManager({ config }: Props) {
   const dataColumns: Column<Row>[] = ordered.map((col, i) => ({
     id: col.name,
     header: headerLabel(col.label),
-    align: col.type === 'number' ? 'right' : undefined,
+    numeric: col.type === 'number',
     // Presence marks the header sortable; the server does the sorting.
     sortValue: sortable.includes(col.name) ? (r: Row) => textOf(r[col.name]) : undefined,
     cell: i === 0
@@ -434,10 +436,13 @@ export function DataTableManager({ config }: Props) {
       hideHeader: true,
       align: 'right',
       cell: r => (
-        <span className="inline-flex gap-1">
-          <IconButton icon="pencil" label={`Edit ${rowName(r)}`} onClick={() => setDrawer({ row: r })} />
-          <IconButton icon="trash" label={`Delete ${rowName(r)}`} onClick={() => setDeleteTarget(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
-        </span>
+        <RowActions
+          label={`Actions for ${rowName(r)}`}
+          items={[
+            { label: 'Edit', name: `Edit ${rowName(r)}`, icon: 'pencil', onSelect: () => setDrawer({ row: r }) },
+            { label: 'Delete', name: `Delete ${rowName(r)}`, icon: 'trash', tone: 'danger', onSelect: () => setDeleteTarget(r) },
+          ]}
+        />
       ),
     },
   ]
@@ -522,15 +527,11 @@ export function DataTableManager({ config }: Props) {
         </div>
       )}
 
-      {loadError ? (
-        <ErrorBanner
-          title={`Couldn’t load ${config.label}`}
-          message={loadError}
-          action={<Button size="sm" icon="refresh" onClick={() => fetchRows()}>Try again</Button>}
-        />
-      ) : (
-        <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
           <DataTable
+            error={loadError}
+            onRetry={fetchRows}
+            errorTitle={`Couldn’t load ${config.label}`}
             label={config.label}
             rows={rows}
             columns={columns}
@@ -567,7 +568,6 @@ export function DataTableManager({ config }: Props) {
             }
           />
         </div>
-      )}
 
       {drawer && (
         <RowDrawer

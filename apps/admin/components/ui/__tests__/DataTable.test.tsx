@@ -98,13 +98,13 @@ describe('DataTable', () => {
   })
 
   it('says which rows are showing', () => {
-    expect(render()).toContain('Showing 1–3 of 3')
+    expect(render()).toContain('1–3 of 3')
   })
 
   it('paginates from the URL', () => {
     search = 'page=2'
     const html = render({ pageSize: 2 })
-    expect(html).toContain('Showing 3–3 of 3')
+    expect(html).toContain('3–3 of 3')
     expect(html).toContain('Charlie')
     expect(html).not.toContain('>Alpha<')
     expect(html).toContain('Page 2 of 2')

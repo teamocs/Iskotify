@@ -8,6 +8,10 @@ import {
   formatRange,
   nextSort,
   applyTableState,
+  facetCounts,
+  parsePageSize,
+  serializePageSize,
+  PAGE_SIZE_OPTIONS,
   type TableState,
 } from '../tableState'
 
@@ -184,11 +188,15 @@ describe('paginate', () => {
 
 describe('formatRange', () => {
   it('uses an en dash and the total', () => {
-    expect(formatRange(paginate(312, 2, 25), 312)).toBe('Showing 26–50 of 312')
+    expect(formatRange(paginate(312, 2, 25), 312)).toBe('26–50 of 312')
+  })
+
+  it('groups thousands so large totals scan', () => {
+    expect(formatRange(paginate(12480, 500, 25), 12480)).toBe('12,476–12,480 of 12,480')
   })
 
   it('reads naturally with no rows', () => {
-    expect(formatRange(paginate(0, 1, 25), 0)).toBe('Showing 0 of 0')
+    expect(formatRange(paginate(0, 1, 25), 0)).toBe('0 of 0')
   })
 })
 
@@ -252,5 +260,41 @@ describe('selection helpers', () => {
   })
   it('select-all removes the page when the whole page was selected', () => {
     expect(togglePage(['x', 'a', 'b'], ['a', 'b'])).toEqual(['x'])
+  })
+})
+
+describe('rows per page', () => {
+  const p = (qs: string) => new URLSearchParams(qs)
+
+  it('offers 10, 25, 50 and 100', () => {
+    expect(PAGE_SIZE_OPTIONS).toEqual([10, 25, 50, 100])
+  })
+
+  it('reads an allowed size from the URL, else the table default', () => {
+    expect(parsePageSize(p('size=50'), 25)).toBe(50)
+    expect(parsePageSize(p(''), 25)).toBe(25)
+    expect(parsePageSize(p('size=7'), 25)).toBe(25)
+    expect(parsePageSize(p('size=abc'), 25)).toBe(25)
+  })
+
+  it('honours a prefix', () => {
+    expect(parsePageSize(p('size=10&log_size=100'), 25, 'log_')).toBe(100)
+  })
+
+  it('writes the size, drops it at the default, and resets to page 1', () => {
+    expect(serializePageSize(p('q=a&page=3'), 50, 25)).toBe('q=a&size=50')
+    expect(serializePageSize(p('size=50&page=2'), 25, 25)).toBe('')
+  })
+})
+
+describe('facetCounts', () => {
+  it('counts rows per filter value with a predicate', () => {
+    const rows = [{ k: 'a' }, { k: 'b' }, { k: 'a' }]
+    const counts = facetCounts(rows, { id: 'k', options: [{ value: 'a' }, { value: 'b' }, { value: 'c' }], predicate: (r, v) => r.k === v })
+    expect(counts).toEqual({ a: 2, b: 1, c: 0 })
+  })
+
+  it('returns nothing when the filter has no predicate (server-filtered)', () => {
+    expect(facetCounts([{ k: 'a' }], { id: 'k', options: [{ value: 'a' }] })).toBeNull()
   })
 })

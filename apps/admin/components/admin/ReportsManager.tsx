@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { notifySuccess, notifyError } from '@/lib/toast'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
-import { Button, IconButton } from '@/components/ui/Button'
+import { Button } from '@/components/ui/Button'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { PageBody } from '@/components/ui/Page'
 import type { ReviewStatus } from '@/lib/admin/bulkStatus'
 import { PRESET_REASONS, QUEUE_PAGE_SIZE, REPORTS_QUEUE } from '@/lib/admin/queueSpecs'
 import { ConfirmDialog } from './ConfirmDialog'
-import { BulkStatusActions, ClampText, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
+import { BulkStatusActions, ClampText, QueueRowActions, StatusBadge, fmtDate, statusFilter, useStatusQueue } from './StatusQueue'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -431,17 +432,8 @@ interface ViewProps {
 }
 
 export function ReportsView({ rows, total, loading, error, selected, onSelectedChange, bulkBusy, bulkResult, onBulk, onRetry, onEdit, onSetStatus, onDelete }: ViewProps) {
-  if (error) {
-    return (
-      <ErrorBanner
-        title="Couldn’t load reported questions"
-        message={error}
-        action={<Button size="sm" icon="refresh" onClick={onRetry}>Try again</Button>}
-      />
-    )
-  }
-
-  const columns: Column<QuestionReport>[] = [
+  // Memoised so a selection change re-renders only the rows whose checkbox flipped.
+  const columns = useMemo<Column<QuestionReport>[]>(() => [
     {
       id: 'question',
       header: 'Question',
@@ -487,27 +479,25 @@ export function ReportsView({ rows, total, loading, error, selected, onSelectedC
       header: 'Actions',
       hideHeader: true,
       align: 'right',
-      cell: r => {
-        const name = shortLabel(r)
-        return (
-          <span className="inline-flex items-center gap-1">
-            {r.status !== 'reviewed' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark reviewed: ${name}`} onClick={() => onSetStatus(r.id, 'reviewed')}>Reviewed</Button>
-            )}
-            {r.status !== 'resolved' && (
-              <Button size="sm" variant="ghost" aria-label={`Mark resolved: ${name}`} onClick={() => onSetStatus(r.id, 'resolved')}>Resolved</Button>
-            )}
-            <IconButton icon="pencil" label={`Edit question: ${name}`} onClick={() => onEdit(r)} />
-            <IconButton icon="trash" label={`Delete report: ${name}`} onClick={() => onDelete(r)} className="hover:bg-danger-soft hover:text-danger-strong" />
-          </span>
-        )
-      },
+      cell: r => (
+        <QueueRowActions
+          name={shortLabel(r)}
+          status={r.status}
+          onSetStatus={s => onSetStatus(r.id, s)}
+          onDelete={() => onDelete(r)}
+          deleteLabel="Delete report"
+          extra={[{ label: 'Edit question', name: `Edit question: ${shortLabel(r)}`, icon: 'pencil', onSelect: () => onEdit(r) }]}
+        />
+      ),
     },
-  ]
+  ], [onSetStatus, onDelete, onEdit])
 
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       <DataTable
+        error={error}
+        onRetry={onRetry}
+        errorTitle="Couldn’t load reported questions"
         announcement={bulkResult}
         label="Reported questions"
         rows={rows}

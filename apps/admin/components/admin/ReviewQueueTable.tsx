@@ -9,6 +9,7 @@ import {
 } from '@/lib/admin/reviewQueue'
 import { apiRequest } from '@/lib/apiRequest'
 import { notifyError } from '@/lib/toast'
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button, IconButton } from '@/components/ui/Button'
@@ -212,7 +213,7 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
 
   return (
     <>
-      <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+      <div className={TABLE_FRAME}>
         <div role="status" aria-live="polite">
           {lastDismissed && (
             <div className="flex flex-wrap items-center gap-2 border-b border-subtle bg-surface-3 px-4 py-2 text-ui text-ink">

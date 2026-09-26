@@ -65,7 +65,7 @@ describe('AppReportsView table', () => {
     search = 'platform=android'
     const html = view({ total: 75 })
     expect(html).toContain('Crash on open')
-    expect(html).toContain('Showing 1–2 of 75')
+    expect(html).toContain('1–2 of 75')
   })
 
   it('offers status and platform filters', () => {

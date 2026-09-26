@@ -1,5 +1,6 @@
 'use client'
 
+import { TABLE_FRAME } from '@/components/ui/Table'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 
@@ -70,7 +71,7 @@ export function UsersTable({ rows }: { rows: UserRow[] }) {
   ]
 
   return (
-    <div className="overflow-hidden rounded-md border border-subtle bg-surface">
+    <div className={TABLE_FRAME}>
       <DataTable
         label="Users"
         rows={rows}

@@ -124,9 +124,44 @@ export function paginate(total: number, page: number, pageSize: number): PageRan
   return { page: current, pageCount, offset, start: offset + 1, end: Math.min(offset + pageSize, total) }
 }
 
+/** "26–50 of 312": the rows on screen and the total they come from. */
+const num = new Intl.NumberFormat('en-PH')
+
 export function formatRange(range: PageRange, total: number): string {
-  if (total === 0) return 'Showing 0 of 0'
-  return `Showing ${range.start}–${range.end} of ${total}`
+  if (total === 0) return '0 of 0'
+  return `${num.format(range.start)}–${num.format(range.end)} of ${num.format(total)}`
+}
+
+/** Rows-per-page choices, kept in the URL as `size=`. */
+export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+
+export function parsePageSize(params: ParamReader, fallback: number, prefix = ''): number {
+  const raw = Number(params.get(`${prefix}size`))
+  return (PAGE_SIZE_OPTIONS as readonly number[]).includes(raw) ? raw : fallback
+}
+
+/** Writes the size (omitted at the table default) and returns to page 1. */
+export function serializePageSize(base: { toString(): string }, size: number, fallback: number, prefix = ''): string {
+  const out = new URLSearchParams(base.toString())
+  if (size === fallback) out.delete(`${prefix}size`)
+  else out.set(`${prefix}size`, String(size))
+  out.delete(`${prefix}page`)
+  return out.toString()
+}
+
+/**
+ * Rows per filter option, for the counts beside each choice. Only possible
+ * when the filter matches client-side; a server-filtered table gets null.
+ */
+export function facetCounts<T>(
+  rows: readonly T[],
+  filter: { id: string; options: readonly { value: string }[]; predicate?: (row: T, value: string) => boolean },
+): Record<string, number> | null {
+  const match = filter.predicate
+  if (!match) return null
+  const out: Record<string, number> = {}
+  for (const o of filter.options) out[o.value] = rows.reduce((n, r) => (match(r, o.value) ? n + 1 : n), 0)
+  return out
 }
 
 export interface StateColumn<T> { id: string; sortValue?: (row: T) => SortValue; searchValue?: (row: T) => string }
