@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTable'
 import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { Button, buttonClass } from '@/components/ui/Button'
@@ -55,9 +55,22 @@ const shortLabel = (r: AppBugReport) => {
 }
 
 // ── Screenshot lightbox ─────────────────────────────────────────────────────
+// Screenshots sit in a PRIVATE bucket. The lightbox never uses the stored
+// image_url (a path, or an old public URL) as an image source: it asks the
+// admin-only route for a short-lived signed URL and shows that.
 
-export function ScreenshotLightbox({ report, onClose }: { report: AppBugReport | null; onClose: () => void }) {
-  if (!report?.image_url) return null
+/** The admin-only route that signs a report's screenshot. */
+export function screenshotEndpoint(reportId: string): string {
+  return `/api/admin/app-reports/${encodeURIComponent(reportId)}/screenshot`
+}
+
+export type ScreenshotState =
+  | { status: 'loading' }
+  | { status: 'ready'; url: string }
+  | { status: 'error' }
+
+/** The dialog itself, given where the signed link stands. Pure, so it's testable. */
+export function ScreenshotDialog({ report, state, onClose }: { report: AppBugReport; state: ScreenshotState; onClose: () => void }) {
   const screen = report.screen || 'unknown'
   return (
     <Dialog
@@ -70,22 +83,55 @@ export function ScreenshotLightbox({ report, onClose }: { report: AppBugReport |
         : undefined}
       footer={close => (
         <>
-          <a href={report.image_url!} target="_blank" rel="noopener noreferrer" className={buttonClass({ variant: 'ghost', className: 'mr-auto' })}>
-            Open original <Icon name="arrow-right" />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
+          {state.status === 'ready' ? (
+            <a href={state.url} target="_blank" rel="noopener noreferrer" className={buttonClass({ variant: 'ghost', className: 'mr-auto' })}>
+              Open original <Icon name="arrow-right" />
+              <span className="sr-only">(opens in a new tab; the link expires in a few minutes)</span>
+            </a>
+          ) : null}
           <Button onClick={close}>Close</Button>
         </>
       )}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={report.image_url}
-        alt={`Screenshot of the ${screen} screen attached to this bug report`}
-        className="mx-auto max-h-[70vh] rounded-sm border border-subtle object-contain"
-      />
+      {state.status === 'ready' ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={state.url}
+          alt={`Screenshot of the ${screen} screen attached to this bug report`}
+          className="mx-auto max-h-[70vh] rounded-sm border border-subtle object-contain"
+        />
+      ) : state.status === 'loading' ? (
+        <p className="py-10 text-center text-sm text-ink-muted" role="status">Loading screenshot…</p>
+      ) : (
+        <p className="py-10 text-center text-sm text-danger-strong" role="alert">Couldn’t open this screenshot. Close and try again.</p>
+      )}
     </Dialog>
   )
+}
+
+/** Opens a report's screenshot: fetches a signed URL, then shows the dialog. */
+export function ScreenshotLightbox({ report, onClose }: { report: AppBugReport | null; onClose: () => void }) {
+  // The result is keyed by report id, so opening another report reads as
+  // "loading" until its own link arrives (no synchronous reset in the effect).
+  const [result, setResult] = useState<{ id: string; state: ScreenshotState } | null>(null)
+  const reportId = report?.image_url ? report.id : null
+
+  useEffect(() => {
+    if (!reportId) return
+    let cancelled = false
+    fetch(screenshotEndpoint(reportId), { cache: 'no-store' })
+      .then(async res => {
+        const body = (await res.json().catch(() => ({}))) as { url?: unknown }
+        if (cancelled) return
+        setResult({ id: reportId, state: res.ok && typeof body.url === 'string' ? { status: 'ready', url: body.url } : { status: 'error' } })
+      })
+      .catch(() => { if (!cancelled) setResult({ id: reportId, state: { status: 'error' } }) })
+    return () => { cancelled = true }
+  }, [reportId])
+
+  if (!report?.image_url) return null
+  const state: ScreenshotState = result?.id === report.id ? result.state : { status: 'loading' }
+  return <ScreenshotDialog report={report} state={state} onClose={onClose} />
 }
 
 // ── Table ───────────────────────────────────────────────────────────────────

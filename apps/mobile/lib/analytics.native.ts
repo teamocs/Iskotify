@@ -26,8 +26,9 @@ export function capture(event: string, props?: Props): void {
   try { client?.capture(event, props as Record<string, any>) } catch { /* noop */ }
 }
 
-export function identifyUser(distinctId: string, props?: Props): void {
-  try { client?.identify(distinctId, props as Record<string, any>) } catch { /* noop */ }
+/** Account ID only, never personal properties. See the web file. */
+export function identifyUser(distinctId: string): void {
+  try { client?.identify(distinctId) } catch { /* noop */ }
 }
 
 export function screenView(name: string, props?: Props): void {

@@ -10,6 +10,7 @@ import HelpScreen from '../help'
 import AboutScreen from '../about'
 import PrivacyScreen from '../privacy'
 import { aria } from '../../test-utils/aria'
+import { PRIVACY_LAST_UPDATED, PRIVACY_SECTIONS } from '@iskotify/utils/privacy-policy'
 
 const mockBack = jest.fn()
 const mockReplace = jest.fn()
@@ -134,6 +135,35 @@ describe('Help: task-based sections', () => {
     fireEvent.press(screen.getByRole('button', { name: /Estimated Admission Score/ }))
     expect(screen.getByText(/historical cutoffs/)).toBeTruthy()
     expect(screen.queryByText(/will qualify|your UPG is/i)).toBeNull()
+  })
+})
+
+describe('Privacy copy (shared with the website via @iskotify/utils/privacy-policy)', () => {
+  const allText = () => JSON.stringify(screen.toJSON())
+
+  it('renders every shared section heading, after "The short version"', () => {
+    render(<PrivacyScreen />)
+    const h2 = screen.getAllByRole('header').filter(h => aria(h, 'aria-level') === 2).map(h => String(h.props.children))
+    expect(h2).toEqual(['The short version', ...PRIVACY_SECTIONS.map(s => s.title)])
+  })
+
+  it('shows the same "last updated" date as the website', () => {
+    render(<PrivacyScreen />)
+    expect(screen.getByText(`Privacy policy. Last updated: ${PRIVACY_LAST_UPDATED}`)).toBeTruthy()
+    expect(PRIVACY_LAST_UPDATED).toBe('September 26, 2026')
+  })
+
+  it('drops the retired AI Coach and the Export-Data-in-Settings claim', () => {
+    render(<PrivacyScreen />)
+    expect(screen.queryByText(/AI Coach/)).toBeNull()
+    expect(screen.queryByText(/Export Data (feature )?in Settings/)).toBeNull()
+    expect(allText()).not.toMatch(/encrypted SQLite/)
+  })
+
+  it('names the National Privacy Commission and shows the contact address as copyable text', () => {
+    render(<PrivacyScreen />)
+    expect(allText()).toMatch(/National Privacy Commission at privacy\.gov\.ph/)
+    expect(screen.getByText('teamocsph@gmail.com').props.selectable).toBe(true)
   })
 })
 

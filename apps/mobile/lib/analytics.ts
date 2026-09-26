@@ -34,8 +34,13 @@ export function capture(event: string, props?: Props): void {
   try { if (started) posthog.capture(event, props) } catch { /* noop */ }
 }
 
-export function identifyUser(distinctId: string, props?: Props): void {
-  try { if (started) posthog.identify(distinctId, props) } catch { /* noop */ }
+/**
+ * Ties later events to a signed-in account by its ID ONLY. Deliberately takes no
+ * properties: no email, name or other personal data may reach PostHog (the
+ * privacy policy promises this; lib/__tests__/analyticsIdentity.test.ts guards it).
+ */
+export function identifyUser(distinctId: string): void {
+  try { if (started) posthog.identify(distinctId) } catch { /* noop */ }
 }
 
 export function screenView(name: string, props?: Props): void {

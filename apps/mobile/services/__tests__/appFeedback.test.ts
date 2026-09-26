@@ -95,7 +95,7 @@ describe('submitBugReport', () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ image_url: null }))
   })
 
-  it('uploads the image and stores the resulting public URL when imageUri is given', async () => {
+  it('uploads the image to the private bucket and stores the object PATH, never a public URL', async () => {
     const insert = mockTableInsert()
     const { upload, getPublicUrl } = mockStorageBucket({ publicUrl: 'https://cdn.test/app-bug-reports/x.png' })
 
@@ -107,10 +107,13 @@ describe('submitBugReport', () => {
 
     expect(supabase.storage.from).toHaveBeenCalledWith('app-bug-reports')
     expect(upload).toHaveBeenCalledTimes(1)
-    expect(getPublicUrl).toHaveBeenCalledTimes(1)
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ image_url: 'https://cdn.test/app-bug-reports/x.png' }),
-    )
+    // The bucket is private: a public URL would not open, so none is requested.
+    expect(getPublicUrl).not.toHaveBeenCalled()
+    const uploadedPath = upload.mock.calls[0][0] as string
+    expect(uploadedPath).toMatch(/^\d+-[a-z0-9]+\.png$/)
+    const row = insert.mock.calls[0][0] as { image_url: string }
+    expect(row.image_url).toBe(uploadedPath)
+    expect(row.image_url).not.toMatch(/^https?:/)
   })
 
   it('still inserts the text report (image_url null) when the storage upload fails', async () => {

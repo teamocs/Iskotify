@@ -1,20 +1,69 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
+import {
+  NPC_WEBSITE,
+  PRIVACY_CONTACT_EMAIL,
+  PRIVACY_LAST_UPDATED,
+  PRIVACY_SECTIONS,
+  PRIVACY_SUMMARY,
+  type PrivacyBlock,
+} from '@iskotify/utils/privacy-policy'
+
+// The policy text lives in packages/utils/src/privacyPolicy.ts, shared with the
+// in-app page (apps/mobile/app/privacy.tsx), so the two always match. This page
+// only lays it out.
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Iskotify',
-  description: 'How Iskotify collects, uses, and protects your data.',
+  description: 'What Iskotify collects, why, who it’s shared with, and your rights under the Data Privacy Act of 2012.',
 }
 
-const UPDATED = 'May 31, 2026'
-const CONTACT_EMAIL = 'teamocsph@gmail.com'
+const LINK_CLASS = 'text-maroon underline'
+
+/** Turns the contact address and the NPC website into links; everything else stays text. */
+function Linked({ text }: { text: string }) {
+  const parts = text.split(new RegExp(`(${PRIVACY_CONTACT_EMAIL.replace(/\./g, '\\.')}|${NPC_WEBSITE.replace(/\./g, '\\.')})`))
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part === PRIVACY_CONTACT_EMAIL) {
+          return <a key={i} href={`mailto:${PRIVACY_CONTACT_EMAIL}`} className={LINK_CLASS}>{part}</a>
+        }
+        if (part === NPC_WEBSITE) {
+          return <a key={i} href={`https://${NPC_WEBSITE}`} className={LINK_CLASS} rel="noopener noreferrer" target="_blank">{part}</a>
+        }
+        return part
+      })}
+    </>
+  )
+}
+
+function Bullets({ items }: { items: { label?: string; text: string }[] }) {
+  return (
+    <ul className="list-disc pl-5 space-y-1.5">
+      {items.map(item => (
+        <li key={item.label ?? item.text}>
+          {item.label ? <strong className="text-ink">{item.label}</strong> : null}
+          {item.label ? ' ' : null}
+          <Linked text={item.text} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function Block({ block }: { block: PrivacyBlock }) {
+  return typeof block === 'string'
+    ? <p><Linked text={block} /></p>
+    : <Bullets items={block.items} />
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-8">
       <h2 className="font-heading font-bold text-lg text-ink mb-2">{title}</h2>
-      <div className="text-[15px] leading-relaxed text-ink-muted">{children}</div>
+      <div className="text-[15px] leading-relaxed text-ink-muted space-y-3">{children}</div>
     </section>
   )
 }
@@ -29,47 +78,20 @@ export default function PrivacyPage() {
         </Link>
 
         <h1 className="font-heading font-extrabold text-3xl text-ink tracking-tight mb-1">Privacy Policy</h1>
-        <p className="text-sm text-ink-muted mb-10">Last updated: {UPDATED}</p>
+        <p className="text-sm text-ink-muted mb-10">Last updated: {PRIVACY_LAST_UPDATED}</p>
 
-        <Section title="Who We Are">
-          Iskotify helps Filipino students find scholarships, track exam deadlines, and prepare for
-          qualifying exams. This policy explains what data we collect, how we use it, and the choices
-          you have.
+        <Section title="The short version">
+          <Bullets items={PRIVACY_SUMMARY.map(text => ({ text }))} />
         </Section>
 
-        <Section title="What We Collect">
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Account info:</strong> your name and email when you sign in with Google.</li>
-            <li><strong>Profile:</strong> your school and grade level, which you provide during onboarding.</li>
-            <li><strong>Study data:</strong> your focus list, practice progress, quiz scores, saved decks, and notes/reminders.</li>
-          </ul>
-        </Section>
-
-        <Section title="How We Use It">
-          Your data personalizes your study experience, syncs progress across devices, and improves
-          our flashcard recommendations. We do not sell your data or share it with advertisers.
-        </Section>
-
-        <Section title="Data Storage">
-          Your data is stored securely via Supabase. Study progress is also cached locally on your
-          device for offline access. Reminders and deadlines are scheduled as local device
-          notifications and are never sent to any third-party calendar service.
-        </Section>
-
-        <Section title="Your Choices">
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Turn reminder notifications on or off anytime in Settings.</li>
-            <li>Request deletion of your account and data by emailing us.</li>
-          </ul>
-        </Section>
-
-        <Section title="Contact">
-          Questions about this policy? Email{' '}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-maroon underline">{CONTACT_EMAIL}</a>.
-        </Section>
+        {PRIVACY_SECTIONS.map(sec => (
+          <Section key={sec.title} title={sec.title}>
+            {sec.blocks.map((block, i) => <Block key={i} block={block} />)}
+          </Section>
+        ))}
 
         <div className="pt-6 border-t border-black/[0.08] text-sm text-ink-muted">
-          <Link href="/terms" className="text-maroon underline">Terms of Service</Link>
+          <Link href="/terms" className={LINK_CLASS}>Terms of Service</Link>
         </div>
       </main>
     </div>

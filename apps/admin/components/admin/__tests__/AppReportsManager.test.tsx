@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
 }))
 
-import { AppReportsManager, AppReportsView, ScreenshotLightbox, type AppBugReport } from '../AppReportsManager'
+import { AppReportsManager, AppReportsView, ScreenshotDialog, ScreenshotLightbox, screenshotEndpoint, type AppBugReport } from '../AppReportsManager'
 
 const noop = () => {}
 const bug = (over: Partial<AppBugReport>): AppBugReport => ({
@@ -90,20 +90,50 @@ describe('AppReportsView table', () => {
   })
 })
 
-describe('ScreenshotLightbox', () => {
-  it('is a titled, labelled dialog with a meaningful image and a close button', () => {
-    const html = renderToStaticMarkup(<ScreenshotLightbox report={bug({})} onClose={noop} />)
+describe('ScreenshotDialog (the lightbox view)', () => {
+  const SIGNED = 'https://x.supabase.co/storage/v1/object/sign/app-bug-reports/shot.png?token=abc'
+
+  it('is a titled, labelled dialog showing the SIGNED image, with a close button', () => {
+    const html = renderToStaticMarkup(<ScreenshotDialog report={bug({})} state={{ status: 'ready', url: SIGNED }} onClose={noop} />)
     expect(html).toContain('role="dialog"')
     expect(html).toContain('aria-modal="true"')
     const labelledby = html.match(/aria-labelledby="([^"]+)"/)![1]
     expect(html).toMatch(new RegExp(`id="${labelledby}"[^>]*>Screenshot: Flashcards<`))
     expect(html).toMatch(/<img[^>]*alt="Screenshot of the Flashcards screen attached to this bug report"/)
+    expect(html).toContain(`src="${SIGNED.replace(/&/g, '&amp;')}"`)
     expect(html).toContain('aria-label="Close"')
     expect(html).toContain('Open original')
   })
 
-  it('renders nothing without a report', () => {
+  it('shows a loading message (and no image) while the link is being signed', () => {
+    const html = renderToStaticMarkup(<ScreenshotDialog report={bug({})} state={{ status: 'loading' }} onClose={noop} />)
+    expect(html).toContain('Loading screenshot')
+    expect(html).not.toContain('<img')
+    expect(html).not.toContain('Open original')
+  })
+
+  it('shows an alert when the link could not be signed', () => {
+    const html = renderToStaticMarkup(<ScreenshotDialog report={bug({})} state={{ status: 'error' }} onClose={noop} />)
+    expect(html).toContain('role="alert"')
+    expect(html).not.toContain('<img')
+  })
+})
+
+describe('ScreenshotLightbox (fetches a signed URL)', () => {
+  it('never renders the stored image_url directly', () => {
+    const html = renderToStaticMarkup(<ScreenshotLightbox report={bug({})} onClose={noop} />)
+    expect(html).not.toContain('cdn.example.com')
+    expect(html).toContain('Loading screenshot')
+  })
+
+  it('renders nothing without a report or without a screenshot', () => {
     expect(renderToStaticMarkup(<ScreenshotLightbox report={null} onClose={noop} />)).toBe('')
+    expect(renderToStaticMarkup(<ScreenshotLightbox report={bug({ image_url: null })} onClose={noop} />)).toBe('')
+  })
+
+  it('asks the admin-only route for this report’s screenshot', () => {
+    expect(screenshotEndpoint('b1')).toBe('/api/admin/app-reports/b1/screenshot')
+    expect(screenshotEndpoint('a/b')).toBe('/api/admin/app-reports/a%2Fb/screenshot')
   })
 })
 
