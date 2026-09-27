@@ -1,71 +1,21 @@
-import { createContext, useContext, useState, useEffect, useMemo } from 'react'
-import { Platform, useColorScheme } from 'react-native'
-import { eq } from 'drizzle-orm'
-import { useDb } from '../hooks/useDb'
-import { userSettings } from '../db/schema'
-import { darkTheme, lightTheme, typography, type Theme, type Typography } from './tokens'
-import { resolveColorScheme, type ThemePref } from './resolveColorScheme'
+import { createContext, useContext } from 'react'
+import { lightTheme, typography, type Theme, type Typography } from './tokens'
+
+// Iskotify has one palette (the light theme), so the context is a constant.
+// It stays a context — rather than a direct import — so screens keep reading
+// colours through useTheme(), which the design-token guard tests rely on.
 
 interface ThemeContextValue {
-  theme:       Theme
-  typo:        Typography
-  isDark:      boolean
-  colorScheme: 'light' | 'dark'
-  themePref:   ThemePref
-  setTheme:    (pref: ThemePref) => Promise<void>
+  theme: Theme
+  typo:  Typography
 }
+
+const VALUE: ThemeContextValue = { theme: lightTheme, typo: typography }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const db           = useDb()
-  const systemScheme = useColorScheme()
-  const [themePref, setThemePref] = useState<ThemePref>('system')
-
-  useEffect(() => {
-    async function load() {
-      const rows = await db
-        .select({ theme: userSettings.theme })
-        .from(userSettings)
-        .where(eq(userSettings.id, 1))
-        .limit(1)
-      const stored = rows[0]?.theme as ThemePref | undefined
-      if (stored === 'light' || stored === 'dark' || stored === 'system') {
-        setThemePref(stored)
-      }
-    }
-    void load()
-  }, [db])
-
-  // First launch (stored pref 'system', OS reports nothing) resolves to LIGHT.
-  const colorScheme = resolveColorScheme(themePref, systemScheme)
-
-  // Web: keep the browser's own UI (form controls, scrollbars) in step with
-  // the painted palette instead of the static value in +html.tsx.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return
-    document.documentElement.style.colorScheme = colorScheme
-  }, [colorScheme])
-
-  const isDark = colorScheme === 'dark'
-  const theme  = isDark ? darkTheme : lightTheme
-
-  const value = useMemo<ThemeContextValue>(() => ({
-    theme,
-    typo: typography,
-    isDark,
-    colorScheme,
-    themePref,
-    setTheme: async (pref: ThemePref) => {
-      setThemePref(pref)
-      await db
-        .update(userSettings)
-        .set({ theme: pref })
-        .where(eq(userSettings.id, 1))
-    },
-  }), [theme, isDark, colorScheme, themePref, db])
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  return <ThemeContext.Provider value={VALUE}>{children}</ThemeContext.Provider>
 }
 
 export function useTheme(): ThemeContextValue {

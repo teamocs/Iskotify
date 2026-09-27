@@ -63,7 +63,7 @@ describe('ScoreDisclaimerModal', () => {
 
   // September 2026 audit: white text on the raw warning fill failed AA. The
   // acknowledge action is now the design system's primary Button: the opaque
-  // maroon accent fill with textInverse, which clears AA in both themes.
+  // maroon accent fill with textInverse, which clears AA.
   it('fills the acknowledge button with the maroon accent, never the raw warning colour', () => {
     render(<ScoreDisclaimerModal visible={true} onAcknowledge={() => {}} />)
     const btn = screen.getByRole('button', { name: /acknowledge disclaimer/i })

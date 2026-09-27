@@ -12,7 +12,6 @@ jest.mock('../../theme/ThemeContext', () => ({
       divider:       '#e0e0e0',
     },
     typo: {},
-    isDark: false,
   }),
 }))
 

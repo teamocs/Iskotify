@@ -18,7 +18,7 @@ interface SchoolPickerProps {
 export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProps) {
   const [modalVisible, setModalVisible] = useState(false)
   const { query, setQuery, results, loading, error, errorMessage, retry, contributeSchool } = useSchoolSearch()
-  const { theme: t, typo, isDark } = useTheme()
+  const { theme: t, typo } = useTheme()
 
   const s = useMemo(() => StyleSheet.create({
     input: {
@@ -94,12 +94,12 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       flexShrink: 0,
     },
     sourceBadgeDb: {
-      backgroundColor: isDark ? 'rgba(34,197,94,0.15)' : 'rgba(22,163,74,0.12)',
+      backgroundColor: t.successSurface,
     },
     sourceBadgeDbTxt: {
       fontFamily: 'Lexend_600SemiBold',
       fontSize: 9,
-      color: isDark ? t.success : t.success,
+      color: t.successStrong,
     },
     sourceBadgePlaces: {
       backgroundColor: t.accentSurface,
@@ -138,7 +138,7 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       color: t.accentText,
       marginTop: 2,
     },
-  }), [t, typo, isDark])
+  }), [t, typo])
 
   const closeModal = useCallback(() => {
     setQuery('')

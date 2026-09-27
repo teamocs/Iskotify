@@ -1,84 +1,11 @@
 import type { TextStyle } from 'react-native'
 
 // ── Design tokens (Refined Maroon, 2026) ─────────────────────────────────────
-// One source of truth for color, type, spacing, radius, elevation. Both themes are
-// contrast-tuned to WCAG: primary text ≥ 7:1, secondary ≥ 4.5:1, tertiary ≥ 3:1.
-// Adding a key here propagates to every screen via useTheme(); both theme objects
-// MUST keep identical keys (Theme = typeof darkTheme).
-
-export const darkTheme = {
-  bg:            '#1a1a2e',
-  surface:       'rgba(255,255,255,0.08)',
-  surface2:      'rgba(255,255,255,0.14)',
-  border:        'rgba(255,255,255,0.14)',
-  textPrimary:   '#ffffff',
-  textSecondary: 'rgba(255,255,255,0.72)',  // was 0.62 → ~5.5:1
-  textTertiary:  'rgba(255,255,255,0.52)',  // was 0.38 (≈2:1, failed) → ≈5.47:1 on bg (4.87:1 on surfaceRaised)
-  accent:        '#800000',
-  accentText:    '#fca5a5',
-  accentSurface: 'rgba(128,0,0,0.22)',
-  accentStrong:  'rgba(128,0,0,0.82)',     // opaque maroon for filled pills, badges, active tabs
-  textInverse:   '#ffffff',                // text/icons on the maroon accent (maroon is dark in both themes)
-  // Semantic status colors — theme-tuned so greens/reds stay legible in dark mode.
-  success:       '#4ade80',
-  successSurface:'rgba(74,222,128,0.16)',
-  danger:        '#f87171',
-  dangerSurface: 'rgba(248,113,113,0.16)',
-  warning:       '#fbbf24',
-  warningSurface:'rgba(251,191,36,0.16)',
-  // `*Strong` — DESIGN.md's "strong" role: text/icons sitting ON that status's
-  // own `*Surface` tint (never on a plain surface — use the DEFAULT color there).
-  // Dark theme's tints blend a light/saturated status color over a DARK bg
-  // (#1a1a2e), so the blended tint stays dark — the DEFAULT color already
-  // clears 4.5:1 against it, measured here (relative-luminance, WCAG formula):
-  //   successStrong #4ade80 on successSurface-over-bg (~#22393B): 7.02:1
-  //   dangerStrong  #f87171 on dangerSurface-over-bg  (~#3E2839): 4.84:1
-  //   warningStrong #fbbf24 on warningSurface-over-bg (~#3E342C): 7.26:1
-  // (This is the light-theme-only bug DESIGN.md's audit found: a *fill* of
-  // raw `warning` behind white text is still ~1.7:1 — that's fixed by using
-  // `accentStrong` as the fill instead, not by this token.)
-  successStrong: '#4ade80',
-  dangerStrong:  '#f87171',
-  warningStrong: '#fbbf24',
-  // Opaque (was 0.92): scrolled content showed through behind tab labels.
-  tabBar:        '#1a1a2e',
-  divider:       'rgba(255,255,255,0.20)',
-  surfaceSubtle: 'rgba(255,255,255,0.05)',
-  // Elevation — boxShadow strings (new-arch, cross-platform). Dark uses deeper black.
-  shadowSm:      '0px 1px 3px rgba(0,0,0,0.40)',
-  shadowMd:      '0px 6px 18px rgba(0,0,0,0.48)',
-  // Full-screen media viewer (figure zoom). Dark in both themes so the image is
-  // the only bright thing on screen; controls on it use textInverse.
-  scrim:         'rgba(0,0,0,0.92)',
-  scrimControl:  'rgba(255,255,255,0.15)',
-  // ── Redesign M1 (direction C) additions ─────────────────────────────────
-  // Status/accent BORDERS: alpha tuned so each clears 3:1 (WCAG 1.4.11
-  // non-text contrast) against BOTH bg #1a1a2e and surface-over-bg (~#2c2c3f),
-  // so a border can carry a state boundary (selected chip, error field) on its
-  // own. Measured (WCAG relative luminance):
-  //   successBorder 3.82 / 3.40 · dangerBorder 3.65 / 3.13
-  //   warningBorder 3.48 / 3.15 · accentBorder 3.62 / 3.23
-  successBorder: 'rgba(74,222,128,0.55)',
-  dangerBorder:  'rgba(248,113,113,0.70)',
-  warningBorder: 'rgba(251,191,36,0.50)',
-  accentBorder:  'rgba(252,165,165,0.55)',
-  // Pressed fill for the one maroon primary action. White on it: 14.43:1.
-  accentPressed: '#5c0000',
-  // Opaque raised surface for sheets/dialogs (= surface blended over bg).
-  // textPrimary 13.64 · textSecondary 7.85 · textTertiary 4.87 · accentText 7.19.
-  surfaceRaised: '#2c2c3f',
-  // Dimmed layer behind sheets/dialogs (not the media scrim above).
-  backdrop:      'rgba(0,0,0,0.60)',
-  // Keyboard focus ring: 8.99:1 on bg.
-  focusRing:     '#fca5a5',
-  // ── Redesign M2 addition ────────────────────────────────────────────────
-  // Boundary of a form control (text field, search, select). `border` is a
-  // decorative hairline (~1.3:1) and cannot show where a field is on its own;
-  // this clears WCAG 1.4.11's 3:1 on every ground a field sits on. Opaque, so
-  // it measures the same over a translucent surface. Measured (WCAG formula):
-  //   bg #1a1a2e 5.06 · surface-over-bg 4.04 · surfaceRaised 4.04 · surface2 3.30
-  inputBorder:   '#8a8aa0',
-}
+// One source of truth for color, type, spacing, radius, elevation. Iskotify has
+// ONE palette — this light theme; there is no dark mode and no theme setting
+// (guarded by __tests__/lightOnly.test.ts). It is contrast-tuned to WCAG:
+// primary text ≥ 7:1, secondary ≥ 4.5:1, tertiary ≥ 3:1. Adding a key here
+// propagates to every screen via useTheme().
 
 export const lightTheme = {
   bg:            '#fdf4f4',
@@ -100,8 +27,9 @@ export const lightTheme = {
   dangerSurface: 'rgba(185,28,28,0.10)',
   warning:       '#b45309',
   warningSurface:'rgba(180,83,9,0.10)',
-  // `*Strong` — text/icons on that status's OWN tint (see darkTheme's comment
-  // for the role). Light theme's tints blend a saturated color at only 10%
+  // `*Strong` — DESIGN.md's "strong" role: text/icons sitting ON that status's
+  // own `*Surface` tint (never on a plain surface — use the DEFAULT color there).
+  // The tints blend a saturated color at only 10%
   // over a near-white bg, so the DEFAULT color falls short here — each is
   // darkened until it clears 4.5:1 against its own blended *Surface tint
   // (measured, WCAG relative-luminance formula; mirrors the web preset's
@@ -120,6 +48,8 @@ export const lightTheme = {
   // Elevation — soft maroon-tinted shadows for the warm light palette.
   shadowSm:      '0px 1px 3px rgba(128,0,0,0.08)',
   shadowMd:      '0px 8px 24px rgba(128,0,0,0.12)',
+  // Full-screen media viewer (figure zoom): dark so the image is the only
+  // bright thing on screen; controls on it use textInverse.
   scrim:         'rgba(0,0,0,0.92)',
   scrimControl:  'rgba(255,255,255,0.15)',
   // ── Redesign M1 (direction C) additions ─────────────────────────────────
@@ -137,17 +67,13 @@ export const lightTheme = {
   backdrop:      'rgba(45,10,10,0.40)',
   // Keyboard focus ring: 10.13:1 on bg.
   focusRing:     '#800000',
-  // Form-control boundary (see darkTheme). Maroon-tinted grey so it sits in
-  // the warm palette. Measured (WCAG formula):
+  // Boundary of a form control (text field, search, select). `border` is a
+  // decorative hairline and can't show where a field is on its own; this
+  // clears WCAG 1.4.11's 3:1 on every ground a field sits on. Maroon-tinted
+  // grey so it sits in the warm palette. Measured (WCAG formula):
   //   bg #fdf4f4 3.48 · surface #ffffff 3.76 · surfaceRaised 3.76 · surface2 3.09
   inputBorder:   '#9c7c7c',
 }
-
-export const statusColors = {
-  strong: '#4ade80',
-  weak:   '#f87171',
-  review: '#fbbf24',
-} as const
 
 // Type scale (min 12 for readability — no body/label below 12pt).
 export const typography = {
@@ -240,7 +166,7 @@ export const layout = {
   tabBarClearance: 80,  // tabBarHeight + 16 gap (add insets.bottom at the call site)
 } as const
 
-export type Theme      = typeof darkTheme
+export type Theme      = typeof lightTheme
 export type Typography = typeof typography
 export type Spacing    = typeof spacing
 export type Radius     = typeof radius

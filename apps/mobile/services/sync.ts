@@ -220,7 +220,6 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
         selectedListingSlug: remoteSettings.selectedListingSlug ?? '',
         lastSyncedAt: 0,  // force catalog re-sync on next launch
         notificationsEnabled: remoteSettings.notificationsEnabled ?? true,
-        theme: remoteSettings.theme ?? 'system',
         focusModeEnabled: remoteSettings.focusModeEnabled ?? true,
         dailyReminderHour: remoteSettings.dailyReminderHour ?? 9,
         weeklySummaryEnabled: remoteSettings.weeklySummaryEnabled ?? true,

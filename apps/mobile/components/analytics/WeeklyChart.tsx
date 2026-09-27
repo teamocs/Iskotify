@@ -12,7 +12,7 @@ export function weeklyChartLabel(data: WeeklyBar[]): string {
 
 /**
  * Seven daily accuracy bars, today last. Bars use accentBorder (≥3:1 non-text
- * contrast in both themes) and today uses accentText, so the bars stand on
+ * contrast) and today uses accentText, so the bars stand on
  * their own; the numbers are printed too, and the whole chart is read as one
  * labelled image by screen readers.
  */

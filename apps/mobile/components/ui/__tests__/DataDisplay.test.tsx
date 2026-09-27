@@ -3,6 +3,7 @@
  * ProgressBar, StatNumber, Avatar — render + accessibility contract.
  */
 import React from 'react'
+import { lightTheme } from '../../../theme/tokens'
 import { Text, StyleSheet } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { Card } from '../Card'
@@ -121,8 +122,7 @@ describe('Badge', () => {
   it('status tones use the *Strong text token on their own tint (DESIGN.md)', () => {
     render(<Badge label="Eligible" tone="success" />)
     const style = StyleSheet.flatten(screen.getByText('Eligible').props.style)
-    // themeContextMock (dark) successStrong
-    expect(style.color).toBe('#4ade80')
+    expect(style.color).toBe(lightTheme.successStrong)
   })
 })
 

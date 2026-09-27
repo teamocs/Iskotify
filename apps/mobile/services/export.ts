@@ -143,7 +143,6 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     googleId: s.googleId ? String(s.googleId) : s.google_id ? String(s.google_id) : null,
     email: s.email ? String(s.email) : null,
     notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
-    theme: String(s.theme ?? 'system'),
     dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
     weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
   }).onConflictDoUpdate({
@@ -156,7 +155,6 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       googleId: s.googleId ? String(s.googleId) : s.google_id ? String(s.google_id) : null,
       email: s.email ? String(s.email) : null,
       notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
-      theme: String(s.theme ?? 'system'),
       dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
       weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
     },

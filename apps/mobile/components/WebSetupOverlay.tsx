@@ -57,7 +57,7 @@ export function WebSetupOverlay() {
   if (!isVisible) return null
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Image
         source={require('../assets/images/icon.png')}
         style={styles.icon}
@@ -78,7 +78,7 @@ export function WebSetupOverlay() {
       </Text>
 
       <Text
-        style={[styles.subtitle, { fontSize: typo.sm, color: 'rgba(255,255,255,0.7)' }]}
+        style={[styles.subtitle, { fontSize: typo.sm, color: theme.textSecondary }]}
         maxFontSizeMultiplier={1.4}
       >
         Fetching the latest exams, scholarships and study decks. This only happens once on a new device.
@@ -87,7 +87,7 @@ export function WebSetupOverlay() {
       {showContinue ? (
         <View style={styles.continueBlock}>
           <Text
-            style={[styles.slowText, { fontSize: typo.xs, color: 'rgba(255,255,255,0.5)' }]}
+            style={[styles.slowText, { fontSize: typo.xs, color: theme.textTertiary }]}
             maxFontSizeMultiplier={1.4}
           >
             Taking longer than usual…
@@ -95,7 +95,7 @@ export function WebSetupOverlay() {
           <Pressable
             style={({ pressed }) => [
               styles.continueBtn,
-              { borderColor: 'rgba(255,255,255,0.35)' },
+              { borderColor: theme.inputBorder, backgroundColor: theme.surface },
               pressed && styles.continueBtnPressed,
             ]}
             onPress={() => markSyncDone()}
@@ -118,7 +118,6 @@ export function WebSetupOverlay() {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#1a1a2e',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9999,

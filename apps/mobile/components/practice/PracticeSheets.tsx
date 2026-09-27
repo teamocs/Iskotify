@@ -15,7 +15,7 @@ type TopicLite = { topic: { id: string; name: string; subjectId: string }; cardC
 
 /**
  * Text field styling shared by the Practice sheets. The outline uses
- * textTertiary (≥5:1 in both themes) because a control boundary must clear
+ * textTertiary (≥5:1) because a control boundary must clear
  * 3:1 (WCAG 1.4.11) and the theme's decorative `border` token does not.
  */
 function useFieldStyle() {

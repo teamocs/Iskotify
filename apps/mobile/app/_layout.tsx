@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Platform, View, Image, InteractionManager, useColorScheme } from 'react-native'
+import { Platform, View, Image, InteractionManager } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack, router, type Href } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -17,9 +17,8 @@ import {
   Lexend_600SemiBold,
 } from '@expo-google-fonts/lexend'
 import { DrizzleProvider } from '../db'
-import { ThemeProvider, useTheme } from '../theme/ThemeContext'
-import { darkTheme, lightTheme, radius } from '../theme/tokens'
-import { resolveColorScheme } from '../theme/resolveColorScheme'
+import { ThemeProvider } from '../theme/ThemeContext'
+import { lightTheme, radius } from '../theme/tokens'
 import { useDb } from '../hooks/useDb'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
@@ -66,9 +65,8 @@ export default function RootLayout() {
   })
   const [appReady, setAppReady] = useState(false)
   const fontsReady = fontsLoaded || !!fontError
-  // The splash sits outside ThemeProvider (the stored preference isn't read
-  // yet), so it follows the OS and otherwise the light first-launch default.
-  const splashBg = resolveColorScheme('system', useColorScheme()) === 'dark' ? darkTheme.bg : lightTheme.bg
+  // The splash sits outside ThemeProvider; it uses the one (light) palette's ground.
+  const splashBg = lightTheme.bg
 
   // Stable callback — never changes, safe as useCallback dep
   const handleReady = useCallback(() => setAppReady(true), [])
@@ -135,7 +133,6 @@ export default function RootLayout() {
 
 function AppInit({ onReady }: { onReady: () => void }) {
   const db = useDb()
-  const { isDark } = useTheme()
 
   const initialize = useCallback(async () => {
     // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set. Runs on
@@ -321,7 +318,7 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style="dark" />
       <AnalyticsScreenTracker />
       {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
     </>

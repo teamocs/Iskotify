@@ -1,21 +1,15 @@
-import { darkTheme, lightTheme, textStyles, textStyle, typography, fonts } from '../tokens'
+import { lightTheme, textStyles, textStyle, typography, fonts } from '../tokens'
 
 // September 2026 accessibility audit follow-up: the ScoreDisclaimerModal's
-// acknowledge button was white text directly on `t.warning` (#fbbf24 in dark
-// ≈1.7:1) — a WCAG failure. `warningStrong`/`successStrong`/`dangerStrong`
+// acknowledge button was white text directly on `t.warning` — a WCAG failure. `warningStrong`/`successStrong`/`dangerStrong`
 // exist for the *text-on-that-status's-own-tint* role (DESIGN.md's `strong`
 // role), distinct from `warning`/`success`/`danger` (text/icon on a plain
 // surface, or as a fill behind white text). See tokens.ts for the measured
-// contrast ratios computed against each theme's own *Surface tint.
+// contrast ratios computed against each *Surface tint.
 describe('theme tokens', () => {
-  it('darkTheme and lightTheme expose the same set of keys (no silent drift)', () => {
-    expect(Object.keys(darkTheme).sort()).toEqual(Object.keys(lightTheme).sort())
-  })
-
   it.each(['warningStrong', 'successStrong', 'dangerStrong'] as const)(
-    '%s is defined as a string on both themes',
+    '%s is defined as a string',
     (key) => {
-      expect(typeof darkTheme[key]).toBe('string')
       expect(typeof lightTheme[key]).toBe('string')
     },
   )
@@ -24,8 +18,7 @@ describe('theme tokens', () => {
   it.each([
     'successBorder', 'dangerBorder', 'warningBorder', 'accentBorder',
     'accentPressed', 'surfaceRaised', 'backdrop', 'focusRing',
-  ] as const)('%s is defined as a string on both themes', (key) => {
-    expect(typeof darkTheme[key]).toBe('string')
+  ] as const)('%s is defined as a string', (key) => {
     expect(typeof lightTheme[key]).toBe('string')
   })
 
@@ -50,7 +43,8 @@ describe('theme tokens', () => {
       return (x! + 0.05) / (y! + 0.05)
     }
 
-    it.each([['light', lightTheme], ['dark', darkTheme]] as const)('%s theme clears 3:1 on bg, surface, surfaceRaised and surface2', (_n, th) => {
+    it('clears 3:1 on bg, surface, surfaceRaised and surface2', () => {
+      const th = lightTheme
       expect(th.inputBorder).toMatch(/^#[0-9a-f]{6}$/i)
       const bg = hex(th.bg)
       const border = hex(th.inputBorder)
@@ -60,9 +54,8 @@ describe('theme tokens', () => {
     })
   })
 
-  it('the raised surface (sheets, dialogs) is opaque in both themes', () => {
+  it('the raised surface (sheets, dialogs) is opaque', () => {
     // A translucent sheet would show the screen through it.
-    expect(darkTheme.surfaceRaised).toMatch(/^#[0-9a-f]{6}$/i)
     expect(lightTheme.surfaceRaised).toMatch(/^#[0-9a-f]{6}$/i)
   })
 })

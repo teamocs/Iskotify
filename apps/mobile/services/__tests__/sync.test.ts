@@ -451,7 +451,8 @@ describe('pullUserData', () => {
     expect(s.gradeLevel).toBe(12)
     expect(s.selectedListingSlug).toBe('upcat-2026')
     expect(s.notificationsEnabled).toBe(false)
-    expect(s.theme).toBe('dark')
+    // A legacy theme in an old backup is ignored: there is one palette.
+    expect(s.theme).toBe('system')
     expect(s.focusModeEnabled).toBe(false)
   })
 

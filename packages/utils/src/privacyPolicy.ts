@@ -66,7 +66,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           },
           {
             label: 'Your study activity.',
-            text: 'Your answers and scores, practice sessions, flashcard review schedule, saved decks, focus list, study plan, the scholarship requirements you tick off, your notes and note reminders, and your app settings, like theme and reminder time.',
+            text: 'Your answers and scores, practice sessions, flashcard review schedule, saved decks, focus list, study plan, the scholarship requirements you tick off, your notes and note reminders, and your app settings, like your reminder time and focus mode.',
           },
           {
             label: 'Things you send us.',
