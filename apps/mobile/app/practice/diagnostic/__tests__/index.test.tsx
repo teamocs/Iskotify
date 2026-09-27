@@ -1,4 +1,5 @@
 import React from 'react'
+import { lightTheme } from '../../../../theme/tokens'
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react-native'
 import { Alert } from 'react-native'
 import DiagnosticExam from '../index'
@@ -414,7 +415,7 @@ describe('DiagnosticExam', () => {
     await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
     const node = screen.getAllByText(pct)[0]! // the overall figure renders first
     const flat = Object.assign({}, ...[node.props.style].flat(Infinity).filter(Boolean))
-    expect(flat.color).toBe('#ffffff') // theme mock textPrimary — never success/danger
+    expect(flat.color).toBe(lightTheme.textPrimary) // neutral ink — never success/danger
   })
 
   // ── Redesign M3: the focus-mode frame shared with exam/[slug].tsx ──────────

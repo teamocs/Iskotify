@@ -14,7 +14,6 @@ export interface UserSettingsData {
   googleId: string | null
   email: string | null
   notificationsEnabled: boolean | null
-  theme: string
   focusModeEnabled: boolean
   incomeBracket: IncomeBracket | null
   gwa: number | null
@@ -43,7 +42,6 @@ const DEFAULTS: UserSettingsData = {
   googleId: null,
   email: null,
   notificationsEnabled: true,
-  theme: 'system',
   focusModeEnabled: true,
   incomeBracket: null,
   gwa: null,
@@ -82,7 +80,6 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     googleId: row.googleId ?? null,
     email: row.email ?? null,
     notificationsEnabled: row.notificationsEnabled ?? true,
-    theme: row.theme ?? 'system',
     focusModeEnabled: row.focusModeEnabled ?? true,
     incomeBracket: (row.incomeBracket as IncomeBracket | null) ?? null,
     gwa: row.gwa ?? null,
@@ -117,7 +114,6 @@ export async function updateSettings(
   if ('googleId' in patch) set.googleId = patch.googleId ?? null
   if ('email' in patch) set.email = patch.email ?? null
   if ('notificationsEnabled' in patch) set.notificationsEnabled = patch.notificationsEnabled ?? true
-  if (patch.theme !== undefined) set.theme = patch.theme
   if ('focusModeEnabled' in patch) set.focusModeEnabled = patch.focusModeEnabled ?? true
   if ('incomeBracket' in patch) set.incomeBracket = patch.incomeBracket ?? null
   if ('gwa' in patch) set.gwa = patch.gwa ?? null

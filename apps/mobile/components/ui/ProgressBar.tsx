@@ -12,8 +12,7 @@ interface Props {
 }
 
 const FILL: Record<NonNullable<Props['tone']>, keyof Theme> = {
-  // accentText rather than accent: a readable fill in dark mode (5.86:1 on the
-  // track) and still maroon-family in light (9.73:1 accent on the track).
+  // accentText: a maroon-family fill that reads clearly on the track.
   accent: 'accentText', success: 'success', warning: 'warning', danger: 'danger',
 }
 

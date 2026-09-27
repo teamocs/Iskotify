@@ -12,7 +12,7 @@ export interface ButtonProps {
   /**
    * `primary` is the maroon fill — direction C allows ONE per screen, for the
    * next step. `secondary` is outlined, `ghost` is text-only, `danger` is a
-   * tinted destructive action (legible in both themes).
+   * tinted destructive action.
    */
   variant?: ButtonVariant
   size?: ButtonSize

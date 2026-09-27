@@ -4,6 +4,7 @@
  * plus Profile (avatar) and Settings at the bottom.
  */
 import React from 'react'
+import { lightTheme } from '../../theme/tokens'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 
 jest.mock('expo-router', () => ({
@@ -59,7 +60,7 @@ describe('SidebarNav', () => {
     render(<SidebarNav />)
     const p = screen.UNSAFE_root.findAll((n: any) => typeof n.type !== 'string' && typeof n.props.style === 'function' && n.props.accessibilityLabel === 'Practice')[0]!
     const ring = StyleSheet.flatten(p.props.style({ pressed: false, focused: true, hovered: false }))
-    expect(ring.outlineColor).toBe('#fca5a5')
+    expect(ring.outlineColor).toBe(lightTheme.focusRing)
     expect(ring.outlineWidth).toBeGreaterThanOrEqual(2)
     expect(ring.outlineOffset).toBeGreaterThanOrEqual(2)
     const idle = StyleSheet.flatten(p.props.style({ pressed: false, focused: false, hovered: false }))

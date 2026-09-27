@@ -6,7 +6,7 @@ import type { NoteColor } from '../../hooks/useNotes'
  *
  * Notes store a colour KEY (`notes.color`: 'red', 'yellow', … or null) — the
  * data is unchanged. At render time each stored key maps onto one of six
- * theme surfaces, so a note reads correctly in light and dark mode and no
+ * theme surfaces, so a note always uses the app's palette and no
  * screen paints a hard-coded pastel. Legacy keys from the old eleven-colour
  * palette fold onto the nearest tone (orange → amber, cyan → maroon, …).
  */

@@ -10,7 +10,7 @@ import { MatchPill } from '../MatchPill'
 
 jest.mock('../../../theme/ThemeContext', () => {
   const { lightTheme, typography } = jest.requireActual('../../../theme/tokens')
-  return { useTheme: () => ({ theme: lightTheme, typo: typography, isDark: false }) }
+  return { useTheme: () => ({ theme: lightTheme, typo: typography }) }
 })
 
 const { lightTheme } = jest.requireActual('../../../theme/tokens')

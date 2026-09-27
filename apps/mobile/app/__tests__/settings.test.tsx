@@ -147,17 +147,11 @@ describe('SettingsScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/settings/leave-feedback')
   })
 
-  it('the theme picker is a radio group exposing aria-checked, with 44pt options', () => {
-    const { StyleSheet } = require('react-native')
+  it('has no theme setting: the app has one (light) palette', () => {
     render(<SettingsScreen />)
-    expect(screen.getByRole('header', { name: 'Appearance' })).toBeTruthy()
-    // themeContextMock reports themePref 'system'.
-    expect(aria(screen.getByRole('radio', { name: 'Auto' }), 'aria-checked')).toBe(true)
-    expect(aria(screen.getByRole('radio', { name: 'Light' }), 'aria-checked')).toBe(false)
-    expect(aria(screen.getByRole('radio', { name: 'Dark' }), 'aria-checked')).toBe(false)
-    const light = screen.getByRole('radio', { name: 'Light' })
-    const st = StyleSheet.flatten(typeof light.props.style === 'function' ? light.props.style({ pressed: false }) : light.props.style)
-    expect(st.minHeight).toBeGreaterThanOrEqual(44)
+    expect(screen.queryByRole('header', { name: 'Appearance' })).toBeNull()
+    expect(screen.queryByRole('radiogroup', { name: 'Theme' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'Dark' })).toBeNull()
   })
 
   it('shows Student as the default name', async () => {

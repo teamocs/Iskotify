@@ -6,6 +6,7 @@
  * counterpart. Native behaviour must stay unchanged.
  */
 import React from 'react'
+import { lightTheme } from '../../../theme/tokens'
 import { Modal, Platform, StyleSheet, Text } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 type ReactTestInstance = typeof screen.UNSAFE_root
@@ -25,8 +26,8 @@ import { Sheet } from '../Sheet'
 import { StatNumber } from '../StatNumber'
 import { focusRing, setInputModality } from '../a11y'
 
-// Matches __mocks__/themeContextMock.js (dark theme).
-const FOCUS_RING = '#fca5a5'
+// The mock serves the real palette (__mocks__/themeContextMock.js).
+const FOCUS_RING = lightTheme.focusRing
 
 /** Every node hidden from native AT must also be aria-hidden for the web build. */
 function expectNativeHiddenAlsoAriaHidden() {

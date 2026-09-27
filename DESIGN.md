@@ -8,7 +8,8 @@ Two surfaces, two implementations, one visual language: **Refined Maroon**.
 | `apps/mobile` — Expo React Native app | `StyleSheet` + `useTheme()` | [`apps/mobile/theme/tokens.ts`](apps/mobile/theme/tokens.ts) |
 
 They are deliberately separate files — a Tailwind preset cannot drive React Native
-`StyleSheet`, and the mobile app carries a dark theme that the web does not.
+`StyleSheet`. Both products are **light-only**: one palette each, no dark mode,
+no theme setting (the mobile guard is `apps/mobile/__tests__/lightOnly.test.ts`).
 Keep the *palette intent* aligned; do not try to merge the files.
 
 ---
@@ -24,9 +25,8 @@ and were found by the September 2026 accessibility audit:
 - `#aeaeb2` was the defined `text-tertiary` token and measured **2.21:1** — a WCAG
   AA failure baked into the system, reproduced across 58 call sites including
   10px table headers.
-- Mobile screens hard-coded `#4ade80` / `#f87171` / `#fbbf24`. Those are the
-  *dark* theme's values, so they never switched — light mode rendered them at
-  **1.54–2.77:1**.
+- Mobile screens hard-coded `#4ade80` / `#f87171` / `#fbbf24`, leftovers from a
+  since-removed dark palette, which rendered at **1.54–2.77:1** on the light ground.
 
 A hard-coded colour cannot re-theme and cannot be audited. A token can be both.
 
@@ -175,7 +175,7 @@ of scope.
 
 ## Mobile Design System (`apps/mobile`)
 
-The mobile app runs on phones (native), tablets (native and web), and the web build. The design system lives in `apps/mobile/theme/tokens.ts` and is consumed through `useTheme()` — never import `darkTheme` / `lightTheme` directly.
+The mobile app runs on phones (native), tablets (native and web), and the web build. The design system lives in `apps/mobile/theme/tokens.ts` and is consumed through `useTheme()` — never import `lightTheme` directly in a screen. There is one palette (the light theme); the app has no dark mode and no theme setting.
 
 ### Tokens: colours and typography
 
@@ -188,28 +188,27 @@ const s = useMemo(() => StyleSheet.create({
 }), [t])
 ```
 
-Both theme objects **must** keep identical keys — `Theme = typeof darkTheme`, so a
-key missing from `lightTheme` is a type error, and a key missing from `darkTheme`
-silently disappears from the type.
+`Theme = typeof lightTheme`: adding a key to the palette makes it available on
+every screen through `useTheme()`.
 
 #### Colour roles
 
-**Text layers** (measured WCAG contrast, dark on `#1a1a2e`; light is worst-of `#fdf4f4` / `#ffffff`):
+**Text layers** (measured WCAG contrast, worst-of `#fdf4f4` / `#ffffff`):
 
-| Role | Dark | Light | Usage |
-|---|---|---|---|
-| `textPrimary` | 17.06 | 16.75 | Primary body text, labels |
-| `textSecondary` | 9.30 | 8.72 | Secondary text, hints, muted labels |
-| `textTertiary` | 5.47 | 5.09 | Disabled, very subtle text |
-| `textInverse` | — | — | Text/icons on maroon fills (44pt+ targets use `accentText` instead) |
+| Role | Contrast | Usage |
+|---|---|---|
+| `textPrimary` | 16.75 | Primary body text, labels |
+| `textSecondary` | 8.72 | Secondary text, hints, muted labels |
+| `textTertiary` | 5.09 | Disabled, very subtle text |
+| `textInverse` | — | Text/icons on maroon fills (44pt+ targets use `accentText` instead) |
 
 **Surfaces and backgrounds**:
-- `bg` — page background (`#1a1a2e` dark, `#fdf4f4` light, warm maroon tint)
+- `bg` — page background (`#fdf4f4`, warm maroon tint)
 - `surface` / `surface2` — cards, raised panels, interactive states
-- `surfaceRaised` — modal sheets/dialogs (darker opaque composite)
+- `surfaceRaised` — modal sheets/dialogs (opaque white)
 - `surfaceSubtle` — skeleton loaders, dividers
 - `border` — card and control edges
-- `inputBorder` — form-control boundary (text fields, pickers), non-text 3:1: dark 5.06 bg · 4.04 surface · 3.30 surface2; light 3.48 bg · 3.76 surface · 3.09 surface2
+- `inputBorder` — form-control boundary (text fields, pickers), non-text 3:1: 3.48 bg · 3.76 surface · 3.09 surface2
 
 **Brand and status** — named by function, not colour:
 - `accent` + `accentText` — primary interactive elements (maroon `#800000`)
@@ -221,11 +220,11 @@ silently disappears from the type.
 - `danger` / `dangerSurface` / `dangerStrong` + `dangerBorder`
 - `warning` / `warningSurface` / `warningStrong` + `warningBorder`
 
-**Elevation**: `shadowSm` (1px 3px, soft) and `shadowMd` (deeper, cards). Dark theme uses deeper black; light theme uses warm maroon tint.
+**Elevation**: `shadowSm` (1px 3px, soft) and `shadowMd` (deeper, cards), both a warm maroon tint.
 
-**Scrim** (full-screen overlay dimming, media viewer): `scrim` (dark in both themes) and `scrimControl` (icons on the scrim).
+**Scrim** (full-screen overlay dimming, media viewer): `scrim` (dark, so the media is the only bright thing on screen) and `scrimControl` (icons on the scrim).
 
-**Theme selection rule** (`resolveColorScheme.ts`): explicit user choice (`light` / `dark` in Settings) always wins; `system` (the default) follows the OS; when the OS reports nothing, **fall back to light** (the owner's 2026-09 directive for first launch).
+**One palette**: the app is light-only regardless of the phone's setting — `app.json` sets `userInterfaceStyle: "light"`, the status bar is dark-on-light, and the web build declares `color-scheme: light`. Do not add a dark variant (owner decision, 2026-09).
 
 #### Type roles and the `textStyle()` helper
 
@@ -330,7 +329,7 @@ Example responsive screen:
 | `Card` | Bordered surface with optional elevation. Optionally pressable. | `accessibilityRole="button"` if `onPress`, optional `accessibilityLabel` |
 | `Badge` | Small pill tag for status/tone. Tone names theme keys: `accent`, `neutral`, `success`, `warning`, `danger`. Label required. | Decorative or status label |
 | `Chip` | Static tag (non-interactive); `FilterChip` is an interactive toggle with radio/checkbox semantics. | `FilterChip` uses `aria-checked` / `aria-selected` (not `accessibilityState`) |
-| `Avatar` | Initials in maroon circle (6.19:1 light, 8.81:1 dark). Pressable version ≥ 44pt. Fallback to user icon. | Decorative circle via `decorative` helper; optional pressable label |
+| `Avatar` | Initials in maroon circle (6.19:1). Pressable version ≥ 44pt. Fallback to user icon. | Decorative circle via `decorative` helper; optional pressable label |
 | `ProgressBar` | Linear progress (0–1). | `accessibilityRole="progressbar"`, `accessibilityValue` |
 | `ProgressRing` | Circular progress (score rings, countdown circles). | Same as ProgressBar |
 | `ListRow` | Compact list item with optional leading icon, two text lines, optional trailing. | Pressable with `accessibilityRole="button"` if interactive |

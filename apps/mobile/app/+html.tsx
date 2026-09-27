@@ -21,6 +21,8 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+        {/* One (light) palette: tint the mobile browser chrome to the page ground. */}
+        <meta name="theme-color" content="#fdf4f4" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
@@ -41,12 +43,10 @@ export default function Root({ children }: PropsWithChildren) {
  * Global web-only CSS injected into the <head>.
  *
  * Rules:
- *  1. color-scheme: light — the first-launch default (owner decision, 2026-09).
- *     ThemeProvider updates document.documentElement.style.colorScheme at
- *     runtime once the user's preference / the OS scheme is known, so native
- *     form controls and scroll bars follow the painted palette.
- *  2. Font-smoothing antialiased — prevents sub-pixel rendering on macOS/Linux
- *     which looks blurry on dark backgrounds.
+ *  1. color-scheme: light — the app has one (light) palette, so native form
+ *     controls and scroll bars always match it.
+ *  2. Font-smoothing antialiased — prevents blurry sub-pixel rendering on
+ *     macOS/Linux.
  *  3. overscroll-behavior-y: none — prevents the iOS/Android-style pull-to-
  *     refresh bounce on desktop browsers (the app manages its own scroll UX).
  *  4. prefers-reduced-motion — respects the OS accessibility setting; collapses

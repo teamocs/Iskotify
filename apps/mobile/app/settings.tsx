@@ -18,7 +18,7 @@ import {
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
 import { useTheme } from '../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../theme/tokens'
+import { radius, spacing, textStyle } from '../theme/tokens'
 import { InfoPage } from '../components/info/InfoPage'
 import { ListRow } from '../components/ui/ListRow'
 import { Avatar } from '../components/ui/Avatar'
@@ -118,15 +118,9 @@ function StepButton({ label, direction, disabled, onPress }: { label: string; di
   )
 }
 
-const THEME_OPTIONS: { label: string; value: 'system' | 'light' | 'dark' }[] = [
-  { label: 'Auto', value: 'system' },
-  { label: 'Light', value: 'light' },
-  { label: 'Dark', value: 'dark' },
-]
-
 export default function SettingsScreen() {
   const db = useDb()
-  const { theme: t, themePref, setTheme } = useTheme()
+  const { theme: t } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
   const [modelDownloadVisible, setModelDownloadVisible] = useState(false)
@@ -176,42 +170,6 @@ export default function SettingsScreen() {
           leading={<Avatar name={profileName} size={40} />}
           onPress={() => router.push('/profile')}
         />
-      </Group>
-
-      <Group title="Appearance">
-        <ControlRow label="Theme" sub="Auto follows your phone's setting">
-          <View
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Theme"
-            style={{ flexDirection: 'row', backgroundColor: t.surface2, borderRadius: radius.md, padding: spacing.xs, gap: spacing.xs }}
-          >
-            {THEME_OPTIONS.map(opt => {
-              const on = themePref === opt.value
-              return (
-                <Pressable
-                  key={opt.value}
-                  onPress={() => void setTheme(opt.value)}
-                  accessibilityRole="radio"
-                  accessibilityLabel={opt.label}
-                  aria-checked={on}
-                  style={(state) => {
-                    const { pressed, hovered, focused } = state as WebPressableState
-                    return [{
-                      minHeight: 44, minWidth: 64, paddingHorizontal: spacing.md,
-                      alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm,
-                      backgroundColor: on ? t.surface : pressed || hovered ? t.surfaceSubtle : 'transparent',
-                      boxShadow: on ? t.shadowSm : undefined,
-                    }, focusRing(t.focusRing, focused)]
-                  }}
-                >
-                  <Text style={[textStyle('label', on ? t.textPrimary : t.textSecondary), { fontFamily: on ? fonts.bodySemi : fonts.bodyMedium }]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-        </ControlRow>
       </Group>
 
       <Group title="Notifications" note="Daily nudges, reminders and your weekly summary">

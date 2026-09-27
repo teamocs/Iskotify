@@ -89,6 +89,8 @@ export const userSettings = sqliteTable('user_settings', {
   googleId: text('google_id'),
   email: text('email'),
   notificationsEnabled: integer('notifications_enabled', { mode: 'boolean' }).default(true),
+  // Legacy: the app has one (light) palette. Kept because SQLite columns are
+  // append-only (db/client.ts migrations); nothing reads or writes it.
   theme: text('theme').notNull().default('system'),
   focusModeEnabled: integer('focus_mode_enabled', { mode: 'boolean' }).notNull().default(true),
   googleCalendarConnected: integer('google_calendar_connected', { mode: 'boolean' }).notNull().default(false),
