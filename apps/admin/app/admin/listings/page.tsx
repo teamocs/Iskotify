@@ -1,55 +1,50 @@
+import Link from 'next/link'
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { ListingsView } from '@/components/admin/ListingsView'
+import { buttonClass } from '@/components/ui/Button'
+import { Icon } from '@/components/ui/Icon'
 import type { Listing } from '@iskotify/utils'
-import type { SyncLog } from '@/lib/admin/syncLog'
-import type { BadgeTone } from '@/components/ui/Badge'
 
 export const dynamic = 'force-dynamic'
 
 async function getData() {
   const db = createServerClient()
-  const [listingsRes, logsRes] = await Promise.all([
+  const [listingsRes, lastImportRes] = await Promise.all([
     db.from('listings').select('*').order('created_at', { ascending: false }),
-    db.from('sync_logs').select('*').order('created_at', { ascending: false }).limit(4)
+    db.from('listing_import_batches').select('published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   return {
     listings: (listingsRes.data ?? []) as Listing[],
-    logs: (logsRes.data ?? []) as SyncLog[]
+    lastImportTime: (lastImportRes.data?.published_at as string | undefined) ?? null,
   }
 }
 
 export default async function ListingsPage() {
-  const { listings, logs } = await getData()
+  const { listings, lastImportTime } = await getData()
 
   const total = listings.length
   const activeCount = listings.filter(l => l.status === 'active').length
   const upcomingCount = listings.filter(l => l.status === 'upcoming').length
-  const lastSyncTime = logs[0]?.created_at ?? null
-
-  function syncHealth(): { label: string; tone: BadgeTone } {
-    if (!lastSyncTime) return { label: 'Never synced', tone: 'neutral' }
-    // Server component: rendered once per request, so reading the clock here is intended.
-    // eslint-disable-next-line react-hooks/purity
-    const hrs = (Date.now() - new Date(lastSyncTime).getTime()) / 3600_000
-    if (hrs < 12) return { label: 'Healthy', tone: 'success' }
-    if (hrs < 24) return { label: 'Stale', tone: 'warning' }
-    return { label: 'Very stale', tone: 'danger' }
-  }
-
-  const health = syncHealth()
 
   return (
     <>
-      <Topbar title="All listings" showSyncButton exportHref="/api/admin/listings/export" />
+      <Topbar
+        title="All listings"
+        exportHref="/api/admin/listings/export"
+        actions={
+          <Link href="/admin/listings/import" className={buttonClass({ variant: 'secondary', size: 'sm' })}>
+            <Icon name="upload" />
+            Import
+          </Link>
+        }
+      />
       <ListingsView
         listings={listings}
-        logs={logs}
         total={total}
         active={activeCount}
         upcoming={upcomingCount}
-        lastSync={lastSyncTime}
-        health={health}
+        lastImport={lastImportTime}
       />
     </>
   )

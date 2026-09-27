@@ -31,6 +31,18 @@ describe('publishKbFile', () => {
     expect(rows('kb_drive_files')[0]!.published_at).toEqual(expect.any(String))
   })
 
+  it('writes a publish event for the history, with who published', async () => {
+    const { db, rows } = fakeDb({
+      kb_drive_files: [{ drive_file_id: 'f1', name: 'UPCAT-Math.csv', status: 'imported', question_ids: ['k:1', 'k:2'] }],
+      upcat_questions: [q('k:1'), q('k:2', { has_visual: true, image_url: null })],
+    })
+    await publishKbFile(db as any, 'f1', 'admin-uuid')
+    expect(rows('kb_publish_events')).toEqual([expect.objectContaining({
+      drive_file_id: 'f1', file_name: 'UPCAT-Math.csv', published: 1, held_missing_media: 1,
+      held_few_options: 0, held_duplicate: 0, already_published: 0, published_by: 'admin-uuid',
+    })])
+  })
+
   it('throws for an unknown file', async () => {
     const { db } = fakeDb()
     await expect(publishKbFile(db as any, 'nope')).rejects.toThrow(/not found/i)

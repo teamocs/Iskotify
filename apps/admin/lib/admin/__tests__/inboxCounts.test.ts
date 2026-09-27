@@ -129,8 +129,8 @@ describe('describeSync', () => {
     expect(describeSync({ ok: true, status: 'ok', at: '2026-09-26T10:00:00Z', message: null }, now)).toMatchObject({ tone: 'success', label: 'OK', when: '2h ago' })
   })
 
-  it('flags an OK sync older than a day as stale', () => {
-    expect(describeSync({ ok: true, status: 'ok', at: '2026-09-24T10:00:00Z', message: null }, now)).toMatchObject({ tone: 'warning', label: 'Stale' })
+  it('does not call an old import stale — listings imports are run by hand now, not on a schedule', () => {
+    expect(describeSync({ ok: true, status: 'ok', at: '2026-09-24T10:00:00Z', message: null }, now)).toMatchObject({ tone: 'success', label: 'OK', when: '2d ago' })
   })
 
   it('surfaces a failed sync', () => {

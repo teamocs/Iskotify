@@ -21,7 +21,7 @@ describe('POST /api/kb/publish', () => {
     vi.resetModules()
     mockRequireAdmin.mockReset()
     mockPublish.mockReset()
-    mockRequireAdmin.mockResolvedValue({ supabase: db })
+    mockRequireAdmin.mockResolvedValue({ supabase: db, userId: 'admin-1' })
     mockPublish.mockResolvedValue({ published: 5, alreadyPublished: 0, skippedMissingMedia: 1, skippedFewOptions: 0, skippedDuplicate: 0 })
   })
 
@@ -43,7 +43,7 @@ describe('POST /api/kb/publish', () => {
     const POST = await load()
     const res = await POST(req({ driveFileId: 'f1' }))
     expect(res.status).toBe(200)
-    expect(mockPublish).toHaveBeenCalledWith(db, 'f1')
+    expect(mockPublish).toHaveBeenCalledWith(db, 'f1', 'admin-1')
     expect(await res.json()).toMatchObject({ published: 5, skippedMissingMedia: 1 })
   })
 

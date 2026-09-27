@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await publishKbFile(gate.supabase!, driveFileId))
+    return NextResponse.json(await publishKbFile(gate.supabase!, driveFileId, gate.userId))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Publish failed'
     const status = /not found/i.test(message) ? 404 : 500

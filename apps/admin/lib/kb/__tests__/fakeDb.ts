@@ -9,6 +9,7 @@ const KEYS: Record<string, string> = {
   upcat_questions: 'question_id',
   upcat_passages: 'set_id',
   kb_drive_files: 'drive_file_id',
+  kb_file_mappings: 'drive_file_id',
 }
 
 export function fakeDb(seed: Record<string, Row[]> = {}) {
@@ -50,6 +51,29 @@ export function fakeDb(seed: Record<string, Row[]> = {}) {
             else t(name).push({ ...v })
           }
           return Promise.resolve({ error: null })
+        },
+        insert(values: Row | Row[]) {
+          const arr = (Array.isArray(values) ? values : [values]).map(v => ({ id: t(name).length + 1, ...v }))
+          t(name).push(...arr)
+          const done = { data: arr, error: null }
+          const b: any = {
+            select() { return b },
+            single() { return Promise.resolve({ data: arr[0], error: null }) },
+            then(res: any, rej: any) { return Promise.resolve(done).then(res, rej) },
+          }
+          return b
+        },
+        delete() {
+          const filters: Filter[] = []
+          const b: any = {
+            eq(col: string, val: unknown) { filters.push(r => r[col] === val); return b },
+            then(res: any, rej: any) {
+              const keep = t(name).filter(r => !filters.every(f => f(r)))
+              tables.set(name, keep)
+              return Promise.resolve({ error: null }).then(res, rej)
+            },
+          }
+          return b
         },
         update(patch: Row) {
           const filters: Filter[] = []

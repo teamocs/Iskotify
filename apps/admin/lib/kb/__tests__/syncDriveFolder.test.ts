@@ -1,48 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { syncDriveFolder, type DriveEntry, type DriveGateway, type MediaStore } from '../syncDriveFolder'
+import { syncDriveFolder } from '../syncDriveFolder'
 import { fakeDb } from './fakeDb'
-
-const MATH_CSV = [
-  'ID,Topic,Subtopic,Difficulty,Question,A,B,C,D,Answer,Solution',
-  'UPCAT-MATH-001,Algebra,Ratio,Average,Q1?,a,b,c,d,B,s1',
-  'UPCAT-MATH-002,Geometry,Angles,Easy,Q2?,a,b,c,d,A,s2',
-].join('\n')
-
-const SCI_CSV = [
-  'ID,Topic,Subtopic,Difficulty,HasFigure,FigureFile,FigureCaption,Question,A,B,C,D,Answer,Solution',
-  'UPCAT-SCI-001,Physics,Speed,Easy,no,,,Q1?,a,b,c,d,D,s',
-  'UPCAT-SCI-003,Physics,Circuits,Average,yes,diagrams/circuit_3.png,Series circuit,Q3?,a,b,c,d,C,s',
-  'UPCAT-SCI-004,Physics,Circuits,Average,yes,diagrams/circuit_3.png,Series circuit,Q4?,a,b,c,d,A,s',
-  'UPCAT-SCI-005,Biology,Cells,Easy,yes,diagrams/missing.png,A cell,Q5?,a,b,c,d,B,s',
-].join('\n')
-
-function pngBytes(w: number, h: number) {
-  const b = Buffer.alloc(24)
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0)
-  b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'ascii'); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20)
-  return b
-}
-
-function entry(p: Partial<DriveEntry> & { id: string; name: string }): DriveEntry {
-  return { mimeType: 'text/csv', md5Checksum: `md5-${p.id}`, modifiedTime: '2026-09-14T00:00:00Z', path: 'Iskotify Questions', ...p }
-}
-
-function gateway(entries: DriveEntry[], texts: Record<string, string>, bytes: Record<string, Buffer> = {}) {
-  const drive: DriveGateway = {
-    listTree: vi.fn(async () => entries),
-    downloadText: vi.fn(async (e: DriveEntry) => {
-      if (!(e.id in texts)) throw new Error(`boom ${e.id}`)
-      return texts[e.id]!
-    }),
-    downloadBytes: vi.fn(async (e: DriveEntry) => bytes[e.id]!),
-  }
-  return drive
-}
-
-function mediaStore() {
-  const media: MediaStore = { upload: vi.fn(async (key: string) => `https://cdn.test/question-media/${key}`) }
-  return media
-}
+import { MATH_CSV, SCI_CSV, entry, gateway, mediaStore, noAi, pngBytes } from './syncFixtures'
 
 describe('syncDriveFolder', () => {
   it('imports a new CSV as namespaced drafts and records it in the ledger', async () => {
@@ -107,17 +66,19 @@ describe('syncDriveFolder', () => {
       [
         entry({ id: 'u1', name: 'random-questions.csv' }),
         entry({ id: 'p1', name: 'PSHS_NCE_300_Questions.csv' }),
-        entry({ id: 'x1', name: 'USTET_Mental Ability_300.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        entry({ id: 'x1', name: 'ACET_Abstract_Reasoning_300Q_Visual.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
         entry({ id: 'h1', name: 'UPCAT-Math-Extra.csv' }),
       ],
       { u1: 'a,b\n1,2', p1: 'x', h1: 'foo,bar\n1,2' },
     )
-    const res = await syncDriveFolder(db as any, drive, mediaStore(), { rootId: 'root' })
+    const res = await syncDriveFolder(db as any, drive, mediaStore(), { rootId: 'root', ask: noAi })
     const byId = Object.fromEntries(rows('kb_drive_files').map(r => [r.drive_file_id, r]))
     expect(byId.u1.status).toBe('needs_mapping')
     expect(byId.p1.status).toBe('skipped')
-    expect(byId.x1).toMatchObject({ status: 'skipped', message: expect.stringMatching(/CSV|Google Sheet/) })
-    expect(byId.h1).toMatchObject({ status: 'needs_mapping', message: expect.stringMatching(/header/i) })
+    expect(byId.x1).toMatchObject({ status: 'skipped', message: expect.stringMatching(/Word.*CSV, Excel/) })
+    expect(byId.h1).toMatchObject({ status: 'needs_mapping', message: expect.stringMatching(/column/i) })
+    // What the manual mapping dialog needs: the file's real headers and a few rows.
+    expect(byId.h1).toMatchObject({ headers: ['foo', 'bar'], sample_rows: [{ foo: '1', bar: '2' }] })
     expect(rows('upcat_questions')).toEqual([])
     expect(res.needsMapping).toHaveLength(2)
     expect(res.skipped).toHaveLength(2)

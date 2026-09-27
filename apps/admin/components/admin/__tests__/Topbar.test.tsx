@@ -1,8 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, it, expect, vi } from 'vitest'
-
-vi.mock('@/app/admin/actions', () => ({ triggerSync: vi.fn() }))
+import { describe, it, expect } from 'vitest'
 
 import { Topbar } from '../Topbar'
 
@@ -24,9 +22,8 @@ describe('Topbar', () => {
     expect(html).toContain('Do it')
   })
 
-  it('drops the emoji from export and sync controls', () => {
-    const html = renderToStaticMarkup(<Topbar title="T" showSyncButton exportHref="/api/x" />)
-    expect(html).toContain('Sync now')
+  it('drops the emoji from export controls', () => {
+    const html = renderToStaticMarkup(<Topbar title="T" exportHref="/api/x" />)
     expect(html).toContain('href="/api/x?format=csv"')
     expect(html).not.toMatch(/[⬇🔄⏳☰]/u)
   })

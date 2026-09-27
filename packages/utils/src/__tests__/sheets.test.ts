@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { transformSheetRow } from '../sheets'
+import { transformSheetRow, sheetOwnedFields, SHEET_OWNED_FIELDS, SheetRowSchema } from '../sheets'
 
 const validRow: Record<string, string> = {
   type: 'scholarship',
@@ -24,6 +24,13 @@ const validRow: Record<string, string> = {
 }
 
 describe('transformSheetRow', () => {
+  it('rejects links that are not http(s), such as javascript: URLs', () => {
+    expect(transformSheetRow({ ...validRow, external_url: 'javascript:alert(1)' })).toBeNull()
+    expect(transformSheetRow({ ...validRow, image_url: 'data:text/html,hi' })).toBeNull()
+    expect(transformSheetRow({ ...validRow, external_url: '', image_url: '' })).not.toBeNull()
+    expect(transformSheetRow({ ...validRow, external_url: 'http://example.ph/apply' })).not.toBeNull()
+  })
+
   it('transforms a valid row into a ListingUpsert', () => {
     const result = transformSheetRow(validRow)
     expect(result).not.toBeNull()
@@ -141,5 +148,25 @@ describe('transformSheetRow', () => {
     const result = transformSheetRow({ ...validRow, type: 'exam' })
     expect(result).not.toBeNull()
     expect(result!.type).toBe('exam')
+  })
+})
+
+describe('sheetOwnedFields', () => {
+  it('excludes slug and the scholarship-only fields the import must never overwrite', () => {
+    const parsed = SheetRowSchema.parse(validRow)
+    const owned = sheetOwnedFields(parsed)
+    expect(Object.keys(owned).sort()).toEqual([...SHEET_OWNED_FIELDS].sort())
+    expect(owned).not.toHaveProperty('slug')
+    expect(owned).not.toHaveProperty('province')
+    expect(owned).not.toHaveProperty('scholarship_meta')
+  })
+
+  it('matches the sheet-owned subset of transformSheetRow', () => {
+    const parsed = SheetRowSchema.parse(validRow)
+    const owned = sheetOwnedFields(parsed)
+    const full = transformSheetRow(validRow)!
+    for (const key of SHEET_OWNED_FIELDS) {
+      expect(owned[key]).toEqual(full[key])
+    }
   })
 })

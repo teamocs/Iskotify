@@ -3,17 +3,14 @@
 import Link from 'next/link'
 import type { Listing } from '@iskotify/utils'
 import { ListingTable } from './ListingTable'
-import type { SyncLog } from '@/lib/admin/syncLog'
-import { Badge, type BadgeTone } from '@/components/ui/Badge'
 
 interface Props {
   listings: Listing[]
-  logs: SyncLog[]
   total: number
   active: number
   upcoming: number
-  lastSync: string | null
-  health: { label: string; tone: BadgeTone }
+  /** `published_at` of the most recently published import batch, if any. */
+  lastImport: string | null
 }
 
 function Figure({ label, value, href }: { label: string; value: number; href: string }) {
@@ -30,9 +27,9 @@ function Figure({ label, value, href }: { label: string; value: number; href: st
  * the table. The table comes first in the reading order that matters — the
  * summary is one row, not four cards.
  */
-export function ListingsView({ listings, total, active, upcoming, lastSync, health }: Props) {
-  const syncTime = lastSync
-    ? new Date(lastSync).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+export function ListingsView({ listings, total, active, upcoming, lastImport }: Props) {
+  const importTime = lastImport
+    ? new Date(lastImport).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : null
 
   return (
@@ -41,9 +38,8 @@ export function ListingsView({ listings, total, active, upcoming, lastSync, heal
         <Figure label="Total" value={total} href="?" />
         <Figure label="Active" value={active} href="?status=active" />
         <Figure label="Upcoming" value={upcoming} href="?status=upcoming" />
-        <Link href="/admin/sync" className="ml-auto flex items-center gap-2 text-ui text-ink-muted hover:text-ink">
-          <span>Last sync{syncTime ? ` ${syncTime}` : ''}</span>
-          <Badge tone={health.tone}>{health.label}</Badge>
+        <Link href="/admin/listings/import" className="ml-auto text-ui text-ink-muted hover:text-ink hover:underline underline-offset-2">
+          {importTime ? `Last import ${importTime}` : 'Never imported'}
         </Link>
       </div>
       <ListingTable listings={listings} />

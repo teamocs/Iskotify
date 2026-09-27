@@ -20,7 +20,7 @@ export async function requireAdmin() {
   }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
-  return { supabase }
+  return { supabase, userId: user.id }
 }
 
 /** Boolean admin check for server actions (which can't return a NextResponse). */

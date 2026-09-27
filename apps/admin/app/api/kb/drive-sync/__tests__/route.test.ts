@@ -9,6 +9,8 @@ vi.mock('@iskotify/utils', () => ({ createServerClient: vi.fn(() => serviceClien
 
 const mockSync = vi.fn()
 vi.mock('@/lib/kb/syncDriveFolder', () => ({ syncDriveFolder: (...a: unknown[]) => mockSync(...a) }))
+const mockLogRun = vi.fn((_db: unknown, _trigger: string, run: () => Promise<unknown>) => run())
+vi.mock('@/lib/kb/syncRuns', () => ({ logSyncRun: (...a: [unknown, string, () => Promise<unknown>]) => mockLogRun(...a) }))
 vi.mock('@/lib/kb/driveClient', () => ({
   createDriveGateway: vi.fn(() => ({ tag: 'drive' })),
   createMediaStore: vi.fn(() => ({ tag: 'media' })),
@@ -24,13 +26,14 @@ async function load() {
   return await import('../route')
 }
 
-const SUMMARY = { imported: [], skipped: [], needsMapping: [], errors: [], unchanged: 3, remaining: 0 }
+const SUMMARY = { imported: [], skipped: [], needsMapping: [], errors: [], unchanged: 3, remaining: 0, aiMapped: 0 }
 
 describe('/api/kb/drive-sync', () => {
   beforeEach(() => {
     vi.resetModules()
     mockRequireAdmin.mockReset()
     mockSync.mockReset()
+    mockLogRun.mockClear()
     mockSync.mockResolvedValue(SUMMARY)
     vi.stubEnv('CRON_SECRET', 'cron-secret-value')
     vi.stubEnv('KB_DRIVE_FOLDER_ID', 'test-folder-id-0000000000')
@@ -59,6 +62,8 @@ describe('/api/kb/drive-sync', () => {
     const [db, , , opts] = mockSync.mock.calls[0]!
     expect(db).toBe(serviceClient)
     expect(opts).toMatchObject({ rootId: 'test-folder-id-0000000000', deadline: expect.any(Number) })
+    // Every run lands in the History's run log, labelled by what started it.
+    expect(mockLogRun.mock.calls[0]![1]).toBe('cron')
   })
 
   it('runs the sync for an admin session (POST from the Sync now button)', async () => {
@@ -67,6 +72,7 @@ describe('/api/kb/drive-sync', () => {
     const res = await POST(req())
     expect(res.status).toBe(200)
     expect(mockSync).toHaveBeenCalledTimes(1)
+    expect(mockLogRun.mock.calls[0]![1]).toBe('manual')
   })
 
   it('does not accept an admin session on GET (no cross-site GET-triggered syncs)', async () => {

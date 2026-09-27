@@ -27,13 +27,13 @@ interface QRow {
   image_url: string | null
 }
 
-export async function publishKbFile(db: SupabaseClient, driveFileId: string): Promise<PublishResult> {
+export async function publishKbFile(db: SupabaseClient, driveFileId: string, publishedBy?: string): Promise<PublishResult> {
   const { data: files, error: fileErr } = await db
     .from('kb_drive_files')
-    .select('drive_file_id, question_ids')
+    .select('drive_file_id, name, question_ids')
     .eq('drive_file_id', driveFileId)
   if (fileErr) throw new Error(`kb_drive_files read failed: ${fileErr.message}`)
-  const file = (files ?? [])[0] as { question_ids: string[] | null } | undefined
+  const file = (files ?? [])[0] as { name?: string; question_ids: string[] | null } | undefined
   if (!file) throw new Error(`Drive file ${driveFileId} not found in the sync ledger`)
   const ids = file.question_ids ?? []
 
@@ -93,11 +93,26 @@ export async function publishKbFile(db: SupabaseClient, driveFileId: string): Pr
     if (error) throw new Error(`flashcard projection failed: ${error.message}`)
   }
 
+  // Published: the file leaves Preview for History. Held-back questions stay
+  // drafts; the event below says how many and why.
   const { error: ledgerErr } = await db
     .from('kb_drive_files')
     .update({ published_at: new Date().toISOString() })
     .eq('drive_file_id', driveFileId)
   if (ledgerErr) throw new Error(`kb_drive_files write failed: ${ledgerErr.message}`)
+
+  const { error: eventErr } = await db.from('kb_publish_events').insert({
+    drive_file_id: driveFileId,
+    file_name: file.name ?? driveFileId,
+    published: result.published,
+    already_published: result.alreadyPublished,
+    held_missing_media: result.skippedMissingMedia,
+    held_few_options: result.skippedFewOptions,
+    held_duplicate: result.skippedDuplicate,
+    published_by: publishedBy ?? null,
+  })
+  // The questions are already live; a missing history row must not report the publish as failed.
+  if (eventErr) console.warn('[kb/publish] publish event not recorded:', eventErr.message)
 
   return result
 }

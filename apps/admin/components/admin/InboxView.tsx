@@ -69,10 +69,10 @@ export function InboxView({ counts, now }: { counts: InboxCounts; now: number })
           <QueueGroup title="Content" counts={counts} />
           <QueueGroup title="Inbox" counts={counts} />
 
-          <Card title="Listings sync" flush>
-            <Link href="/admin/sync" className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover">
+          <Card title="Listings import" flush>
+            <Link href="/admin/listings/import" className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover">
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-ink group-hover:underline underline-offset-2">Last Google Sheets sync</span>
+                <span className="block text-sm font-medium text-ink group-hover:underline underline-offset-2">Last Google Sheets import</span>
                 <span className="block text-xs text-ink-muted">
                   {sync.when ?? 'No run recorded'}
                   {syncMessage && <> · {syncMessage}</>}
