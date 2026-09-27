@@ -4,6 +4,7 @@ import { createServerClient } from '@iskotify/utils'
 import { requireAdmin } from '@/lib/admin/requireAdmin'
 import { syncDriveFolder } from '@/lib/kb/syncDriveFolder'
 import { createDriveGateway, createMediaStore } from '@/lib/kb/driveClient'
+import { logSyncRun, type SyncTrigger } from '@/lib/kb/syncRuns'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,8 @@ function isCron(req: NextRequest): boolean {
 // link or <img> loaded in a signed-in admin's browser cannot trigger a sync.
 async function run(req: NextRequest, allowSession: boolean) {
   let db: ReturnType<typeof createServerClient>
-  if (isCron(req)) {
+  const trigger: SyncTrigger = isCron(req) ? 'cron' : 'manual'
+  if (trigger === 'cron') {
     db = createServerClient()
   } else if (allowSession) {
     const gate = await requireAdmin()
@@ -44,10 +46,12 @@ async function run(req: NextRequest, allowSession: boolean) {
   }
 
   try {
-    const summary = await syncDriveFolder(db, createDriveGateway(), createMediaStore(db), {
-      rootId,
-      deadline: Date.now() + TIME_BUDGET_MS,
-    })
+    const summary = await logSyncRun(db, trigger, () =>
+      syncDriveFolder(db, createDriveGateway(), createMediaStore(db), {
+        rootId,
+        deadline: Date.now() + TIME_BUDGET_MS,
+      }),
+    )
     return NextResponse.json(summary)
   } catch (err) {
     console.error('[kb/drive-sync] failed:', err)

@@ -23,8 +23,8 @@ export interface QueueDef { id: QueueId; group: 'Content' | 'Inbox'; label: stri
 export const QUEUES: QueueDef[] = [
   { id: 'drafts', group: 'Content', label: 'Drafts awaiting publish', description: 'Topics imported but not live in the app yet.', href: '/admin/flashcards/drafts' },
   { id: 'reviewQueue', group: 'Content', label: 'Flagged distractors', description: 'Question options that may give the answer away.', href: '/admin/upcat/review-queue' },
-  { id: 'driveNeedsMapping', group: 'Content', label: 'Drive files needing mapping', description: 'Files with no import rule yet.', href: '/admin/sync#drive-question-bank' },
-  { id: 'driveMissingFigures', group: 'Content', label: 'Drive files missing figures', description: 'Imported files whose questions reference absent images.', href: '/admin/sync#drive-question-bank' },
+  { id: 'driveNeedsMapping', group: 'Content', label: 'Drive files needing mapping', description: 'Question files the sync couldn’t read on its own.', href: '/admin/sync#needs-attention' },
+  { id: 'driveMissingFigures', group: 'Content', label: 'Drive files missing figures', description: 'Imported files whose questions reference absent images.', href: '/admin/sync#preview' },
   { id: 'reports', group: 'Inbox', label: 'Reported questions', description: 'New reports from students about a question.', href: '/admin/reports' },
   { id: 'bugReports', group: 'Inbox', label: 'Bug reports', description: 'New app problems reported from the mobile app.', href: '/admin/app-reports' },
   { id: 'feedback', group: 'Inbox', label: 'Feedback', description: 'New suggestions and comments.', href: '/admin/feedback' },
@@ -125,14 +125,11 @@ export function timeAgo(iso: string, now: number): string {
 
 export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'brand'
 
-const STALE_AFTER_MS = 24 * 3600_000
-
 export function describeSync(sync: LastSync, now: number): { tone: Tone; label: string; when: string | null } {
   if (!sync.ok) return { tone: 'neutral', label: 'Unavailable', when: null }
   if (!sync.status || !sync.at) return { tone: 'neutral', label: 'Never run', when: null }
   const when = timeAgo(sync.at, now)
   if (sync.status === 'error') return { tone: 'danger', label: 'Failed', when }
   if (sync.status === 'warn') return { tone: 'warning', label: 'Warnings', when }
-  if (now - new Date(sync.at).getTime() > STALE_AFTER_MS) return { tone: 'warning', label: 'Stale', when }
   return { tone: 'success', label: 'OK', when }
 }

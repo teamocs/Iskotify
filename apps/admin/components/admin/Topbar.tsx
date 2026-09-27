@@ -1,7 +1,6 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { SyncNowButton } from './SyncNowButton'
 import { ExportButtons } from './ExportButtons'
 import { useAdminDrawer } from '../../contexts/AdminDrawerContext'
 import { IconButton } from '@/components/ui/Button'
@@ -9,14 +8,13 @@ import { IconButton } from '@/components/ui/Button'
 interface Props {
   /** The page's one h1. Pages should not repeat it as their own heading. */
   title: string
-  showSyncButton?: boolean
   /** When set, renders CSV/JSON export links (e.g. "/api/admin/listings/export"). */
   exportHref?: string
   /** Page-level actions, right-aligned. */
   actions?: ReactNode
 }
 
-export function Topbar({ title, showSyncButton = false, exportHref, actions }: Props) {
+export function Topbar({ title, exportHref, actions }: Props) {
   const { openDrawer, openShortcuts } = useAdminDrawer()
 
   return (
@@ -28,7 +26,6 @@ export function Topbar({ title, showSyncButton = false, exportHref, actions }: P
       <div className="flex items-center gap-2">
         {actions}
         {exportHref && <ExportButtons baseHref={exportHref} />}
-        {showSyncButton && <SyncNowButton />}
         <IconButton icon="keyboard" label="Keyboard shortcuts" onClick={openShortcuts} className="hidden sm:inline-flex" />
       </div>
     </header>

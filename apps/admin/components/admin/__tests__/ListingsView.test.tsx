@@ -44,10 +44,6 @@ const mockListings = [
   { ...base, id: '1', title: 'Scholar A', type: 'scholarship' as const, status: 'active' as const, deadline: null, provider: '' },
 ]
 
-const mockLogs = [
-  { id: 1, synced: 5, skipped: 2, closed: 0, status: 'ok' as const, message: null, created_at: '2025-01-01T12:00:00Z' },
-]
-
 describe('ListingsView', () => {
   // The four stat cards became one summary strip whose counts are links that
   // set the status filter in the URL.
@@ -55,32 +51,41 @@ describe('ListingsView', () => {
     const html = renderToStaticMarkup(
       React.createElement(ListingsView, {
         listings: mockListings,
-        logs: mockLogs,
         total: 42,
         active: 10,
         upcoming: 5,
-        lastSync: '2025-01-01T12:00:00Z',
-        health: { label: 'Healthy', tone: 'success' },
+        lastImport: '2025-01-01T12:00:00Z',
       })
     )
     expect(html).toContain('Total')
     expect(html).toContain('42')
     expect(html).toContain('href="?status=active"')
     expect(html).toContain('href="?status=upcoming"')
-    expect(html).toContain('Last sync')
-    expect(html).toContain('Healthy')
+    expect(html).toContain('Last import')
+    expect(html).toContain('href="/admin/listings/import"')
+  })
+
+  it('shows "Never imported" when no batch has ever been published', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ListingsView, {
+        listings: mockListings,
+        total: 1,
+        active: 1,
+        upcoming: 0,
+        lastImport: null,
+      })
+    )
+    expect(html).toContain('Never imported')
   })
 
   it('renders the listing table', () => {
     const html = renderToStaticMarkup(
       React.createElement(ListingsView, {
         listings: mockListings,
-        logs: [],
         total: 1,
         active: 1,
         upcoming: 0,
-        lastSync: null,
-        health: { label: 'Never synced', tone: 'neutral' },
+        lastImport: null,
       })
     )
     expect(html).toContain('Scholar A')

@@ -21,7 +21,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/flashcards/drafts', label: 'Drafts', icon: 'file-pen' },
       { href: '/admin/upcat/review-queue', label: 'Review queue', icon: 'scan' },
       { href: '/admin/exam-blueprints', label: 'Exam blueprints', icon: 'blueprint' },
-      { href: '/admin/sync#drive-question-bank', label: 'Drive question bank', icon: 'folder' },
+      { href: '/admin/sync', label: 'Question sync', icon: 'folder' },
     ],
   },
   {
@@ -29,6 +29,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Listings',
     items: [
       { href: '/admin/listings', label: 'All listings', icon: 'list' },
+      { href: '/admin/listings/import', label: 'Import from Sheets', icon: 'upload' },
       { href: '/admin/listings/courses', label: 'Course tags', icon: 'tag' },
       { href: '/admin/updates', label: 'Admissions updates', icon: 'megaphone' },
     ],
@@ -56,7 +57,6 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'system',
     label: 'System',
     items: [
-      { href: '/admin/sync', label: 'Sync logs', icon: 'refresh' },
       { href: '/admin/data', label: 'Data tables', icon: 'database' },
       { href: '/admin/guide', label: 'User guide', icon: 'help' },
     ],

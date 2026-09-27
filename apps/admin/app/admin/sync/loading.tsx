@@ -9,7 +9,7 @@ export default function SyncLoading() {
           <div key={i} className="h-16 bg-surface border border-subtle rounded-md animate-pulse" />
         ))}
       </div>
-      <p role="status" className="sr-only">Loading sync logs…</p>
+      <p role="status" className="sr-only">Loading question sync…</p>
     </div>
   )
 }

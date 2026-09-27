@@ -33,7 +33,7 @@ describe('InboxView', () => {
 
   it('links every queue to where the work is done', () => {
     const html = render()
-    for (const href of ['/admin/flashcards/drafts', '/admin/upcat/review-queue', '/admin/reports', '/admin/app-reports', '/admin/feedback', '/admin/date-contributions', '/admin/sync#drive-question-bank']) {
+    for (const href of ['/admin/flashcards/drafts', '/admin/upcat/review-queue', '/admin/reports', '/admin/app-reports', '/admin/feedback', '/admin/date-contributions', '/admin/sync#needs-attention']) {
       expect(html).toContain(`href="${href}"`)
     }
   })

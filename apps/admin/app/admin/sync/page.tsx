@@ -1,42 +1,43 @@
 import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
-import { KbDriveSyncPanel, type KbDriveFile } from '@/components/admin/KbDriveSyncPanel'
-import { SyncLogTable } from '@/components/admin/SyncLogTable'
-import type { SyncLog } from '@/lib/admin/syncLog'
-import { Card } from '@/components/ui/Card'
+import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { QuestionSyncView } from '@/components/admin/questionSync/QuestionSyncView'
+import type { KbFileRow, PublishEventRow, SyncRunRow } from '@/components/admin/questionSync/types'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SyncPage() {
+const FILE_COLUMNS =
+  'drive_file_id, name, path, status, dialect, mapping_source, rows_total, rows_imported, rows_missing_media, rows_drafted, rows_rejected, headers, message, imported_at, published_at, updated_at'
+
+// Google Drive → question bank. Files move Needs attention → Preview → History;
+// the Google Sheets listings import is a separate page (/admin/listings/import).
+export default async function QuestionSyncPage() {
   const db = createServerClient()
-  // Independent reads: run them together. A missing kb_drive_files table
-  // (migration 055 not applied yet) just renders the empty state.
-  const [{ data: logs, error: logsError }, { data: kbFiles }] = await Promise.all([
-    db
-      .from('sync_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100),
-    db
-      .from('kb_drive_files')
-      .select('drive_file_id, name, path, status, dialect, rows_total, rows_imported, rows_missing_media, rows_drafted, message, imported_at, published_at, updated_at')
-      .order('name'),
+  const [files, mappings, runs, events] = await Promise.all([
+    db.from('kb_drive_files').select(FILE_COLUMNS).order('name'),
+    db.from('kb_file_mappings').select('drive_file_id, subtest'),
+    db.from('kb_sync_runs').select('*').order('started_at', { ascending: false }).limit(30),
+    db.from('kb_publish_events').select('*').order('created_at', { ascending: false }).limit(200),
   ])
+
+  const mapped = new Map(((mappings.data ?? []) as { drive_file_id: string; subtest: string }[]).map(m => [m.drive_file_id, m.subtest]))
+  const rows = ((files.data ?? []) as KbFileRow[]).map(f => ({ ...f, mapped_subtest: mapped.get(f.drive_file_id) }))
 
   return (
     <>
-      <Topbar title="Sync logs" />
-      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6 md:py-5 space-y-4">
-        <KbDriveSyncPanel files={(kbFiles ?? []) as KbDriveFile[]} />
-        <Card id="sync-history" title="Listings sync history" description="The last 100 Google Sheets syncs." flush>
-          {logsError ? (
-            <div className="p-4"><ErrorBanner title="Couldn’t load the sync history" message={logsError.message} /></div>
-          ) : (
-            <SyncLogTable logs={(logs ?? []) as SyncLog[]} />
-          )}
-        </Card>
-      </div>
+      <Topbar title="Question sync" />
+      <PageBody intro="Questions from the Iskotify Drive folder arrive as drafts. Preview each file and publish it; published files move to History.">
+        {files.error ? (
+          <ErrorBanner title="Couldn’t load the Drive files" message={files.error.message} />
+        ) : (
+          <QuestionSyncView
+            files={rows}
+            runs={(runs.data ?? []) as SyncRunRow[]}
+            events={(events.data ?? []) as PublishEventRow[]}
+          />
+        )}
+      </PageBody>
     </>
   )
 }

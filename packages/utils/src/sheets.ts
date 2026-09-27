@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import type { ListingUpsert } from './types'
 
+// Empty, or an http(s) URL: these are rendered as links and images in the apps.
+const webLink = z.string().trim().refine(v => v === '' || /^https?:\/\//i.test(v), 'Links must start with http:// or https://').default('')
+
 export const SheetRowSchema = z.object({
   type: z.enum(['scholarship', 'exam']),
   title: z.string().min(1),
@@ -22,16 +25,16 @@ export const SheetRowSchema = z.object({
   ),
   region: z.string().default(''),
   grant_amount: z.string().default(''),
-  external_url: z.string().default(''),
-  image_url: z.string().default(''),
+  external_url: webLink,
+  image_url: webLink,
 })
 
-function splitPipe(value: string): string[] {
+export function splitPipe(value: string): string[] {
   if (!value.trim()) return []
   return value.split('|').map(s => s.trim()).filter(Boolean)
 }
 
-function parseEvents(value: string): Array<{ name: string; date: string }> {
+export function parseEvents(value: string): Array<{ name: string; date: string }> {
   const parts = splitPipe(value)
   const events: Array<{ name: string; date: string }> = []
   for (let i = 0; i + 1 < parts.length; i += 2) {
@@ -42,24 +45,43 @@ function parseEvents(value: string): Array<{ name: string; date: string }> {
   return events
 }
 
-function parseDate(value: string): string | null {
+export function parseDate(value: string): string | null {
   return value.trim() || null
 }
 
-function parseNumber(value: string): number | null {
+export function parseNumber(value: string): number | null {
   if (!value.trim()) return null
   const n = Number(value.trim())
   return isNaN(n) ? null : n
 }
 
-export function transformSheetRow(row: Record<string, string>): ListingUpsert | null {
-  const parsed = SheetRowSchema.safeParse(row)
-  if (!parsed.success) return null
-  const d = parsed.data
+/**
+ * The columns a sheet import is allowed to touch on an EXISTING listing.
+ * Everything else on `Listing` (id, slug, timestamps, and the Epic B
+ * scholarship-typed fields — province, city, scope, is_verified,
+ * income_ceiling, gwa_requirement, monthly_stipend, service_obligation_years,
+ * has_entrance_exam, application_window, scholarship_meta) is admin-owned and
+ * a re-sync must never overwrite it on a row that already exists.
+ */
+export const SHEET_OWNED_FIELDS = [
+  'type', 'title', 'provider', 'description', 'requirements', 'coverage',
+  'deadline', 'exam_date', 'results_date', 'events', 'target_courses',
+  'target_year_levels', 'tags', 'status', 'region', 'grant_amount',
+  'external_url', 'image_url',
+] as const satisfies readonly (keyof ListingUpsert)[]
+
+export type SheetOwnedField = typeof SHEET_OWNED_FIELDS[number]
+export type SheetOwnedFields = Pick<ListingUpsert, SheetOwnedField>
+
+type ParsedSheetRow = ReturnType<typeof SheetRowSchema.parse>
+
+/** The sheet-owned fields only, parsed from one validated row — shared by
+ *  `transformSheetRow` (new rows, full defaults) and the import planner
+ *  (existing rows, sheet-owned fields only). */
+export function sheetOwnedFields(d: ParsedSheetRow): SheetOwnedFields {
   return {
     type: d.type,
     title: d.title,
-    slug: d.slug,
     provider: d.provider,
     description: d.description,
     requirements: splitPipe(d.requirements),
@@ -76,6 +98,16 @@ export function transformSheetRow(row: Record<string, string>): ListingUpsert | 
     grant_amount: parseNumber(d.grant_amount),
     external_url: d.external_url,
     image_url: d.image_url,
+  }
+}
+
+export function transformSheetRow(row: Record<string, string>): ListingUpsert | null {
+  const parsed = SheetRowSchema.safeParse(row)
+  if (!parsed.success) return null
+  const d = parsed.data
+  return {
+    slug: d.slug,
+    ...sheetOwnedFields(d),
     // Epic B scholarship typed fields (sheet rows don't supply these; default values)
     province: null,
     city: null,
