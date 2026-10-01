@@ -19,6 +19,8 @@ jest.mock('../supabase', () => ({
   supabase: {
     auth: { getUser: jest.fn() },
     from: jest.fn(),
+    // content_status_feed (migration 065): no unpublished/deleted content by default.
+    rpc: jest.fn(() => Promise.resolve({ data: [], error: null })),
   },
 }))
 jest.mock('../questionReports', () => ({ pushPendingReports: jest.fn().mockResolvedValue(undefined) }))
