@@ -47,7 +47,32 @@ export function resolveDiagnosticTarget(input: ResolveDiagnosticTargetInput): Di
 
 /** How an exam with no blueprint acronym is named in copy: its slug, in capitals ("dcat-dlsu" -> "DCAT-DLSU"). */
 export function examSlugLabel(slug: string): string {
-  return slug.toUpperCase()
+  return typeof slug === 'string' ? slug.toUpperCase() : ''
+}
+
+/** A route param as one string: the first value of an array, else the value itself. */
+export function firstParam(v: string | string[] | undefined | null): string | undefined {
+  const s = Array.isArray(v) ? v[0] : v
+  return typeof s === 'string' ? s : undefined
+}
+
+/** `?exam=` as a slug: first value, trimmed, lowercased; undefined when blank. */
+export function normalizeExamParam(v: string | string[] | undefined | null): string | undefined {
+  const s = firstParam(v)?.trim().toLowerCase()
+  return s ? s : undefined
+}
+
+/**
+ * Whether /practice/review/<slug> would list anything: a loaded flashcard topic
+ * tagged to the exam (the same filter review/[slug].tsx applies).
+ */
+export function hasReviewTopics(
+  slug: string,
+  topicRows: readonly { topic: { id: string } }[],
+  topicIdsByListingSlug: Record<string, string[]>,
+): boolean {
+  const ids = new Set(topicIdsByListingSlug[slug] ?? [])
+  return topicRows.some(r => ids.has(r.topic.id))
 }
 
 /** Whole-diagnostic budget for an exam diagnostic (a finished passage can overshoot slightly). */
