@@ -11,17 +11,29 @@ import DiagnosticExam from '../index'
 const mockPush = jest.fn()
 const mockReplace = jest.fn()
 const mockBack = jest.fn()
-let mockSearchParams: { subject?: string; exam?: string } = {}
+let mockSearchParams: { subject?: string | string[]; exam?: string | string[] } = {}
 
 // Batch D: which exam the diagnostic samples is resolved from the focus list +
 // runnable blueprints; defaults (no focus, nothing runnable) keep the UPCAT diagnostic.
 let mockFocusSlugs: string[] = []
 let mockRunnable: { slug: string; name: string; acronym: string }[] = []
 let mockSources: Record<string, unknown> = {}
+let mockLookupError: Error | null = null
+let mockSourceGate: Promise<void> | null = null
 jest.mock('../../../../services/diagnosticSource', () => ({
-  listFocusExamSlugs: () => Promise.resolve(mockFocusSlugs),
-  listRunnableDiagnosticBlueprints: () => Promise.resolve(mockRunnable),
-  loadBlueprintDiagnosticSource: (_db: unknown, slug: string) => Promise.resolve(mockSources[slug] ?? null),
+  listFocusExamSlugs: () => (mockLookupError ? Promise.reject(mockLookupError) : Promise.resolve(mockFocusSlugs)),
+  listRunnableDiagnosticBlueprints: () => (mockLookupError ? Promise.reject(mockLookupError) : Promise.resolve(mockRunnable)),
+  loadBlueprintDiagnosticSource: async (_db: unknown, slug: string) => {
+    if (mockSourceGate) await mockSourceGate
+    return mockSources[slug] ?? null
+  },
+}))
+
+// Review topics available for the exam (the source /practice/review/<slug> lists from).
+let mockPractice: { topicRows: any[]; topicIdsByListingSlug: Record<string, string[]>; loaded: boolean } =
+  { topicRows: [], topicIdsByListingSlug: {}, loaded: true }
+jest.mock('../../../../hooks/usePracticeData', () => ({
+  usePracticeData: () => mockPractice,
 }))
 
 jest.mock('expo-router', () => ({
@@ -107,7 +119,10 @@ describe('DiagnosticExam', () => {
     mockFocusSlugs = []
     mockRunnable = []
     mockSources = {}
-    alertSpy =jest.spyOn(Alert, 'alert').mockImplementation(() => {})
+    mockLookupError = null
+    mockSourceGate = null
+    mockPractice = { topicRows: [], topicIdsByListingSlug: {}, loaded: true }
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
   })
 
   afterEach(() => alertSpy.mockRestore())
@@ -737,8 +752,122 @@ describe('DiagnosticExam', () => {
       expect(screen.getByText('Per-section readiness')).toBeTruthy()
       expect(screen.getByText(/Not available yet: Abstract Thinking/)).toBeTruthy()
 
-      fireEvent.press(screen.getByText(/Practice weakest section/))
+    })
+
+    it('review fix 1: with review topics for the exam, the next step is its review topics', async () => {
+      setupAcet()
+      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { acet: ['t1'] }, loaded: true }
+      mockSearchParams = { exam: 'acet' }
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
+      await skipToLastAndSubmit()
+      await screen.findByText('ACET diagnostic results')
+      expect(screen.queryByText('Take a mock exam')).toBeNull()
+      fireEvent.press(screen.getByText('Review ACET topics'))
       expect(mockPush).toHaveBeenCalledWith('/practice/review/acet')
+    })
+
+    it('review fix 1: with no review topics for the exam, it offers a mock exam instead of a dead end', async () => {
+      setupAcet()
+      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { upcat: ['t1'] }, loaded: true }
+      mockSearchParams = { exam: 'acet' }
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
+      await skipToLastAndSubmit()
+      await screen.findByText('ACET diagnostic results')
+      expect(screen.queryByText('Review ACET topics')).toBeNull()
+      expect(screen.queryByText(/Practice weakest/)).toBeNull()
+      fireEvent.press(screen.getByText('Take a mock exam'))
+      expect(mockPush).toHaveBeenCalledWith('/practice/start/acet')
+    })
+
+    it('review fix 2: a failed focus/blueprint lookup without ?exam= still serves the UPCAT diagnostic', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      mockLookupError = new Error('db locked')
+      mockBankRows = [
+        { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      ]
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+      warnSpy.mockRestore()
+    })
+
+    it('review fix 2: a failed lookup for an explicit ?exam= keeps the retry state', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      mockLookupError = new Error('db locked')
+      mockSearchParams = { exam: 'acet' }
+      render(<DiagnosticExam />)
+      expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy()
+      warnSpy.mockRestore()
+    })
+
+    it('review fix 3: changing the params mid-load discards the stale load (no ACET questions under a UPCAT screen)', async () => {
+      setupAcet()
+      let release!: () => void
+      mockSourceGate = new Promise<void>(r => { release = r })
+      mockSearchParams = { exam: 'acet' }
+      mockBankRows = [
+        { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      ]
+      const view = render(<DiagnosticExam />)
+      mockSearchParams = { subject: 'Science' }
+      view.rerender(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+      await act(async () => { release() })
+      expect(screen.getByText('Sci Q1')).toBeTruthy()
+      expect(screen.queryByText(LANG)).toBeNull()
+      expect(screen.queryByText(/^ENG Q\d$/)).toBeNull()
+    })
+
+    it('review fix 3: a new exam starts clean (answers, position and submit guard reset)', async () => {
+      setupAcet()
+      mockSearchParams = { exam: 'acet' }
+      const view = render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
+      fireEvent.press(screen.getByText('a'))
+      fireEvent.press(screen.getByText('Skip'))
+      mockSearchParams = { subject: 'Science' }
+      mockBankRows = [
+        { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      ]
+      view.rerender(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
+      expect(screen.getByText('Question 1 of 1')).toBeTruthy()
+      expect(screen.queryAllByRole('radio', { checked: true })).toHaveLength(0)
+      fireEvent.press(screen.getByText('a'))
+      await reviewAndConfirmSubmit(alertSpy) // would be swallowed by a stale submittedRef
+      await waitFor(() => expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ listingSlug: 'upcat', subtest: 'Science' })))
+    })
+
+    it('review fix 4: ?exam= is normalized (array, whitespace, mixed case)', async () => {
+      setupAcet()
+      mockSearchParams = { exam: ['  AcEt ', 'ustet'] }
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
+      expect(screen.getByText(LANG)).toBeTruthy()
+    })
+
+    it('review fix 4: an unknown mixed-case ?exam= is honest and does not throw', async () => {
+      mockSearchParams = { exam: ['DCAT-DLSU'] }
+      render(<DiagnosticExam />)
+      expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet")).toBeTruthy()
+    })
+
+    it('review fix 5: a resumed exam diagnostic still lists the sections not available yet', async () => {
+      setupAcet()
+      mockSearchParams = { exam: 'acet' }
+      mockLoadRun.mockResolvedValue({
+        runKey: 'diagnostic:acet:exam', kind: 'diagnostic', slug: 'acet', mode: '',
+        questionIds: ['MAT3'], sectionNames: ['Math'],
+        answers: { 0: 0 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+        endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: 4242, updatedAt: Date.now(),
+      })
+      render(<DiagnosticExam />)
+      fireEvent.press(await screen.findByText('Resume where you left off'))
+      await waitFor(() => expect(screen.getByText('MAT Q3')).toBeTruthy())
+      await skipToLastAndSubmit()
+      expect(await screen.findByText(/Not available yet: Abstract Thinking/)).toBeTruthy()
     })
 
     it('arms a timer of one minute per question', async () => {

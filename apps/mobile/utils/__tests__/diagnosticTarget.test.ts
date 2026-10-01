@@ -5,6 +5,10 @@ import {
   buildBlueprintDiagnosticSessionParams,
   blueprintDiagnosticToAttemptMeta,
   blueprintDiagnosticPool,
+  normalizeExamParam,
+  firstParam,
+  examSlugLabel,
+  hasReviewTopics,
   diagnosticRunKey,
   diagnosticRunSlug,
   BLUEPRINT_DIAGNOSTIC_MAX_QUESTIONS,
@@ -225,5 +229,40 @@ describe('diagnostic run keys', () => {
 
   it('does not let a subject value collide with an exam key', () => {
     expect(diagnosticRunKey({ kind: 'blueprint', slug: 'all' }, undefined)).not.toBe(diagnosticRunKey({ kind: 'upcat' }, undefined))
+  })
+})
+
+// ---- review fixes ----------------------------------------------------------
+
+describe('normalizeExamParam / firstParam', () => {
+  it('takes the first value of an array, trims and lowercases', () => {
+    expect(normalizeExamParam(['  ACET ', 'ustet'])).toBe('acet')
+    expect(normalizeExamParam('UpCat')).toBe('upcat')
+    expect(normalizeExamParam(' DCAT-DLSU ')).toBe('dcat-dlsu')
+  })
+  it('is undefined for missing, empty or blank values', () => {
+    expect(normalizeExamParam(undefined)).toBeUndefined()
+    expect(normalizeExamParam('')).toBeUndefined()
+    expect(normalizeExamParam('   ')).toBeUndefined()
+    expect(normalizeExamParam([])).toBeUndefined()
+  })
+  it('firstParam keeps case (subtest names) but takes the first array value', () => {
+    expect(firstParam(['Science', 'Mathematics'])).toBe('Science')
+    expect(firstParam(undefined)).toBeUndefined()
+  })
+  it('examSlugLabel never throws', () => {
+    expect(examSlugLabel('dcat-dlsu')).toBe('DCAT-DLSU')
+    expect(examSlugLabel(undefined as unknown as string)).toBe('')
+    expect(examSlugLabel(['x'] as unknown as string)).toBe('')
+  })
+})
+
+describe('hasReviewTopics', () => {
+  const topicRows = [{ topic: { id: 't1' } }, { topic: { id: 't2' } }]
+  it('is true only when a loaded topic is tagged to the exam (what review/[slug] lists)', () => {
+    expect(hasReviewTopics('acet', topicRows, { acet: ['t2'] })).toBe(true)
+    expect(hasReviewTopics('acet', topicRows, { acet: ['gone'] })).toBe(false)
+    expect(hasReviewTopics('acet', topicRows, { upcat: ['t1'] })).toBe(false)
+    expect(hasReviewTopics('acet', [], { acet: ['t1'] })).toBe(false)
   })
 })
