@@ -200,6 +200,8 @@ describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () =
     const rights = section('Your choices and your rights')
     expect(rights).toMatch(/Withdraw consent/)
     expect(rights).toMatch(/Profile, then Scholarship info/)
+    // The button the app actually shows (components/consent/WithdrawSensitiveButton.tsx).
+    expect(rights).toMatch(/Withdraw consent and clear these details/)
     expect(rights).toMatch(/Settings, then Privacy/)
     expect(rights).toMatch(/Object/)
     expect(rights).toMatch(/National Privacy Commission at privacy\.gov\.ph/)
