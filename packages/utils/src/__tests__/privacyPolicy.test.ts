@@ -8,6 +8,8 @@ import {
   DPO_NAME,
   DPO_EMAIL,
   BUSINESS_ADDRESS,
+  SUPABASE_REGION,
+  UPSTASH_REGION,
   privacyPolicyText,
 } from '../privacyPolicy'
 
@@ -156,11 +158,12 @@ describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () =
 
   it('names the country of every service that receives data, and the service agreements', () => {
     const share = section('Who we share it with')
-    expect(share).toMatch(/Supabase","text":"[^"]*\[region to confirm\]/)
+    // Supabase and Upstash name their region once the owner confirms it.
+    if (SUPABASE_REGION) expect(share).toMatch(new RegExp(`Supabase","text":"[^"]*Servers: ${SUPABASE_REGION}`))
     for (const name of ['Vercel', 'Google', 'PostHog', 'Resend', 'Expo']) {
       expect(share).toMatch(new RegExp(`"${name}","text":"[^"]*United States`))
     }
-    expect(share).toMatch(/Upstash","text":"[^"]*\[region to confirm\]/)
+    if (UPSTASH_REGION) expect(share).toMatch(new RegExp(`Upstash","text":"[^"]*Servers: ${UPSTASH_REGION}`))
     expect(share).toMatch(/first 5 characters/)
     expect(share).toContain('We use service agreements requiring these providers to protect your data.')
   })
@@ -175,17 +178,22 @@ describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () =
     expect(keep).toMatch(/When you delete your account:/)
   })
 
-  it('names a Data Protection Officer with clear placeholders and the working inbox', () => {
-    expect(DPO_NAME).toBe('[name to be appointed]')
-    expect(DPO_EMAIL).toBe('dpo@iskotify.ph')
-    expect(BUSINESS_ADDRESS).toBe('[business address]')
+  it('reaches the Data Protection Officer through a working inbox, leaving out details not supplied yet', () => {
     const contact = section('Contact us')
     expect(contact).toMatch(/Data Protection Officer/)
-    expect(contact).toContain(DPO_NAME)
-    expect(contact).toContain(`${DPO_EMAIL} [placeholder`)
     expect(contact).toContain(PRIVACY_CONTACT_EMAIL)
-    expect(contact).toContain(BUSINESS_ADDRESS)
     expect(contact).toContain('Online Creative Solutions')
+    // Each owner-supplied detail appears only once it is filled in.
+    for (const v of [DPO_NAME, DPO_EMAIL, BUSINESS_ADDRESS, SUPABASE_REGION, UPSTASH_REGION]) {
+      if (v) expect(text).toContain(v)
+    }
+    if (!DPO_EMAIL) expect(text).not.toContain('dpo@')
+    if (!SUPABASE_REGION) expect(section('Who we share it with')).not.toMatch(/Supabase[^}]*Servers:/)
+  })
+
+  it('never shows a bracketed placeholder publicly', () => {
+    expect(text).not.toMatch(/\[[^\]]*\]/)
+    expect(text).not.toMatch(/placeholder|to be appointed|region to confirm/i)
   })
 
   it('lets you withdraw consent and says where, and keeps the other rights', () => {

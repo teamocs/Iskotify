@@ -14,13 +14,19 @@ export const PRIVACY_LAST_UPDATED = 'October 1, 2026'
 export const PRIVACY_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const NPC_WEBSITE = 'privacy.gov.ph'
 
-// Placeholders the owner must fill before launch (square brackets on purpose,
-// so they stand out on the page). termsOfService.ts repeats BUSINESS_ADDRESS
-// (it imports nothing); a test keeps the two equal.
-export const DPO_NAME = '[name to be appointed]'
-/** Not a working inbox yet: the policy labels it a placeholder next to the address that works. */
-export const DPO_EMAIL = 'dpo@iskotify.ph'
-export const BUSINESS_ADDRESS = '[business address]'
+// Details the owner fills in before launch. Leave a value '' until it is real:
+// an empty detail is left out of the policy, never shown as a placeholder (a
+// test fails if any [bracketed] text renders). termsOfService.ts repeats
+// BUSINESS_ADDRESS (it imports nothing); a test keeps the two equal.
+export const DPO_NAME = ''
+/** Set only once the inbox works; until then the DPO is reached at PRIVACY_CONTACT_EMAIL. */
+export const DPO_EMAIL = ''
+export const BUSINESS_ADDRESS = ''
+export const SUPABASE_REGION = ''
+export const UPSTASH_REGION = ''
+
+/** " Servers: <region>." once the region is known, otherwise nothing. */
+const servers = (region: string) => (region ? ` Servers: ${region}.` : '')
 
 /** One bullet in a list. `label` is shown in bold before the text. */
 export interface PrivacyListItem {
@@ -160,14 +166,14 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       'We don’t sell or rent your data. We share it only with the services that help run Iskotify, and each one gets only what it needs:',
       {
         items: [
-          { label: 'Supabase', text: 'stores our database and files, runs sign-in, and sends sign-in emails like password resets. Servers: [region to confirm].' },
+          { label: 'Supabase', text: `stores our database and files, runs sign-in, and sends sign-in emails like password resets.${servers(SUPABASE_REGION)}` },
           { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes school-name lookups to Google Places. Servers: United States.' },
           { label: 'Google', text: 'handles Google sign-in if you choose it. Google Places looks up a school name you type that isn’t on our list. Servers: United States.' },
           { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device, so this service gets nothing that identifies you.' },
           { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on. Servers: United States.' },
           { label: 'Expo', text: 'delivers app updates to your phone. Servers: United States.' },
           { label: 'Resend', text: 'sends early access emails, so it gets your name and email address. Servers: United States.' },
-          { label: 'Upstash', text: 'briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour. Servers: [region to confirm].' },
+          { label: 'Upstash', text: `briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour.${servers(UPSTASH_REGION)}` },
         ],
       },
       'We use service agreements requiring these providers to protect your data.',
@@ -245,9 +251,9 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       'You can also write to our Data Protection Officer:',
       {
         items: [
-          { label: 'Data Protection Officer:', text: DPO_NAME },
-          { label: 'Email:', text: `${DPO_EMAIL} [placeholder, not active yet] or ${PRIVACY_CONTACT_EMAIL}` },
-          { label: 'Address:', text: `Online Creative Solutions, ${BUSINESS_ADDRESS}` },
+          ...(DPO_NAME ? [{ label: 'Data Protection Officer:', text: DPO_NAME }] : []),
+          { label: 'Email:', text: DPO_EMAIL ? `${DPO_EMAIL} or ${PRIVACY_CONTACT_EMAIL}` : PRIVACY_CONTACT_EMAIL },
+          { label: 'Address:', text: BUSINESS_ADDRESS ? `Online Creative Solutions, ${BUSINESS_ADDRESS}` : 'Online Creative Solutions, Philippines' },
         ],
       },
     ],

@@ -16,11 +16,13 @@ export const TERMS_LAST_UPDATED = 'October 1, 2026'
 export const TERMS_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const TERMS_OPERATOR = 'Online Creative Solutions'
 
-// Placeholders the owner must fill before launch (square brackets on purpose).
-// TERMS_BUSINESS_ADDRESS must equal BUSINESS_ADDRESS in privacyPolicy.ts (a
-// test checks it); this file imports nothing, so it's repeated here.
-export const TERMS_BUSINESS_ADDRESS = '[business address]'
-export const TERMS_DTI_BN = '[DTI BN No.]'
+// Details the owner fills in before launch. Leave a value '' until it is real:
+// an empty detail is left out, never shown as a placeholder (a test fails if
+// any [bracketed] text renders). TERMS_BUSINESS_ADDRESS must equal
+// BUSINESS_ADDRESS in privacyPolicy.ts (a test checks it); this file imports
+// nothing, so it's repeated here.
+export const TERMS_BUSINESS_ADDRESS = ''
+export const TERMS_DTI_BN = ''
 export const DTI_CONSUMER_EMAIL = 'consumercare@dti.gov.ph'
 
 /** The words each renderer turns into a link to the privacy policy. */
@@ -53,7 +55,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: 'Who we are',
     blocks: [
-      `Iskotify is run by ${TERMS_OPERATOR}, a business in the Philippines. Business address: ${TERMS_BUSINESS_ADDRESS}. Business name registration: ${TERMS_DTI_BN}. In these terms, “we” and “us” means ${TERMS_OPERATOR}, and “you” means anyone who uses Iskotify.`,
+      `Iskotify is run by ${TERMS_OPERATOR}, a business in the Philippines.${TERMS_BUSINESS_ADDRESS ? ` Business address: ${TERMS_BUSINESS_ADDRESS}.` : ''}${TERMS_DTI_BN ? ` Business name registration: ${TERMS_DTI_BN}.` : ''} In these terms, “we” and “us” means ${TERMS_OPERATOR}, and “you” means anyone who uses Iskotify.`,
       'These terms cover the Iskotify app, on your phone or on the web, and the Iskotify website. By creating an account or using Iskotify, you agree to them. If you don’t agree, please don’t use Iskotify.',
     ],
   },

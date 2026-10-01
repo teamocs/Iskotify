@@ -97,14 +97,20 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(paid).toMatch(/parent or guardian can email us/)
   })
 
-  it('names the business behind Iskotify, with placeholders for its address and registration', () => {
-    expect(TERMS_BUSINESS_ADDRESS).toBe('[business address]')
-    expect(TERMS_DTI_BN).toBe('[DTI BN No.]')
-    // One address for the whole business: the privacy policy uses the same placeholder.
+  it('names the business behind Iskotify, adding its address and registration once supplied', () => {
+    // One address for the whole business: the privacy policy uses the same value.
     expect(TERMS_BUSINESS_ADDRESS).toBe(BUSINESS_ADDRESS)
     const who = section('Who we are')
-    expect(who).toContain(TERMS_BUSINESS_ADDRESS)
-    expect(who).toContain(TERMS_DTI_BN)
+    expect(who).toContain(TERMS_OPERATOR)
+    if (TERMS_BUSINESS_ADDRESS) expect(who).toContain(TERMS_BUSINESS_ADDRESS)
+    else expect(who).not.toMatch(/Business address/)
+    if (TERMS_DTI_BN) expect(who).toContain(TERMS_DTI_BN)
+    else expect(who).not.toMatch(/Business name registration/)
+  })
+
+  it('never shows a bracketed placeholder publicly', () => {
+    expect(text).not.toMatch(/\[[^\]]*\]/)
+    expect(text).not.toMatch(/placeholder|to be appointed|region to confirm/i)
   })
 
   it('explains how to complain, how fast we reply and how to escalate to the DTI', () => {
