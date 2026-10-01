@@ -6,7 +6,7 @@ import { supabase } from './supabase'
 //  - POST {admin}/api/payments/checkout with the student's access token →
 //    200 {checkoutUrl} | 409 {error:'already_premium'} | 503 {error:'payments_disabled'}.
 
-const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.vercel.app'
+const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.ph'
 export const CHECKOUT_URL = `${ADMIN_BASE_URL}/api/payments/checkout`
 const REQUEST_TIMEOUT_MS = 20000
 

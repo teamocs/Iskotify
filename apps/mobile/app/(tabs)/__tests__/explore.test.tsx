@@ -777,10 +777,18 @@ describe('ListsScreen', () => {
     expect(screen.getByRole('radio', { name: 'NCR' })).toBeTruthy()
   })
 
+  // Noon (Manila) five calendar days ahead: "now + 5 days + 1 hour" crossed Manila
+  // midnight during the last hour of each day and read as "In 6 days".
+  const manilaNoonInDays = (days: number) => {
+    const MANILA = 8 * 3_600_000
+    const todayStart = Math.floor((Date.now() + MANILA) / 86_400_000) * 86_400_000 - MANILA
+    return todayStart + days * 86_400_000 + 12 * 3_600_000
+  }
+
   it('an upcoming exam card says how soon it is, with no emoji', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(
-      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: Date.now() + 5 * 86_400_000 + 3_600_000, region: 'NCR', provider: 'UP', targetCourses: '[]' }],
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: manilaNoonInDays(5), region: 'NCR', provider: 'UP', targetCourses: '[]' }],
       [],
     ))
     render(<ListsScreen />)

@@ -86,6 +86,10 @@ Anything else is recorded and logged for manual review, never granted.
 
 Do these in order. Webhooks reject everything until their secrets are set.
 
+The admin app (webhooks, checkout) lives at **`https://iskotify.ph`** (custom domain;
+`iskotify.vercel.app` still works as an alias, `www.iskotify.ph` does not resolve).
+The student web app is `https://app.iskotify.ph`.
+
 ### A. Google Play Console
 1. Payments profile set up (Philippines). Merchant account active.
 2. Create a **one-time product** (in-app product, not subscription), price ₱500.
@@ -99,7 +103,7 @@ Do these in order. Webhooks reject everything until their secrets are set.
 3. Create an offering (the "current" offering) with one package containing the product.
 4. **Project settings → Restore behavior → "Keep with original App User ID".**
 5. Integrations → Webhooks:
-   - URL: `https://iskotify.vercel.app/api/payments/revenuecat/webhook`
+   - URL: `https://iskotify.ph/api/payments/revenuecat/webhook`
    - Authorization header: a long random string → also set as `REVENUECAT_WEBHOOK_AUTH`.
    - Environment: Production (sandbox events are ignored unless `REVENUECAT_ALLOW_SANDBOX=true`).
 6. Copy the **secret API key** (server) and the **Android public SDK key** (`goog_…`, app).
@@ -107,7 +111,7 @@ Do these in order. Webhooks reject everything until their secrets are set.
 ### C. PayMongo
 1. Complete business verification (KYC) and activate live mode.
 2. Developers → Webhooks → add:
-   - URL: `https://iskotify.vercel.app/api/payments/paymongo/webhook`
+   - URL: `https://iskotify.ph/api/payments/paymongo/webhook`
    - Event: `checkout_session.payment.paid`
    - Copy the webhook secret → `PAYMONGO_WEBHOOK_SECRET`.
 3. Copy the secret key (`sk_live_…`) → `PAYMONGO_SECRET_KEY`.
