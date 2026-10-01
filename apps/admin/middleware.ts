@@ -16,7 +16,15 @@ const OPERATOR_ENDPOINTS = [
 
 // Called by signed-in STUDENTS with their bearer token, verified inside the route.
 const BEARER_ENDPOINTS = [
-  '/api/account/delete', // account deletion
+  '/api/account/delete',     // account deletion
+  '/api/payments/checkout',  // web purchase (PayMongo Checkout)
+]
+
+// Payment-provider webhooks: no session, authenticated inside the route
+// (PayMongo signature / RevenueCat shared secret). Matched EXACTLY.
+const WEBHOOK_ENDPOINTS = [
+  '/api/payments/paymongo/webhook',
+  '/api/payments/revenuecat/webhook',
 ]
 
 // Public endpoints that need NO admin session — matched EXACTLY (not startsWith),
@@ -30,6 +38,9 @@ export async function middleware(request: NextRequest) {
   // Allow operator endpoints through — they have their own auth.
   // Exact match: a look-alike path (e.g. /api/account/delete-x) gets no exemption.
   if (BEARER_ENDPOINTS.includes(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
+  if (WEBHOOK_ENDPOINTS.includes(request.nextUrl.pathname)) {
     return NextResponse.next({ request })
   }
   if (OPERATOR_ENDPOINTS.some(p => request.nextUrl.pathname.startsWith(p))) {
