@@ -9,7 +9,6 @@ import { supabase } from '../services/supabase'
 import { syncOnLaunch, pushUserData } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { invalidate } from '../services/queryCache'
-import { runEnhancement } from '../hooks/useAiEnhancement'
 import { capture } from '../lib/analytics'
 import {
   userSettings, practiceSessions, focusListings as focusListingsTable, upcatQuestions,
@@ -341,7 +340,6 @@ export default function OnboardingScreen() {
       .then(() => {
         syncRunningRef.current = false
         if (aliveRef.current) setSyncStatus('done')
-        void runEnhancement(db).catch(e => console.warn('[onboarding] enhancement error:', e))
       })
       .catch(e => {
         syncRunningRef.current = false

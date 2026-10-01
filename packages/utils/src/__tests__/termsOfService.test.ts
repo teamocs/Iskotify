@@ -34,7 +34,7 @@ describe('terms of service content (shared by the app and the website)', () => {
       'Students under 18',
       'Exam, school and scholarship details',
       'The Estimated Admission Score',
-      'The on-device AI model',
+      'AI-assisted content',
       'Using Iskotify fairly',
       'Your content',
       'Our content',
@@ -109,11 +109,12 @@ describe('terms of service content (shared by the app and the website)', () => {
     }
   })
 
-  it('says the optional AI model runs on your device and may be wrong', () => {
-    const ai = section('The on-device AI model')
-    expect(ai).toMatch(/optional/)
-    expect(ai).toMatch(/runs on your device/)
+  it('discloses AI-assisted content, that our team checks it, that it can be wrong and how to report it', () => {
+    const ai = section('AI-assisted content')
+    expect(ai).toMatch(/AI tools/)
+    expect(ai).toMatch(/checked/)
     expect(ai).toMatch(/can be wrong/)
+    expect(ai).toMatch(/Report/)
   })
 
   it('asks under-18s to use Iskotify with a parent or guardian’s awareness, without an invented age check', () => {
@@ -154,13 +155,10 @@ describe('terms of service content (shared by the app and the website)', () => {
   })
 })
 
-// The on-device model writes extra answer choices for practice questions
-// (apps/mobile/hooks/useAiEnhancement.ts). Its search/embedding side is
-// dormant, and students don't type into it, so neither may be claimed.
-describe('on-device AI model wording', () => {
-  it('describes what the model really does', () => {
-    expect(text).toMatch(/answer choices/)
-    expect(text).not.toMatch(/helps with search/)
-    expect(text).not.toMatch(/what you type into it/)
+// The on-device model was removed (P1c): nothing may still offer a download.
+describe('no on-device AI model', () => {
+  it('no longer offers or describes a downloadable model', () => {
+    expect(text).not.toMatch(/download an optional AI model/)
+    expect(text).not.toMatch(/runs on your device, without internet/)
   })
 })

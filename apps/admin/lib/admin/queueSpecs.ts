@@ -35,7 +35,12 @@ const statusFilter: Record<string, QueueCondition> = Object.fromEntries(
 )
 
 /** The reasons the mobile app offers (ReportQuestionModal); details follow after " — ". */
-export const PRESET_REASONS = ['Wrong answer', 'Typo or formatting issue', 'Question is unclear'] as const
+export const PRESET_REASONS = [
+  'Wrong answer',
+  'Typo or formatting issue',
+  'Question is unclear',
+  'Inappropriate or wrong AI-written content',
+] as const
 
 export const REPORTS_QUEUE: QueueSpec = {
   table: 'question_reports',

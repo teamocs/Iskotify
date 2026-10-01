@@ -40,15 +40,6 @@ jest.mock('@lineiconshq/free-icons', () => ({
   Gear1Outlined: {},
 }))
 
-// AiModelDownloadSheet pulls in the native background-downloader module via
-// useModelDownload — mock the sheet itself so this screen test stays isolated
-// from that native dependency (mirrors how heavy child components are mocked
-// elsewhere in this suite).
-jest.mock('../../components/AiModelDownloadSheet', () => ({
-  AiModelDownloadSheet: ({ visible }: { visible: boolean }) =>
-    visible ? require('react').createElement(require('react-native').Text, null, 'AI Model Download Sheet') : null,
-}))
-
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { version: '1.2.3' } },
@@ -159,17 +150,10 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('Student')).toBeTruthy()
   })
 
-  it('opens the on-device AI model sheet', () => {
+  it('has no on-device AI model controls: the student app ships no AI', () => {
     render(<SettingsScreen />)
-    expect(screen.queryByText('AI Model Download Sheet')).toBeNull()
-    fireEvent.press(screen.getByRole('button', { name: /On-device AI model/ }))
-    expect(screen.getByText('AI Model Download Sheet')).toBeTruthy()
-  })
-
-  // The model writes extra practice answer choices; its search side is dormant.
-  it('describes the on-device model by what it does', () => {
-    render(<SettingsScreen />)
-    expect(screen.queryByText(/smarter search/)).toBeNull()
-    expect(screen.getByText(/answer choices/)).toBeTruthy()
+    expect(screen.queryByRole('header', { name: 'Offline tools' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /On-device AI model/ })).toBeNull()
+    expect(screen.queryByText(/answer choices/)).toBeNull()
   })
 })

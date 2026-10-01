@@ -4,8 +4,8 @@
 // hybrid semantic retrieval (see docs/superpowers/plans/2026-07-03-kuya-rag-
 // reliability.md, Phase 2). They are intentionally decoupled from any native
 // module or DB access so they run in plain Jest — the embedding source
-// (services/embeddings.ts) and the wiring into ragPipeline come later, gated on
-// the on-device embedding spike.
+// (the on-device embedding model was removed from the student app) and any
+// wiring into a retrieval pipeline would need a new embedding source.
 //
 // NOTHING here is wired into the live chat/RAG path yet.
 

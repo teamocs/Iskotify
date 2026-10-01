@@ -64,7 +64,7 @@ const UPPERCASE = /textTransform\s*:\s*['"]uppercase['"]|\.toUpperCase\(\)/g
 const EMOJI = /\p{Extended_Pictographic}/gu
 const ICON_GLYPHS = /[›‹▲▼✕✓✗＋↪⚠⠿↻★☆←→☁•]/g
 const A11Y_STATE = /accessibilityState\s*=/g
-const LAYOUT = /<(Screen|ScreenScroll|TwoColumn|InfoPage|SessionChooser|SessionLoading|SessionPreparing|SessionEmpty|FlashcardExam|Redirect)\b|useBreakpoint\(|useWebContentWidth\(/
+const LAYOUT = /<(Screen|ScreenScroll|TwoColumn|InfoPage|SessionChooser|SessionLoading|SessionEmpty|FlashcardExam|Redirect)\b|useBreakpoint\(|useWebContentWidth\(/
 
 function strip(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
