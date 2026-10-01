@@ -47,6 +47,7 @@ beforeEach(() => {
 })
 
 import SignInScreen from '../sign-in'
+import { setAccountNotice, takeAccountNotice, ACCOUNT_DELETED_NOTICE } from '../../../services/accountNotice'
 import { aria } from '../../../test-utils/aria'
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -490,5 +491,18 @@ describe('SignInScreen — leaked-password check on sign-up', () => {
     pressCreate()
     expect(await screen.findByText('Password must be at least 8 characters.')).toBeTruthy()
     expect(mockCheckPwnedPassword).not.toHaveBeenCalled()
+  })
+})
+
+describe('SignInScreen — after account deletion (web)', () => {
+  beforeEach(() => { takeAccountNotice() })
+
+  it('tells the student their account was deleted, once', () => {
+    setAccountNotice(ACCOUNT_DELETED_NOTICE)
+    const { unmount } = render(<SignInScreen />)
+    expect(screen.getByText('Your account was deleted.')).toBeTruthy()
+    unmount()
+    render(<SignInScreen />)
+    expect(screen.queryByText('Your account was deleted.')).toBeNull()
   })
 })

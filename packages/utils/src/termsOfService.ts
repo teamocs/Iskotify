@@ -12,7 +12,7 @@
 // packages/utils/src/__tests__/termsOfService.test.ts guards the structure and
 // the claims that must (or must never) appear.
 
-export const TERMS_LAST_UPDATED = 'September 26, 2026'
+export const TERMS_LAST_UPDATED = 'October 1, 2026'
 export const TERMS_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const TERMS_OPERATOR = 'Online Creative Solutions'
 
@@ -39,7 +39,7 @@ export const TERMS_SUMMARY: string[] = [
   'Use Iskotify for your own studying. Don’t cheat, scrape our content or harass anyone.',
   'Exam, school and scholarship details can change. Always check the official website before you act.',
   'The Estimated Admission Score is only an estimate. It is not an admission decision.',
-  `Your notes are yours. You can ask us to delete your account at any time by emailing ${TERMS_CONTACT_EMAIL}.`,
+  `Your notes are yours. You can delete your account in the app at any time (Profile, then Your data, then Delete account).`,
 ]
 
 export const TERMS_SECTIONS: TermsSection[] = [
@@ -152,7 +152,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: 'Ending your account',
     blocks: [
-      `You can stop using Iskotify at any time. There isn’t a delete-account button yet, so to delete your account and your backup, email ${TERMS_CONTACT_EMAIL} from the email address on your account.`,
+      `You can stop using Iskotify at any time. To delete your account and your backup, go to Profile, then Your data, then Delete account, and type DELETE to confirm. If you can’t open the app, use iskotify.ph/delete-account, or email ${TERMS_CONTACT_EMAIL} from the email address on your account and we’ll delete it within 7 days.`,
       'We may suspend or close an account that breaks these terms, for example one used to scrape content or harass others. When we can, we’ll tell you why first and give you a chance to respond.',
     ],
   },

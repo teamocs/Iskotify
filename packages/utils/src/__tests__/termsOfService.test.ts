@@ -14,7 +14,7 @@ const section = (title: string) => JSON.stringify(TERMS_SECTIONS.find(s => s.tit
 
 describe('terms of service content (shared by the app and the website)', () => {
   it('carries the current "last updated" date, the operator and the contact address', () => {
-    expect(TERMS_LAST_UPDATED).toBe('September 26, 2026')
+    expect(TERMS_LAST_UPDATED).toBe('October 1, 2026')
     expect(TERMS_OPERATOR).toBe('Online Creative Solutions')
     expect(TERMS_CONTACT_EMAIL).toBe('teamocsph@gmail.com')
     expect(text).toContain('teamocsph@gmail.com')
@@ -138,10 +138,14 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(section('Our content')).toMatch(/republish/)
   })
 
-  it('explains account deletion by email and suspension for breaking the terms', () => {
+  it('explains in-app account deletion, the web page, the email fallback and suspension', () => {
     const ending = section('Ending your account')
+    expect(ending).not.toMatch(/isn’t a delete-account button/)
+    expect(ending).toMatch(/Profile, then Your data, then Delete account/)
+    expect(ending).toContain('iskotify.ph/delete-account')
     expect(ending).toContain(`email ${TERMS_CONTACT_EMAIL}`)
     expect(ending).toMatch(/suspend/)
+    expect(TERMS_SUMMARY.join(' ')).toMatch(/delete your account (in the app|from Profile)/)
   })
 
   it('points to the privacy policy with a link both apps can render', () => {

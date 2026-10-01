@@ -14,6 +14,11 @@ const OPERATOR_ENDPOINTS = [
   '/api/kb/drive-sync',         // Vercel Cron (Bearer CRON_SECRET) or admin session — checked in the route
 ]
 
+// Called by signed-in STUDENTS with their bearer token, verified inside the route.
+const BEARER_ENDPOINTS = [
+  '/api/account/delete', // account deletion
+]
+
 // Public endpoints that need NO admin session — matched EXACTLY (not startsWith),
 // so admin subroutes like /api/early-access/send and /api/early-access/apk-url
 // stay session-gated.
@@ -23,6 +28,10 @@ const PUBLIC_ENDPOINTS = [
 
 export async function middleware(request: NextRequest) {
   // Allow operator endpoints through — they have their own auth.
+  // Exact match: a look-alike path (e.g. /api/account/delete-x) gets no exemption.
+  if (BEARER_ENDPOINTS.includes(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
   if (OPERATOR_ENDPOINTS.some(p => request.nextUrl.pathname.startsWith(p))) {
     return NextResponse.next({ request })
   }

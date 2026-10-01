@@ -158,7 +158,7 @@ describe('FooterCTA', () => {
   })
 
   it('keeps the legal and contact links', () => {
-    for (const href of ['/privacy', '/terms', '/contact']) expect(html).toContain(`href="${href}"`)
+    for (const href of ['/privacy', '/terms', '/delete-account', '/contact']) expect(html).toContain(`href="${href}"`)
   })
 })
 
