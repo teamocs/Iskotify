@@ -5,7 +5,7 @@ import { setAccountNotice, ACCOUNT_DELETED_NOTICE } from './accountNotice'
 import { resetAnalytics } from '../lib/analytics'
 import { signOutPremium } from './premiumState'
 
-const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.vercel.app'
+const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.ph'
 const REQUEST_TIMEOUT_MS = 30000
 
 export const DELETE_CONFIRM_WORD = 'DELETE'
