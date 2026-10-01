@@ -42,6 +42,47 @@ describe('pickNextPractice', () => {
     expect(pickNextPractice(none)).toEqual({ kind: 'diagnostic' })
   })
 
+  it('drills the weakest UPCAT subtest when there is no weak flashcard topic', () => {
+    const next = pickNextPractice({
+      ...none,
+      subtestAccuracy: [{ subtest: 'Science', pct: 72 }, { subtest: 'Mathematics', pct: 41 }, { subtest: 'Reading Comprehension', pct: 55 }],
+      focusMock: { slug: 'upcat', title: 'UPCAT', items: 40, minutes: 60 },
+    })
+    expect(next).toEqual({ kind: 'subtest', subtest: 'Mathematics' })
+  })
+
+  it('keeps a weak flashcard topic ahead of a weak subtest', () => {
+    const next = pickNextPractice({
+      ...none,
+      weakTopic: { id: 't1', name: 'Fractions' },
+      subtestAccuracy: [{ subtest: 'Mathematics', pct: 30 }],
+    })
+    expect(next).toEqual({ kind: 'topic', topicId: 't1', topicName: 'Fractions' })
+  })
+
+  it('does not call a subtest weak at or above the weak threshold (60%)', () => {
+    const next = pickNextPractice({ ...none, subtestAccuracy: [{ subtest: 'Science', pct: 60 }], hasTakenDiagnostic: true })
+    expect(next).toEqual({ kind: 'drill', subtest: 'Science' })
+  })
+
+  it('never re-offers the diagnostic once it was taken: drills the lowest subtest', () => {
+    const next = pickNextPractice({
+      ...none,
+      hasTakenDiagnostic: true,
+      subtestAccuracy: [{ subtest: 'Science', pct: 90 }, { subtest: 'Language Proficiency', pct: 70 }],
+    })
+    expect(next).toEqual({ kind: 'drill', subtest: 'Language Proficiency' })
+  })
+
+  it('offers a mixed drill after the diagnostic when no subtest has a number yet', () => {
+    expect(pickNextPractice({ ...none, hasTakenDiagnostic: true })).toEqual({ kind: 'drill', subtest: null })
+  })
+
+  it('still prefers the focus mock over a drill after the diagnostic', () => {
+    const next = pickNextPractice({ ...none, hasTakenDiagnostic: true, focusMock: { slug: 'acet', title: 'ACET', items: 120, minutes: 120 } })
+    expect(next.kind).toBe('mock')
+  })
+
   it('ignores a resume entry with no questions and a non-positive due count', () => {
     const next = pickNextPractice({ ...none, resume: { slug: 'x', title: 'X', answered: 0, total: 0 }, dueCount: -1 })
     expect(next).toEqual({ kind: 'diagnostic' })
@@ -81,6 +122,23 @@ describe('nextPracticeCopy', () => {
   it('describes a short mock in minutes', () => {
     expect(nextPracticeCopy({ kind: 'mock', slug: 's', title: 'S', items: 20, minutes: 45 }).body)
       .toBe('20 items · 45 min. Or try a 30-minute Study Sprint from the same screen.')
+  })
+
+  it('routes a subtest drill to the UPCAT quick drill for that subtest', () => {
+    const c = nextPracticeCopy({ kind: 'subtest', subtest: 'Reading Comprehension' })
+    expect(c.title).toBe('Drill Reading Comprehension')
+    expect(c.actionLabel).toBe('Start drill')
+    expect(c.href).toBe('/practice/upcat/Reading%20Comprehension?mode=quick')
+  })
+
+  it('routes the post-diagnostic drill to a subtest, or a mixed quick drill', () => {
+    const one = nextPracticeCopy({ kind: 'drill', subtest: 'Science' })
+    expect(one.title).toBe('Keep Science sharp')
+    expect(one.href).toBe('/practice/upcat/Science?mode=quick')
+    const mixed = nextPracticeCopy({ kind: 'drill', subtest: null })
+    expect(mixed.title).toBe('Keep your skills sharp')
+    expect(mixed.href).toBe('/practice/upcat/all?mode=quick')
+    expect(mixed.actionLabel).toBe('Start drill')
   })
 
   it('offers the diagnostic to a new student', () => {

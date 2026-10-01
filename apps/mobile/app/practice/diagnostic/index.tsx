@@ -69,7 +69,8 @@ type Phase = 'loading' | 'load-error' | 'unavailable' | 'resume-prompt' | 'exam'
  * diagnostic below, unchanged). Another exam gets a short blueprint sample
  * (utils/diagnosticTarget.ts: 5 per section, 1 min/question), recorded under
  * that exam's slug; an exam with no runnable blueprint says so honestly and
- * offers the UPCAT-style diagnostic instead of serving it silently.
+ * points at its topic review (or its exam page) — never UPCAT questions under
+ * the student's exam.
  */
 export default function DiagnosticExam() {
   const params = useLocalSearchParams<{ subject?: string | string[]; exam?: string | string[] }>()
@@ -123,8 +124,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   const [examLabel, setExamLabel] = useState('')
   // Blueprint sections with nothing runnable yet, shown on the results.
   const [comingSoon, setComingSoon] = useState<string[]>([])
-  // "Take the UPCAT-style diagnostic instead" on the unavailable state.
-  const [forceUpcat, setForceUpcat] = useState(false)
   const isBlueprint = target?.kind === 'blueprint'
   const runKey = target ? diagnosticRunKey(target, subjectParam) : ''
 
@@ -182,9 +181,9 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     let alive = true
     void (async () => {
       try {
-        // Which exam? An explicit ?exam= wins (or the UPCAT fallback chosen on the
-        // unavailable state), else the primary focus exam with a runnable blueprint.
-        const examParam = forceUpcat ? 'upcat' : examParamRaw
+        // Which exam? An explicit ?exam= wins, else the primary focus exam with a
+        // runnable blueprint.
+        const examParam = examParamRaw
         const needsLookup = examParam ? examParam !== 'upcat' : !subjectParam
         let focusSlugs: string[] = []
         let runnable: { slug: string }[] = []
@@ -285,7 +284,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     })()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subjectParam, examParamRaw, forceUpcat, loadAttempt])
+  }, [db, subjectParam, examParamRaw, loadAttempt])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's ids. The diagnostic's question pool mixes bank rows (real
@@ -485,19 +484,23 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }
 
   if (phase === 'unavailable') {
+    const slug = target?.kind === 'unavailable' ? target.slug : ''
+    const canReview = !!slug && hasReviewTopics(slug, practice.topicRows, practice.topicIdsByListingSlug)
     return (
       <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
         <PageTitle
           title={`A diagnostic for ${examLabel} isn't available yet`}
-          lead="There aren't enough published questions for this exam to build one. You can take the UPCAT-style general diagnostic to find your starting point in the meantime."
+          lead={canReview
+            ? `There aren't enough published questions for this exam to build one yet. Its topic reviews are ready now.`
+            : `There aren't enough published questions for this exam to build one yet. Practice for ${examLabel} is coming soon.`}
         />
         <View style={{ gap: spacing.sm }}>
-          <Button
-            label="Take the UPCAT-style diagnostic instead"
-            onPress={() => { setPhase('loading'); setForceUpcat(true) }}
-            fullWidth
-            size="lg"
-          />
+          {/* Never the UPCAT diagnostic here: those questions are not this exam's. */}
+          {!slug || !practice.loaded ? null : canReview ? (
+            <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${slug}`)} fullWidth size="lg" />
+          ) : (
+            <Button label="See exam details" onPress={() => router.push(`/listings/${encodeURIComponent(slug)}`)} fullWidth size="lg" />
+          )}
           <Button label="Back to Home" variant="secondary" fullWidth onPress={() => router.replace('/(tabs)')} />
         </View>
       </Screen>
@@ -614,12 +617,14 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
               hasReviewTopics(target.slug, practice.topicRows, practice.topicIdsByListingSlug) ? (
                 <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${target.slug}`)} fullWidth size="lg" />
               ) : (
-                <Button label="Take a mock exam" onPress={() => router.push(`/practice/start/${target.slug}`)} fullWidth size="lg" />
+                // The blueprint is runnable (that is how this diagnostic was built): straight to its prestart.
+                <Button label="Take a mock exam" onPress={() => router.push(`/practice/exam/${target.slug}`)} fullWidth size="lg" />
               )
             ) : (
+              // The UPCAT drill for the weakest subtest (all four when none was answered).
               <Button
-                label={weakest ? `Practice weakest subject (${weakest})` : 'Practice weak subjects'}
-                onPress={() => router.push('/practice/review/upcat')}
+                label={weakest ? `Practice weakest subject (${weakest})` : 'Practice all subjects'}
+                onPress={() => router.push(`/practice/upcat/${weakest ? encodeURIComponent(weakest) : 'all'}?mode=quick`)}
                 fullWidth
                 size="lg"
               />

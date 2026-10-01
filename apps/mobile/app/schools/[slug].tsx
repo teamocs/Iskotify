@@ -14,6 +14,8 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useFocusListings } from '../../hooks/useFocusListings'
 import { schoolFocusSlug } from '../../utils/focusSlug'
 import { examAcronymToListingSlug, isRealExamAcronym } from '../../utils/targetExams'
+import { listRunnableBlueprints } from '../../services/examBlueprints'
+import { hasReviewContent } from '../../services/practiceSignals'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -177,6 +179,8 @@ function SchoolSkeleton() {
 // ---------------------------------------------------------------------------
 
 const FALLBACK = '/explore?section=universities'
+/** The general entrance exam a school-level focus practises with (see app/practice/start/[slug].tsx). */
+const GENERAL_EXAM_SLUG = 'general-cet'
 
 export default function SchoolProfileScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
@@ -208,6 +212,23 @@ export default function SchoolProfileScreen() {
     })
     return () => { alive = false }
   }, [db, slug, attempt])
+
+  // A school whose own exam has no content practises with the general entrance
+  // exam ('general-cet'): say "mock" only when that mock can run, else offer
+  // its topic review, else nothing (null while unknown).
+  const examAcronym = profile?.entranceExamAcronym
+  const needsGeneral = !examAcronymToListingSlug(examAcronym) && isRealExamAcronym(examAcronym)
+  const [generalPractice, setGeneralPractice] = useState<'mock' | 'review' | 'none' | null>(null)
+  useEffect(() => {
+    if (!needsGeneral) return
+    let alive = true
+    Promise.all([listRunnableBlueprints(db), hasReviewContent(db, GENERAL_EXAM_SLUG)])
+      .then(([runnable, review]) => {
+        if (alive) setGeneralPractice(runnable.some(b => b.slug === GENERAL_EXAM_SLUG) ? 'mock' : review ? 'review' : 'none')
+      })
+      .catch((e: unknown) => console.warn('[school] general practice lookup failed:', e))
+    return () => { alive = false }
+  }, [db, needsGeneral])
 
   if (status !== 'ready' || !school) {
     return (
@@ -329,14 +350,16 @@ export default function SchoolProfileScreen() {
           icon={<Lineicons icon={GraduationCap1Outlined} size={18} color={t.textInverse} />}
           onPress={() => router.push(`/listings/${examSlug}`)}
         />
-      ) : (
+      ) : generalPractice === 'mock' || generalPractice === 'review' ? (
         <Button
-          label="Practise with the general entrance mock"
+          label={generalPractice === 'mock' ? 'Practise with the general entrance mock' : 'Practise general entrance topics'}
           size="lg"
           fullWidth={!twoUp}
           onPress={() => router.push(`/practice/start/${focusSlug}`)}
         />
-      )}
+      ) : generalPractice === 'none' ? (
+        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Practice coming soon</Text>
+      ) : null}
       <Button
         label={inFocus ? `In Focus #${focusPriority}` : 'Add to Focus'}
         accessibilityLabel={inFocus ? `In Focus #${focusPriority}. Remove from Focus` : 'Add to Focus'}

@@ -50,7 +50,7 @@ export interface GenerateStudyPlanInput {
   weakTopics: WeakTopicInput[]
   /** True once the user has completed ANY practice activity, ever (not just today). */
   hasAnyReadinessData: boolean
-  /** listingSlug of the nearest focused exam — used as the mock_section item's refId. */
+  /** listingSlug of the nearest upcoming focused exam whose mock can run — the mock_section item's refId (null = no mock item). */
   mockSectionRefId: string | null
 }
 
@@ -207,7 +207,7 @@ export function describeTopPlanItem(item: StudyPlanItemDraft | null, topicName?:
     case 'topic_practice':
       return `Practice ${topicName ?? 'your weakest topic'} — ${item.targetCount} questions queued`
     case 'mock_section':
-      return 'Timed mock section today — dress rehearsal for the real thing'
+      return 'Timed mock today — a full dress rehearsal for the real thing'
     case 'diagnostic':
       return 'Take a quick diagnostic to find your starting point'
   }

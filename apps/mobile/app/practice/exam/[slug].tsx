@@ -992,7 +992,7 @@ export default function BlueprintExam() {
           <View style={{ gap: spacing.sm }}>
             <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
             <Button label="Retake exam" variant="secondary" fullWidth onPress={() => router.replace(`/practice/exam/${slug}`)} />
-            <Button label="Back to exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/exam')} />
+            <Button label="Back to mock exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/exam')} />
           </View>
         </View>
       </Screen>

@@ -96,29 +96,56 @@ export function examAcronym(title: string, blueprintAcronym?: string | null): st
   return title.trim().slice(0, 4).toUpperCase() || '?'
 }
 
+// ── Practice availability ────────────────────────────────────────────────────
+
+/**
+ * What a student can practise for an exam right now: a timed mock (a runnable
+ * blueprint), only topic review (flashcard topics tagged to the exam), or
+ * nothing yet.
+ */
+export type PracticeAvailability = 'mock' | 'review' | 'none'
+
+export function practiceAvailability(
+  slug: string,
+  runnableSlugs: readonly string[],
+  reviewSlugs: ReadonlySet<string>,
+): PracticeAvailability {
+  if (runnableSlugs.includes(slug)) return 'mock'
+  return reviewSlugs.has(slug) ? 'review' : 'none'
+}
+
+/** The small honest label for what is missing (null when the mock is ready). */
+export function practiceAvailabilityLabel(a: PracticeAvailability): string | null {
+  if (a === 'none') return 'Practice coming soon'
+  if (a === 'review') return 'Mock exam coming soon'
+  return null
+}
+
 // ── Tile-tap routing ─────────────────────────────────────────────────────────
 
 /**
  * resolveFocusTileRoute — where a "My Entrance Exams" tile tap should navigate.
  *
- *   - A scored tile always goes to its own /practice/start/:slug chooser
- *     (mock exam / Study Sprint), regardless of blueprint status.
+ *   - A scored tile always goes to its own /practice/start/:slug chooser.
  *   - A scoreless UPCAT tile goes to the (UPCAT) diagnostic.
- *   - Any other scoreless exam goes to the diagnostic naming that exam
- *     (`?exam=<slug>`): with a runnable blueprint it samples that exam; without
- *     one the screen says honestly that no diagnostic is available yet instead
- *     of serving UPCAT questions under the student's exam.
- *   `blueprintSlugs` no longer changes the scoreless route (the diagnostic
- *     screen resolves runnability itself); it is kept for call-site stability.
+ *   - A scoreless exam with a runnable blueprint goes to the diagnostic naming
+ *     that exam (`?exam=<slug>`), which samples that exam.
+ *   - Without one, never a dead-end diagnostic (and never UPCAT questions under
+ *     the student's exam): its review chooser when it has topics to review,
+ *     else its listing page, which says practice is coming soon.
  */
 export function resolveFocusTileRoute(
   slug: string,
   hasScore: boolean,
-  _blueprintSlugs: readonly string[],
+  runnableSlugs: readonly string[],
+  reviewSlugs: ReadonlySet<string> = new Set(),
 ): string {
   if (hasScore) return `/practice/start/${slug}`
   if (slug === 'upcat') return '/practice/diagnostic'
-  return `/practice/diagnostic?exam=${encodeURIComponent(slug)}`
+  const availability = practiceAvailability(slug, runnableSlugs, reviewSlugs)
+  if (availability === 'mock') return `/practice/diagnostic?exam=${encodeURIComponent(slug)}`
+  if (availability === 'review') return `/practice/start/${encodeURIComponent(slug)}`
+  return `/listings/${encodeURIComponent(slug)}`
 }
 
 // ── Exam picker modal options ────────────────────────────────────────────────
@@ -127,6 +154,7 @@ export interface ExamPickerOption {
   slug: string
   title: string
   acronym: string
+  practice: PracticeAvailability
 }
 
 export const EXAM_PICKER_LIMIT = 9
@@ -135,6 +163,8 @@ export const EXAM_PICKER_LIMIT = 9
  * buildExamPickerOptions — the 3×3 exam-picker grid's contents: blueprint-backed
  * exams first (in blueprint displayOrder), then the remaining exam listings,
  * excluding anything already in Focus. Capped to `limit` (default 9).
+ * `blueprintSlugs` must be the RUNNABLE blueprints; each option carries what
+ * can be practised for it (see practiceAvailability).
  */
 export function buildExamPickerOptions(
   examListings: ReadonlyArray<{ slug: string; title: string }>,
@@ -142,6 +172,7 @@ export function buildExamPickerOptions(
   blueprintInfo: ReadonlyMap<string, { acronym: string; name: string }>,
   excludeSlugs: ReadonlySet<string>,
   limit: number = EXAM_PICKER_LIMIT,
+  reviewSlugs: ReadonlySet<string> = new Set(),
 ): ExamPickerOption[] {
   const bySlug = new Map(examListings.map(l => [l.slug, l]))
   const ordered: string[] = []
@@ -154,6 +185,9 @@ export function buildExamPickerOptions(
   return ordered.slice(0, limit).map(slug => {
     const l = bySlug.get(slug)!
     const bp = blueprintInfo.get(slug)
-    return { slug, title: l.title, acronym: examAcronym(l.title, bp?.acronym) }
+    return {
+      slug, title: l.title, acronym: examAcronym(l.title, bp?.acronym),
+      practice: practiceAvailability(slug, blueprintSlugs, reviewSlugs),
+    }
   })
 }

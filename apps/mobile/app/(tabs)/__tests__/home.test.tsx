@@ -122,6 +122,7 @@ const emptyPracticeData = {
   totalCards: 0,
   cardCountByTopic: {},
   topicIdsByListingSlug: {},
+  loaded: true,
   refresh: jest.fn().mockResolvedValue(undefined),
 }
 
@@ -319,7 +320,7 @@ describe('Today', () => {
       const { router } = require('expo-router')
       mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, items: [planItem({ id: 2, kind: 'mock_section', refId: 'upcat' })] })
       render(<HomeScreen />)
-      fireEvent.press(screen.getByRole('button', { name: 'Timed mock section, A dress rehearsal for the real exam' }))
+      fireEvent.press(screen.getByRole('button', { name: 'Timed mock, A full, timed dress rehearsal for the real exam' }))
       expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
     })
 
@@ -382,6 +383,7 @@ describe('Today', () => {
     it('a focused exam with no score yet opens the diagnostic', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [focusUpcat] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat'] })
       render(<HomeScreen />)
       fireEvent.press(screen.getByRole('button', { name: 'UPCAT 2026, no score yet' }))
       expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
@@ -390,7 +392,7 @@ describe('Today', () => {
     it('a focused exam with a mock best shows it and opens practice/start/:slug', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [focusUpcat] })
-      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, listingMockBest: new Map([['upcat', 72]]) })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat'], listingMockBest: new Map([['upcat', 72]]) })
       render(<HomeScreen />)
       expect(screen.getByText('72%')).toBeTruthy()
       fireEvent.press(screen.getByRole('button', { name: 'UPCAT 2026, best score 72%' }))
@@ -406,13 +408,32 @@ describe('Today', () => {
       expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?exam=acet')
     })
 
-    it('a scoreless exam without a blueprint goes to the diagnostic naming it (honest not-available state)', () => {
+    it('a scoreless exam with nothing to practise says so and opens its listing (never a dead-end diagnostic)', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'random-exam', title: 'Random Exam' }] })
       mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat', 'acet', 'ustet'] })
       render(<HomeScreen />)
-      fireEvent.press(screen.getByRole('button', { name: 'Random Exam, no score yet' }))
-      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?exam=random-exam')
+      expect(screen.getByText('No score yet · Practice coming soon')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Random Exam, no score yet, practice coming soon' }))
+      expect(router.push).toHaveBeenCalledWith('/listings/random-exam')
+    })
+
+    it('a scoreless exam with review topics but no mock opens its review chooser', () => {
+      const { router } = require('expo-router')
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'random-exam', title: 'Random Exam' }] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat'] })
+      mockUsePracticeData.mockReturnValue({ ...emptyPracticeData, topicIdsByListingSlug: { 'random-exam': ['t1'] } })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByRole('button', { name: 'Random Exam, no score yet, mock exam coming soon' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/start/random-exam')
+    })
+
+    it('labels nothing as coming soon until the catalog has loaded', () => {
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'random-exam', title: 'Random Exam' }] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, loaded: false })
+      render(<HomeScreen />)
+      expect(screen.getByRole('button', { name: 'Random Exam, no score yet' })).toBeTruthy()
+      expect(screen.queryByText(/coming soon/)).toBeNull()
     })
 
     it('excludes school-level focus entries', () => {
@@ -429,9 +450,10 @@ describe('Today', () => {
       render(<HomeScreen />)
       fireEvent.press(screen.getByRole('button', { name: 'Add an exam' }))
       expect(screen.getByRole('header', { name: 'Add an exam' })).toBeTruthy()
-      fireEvent.press(screen.getByRole('button', { name: 'Add USTET to Focus' }))
+      expect(screen.getByText('Practice coming soon')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Add USTET to Focus, practice coming soon' }))
       expect(mockAddListing).toHaveBeenCalledWith('ustet')
-      expect(screen.queryByRole('button', { name: 'Add USTET to Focus' })).toBeNull()
+      expect(screen.queryByRole('button', { name: /Add USTET to Focus/ })).toBeNull()
     })
 
     it('shows a skeleton while exams load', () => {

@@ -17,6 +17,7 @@ import { asc, eq, and, isNull } from 'drizzle-orm'
 import { studyPlanItems, focusListings, listings as listingsTable } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
 import { getDueCounts } from './srsAggregates'
+import { listRunnableBlueprints } from './examBlueprints'
 import { getWeakTopicStats, getTopicNames, getPracticeDayIndices } from './homeAggregates'
 import { pickWeakTopics } from '../utils/weakness'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
@@ -68,7 +69,7 @@ export async function getPlanItemsForDate(db: DrizzleClient, planDate: string): 
 export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<GenerateStudyPlanInput> {
   const now = today.getTime()
 
-  const [dueCounts, weakStats, topicNames, dayIndices, focusedRows] = await Promise.all([
+  const [dueCounts, weakStats, topicNames, dayIndices, focusedRows, runnable] = await Promise.all([
     getDueCounts(db, now),
     getWeakTopicStats(db),
     getTopicNames(db),
@@ -80,6 +81,7 @@ export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<
     }).from(focusListings)
       .leftJoin(listingsTable, eq(listingsTable.slug, focusListings.listingSlug))
       .orderBy(asc(focusListings.priority)),
+    listRunnableBlueprints(db),
   ])
 
   const topicMap = new Map(topicNames.map(t => [t.id, t.name]))
@@ -92,6 +94,11 @@ export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<
     .filter(r => !isSchoolFocusSlug(r.slug) && r.examDate != null && r.examDate > now)
     .sort((a, b) => a.examDate! - b.examDate!)
   const nearest = upcoming[0] ?? null
+  // The weekly mock item opens /practice/exam/<slug>: only an exam whose mock
+  // can actually run (a published blueprint with questions) gets one, never
+  // the "This mock isn't ready yet" dead end.
+  const runnableSlugs = new Set(runnable.map(b => b.slug))
+  const mockExam = upcoming.find(r => runnableSlugs.has(r.slug)) ?? null
 
   return {
     today,
@@ -99,7 +106,7 @@ export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<
     dueSrsCount: dueCounts.total,
     weakTopics,
     hasAnyReadinessData: dayIndices.length > 0,
-    mockSectionRefId: nearest?.slug ?? null,
+    mockSectionRefId: mockExam?.slug ?? null,
   }
 }
 

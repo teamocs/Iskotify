@@ -266,7 +266,7 @@ describe('DiagnosticExam', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)')
   })
 
-  it('"Practice weakest subject" routes to the UPCAT review screen', async () => {
+  it('"Practice weakest subject" routes to the UPCAT drill for that subtest', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [
       { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 1, explanation: '', setId: null },
@@ -277,8 +277,22 @@ describe('DiagnosticExam', () => {
     await reviewAndConfirmSubmit(alertSpy)
     await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
 
-    fireEvent.press(screen.getByText(/Practice weakest subject/))
-    expect(mockPush).toHaveBeenCalledWith('/practice/review/upcat')
+    fireEvent.press(screen.getByText('Practice weakest subject (Science)'))
+    expect(mockPush).toHaveBeenCalledWith('/practice/upcat/Science?mode=quick')
+  })
+
+  it('url-encodes a multi-word weakest subtest in the drill route', async () => {
+    mockSearchParams = { subject: 'Reading Comprehension' }
+    mockBankRows = [
+      { questionId: 'R1', subtest: 'Reading Comprehension', questionText: 'RC Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 1, explanation: '', setId: null },
+    ]
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('RC Q1')).toBeTruthy())
+    fireEvent.press(screen.getByText('a'))
+    await reviewAndConfirmSubmit(alertSpy)
+    await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+    fireEvent.press(screen.getByText('Practice weakest subject (Reading Comprehension)'))
+    expect(mockPush).toHaveBeenCalledWith('/practice/upcat/Reading%20Comprehension?mode=quick')
   })
 
   // ── Fix 2: last-question safety ────────────────────────────────────────────
@@ -767,7 +781,7 @@ describe('DiagnosticExam', () => {
       expect(mockPush).toHaveBeenCalledWith('/practice/review/acet')
     })
 
-    it('review fix 1: with no review topics for the exam, it offers a mock exam instead of a dead end', async () => {
+    it('review fix 1: with no review topics for the exam, it goes straight to the mock exam (no chooser hop)', async () => {
       setupAcet()
       mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { upcat: ['t1'] }, loaded: true }
       mockSearchParams = { exam: 'acet' }
@@ -778,7 +792,7 @@ describe('DiagnosticExam', () => {
       expect(screen.queryByText('Review ACET topics')).toBeNull()
       expect(screen.queryByText(/Practice weakest/)).toBeNull()
       fireEvent.press(screen.getByText('Take a mock exam'))
-      expect(mockPush).toHaveBeenCalledWith('/practice/start/acet')
+      expect(mockPush).toHaveBeenCalledWith('/practice/exam/acet')
     })
 
     it('review fix 2: a failed focus/blueprint lookup without ?exam= still serves the UPCAT diagnostic', async () => {
@@ -914,7 +928,7 @@ describe('DiagnosticExam', () => {
       await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
     })
 
-    it('a focus exam with no runnable blueprint is an honest state, with a way to take the UPCAT-style diagnostic instead', async () => {
+    it('a focus exam with no runnable blueprint is an honest state that never offers UPCAT questions instead', async () => {
       mockSearchParams = { exam: 'dcat-dlsu' }
       mockBankRows = [
         { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
@@ -923,12 +937,20 @@ describe('DiagnosticExam', () => {
       expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet")).toBeTruthy()
       expect(screen.queryByText('Sci Q1')).toBeNull()
       expect(mockSaveRun).not.toHaveBeenCalled()
+      expect(screen.queryByRole('button', { name: /UPCAT/ })).toBeNull()
+      // Nothing to review either: the exam's page, which says practice is coming soon.
+      fireEvent.press(screen.getByRole('button', { name: 'See exam details' }))
+      expect(mockPush).toHaveBeenCalledWith('/listings/dcat-dlsu')
+    })
 
-      fireEvent.press(screen.getByRole('button', { name: 'Take the UPCAT-style diagnostic instead' }))
-      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy())
-      fireEvent.press(screen.getByText('a'))
-      await skipToLastAndSubmit() // the whole UPCAT diagnostic: bank Science + bundled Mathematics
-      await waitFor(() => expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ listingSlug: 'upcat', kind: 'diagnostic' })))
+    it('an exam with no runnable blueprint but review topics offers its topic review', async () => {
+      mockSearchParams = { exam: 'dcat-dlsu' }
+      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { 'dcat-dlsu': ['t1'] }, loaded: true }
+      render(<DiagnosticExam />)
+      expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet")).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'See exam details' })).toBeNull()
+      fireEvent.press(screen.getByRole('button', { name: 'Review DCAT-DLSU topics' }))
+      expect(mockPush).toHaveBeenCalledWith('/practice/review/dcat-dlsu')
     })
 
     it('keys the saved run by exam and stores the exam slug', async () => {

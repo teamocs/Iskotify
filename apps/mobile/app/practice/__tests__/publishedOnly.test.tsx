@@ -7,7 +7,6 @@ import { CREATE_SQL, MIGRATIONS } from '../../../db/client'
 import type { DrizzleClient } from '../../../db/client'
 import TopicQuiz from '../[topicId]'
 import DeckQuiz from '../deck/[deckId]'
-import ListingQuiz from '../listing/[slug]'
 
 // Logic audit A6: a quiz must never serve an unpublished (draft/archived) card
 // — the Practice list already hid them, but the quiz screens queried every row.
@@ -70,12 +69,5 @@ describe('quiz screens serve published cards only', () => {
     await startQuick()
     expect(screen.getByTestId('exam').props.children).not.toContain('draft1')
     expect(screen.getByTestId('exam').props.children).toContain('pub2')
-  })
-
-  it('listing review quiz (also scoped to the listing slug)', async () => {
-    mockParams.value = { slug: 'upcat' }
-    render(<ListingQuiz />)
-    await startQuick()
-    expect(screen.getByTestId('exam').props.children).toBe('exam:pub1,pub2')
   })
 })

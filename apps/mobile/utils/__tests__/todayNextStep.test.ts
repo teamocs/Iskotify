@@ -33,6 +33,12 @@ describe('planItemCopy', () => {
     expect(planItemCopy(item({ kind: 'mock_section', refId: 'upcat' }), topics).route).toBe('/practice/exam/upcat')
     expect(planItemCopy(item({ kind: 'diagnostic', refId: '' }), topics).route).toBe('/practice/diagnostic')
   })
+
+  it('names the mock item for what it opens: the full timed mock, not a section', () => {
+    const c = planItemCopy(item({ kind: 'mock_section', refId: 'upcat' }), topics)
+    expect(c).toMatchObject({ title: 'Timed mock', detail: 'A full, timed dress rehearsal for the real exam', actionLabel: 'Start mock' })
+    expect(planItemCopy(item({ kind: 'diagnostic', refId: '' }), topics).route).toBe('/practice/diagnostic')
+  })
 })
 
 describe('pickNextStep', () => {

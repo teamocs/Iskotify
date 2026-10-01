@@ -25,6 +25,7 @@ import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { pickNextStep } from '../../utils/todayNextStep'
+import { hasReviewTopics } from '../../utils/diagnosticTarget'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
@@ -44,7 +45,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 export default function TodayScreen() {
   const stats = useHomeStats()
   const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays } = stats
-  const { topicRows } = usePracticeData()
+  const { topicRows, topicIdsByListingSlug, loaded: practiceLoaded } = usePracticeData()
   const { addListing } = useFocusListings()
   const catalog = useHomeCatalog()
   const db = useDb()
@@ -54,6 +55,11 @@ export default function TodayScreen() {
   const topicNameById = useMemo(
     () => new Map(topicRows.map(r => [r.topic.id, r.topic.name])),
     [topicRows],
+  )
+  // Exams with flashcard topics to review: practice exists even without a mock.
+  const reviewSlugs = useMemo(
+    () => new Set(Object.keys(topicIdsByListingSlug).filter(slug => hasReviewTopics(slug, topicRows, topicIdsByListingSlug))),
+    [topicRows, topicIdsByListingSlug],
   )
 
   // ── Admissions feed (for "Coming up") ───────────────────────────────────────
@@ -188,6 +194,8 @@ export default function TodayScreen() {
               focusedListings={focusedListings}
               examListings={catalog.examListings}
               blueprintSlugs={catalog.blueprintSlugs}
+              reviewSlugs={reviewSlugs}
+              availabilityKnown={catalog.loaded && practiceLoaded}
               blueprintInfo={catalog.blueprintInfo}
               listingMockBest={catalog.listingMockBest}
               listingAccuracy={listingAccuracy}

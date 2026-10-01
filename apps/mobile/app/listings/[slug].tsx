@@ -32,7 +32,8 @@ import { externalLinkProps } from '../../components/explore/externalLink'
 import { daysUntilDate, fmtLongDate, matchBadge } from '../../components/explore/exploreModel'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
-import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
+import { listRunnableBlueprints } from '../../services/examBlueprints'
+import { hasReviewContent } from '../../services/practiceSignals'
 import { matchScholarship, scholarshipProfileIncomplete, studentProfileFromSettings } from '../../utils/scholarshipMatch'
 import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
 
@@ -164,7 +165,9 @@ export default function ListingDetailScreen() {
   const [reasonsOpen, setReasonsOpen] = useState(false)
   const [profileIncomplete, setProfileIncomplete] = useState(false)
   const [watchingResults, setWatchingResults] = useState(false)
-  const [hasBlueprint, setHasBlueprint] = useState(false)
+  // What this exam can be practised with: a runnable mock, topic review only, or
+  // nothing yet (null while unknown, so no button flashes in and out).
+  const [practice, setPractice] = useState<'mock' | 'review' | 'none' | null>(null)
   const [showDateCorrection, setShowDateCorrection] = useState(false)
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
   const inFocus = isInFocus(slug)
@@ -206,10 +209,15 @@ export default function ListingDetailScreen() {
         }
         setStatus(l ? 'ready' : 'missing')
 
-        // Non-blocking: does this exam have a published mock blueprint?
-        listPublishedBlueprintSlugs(db)
-          .then(slugs => { if (alive) setHasBlueprint(slugs.includes(slug)) })
-          .catch(() => { /* the mock CTA simply won't appear */ })
+        // Non-blocking: can this exam's mock actually run (never "This mock isn't
+        // ready yet")? Else does it have topics to review?
+        if (l?.type === 'exam') {
+          Promise.all([listRunnableBlueprints(db), hasReviewContent(db, slug)])
+            .then(([runnable, review]) => {
+              if (alive) setPractice(runnable.some(b => b.slug === slug) ? 'mock' : review ? 'review' : 'none')
+            })
+            .catch(() => { /* the practice CTA simply won't appear */ })
+        }
       } catch (e) {
         console.warn('[listing] load failed:', e)
         if (alive) setStatus('error')
@@ -396,7 +404,7 @@ export default function ListingDetailScreen() {
 
   // 3. One primary action, then the save action (Focus).
   const primary = isExam ? (
-    hasBlueprint ? (
+    practice === 'mock' ? (
       <Button
         label="Take a mock exam"
         size="lg"
@@ -404,9 +412,12 @@ export default function ListingDetailScreen() {
         icon={<Lineicons icon={GraduationCap1Outlined} size={18} color={t.textInverse} />}
         onPress={() => router.push(`/practice/exam/${slug}`)}
       />
-    ) : (
-      <Button label="Practise for this exam" size="lg" fullWidth={!twoUp} onPress={() => router.push('/(tabs)/practice')} />
-    )
+    ) : practice === 'review' ? (
+      // The exam's chooser: topic review now, with "Mock exam coming soon".
+      <Button label="Practise for this exam" size="lg" fullWidth={!twoUp} onPress={() => router.push(`/practice/start/${slug}`)} />
+    ) : practice === 'none' ? (
+      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Practice coming soon</Text>
+    ) : null
   ) : listing.externalUrl ? (
     <PrimaryLinkButton label="Apply on the official site" url={listing.externalUrl} />
   ) : null

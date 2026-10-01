@@ -30,6 +30,15 @@ jest.mock('../../../hooks/useFocusListings', () => ({
 
 jest.mock('../../../hooks/useDb', () => ({ useDb: jest.fn() }))
 
+const mockRunnable = jest.fn()
+jest.mock('../../../services/examBlueprints', () => ({
+  listRunnableBlueprints: (...a: unknown[]) => mockRunnable(...a),
+}))
+const mockHasReview = jest.fn()
+jest.mock('../../../services/practiceSignals', () => ({
+  hasReviewContent: (...a: unknown[]) => mockHasReview(...a),
+}))
+
 const SCHOOL = {
   id: 'up-diliman', name: 'University of the Philippines Diliman', acronym: 'UPD',
   region: 'NCR', province: 'Metro Manila', city: 'Quezon City', type: 'State University', isSuc: true, isLuc: false,
@@ -70,6 +79,8 @@ describe('SchoolProfileScreen', () => {
     jest.clearAllMocks()
     failFirst = false
     mockFocus.inFocus = false
+    mockRunnable.mockResolvedValue([])
+    mockHasReview.mockResolvedValue(false)
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(SCHOOL, PROFILE))
   })
@@ -100,6 +111,39 @@ describe('SchoolProfileScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/listings/upcat')
     fireEvent.press(screen.getByRole('button', { name: 'Add to Focus' }))
     expect(mockFocus.addListing).toHaveBeenCalledWith('upcat')
+  })
+
+  describe('a school whose exam has no content of its own (general entrance practice)', () => {
+    const OWN_EXAM = { ...PROFILE, entranceExamName: 'Own Entrance Test', entranceExamAcronym: 'OET' }
+    beforeEach(() => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SCHOOL, OWN_EXAM))
+    })
+
+    it('offers the general entrance mock only when it can actually run', async () => {
+      const { router } = require('expo-router')
+      mockRunnable.mockResolvedValue([{ slug: 'general-cet' }])
+      render(<SchoolProfileScreen />)
+      fireEvent.press(await screen.findByRole('button', { name: 'Practise with the general entrance mock' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/start/school:up-diliman')
+    })
+
+    it('without a runnable general mock, offers its topic review honestly', async () => {
+      const { router } = require('expo-router')
+      mockHasReview.mockResolvedValue(true)
+      render(<SchoolProfileScreen />)
+      fireEvent.press(await screen.findByRole('button', { name: 'Practise general entrance topics' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/start/school:up-diliman')
+      expect(screen.queryByRole('button', { name: 'Practise with the general entrance mock' })).toBeNull()
+      expect(mockHasReview).toHaveBeenCalledWith(expect.anything(), 'general-cet')
+    })
+
+    it('with nothing to practise, no practice button (Focus is still offered)', async () => {
+      render(<SchoolProfileScreen />)
+      expect(await screen.findByRole('button', { name: 'Add to Focus' })).toBeTruthy()
+      expect(await screen.findByText('Practice coming soon')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Practise/ })).toBeNull()
+    })
   })
 
   // Bug (route audit 2026-09-26): a school whose type text is itself "SUC"

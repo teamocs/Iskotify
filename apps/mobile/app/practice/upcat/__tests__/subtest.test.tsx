@@ -656,7 +656,9 @@ describe('UpcatExam', () => {
       await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
       expect(await screen.findByRole('header', { name: 'Tapos na! Practice complete.' })).toBeTruthy()
       expect(screen.getByTestId('screen-scroll')).toBeTruthy()
-      expect(screen.getByRole('button', { name: 'Back to exams' })).toBeTruthy()
+      // Lands on the real Mock exams list, not the /practice/upcat redirect to a prestart.
+      fireEvent.press(screen.getByRole('button', { name: 'Back to mock exams' }))
+      expect(mockReplace).toHaveBeenCalledWith('/practice/exam')
     })
   })
   describe('free limits (P3 Full Access)', () => {

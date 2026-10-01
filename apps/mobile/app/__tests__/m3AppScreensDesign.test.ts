@@ -20,7 +20,6 @@ const SCREENS = [
   'app/practice/deck/[deckId].tsx',
   'app/practice/due/index.tsx',
   'app/practice/start/[slug].tsx',
-  'app/practice/listing/[slug].tsx',
   'app/practice/review/[slug].tsx',
   'app/practice/exam/index.tsx',
   'app/practice/upcat/[subtest].tsx',

@@ -18,7 +18,8 @@ import { ErrorState } from '../ui/ErrorState'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import {
   buildFocusExamSlots, buildExamPickerOptions, resolveFocusTileRoute,
-  DEFAULT_SUGGESTED_EXAM_SLUGS, type FocusExamSlot,
+  practiceAvailability, practiceAvailabilityLabel,
+  DEFAULT_SUGGESTED_EXAM_SLUGS, type FocusExamSlot, type PracticeAvailability,
 } from '../../utils/focusExamSlots'
 import { pickCountdown } from '../../utils/todayNextStep'
 import { focusExamScore } from '../../utils/focusExamScore'
@@ -35,7 +36,12 @@ interface FocusedExamInput {
 interface Props {
   focusedListings: FocusedExamInput[]
   examListings: ExamListingSummary[]
+  /** RUNNABLE blueprint slugs (useHomeCatalog): an exam outside it has no mock to take. */
   blueprintSlugs: string[]
+  /** Exams with flashcard topics to review (practice without a mock). */
+  reviewSlugs?: ReadonlySet<string>
+  /** False until blueprints/topics have loaded: no "coming soon" label before that. */
+  availabilityKnown?: boolean
   blueprintInfo: Map<string, BlueprintInfo>
   listingMockBest: Map<string, number>
   listingAccuracy: Record<string, number>
@@ -46,6 +52,8 @@ interface Props {
 }
 
 // Hoisted: building an Intl formatter is slow.
+const NO_SLUGS: ReadonlySet<string> = new Set()
+
 const EXAM_DATE = new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 
 /**
@@ -55,7 +63,7 @@ const EXAM_DATE = new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 's
  */
 export function FocusExamsFold({
   focusedListings, examListings, blueprintSlugs, blueprintInfo, listingMockBest, listingAccuracy, onAddListing,
-  loading, error, onRetry,
+  reviewSlugs = NO_SLUGS, availabilityKnown = true, loading, error, onRetry,
 }: Props) {
   const { theme: t } = useTheme()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -86,8 +94,8 @@ export function FocusExamsFold({
   )
 
   const pickerOptions = useMemo(
-    () => buildExamPickerOptions(examListings, blueprintSlugs, blueprintInfo, focusedSlugSet),
-    [examListings, blueprintSlugs, blueprintInfo, focusedSlugSet],
+    () => buildExamPickerOptions(examListings, blueprintSlugs, blueprintInfo, focusedSlugSet, undefined, reviewSlugs),
+    [examListings, blueprintSlugs, blueprintInfo, focusedSlugSet, reviewSlugs],
   )
 
   const countdown = useMemo(
@@ -97,10 +105,12 @@ export function FocusExamsFold({
 
   const scoreFor = (slug: string) => focusExamScore(listingMockBest.get(slug), listingAccuracy[slug])
   const readinessFor = (slug: string): number | null => scoreFor(slug).pct
+  // "Practice coming soon" / "Mock exam coming soon": only once we actually know.
+  const missingLabel = (a: PracticeAvailability): string | null => (availabilityKnown ? practiceAvailabilityLabel(a) : null)
 
   function onRowPress(slot: Exclude<FocusExamSlot, { kind: 'blank' }>) {
     if (slot.kind === 'suggested') { void onAddListing(slot.slug); return }
-    router.push(resolveFocusTileRoute(slot.slug, readinessFor(slot.slug) != null, blueprintSlugs) as never)
+    router.push(resolveFocusTileRoute(slot.slug, readinessFor(slot.slug) != null, blueprintSlugs, reviewSlugs) as never)
   }
 
   const nothingYet = focusedExams.length === 0
@@ -150,18 +160,19 @@ export function FocusExamsFold({
               )
             }
             const { pct, label: scoreLabel } = scoreFor(slot.slug)
+            const missing = missingLabel(practiceAvailability(slot.slug, blueprintSlugs, reviewSlugs))
             return (
               <ListRow
                 key={slot.slug}
                 title={slot.title}
-                subtitle={scoreLabel}
+                subtitle={missing ? `${scoreLabel} · ${missing}` : scoreLabel}
                 trailing={
                   <Text style={textStyle('numeric', pct != null ? t.textPrimary : t.textSecondary)} maxFontSizeMultiplier={1.5}>
                     {pct != null ? `${pct}%` : '—'}
                   </Text>
                 }
                 onPress={() => onRowPress(slot)}
-                accessibilityLabel={`${slot.title}, ${pct != null ? `best score ${pct}%` : 'no score yet'}`}
+                accessibilityLabel={`${slot.title}, ${pct != null ? `best score ${pct}%` : 'no score yet'}${missing ? `, ${missing.toLowerCase()}` : ''}`}
               />
             )
           })
@@ -202,15 +213,19 @@ export function FocusExamsFold({
             You've added every exam we track.
           </Text>
         ) : (
-          pickerOptions.map(opt => (
-            <ListRow
-              key={opt.slug}
-              title={opt.title}
-              showChevron={false}
-              onPress={() => { void onAddListing(opt.slug); setPickerOpen(false) }}
-              accessibilityLabel={`Add ${opt.title} to Focus`}
-            />
-          ))
+          pickerOptions.map(opt => {
+            const missing = missingLabel(opt.practice)
+            return (
+              <ListRow
+                key={opt.slug}
+                title={opt.title}
+                subtitle={missing ?? undefined}
+                showChevron={false}
+                onPress={() => { void onAddListing(opt.slug); setPickerOpen(false) }}
+                accessibilityLabel={`Add ${opt.title} to Focus${missing ? `, ${missing.toLowerCase()}` : ''}`}
+              />
+            )
+          })
         )}
       </Sheet>
     </View>

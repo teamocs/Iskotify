@@ -1,5 +1,6 @@
 import {
   buildFocusExamSlots, buildExamPickerOptions, examAcronym, resolveFocusTileRoute,
+  practiceAvailability, practiceAvailabilityLabel,
   DEFAULT_SUGGESTED_EXAM_SLUGS, FOCUS_EXAM_SLOT_COUNT,
 } from '../focusExamSlots'
 
@@ -94,6 +95,13 @@ describe('buildExamPickerOptions', () => {
     expect(opts.map(o => o.slug)).toEqual(['ustet', 'random-exam'])
   })
 
+  it('marks each option with what can be practised for it', () => {
+    const opts = buildExamPickerOptions(examListings, blueprintSlugs, blueprintInfo, new Set(), 9, new Set(['random-exam']))
+    expect(opts.map(o => [o.slug, o.practice])).toEqual([['upcat', 'mock'], ['ustet', 'mock'], ['random-exam', 'review']])
+    const bare = buildExamPickerOptions(examListings, blueprintSlugs, blueprintInfo, new Set())
+    expect(bare.find(o => o.slug === 'random-exam')!.practice).toBe('none')
+  })
+
   it('caps to the requested limit', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ slug: `e${i}`, title: `Exam ${i}` }))
     const opts = buildExamPickerOptions(many, [], new Map(), new Set(), 9)
@@ -119,12 +127,31 @@ describe('resolveFocusTileRoute', () => {
     expect(resolveFocusTileRoute('ustet', false, blueprintSlugs)).toBe('/practice/diagnostic?exam=ustet')
   })
 
-  it('routes a scoreless exam with no runnable blueprint to the diagnostic naming the exam (honest not-available state, never the UPCAT one)', () => {
-    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs)).toBe('/practice/diagnostic?exam=random-exam')
-    expect(resolveFocusTileRoute('acet', false, [])).toBe('/practice/diagnostic?exam=acet')
+  it('routes a scoreless exam with no runnable mock but review topics to its review chooser (never a dead-end diagnostic)', () => {
+    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs, new Set(['random-exam']))).toBe('/practice/start/random-exam')
+  })
+
+  it('routes a scoreless exam with nothing to practise yet to its listing page', () => {
+    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs)).toBe('/listings/random-exam')
+    expect(resolveFocusTileRoute('acet', false, [])).toBe('/listings/acet')
   })
 
   it('url-encodes the exam slug', () => {
-    expect(resolveFocusTileRoute('a b&c', false, [])).toBe('/practice/diagnostic?exam=a%20b%26c')
+    expect(resolveFocusTileRoute('a b&c', false, ['a b&c'])).toBe('/practice/diagnostic?exam=a%20b%26c')
+    expect(resolveFocusTileRoute('a b&c', false, [])).toBe('/listings/a%20b%26c')
+  })
+})
+
+describe('practiceAvailability', () => {
+  it('is a mock when the exam has a runnable blueprint, else review topics, else none', () => {
+    expect(practiceAvailability('acet', ['acet'], new Set())).toBe('mock')
+    expect(practiceAvailability('acet', [], new Set(['acet']))).toBe('review')
+    expect(practiceAvailability('acet', [], new Set())).toBe('none')
+  })
+
+  it('labels only what is missing', () => {
+    expect(practiceAvailabilityLabel('mock')).toBeNull()
+    expect(practiceAvailabilityLabel('review')).toBe('Mock exam coming soon')
+    expect(practiceAvailabilityLabel('none')).toBe('Practice coming soon')
   })
 })
