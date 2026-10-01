@@ -661,6 +661,10 @@ export const MIGRATIONS = [
   // uploaded with the backup and reset on sign-out and account switch.
   `ALTER TABLE user_settings ADD COLUMN premium_cached INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE user_settings ADD COLUMN premium_checked_at INTEGER NOT NULL DEFAULT 0`,
+  // ── P3 review: which account premium_cached belongs to ('' = nobody) ──
+  // The cache is trusted only for that signed-in account, so an account switch
+  // can never hand the previous account's access to the next one.
+  `ALTER TABLE user_settings ADD COLUMN premium_user_id TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

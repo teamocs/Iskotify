@@ -38,6 +38,8 @@ let snapshot: PremiumSnapshot = initialSnapshot()
 const listeners = new Set<() => void>()
 let boundDb: DrizzleClient | null = null
 let inFlight: Promise<boolean> | null = null
+/** Bumped on sign-out / account switch; a refresh started under an older value is dropped. */
+let generation = 0
 
 function set(next: Partial<PremiumSnapshot>): void {
   const merged = { ...snapshot, ...next }
@@ -66,27 +68,37 @@ async function currentUserId(): Promise<string | null | undefined> {
   }
 }
 
-async function doRefresh(db: DrizzleClient): Promise<boolean> {
-  const cached = (await readPremiumCache(db).catch(() => ({ premium: false, checkedAt: 0 }))).premium
+async function doRefresh(db: DrizzleClient, gen: number): Promise<boolean> {
+  // An account switch or sign-out (generation bump) while this check runs makes
+  // its answer stale: it is dropped, never shown or cached for the next person.
+  const stale = () => gen !== generation
+  const cache = await readPremiumCache(db).catch(() => ({ premium: false, checkedAt: 0, userId: '' }))
   const userId = await currentUserId()
+  if (stale()) return snapshot.isPremium
   if (userId === undefined) {
-    set({ isPremium: cached, loading: false })
-    return cached
+    // Session unknown: the cache can't be matched to an account, so it grants nothing new.
+    set({ isPremium: snapshot.loading ? false : snapshot.isPremium, loading: false })
+    return snapshot.isPremium
   }
   if (userId === null) {
-    if (cached) await clearPremiumCache(db).catch(e => console.warn('[premium] cache clear failed:', e))
+    if (cache.premium) await clearPremiumCache(db).catch(e => console.warn('[premium] cache clear failed:', e))
     set({ isPremium: false, loading: false })
     return false
   }
+  // The cache counts only for the account it was written for.
+  const cached = cache.premium && cache.userId === userId
   // Show the cached answer straight away; the network answer follows.
   if (snapshot.loading) set({ isPremium: cached, loading: false })
   // RevenueCat follows the signed-in Supabase account (purchases are attributed to it).
   await storeLogIn(userId)
   const row = await fetchEntitlementPremium(userId)
+  if (stale()) return snapshot.isPremium
   const premium = resolvePremium({ signedIn: true, row, cached })
   if (row !== null) {
-    await writePremiumCache(db, premium).catch(e => console.warn('[premium] cache write failed:', e))
+    // Stamped with its account: even if a switch lands mid-write, no one else trusts it.
+    await writePremiumCache(db, premium, userId).catch(e => console.warn('[premium] cache write failed:', e))
   }
+  if (stale()) return snapshot.isPremium
   set({ isPremium: premium, loading: false })
   return premium
 }
@@ -96,22 +108,39 @@ export function refreshPremium(): Promise<boolean> {
   const db = boundDb
   if (!snapshot.enabled || !db) return Promise.resolve(snapshot.isPremium)
   if (!inFlight) {
-    inFlight = doRefresh(db)
+    const p: Promise<boolean> = doRefresh(db, generation)
       .catch(e => { console.warn('[premium] refresh failed:', e); set({ loading: false }); return snapshot.isPremium })
-      .finally(() => { inFlight = null })
+      .finally(() => { if (inFlight === p) inFlight = null })
+    inFlight = p
   }
   return inFlight
+}
+
+/** Drop the current account's state: any check in flight is now stale. */
+function bumpGeneration(): void {
+  generation++
+  inFlight = null
 }
 
 /**
  * After a web payment PayMongo's webhook may land a few seconds after the
  * student is back: re-read until Full Access shows up or the attempts run out.
  */
-export async function pollPremium(opts: { attempts?: number; intervalMs?: number } = {}): Promise<boolean> {
+export interface PollOptions {
+  attempts?: number
+  intervalMs?: number
+  /** Aborted when the waiting screen closes: the polling stops at the next step. */
+  signal?: AbortSignal
+}
+
+export async function pollPremium(opts: PollOptions = {}): Promise<boolean> {
   const attempts = opts.attempts ?? 6
   const intervalMs = opts.intervalMs ?? 2500
+  const stopped = () => !!opts.signal?.aborted
   for (let i = 0; i < attempts; i++) {
+    if (stopped()) return false
     if (i > 0 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs))
+    if (stopped()) return false
     if (await refreshPremium()) return true
   }
   return false
@@ -123,8 +152,8 @@ export async function pollPremium(opts: { attempts?: number; intervalMs?: number
  * Full Access; 'pending' if it has not arrived after ~30 s (the screen then
  * says it may take a minute and offers a refresh). Never grants access itself.
  */
-export async function confirmPurchase(opts: { attempts?: number; intervalMs?: number } = {}): Promise<'confirmed' | 'pending'> {
-  const ok = await pollPremium({ attempts: opts.attempts ?? 12, intervalMs: opts.intervalMs ?? 2500 })
+export async function confirmPurchase(opts: PollOptions = {}): Promise<'confirmed' | 'pending'> {
+  const ok = await pollPremium({ attempts: opts.attempts ?? 12, intervalMs: opts.intervalMs ?? 2500, signal: opts.signal })
   return ok ? 'confirmed' : 'pending'
 }
 
@@ -133,6 +162,7 @@ export async function confirmPurchase(opts: { attempts?: number; intervalMs?: nu
  * device starts free (the next person's own check decides). Never throws.
  */
 export async function signOutPremium(db?: DrizzleClient | null): Promise<void> {
+  bumpGeneration()
   try { await storeLogOut() } catch (e) { console.warn('[premium] store logout failed:', e) }
   const target = db ?? boundDb
   if (target) await clearPremiumCache(target).catch(e => console.warn('[premium] cache clear failed:', e))
@@ -148,6 +178,7 @@ export async function signOutPremium(db?: DrizzleClient | null): Promise<void> {
  */
 export function forgetPremiumState(): void {
   if (!snapshot.enabled) return
+  bumpGeneration()
   set({ isPremium: false })
   void refreshPremium()
 }
@@ -201,4 +232,5 @@ export function _resetPremiumForTests(): void {
   listeners.clear()
   boundDb = null
   inFlight = null
+  generation = 0
 }

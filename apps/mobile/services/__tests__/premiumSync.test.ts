@@ -61,35 +61,36 @@ beforeEach(() => {
 
 it('never uploads the premium cache with the settings backup', async () => {
   const { raw, db } = makeDb()
-  synced(raw, { premium_cached: 1, premium_checked_at: 500 })
+  synced(raw, { premium_cached: 1, premium_checked_at: 500, premium_user_id: 'u1' })
   expect(await pushUserData(db)).toBe(true)
   const settings = (mockState.remote as { settings: Record<string, unknown> }).settings
   expect(settings.fullName).toBe('Juan')
   expect(settings).not.toHaveProperty('premiumCached')
   expect(settings).not.toHaveProperty('premiumCheckedAt')
+  expect(settings).not.toHaveProperty('premiumUserId')
 })
 
 it('never restores premium from a backup', async () => {
   const { raw, db } = makeDb()
   synced(raw)
-  mockState.remote = { user_id: 'u1', settings: { fullName: 'Juan', premiumCached: true, premiumCheckedAt: 9 } }
+  mockState.remote = { user_id: 'u1', settings: { fullName: 'Juan', premiumCached: true, premiumCheckedAt: 9, premiumUserId: 'u1' } }
   await pullUserData(db)
-  expect(row(raw)).toMatchObject({ premium_cached: 0, premium_checked_at: 0 })
+  expect(row(raw)).toMatchObject({ premium_cached: 0, premium_checked_at: 0, premium_user_id: '' })
 })
 
 it('a different account signing in starts free on this device', async () => {
   const { raw, db } = makeDb()
-  synced(raw, { premium_cached: 1, premium_checked_at: 500 })
+  synced(raw, { premium_cached: 1, premium_checked_at: 500, premium_user_id: 'u1' })
   expect(await reconcileAccountOwner(db, 'u2')).toBe('switched')
-  expect(row(raw)).toMatchObject({ owner_user_id: 'u2', premium_cached: 0, premium_checked_at: 0 })
+  expect(row(raw)).toMatchObject({ owner_user_id: 'u2', premium_cached: 0, premium_checked_at: 0, premium_user_id: '' })
   expect(mockForget).toHaveBeenCalledTimes(1)
 })
 
 it('the same account signing in again keeps its access', async () => {
   const { raw, db } = makeDb()
-  synced(raw, { premium_cached: 1, premium_checked_at: 500 })
+  synced(raw, { premium_cached: 1, premium_checked_at: 500, premium_user_id: 'u1' })
   mockForget.mockClear()
   expect(await reconcileAccountOwner(db, 'u1')).toBe('same')
-  expect(row(raw)).toMatchObject({ premium_cached: 1 })
+  expect(row(raw)).toMatchObject({ premium_cached: 1, premium_user_id: 'u1' })
   expect(mockForget).not.toHaveBeenCalled()
 })

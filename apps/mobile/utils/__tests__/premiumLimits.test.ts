@@ -7,6 +7,7 @@ import {
   manilaDayBounds,
   isPaywallEnabled,
   resolvePremium,
+  trimToAllowance,
 } from '../premiumLimits'
 
 describe('premium limits', () => {
@@ -82,5 +83,33 @@ describe('premium limits', () => {
       expect(resolvePremium({ signedIn: true, row: null, cached: true })).toBe(true)
       expect(resolvePremium({ signedIn: true, row: null, cached: false })).toBe(false)
     })
+  })
+})
+
+describe('trimToAllowance (never splits a passage set)', () => {
+  const solo = (id: string) => ({ id, setId: null as string | null })
+  const inSet = (id: string, setId: string) => ({ id, setId })
+  const ids = (qs: { id: string }[]) => qs.map(q => q.id)
+
+  it('keeps everything when it fits, and nothing when the allowance is 0', () => {
+    const qs = [solo('a'), inSet('b1', 'B'), inSet('b2', 'B')]
+    expect(ids(trimToAllowance(qs, 3))).toEqual(['a', 'b1', 'b2'])
+    expect(ids(trimToAllowance(qs, Infinity))).toEqual(['a', 'b1', 'b2'])
+    expect(trimToAllowance(qs, 0)).toEqual([])
+  })
+
+  it('stops before a passage set that would not fit whole', () => {
+    const qs = [solo('a'), inSet('b1', 'B'), inSet('b2', 'B'), inSet('b3', 'B'), solo('c')]
+    expect(ids(trimToAllowance(qs, 3))).toEqual(['a'])
+    expect(ids(trimToAllowance(qs, 4))).toEqual(['a', 'b1', 'b2', 'b3'])
+  })
+
+  it('serves a first set whole even when it alone is over the allowance (over by less than one set)', () => {
+    const qs = [inSet('b1', 'B'), inSet('b2', 'B'), inSet('b3', 'B'), solo('c')]
+    expect(ids(trimToAllowance(qs, 1))).toEqual(['b1', 'b2', 'b3'])
+  })
+
+  it('trims standalone questions one by one, as before', () => {
+    expect(ids(trimToAllowance([solo('a'), solo('b'), solo('c')], 2))).toEqual(['a', 'b'])
   })
 })

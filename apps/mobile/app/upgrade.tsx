@@ -11,7 +11,7 @@ import { decorative, focusRing, heading, type WebPressableState } from '../compo
 import { useTheme } from '../theme/ThemeContext'
 import { spacing, radius, textStyle } from '../theme/tokens'
 import { usePremium } from '../hooks/usePremium'
-import { PURCHASE_CHANNEL, getFullAccessPrice } from '../services/premium'
+import { PURCHASE_CHANNEL, getFullAccessPrice, storeAvailable } from '../services/premium'
 import { buyFullAccess, restoreFullAccessForUser, confirmPurchase, pollPremium } from '../services/premiumState'
 import { supabase } from '../services/supabase'
 import { capture } from '../lib/analytics'
@@ -22,7 +22,8 @@ import { FREE_DAILY_PRACTICE_QUESTIONS } from '../utils/premiumLimits'
 // (GCash, Maya or card). Either unlocks both. Access is granted only when the
 // server entitlement row says so, so after paying this screen waits for it
 // ("Confirming your purchase"). The Android build never mentions the web
-// purchase or its price (Play payments policy).
+// purchase or its price (Play payments policy). A build that can't sell
+// (iOS for now, or no store key) shows no purchase at all.
 
 type Phase =
   | 'idle'        // ready to buy
@@ -50,6 +51,7 @@ export default function UpgradeScreen() {
   const { enabled, isPremium } = usePremium()
   const { theme: t } = useTheme()
   const play = PURCHASE_CHANNEL === 'play'
+  const canBuy = storeAvailable()
 
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [price, setPrice] = useState<string | null>(null)
@@ -57,6 +59,17 @@ export default function UpgradeScreen() {
   const [error, setError] = useState<string | null>(null)
   const lastAction = useRef<'buy' | 'restore'>('buy')
   const viewed = useRef(false)
+  // One purchase / restore at a time: a double tap lands before the button re-renders as busy.
+  const inFlight = useRef(false)
+  // Aborted on unmount: the confirmation polling stops and no state is set afterwards.
+  const life = useRef(new AbortController())
+  useEffect(() => {
+    if (life.current.signal.aborted) life.current = new AbortController() // remounted (Strict Mode)
+    const ctrl = life.current
+    return () => ctrl.abort()
+  }, [])
+  const signal = () => life.current.signal
+  const gone = () => life.current.signal.aborted
 
   useEffect(() => {
     if (!enabled) return
@@ -79,6 +92,7 @@ export default function UpgradeScreen() {
     setPhase('confirming')
     setError(null)
     const ok = await wait()
+    if (life.current.signal.aborted) return // the screen closed: no state updates
     if (ok) {
       setPhase('success')
       capture('purchase_completed', { channel: PURCHASE_CHANNEL })
@@ -92,43 +106,51 @@ export default function UpgradeScreen() {
   useEffect(() => {
     if (!enabled || returnStatus !== 'success' || returned.current) return
     returned.current = true
-    void confirm(() => pollPremium())
+    void confirm(() => pollPremium({ signal: life.current.signal }))
   }, [enabled, returnStatus, confirm])
 
-  async function buy() {
+  /** Runs one purchase / restore / re-check; a second tap while one runs is ignored. */
+  async function once(run: () => Promise<void>) {
+    if (inFlight.current) return
+    inFlight.current = true
+    try { await run() } finally { inFlight.current = false }
+  }
+
+  const buy = () => once(async () => {
     lastAction.current = 'buy'
     setPhase('working')
     setError(null)
     capture('purchase_started', { channel: PURCHASE_CHANNEL, source: typeof from === 'string' && from ? from : 'direct' })
     const res = await buyFullAccess()
+    if (gone()) return
     switch (res.status) {
-      case 'success': await confirm(async () => (await confirmPurchase()) === 'confirmed'); return
+      case 'success': await confirm(async () => (await confirmPurchase({ signal: signal() })) === 'confirmed'); return
       case 'redirecting': return // the browser is leaving for the checkout page
-      case 'already_premium': await confirm(() => pollPremium()); return
+      case 'already_premium': await confirm(() => pollPremium({ signal: signal() })); return
       case 'cancelled': setPhase('idle'); return
       case 'signed_out': setSignedIn(false); setPhase('idle'); return
       case 'error': setError(res.message); setPhase('error'); return
       default: setPhase('idle')
     }
-  }
+  })
 
-  async function restore() {
+  const restore = () => once(async () => {
     lastAction.current = 'restore'
     setPhase('working')
     setError(null)
     const res = await restoreFullAccessForUser()
-    if (res.status === 'success') { await confirm(async () => (await confirmPurchase()) === 'confirmed'); return }
+    if (gone()) return
+    if (res.status === 'success') { await confirm(async () => (await confirmPurchase({ signal: signal() })) === 'confirmed'); return }
     if (res.status === 'signed_out') { setSignedIn(false); setPhase('idle'); return }
     if (res.status === 'error') { setError(res.message); setPhase('error'); return }
     // Nothing in the store: the account may still hold Full Access on the server.
     setPhase('working')
-    if (await pollPremium()) { setPhase('success'); return }
-    setPhase('not_found')
-  }
+    const found = await pollPremium({ signal: signal() })
+    if (gone()) return
+    setPhase(found ? 'success' : 'not_found')
+  })
 
-  async function checkAgain() {
-    await confirm(() => pollPremium())
-  }
+  const checkAgain = () => once(() => confirm(() => pollPremium({ signal: signal() })))
 
   if (!enabled) return <Redirect href="/(tabs)/profile" />
 
@@ -145,7 +167,7 @@ export default function UpgradeScreen() {
     : null
 
   const priceText = play
-    ? (price ? `${price}, one-time payment` : 'One-time payment. Google Play shows the price.')
+    ? (price ? `${price}, one-time payment` : canBuy ? 'One-time payment. Google Play shows the price.' : 'One-time payment.')
     : `${price ?? '₱500'}, one-time payment`
 
   return (
@@ -219,6 +241,8 @@ export default function UpgradeScreen() {
                 </Text>
                 <Button label="Sign in to continue" size="lg" fullWidth onPress={() => router.push(signInHref)} />
               </View>
+            ) : !canBuy ? (
+              <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>Not available on this device yet.</Text>
             ) : phase === 'pending' ? (
               <Button label="Check again" size="lg" fullWidth onPress={() => void checkAgain()} />
             ) : phase === 'error' ? (
@@ -226,6 +250,7 @@ export default function UpgradeScreen() {
                 label="Try again"
                 size="lg"
                 fullWidth
+                loading={busy}
                 onPress={() => void (lastAction.current === 'restore' ? restore() : buy())}
               />
             ) : (
@@ -238,7 +263,7 @@ export default function UpgradeScreen() {
               />
             )}
 
-            {play && signedIn ? (
+            {play && signedIn && canBuy ? (
               <Button
                 label="Restore purchases"
                 variant="ghost"

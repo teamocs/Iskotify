@@ -160,12 +160,12 @@ export async function syncPrimaryListing(db: DrizzleClient): Promise<void> {
 // Resolves true when the backup row was written, false when signed out or when
 // the upsert was rejected (the error is logged; the next push retries in full).
 /**
- * The Full Access cache (premium_cached / premium_checked_at) is this device's
+ * The Full Access cache (premium_cached / premium_checked_at / premium_user_id) is this device's
  * copy of the store / server answer, not the student's data: it never goes into
  * the backup (and the restore below never reads it back).
  */
-function withoutPremiumCache<T extends { premiumCached?: unknown; premiumCheckedAt?: unknown }>(row: T): Omit<T, 'premiumCached' | 'premiumCheckedAt'> {
-  const { premiumCached: _p, premiumCheckedAt: _c, ...rest } = row
+function withoutPremiumCache<T extends { premiumCached?: unknown; premiumCheckedAt?: unknown; premiumUserId?: unknown }>(row: T): Omit<T, 'premiumCached' | 'premiumCheckedAt' | 'premiumUserId'> {
+  const { premiumCached: _p, premiumCheckedAt: _c, premiumUserId: _u, ...rest } = row
   return rest
 }
 
@@ -362,6 +362,7 @@ const USER_SETTINGS_RESET = {
   // Full Access belongs to the account: the next one starts free until its own check.
   premiumCached: false,
   premiumCheckedAt: 0,
+  premiumUserId: '',
   pushDirtyAt: 0,
   lastPullOkAt: 0,
 } satisfies Partial<typeof userSettings.$inferInsert>

@@ -38,28 +38,28 @@ function attempts(db: DrizzleClient, sessionKey: number, answeredAt: number, pic
 describe('premium cache (user_settings.premium_cached / premium_checked_at)', () => {
   it('reads false before anything was stored', async () => {
     const { db } = makeDb()
-    expect(await readPremiumCache(db)).toEqual({ premium: false, checkedAt: 0 })
+    expect(await readPremiumCache(db)).toEqual({ premium: false, checkedAt: 0, userId: '' })
   })
 
   it('stores and reads back the last known state', async () => {
     const { db, raw } = makeDb()
-    await writePremiumCache(db, true, 1234)
-    expect(await readPremiumCache(db)).toEqual({ premium: true, checkedAt: 1234 })
-    const r = raw.prepare('SELECT premium_cached, premium_checked_at FROM user_settings WHERE id = 1').get()
-    expect(r).toEqual({ premium_cached: 1, premium_checked_at: 1234 })
+    await writePremiumCache(db, true, 'u1', 1234)
+    expect(await readPremiumCache(db)).toEqual({ premium: true, checkedAt: 1234, userId: 'u1' })
+    const r = raw.prepare('SELECT premium_cached, premium_checked_at, premium_user_id FROM user_settings WHERE id = 1').get()
+    expect(r).toEqual({ premium_cached: 1, premium_checked_at: 1234, premium_user_id: 'u1' })
   })
 
   it('clears to free on sign-out', async () => {
     const { db } = makeDb()
-    await writePremiumCache(db, true, 1234)
+    await writePremiumCache(db, true, 'u1', 1234)
     await clearPremiumCache(db)
-    expect(await readPremiumCache(db)).toEqual({ premium: false, checkedAt: 0 })
+    expect(await readPremiumCache(db)).toEqual({ premium: false, checkedAt: 0, userId: '' })
   })
 
   it('never touches the rest of the settings row', async () => {
     const { db, raw } = makeDb()
     raw.prepare("INSERT INTO user_settings (id, full_name, age_band) VALUES (1, 'Juan', 'adult')").run()
-    await writePremiumCache(db, true, 99)
+    await writePremiumCache(db, true, 'u1', 99)
     const r = raw.prepare('SELECT full_name, age_band, push_dirty_at FROM user_settings WHERE id = 1').get()
     expect(r).toEqual({ full_name: 'Juan', age_band: 'adult', push_dirty_at: 0 })
   })

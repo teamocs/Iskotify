@@ -43,13 +43,32 @@ export function storeAvailable(): boolean {
 const foundPurchase = (info: CustomerInfo | null | undefined): boolean =>
   !!info?.entitlements?.active?.[ENTITLEMENT_ID]
 
-export async function storeLogIn(userId: string): Promise<void> {
-  if (!configured || !userId || loggedInAs === userId) return
+/** Log RevenueCat in as the Supabase user. True once it is (a failed logIn is retried next call). */
+export async function storeLogIn(userId: string): Promise<boolean> {
+  if (!configured || !userId) return false
+  if (loggedInAs === userId) return true
   try {
     await Purchases.logIn(userId)
     loggedInAs = userId
+    return true
   } catch (e) {
     console.warn('[premium] RevenueCat logIn failed:', e)
+    return false
+  }
+}
+
+/**
+ * A purchase or restore must be attributed to THIS account: log in, then check
+ * RevenueCat really is on that user (a failed or raced logIn would leave the
+ * previous or an anonymous user, whose webhook would grant the wrong account).
+ */
+async function storeIsUser(userId: string): Promise<boolean> {
+  if (!(await storeLogIn(userId))) return false
+  try {
+    return (await Purchases.getAppUserID()) === userId
+  } catch (e) {
+    console.warn('[premium] getAppUserID failed:', e)
+    return false
   }
 }
 
@@ -90,7 +109,7 @@ function isCancelled(e: unknown): boolean {
 export async function purchaseFullAccess(userId: string): Promise<PurchaseOutcome> {
   if (!userId) return { status: 'signed_out' }
   if (!configured) return { status: 'error', message: PURCHASE_ERROR }
-  await storeLogIn(userId)
+  if (!(await storeIsUser(userId))) { loggedInAs = null; return { status: 'error', message: NETWORK_ERROR } }
   let pkg: PurchasesPackage | null
   try {
     pkg = await currentPackage()
@@ -115,7 +134,7 @@ export async function purchaseFullAccess(userId: string): Promise<PurchaseOutcom
 export async function restoreFullAccess(userId: string): Promise<PurchaseOutcome> {
   if (!userId) return { status: 'signed_out' }
   if (!configured) return { status: 'error', message: PURCHASE_ERROR }
-  await storeLogIn(userId)
+  if (!(await storeIsUser(userId))) { loggedInAs = null; return { status: 'error', message: NETWORK_ERROR } }
   try {
     // Only tells the student whether Play found a purchase; the row decides access.
     const info = await Purchases.restorePurchases()

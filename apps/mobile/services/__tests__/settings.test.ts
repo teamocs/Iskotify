@@ -59,7 +59,8 @@ function makeDb(): DrizzleClient {
       sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
       analytics_choice_at INTEGER NOT NULL DEFAULT 0,
       premium_cached INTEGER NOT NULL DEFAULT 0,
-      premium_checked_at INTEGER NOT NULL DEFAULT 0
+      premium_checked_at INTEGER NOT NULL DEFAULT 0,
+      premium_user_id TEXT NOT NULL DEFAULT ''
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient

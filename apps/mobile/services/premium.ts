@@ -22,7 +22,7 @@ export function storeAvailable(): boolean {
   return true
 }
 
-export async function storeLogIn(_userId: string): Promise<void> { /* no store identity on web */ }
+export async function storeLogIn(_userId: string): Promise<boolean> { return true /* no store identity on web */ }
 
 export async function storeLogOut(): Promise<void> { /* no store identity on web */ }
 

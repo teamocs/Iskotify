@@ -26,6 +26,10 @@ jest.mock('../../../../services/premiumGate', () => ({
   practiceAllowanceNow: jest.fn(async () => Infinity),
 }))
 
+// The live premium state (default: flag off, no limit). Tests flip it and rerender.
+const mockPremium = { enabled: false, isPremium: false, unlimited: true, loading: false }
+jest.mock('../../../../hooks/usePremium', () => ({ usePremium: () => ({ ...mockPremium, refresh: async () => mockPremium.isPremium }) }))
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
@@ -150,6 +154,7 @@ describe('BlueprintExam', () => {
     mockSearchParams = { slug: 'test-mock' }
     mockGate.fullMockAllowed = true
     mockFullMockAllowedNow.mockClear()
+    Object.assign(mockPremium, { enabled: false, isPremium: false, unlimited: true, loading: false })
     mockRouterPush.mockClear()
 
     mockGetExamBlueprint.mockResolvedValue(BLUEPRINT)
@@ -574,6 +579,30 @@ describe('BlueprintExam', () => {
       expect(screen.getByRole('button', { name: /Study Sprint/ })).toBeTruthy()
       fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
       expect(mockRouterPush).toHaveBeenCalledWith('/upgrade?from=full_mock_cap')
+    })
+
+    it('unlocks Full Mock on the prestart as soon as Full Access arrives', async () => {
+      Object.assign(mockPremium, { enabled: true, unlimited: false })
+      mockGate.fullMockAllowed = false
+      const { rerender } = render(<BlueprintExam />)
+      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+      Object.assign(mockPremium, { isPremium: true, unlimited: true })
+      mockGate.fullMockAllowed = true
+      await act(async () => { rerender(<BlueprintExam />) })
+      expect(mockFullMockAllowedNow).toHaveBeenCalledTimes(2)
+      expect(screen.queryByText(/used your free full mock/i)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Full Mock' })).toBeTruthy()
+    })
+
+    it('re-checks the free full mock once the premium state has loaded (loading is not a lasting pass)', async () => {
+      Object.assign(mockPremium, { enabled: true, unlimited: false, loading: true })
+      mockGate.fullMockAllowed = true // the gate fails open while loading
+      const { rerender } = render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      Object.assign(mockPremium, { loading: false })
+      mockGate.fullMockAllowed = false
+      await act(async () => { rerender(<BlueprintExam />) })
+      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
     })
 
     it('with a free mock left (or the flag off), Full Mock starts as before', async () => {

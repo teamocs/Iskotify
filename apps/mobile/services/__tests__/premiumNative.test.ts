@@ -2,9 +2,11 @@
  * P3 Full Access, Android: the RevenueCat (Google Play) side. The module under
  * test is services/premium.native.ts; react-native-purchases is the manual mock.
  */
-type Mocked = Record<'configure' | 'logIn' | 'logOut' | 'isAnonymous' | 'getOfferings' | 'purchasePackage' | 'restorePurchases' | 'getCustomerInfo', jest.Mock>
+type Mocked = Record<'configure' | 'logIn' | 'logOut' | 'isAnonymous' | 'getAppUserID' | 'getOfferings' | 'purchasePackage' | 'restorePurchases' | 'getCustomerInfo', jest.Mock>
 // The module registry is reset per load(), so P is re-bound to that load's mock.
 let P: Mocked
+
+import { NETWORK_ERROR } from '../premiumTypes'
 
 const RN = { Platform: { OS: 'android' } }
 jest.mock('react-native', () => RN)
@@ -54,6 +56,24 @@ describe('configure', () => {
     m.configureStore()
     expect(P.configure).not.toHaveBeenCalled()
   })
+
+  it('reports the store as unavailable on iOS and without a key, so no purchase is offered', () => {
+    RN.Platform.OS = 'ios'
+    let m = load()
+    m.configureStore()
+    expect(m.storeAvailable()).toBe(false)
+
+    RN.Platform.OS = 'android'
+    delete process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+    m = load()
+    m.configureStore()
+    expect(m.storeAvailable()).toBe(false)
+
+    process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY = 'goog_test'
+    m = load()
+    m.configureStore()
+    expect(m.storeAvailable()).toBe(true)
+  })
 })
 
 describe('identity', () => {
@@ -66,6 +86,15 @@ describe('identity', () => {
     expect(P.logIn).toHaveBeenCalledWith('u1')
     await m.storeLogIn('u2')
     expect(P.logIn).toHaveBeenLastCalledWith('u2')
+  })
+
+  it('reports whether the logIn worked, and retries a failed one', async () => {
+    const m = load()
+    m.configureStore()
+    P.logIn.mockRejectedValueOnce(new Error('offline'))
+    expect(await m.storeLogIn('u1')).toBe(false)
+    expect(await m.storeLogIn('u1')).toBe(true)
+    expect(P.logIn).toHaveBeenCalledTimes(2)
   })
 
   it('logs out on sign-out, but not an anonymous user (RevenueCat would throw)', async () => {
@@ -121,6 +150,35 @@ describe('purchase', () => {
     expect((await m.purchaseFullAccess('u1')).status).toBe('error')
     P.getOfferings.mockResolvedValueOnce({ current: null, all: {} })
     expect((await m.purchaseFullAccess('u1')).status).toBe('error')
+  })
+
+  it('never buys under another RevenueCat user when the logIn failed', async () => {
+    const m = load()
+    m.configureStore()
+    P.getOfferings.mockResolvedValue({ current: { availablePackages: [pkg] }, all: {} })
+    P.logIn.mockRejectedValueOnce(new Error('offline'))
+    expect(await m.purchaseFullAccess('u1')).toEqual({ status: 'error', message: NETWORK_ERROR })
+    expect(P.purchasePackage).not.toHaveBeenCalled()
+  })
+
+  it('never buys when RevenueCat is still on a different user (e.g. the previous account)', async () => {
+    const m = load()
+    m.configureStore()
+    P.getOfferings.mockResolvedValue({ current: { availablePackages: [pkg] }, all: {} })
+    await m.storeLogIn('u1')
+    P.getAppUserID.mockResolvedValueOnce('u-previous')
+    expect(await m.purchaseFullAccess('u1')).toEqual({ status: 'error', message: NETWORK_ERROR })
+    expect(P.purchasePackage).not.toHaveBeenCalled()
+  })
+
+  it('never restores under another RevenueCat user', async () => {
+    const m = load()
+    m.configureStore()
+    P.logIn.mockRejectedValueOnce(new Error('offline'))
+    expect(await m.restoreFullAccess('u1')).toEqual({ status: 'error', message: NETWORK_ERROR })
+    P.getAppUserID.mockResolvedValueOnce('$RCAnonymousID:other')
+    expect(await m.restoreFullAccess('u1')).toEqual({ status: 'error', message: NETWORK_ERROR })
+    expect(P.restorePurchases).not.toHaveBeenCalled()
   })
 
   it('restores an earlier purchase', async () => {

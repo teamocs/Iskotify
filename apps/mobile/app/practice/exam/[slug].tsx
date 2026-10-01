@@ -51,6 +51,7 @@ import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
 import { fullMockAllowedNow } from '../../../services/premiumGate'
+import { usePremium } from '../../../hooks/usePremium'
 import { UpgradeCard, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
@@ -275,6 +276,7 @@ export default function BlueprintExam() {
   const [resumeAvailable, setResumeAvailable] = useState(false)
   // P3 Full Access: the free full mock for this exam is used up (never true with the paywall flag off).
   const [fullMockLocked, setFullMockLocked] = useState(false)
+  const { unlimited: premiumUnlimited, loading: premiumLoading } = usePremium()
   // The saved run's time already ran out: offer Submit / Discard, never a silent auto-submit.
   const [resumeStale, setResumeStale] = useState(false)
   // Set by "Submit what I answered": the restored run is submitted once the exam phase is up.
@@ -394,13 +396,15 @@ export default function BlueprintExam() {
   }, [phase, slug, loadRun])
 
   // P3 Full Access: a free student gets one full mock per exam. Study Sprint and
-  // resuming a started run are never gated.
+  // resuming a started run are never gated. Re-checked whenever the premium
+  // state changes: Full Access arriving unlocks it, and the fail-open answer
+  // given while that state was still loading is replaced once it has loaded.
   useEffect(() => {
     if (phase !== 'prestart' || !slug) return
     let cancelled = false
     void fullMockAllowedNow(db, slug).then(ok => { if (!cancelled) setFullMockLocked(!ok) })
     return () => { cancelled = true }
-  }, [phase, slug, db])
+  }, [phase, slug, db, premiumUnlimited, premiumLoading])
 
   // Fix 1: persist answers/position/timers on every change while the run is
   // in progress — cleared on submit (see submit()). Best-effort: a save

@@ -23,9 +23,10 @@ jest.mock('react-native-safe-area-context', () => ({
 const mockPremium = { enabled: true, isPremium: false, unlimited: false, loading: false, refresh: jest.fn(async () => false) }
 jest.mock('../../hooks/usePremium', () => ({ usePremium: () => mockPremium }))
 
-const mockStore: { channel: 'play' | 'web'; price: string | null } = { channel: 'play', price: '₱500.00' }
+const mockStore: { channel: 'play' | 'web'; price: string | null; available: boolean } = { channel: 'play', price: '₱500.00', available: true }
 jest.mock('../../services/premium', () => ({
   get PURCHASE_CHANNEL() { return mockStore.channel },
+  storeAvailable: () => mockStore.available,
   getFullAccessPrice: jest.fn(async () => mockStore.price),
 }))
 
@@ -36,8 +37,8 @@ const mockPoll = jest.fn()
 jest.mock('../../services/premiumState', () => ({
   buyFullAccess: () => mockBuy(),
   restoreFullAccessForUser: () => mockRestore(),
-  confirmPurchase: () => mockConfirm(),
-  pollPremium: () => mockPoll(),
+  confirmPurchase: (...a: unknown[]) => mockConfirm(...a),
+  pollPremium: (...a: unknown[]) => mockPoll(...a),
 }))
 
 const mockSession: { signedIn: boolean } = { signedIn: true }
@@ -53,7 +54,7 @@ beforeEach(() => {
   mockPush.mockReset()
   mockReplace.mockReset()
   Object.assign(mockPremium, { enabled: true, isPremium: false, unlimited: false, loading: false })
-  Object.assign(mockStore, { channel: 'play', price: '₱500.00' })
+  Object.assign(mockStore, { channel: 'play', price: '₱500.00', available: true })
   mockSession.signedIn = true
   mockBuy.mockReset().mockResolvedValue({ status: 'success' })
   mockRestore.mockReset().mockResolvedValue({ status: 'nothing_to_restore' })
@@ -168,6 +169,74 @@ describe('Android (Google Play)', () => {
     render(<UpgradeScreen />)
     expect(await screen.findByText('You have Full Access')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Buy through Google Play' })).toBeNull()
+  })
+})
+
+describe('one purchase at a time', () => {
+  const never = () => new Promise<never>(() => {})
+
+  it('a double tap on Buy starts only one purchase', async () => {
+    mockBuy.mockImplementation(never)
+    render(<UpgradeScreen />)
+    const btn = await screen.findByRole('button', { name: 'Buy through Google Play' })
+    await act(async () => { fireEvent.press(btn); fireEvent.press(btn) })
+    expect(mockBuy).toHaveBeenCalledTimes(1)
+  })
+
+  it('a double tap on Restore starts only one restore', async () => {
+    mockRestore.mockImplementation(never)
+    render(<UpgradeScreen />)
+    const btn = await screen.findByRole('button', { name: 'Restore purchases' })
+    await act(async () => { fireEvent.press(btn); fireEvent.press(btn) })
+    expect(mockRestore).toHaveBeenCalledTimes(1)
+  })
+
+  it('Try again shows loading and a double tap retries once', async () => {
+    mockBuy.mockResolvedValueOnce({ status: 'error', message: 'Nope.' }).mockImplementation(never)
+    render(<UpgradeScreen />)
+    const buyBtn = await screen.findByRole('button', { name: 'Buy through Google Play' })
+    await act(async () => { fireEvent.press(buyBtn) })
+    const retry = screen.getByRole('button', { name: 'Try again' })
+    await act(async () => { fireEvent.press(retry); fireEvent.press(retry) })
+    expect(mockBuy).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { busy: true })).toBeTruthy()
+  })
+})
+
+describe('leaving the screen', () => {
+  it('stops waiting for the confirmation when the screen closes', async () => {
+    let signal: AbortSignal | undefined
+    mockConfirm.mockImplementation((opts?: { signal?: AbortSignal }) => { signal = opts?.signal; return new Promise(() => {}) })
+    const { unmount } = render(<UpgradeScreen />)
+    const buyBtn = await screen.findByRole('button', { name: 'Buy through Google Play' })
+    await act(async () => { fireEvent.press(buyBtn) })
+    expect(signal).toBeDefined()
+    expect(signal!.aborted).toBe(false)
+    unmount()
+    expect(signal!.aborted).toBe(true)
+  })
+
+  it('stops polling for a web payment when the screen closes', async () => {
+    Object.assign(mockStore, { channel: 'web', price: '₱500' })
+    mockParams = { status: 'success' }
+    let signal: AbortSignal | undefined
+    mockPoll.mockImplementation((opts?: { signal?: AbortSignal }) => { signal = opts?.signal; return new Promise(() => {}) })
+    const { unmount } = render(<UpgradeScreen />)
+    await screen.findByText(/Confirming your purchase/)
+    unmount()
+    expect(signal?.aborted).toBe(true)
+  })
+})
+
+describe('no store on this device (iOS, or a build without the store key)', () => {
+  it('offers no purchase and says so neutrally, never pointing to the web', async () => {
+    mockStore.available = false
+    mockStore.price = null
+    render(<UpgradeScreen />)
+    expect(await screen.findByText('Not available on this device yet.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Buy through Google Play' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Restore purchases' })).toBeNull()
+    expect(allText()).not.toMatch(/web|website|GCash|Maya|PayMongo|iskotify\.ph/i)
   })
 })
 

@@ -165,6 +165,8 @@ export const userSettings = sqliteTable('user_settings', {
   premiumCached: integer('premium_cached', { mode: 'boolean' }).notNull().default(false),
   // When that state was last confirmed online, epoch ms; 0 = never.
   premiumCheckedAt: integer('premium_checked_at').notNull().default(0),
+  // The Supabase user id premiumCached belongs to; '' = nobody. Trusted only for that account.
+  premiumUserId: text('premium_user_id').notNull().default(''),
 })
 
 export const userProgress = sqliteTable('user_progress', {

@@ -29,7 +29,7 @@ jest.mock('../supabase', () => ({
 
 const mockStore = {
   configureStore: jest.fn(),
-  storeLogIn: jest.fn(async (_id: string) => undefined),
+  storeLogIn: jest.fn(async (_id: string) => true),
   storeLogOut: jest.fn(async () => undefined),
   storeHasPremium: jest.fn(async (): Promise<boolean | null> => null),
   purchaseFullAccess: jest.fn(async (_id: string) => ({ status: 'success' })),
@@ -82,7 +82,7 @@ it('with the flag off, reports unlimited access and never touches the store', as
 
 it('offline, a paying student keeps access from the cache', async () => {
   const db = makeDb()
-  await writePremiumCache(db, true, 5)
+  await writePremiumCache(db, true, 'u1', 5)
   await initPremium(db)
   expect(getPremiumSnapshot()).toMatchObject({ enabled: true, isPremium: true, unlimited: true, loading: false })
 })
@@ -120,7 +120,7 @@ it('logs RevenueCat in with the signed-in Supabase user id', async () => {
 
 it('a refund (both sources say no) takes access away', async () => {
   const db = makeDb()
-  await writePremiumCache(db, true, 5)
+  await writePremiumCache(db, true, 'u1', 5)
   mockRow.mockResolvedValue(false)
   await initPremium(db)
   expect(getPremiumSnapshot()).toMatchObject({ isPremium: false, unlimited: false })
@@ -129,7 +129,7 @@ it('a refund (both sources say no) takes access away', async () => {
 
 it('signed out is free, and the cache is cleared', async () => {
   const db = makeDb()
-  await writePremiumCache(db, true, 5)
+  await writePremiumCache(db, true, 'u1', 5)
   mockAuth.userId = null
   await initPremium(db)
   expect(getPremiumSnapshot().isPremium).toBe(false)
@@ -178,6 +178,19 @@ it('stops polling after the given attempts', async () => {
   mockRow.mockClear()
   expect(await pollPremium({ attempts: 3, intervalMs: 0 })).toBe(false)
   expect(mockRow).toHaveBeenCalledTimes(3)
+})
+
+it('stops polling once its signal is aborted (the screen closed)', async () => {
+  const db = makeDb()
+  await initPremium(db)
+  const ctrl = new AbortController()
+  mockRow.mockClear()
+  mockRow.mockImplementation(async () => { ctrl.abort(); return false })
+  expect(await pollPremium({ attempts: 5, intervalMs: 0, signal: ctrl.signal })).toBe(false)
+  expect(mockRow).toHaveBeenCalledTimes(1)
+  mockRow.mockClear()
+  expect(await confirmPurchase({ attempts: 5, intervalMs: 0, signal: ctrl.signal })).toBe('pending')
+  expect(mockRow).not.toHaveBeenCalled()
 })
 
 describe('confirmPurchase (after a Play purchase or restore)', () => {
@@ -229,4 +242,59 @@ it('an account switch drops the previous access at once (no store logout racing 
   forgetPremiumState()
   expect(getPremiumSnapshot().isPremium).toBe(false)
   expect(mockStore.storeLogOut).not.toHaveBeenCalled()
+})
+
+describe('account switch (the cache belongs to one account)', () => {
+  it("another account never inherits the previous account's cached access, even offline", async () => {
+    const db = makeDb()
+    await writePremiumCache(db, true, 'u1', 5)
+    mockAuth.userId = 'u2'
+    mockRow.mockResolvedValue(null) // offline: the row cannot be read
+    const seen: boolean[] = []
+    const unsub = subscribePremium(() => seen.push(getPremiumSnapshot().isPremium))
+    await initPremium(db)
+    unsub()
+    expect(getPremiumSnapshot().isPremium).toBe(false)
+    expect(seen).not.toContain(true)
+  })
+
+  it('stores which account the cached access belongs to', async () => {
+    const db = makeDb()
+    mockRow.mockResolvedValue(true)
+    await initPremium(db)
+    expect(await readPremiumCache(db)).toMatchObject({ premium: true, userId: 'u1' })
+  })
+
+  it("drops a refresh still in flight for the previous account (its answer never lands)", async () => {
+    const db = makeDb()
+    await initPremium(db)
+    let resolveOld!: (v: boolean | null) => void
+    mockRow.mockImplementationOnce(() => new Promise(r => { resolveOld = r }))
+    const old = refreshPremium()
+    await new Promise(r => setTimeout(r, 0))
+    // The account switches while u1's check is still running.
+    mockAuth.userId = 'u2'
+    mockRow.mockResolvedValue(false)
+    forgetPremiumState()
+    resolveOld(true)
+    await old
+    await new Promise(r => setTimeout(r, 0))
+    await refreshPremium()
+    expect(getPremiumSnapshot().isPremium).toBe(false)
+    expect((await readPremiumCache(db)).premium).toBe(false)
+  })
+
+  it('after sign-out, a refresh still in flight cannot bring access back', async () => {
+    const db = makeDb()
+    await initPremium(db)
+    let resolveOld!: (v: boolean | null) => void
+    mockRow.mockImplementationOnce(() => new Promise(r => { resolveOld = r }))
+    const old = refreshPremium()
+    await new Promise(r => setTimeout(r, 0))
+    await signOutPremium(db)
+    resolveOld(true)
+    await old
+    expect(getPremiumSnapshot().isPremium).toBe(false)
+    expect((await readPremiumCache(db)).premium).toBe(false)
+  })
 })

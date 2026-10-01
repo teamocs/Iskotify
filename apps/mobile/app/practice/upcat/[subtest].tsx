@@ -40,6 +40,8 @@ import { confirmAction } from '../../../utils/confirmAction'
 import { upcatDrillKind } from '../../../utils/sessionKind'
 import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 import { practiceAllowanceNow, fullMockAllowedNow } from '../../../services/premiumGate'
+import { usePremium } from '../../../hooks/usePremium'
+import { trimToAllowance } from '../../../utils/premiumLimits'
 import { UpgradeCard, PRACTICE_CAP_BODY, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 
 type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results' | 'capped'
@@ -94,6 +96,7 @@ export default function UpcatExam() {
   const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
   // P3 Full Access: which free limit stopped a new run (never set with the paywall flag off).
   const [cap, setCap] = useState<'practice' | 'mock' | null>(null)
+  const { unlimited: premiumUnlimited } = usePremium()
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -138,7 +141,8 @@ export default function UpcatExam() {
       } else {
         const allowance = await practiceAllowanceNow(db)
         if (allowance <= 0) { setCap('practice'); setPhase('capped'); return }
-        if (built.length > allowance) built = built.slice(0, allowance)
+        // Whole passage sets only (see trimToAllowance for the exact rule).
+        if (built.length > allowance) built = trimToAllowance(built, allowance)
       }
     }
     setQuestions(built)
@@ -146,6 +150,18 @@ export default function UpcatExam() {
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
     setPhase(built.length ? 'exam' : 'results')
   }
+
+  // P3 Full Access arrived (e.g. bought from the cap card): leave the cap and
+  // build the run from the questions already loaded. Runs only when the premium
+  // state CHANGES (not on every phase change), so a gate that still says no can
+  // never loop.
+  useEffect(() => {
+    if (phase !== 'capped' || !premiumUnlimited) return
+    setCap(null)
+    setPhase('loading')
+    void buildFreshExam()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [premiumUnlimited])
 
   useEffect(() => {
     void (async () => {

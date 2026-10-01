@@ -63,3 +63,30 @@ export function resolvePremium(input: { signedIn: boolean; row: boolean | null; 
   if (input.row === null) return input.cached
   return input.row
 }
+
+/**
+ * Cut a run down to today's free allowance without splitting a passage set.
+ * A set is the run of consecutive questions sharing a setId (buildExam keeps
+ * each set together); a question without a setId is a set of one.
+ * Rule: take whole sets in order while they fit, and stop at the first one that
+ * doesn't. The one exception: if the FIRST set alone is bigger than a non-zero
+ * allowance, it is served whole, so the run is never empty and goes over the
+ * allowance by less than one set. An allowance of 0 serves nothing.
+ */
+export function trimToAllowance<T extends { setId: string | null }>(questions: T[], allowance: number): T[] {
+  if (allowance <= 0) return []
+  if (questions.length <= allowance) return questions
+  const out: T[] = []
+  let i = 0
+  while (i < questions.length) {
+    const setId = questions[i]!.setId
+    let end = i + 1
+    if (setId) while (end < questions.length && questions[end]!.setId === setId) end++
+    const size = end - i
+    if (out.length + size > allowance && out.length > 0) break
+    out.push(...questions.slice(i, end))
+    if (out.length >= allowance) break
+    i = end
+  }
+  return out
+}
