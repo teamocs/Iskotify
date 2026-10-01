@@ -316,7 +316,76 @@ describe('auth/callback — account owner reconcile', () => {
     render(<AuthCallback />)
     await waitFor(() => expect(order).toContain('push'))
 
-    expect(sync.reconcileAccountOwner).toHaveBeenCalledWith(mockDb, 'user-B')
+    expect(sync.reconcileAccountOwner).toHaveBeenCalledWith(mockDb, 'user-B', 'u@test.com')
     expect(order).toEqual(['reconcile', 'settings-write', 'push'])
+  })
+})
+
+// ── Data-loss review: backup check errors, owner failure ─────────────────────
+describe('auth/callback — never sync blind', () => {
+  function backupCheckReturns(result: unknown) {
+    const mockMaybeSingle = jest.fn().mockResolvedValue(result)
+    const mockLimit = jest.fn(() => ({ maybeSingle: mockMaybeSingle }))
+    const mockEq = jest.fn(() => ({ limit: mockLimit }))
+    mockSupabaseFrom.mockReturnValue({ select: jest.fn(() => ({ eq: mockEq })) })
+  }
+
+  it('a backup check that returns { error } neither pulls nor pushes (could not tell if a backup exists)', async () => {
+    const sync = require('../../../services/sync')
+    sync.pullUserData.mockClear(); sync.pushUserData.mockClear()
+    setupSuccessfulExchange('user-B')
+    backupCheckReturns({ data: null, error: { message: 'JWT expired' } })
+
+    render(<AuthCallback />)
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/onboarding'))
+
+    expect(sync.pullUserData).not.toHaveBeenCalled()
+    expect(sync.pushUserData).not.toHaveBeenCalled()
+  })
+
+  it('a thrown backup check neither pulls nor pushes either', async () => {
+    const sync = require('../../../services/sync')
+    sync.pullUserData.mockClear(); sync.pushUserData.mockClear()
+    setupSuccessfulExchange('user-B')
+    mockSupabaseFrom.mockReturnValue({ select: jest.fn(() => { throw new Error('network timeout') }) })
+
+    render(<AuthCallback />)
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/onboarding'))
+
+    expect(sync.pullUserData).not.toHaveBeenCalled()
+    expect(sync.pushUserData).not.toHaveBeenCalled()
+  })
+
+  it('a confirmed "no backup" (no error) still pushes; a confirmed backup pulls', async () => {
+    const sync = require('../../../services/sync')
+    sync.pullUserData.mockClear(); sync.pushUserData.mockClear()
+    setupSuccessfulExchange('user-B')
+    backupCheckReturns({ data: null, error: null })
+    const first = render(<AuthCallback />)
+    await waitFor(() => expect(sync.pushUserData).toHaveBeenCalled())
+    first.unmount()
+
+    sync.pullUserData.mockClear(); sync.pushUserData.mockClear(); mockReplace.mockClear()
+    setupSuccessfulExchange('user-B')
+    backupCheckReturns({ data: { user_id: 'user-B' }, error: null })
+    render(<AuthCallback />)
+    await waitFor(() => expect(sync.pullUserData).toHaveBeenCalled())
+    expect(sync.pushUserData).not.toHaveBeenCalled()
+  })
+
+  it('if clearing the previous account fails, B is NOT written onto A and sign-in is aborted', async () => {
+    const sync = require('../../../services/sync')
+    sync.reconcileAccountOwner.mockRejectedValueOnce(new Error('disk full'))
+    sync.pullUserData.mockClear(); sync.pushUserData.mockClear(); mockInsert.mockClear()
+    setupSuccessfulExchange('user-B')
+
+    render(<AuthCallback />)
+    await waitFor(() => expect(mockReplace).toHaveBeenCalled())
+
+    expect(mockInsert).not.toHaveBeenCalled()
+    expect(sync.pullUserData).not.toHaveBeenCalled()
+    expect(sync.pushUserData).not.toHaveBeenCalled()
+    expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)')
+    expect(mockReplace).not.toHaveBeenCalledWith('/onboarding')
   })
 })

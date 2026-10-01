@@ -28,10 +28,13 @@ jest.mock('../supabase', () => ({
 }))
 jest.mock('../questionReports', () => ({ pushPendingReports: jest.fn().mockResolvedValue(undefined) }))
 
-function makeDb() {
+function makeDb(pulled = true) {
   const raw = new Database(':memory:')
   raw.exec(CREATE_SQL)
   for (const sql of MIGRATIONS) { try { raw.exec(sql) } catch { /* dup on re-run */ } }
+  // A device that has already completed a pull for its owner (the normal returning-user state):
+  // curated entities are REPLACED. A never-pulled device MERGES instead (see syncDataLoss.test.ts).
+  if (pulled) raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, owner_user_id) VALUES (1, 1, 'u1')`)
   return { raw, db: drizzle(raw, { schema }) as unknown as DrizzleClient }
 }
 const count = (raw: InstanceType<typeof Database>, t: string) =>
@@ -140,7 +143,7 @@ describe('pullUserData merge (C1)', () => {
 
   it('does not blank local settings with empty remote values', async () => {
     const { raw, db } = makeDb()
-    raw.exec(`INSERT INTO user_settings (id, full_name, email, school) VALUES (1, 'Juan', 'j@x.ph', 'PSHS')`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, full_name, email, school) VALUES (1, 1, 'Juan', 'j@x.ph', 'PSHS')`)
     mockState.remote = { settings: { id: 1, fullName: '', email: '', school: '' } }
     await pullUserData(db)
     const s = raw.prepare(`SELECT full_name AS n, email, school FROM user_settings WHERE id=1`).get() as any

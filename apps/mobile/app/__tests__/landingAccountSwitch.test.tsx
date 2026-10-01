@@ -61,3 +61,29 @@ it('reconciles the owner with the signed-in user id first, then writes settings,
   expect(mockReconcile).toHaveBeenCalledWith(mockDb, 'user-B')
   expect(mockOrder).toEqual(['reconcile', 'settings-write', 'push'])
 })
+
+describe('landing sign-in safety', () => {
+  beforeEach(() => { mockOrder.length = 0; mockPull.mockClear(); mockPush.mockClear(); mockDb.insert.mockClear() })
+
+  it('a failed backup-existence check neither pulls nor pushes', async () => {
+    const { supabase } = require('../../services/supabase')
+    supabase.from.mockImplementationOnce(() => ({
+      select: () => ({ eq: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'JWT expired' } }) }) }) }),
+    }))
+    render(<LandingScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Continue with Google' }))
+    await waitFor(() => expect(require('expo-router').router.replace).toHaveBeenCalled())
+    expect(mockPull).not.toHaveBeenCalled()
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('if clearing the previous account fails, B is not written onto A and an error is shown', async () => {
+    mockReconcile.mockRejectedValueOnce(new Error('disk full'))
+    render(<LandingScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Continue with Google' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(mockDb.insert).not.toHaveBeenCalled()
+    expect(mockPull).not.toHaveBeenCalled()
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+})

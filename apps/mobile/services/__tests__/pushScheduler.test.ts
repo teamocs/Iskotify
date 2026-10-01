@@ -140,3 +140,24 @@ describe('flushPendingPush', () => {
     expect(push).not.toHaveBeenCalled()
   })
 })
+
+describe('flushPendingPush reports whether the edit landed', () => {
+  it('resolves false when the push fails (the edit stays dirty) and true when it lands', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    registerPusher(jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true))
+    schedulePushUserData(DB)
+    expect(await flushPendingPush()).toBe(false)
+    schedulePushUserData(DB)
+    expect(await flushPendingPush()).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('resolves false when the pusher throws, and true when nothing is pending', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    registerPusher(jest.fn().mockRejectedValue(new Error('net')))
+    schedulePushUserData(DB)
+    expect(await flushPendingPush()).toBe(false)
+    expect(await flushPendingPush()).toBe(true)
+    warn.mockRestore()
+  })
+})

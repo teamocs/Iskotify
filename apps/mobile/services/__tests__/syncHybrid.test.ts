@@ -43,10 +43,13 @@ jest.mock('../supabase', () => ({
 }))
 jest.mock('../questionReports', () => ({ pushPendingReports: jest.fn().mockResolvedValue(undefined) }))
 
-function makeDb() {
+function makeDb(pulled = true) {
   const raw = new Database(':memory:')
   raw.exec(CREATE_SQL)
   for (const sql of MIGRATIONS) { try { raw.exec(sql) } catch { /* dup on re-run */ } }
+  // A device that has already completed a pull for its owner (the normal returning-user state):
+  // curated entities are REPLACED. A never-pulled device MERGES instead (see syncDataLoss.test.ts).
+  if (pulled) raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, owner_user_id) VALUES (1, 1, 'u1')`)
   return { raw, db: drizzle(raw, { schema }) as unknown as DrizzleClient }
 }
 const count = (raw: InstanceType<typeof Database>, t: string) =>
@@ -125,7 +128,7 @@ describe('curated entities REPLACE local when the remote has data', () => {
 
   it('settings: remote replaces local values, but an empty remote value never blanks a local one', async () => {
     const { raw, db } = makeDb()
-    raw.exec(`INSERT INTO user_settings (id, full_name, email, school) VALUES (1, 'Juan', 'j@x.ph', 'PSHS')`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, full_name, email, school) VALUES (1, 1, 'Juan', 'j@x.ph', 'PSHS')`)
     mockState.remote = { settings: { id: 1, fullName: 'Remote Juan', email: '', school: '', dailyReminderHour: 18 } }
     await pullUserData(db)
     const s = raw.prepare(`SELECT full_name AS n, email, school, daily_reminder_hour AS h FROM user_settings WHERE id=1`).get() as any
@@ -188,7 +191,7 @@ describe('append-only logs still merge, and attempts are re-pruned', () => {
 describe('queued local edits are flushed BEFORE the pull', () => {
   it('a debounced edit reaches the backend first, so the pull does not revert it', async () => {
     const { raw, db } = makeDb()
-    raw.exec(`INSERT INTO user_settings (id, owner_user_id) VALUES (1, 'u1')`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, owner_user_id) VALUES (1, 1, 'u1')`)
     mockState.remote = { notes: [note('old', 'Old backup note')] }
     raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES ('fresh', 'Just typed', 'x', 1, 2)`)
     schedulePushUserData(db) // 1.5 s debounce, not fired yet
@@ -214,8 +217,8 @@ describe('account switch', () => {
     raw.exec(`INSERT INTO saved_decks (id, name, topic_ids, created_at) VALUES ('d', 'D', '[]', 1)`)
     raw.exec(`INSERT INTO user_requirements (listing_slug, requirement_index, acquired_at) VALUES ('upcat', 0, 1)`)
     raw.exec(`INSERT INTO exam_runs (run_key, kind, started_at, updated_at) VALUES ('rk', 'exam', 1, 1)`)
-    raw.exec(`INSERT INTO user_settings (id, full_name, email, google_id, school, selected_listing_slug, last_synced_at, sync_rev, owner_user_id)
-      VALUES (1, 'Alice', 'a@x.ph', 'A', 'PSHS', 'upcat', 12345, 2, 'A')`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, full_name, email, google_id, school, selected_listing_slug, last_synced_at, sync_rev, owner_user_id)
+      VALUES (1, 1, 'Alice', 'a@x.ph', 'A', 'PSHS', 'upcat', 12345, 2, 'A')`)
   }
   const USER_TABLES = [
     'practice_sessions', 'user_progress', 'question_attempts', 'flashcard_srs', 'notes', 'note_labels',
@@ -246,9 +249,9 @@ describe('account switch', () => {
   })
 
   it('anonymous -> first sign-in (no stored owner) keeps local data, merges, and records the owner', async () => {
-    const { raw, db } = makeDb()
+    const { raw, db } = makeDb(false)
     raw.exec(`INSERT INTO practice_sessions (listing_slug, score, total, completed_at) VALUES ('upcat', 7, 10, 5000)`)
-    raw.exec(`INSERT INTO user_settings (id, full_name) VALUES (1, 'Anon')`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at, full_name) VALUES (1, 0, 'Anon')`)
     mockState.remote = { practice_sessions: [session()] }
     await pullUserData(db)
     expect(count(raw, 'practice_sessions')).toBe(2)
@@ -266,7 +269,7 @@ describe('account switch', () => {
   })
 
   it('reconcileAccountOwner reports what it did', async () => {
-    const { raw, db } = makeDb()
+    const { raw, db } = makeDb(false)
     expect(await reconcileAccountOwner(db, 'A')).toBe('claimed')
     expect(await reconcileAccountOwner(db, 'A')).toBe('same')
     raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES ('n', 'x', 'x', 1, 1)`)
@@ -293,7 +296,7 @@ describe('account switch', () => {
 
   it('pushUserData claims an unowned database for the signed-in user', async () => {
     const { raw, db } = makeDb()
-    raw.exec(`INSERT INTO user_settings (id) VALUES (1)`)
+    raw.exec(`INSERT OR REPLACE INTO user_settings (id, last_pull_ok_at) VALUES (1, 1)`)
     expect(await pushUserData(db)).toBe(true)
     expect((raw.prepare(`SELECT owner_user_id AS o FROM user_settings WHERE id=1`).get() as any).o).toBe('u1')
   })

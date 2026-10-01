@@ -134,6 +134,13 @@ export const userSettings = sqliteTable('user_settings', {
   // signed in (anonymous). Device-local bookkeeping read by services/sync.ts so
   // signing in as a DIFFERENT account never mixes the previous user's data in.
   ownerUserId: text('owner_user_id').notNull().default(''),
+  // Durable "local curated edits not yet in the cloud backup" marker (epoch ms, 0 = clean).
+  // Set by schedulePushUserData, cleared only by a push whose upsert succeeded. A pull that
+  // finds it set pushes first, and skips every curated REPLACE if that push fails.
+  pushDirtyAt: integer('push_dirty_at').notNull().default(0),
+  // Last time a pull for this device's owner completed (epoch ms, 0 = never). pushUserData
+  // refuses to overwrite a backup with an empty, never-pulled device.
+  lastPullOkAt: integer('last_pull_ok_at').notNull().default(0),
 })
 
 export const userProgress = sqliteTable('user_progress', {

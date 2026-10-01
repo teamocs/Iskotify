@@ -19,6 +19,7 @@ function makeDb() {
   const raw = new Database(':memory:')
   raw.exec(CREATE_SQL)
   for (const sql of MIGRATIONS) { try { raw.exec(sql) } catch { /* dup */ } }
+  raw.exec(`INSERT INTO user_settings (id, last_pull_ok_at) VALUES (1, 1)`) // has pulled before
   return { raw, db: drizzle(raw, { schema }) as unknown as DrizzleClient }
 }
 

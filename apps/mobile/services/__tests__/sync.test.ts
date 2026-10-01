@@ -242,7 +242,9 @@ function makeTestDb(): DrizzleClient {
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
       onboarding_step TEXT NOT NULL DEFAULT '',
       tour_seen_at INTEGER NOT NULL DEFAULT 0,
-      owner_user_id TEXT NOT NULL DEFAULT ''
+      owner_user_id TEXT NOT NULL DEFAULT '',
+      push_dirty_at INTEGER NOT NULL DEFAULT 0,
+      last_pull_ok_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -722,7 +724,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
       onboarding_step TEXT NOT NULL DEFAULT '',
       tour_seen_at INTEGER NOT NULL DEFAULT 0,
-      owner_user_id TEXT NOT NULL DEFAULT ''
+      owner_user_id TEXT NOT NULL DEFAULT '',
+      push_dirty_at INTEGER NOT NULL DEFAULT 0,
+      last_pull_ok_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

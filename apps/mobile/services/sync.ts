@@ -1,4 +1,4 @@
-import { eq, asc, inArray, sql } from 'drizzle-orm'
+import { eq, asc, inArray, sql, and, lte, isNotNull } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { markSyncStart, markSyncDone, markSyncError } from './syncStatus'
@@ -189,6 +189,18 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     await db.update(userSettings).set({ ownerUserId: user.id }).where(eq(userSettings.id, 1))
   }
 
+  // Never overwrite a (possibly populated) backup with NOTHING: a device that has not
+  // completed a pull for this owner and holds no user data at all has nothing worth
+  // saving, and its push would erase the real backup.
+  const hasLocalData = focus.length + decks.length + progress.length + sessions.length + noteRows.length +
+    labelRows.length + assignRows.length + reqRows.length + attempts.length + srsRows.length + planRows.length > 0 ||
+    !!settings[0]?.fullName?.trim()
+  if (settings[0] && (settings[0].lastPullOkAt ?? 0) === 0 && !hasLocalData) {
+    console.warn('[sync] backup push skipped: empty device that has never pulled this account')
+    return false
+  }
+  const dirtyAtSeen = settings[0]?.pushDirtyAt ?? 0
+
   const { error } = await supabase.from('user_app_data').upsert({
     user_id: user.id,
     focus_listings: focus,
@@ -209,7 +221,28 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     console.warn('[sync] backup push failed:', error)
     return false
   }
+  // The upsert truly succeeded: clear the unsynced marker — but only if no edit marked
+  // it dirty again while this push was in flight (that edit is not in this snapshot).
+  if (dirtyAtSeen > 0) {
+    await db.update(userSettings).set({ pushDirtyAt: 0 })
+      .where(and(eq(userSettings.id, 1), lte(userSettings.pushDirtyAt, dirtyAtSeen)))
+  }
   return true
+}
+
+/**
+ * Best-effort backup of unsynced edits right before the session is dropped
+ * (sign out): after it the device cannot push, and the next sign-in may pull.
+ * Never throws and never blocks sign-out for long.
+ */
+export async function pushBeforeSignOut(db: DrizzleClient): Promise<void> {
+  try {
+    await flushPendingPush()
+    const rows = await db.select({ d: userSettings.pushDirtyAt }).from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+    if ((rows[0]?.d ?? 0) > 0) await pushUserData(db)
+  } catch (e) {
+    console.warn('[sync] push before sign-out failed (non-fatal):', e)
+  }
 }
 
 // Fire-and-forget callers (after each session, focus change…) go through the
@@ -221,10 +254,13 @@ export { schedulePushUserData, flushPendingPush, cancelPendingPush, PUSH_DEBOUNC
 
 // ── Account ownership ──────────────────────────────────────────────────────────
 // The local DB belongs to ONE Supabase account at a time (user_settings.owner_user_id).
-// Anonymous (empty owner) -> first sign-in keeps the local data (it is merged into
-// the account). A DIFFERENT account signing in on the same device must never see
-// or upload the previous user's data, so their user tables are wiped first. The
-// catalog (listings, flashcards, questions, blueprints…) and the sync cursor stay.
+// Anonymous (no owner evidence) -> first sign-in keeps the local data. A DIFFERENT
+// account signing in on the same device must never see or upload the previous
+// user's data, so their user tables are wiped first. The catalog (listings,
+// flashcards, questions, blueprints…) and the sync cursor stay.
+//  - 'claimed':  device had no owner (anonymous, or an upgraded install of the SAME user)
+//  - 'same':     owner already matches
+//  - 'switched': a different account — previous user's data wiped
 export type OwnerChange = 'claimed' | 'same' | 'switched'
 
 // Per-user columns of user_settings reset on an account switch. NOT reset:
@@ -257,25 +293,48 @@ const USER_SETTINGS_RESET = {
   dailyReminderHour: 9,
   weeklySummaryEnabled: true,
   onboardingStep: '',
+  pushDirtyAt: 0,
+  lastPullOkAt: 0,
 } satisfies Partial<typeof userSettings.$inferInsert>
 
-export async function reconcileAccountOwner(db: DrizzleClient, userId: string): Promise<OwnerChange> {
-  const rows = await db.select({ owner: userSettings.ownerUserId }).from(userSettings).where(eq(userSettings.id, 1)).limit(1)
-  const stored = rows[0]?.owner ?? ''
+const trimmed = (v: string | null | undefined): string => (typeof v === 'string' ? v.trim() : '')
+
+export async function reconcileAccountOwner(
+  db: DrizzleClient,
+  userId: string,
+  email?: string | null,
+): Promise<OwnerChange> {
+  const rows = await db
+    .select({ owner: userSettings.ownerUserId, googleId: userSettings.googleId, email: userSettings.email })
+    .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+  const row = rows[0]
+  const stored = row?.owner ?? ''
   if (stored === userId) return 'same'
 
   if (stored === '') {
-    await db.insert(userSettings)
-      .values({ id: 1, ownerUserId: userId })
-      .onConflictDoUpdate({ target: userSettings.id, set: { ownerUserId: userId } })
-    // A push queued while anonymous would overwrite this account's existing
-    // backup with pre-sign-in data; the pull merges that data in instead.
-    cancelPendingPush()
-    return 'claimed'
+    // Installs that predate owner_user_id: the sign-in code stored the auth uid in
+    // googleId (and the account email in email), so they are evidence of whose data
+    // this is. A mismatch means a different account is signing in.
+    const legacyId = trimmed(row?.googleId)
+    const legacyEmail = trimmed(row?.email).toLowerCase()
+    const foreign = legacyId
+      ? legacyId !== userId
+      : !!(legacyEmail && trimmed(email) && legacyEmail !== trimmed(email).toLowerCase())
+    if (!foreign) {
+      await db.insert(userSettings)
+        .values({ id: 1, ownerUserId: userId })
+        .onConflictDoUpdate({ target: userSettings.id, set: { ownerUserId: userId } })
+      // A push queued while anonymous would overwrite this account's existing
+      // backup with pre-sign-in data; the pull merges that data in instead.
+      cancelPendingPush()
+      return 'claimed'
+    }
   }
 
-  // Different account: nothing queued for the previous user may be uploaded.
+  // Different account: nothing queued for the previous user may be uploaded, and
+  // their note reminders must stop firing on this device.
   cancelPendingPush()
+  const reminderNotes = await db.select({ id: notesTable.id }).from(notesTable).where(isNotNull(notesTable.reminderAt))
   await db.transaction((tx) => {
     for (const table of STUDY_TABLES) {
       if (table === userSettings) continue
@@ -289,6 +348,17 @@ export async function reconcileAccountOwner(db: DrizzleClient, userId: string): 
       .onConflictDoUpdate({ target: userSettings.id, set: { ...USER_SETTINGS_RESET, ownerUserId: userId } })
       .run()
   })
+  if (reminderNotes.length > 0) {
+    // Loaded lazily: the notifications module pulls in expo-constants, which the
+    // sync engine (and its tests) must not depend on at import time.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { cancelNoteReminder } = require('./notifications') as typeof import('./notifications')
+      for (const n of reminderNotes) await cancelNoteReminder(n.id).catch(() => undefined)
+    } catch (e) {
+      console.warn('[sync] could not cancel the previous account note reminders (non-fatal):', e)
+    }
+  }
   invalidate('')
   scheduleWebPersist()
   return 'switched'
@@ -328,12 +398,12 @@ const asRows = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
 type Tx = Parameters<Parameters<DrizzleClient['transaction']>[0]>[0]
 
 /**
- * Replaces one user-curated list with the remote copy, but only when the remote
- * actually has rows for it (an empty/absent remote list never wipes local data).
- * All-or-nothing: a row that fails to insert rolls the whole entity back to the
- * local rows. Returns whether the entity was replaced.
+ * Applies one user-curated entity (REPLACE or MERGE, decided by `write`) in its own
+ * transaction, but only when the remote actually has rows for it (an empty/absent
+ * remote list never touches local data). All-or-nothing: a throw rolls the entity
+ * back to the local rows. Returns whether it was applied.
  */
-async function replaceCurated(
+async function applyCurated(
   db: DrizzleClient,
   label: string,
   remote: unknown[],
@@ -349,22 +419,69 @@ async function replaceCurated(
   }
 }
 
+const orderFocus = <T extends { listingSlug: string; priority: number; addedAt: number }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => a.priority - b.priority || a.addedAt - b.addedAt || a.listingSlug.localeCompare(b.listingSlug))
+
+async function markPullOk(db: DrizzleClient): Promise<void> {
+  try {
+    await db.insert(userSettings)
+      .values({ id: 1, lastPullOkAt: Date.now() })
+      .onConflictDoUpdate({ target: userSettings.id, set: { lastPullOkAt: Date.now() } })
+  } catch (e) {
+    console.warn('[sync] could not record pull completion (non-fatal):', e)
+  }
+}
+
 // Pull user data from Supabase into the local DB — HYBRID restore:
 //  - append-only LOGS (practice sessions, progress, question attempts, SRS) are
 //    MERGED by natural key: local rows are never deleted, so work that has not
 //    reached the cloud yet survives, and pulling twice is a no-op;
 //  - user-CURATED entities (notes, labels, plan, focus, saved decks,
 //    requirements, settings) are REPLACED by the remote copy when it has data,
-//    so a delete made on another device propagates. Unsynced local edits are
-//    protected by flushing the debounced push BEFORE the pull.
-export async function pullUserData(db: DrizzleClient): Promise<void> {
+//    so a delete made on another device propagates ...
+//  - ... unless local edits are not in the cloud yet. The durable push_dirty_at
+//    marker records that across reloads/offline: a dirty device pushes first, and
+//    if that push fails every curated replace is skipped this pull (logs only).
+//  - the first sign-in of an anonymous device ('claimed') MERGES curated data
+//    into the existing backup instead of replacing it, then pushes the union.
+// Pulls are serialized: two overlapping callers (web callback + auth listener)
+// run one after the other instead of interleaving their reads and writes.
+let pullChain: Promise<void> = Promise.resolve()
+
+export function pullUserData(db: DrizzleClient): Promise<void> {
+  const run = pullChain.then(() => pullUserDataOnce(db))
+  pullChain = run.catch(() => undefined)
+  return run
+}
+
+async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  // Wipe a previous account's data first; otherwise send queued local edits to
-  // the cloud so the replace below cannot revert them.
-  const owner = await reconcileAccountOwner(db, user.id)
-  if (owner === 'same') await flushPendingPush()
+  const owner = await reconcileAccountOwner(db, user.id, user.email)
+
+  // A device that has never completed a pull for this owner (anonymous -> first
+  // sign-in, upgraded install, or a pull that never finished) MERGES curated data
+  // into the backup. This is derived from durable state, not from the 'claimed'
+  // return value, because the sign-in screens call reconcileAccountOwner themselves
+  // first. Such a device must also NOT push before pulling: its local data may
+  // pre-date the account and would overwrite the real backup.
+  const stateRows = await db.select({ d: userSettings.pushDirtyAt, p: userSettings.lastPullOkAt })
+    .from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+  const merging = owner === 'claimed' || (stateRows[0]?.p ?? 0) === 0
+
+  // Protect unsynced local edits (this process' queue AND the durable marker).
+  let curatedSafe = true
+  if (merging) {
+    cancelPendingPush()
+  } else {
+    await flushPendingPush()
+    const dirtyRows = await db.select({ d: userSettings.pushDirtyAt }).from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+    if ((dirtyRows[0]?.d ?? 0) > 0) {
+      curatedSafe = await pushUserData(db).catch(() => false)
+      if (!curatedSafe) console.warn('[sync] unsynced local edits could not be pushed: keeping local curated data this pull')
+    }
+  }
 
   const { data, error } = await supabase
     .from('user_app_data')
@@ -373,7 +490,12 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
     .limit(1)
     .single()
 
-  if (error || !data) return
+  // PGRST116 = no row: a legitimate "no backup yet", not a failure.
+  if (error && (error as { code?: string }).code !== 'PGRST116') return
+  if (!data) {
+    await markPullOk(db)
+    return
+  }
 
   // 1) CRITICAL — restore settings + focus listings independently and resiliently.
   //    These two gate returning-user detection (skip onboarding), so a bad row in
@@ -383,7 +505,7 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
   //    column" failure. Remote replaces local, but an empty remote value never
   //    blanks a value the user already has on this device.
   const remoteSettings = data.settings as Partial<typeof userSettings.$inferInsert> | null
-  if (remoteSettings) {
+  if (remoteSettings && curatedSafe) {
     try {
       const localRows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
       const local = localRows[0]
@@ -414,48 +536,49 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
     }
   }
 
-  // Focus: the remote set replaces local, then priorities are renumbered
+  // Focus: REPLACE (or, when claiming, UNION by slug), then renumber priorities
   // 0..n-1 in a deterministic order (priority, addedAt, slug) so the primary
   // listing (syncPrimaryListing: lowest priority) is stable across devices.
   const remoteFocus = asRows<typeof focusListings.$inferInsert>(data.focus_listings)
-  await replaceCurated(db, 'focus', remoteFocus, (tx) => {
-    const bySlug = new Map<string, { listingSlug: string; priority: number; addedAt: number }>()
-    for (const r of remoteFocus) {
-      const slug = requireStr(r?.listingSlug, 'listingSlug')
-      if (!bySlug.has(slug)) bySlug.set(slug, { listingSlug: slug, priority: Number(r.priority) || 0, addedAt: Number(r.addedAt) || 0 })
-    }
-    const ordered = [...bySlug.values()].sort((a, b) =>
-      a.priority - b.priority || a.addedAt - b.addedAt || a.listingSlug.localeCompare(b.listingSlug))
-    tx.delete(focusListings).run()
-    ordered.forEach((r, i) => { tx.insert(focusListings).values({ ...r, priority: i }).run() })
-  })
+  if (curatedSafe) {
+    await applyCurated(db, 'focus', remoteFocus, (tx) => {
+      const remoteBySlug = new Map<string, { listingSlug: string; priority: number; addedAt: number }>()
+      for (const r of remoteFocus) {
+        const slug = requireStr(r?.listingSlug, 'listingSlug')
+        if (!remoteBySlug.has(slug)) remoteBySlug.set(slug, { listingSlug: slug, priority: Number(r.priority) || 0, addedAt: Number(r.addedAt) || 0 })
+      }
+      let ordered = orderFocus([...remoteBySlug.values()])
+      if (merging) {
+        const localOnly = orderFocus(tx.select().from(focusListings).all().filter(l => !remoteBySlug.has(l.listingSlug)))
+        ordered = [...ordered, ...localOnly]
+      }
+      tx.delete(focusListings).run()
+      ordered.forEach((r, i) => { tx.insert(focusListings).values({ listingSlug: r.listingSlug, addedAt: r.addedAt, priority: i }).run() })
+    })
+  }
 
   // 2) BEST-EFFORT — everything below is logged but never blocks sign-in or the
   //    critical restore above. Old remote payloads may contain a saved_listings
   //    field — it is simply ignored (field removed from app).
 
-  // 2a) Append-only logs: MERGE by natural key. Optional tables (absent in older
-  //     schemas / pre-migration backups) default to [] and never block the merge.
+  // 2a) Append-only logs: MERGE by natural key. The "already have it" sets are read
+  //     INSIDE the transaction so nothing can slip in between read and write.
+  //     Optional tables (absent in older schemas) default to [] and never block it.
   try {
-    const [localSessions, localProgress, localAttempts, localSrs] = await Promise.all([
-      db.select().from(practiceSessions),
-      db.select().from(userProgress),
-      db.select().from(questionAttempts).catch(() => []),
-      db.select().from(flashcardSrs).catch(() => []),
-    ])
     const sessionKey = (r: { completedAt: number; listingSlug?: string | null; topicId?: string | null; deckId?: string | null; subtest?: string | null; score?: number | null; total?: number | null }) =>
       naturalKey(r.completedAt, r.listingSlug ?? '', r.topicId ?? '', r.deckId ?? '', r.subtest ?? null, r.score ?? 0, r.total ?? 0)
     const progressKey = (r: { flashcardId: string; answeredAt: number; correct: unknown }) =>
       naturalKey(r.flashcardId, r.answeredAt, r.correct ? 1 : 0)
     const attemptKey = (r: { sessionKey: number; questionId: string; answeredAt: number }) =>
       naturalKey(r.sessionKey, r.questionId, r.answeredAt)
-
-    const seenSessions = new Set(localSessions.map(sessionKey))
-    const seenProgress = new Set(localProgress.map(progressKey))
-    const seenAttempts = new Set(localAttempts.map(attemptKey))
-    const srsByCard = new Map(localSrs.map(r => [r.flashcardId, r]))
+    const optional = <T>(read: () => T[]): T[] => { try { return read() } catch { return [] } }
 
     await db.transaction((tx) => {
+      const seenSessions = new Set(tx.select().from(practiceSessions).all().map(sessionKey))
+      const seenProgress = new Set(tx.select().from(userProgress).all().map(progressKey))
+      const seenAttempts = new Set(optional(() => tx.select().from(questionAttempts).all()).map(attemptKey))
+      const srsByCard = new Map(optional(() => tx.select().from(flashcardSrs).all()).map(r => [r.flashcardId, r]))
+
       for (const row of asRows<typeof practiceSessions.$inferInsert>(data.practice_sessions)) {
         skipBadRow('practice_sessions', () => {
           requireNum(row?.completedAt, 'completedAt')
@@ -510,59 +633,110 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
   // useRecordAttempts enforces on write; keep the 5000 newest.
   try { await pruneOldAttempts(db) } catch (e) { console.warn('[sync] attempts prune failed (non-fatal):', e) }
 
-  // 2b) User-curated entities: REPLACE when the remote has data.
-  const remoteDecks = asRows<typeof savedDecks.$inferInsert>(data.saved_decks)
-  await replaceCurated(db, 'saved_decks', remoteDecks, (tx) => {
-    tx.delete(savedDecks).run()
-    for (const row of remoteDecks) tx.insert(savedDecks).values(row).onConflictDoNothing().run()
-  })
+  // 2b) User-curated entities: REPLACE when the remote has data (UNION when claiming).
+  if (curatedSafe) {
+    const remoteDecks = asRows<typeof savedDecks.$inferInsert>(data.saved_decks)
+    await applyCurated(db, 'saved_decks', remoteDecks, (tx) => {
+      if (!merging) tx.delete(savedDecks).run()
+      for (const row of remoteDecks) tx.insert(savedDecks).values(row).onConflictDoNothing().run()
+    })
 
-  const remoteReqs = asRows<typeof userRequirements.$inferInsert>(data.user_requirements)
-  await replaceCurated(db, 'user_requirements', remoteReqs, (tx) => {
-    tx.delete(userRequirements).run()
-    for (const row of remoteReqs) {
-      tx.insert(userRequirements)
-        .values({ listingSlug: row.listingSlug, requirementIndex: row.requirementIndex, acquiredAt: row.acquiredAt })
-        .onConflictDoNothing()
-        .run()
+    const remoteReqs = asRows<typeof userRequirements.$inferInsert>(data.user_requirements)
+    await applyCurated(db, 'user_requirements', remoteReqs, (tx) => {
+      if (!merging) tx.delete(userRequirements).run()
+      for (const row of remoteReqs) {
+        tx.insert(userRequirements)
+          .values({ listingSlug: row.listingSlug, requirementIndex: row.requirementIndex, acquiredAt: row.acquiredAt })
+          .onConflictDoNothing()
+          .run()
+      }
+    })
+
+    const planKey = (r: { planDate: string; kind: string; refId?: string | null }) => naturalKey(r.planDate, r.kind, r.refId ?? '')
+    const remotePlan = asRows<typeof studyPlanItems.$inferInsert>(data.study_plan_items)
+    await applyCurated(db, 'study_plan_items', remotePlan, (tx) => {
+      if (!merging) {
+        tx.delete(studyPlanItems).run()
+        for (const row of remotePlan) tx.insert(studyPlanItems).values(withoutId(row)).run()
+        return
+      }
+      const local = new Map(tx.select().from(studyPlanItems).all().map(r => [planKey(r), r]))
+      for (const row of remotePlan) {
+        const mine = local.get(planKey(row))
+        if (!mine) tx.insert(studyPlanItems).values(withoutId(row)).run()
+        else if (mine.completedAt == null && row.completedAt != null) {
+          tx.update(studyPlanItems).set({ completedAt: row.completedAt }).where(eq(studyPlanItems.id, mine.id)).run()
+        }
+      }
+    })
+
+    const remoteNotes = asRows<typeof notesTable.$inferInsert>(data.notes)
+    const remoteLabels = asRows<typeof noteLabels.$inferInsert>(data.note_labels)
+    const remoteAssigns = asRows<typeof noteLabelAssignments.$inferInsert>(data.note_label_assignments)
+    let touched = false
+    if (!merging) {
+      const notesReplaced = await applyCurated(db, 'notes', remoteNotes, (tx) => {
+        tx.delete(notesTable).run()
+        for (const row of remoteNotes) tx.insert(notesTable).values(row).run()
+      })
+      const labelsReplaced = await applyCurated(db, 'note_labels', remoteLabels, (tx) => {
+        tx.delete(noteLabels).run()
+        for (const row of remoteLabels) tx.insert(noteLabels).values(row).run()
+      })
+      const assignsReplaced = await applyCurated(db, 'note_label_assignments', remoteAssigns, (tx) => {
+        tx.delete(noteLabelAssignments).run()
+        for (const row of remoteAssigns) tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
+      })
+      touched = notesReplaced || labelsReplaced || assignsReplaced
+    } else {
+      // Union: the anonymous notes/labels stay next to the account's. A local label
+      // with the same NAME as a remote one is folded into it (its assignments move).
+      touched = await applyCurated(db, 'notes', [...remoteNotes, ...remoteLabels, ...remoteAssigns], (tx) => {
+        const localNotes = new Map(tx.select().from(notesTable).all().map(n => [n.id, n]))
+        for (const row of remoteNotes) {
+          const mine = localNotes.get(row.id as string)
+          if (!mine) tx.insert(notesTable).values(row).run()
+          else if ((row.updatedAt ?? 0) > mine.updatedAt) tx.update(notesTable).set(row).where(eq(notesTable.id, row.id as string)).run()
+        }
+
+        const remoteLabelByName = new Map(remoteLabels.map(l => [l.name, l]))
+        for (const l of tx.select().from(noteLabels).all()) {
+          const twin = remoteLabelByName.get(l.name)
+          if (twin && twin.id !== l.id) {
+            const moved = tx.select().from(noteLabelAssignments).all().filter(a => a.labelId === l.id)
+            tx.delete(noteLabelAssignments).where(eq(noteLabelAssignments.labelId, l.id)).run()
+            tx.delete(noteLabels).where(eq(noteLabels.id, l.id)).run()
+            // the twin row is inserted below; remembered assignments are re-added after it
+            for (const a of moved) remoteAssigns.push({ noteId: a.noteId, labelId: twin.id as string })
+          }
+        }
+        for (const row of remoteLabels) tx.insert(noteLabels).values(row).onConflictDoNothing().run()
+        for (const row of remoteAssigns) tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
+      })
     }
-  })
-
-  const remotePlan = asRows<typeof studyPlanItems.$inferInsert>(data.study_plan_items)
-  await replaceCurated(db, 'study_plan_items', remotePlan, (tx) => {
-    tx.delete(studyPlanItems).run()
-    for (const row of remotePlan) tx.insert(studyPlanItems).values(withoutId(row)).run()
-  })
-
-  const remoteNotes = asRows<typeof notesTable.$inferInsert>(data.notes)
-  const remoteLabels = asRows<typeof noteLabels.$inferInsert>(data.note_labels)
-  const remoteAssigns = asRows<typeof noteLabelAssignments.$inferInsert>(data.note_label_assignments)
-  const notesReplaced = await replaceCurated(db, 'notes', remoteNotes, (tx) => {
-    tx.delete(notesTable).run()
-    for (const row of remoteNotes) tx.insert(notesTable).values(row).run()
-  })
-  const labelsReplaced = await replaceCurated(db, 'note_labels', remoteLabels, (tx) => {
-    tx.delete(noteLabels).run()
-    for (const row of remoteLabels) tx.insert(noteLabels).values(row).run()
-  })
-  const assignsReplaced = await replaceCurated(db, 'note_label_assignments', remoteAssigns, (tx) => {
-    tx.delete(noteLabelAssignments).run()
-    for (const row of remoteAssigns) tx.insert(noteLabelAssignments).values(row).onConflictDoNothing().run()
-  })
-  if (notesReplaced || labelsReplaced || assignsReplaced) {
-    // Drop assignments left pointing at a note/label that no longer exists.
-    try {
-      await db.run(sql`DELETE FROM note_label_assignments
-        WHERE note_id NOT IN (SELECT id FROM notes) OR label_id NOT IN (SELECT id FROM note_labels)`)
-    } catch (e) {
-      console.warn('[sync] dangling label assignment cleanup failed (non-fatal):', e)
+    if (touched) {
+      // Drop assignments left pointing at a note/label that no longer exists.
+      try {
+        await db.run(sql`DELETE FROM note_label_assignments
+          WHERE note_id NOT IN (SELECT id FROM notes) OR label_id NOT IN (SELECT id FROM note_labels)`)
+      } catch (e) {
+        console.warn('[sync] dangling label assignment cleanup failed (non-fatal):', e)
+      }
     }
   }
+
+  await markPullOk(db)
 
   // Screens cached pre-sync numbers (zeros on a fresh sign-in): drop them so
   // home/progress/practice refetch the restored data.
   invalidate('')
   scheduleWebPersist()
+
+  // First sign-in with an existing backup: the merged union is the new truth, so
+  // back it up now (the backup row still holds only the pre-merge copy).
+  if (merging) {
+    try { await pushUserData(db) } catch (e) { console.warn('[sync] post-merge push failed (non-fatal):', e) }
+  }
 }
 
 /**

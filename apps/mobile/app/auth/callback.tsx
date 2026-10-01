@@ -144,11 +144,10 @@ export default function AuthCallback() {
         if (user) {
           // A different account on this device must not inherit (or upload) the
           // previous user's data: reconcile BEFORE the profile write below. Anonymous
-          // -> first sign-in keeps the local data. A failure here is safe: the pull and
-          // push below re-check ownership and refuse to mix accounts.
-          try { await reconcileAccountOwner(db, user.id) } catch (e) {
-            console.warn('[auth/callback] account owner check failed (non-fatal):', e)
-          }
+          // -> first sign-in keeps the local data.
+          // If the wipe fails we must NOT go on: B's name/email would be written onto A's
+          // data. The throw lands in the catch below (sign-in aborted, error route).
+          await reconcileAccountOwner(db, user.id, user.email)
           // Preserve a name the user typed during (anonymous) onboarding — only fall
           // back to the Google display name when there's no local name yet. Writing the
           // Google name unconditionally would clobber the onboarding name (or blank it
@@ -169,17 +168,20 @@ export default function AuthCallback() {
           // yet, this is a first sign-in after anonymous onboarding → push the local
           // data up so it's preserved and available on other devices. Both non-fatal:
           // a sync failure must never bounce an otherwise-successful sign-in to /landing.
-          let hasCloudBackup = false
+          // 'unknown' (the check errored) must neither pull nor push: treating it as "no
+          // backup" would push this device's data over a real backup.
+          let backupState: 'exists' | 'none' | 'unknown' = 'unknown'
           try {
-            const { data: backup } = await supabase
+            const { data: backup, error: backupError } = await supabase
               .from('user_app_data').select('user_id').eq('user_id', user.id).limit(1).maybeSingle()
-            hasCloudBackup = !!backup
+            if (backupError) console.warn('[auth/callback] backup check failed, skipping sync (non-fatal):', backupError)
+            else backupState = backup ? 'exists' : 'none'
           } catch (e) {
-            console.warn('[auth/callback] backup check failed (non-fatal):', e)
+            console.warn('[auth/callback] backup check failed, skipping sync (non-fatal):', e)
           }
           try {
-            if (hasCloudBackup) await pullUserData(db)
-            else await pushUserData(db)
+            if (backupState === 'exists') await pullUserData(db)
+            else if (backupState === 'none') await pushUserData(db)
           } catch (syncErr) {
             console.warn('[auth/callback] sync failed (non-fatal):', syncErr)
           }

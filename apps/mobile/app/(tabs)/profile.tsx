@@ -50,7 +50,7 @@ import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
 import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
-import { syncOnLaunch } from '../../services/sync'
+import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
 
 interface ProfileData {
   fullName: string
@@ -359,6 +359,8 @@ export default function ProfileScreen() {
       'Your local progress stays on this device. Your cloud backup is safe.',
       'Sign Out',
       async () => {
+        // Unsynced edits can't be pushed once signed out; try now (best effort).
+        try { await pushBeforeSignOut(db) } catch (err) { console.warn('[profile] push before sign-out failed:', err) }
         try {
           await supabase.auth.signOut()
         } catch (err) {

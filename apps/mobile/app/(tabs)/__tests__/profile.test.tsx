@@ -38,6 +38,12 @@ jest.mock('../../../services/supabase', () => ({
   },
 }))
 
+const mockSignOutOrder: string[] = []
+jest.mock('../../../services/sync', () => ({
+  syncOnLaunch: jest.fn().mockResolvedValue(undefined),
+  pushBeforeSignOut: jest.fn(async () => { mockSignOutOrder.push('push') }),
+}))
+
 jest.mock('../../../services/webReset', () => ({
   clearWebData: jest.fn().mockResolvedValue(undefined),
 }))
@@ -334,6 +340,25 @@ describe('ProfileScreen — interactions', () => {
     fireEvent.press(getByText('Sign Out'))
     expect(alertSpy).toHaveBeenCalledWith('Sign Out?', expect.any(String), expect.any(Array))
     const { supabase } = require('../../../services/supabase')
+    await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
+    alertSpy.mockRestore()
+  })
+
+  it('Sign Out pushes unsynced edits BEFORE signing out (best effort, never blocks sign-out)', async () => {
+    const { supabase } = require('../../../services/supabase')
+    const sync = require('../../../services/sync')
+    mockSignOutOrder.length = 0
+    supabase.auth.signOut.mockImplementationOnce(async () => { mockSignOutOrder.push('signOut'); return { error: null } })
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((x: any) => x.style === 'destructive')?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Sign Out'))
+    await waitFor(() => expect(mockSignOutOrder).toEqual(['push', 'signOut']))
+    // a failing push must not trap the user signed in
+    sync.pushBeforeSignOut.mockRejectedValueOnce(new Error('offline'))
+    supabase.auth.signOut.mockClear()
+    fireEvent.press(getByText('Sign Out'))
     await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
     alertSpy.mockRestore()
   })
