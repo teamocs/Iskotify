@@ -25,8 +25,15 @@ const NativeKAV: React.ComponentType<{ behavior: 'padding'; style?: object; chil
 /** Onboarding column: narrower than the 720 reading width, one question needs little room. */
 const COLUMN = 560
 
-const SECTIONS: { name: Section; count: number }[] = (['About you', 'Your goal', 'Scholarship match', 'Quick check'] as Section[])
-  .map(name => ({ name, count: ONBOARDING_STEPS.filter(s => s.section === name).length }))
+/** What each step asks, in a few words, for the desktop rail. */
+const SECTION_HINT: Record<Section, string> = {
+  'Before we start': 'Your age and consent',
+  'About you': 'Your name and grade',
+  'Your exam': 'What you are preparing for',
+  'Quick check': 'Optional warm-up',
+}
+
+const SECTIONS: { name: Section; hint: string }[] = ONBOARDING_STEPS.map(s => ({ name: s.section, hint: SECTION_HINT[s.section] }))
 
 interface Props {
   step: StepId
@@ -41,19 +48,13 @@ interface Props {
   primaryLoading?: boolean
   /** Plain-words reason Continue is disabled, shown next to the button. */
   primaryHint?: string
-  /**
-   * Whether the student opted in to sharing sensitive details. When false the
-   * income and GWA steps are not in their flow, so they are not counted.
-   * Defaults to true (the full 11 steps).
-   */
-  sensitive?: boolean
   /** Scroll the body (default). Set false when the body owns a list. */
   scroll?: boolean
   children: React.ReactNode
 }
 
 /**
- * Wide windows: where the student is in the four sections. Done sections get a
+ * Wide windows: where the student is in the four steps. Done sections get a
  * check, the current one is filled and marked aria-current="step".
  */
 function SectionRail({ current }: { current: Section }) {
@@ -120,7 +121,7 @@ function SectionRail({ current }: { current: Section }) {
                     {s.name}
                   </Text>
                   <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>
-                    {s.count === 1 ? '1 question' : `${s.count} questions`}
+                    {s.hint}
                   </Text>
                 </View>
               </View>
@@ -134,25 +135,25 @@ function SectionRail({ current }: { current: Section }) {
 }
 
 /**
- * One onboarding question: back · "Step n of 9 · section" · skip, a progress
+ * One onboarding step: back · "Step n of 4 · section" · skip, a progress
  * bar, the question as the page's level-1 heading, the answer controls, and a
  * full-width Continue (the one primary action) that rides above the keyboard.
  * Screen-reader focus moves to the question on every step.
  *
  * Phones and tablets: one column, Continue pinned to the bottom edge. Wide
  * windows: the question sits in a card with its Continue inside it, beside a
- * rail of the four sections, instead of a thin column stranded on a 1440px
+ * rail of the four steps, instead of a thin column stranded on a 1440px
  * field with a full-bleed bar at the bottom of the window.
  */
 export function StepShell({
   step, title, description, onBack, onSkip, primaryLabel, onPrimary, primaryDisabled, primaryLoading,
-  primaryHint, sensitive = true, scroll = true, children,
+  primaryHint, scroll = true, children,
 }: Props) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const wide = bp === 'expanded'
   const gutter = wide ? spacing.xxxl : pagePadding(bp)
-  const pos = stepPosition(step, sensitive)
+  const pos = stepPosition(step)
   const titleRef = useRef<Text>(null)
 
   useEffect(() => {

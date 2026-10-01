@@ -1,143 +1,142 @@
 import {
-  ONBOARDING_STEPS, stepPosition, nextStep, prevStep, resumeStep, isOptional, furthestStep,
+  ONBOARDING_STEPS, stepPosition, nextStep, prevStep, resumeStep, isOptional, furthestStep, normalizeMarker,
 } from '../flow'
 
-const C = { consented: true, sensitive: true }
+const C = { consented: true }
 
-describe('onboarding flow', () => {
-  it('asks one question per step, in this order (consent first, the sensitive opt-in before income)', () => {
-    expect(ONBOARDING_STEPS.map(s => s.id)).toEqual([
-      'consent', 'name', 'grade', 'school', 'goals', 'courses', 'sensitive', 'income', 'gwa', 'province', 'check',
-    ])
+describe('onboarding flow (P4: four short steps)', () => {
+  it('asks consent first, then about you, the exam, and the optional quick check', () => {
+    expect(ONBOARDING_STEPS.map(s => s.id)).toEqual(['consent', 'about', 'goals', 'check'])
   })
 
-  it('reports the position for the progress indicator', () => {
-    expect(stepPosition('consent', true)).toEqual({ index: 1, total: 11, section: 'About you' })
-    expect(stepPosition('name', true)).toEqual({ index: 2, total: 11, section: 'About you' })
-    expect(stepPosition('goals', true)).toEqual({ index: 5, total: 11, section: 'Your goal' })
-    expect(stepPosition('gwa', true)).toEqual({ index: 9, total: 11, section: 'Scholarship match' })
-    expect(stepPosition('check', true)).toEqual({ index: 11, total: 11, section: 'Quick check' })
-  })
-
-  it('does not count the skipped income and GWA steps when the student declined the sensitive opt-in', () => {
-    expect(stepPosition('sensitive', false)).toEqual({ index: 7, total: 9, section: 'Scholarship match' })
-    expect(stepPosition('province', false)).toEqual({ index: 8, total: 9, section: 'Scholarship match' })
-    expect(stepPosition('check', false)).toEqual({ index: 9, total: 9, section: 'Quick check' })
+  it('reports the position for the progress indicator: Step n of 4', () => {
+    expect(stepPosition('consent')).toEqual({ index: 1, total: 4, section: 'Before we start' })
+    expect(stepPosition('about')).toEqual({ index: 2, total: 4, section: 'About you' })
+    expect(stepPosition('goals')).toEqual({ index: 3, total: 4, section: 'Your exam' })
+    expect(stepPosition('check')).toEqual({ index: 4, total: 4, section: 'Quick check' })
   })
 
   it('moves forward and back, stopping at the ends', () => {
-    expect(nextStep('consent', true)).toBe('name')
-    expect(nextStep('name', true)).toBe('grade')
-    expect(nextStep('courses', true)).toBe('sensitive')
-    expect(nextStep('sensitive', true)).toBe('income')
-    expect(nextStep('province', true)).toBe('check')
-    expect(nextStep('check', true)).toBeNull()
-    expect(prevStep('grade', true)).toBe('name')
-    expect(prevStep('name', true)).toBe('consent')
-    expect(prevStep('consent', true)).toBeNull()
+    expect(nextStep('consent')).toBe('about')
+    expect(nextStep('about')).toBe('goals')
+    expect(nextStep('goals')).toBe('check')
+    expect(nextStep('check')).toBeNull()
+    expect(prevStep('check')).toBe('goals')
+    expect(prevStep('about')).toBe('consent')
+    expect(prevStep('consent')).toBeNull()
   })
 
-  it('skips the income and GWA steps without sensitive consent, in both directions', () => {
-    expect(nextStep('sensitive', false)).toBe('province')
-    expect(prevStep('province', false)).toBe('sensitive')
-    expect(prevStep('province', true)).toBe('gwa')
+  it('only the quick check can be skipped', () => {
+    expect(ONBOARDING_STEPS.filter(s => isOptional(s.id)).map(s => s.id)).toEqual(['check'])
   })
 
-  it('only consent, name, grade, the goal and the opt-in cannot be skipped', () => {
-    const required = ONBOARDING_STEPS.filter(s => !isOptional(s.id)).map(s => s.id)
-    expect(required).toEqual(['consent', 'name', 'grade', 'goals', 'sensitive'])
-  })
-
-  describe('resumeStep (resume-safe: the saved answers decide where to pick up)', () => {
-    it('starts at the name for a brand-new student who already consented', () => {
-      expect(resumeStep({ ...C })).toBe('name')
-      expect(resumeStep({ ...C, fullName: '   ' })).toBe('name')
+  describe('normalizeMarker (markers saved by the older 11-step flow)', () => {
+    it('maps every old step id onto the new step it now belongs to', () => {
+      expect(normalizeMarker('consent')).toBe('consent')
+      expect(normalizeMarker('name')).toBe('consent')
+      expect(normalizeMarker('grade')).toBe('about')
+      expect(normalizeMarker('school')).toBe('about')
+      expect(normalizeMarker('goals')).toBe('goals')
+      for (const old of ['courses', 'sensitive', 'income', 'gwa', 'province']) {
+        expect(normalizeMarker(old)).toBe('goals')
+      }
+      expect(normalizeMarker('check')).toBe('check')
+      expect(normalizeMarker('done')).toBe('done')
     })
 
-    it('skips the name when it is already saved (e.g. from Google sign-in)', () => {
-      expect(resumeStep({ ...C, fullName: 'Juan' })).toBe('grade')
+    it('keeps the new ids, and treats anything else as no marker', () => {
+      expect(normalizeMarker('about')).toBe('about')
+      expect(normalizeMarker('')).toBeNull()
+      expect(normalizeMarker(null)).toBeNull()
+      expect(normalizeMarker(undefined)).toBeNull()
+      expect(normalizeMarker('nonsense')).toBeNull()
+    })
+  })
+
+  describe('resumeStep (the saved answers decide where to pick up)', () => {
+    it('starts at about-you for a brand-new student who already consented', () => {
+      expect(resumeStep({ ...C })).toBe('about')
+      expect(resumeStep({ ...C, fullName: '   ', gradeLevel: 11 })).toBe('about')
     })
 
-    it('resumes at the goal once name and grade are saved', () => {
+    it('stays on about-you until both the name and the grade are saved', () => {
+      expect(resumeStep({ ...C, fullName: 'Juan' })).toBe('about')
+      expect(resumeStep({ ...C, gradeLevel: 11 })).toBe('about')
+    })
+
+    it('resumes at the exam once name and grade are saved', () => {
       expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11 })).toBe('goals')
     })
 
-    it('resumes after the goal when a focus exam or scholarship already exists', () => {
-      expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: true })).toBe('courses')
-    })
-
-    it('with no saved progress marker, falls back to the first unanswered required question', () => {
-      expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: true, furthest: '' })).toBe('courses')
+    it('without a marker, a saved focus resumes at the quick check', () => {
+      expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: true })).toBe('check')
+      expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: true, furthest: 'nonsense' })).toBe('check')
       expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, furthest: 'nonsense' })).toBe('goals')
     })
-  })
 
-  describe('resumeStep with the furthest step reached (optional answers can be skipped)', () => {
-    const base = { ...C, fullName: 'Juan', gradeLevel: 11 }
-
-    it('after the grade, resumes at the (optional) school, not past it', () => {
-      expect(resumeStep({ ...base, furthest: 'grade' })).toBe('school')
-    })
-
-    it('after skipping the school, resumes at the goal', () => {
-      expect(resumeStep({ ...base, furthest: 'school' })).toBe('goals')
-    })
-
-    it('after the goal, resumes at the step after the furthest one reached', () => {
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'goals' })).toBe('courses')
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'courses' })).toBe('sensitive')
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'sensitive' })).toBe('income')
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'gwa' })).toBe('province')
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'province' })).toBe('check')
-    })
-
-    it('reports a finished onboarding as done, so the flow is not re-entered', () => {
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'check' })).toBe('done')
-      expect(resumeStep({ ...base, hasFocus: true, furthest: 'done' })).toBe('done')
+    it('resumes at the step after the furthest one reached', () => {
+      const base = { ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: true }
+      expect(resumeStep({ ...base, furthest: 'goals' })).toBe('check')
+      expect(resumeStep({ ...base, furthest: 'check' })).toBe('done')
+      expect(resumeStep({ ...base, furthest: 'done' })).toBe('done')
     })
 
     it('never skips a required answer that is missing, whatever the marker says', () => {
-      expect(resumeStep({ ...C, fullName: '', gradeLevel: 11, hasFocus: true, furthest: 'done' })).toBe('name')
-      expect(resumeStep({ ...C, fullName: 'Juan', hasFocus: true, furthest: 'province' })).toBe('grade')
-      expect(resumeStep({ ...base, hasFocus: false, furthest: 'province' })).toBe('goals')
-      expect(resumeStep({ ...base, hasFocus: false, furthest: 'done' })).toBe('goals')
+      expect(resumeStep({ ...C, fullName: '', gradeLevel: 11, hasFocus: true, furthest: 'done' })).toBe('about')
+      expect(resumeStep({ ...C, fullName: 'Juan', hasFocus: true, furthest: 'check' })).toBe('about')
+      expect(resumeStep({ ...C, fullName: 'Juan', gradeLevel: 11, hasFocus: false, furthest: 'done' })).toBe('goals')
+    })
+
+    it('always asks for consent first when it is missing, whatever the saved progress', () => {
+      expect(resumeStep({ consented: false, fullName: 'Juan', gradeLevel: 11, hasFocus: true, furthest: 'done' })).toBe('consent')
+      expect(resumeStep({ consented: false })).toBe('consent')
     })
   })
 
-  describe('resumeStep with the consent and the sensitive opt-in', () => {
-    const base = { fullName: 'Juan', gradeLevel: 11, hasFocus: true }
+  describe('resumeStep for a student part-way through the older 11-step flow', () => {
+    const named = { ...C, fullName: 'Juan' }
+    const graded = { ...named, gradeLevel: 11 }
+    const focused = { ...graded, hasFocus: true }
 
-    it('always asks for consent first when it is missing, whatever the saved progress', () => {
-      expect(resumeStep({ ...base, consented: false, sensitive: false, furthest: 'courses' })).toBe('consent')
-      expect(resumeStep({ ...base, consented: false, sensitive: false, furthest: 'done' })).toBe('consent')
-      expect(resumeStep({ consented: false, sensitive: false })).toBe('consent')
+    it('after the old name step: about-you (the grade is still missing)', () => {
+      expect(resumeStep({ ...named, furthest: 'name' })).toBe('about')
     })
 
-    it('a brand-new student who just consented continues at the name', () => {
-      expect(resumeStep({ consented: true, sensitive: false, furthest: 'consent' })).toBe('name')
+    it('after the old grade or school steps: the exam', () => {
+      expect(resumeStep({ ...graded, furthest: 'grade' })).toBe('goals')
+      expect(resumeStep({ ...graded, furthest: 'school' })).toBe('goals')
     })
 
-    it('skips income and GWA on resume when the sensitive opt-in is off', () => {
-      expect(resumeStep({ ...base, consented: true, sensitive: false, furthest: 'sensitive' })).toBe('province')
-      expect(resumeStep({ ...base, consented: true, sensitive: false, furthest: 'courses' })).toBe('sensitive')
+    it('after the old goal or any later scholarship step: the quick check', () => {
+      for (const old of ['goals', 'courses', 'sensitive', 'income', 'gwa', 'province']) {
+        expect(resumeStep({ ...focused, furthest: old })).toBe('check')
+      }
     })
 
-    it('a legacy marker past the opt-in still skips income and GWA without consent', () => {
-      expect(resumeStep({ ...base, consented: true, sensitive: false, furthest: 'school' })).toBe('goals')
-      expect(resumeStep({ ...base, consented: true, sensitive: false, furthest: 'income' })).toBe('province')
+    it('a finished old onboarding stays finished', () => {
+      expect(resumeStep({ ...focused, furthest: 'check' })).toBe('done')
+      expect(resumeStep({ ...focused, furthest: 'done' })).toBe('done')
     })
   })
 
   describe('furthestStep (the persisted marker only moves forward)', () => {
     it('keeps the later of the saved marker and the step just completed', () => {
-      expect(furthestStep('', 'name')).toBe('name')
-      expect(furthestStep(null, 'grade')).toBe('grade')
-      expect(furthestStep('gwa', 'grade')).toBe('gwa')
-      expect(furthestStep('grade', 'gwa')).toBe('gwa')
-      expect(furthestStep('done', 'courses')).toBe('done')
+      expect(furthestStep('', 'consent')).toBe('consent')
+      expect(furthestStep(null, 'about')).toBe('about')
+      expect(furthestStep('goals', 'about')).toBe('goals')
+      expect(furthestStep('about', 'goals')).toBe('goals')
+      expect(furthestStep('done', 'goals')).toBe('done')
       expect(furthestStep('check', 'done')).toBe('done')
-      expect(furthestStep('garbage', 'school')).toBe('school')
-      expect(furthestStep('name', 'consent')).toBe('name')
+      expect(furthestStep('garbage', 'about')).toBe('about')
+    })
+
+    it('ranks an old marker by the new step it maps to, and writes new ids only', () => {
+      // Old 'province' sits at the new 'goals': re-confirming the goal keeps the
+      // new id (same rank), and nothing earlier moves it back.
+      expect(furthestStep('province', 'goals')).toBe('goals')
+      expect(furthestStep('province', 'about')).toBe('goals')
+      expect(furthestStep('grade', 'consent')).toBe('about')
+      expect(furthestStep('courses', 'done')).toBe('done')
     })
   })
 })

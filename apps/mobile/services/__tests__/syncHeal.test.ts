@@ -129,7 +129,8 @@ function makeHealDb(): InstanceType<typeof Database> {
       analytics_choice_at INTEGER NOT NULL DEFAULT 0,
       premium_cached INTEGER NOT NULL DEFAULT 0,
       premium_checked_at INTEGER NOT NULL DEFAULT 0,
-      premium_user_id TEXT NOT NULL DEFAULT ''
+      premium_user_id TEXT NOT NULL DEFAULT '',
+      profile_prompt_dismissed_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

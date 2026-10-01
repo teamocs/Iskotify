@@ -23,6 +23,7 @@ const ALLOWED: Record<string, string> = {
   'app/auth/callback.tsx': 'sign-in bookkeeping, followed by an explicit pull/push',
   'app/landing.tsx': 'sign-in bookkeeping, followed by an explicit pull/push',
   'components/walkthrough/tourState.ts': 'device-local tourSeenAt, never synced',
+  'components/home/scholarshipPromptState.ts': 'device-local profilePromptDismissedAt, never restored',
   'hooks/useFocusListings.ts': 'covered: add/remove/move all schedule (see curatedWritesSchedulePush.test.tsx)',
   'services/premiumCache.ts': 'device-local Full Access cache, never backed up nor restored (premiumSync.test.ts)',
 }
