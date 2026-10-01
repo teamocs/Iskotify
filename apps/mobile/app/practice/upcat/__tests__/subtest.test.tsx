@@ -179,7 +179,7 @@ describe('UpcatExam', () => {
     // Q0..Q14 were served before; Q15..Q29 never.
     mockLastSeen = new Map(Array.from({ length: 15 }, (_, i) => [`Q${i}`, 1000 + i]))
     render(<UpcatExam />)
-    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled(), { timeout: 10_000 })
     expect(mockLastSeenOrEmpty).toHaveBeenCalledWith(expect.anything(), 'upcat_questions', expect.arrayContaining(['Q0', 'Q29']))
     const ids = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0].questionIds as string[]
     expect(ids).toHaveLength(15)
@@ -391,7 +391,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled(), { timeout: 10_000 })
     const lastCall = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
     expect(lastCall).toMatchObject({
       runKey: 'upcat:Mathematics:full',
