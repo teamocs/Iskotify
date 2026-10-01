@@ -388,22 +388,22 @@ describe('Today', () => {
       expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
     })
 
-    it('a scoreless ACET (own published blueprint) goes to practice/start/acet', () => {
+    it('a scoreless ACET (own published blueprint) goes to its own diagnostic', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'acet', title: 'ACET 2026' }] })
       mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat', 'acet', 'ustet'] })
       render(<HomeScreen />)
       fireEvent.press(screen.getByRole('button', { name: 'ACET 2026, no score yet' }))
-      expect(router.push).toHaveBeenCalledWith('/practice/start/acet')
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?exam=acet')
     })
 
-    it('a scoreless exam without a blueprint still goes to the diagnostic', () => {
+    it('a scoreless exam without a blueprint goes to the diagnostic naming it (honest not-available state)', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'random-exam', title: 'Random Exam' }] })
       mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat', 'acet', 'ustet'] })
       render(<HomeScreen />)
       fireEvent.press(screen.getByRole('button', { name: 'Random Exam, no score yet' }))
-      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?exam=random-exam')
     })
 
     it('excludes school-level focus entries', () => {

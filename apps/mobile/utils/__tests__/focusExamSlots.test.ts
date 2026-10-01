@@ -114,13 +114,17 @@ describe('resolveFocusTileRoute', () => {
     expect(resolveFocusTileRoute('upcat', false, blueprintSlugs)).toBe('/practice/diagnostic')
   })
 
-  it('routes a scoreless non-UPCAT tile with its own published blueprint to practice/start/:slug', () => {
-    expect(resolveFocusTileRoute('acet', false, blueprintSlugs)).toBe('/practice/start/acet')
-    expect(resolveFocusTileRoute('ustet', false, blueprintSlugs)).toBe('/practice/start/ustet')
+  it("routes a scoreless non-UPCAT tile with a runnable blueprint to that exam's own diagnostic", () => {
+    expect(resolveFocusTileRoute('acet', false, blueprintSlugs)).toBe('/practice/diagnostic?exam=acet')
+    expect(resolveFocusTileRoute('ustet', false, blueprintSlugs)).toBe('/practice/diagnostic?exam=ustet')
   })
 
-  it('routes a scoreless exam with no published blueprint to the diagnostic', () => {
-    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs)).toBe('/practice/diagnostic')
-    expect(resolveFocusTileRoute('acet', false, [])).toBe('/practice/diagnostic')
+  it('routes a scoreless exam with no runnable blueprint to the diagnostic naming the exam (honest not-available state, never the UPCAT one)', () => {
+    expect(resolveFocusTileRoute('random-exam', false, blueprintSlugs)).toBe('/practice/diagnostic?exam=random-exam')
+    expect(resolveFocusTileRoute('acet', false, [])).toBe('/practice/diagnostic?exam=acet')
+  })
+
+  it('url-encodes the exam slug', () => {
+    expect(resolveFocusTileRoute('a b&c', false, [])).toBe('/practice/diagnostic?exam=a%20b%26c')
   })
 })

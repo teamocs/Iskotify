@@ -103,24 +103,22 @@ export function examAcronym(title: string, blueprintAcronym?: string | null): st
  *
  *   - A scored tile always goes to its own /practice/start/:slug chooser
  *     (mock exam / Study Sprint), regardless of blueprint status.
- *   - A scoreless tile goes to the diagnostic ONLY when it's UPCAT (the
- *     diagnostic's content and recorded sessions are UPCAT-based — see
- *     services/diagnostic listingSlug 'upcat') or when the exam has no
- *     published blueprint (no mock content exists to start yet).
- *   - A scoreless non-UPCAT exam WITH its own published blueprint has a
- *     mock/sprint chooser of its own, so it routes there instead of
- *     dead-ending into the UPCAT diagnostic.
+ *   - A scoreless UPCAT tile goes to the (UPCAT) diagnostic.
+ *   - Any other scoreless exam goes to the diagnostic naming that exam
+ *     (`?exam=<slug>`): with a runnable blueprint it samples that exam; without
+ *     one the screen says honestly that no diagnostic is available yet instead
+ *     of serving UPCAT questions under the student's exam.
+ *   `blueprintSlugs` no longer changes the scoreless route (the diagnostic
+ *     screen resolves runnability itself); it is kept for call-site stability.
  */
 export function resolveFocusTileRoute(
   slug: string,
   hasScore: boolean,
-  blueprintSlugs: readonly string[],
+  _blueprintSlugs: readonly string[],
 ): string {
-  if (!hasScore && slug !== 'upcat' && !blueprintSlugs.includes(slug)) {
-    return '/practice/diagnostic'
-  }
-  if (!hasScore && slug === 'upcat') return '/practice/diagnostic'
-  return `/practice/start/${slug}`
+  if (hasScore) return `/practice/start/${slug}`
+  if (slug === 'upcat') return '/practice/diagnostic'
+  return `/practice/diagnostic?exam=${encodeURIComponent(slug)}`
 }
 
 // ── Exam picker modal options ────────────────────────────────────────────────
