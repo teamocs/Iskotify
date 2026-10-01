@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { resetStudyData } from './resetStudyData'
 import { setAccountNotice, ACCOUNT_DELETED_NOTICE } from './accountNotice'
 import { resetAnalytics } from '../lib/analytics'
+import { signOutPremium } from './premiumState'
 
 const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.vercel.app'
 const REQUEST_TIMEOUT_MS = 30000
@@ -84,6 +85,8 @@ export async function deleteAccount(db: DrizzleClient): Promise<DeleteAccountRes
   }
   // Forget the account id and stop analytics: the next person here is asked afresh.
   resetAnalytics()
+  // RevenueCat forgets the account and this device starts free. Never throws.
+  await signOutPremium(db)
   setAccountNotice(ACCOUNT_DELETED_NOTICE)
   return { ok: true }
 }

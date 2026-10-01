@@ -33,6 +33,8 @@ module.exports = {
         '^expo-linking$': '<rootDir>/__mocks__/expoLinkingMock.js',
         '^react-native$': '<rootDir>/__mocks__/reactNativeMock.js',
         '^expo-secure-store$': '<rootDir>/__mocks__/expoSecureStoreMock.js',
+        // RevenueCat needs the native bridge; see __mocks__/reactNativePurchasesMock.js.
+        '^react-native-purchases$': '<rootDir>/__mocks__/reactNativePurchasesMock.js',
       },
     },
     {
@@ -49,6 +51,8 @@ module.exports = {
         '\\.svg$': '<rootDir>/__mocks__/svgMock.js',
         'theme/ThemeContext': '<rootDir>/__mocks__/themeContextMock.js',
         '^expo-secure-store$': '<rootDir>/__mocks__/expoSecureStoreMock.js',
+        // RevenueCat needs the native bridge; see __mocks__/reactNativePurchasesMock.js.
+        '^react-native-purchases$': '<rootDir>/__mocks__/reactNativePurchasesMock.js',
       },
     },
   ],

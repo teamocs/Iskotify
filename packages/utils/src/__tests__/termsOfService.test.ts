@@ -68,18 +68,32 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(text).not.toMatch(/AI Coach/i)
   })
 
-  it('keeps the core free and describes the optional one-time Full Access honestly, in the future tense', () => {
+  it('keeps the core free and describes the optional one-time Full Access honestly', () => {
     const paid = section('Free features and Iskotify Full Access')
     expect(paid).toMatch(/core features are free/)
-    expect(paid).toMatch(/Nothing in Iskotify costs money today/)
-    expect(paid).toMatch(/may offer Iskotify Full Access/)
-    expect(paid).toMatch(/one-time purchase/)
-    expect(paid).toMatch(/won’t be a subscription/)
+    expect(paid).toMatch(/stay free/)
+    expect(paid).toMatch(/optional one-time purchase/)
+    expect(paid).toMatch(/isn’t a subscription/)
+    // What it unlocks, matching the upgrade screen.
+    expect(paid).toMatch(/unlimited practice questions/)
+    expect(paid).toMatch(/unlimited full mock exams/)
+    expect(paid).toMatch(/explanations for every answer choice/)
+    expect(paid).toMatch(/may not be on sale yet/)
     expect(paid).toMatch(/Before you pay, we’ll show you the price/)
     expect(paid).toMatch(/what Full Access includes/)
     expect(paid).toMatch(/for as long as we offer Iskotify/)
+    // No longer future tense: it can be bought now.
+    expect(paid).not.toMatch(/costs money today|may offer Iskotify Full Access|before anyone is asked to pay/)
     expect(TERMS_SUMMARY.join(' ')).not.toMatch(/Iskotify is a free study app/)
     expect(text).not.toMatch(/Iskotify is free to use/)
+  })
+
+  it('says where Full Access is bought, without steering Android readers to another payment (shared text)', () => {
+    const paid = section('Free features and Iskotify Full Access')
+    expect(paid).toMatch(/Android app[^"]*through Google Play/)
+    expect(paid).toMatch(/other Iskotify platforms where it’s offered/)
+    // The in-app Terms on Android shows this same text: no web prices, methods or links.
+    expect(paid).not.toMatch(/GCash|Maya|QR Ph|PayMongo|₱|iskotify\.ph|website/i)
   })
 
   it('gives real refund routes and never says "no refunds"', () => {

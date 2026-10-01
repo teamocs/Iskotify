@@ -86,7 +86,7 @@ describe('privacy policy content (shared by the app and the website)', () => {
   })
 
   it('discloses the services that receive data, including the leaked-password check', () => {
-    for (const name of ['Supabase', 'Vercel', 'Google', 'PostHog', 'Expo', 'Resend', 'Upstash', 'Have I Been Pwned']) {
+    for (const name of ['Supabase', 'Vercel', 'Google', 'PostHog', 'Expo', 'Resend', 'Upstash', 'Have I Been Pwned', 'RevenueCat', 'PayMongo', 'Google Play']) {
       expect(text).toContain(name)
     }
     expect(text).toMatch(/first 5 characters/)
@@ -164,6 +164,9 @@ describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () =
       expect(share).toMatch(new RegExp(`"${name}","text":"[^"]*United States`))
     }
     if (UPSTASH_REGION) expect(share).toMatch(new RegExp(`Upstash","text":"[^"]*Servers: ${UPSTASH_REGION}`))
+    expect(share).toMatch(/"RevenueCat","text":"[^"]*account ID[^"]*Google Play purchase[^"]*Servers: United States/)
+    expect(share).toMatch(/"PayMongo","text":"[^"]*web payments[^"]*payment details you enter on its page[^"]*Servers: Philippines/)
+    expect(share).toMatch(/"Google Play","text":"[^"]*in-app payments[^"]*Google’s privacy policy/)
     expect(share).toMatch(/first 5 characters/)
     expect(share).toContain('We use service agreements requiring these providers to protect your data.')
   })
@@ -176,6 +179,13 @@ describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () =
     expect(keep).toMatch(/Analytics:","text":"[^"]*12 months/)
     expect(keep).toMatch(/Early access sign-ups:","text":"[^"]*6 months after Iskotify launches publicly/)
     expect(keep).toMatch(/When you delete your account:/)
+    expect(keep).toMatch(/Purchase records:","text":"[^"]*as long as tax law requires[^"]*unlinked from you/)
+  })
+
+  it('collects purchases and says why, without claiming nothing is kept after deletion', () => {
+    expect(section('What we collect')).toMatch(/Purchases\./)
+    expect(section('Our legal basis')).toMatch(/Purchases[^"]*:","text":"[^"]*Section 12\(c\)/)
+    expect(text).not.toMatch(/today, nothing/)
   })
 
   it('reaches the Data Protection Officer through a working inbox, leaving out details not supplied yet', () => {

@@ -655,6 +655,16 @@ export const MIGRATIONS = [
   // analytics switch, are decided by these timestamps, not by the Terms version.
   `ALTER TABLE user_settings ADD COLUMN sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE user_settings ADD COLUMN analytics_choice_at INTEGER NOT NULL DEFAULT 0`,
+
+  // ── P3 Full Access: last known premium state, so an offline student keeps access ──
+  // A cache only (the truth is the store / the server entitlement row): never
+  // uploaded with the backup and reset on sign-out and account switch.
+  `ALTER TABLE user_settings ADD COLUMN premium_cached INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN premium_checked_at INTEGER NOT NULL DEFAULT 0`,
+  // ── P3 review: which account premium_cached belongs to ('' = nobody) ──
+  // The cache is trusted only for that signed-in account, so an account switch
+  // can never hand the previous account's access to the next one.
+  `ALTER TABLE user_settings ADD COLUMN premium_user_id TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

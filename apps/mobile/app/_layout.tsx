@@ -38,6 +38,7 @@ import { identifyUser, resetAnalytics } from '../lib/analytics'
 import { applyAnalyticsConsent, identifyAfterConsent } from '../services/analyticsConsent'
 import { AnalyticsScreenTracker } from '../components/AnalyticsScreenTracker'
 import { ConsentGate } from '../components/consent/ConsentGate'
+import { initPremium } from '../services/premiumState'
 
 // KeyboardProvider is native-only (react-native-keyboard-controller).
 // On web, render children directly — the provider import itself is safe to
@@ -139,6 +140,20 @@ export default function RootLayout() {
 
 function AppInit({ onReady, ready }: { onReady: () => void; ready: boolean }) {
   const db = useDb()
+
+  // Iskotify Full Access (P3): the cached state at once, then the server's, kept
+  // fresh on foreground and auth changes. A no-op with the paywall flag off.
+  useEffect(() => {
+    let cleanup: (() => void) | undefined
+    let disposed = false
+    initPremium(db)
+      .then(fn => { if (disposed) fn(); else cleanup = fn })
+      .catch(e => console.warn('[layout] premium init failed (non-fatal):', e))
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
+  }, [db])
 
   const initialize = useCallback(async () => {
     // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set, and

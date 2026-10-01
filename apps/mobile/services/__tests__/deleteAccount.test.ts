@@ -33,6 +33,9 @@ jest.mock('../sync', () => ({
 const mockResetAnalytics = jest.fn()
 jest.mock('../../lib/analytics', () => ({ resetAnalytics: () => mockResetAnalytics() }))
 
+const mockSignOutPremium = jest.fn()
+jest.mock('../premiumState', () => ({ signOutPremium: (...a: unknown[]) => mockSignOutPremium(...a) }))
+
 const db = { tag: 'db' } as never
 const okResponse = (status = 200, body: unknown = { ok: true }) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
@@ -91,6 +94,17 @@ describe('deleteAccount', () => {
   it('switches analytics off once the account is gone', async () => {
     await deleteAccount(db)
     expect(mockResetAnalytics).toHaveBeenCalled()
+  })
+
+  it('forgets Full Access on this device (RevenueCat logout + cache) once the account is gone', async () => {
+    await deleteAccount(db)
+    expect(mockSignOutPremium).toHaveBeenCalledWith(db)
+  })
+
+  it('keeps Full Access state as it was when the deletion fails', async () => {
+    mockFetch.mockImplementation(async () => okResponse(500, {}))
+    await deleteAccount(db)
+    expect(mockSignOutPremium).not.toHaveBeenCalled()
   })
 
   it('keeps analytics as it was when the deletion fails', async () => {

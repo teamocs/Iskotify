@@ -24,6 +24,7 @@ const ALLOWED: Record<string, string> = {
   'app/landing.tsx': 'sign-in bookkeeping, followed by an explicit pull/push',
   'components/walkthrough/tourState.ts': 'device-local tourSeenAt, never synced',
   'hooks/useFocusListings.ts': 'covered: add/remove/move all schedule (see curatedWritesSchedulePush.test.tsx)',
+  'services/premiumCache.ts': 'device-local Full Access cache, never backed up nor restored (premiumSync.test.ts)',
 }
 
 function walk(dir: string, out: string[] = []): string[] {

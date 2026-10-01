@@ -159,6 +159,14 @@ export const userSettings = sqliteTable('user_settings', {
   sensitiveWithdrawnAt: integer('sensitive_withdrawn_at').notNull().default(0),
   // When the analytics switch was last set, epoch ms; 0 = never chosen. Latest choice wins.
   analyticsChoiceAt: integer('analytics_choice_at').notNull().default(0),
+  // ── Full Access (P3) cache ─────────────────────────────────────────────────────
+  // Last known premium state (1 = Full Access) so an offline student keeps access.
+  // Not the source of truth, never uploaded with the backup (services/sync.ts).
+  premiumCached: integer('premium_cached', { mode: 'boolean' }).notNull().default(false),
+  // When that state was last confirmed online, epoch ms; 0 = never.
+  premiumCheckedAt: integer('premium_checked_at').notNull().default(0),
+  // The Supabase user id premiumCached belongs to; '' = nobody. Trusted only for that account.
+  premiumUserId: text('premium_user_id').notNull().default(''),
 })
 
 export const userProgress = sqliteTable('user_progress', {

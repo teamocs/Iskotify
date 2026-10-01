@@ -77,7 +77,7 @@ export default function DeleteAccountPage() {
 
         <Section title="What we keep">
           <p>
-            We keep nothing about you afterwards, except where the law requires us to. That is none today.
+            We keep nothing about you afterwards, except where the law requires us to: if you bought Iskotify Full Access, we keep the purchase records tax law requires, no longer linked to you.
           </p>
           <p>
             One exception you should know about: usage analytics that we keep in PostHog aren’t removed by

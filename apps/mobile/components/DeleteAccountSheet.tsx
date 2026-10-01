@@ -93,7 +93,7 @@ export function DeleteAccountSheet({ visible, onClose, onDeleted }: Props) {
         </Text>
 
         <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
-          We keep nothing about you afterwards. No records are legally required to be kept today.
+          We keep nothing about you afterwards, except the purchase records tax law requires if you bought Full Access, no longer linked to you.
         </Text>
         <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
           Your notes on this device stay until you delete them from Notes. Usage analytics are not removed by this button; email teamocsph@gmail.com and we will delete what is linked to you.
