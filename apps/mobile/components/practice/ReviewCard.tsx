@@ -29,7 +29,12 @@ export interface ReviewCardProps {
   imageAlt?: string | null
   imageWidth?: number | null
   imageHeight?: number | null
+  /** The answer choices or explanation came from the AI content pipeline: show a disclosure caption. */
+  aiAssisted?: boolean
 }
+
+export const AI_ASSISTED_CAPTION =
+  'AI-assisted: the answer choices or explanation were written with AI and reviewed by our team.'
 
 /**
  * Shared review presentation for all four practice-exam engines (blueprint mock,
@@ -41,7 +46,7 @@ export interface ReviewCardProps {
  */
 export function ReviewCard({
   index, questionText, options, correctIndex, selectedIndex, explanation, optionExplanations, strategyTip,
-  imageUrl, imageAlt, imageWidth, imageHeight,
+  imageUrl, imageAlt, imageWidth, imageHeight, aiAssisted,
 }: ReviewCardProps) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
@@ -120,6 +125,10 @@ export function ReviewCard({
           <Text style={[s.tipTxt, { flex: 1 }]} maxFontSizeMultiplier={1.5}>{tip}</Text>
         </View>
       ) : null}
+
+      {aiAssisted ? (
+        <Text style={s.aiCaption} maxFontSizeMultiplier={1.6}>{AI_ASSISTED_CAPTION}</Text>
+      ) : null}
     </View>
   )
 }
@@ -172,6 +181,10 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     },
     wrongTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: Math.round(typo.sm * 1.5) },
     wrongLetter: { fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    aiCaption: {
+      fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular',
+      lineHeight: Math.round(typo.xs * 1.5), marginTop: spacing.sm,
+    },
     tipChip: {
       flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: t.warningSurface, borderWidth: 1,
       borderColor: t.warningBorder, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md,

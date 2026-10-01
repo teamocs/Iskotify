@@ -39,6 +39,8 @@ export interface QuizQuestion {
   /** Index-aligned with `options` above (post-shuffle); null at answerIndex. Task E. */
   optionExplanations?: (string | null)[]
   strategyTip?: string
+  /** Answer choices or explanation came from the AI content pipeline (admin-side); drives the review-screen disclosure. */
+  aiAssisted?: boolean
   imageUrl?: string | null
   imageAlt?: string | null
   imageWidth?: number | null
@@ -116,6 +118,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
   return cards.map(card => {
     const explanation = card.aiExplanation ?? card.explanation
     const strategyTip = card.strategyTip?.trim() || undefined
+    const explanationIsAi = !!card.aiExplanation?.trim()
     // Independent of which options branch below fires — a card's figure isn't
     // tied to whether its options came from AI/admin/embedded/placeholder.
     const imageFields = {
@@ -133,7 +136,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
     ) {
       {
         // optionExplanations is stored index-aligned with WHICHEVER option
-        // array it was generated alongside — for AI-enhanced cards that's
+        // array it was generated alongside — for AI-enhanced cards that is
         // aiOptions (see admin's lib/gemini/generateDistractors.ts), so it's
         // paired with aiOptions/aiCorrectIndex here.
         const { options, correctIndex, aux } = shuffleWithIndex(card.aiOptions, card.aiCorrectIndex, card.optionExplanations)
@@ -145,12 +148,13 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
           explanation,
           optionExplanations: aux,
           strategyTip,
+          aiAssisted: true,
           ...imageFields,
         }
       }
     }
 
-    // Priority 2: admin-stored options. Unlike aiOptions above (Gemini-generated,
+    // Priority 2: admin-stored options. Unlike aiOptions above (admin-pipeline AI,
     // always exactly 4 by construction — a different length there means bad AI
     // data, so it falls through), admin/imported options are legitimately
     // variable-length: the CSV importer drops a blank 4th option, and questions
@@ -174,6 +178,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
           explanation,
           optionExplanations: aux,
           strategyTip,
+          aiAssisted: explanationIsAi,
           ...imageFields,
         }
       }
@@ -183,16 +188,14 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
     const embedded = parseEmbedded(card)
     if (embedded) {
       const { options, correctIndex } = shuffleWithIndex(embedded.options, embedded.answerIndex)
-      return { ...embedded, options, answerIndex: correctIndex, explanation, ...imageFields }
+      return { ...embedded, options, answerIndex: correctIndex, explanation, aiAssisted: explanationIsAi, ...imageFields }
     }
 
     // Priority 4: safe placeholder distractors
     //
-    // Reached only when the LLM hasn't enhanced this card yet AND it has no
-    // admin-set options AND no embedded MCQ format. Practice screens should
-    // call enhanceCardsByIds() before reaching this state — this is the
-    // last-resort fallback for cards enhancement couldn't reach (model not
-    // downloaded, model rejected the card, etc.).
+    // Reached only when the card has no server-provided AI options, no
+    // admin-set options AND no embedded MCQ format (the student app runs no
+    // on-device AI), so it is a last-resort fallback for malformed cards.
     //
     // We deliberately use generic placeholders rather than pulling distractors
     // from other cards' answers — the latter produces misleading non-sequiturs.
@@ -204,6 +207,7 @@ export function buildQuizQuestions(cards: RawCard[]): QuizQuestion[] {
       options: all,
       answerIndex: Math.max(0, all.indexOf(correct)),
       explanation,
+      aiAssisted: explanationIsAi,
       ...imageFields,
     }
   })

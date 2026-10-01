@@ -7,6 +7,7 @@ const PRESET_REASONS = [
   'Wrong answer',
   'Typo or formatting issue',
   'Question is unclear',
+  'Inappropriate or wrong AI-written content',
   'Other',
 ] as const
 

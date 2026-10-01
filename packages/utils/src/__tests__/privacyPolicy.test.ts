@@ -80,7 +80,7 @@ describe('privacy policy content (shared by the app and the website)', () => {
   })
 
   it('discloses the services that receive data, including the leaked-password check', () => {
-    for (const name of ['Supabase', 'Vercel', 'Google', 'PostHog', 'Hugging Face', 'Expo', 'Resend', 'Upstash', 'Have I Been Pwned']) {
+    for (const name of ['Supabase', 'Vercel', 'Google', 'PostHog', 'Expo', 'Resend', 'Upstash', 'Have I Been Pwned']) {
       expect(text).toContain(name)
     }
     expect(text).toMatch(/first 5 characters/)
@@ -128,9 +128,20 @@ describe('privacy policy content (shared by the app and the website)', () => {
   })
 })
 
-describe('on-device AI model wording', () => {
-  it('does not claim students type into the model', () => {
-    expect(text).not.toMatch(/what you type into it/)
-    expect(text).toMatch(/answer choices/)
+describe('AI wording (the student app ships no AI and sends nothing to an AI provider)', () => {
+  it('no longer mentions the removed on-device model, Hugging Face or Gemini ranking', () => {
+    expect(text).not.toMatch(/Hugging Face/i)
+    expect(text).not.toMatch(/on-device (AI )?model/i)
+    expect(text).not.toMatch(/Gemini/i)
+    expect(text).not.toMatch(/AI ranks/i)
+  })
+
+  it('says scholarship search words are not sent anywhere', () => {
+    expect(text).toMatch(/Scholarship searches are ranked on your phone by keywords/)
+    expect(text).toMatch(/never sent to an AI provider/)
+  })
+
+  it('discloses that some practice content is drafted with AI and reviewed by our team', () => {
+    expect(text).toMatch(/drafted with the help of AI tools/)
   })
 })

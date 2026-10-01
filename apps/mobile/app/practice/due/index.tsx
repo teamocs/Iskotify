@@ -6,18 +6,17 @@ import { flashcards as flashcardsTable } from '../../../db/schema'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
-import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { pickQuestions } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
-import { SessionEmpty, SessionLoading, SessionPreparing } from '../../../components/practice/SessionStates'
+import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'enhancing' | 'exam' | 'empty'
+type Phase = 'loading' | 'exam' | 'empty'
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,6 @@ export default function DueReviewScreen() {
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
-  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
 
 
   useEffect(() => {
@@ -71,17 +69,8 @@ export default function DueReviewScreen() {
         }).from(flashcardsTable).where(inArray(flashcardsTable.id, ids))
       }
 
-      let cardRows = await fetchCards()
+      const cardRows = await fetchCards()
 
-      const unenhancedIds = cardRows
-        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
-        .map(r => r.id)
-      if (unenhancedIds.length > 0) {
-        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
-        setPhase('enhancing')
-        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
-        cardRows = await fetchCards()
-      }
 
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
@@ -104,7 +93,6 @@ export default function DueReviewScreen() {
 
   if (phase === 'loading') return <SessionLoading label="Loading due cards" />
 
-  if (phase === 'enhancing') return <SessionPreparing done={enhanceProgress.done} total={enhanceProgress.total} />
 
   if (phase === 'empty') {
     return (

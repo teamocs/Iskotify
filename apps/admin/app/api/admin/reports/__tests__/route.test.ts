@@ -514,6 +514,18 @@ describe('GET /api/admin/reports — server paging', () => {
     expect(capturedOrArgs[0]).toContain('reason.not.ilike."Question is unclear%"')
   })
 
+  it('filters the AI-content reason by prefix and keeps it out of "other"', async () => {
+    adminUser()
+    const { GET } = await import('../route')
+    const reason = 'Inappropriate or wrong AI-written content'
+    const res = await GET(makeListReq(`?reason=${encodeURIComponent(reason)}`))
+    expect(res.status).toBe(200)
+    expect(capturedIlikeArgs).toContainEqual(['reason', `${reason}%`])
+    adminUser()
+    await GET(makeListReq('?reason=other'))
+    expect(capturedOrArgs[capturedOrArgs.length - 1]).toContain(`reason.not.ilike."${reason}%"`)
+  })
+
   it('rejects a reason that is not offered', async () => {
     adminUser()
     const { GET } = await import('../route')

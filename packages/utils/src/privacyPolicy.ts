@@ -74,7 +74,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           },
           {
             label: 'Search words.',
-            text: 'When you press search on the Scholarships tab, the words you typed. When you look for your school and it isn’t on our list, the school name you typed.',
+            text: 'When you look for your school and it isn’t on our list, the school name you typed. Scholarship searches are ranked on your phone by keywords, so the words you type there stay on your phone and are never sent to an AI provider.',
           },
           {
             label: 'Usage analytics.',
@@ -137,15 +137,15 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         items: [
           { label: 'Supabase', text: 'stores our database and files, runs sign-in, and sends sign-in emails like password resets.' },
           { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes your searches along.' },
-          { label: 'Google', text: 'handles Google sign-in if you choose it. Google’s Gemini AI ranks results for the words you type in scholarship search. Google Places looks up a school name you type that isn’t on our list.' },
+          { label: 'Google', text: 'handles Google sign-in if you choose it. Google Places looks up a school name you type that isn’t on our list.' },
           { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device.' },
           { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on.' },
-          { label: 'Hugging Face', text: 'hosts the optional on-device AI model. If you download it from Settings, Hugging Face sees the download request. The model then runs on your phone to write extra answer choices for practice questions, and nothing from it is sent back.' },
           { label: 'Expo', text: 'delivers app updates to your phone.' },
           { label: 'Resend', text: 'sends early access emails, so it gets your name and email address.' },
           { label: 'Upstash', text: 'briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour.' },
         ],
       },
+      'Some practice questions, answer choices and explanations are drafted with the help of AI tools by our team and checked before they reach the app. Nothing you type or do in the app is sent to those tools. If an explanation looks wrong or inappropriate, use Report on the question.',
       'Our team, including the content staff who help us check questions and dates, can see the reports, suggestions and feedback you send.',
       'We may also share data if the law requires it, for example because of a valid court order.',
     ],

@@ -6,7 +6,6 @@ import { and, eq, like } from 'drizzle-orm'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
-import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bulb2Outlined } from '@lineiconshq/free-icons'
@@ -15,11 +14,11 @@ import { classify } from '../../../utils/weakness'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
-import { SessionEmpty, SessionLoading, SessionPreparing } from '../../../components/practice/SessionStates'
+import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'enhancing' | 'chooser' | 'exam' | 'empty'
+type Phase = 'loading' | 'chooser' | 'exam' | 'empty'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +43,6 @@ export default function ListingQuizScreen() {
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
-  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
   // Task H: due-today option — flashcardId → dueAt for cards in this pool that are due now.
   const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
 
@@ -108,20 +106,7 @@ export default function ListingQuizScreen() {
         })
       }
 
-      let allCards = initialCards
-      let matching = filterToListing(allCards)
-
-      // On-demand LLM enhancement of unenhanced cards in this listing before quiz starts.
-      const unenhancedIds = matching
-        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
-        .map(r => r.id)
-      if (unenhancedIds.length > 0) {
-        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
-        setPhase('enhancing')
-        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
-        allCards = await fetchAllCards()
-        matching = filterToListing(allCards)
-      }
+      const matching = filterToListing(initialCards)
 
       // mode=weak: filter to cards from topics with <60% accuracy.
       // This controls WHICH cards are included; Quick/Full below controls HOW MANY.
@@ -174,7 +159,6 @@ export default function ListingQuizScreen() {
 
   if (phase === 'loading') return <SessionLoading label="Loading cards" />
 
-  if (phase === 'enhancing') return <SessionPreparing done={enhanceProgress.done} total={enhanceProgress.total} />
 
   if (phase === 'empty') {
     return mode === 'weak' ? (

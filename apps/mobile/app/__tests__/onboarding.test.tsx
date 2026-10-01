@@ -65,10 +65,6 @@ jest.mock('../../db/webPersist', () => ({
 
 let mockBackHandler: (() => boolean) | null = null
 
-jest.mock('../../hooks/useAiEnhancement', () => ({
-  runEnhancement: jest.fn().mockResolvedValue(undefined),
-}))
-
 // DB: `select` resolves the saved settings row (resume source); inserts are recorded.
 let mockSavedSettings: Record<string, unknown>[] = []
 let mockFocusRows: Record<string, unknown>[] = []

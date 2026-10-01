@@ -4,6 +4,23 @@ const card = (overrides: Partial<RawCard> = {}): RawCard => ({
   id: '1', question: 'Q?', answer: 'A', explanation: '', ...overrides,
 })
 
+describe('buildQuizQuestions aiAssisted flag (Play generative-AI disclosure)', () => {
+  it('is true when the served options came from aiOptions', () => {
+    const [q] = buildQuizQuestions([card({ aiOptions: ['a', 'b', 'c', 'd'], aiCorrectIndex: 2 })])
+    expect(q!.aiAssisted).toBe(true)
+  })
+
+  it('is true when the explanation came from aiExplanation', () => {
+    const [q] = buildQuizQuestions([card({ options: ['a', 'b', 'c', 'd'], correctAnswerIndex: 0, aiExplanation: 'why' })])
+    expect(q!.aiAssisted).toBe(true)
+  })
+
+  it('is false for admin-written options and explanation', () => {
+    const [q] = buildQuizQuestions([card({ explanation: 'human', options: ['a', 'b', 'c', 'd'], correctAnswerIndex: 0 })])
+    expect(q!.aiAssisted).toBeFalsy()
+  })
+})
+
 describe('buildQuizQuestions', () => {
   describe('AI options — highest priority', () => {
     it('uses aiOptions and aiCorrectIndex when present', () => {
