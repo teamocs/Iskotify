@@ -30,6 +30,9 @@ by Jev. Not legal advice — items marked [LAWYER] / [CPA] need a professional.
 - Published-only RLS on question / passage / flashcard bodies; status-only public feed so devices still learn about unpublished items; stop syncing drafts.
 
 ## P3 — monetization
+- **Built (#73, #74), switched off.** As built it uses `public.entitlements` and admin-app webhooks, not
+  `profiles.is_premium` or an edge function. Setup, operations and go-live steps:
+  [docs/payments/in-app-purchases.md](../payments/in-app-purchases.md).
 - RevenueCat (react-native-purchases) non-consumable `premium` entitlement, app_user_id = Supabase user id; premium gate hook;
   paywall at natural moments; restore; Supabase `purchases` + `profiles.is_premium` + rc-webhook edge function;
   grandfather early-access users; web reads `is_premium`; PayMongo checkout + webhook behind a flag.
