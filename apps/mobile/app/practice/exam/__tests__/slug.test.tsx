@@ -70,6 +70,13 @@ jest.mock('../../../../hooks/useAdmissionEstimate', () => ({
   loadAdmissionEstimateSnapshot: (...args: unknown[]) => mockLoadSnapshot(...args),
 }))
 
+// P4 unseen-first sampling: the student's last-seen map (default: nothing seen).
+let mockLastSeen = new Map<string, number>()
+const mockLastSeenOrEmpty = jest.fn(async (..._a: unknown[]) => mockLastSeen)
+jest.mock('../../../../services/questionHistory', () => ({
+  lastSeenOrEmpty: (...a: unknown[]) => mockLastSeenOrEmpty(...a),
+}))
+
 const mockGetExamBlueprint = jest.fn()
 const mockGetQuestionsByCategory = jest.fn()
 const mockGetAllPassages = jest.fn()
@@ -241,6 +248,31 @@ describe('BlueprintExam', () => {
     expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Language Proficiency' }))
     // The in-memory results UI still names the section.
     expect(screen.getAllByText('Language Proficiency (English & Filipino)', { exact: false }).length).toBeGreaterThan(0)
+  })
+
+  it('P4: a new full mock and a new Study Sprint serve never-seen questions first', async () => {
+    mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q1, Q2, Q3]]]))
+    mockLastSeen = new Map([['Q1', 1000]]) // Q1 served before; Q2, Q3 never
+    mockLastSeenOrEmpty.mockClear()
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+    expect(mockLastSeenOrEmpty).toHaveBeenCalledWith(expect.anything(), 'upcat_questions', expect.arrayContaining(['Q1', 'Q2', 'Q3']))
+    fireEvent.press(screen.getByText('Full Mock'))
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    expect(new Set(mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0].questionIds)).toEqual(new Set(['Q2', 'Q3']))
+    mockLastSeen = new Map()
+  })
+
+  it('P4: Study Sprint uses the same history', async () => {
+    mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q1, Q2, Q3]]]))
+    mockLastSeen = new Map([['Q2', 5], ['Q3', 9]]) // Q1 never served
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText(/Study Sprint/)).toBeTruthy())
+    fireEvent.press(screen.getByText(/Study Sprint/))
+    // 30-minute blueprint: the sprint keeps all 2 items -> Q1 (unseen) + Q2 (oldest seen).
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    expect(new Set(mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0].questionIds)).toEqual(new Set(['Q1', 'Q2']))
+    mockLastSeen = new Map()
   })
 
   it('a Study Sprint sitting is recorded as kind=sprint, never as a mock', async () => {

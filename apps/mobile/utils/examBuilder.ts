@@ -1,5 +1,6 @@
 import type { ExamBlueprint, BlueprintSection } from '../services/examBlueprints'
 import { isMissingRequiredFigure, groupIntoUnits, type QuestionUnit, type RawUpcatQuestion, type RawUpcatPassage, type ExamQuestion } from './upcatExam'
+import { rankUnseenFirst, servedOrder, type SamplingOptions } from './unseenFirst'
 
 // ---------------------------------------------------------------------------
 // Section chip state (B2)
@@ -31,37 +32,36 @@ export function sectionChipState(
 export interface BuiltSection { section: BlueprintSection; questions: ExamQuestion[]; available: number }
 export interface BuiltExam { runnable: BuiltSection[]; comingSoon: BlueprintSection[]; totalQuestions: number }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j]!, a[i]!] }
-  return a
-}
-
 /**
  * Pick whole units (passage sets / single questions) for a section target.
- * A passage set is never truncated or split. Units are visited in shuffled
- * order and taken only while they still fit within `target`; if a gap remains
+ * A passage set is never truncated or split. Units are visited unseen-first
+ * (utils/unseenFirst: never-served units in random order, then the least
+ * recently served; a plain shuffle with no history) and taken only while they
+ * still fit within `target`; if a gap remains
  * and the smallest leftover unit lands closer to the target than staying short
  * does, that one unit is added (so a section overshoots by less than the gap it
  * would otherwise leave). When nothing fits (every unit is larger than the
  * target, e.g. one 5-question passage for a 3-item section) the smallest unit
  * is taken whole: a section may therefore exceed its target, but only by
- * finishing a passage, never by cutting one.
+ * finishing a passage, never by cutting one. The picked units are served in
+ * random order (each still whole; utils/unseenFirst servedOrder).
  */
-function pickUnits(units: QuestionUnit[], target: number): QuestionUnit[] {
+function pickUnits(units: QuestionUnit[], target: number, opts: SamplingOptions = {}): QuestionUnit[] {
+  const rng = opts.rng ?? Math.random
   const goal = Math.max(1, target)
   const picked: QuestionUnit[] = []
   const leftover: QuestionUnit[] = []
   let count = 0
-  for (const u of shuffle(units)) {
+  for (const u of rankUnseenFirst(units, unit => unit.map(q => q.questionId), opts.seen, rng)) {
     if (count + u.length <= goal) { picked.push(u); count += u.length } else leftover.push(u)
   }
-  if (leftover.length === 0) return picked
+  if (leftover.length === 0) return servedOrder(picked, opts)
+  // reduce keeps the FIRST of equal sizes, i.e. the best-ranked one.
   const smallest = leftover.reduce((a, b) => (b.length < a.length ? b : a))
   if (picked.length === 0) return [smallest]
   const deficit = goal - count
   if (deficit > 0 && smallest.length - deficit < deficit) picked.push(smallest)
-  return picked
+  return servedOrder(picked, opts)
 }
 
 /** Build a timed mock from a blueprint: each section samples about item_count questions
@@ -69,12 +69,14 @@ function pickUnits(units: QuestionUnit[], target: number): QuestionUnit[] {
  *  (shown in the structure preview, excluded from the runnable timed exam). Passage sets
  *  are kept whole and contiguous (sorted by setPosition) with the passage text attached to
  *  every question of the set, using the same grouping as the UPCAT subtest builder, and a
- *  question is never placed in two sections. */
+ *  question is never placed in two sections. `sampling` (P4) makes it
+ *  unseen-first: pass the student's last-seen map for NEW runs only. */
 export function buildBlueprintExam(
   blueprint: ExamBlueprint,
   questionsByCategory: Map<string, RawUpcatQuestion[]>,
   passages: RawUpcatPassage[],
   itemCountFor?: (section: BlueprintSection) => number,
+  sampling: SamplingOptions = {},
 ): BuiltExam {
   const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
   const runnable: BuiltSection[] = []
@@ -90,7 +92,7 @@ export function buildBlueprintExam(
     const pool = (questionsByCategory.get(section.skillCategory) ?? []).filter(q => !isMissingRequiredFigure(q) && !used.has(q.questionId))
     if (pool.length === 0) { comingSoon.push(section); continue }
     const target = itemCountFor ? itemCountFor(section) : section.itemCount
-    const picked = pickUnits(groupIntoUnits(pool), target).flat()
+    const picked = pickUnits(groupIntoUnits(pool), target, sampling).flat()
     for (const q of picked) used.add(q.questionId)
     const questions: ExamQuestion[] = picked.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
     runnable.push({ section, questions, available: pool.length })
@@ -229,16 +231,17 @@ export function computeSprintItemCounts(
  * Build a Study Sprint exam: same section/pool sampling as buildBlueprintExam,
  * but each section's item_count is first scaled down to the sprint budget via
  * computeSprintItemCounts. Sections with an empty pool are still excluded as
- * comingSoon exactly like the full mock.
+ * comingSoon exactly like the full mock. Same unseen-first `sampling`.
  */
 export function buildStudySprintExam(
   blueprint: ExamBlueprint,
   questionsByCategory: Map<string, RawUpcatQuestion[]>,
   passages: RawUpcatPassage[],
   sprintMinutes: number = STUDY_SPRINT_MINUTES,
+  sampling: SamplingOptions = {},
 ): BuiltExam {
   const counts = computeSprintItemCounts(blueprint.sections, blueprint.totalTimeMinutes, sprintMinutes)
-  return buildBlueprintExam(blueprint, questionsByCategory, passages, sec => counts.get(sec.id) ?? sec.itemCount)
+  return buildBlueprintExam(blueprint, questionsByCategory, passages, sec => counts.get(sec.id) ?? sec.itemCount, sampling)
 }
 
 /**

@@ -3,10 +3,11 @@
 // here so the free tier can be tuned in one place.
 //
 // Free: diagnostic, explore/scholarships, notes, estimator, flashcards, Study
-// Sprint, FREE_FULL_MOCKS_PER_EXAM full mock per exam, and up to
-// FREE_DAILY_PRACTICE_QUESTIONS practice questions per Manila calendar day (with
-// the main explanation). Full Access: unlimited practice, unlimited full mocks
-// and the per-option "why the others are wrong" explanations.
+// Sprint, every explanation (main and per-option), FREE_FULL_MOCKS_PER_EXAM
+// full mock per exam, and up to FREE_DAILY_PRACTICE_QUESTIONS practice
+// questions per Manila calendar day. Full Access: unlimited practice and
+// unlimited full mocks. (Per-option explanations may return to the paid list
+// once >=90% of questions carry checked ones.)
 
 import { DAY_MS, localDayIndex } from './localDay'
 

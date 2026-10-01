@@ -1,4 +1,5 @@
 import { pickQuestions, QUICK_SIZE, FULL_CAP } from '../flashcardExam'
+import { seqRng } from '../unseenFirst'
 
 const q = (id: string, stem = id) => ({ id, stem, options: ['a','b','c','d'], answerIndex: 0 }) as any
 
@@ -57,6 +58,23 @@ describe('pickQuestions', () => {
       const dueAtById = { a: 1, b: 2 }
       // 'b' is deduped away (normalized stem collides with 'a'), so only 'a' remains due.
       expect(pickQuestions(items, 'due', dueAtById).map(x => x.id)).toEqual(['a'])
+    })
+  })
+
+  describe('quick mode: unseen-first sampling (P4)', () => {
+    const pool = Array.from({ length: 30 }, (_, i) => q(`c${i}`))
+
+    it('deals never-seen cards before seen ones', () => {
+      const seen = new Map(pool.slice(0, 15).map((c, i) => [c.id as string, i + 1]))
+      const out = pickQuestions(pool, 'quick', undefined, { seen, rng: seqRng(0.42) })
+      expect(out).toHaveLength(QUICK_SIZE)
+      expect(new Set(out.map(c => c.id))).toEqual(new Set(pool.slice(15).map(c => c.id)))
+    })
+
+    it('then the least recently seen', () => {
+      const seen = new Map(pool.map((c, i) => [c.id as string, 1000 - i])) // c29 oldest
+      const out = pickQuestions(pool, 'quick', undefined, { seen, rng: seqRng(0.9) })
+      expect(new Set(out.map(c => c.id))).toEqual(new Set(pool.slice(15).map(c => c.id)))
     })
   })
 })

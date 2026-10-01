@@ -53,6 +53,7 @@ import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById,
 import { fullMockAllowedNow } from '../../../services/premiumGate'
 import { usePremium } from '../../../hooks/usePremium'
 import { UpgradeCard, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
+import { lastSeenOrEmpty } from '../../../services/questionHistory'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
 
@@ -253,6 +254,10 @@ export default function BlueprintExam() {
   // than the full mock already shown on the prestart card).
   const poolsRef = useRef<Map<string, RawUpcatQuestion[]>>(new Map())
   const passagesRef = useRef<RawUpcatPassage[]>([])
+  // P4: when each pool question was last served, read at load, so the full mock
+  // built for the prestart and a Study Sprint started from it are unseen-first.
+  // (A resumed run is rebuilt from its saved ids and never re-sampled.)
+  const seenRef = useRef<Map<string, number>>(new Map())
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   // Question-report state: which indexes were reported + which index the modal is open for.
@@ -362,7 +367,9 @@ export default function BlueprintExam() {
       const cats = Array.from(new Set(bp.sections.map(s => s.skillCategory)))
       const [pools, passages, clusters] = await Promise.all([getQuestionsByCategory(db, cats), getAllPassages(db), getTargetCourseClusters(db)])
       poolsRef.current = pools; passagesRef.current = passages
-      const b = buildBlueprintExam(bp, pools, passages)
+      const poolIds = Array.from(pools.values()).flat().map(q => q.questionId)
+      seenRef.current = await lastSeenOrEmpty(db, 'upcat_questions', poolIds)
+      const b = buildBlueprintExam(bp, pools, passages, undefined, { seen: seenRef.current })
       const flat: FlatQuestion[] = b.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setExamMode('full')
       setBlueprint(bp); setBuilt(b); setQuestions(flat); setCourseClusters(clusters)
@@ -558,7 +565,7 @@ export default function BlueprintExam() {
     visitedRef.current = new Set()
 
     if (mode === 'sprint') {
-      const sprintBuilt = buildStudySprintExam(blueprint, poolsRef.current, passagesRef.current, STUDY_SPRINT_MINUTES)
+      const sprintBuilt = buildStudySprintExam(blueprint, poolsRef.current, passagesRef.current, STUDY_SPRINT_MINUTES, { seen: seenRef.current })
       const flat: FlatQuestion[] = sprintBuilt.runnable.flatMap(bs => bs.questions.map(q => ({ q, sectionName: bs.section.name })))
       setBuilt(sprintBuilt); setQuestions(flat)
       prefetchSessionImages(flat.map(f => f.q)) // fire-and-forget; never blocks session start

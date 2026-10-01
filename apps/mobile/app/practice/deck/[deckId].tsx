@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocalSearchParams, router } from 'expo-router'
 import { and, inArray, eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -9,6 +9,7 @@ import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
 import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
+import { lastSeenOrEmpty } from '../../../services/questionHistory'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
 import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
@@ -36,6 +37,9 @@ export default function DeckQuizScreen() {
 
   const [deckName, setDeckName] = useState('')
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
+  // P4: when each card was last served, read once per load; the quick quiz deals
+  // never-seen cards first (history only improves the mix, never blocks it).
+  const seenRef = useRef<Map<string, number>>(new Map())
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   // Task H: due-today option — flashcardId → dueAt for cards in this deck that are due now.
@@ -104,6 +108,7 @@ export default function DeckQuizScreen() {
       prefetchSessionImages(parsed) // fire-and-forget; never blocks session start
       setAllQuestions(parsed)
       setPhase(parsed.length === 0 ? 'empty' : 'chooser')
+      void lastSeenOrEmpty(db, 'flashcards', parsed.map(q => q.id).filter((id): id is string => id != null)).then(m => { seenRef.current = m })
 
       // Task H: which of this deck's cards are due right now.
       try {
@@ -148,7 +153,7 @@ export default function DeckQuizScreen() {
   // ── Phase: chooser ────────────────────────────────────────────────────────────
 
   function choose(mode: 'quick' | 'full' | 'due') {
-    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode)
+    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode, undefined, { seen: seenRef.current })
     setExamQuestions(q)
     setPhase('exam')
   }

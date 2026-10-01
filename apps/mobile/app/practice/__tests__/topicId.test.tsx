@@ -33,6 +33,13 @@ jest.mock('../../../services/srsAggregates', () => ({
   getDueFlashcards: (...args: any[]) => mockGetDueFlashcards(...args),
 }))
 
+// P4 unseen-first: when each card was last served (default: never).
+let mockLastSeen = new Map<string, number>()
+const mockLastSeenOrEmpty = jest.fn(async (..._a: unknown[]) => mockLastSeen)
+jest.mock('../../../services/questionHistory', () => ({
+  lastSeenOrEmpty: (...a: unknown[]) => mockLastSeenOrEmpty(...a),
+}))
+
 function makeCardRow(id: string, question = `Question ${id}`) {
   return {
     id,
@@ -74,6 +81,20 @@ describe('[topicId] chooser — Due today (Task H)', () => {
   beforeEach(() => {
     mockGetDueFlashcards.mockReset()
     mockGetDueFlashcards.mockResolvedValue([])
+  })
+
+  it('P4: the quick quiz deals never-seen cards before seen ones', async () => {
+    const rows = Array.from({ length: 30 }, (_, i) => makeCardRow(`c${i}`))
+    mockDbInstance = makeDb(rows)
+    // c0..c14 served before; c15..c29 never.
+    mockLastSeen = new Map(Array.from({ length: 15 }, (_, i) => [`c${i}`, 100 + i]))
+    render(<QuizScreen />)
+    await act(async () => {})
+    expect(mockLastSeenOrEmpty).toHaveBeenCalledWith(expect.anything(), 'flashcards', expect.arrayContaining(['c0', 'c29']))
+    fireEvent.press(screen.getByRole('button', { name: /^Start quick set/ }))
+    const served = String(screen.getByTestId('exam').props.children).replace('exam:', '').split(',')
+    expect(new Set(served)).toEqual(new Set(Array.from({ length: 15 }, (_, i) => `c${i + 15}`)))
+    mockLastSeen = new Map()
   })
 
   it('does not show a "Due today" option when nothing in this topic is due', async () => {

@@ -28,8 +28,14 @@ jest.mock('../../../hooks/usePracticeData', () => ({
 }))
 
 const mockFocusListings: any[] = []
+const mockFocusLoaded = { value: true }
 jest.mock('../../../hooks/useFocusListings', () => ({
-  useFocusListings: () => ({ focusListings: mockFocusListings }),
+  useFocusListings: () => ({ focusListings: mockFocusListings, loaded: mockFocusLoaded.value }),
+}))
+
+const mockCountOpenMistakes = jest.fn()
+jest.mock('../../../services/questionHistory', () => ({
+  countOpenMistakes: (...a: any[]) => mockCountOpenMistakes(...a),
 }))
 
 const mockDecks: any[] = []
@@ -106,7 +112,90 @@ describe('PracticeScreen (redesign M2)', () => {
     mockLoadRun.mockReset().mockResolvedValue(null)
     mockCreateDeck.mockClear()
     mockFocusListings.splice(0)
+    mockFocusLoaded.value = true
+    mockCountOpenMistakes.mockReset().mockResolvedValue(0)
     mockDecks.splice(0)
+  })
+
+  // P4: a quick-start row at the top — Diagnostic, Sprint, Drill, Mistakes.
+  describe('quick start', () => {
+    const quick = () => screen.getByTestId('practice-quick-start')
+
+    it('offers four tiles, each a 44pt+ button', async () => {
+      await renderSettled()
+      const tiles = within(quick()).getAllByRole('button')
+      expect(tiles.map(b => b.props.accessibilityLabel)).toEqual([
+        'Diagnostic, See where you stand',
+        'Sprint, Pick an exam · 30 min',
+        'Drill, Choose an exam first',
+        'Mistakes, None yet',
+      ])
+    })
+
+    it('Diagnostic targets a non-UPCAT focus exam that has a runnable blueprint', async () => {
+      mockFocusListings.push({ slug: 'acet', priority: 1, addedAt: 0, title: 'ACET', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT, ACET])
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: /^Diagnostic/ }))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?exam=acet')
+    })
+
+    it('Diagnostic is the plain UPCAT diagnostic when UPCAT leads', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT])
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: /^Diagnostic/ }))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
+    })
+
+    it("Sprint opens the focus exam's prestart", async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([ACET, UPCAT])
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: 'Sprint, UPCAT · 30 min' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
+    })
+
+    it('Drill picks a UPCAT subtest when UPCAT is in focus', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: 'Drill, Pick a UPCAT subtest' }))
+      fireEvent.press(screen.getByRole('button', { name: 'Reading Comprehension' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/upcat/Reading%20Comprehension?mode=quick')
+    })
+
+    it('Drill otherwise opens the weakest topic', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's1', name: 'Math' }],
+        topicRows: [{ topic: { id: 't1', name: 'Fractions', subjectId: 's1' }, strength: 'Weak', cardCount: 5, lastPracticedAt: 1, accuracy: 30 }],
+        topicIdsByListingSlug: { acet: ['t1'] },
+      })
+      mockFocusListings.push({ slug: 'acet', priority: 1, addedAt: 0, title: 'ACET', type: 'exam' })
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: 'Drill, Fractions' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/t1')
+    })
+
+    it('Mistakes shows the count and opens Mistakes mode', async () => {
+      mockCountOpenMistakes.mockResolvedValue(3)
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: 'Mistakes, 3 to retry' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/mistakes')
+    })
+
+    it('Mistakes with none yet still opens (to the empty state)', async () => {
+      await renderSettled()
+      fireEvent.press(within(quick()).getByRole('button', { name: 'Mistakes, None yet' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/mistakes')
+    })
+
+    it('a failed count reads as unknown, never as an error', async () => {
+      jest.spyOn(console, 'warn').mockImplementationOnce(() => {})
+      mockCountOpenMistakes.mockRejectedValue(new Error('db'))
+      await renderSettled()
+      expect(within(quick()).getByRole('button', { name: 'Mistakes, Retry what you missed' })).toBeTruthy()
+    })
   })
 
   describe('header', () => {
@@ -400,19 +489,39 @@ describe('PracticeScreen (redesign M2)', () => {
   })
 
   describe('tools', () => {
+    const upcatFocus = () => mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+
     it.each([
       ['Estimated Admission Score', '/estimator'],
       ['Notes', '/notes'],
       ['Requirements', '/requirements'],
     ])('opens %s', async (name, href) => {
+      upcatFocus()
       await renderSettled()
       fireEvent.press(within(screen.getByTestId('practice-tools')).getByText(name))
       expect(router.push).toHaveBeenCalledWith(href)
     })
 
     it('frames the admission score as an estimate', async () => {
+      upcatFocus()
       await renderSettled()
       expect(within(screen.getByTestId('practice-tools')).getByText(/based on historical cutoffs/)).toBeTruthy()
+    })
+
+    // P4: the estimator is UPCAT-only, so its row shows only when UPCAT is in focus.
+    it('hides the Estimated Admission Score unless UPCAT is in focus', async () => {
+      mockFocusListings.push({ slug: 'acet', priority: 1, addedAt: 0, title: 'ACET', type: 'exam' })
+      await renderSettled()
+      const tools = screen.getByTestId('practice-tools')
+      expect(within(tools).queryByText('Estimated Admission Score')).toBeNull()
+      expect(within(tools).getByText('Notes')).toBeTruthy()
+    })
+
+    it('keeps it hidden until focus has loaded (no flicker)', async () => {
+      upcatFocus()
+      mockFocusLoaded.value = false
+      await renderSettled()
+      expect(within(screen.getByTestId('practice-tools')).queryByText('Estimated Admission Score')).toBeNull()
     })
   })
 

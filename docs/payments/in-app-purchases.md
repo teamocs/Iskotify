@@ -18,10 +18,11 @@ subscription. Bought once, it unlocks Android and web on the same account.
 |---|---|
 | Diagnostic test | Unlimited practice questions |
 | Explore, schools, scholarships | Unlimited full mock exams |
-| Notes, estimator, flashcards | Detailed explanation for every answer choice |
+| Notes, estimator, flashcards | |
 | Sprint mode (short timed mock) | |
 | 1 full mock exam per entrance exam | |
-| 30 practice questions per day (Manila time), with the main explanation | |
+| 30 practice questions per day (Manila time) | |
+| Every explanation: the main one and why each wrong choice is wrong | |
 
 Change the limits in `apps/mobile/utils/premiumLimits.ts`:
 
@@ -31,7 +32,9 @@ export const FREE_FULL_MOCKS_PER_EXAM = 1
 ```
 
 Never gated: the diagnostic, onboarding, Sprint, resuming a run already started.
-Flashcard quizzes are free.
+Flashcard quizzes are free. Explanations are free for everyone, including the
+per-option "why the others are wrong" ones (decision 2026-10; they may return to
+the paid list once at least 90% of questions have checked per-option explanations).
 
 ---
 
@@ -209,7 +212,7 @@ account, their entitlement is deleted and their payment records are unlinked
 | Play price | Play Console (the app shows the store's localized price) |
 | Turn web checkout off | `PAYMENTS_ENABLED` unset → checkout returns 503 (webhooks still honour paid payments) |
 | Turn the paywall off in the app | `EXPO_PUBLIC_PAYWALL_ENABLED` unset/`0` → no limits, no upgrade UI |
-| What Full Access includes | gates in `app/practice/upcat/[subtest].tsx`, `app/practice/exam/[slug].tsx`, `components/practice/ReviewCard.tsx`; then update the Terms section "Free features and Iskotify Full Access" |
+| What Full Access includes | Today: unlimited practice questions + unlimited full mocks. Gates in `app/practice/upcat/[subtest].tsx` (also serves `/practice/mistakes`) and `app/practice/exam/[slug].tsx`; the `INCLUDED` list in `app/upgrade.tsx`; then the Terms section "Free features and Iskotify Full Access". Per-option explanations (`components/practice/ReviewCard.tsx`) are free; re-gate them only once at least 90% of questions have checked ones |
 
 If the price or what's included changes, update `packages/utils/src/termsOfService.ts`
 in the same PR.

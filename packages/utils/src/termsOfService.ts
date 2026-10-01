@@ -77,8 +77,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: 'Free features and Iskotify Full Access',
     blocks: [
-      'Iskotify’s core features are free to use, and there are no ads. They stay free: the diagnostic, flashcards, Study Sprint, notes, scholarships, the Estimated Admission Score, one full mock exam per exam and a set number of practice questions each day.',
-      'Iskotify Full Access is an optional one-time purchase. It unlocks unlimited practice questions, unlimited full mock exams and detailed explanations for every answer choice. It isn’t a subscription: you pay once.',
+      'Iskotify’s core features are free to use, and there are no ads. They stay free: the diagnostic, flashcards, Study Sprint, notes, scholarships, the Estimated Admission Score, one full mock exam per exam and a set number of practice questions each day. Answer explanations stay free for everyone.',
+      'Iskotify Full Access is an optional one-time purchase. It unlocks unlimited practice questions and unlimited full mock exams. It isn’t a subscription: you pay once.',
       'Full Access may not be on sale yet everywhere Iskotify is available. Before you pay, we’ll show you the price and what Full Access includes.',
       'Full Access belongs to your Iskotify account, so you need to be signed in to buy it. Once you buy Full Access, you keep it for as long as we offer Iskotify, on every device you sign in to.',
       'In the Android app, you buy Full Access through Google Play, and Google Play’s refund process applies. You can also buy it on other Iskotify platforms where it’s offered. However you bought it, you can email us for a refund if Full Access doesn’t work as described and we can’t fix it, or where the law gives you a right to one.',

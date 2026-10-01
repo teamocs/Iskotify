@@ -77,7 +77,9 @@ describe('terms of service content (shared by the app and the website)', () => {
     // What it unlocks, matching the upgrade screen.
     expect(paid).toMatch(/unlimited practice questions/)
     expect(paid).toMatch(/unlimited full mock exams/)
-    expect(paid).toMatch(/explanations for every answer choice/)
+    // Explanations (including why each wrong choice is wrong) are free, never part of Full Access.
+    expect(paid).not.toMatch(/explanations for every answer choice/)
+    expect(paid).toMatch(/explanations stay free for everyone/)
     expect(paid).toMatch(/may not be on sale yet/)
     expect(paid).toMatch(/Before you pay, we’ll show you the price/)
     expect(paid).toMatch(/what Full Access includes/)

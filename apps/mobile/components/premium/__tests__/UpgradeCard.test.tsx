@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
-import { UpgradeCard, LockedOptionExplanations, PRACTICE_CAP_BODY } from '../UpgradeCard'
+import * as UpgradeCardModule from '../UpgradeCard'
+import { UpgradeCard, PRACTICE_CAP_BODY } from '../UpgradeCard'
 
 const mockPush = jest.fn()
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }))
@@ -21,11 +22,7 @@ describe('UpgradeCard', () => {
   })
 })
 
-describe('LockedOptionExplanations', () => {
-  it('is a short locked line with an upgrade link', () => {
-    render(<LockedOptionExplanations />)
-    expect(screen.getByText(/why each wrong choice is wrong/i)).toBeTruthy()
-    fireEvent.press(screen.getByRole('link', { name: /unlock full access/i }))
-    expect(mockPush).toHaveBeenCalledWith('/upgrade?from=option_explanations')
-  })
+// Per-option explanations are free for everyone now: no locked line exists.
+it('has no locked per-option explanations prompt any more', () => {
+  expect('LockedOptionExplanations' in UpgradeCardModule).toBe(false)
 })

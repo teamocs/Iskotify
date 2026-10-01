@@ -1,11 +1,11 @@
-import { View, Text, Pressable } from 'react-native'
+import { View, Text } from 'react-native'
 import { router, type Href } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Locked1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { spacing, radius, textStyle } from '../../theme/tokens'
 import { Button } from '../ui/Button'
-import { decorative, focusRing, heading, type WebPressableState } from '../ui/a11y'
+import { decorative, heading } from '../ui/a11y'
 import { FREE_DAILY_PRACTICE_QUESTIONS } from '../../utils/premiumLimits'
 
 // Iskotify Full Access (P3) prompts. Render these only when usePremium().enabled
@@ -48,41 +48,6 @@ export function UpgradeCard({ title, body, source, testID }: Props) {
       </View>
       <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>{body}</Text>
       <Button label="Unlock Full Access" fullWidth onPress={() => router.push(upgradeHref(source))} />
-    </View>
-  )
-}
-
-/** Stands in for the per-option "why the others are wrong" rows; the main explanation stays visible. */
-export function LockedOptionExplanations() {
-  const { theme: t } = useTheme()
-  return (
-    <View
-      style={{
-        flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.sm,
-        backgroundColor: t.surfaceSubtle, borderRadius: radius.md, borderCurve: 'continuous',
-        paddingHorizontal: spacing.md, marginTop: spacing.sm,
-      }}
-    >
-      <View {...decorative}>
-        <Lineicons icon={Locked1Outlined} size={16} color={t.textSecondary} />
-      </View>
-      <Text style={[textStyle('bodySm', t.textSecondary), { flexShrink: 1, paddingVertical: spacing.sm }]} maxFontSizeMultiplier={2}>
-        See why each wrong choice is wrong with Full Access.
-      </Text>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="Unlock Full Access to see why each wrong choice is wrong"
-        onPress={() => router.push(upgradeHref('option_explanations'))}
-        hitSlop={4}
-        style={(s) => [
-          { minHeight: 44, justifyContent: 'center' },
-          focusRing(t.focusRing, (s as WebPressableState).focused),
-        ]}
-      >
-        <Text style={[textStyle('label', t.accentText), { textDecorationLine: 'underline' }]} maxFontSizeMultiplier={2}>
-          Unlock
-        </Text>
-      </Pressable>
     </View>
   )
 }

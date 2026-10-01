@@ -6,8 +6,6 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bulb2Outlined } from '@lineiconshq/free-icons'
 import { decorative } from '../ui/a11y'
 import { spacing, radius } from '../../theme/tokens'
-import { usePremium } from '../../hooks/usePremium'
-import { LockedOptionExplanations } from '../premium/UpgradeCard'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
 
@@ -52,9 +50,7 @@ export function ReviewCard({
 }: ReviewCardProps) {
   const { theme: t, typo } = useTheme()
   const s = useMemo(() => makeStyles(t, typo), [t, typo])
-  // P3: per-option explanations are Full Access (always shown with the paywall flag off).
-  const { unlimited } = usePremium()
-
+  // Per-option explanations are free for everyone (not part of Full Access).
   const ok = selectedIndex === correctIndex
   const wrongRows = (optionExplanations ?? [])
     .map((text, i) => ({ i, text }))
@@ -109,9 +105,7 @@ export function ReviewCard({
         </View>
       ) : null}
 
-      {wrongRows.length > 0 && !unlimited ? <LockedOptionExplanations /> : null}
-
-      {wrongRows.length > 0 && unlimited ? (
+      {wrongRows.length > 0 ? (
         <View style={s.wrongBlock}>
           <Text style={s.explainLabel} maxFontSizeMultiplier={1.4}>Why the others are wrong</Text>
           {wrongRows.map(r => (

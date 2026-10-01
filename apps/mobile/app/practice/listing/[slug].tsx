@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
@@ -12,6 +12,7 @@ import { Bulb2Outlined } from '@lineiconshq/free-icons'
 import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
 import { classify } from '../../../utils/weakness'
 import { getDueFlashcards } from '../../../services/srsAggregates'
+import { lastSeenOrEmpty } from '../../../services/questionHistory'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
 import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
@@ -41,6 +42,9 @@ export default function ListingQuizScreen() {
 
   const [listingTitle, setListingTitle] = useState('')
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
+  // P4: when each card was last served, read once per load; the quick quiz deals
+  // never-seen cards first (history only improves the mix, never blocks it).
+  const seenRef = useRef<Map<string, number>>(new Map())
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   // Task H: due-today option — flashcardId → dueAt for cards in this pool that are due now.
@@ -142,6 +146,7 @@ export default function ListingQuizScreen() {
       prefetchSessionImages(parsed) // fire-and-forget; never blocks session start
       setAllQuestions(parsed)
       setPhase(parsed.length === 0 ? 'empty' : 'chooser')
+      void lastSeenOrEmpty(db, 'flashcards', parsed.map(q => q.id).filter((id): id is string => id != null)).then(m => { seenRef.current = m })
 
       // Task H: which of this pool's cards are due right now.
       try {
@@ -190,7 +195,7 @@ export default function ListingQuizScreen() {
   // card pool (which for mode=weak has already been narrowed to weak topics).
 
   function choose(size: 'quick' | 'full' | 'due') {
-    const q = size === 'due' ? dueQuestions : pickQuestions(allQuestions, size)
+    const q = size === 'due' ? dueQuestions : pickQuestions(allQuestions, size, undefined, { seen: seenRef.current })
     setExamQuestions(q)
     setPhase('exam')
   }

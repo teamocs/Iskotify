@@ -1,5 +1,7 @@
-// P3 Full Access: per-option explanations are a Full Access feature. The main
-// "why the correct answer is correct" explanation always stays visible.
+// Per-option "why the others are wrong" explanations are free for everyone
+// (decision 2026-10: they left Full Access, which is now only unlimited
+// practice questions and unlimited full mocks). They may return to the paid
+// list once >=90% of questions carry checked per-option explanations.
 import React from 'react'
 import { render, screen } from '@testing-library/react-native'
 import { ReviewCard } from '../ReviewCard'
@@ -20,29 +22,31 @@ const props = {
 
 beforeEach(() => Object.assign(mockPremium, { enabled: true, isPremium: false, unlimited: false, loading: false }))
 
-it('free: keeps the main explanation and shows a locked line instead of the per-option rows', () => {
+it('free (paywall on): shows the main explanation AND every per-option explanation, with no upgrade link', () => {
   render(<ReviewCard {...props} />)
   expect(screen.getByText('Manila is the capital.')).toBeTruthy()
-  expect(screen.queryByText(/Cebu is a city in the Visayas/)).toBeNull()
-  expect(screen.queryByText('Why the others are wrong')).toBeNull()
-  expect(screen.getByRole('link', { name: /unlock full access/i })).toBeTruthy()
+  expect(screen.getByText('Why the others are wrong')).toBeTruthy()
+  expect(screen.getByText(/Cebu is a city in the Visayas/)).toBeTruthy()
+  expect(screen.getByText(/Davao is in Mindanao/)).toBeTruthy()
+  expect(screen.queryByRole('link', { name: /unlock/i })).toBeNull()
+  expect(screen.queryByText(/Full Access/)).toBeNull()
 })
 
-it('Full Access: shows every per-option explanation', () => {
+it('Full Access: the same per-option explanations', () => {
   Object.assign(mockPremium, { isPremium: true, unlimited: true })
   render(<ReviewCard {...props} />)
   expect(screen.getByText(/Cebu is a city in the Visayas/)).toBeTruthy()
-  expect(screen.queryByRole('link', { name: /unlock full access/i })).toBeNull()
+  expect(screen.queryByRole('link', { name: /unlock/i })).toBeNull()
 })
 
-it('flag off: unchanged, every per-option explanation and no upgrade link', () => {
+it('flag off: every per-option explanation and no upgrade link', () => {
   Object.assign(mockPremium, { enabled: false, unlimited: true })
   render(<ReviewCard {...props} />)
   expect(screen.getByText(/Davao is in Mindanao/)).toBeTruthy()
   expect(screen.queryByRole('link', { name: /unlock/i })).toBeNull()
 })
 
-it('no per-option data: no locked line either', () => {
+it('no per-option data: no "why the others are wrong" block', () => {
   render(<ReviewCard {...props} optionExplanations={null} />)
-  expect(screen.queryByRole('link', { name: /unlock/i })).toBeNull()
+  expect(screen.queryByText('Why the others are wrong')).toBeNull()
 })

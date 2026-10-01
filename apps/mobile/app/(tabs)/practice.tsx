@@ -21,6 +21,9 @@ import { syncOnLaunch } from '../../services/sync'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
 import { runKeyFor } from '../../utils/examRunPersistence'
 import { pickNextPractice, nextPracticeCopy, type NextPracticeInput } from '../../utils/nextPracticeAction'
+import { quickStartTiles, upcatInFocus, upcatSubtestHref, type QuickStartTile } from '../../utils/practiceQuickStart'
+import { SUBTESTS } from '../../utils/upcatExam'
+import { countOpenMistakes } from '../../services/questionHistory'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { Screen } from '../../components/ui/Screen'
@@ -35,6 +38,8 @@ import { ErrorState } from '../../components/ui/ErrorState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { focusRing, type WebPressableState } from '../../components/ui/a11y'
 import { NextStepCard } from '../../components/practice/NextStepCard'
+import { QuickStartRow } from '../../components/practice/QuickStartRow'
+import { Sheet } from '../../components/ui/Sheet'
 import { DeckRow } from '../../components/practice/DeckRow'
 import { PracticeSearchSheet, NewDeckSheet, type SearchEntry } from '../../components/practice/PracticeSheets'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -42,18 +47,19 @@ import { confirmAction } from '../../utils/confirmAction'
 
 // Practice tab — redesign M2, direction C ("One Next Step").
 // Order of the page answers "what do I practise now?" before anything else:
+//   0. Quick start — Diagnostic, Sprint, Drill, Mistakes (P4; surface tiles)
 //   1. Next step   — ONE action, the tab's only maroon button
 //   2. Mock exams  — up to 4, focus exams first
 //   3. Subjects    — A–Z, readiness as a number
 //   4. Your decks  — saved topic bundles, with due counts
-//   5. Tools       — Estimated Admission Score, Notes, Requirements
+//   5. Tools       — Estimated Admission Score (UPCAT focus only), Notes, Requirements
 // Readiness grids and My Focus live on Today/Progress now (no duplication).
 
 type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error' }
 
 type InProgressRun = { slug: string; title: string; answered: number; total: number; updatedAt: number }
 
-const CACHE_KEYS = ['practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list'] as const
+const CACHE_KEYS = ['practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list', 'practice:mistakesCount'] as const
 
 function minutes(n: number): string {
   return n < 60 ? `${n} min` : `${Math.round((n / 60) * 10) / 10} h`
@@ -94,12 +100,13 @@ export default function PracticeScreen() {
   const db = useDb()
   const bp = useBreakpoint()
   const { subjects, topicRows, cardCountByTopic, topicIdsByListingSlug, refresh, loaded } = usePracticeData()
-  const { focusListings } = useFocusListings()
+  const { focusListings, loaded: focusLoaded } = useFocusListings()
   const { decks, createDeck, deleteDeck } = useSavedDecks()
   const { loadRun } = useExamRunPersistence()
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [deckOpen, setDeckOpen] = useState(false)
+  const [subtestOpen, setSubtestOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
   // ── Data ─────────────────────────────────────────────────────────────────
@@ -133,6 +140,25 @@ export default function PracticeScreen() {
         if (!cancelled) setDueCounts({ total: 0, byTopic: {} })
       })
     return () => { cancelled = true }
+  }, [db, reloadKey])
+
+  // Open mistakes for the quick-start tile; null while loading or unreadable
+  // (the tile then just says what Mistakes is, never shows an error).
+  const [mistakesCount, setMistakesCount] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    cachedQuery('practice:mistakesCount', 30_000, () => countOpenMistakes(db))
+      .then(n => { if (!cancelled) setMistakesCount(n) })
+      .catch(e => {
+        console.warn('[practice/mistakesCount] load failed:', e)
+        if (!cancelled) setMistakesCount(null)
+      })
+    // A finished session invalidates 'practice:' and refetches in the background;
+    // take the fresh count so the tile is right when the student comes back.
+    const unsub = subscribe('practice:mistakesCount', n => {
+      if (!cancelled && typeof n === 'number') setMistakesCount(n)
+    })
+    return () => { cancelled = true; unsub() }
   }, [db, reloadKey])
 
   const [blueprints, setBlueprints] = useState<Load<RunnableBlueprint[]>>({ status: 'loading' })
@@ -224,6 +250,17 @@ export default function PracticeScreen() {
     }))
   }, [dueCounts, resume, blueprints.status, weakTopic, focusBlueprint])
 
+  const quickTiles = useMemo(() => quickStartTiles({
+    focusSlugs,
+    blueprints: blueprints.status === 'ready' ? blueprints.data : [],
+    weakTopic,
+    mistakesCount,
+  }), [focusSlugs, blueprints, weakTopic, mistakesCount])
+
+  // The estimator is UPCAT-only: its row shows only once focus has loaded and
+  // includes UPCAT (no flash of it for everyone else). /estimator stays reachable.
+  const showEstimator = focusLoaded && upcatInFocus(focusSlugs)
+
   // Subjects A–Z with recent-accuracy readiness (same source as Progress).
   const subjectRows = useMemo(() => {
     if (readiness.status !== 'ready') return []
@@ -279,6 +316,7 @@ export default function PracticeScreen() {
   const deckDue = (d: SavedDeck) => d.topicIds.reduce((n, id) => n + (dueCounts?.byTopic[id] ?? 0), 0)
 
   const go = (href: string) => router.push(href as never)
+  const openQuickTile = (tile: QuickStartTile) => { if (tile.href) go(tile.href); else setSubtestOpen(true) }
 
   // ── Sections ─────────────────────────────────────────────────────────────
 
@@ -386,12 +424,14 @@ export default function PracticeScreen() {
     <View testID="practice-tools">
       <SectionHeader title="Tools" />
       <RowGroup>
-        <ListRow
-          leading={<RowIcon icon={Calculator1Outlined} />}
-          title="Estimated Admission Score"
-          subtitle="An estimate based on historical cutoffs"
-          onPress={() => go('/estimator')}
-        />
+        {showEstimator ? (
+          <ListRow
+            leading={<RowIcon icon={Calculator1Outlined} />}
+            title="Estimated Admission Score"
+            subtitle="An estimate based on historical cutoffs"
+            onPress={() => go('/estimator')}
+          />
+        ) : null}
         <ListRow leading={<RowIcon icon={Notebook1Outlined} />} title="Notes" subtitle="Your study notes and reminders" onPress={() => go('/notes')} />
         <ListRow
           leading={<RowIcon icon={ClipboardOutlined} />}
@@ -422,6 +462,7 @@ export default function PracticeScreen() {
 
   const primary = (
     <View style={{ gap: spacing.xxl }}>
+      <QuickStartRow tiles={quickTiles} onPress={openQuickTile} />
       <NextStepCard copy={nextCopy} onAction={go} />
       {mocksSection}
       {subjectsSection}
@@ -459,6 +500,13 @@ export default function PracticeScreen() {
       </Screen>
 
       <PracticeSearchSheet visible={searchOpen} entries={searchEntries} onClose={() => setSearchOpen(false)} onOpen={go} />
+      <Sheet visible={subtestOpen} title="Drill a UPCAT subtest" onClose={() => setSubtestOpen(false)}>
+        <RowGroup>
+          {SUBTESTS.map(st => (
+            <ListRow key={st} title={st} onPress={() => { setSubtestOpen(false); go(upcatSubtestHref(st)) }} />
+          ))}
+        </RowGroup>
+      </Sheet>
       <NewDeckSheet visible={deckOpen} subjects={subjects} topicRows={topicRows} onClose={() => setDeckOpen(false)} onCreate={createDeck} />
     </>
   )

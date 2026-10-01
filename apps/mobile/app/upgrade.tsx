@@ -35,14 +35,15 @@ type Phase =
   | 'error'
   | 'not_found'   // restore found nothing
 
+// Explanations (the main one and the per-option ones) are free for everyone,
+// so Full Access is exactly these two lines.
 const INCLUDED = [
   'Unlimited practice questions, every day',
   'Unlimited full mock exams',
-  'Why each wrong choice is wrong, on every question',
 ] as const
 
 const STILL_FREE =
-  `Still free for everyone: the diagnostic, flashcards, Study Sprint, notes, scholarships, the estimator, one full mock per exam and ${FREE_DAILY_PRACTICE_QUESTIONS} practice questions a day.`
+  `Still free for everyone: the diagnostic, flashcards, Study Sprint, notes, scholarships, the estimator, every explanation, one full mock per exam and ${FREE_DAILY_PRACTICE_QUESTIONS} practice questions a day.`
 
 const signInHref = (Platform.OS === 'web' ? '/auth/sign-in' : '/landing') as Href
 

@@ -1,3 +1,5 @@
+import { rankUnseenFirst, servedOrder, type SamplingOptions } from './unseenFirst'
+
 export const QUICK_SIZE = 15
 export const FULL_CAP = 60
 
@@ -28,12 +30,6 @@ export function dedupeByStem<T extends { stem: string }>(items: T[]): T[] {
   return out
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j]!, a[i]!] }
-  return a
-}
-
 /**
  * pickQuestions — sizes/orders a deduped (dedupeByStem) card pool for a quiz run.
  *
@@ -43,11 +39,16 @@ function shuffle<T>(arr: T[]): T[] {
  * (smallest/oldest dueAt), capped at FULL_CAP. Items without an `id` or with
  * no entry in `dueAtById` are dropped, so passing an empty/undefined map
  * yields an empty due session rather than silently falling back to "all".
+ *
+ * 'quick' mode (P4) is unseen-first when `sampling.seen` is given (flashcard
+ * id -> last served, source 'flashcards'; utils/unseenFirst): never-served
+ * cards first, then the least recently served, dealt in random order.
  */
 export function pickQuestions<T extends { stem: string; id?: string }>(
   all: T[],
   mode: 'quick' | 'full' | 'due',
   dueAtById?: Record<string, number>,
+  sampling: SamplingOptions = {},
 ): T[] {
   const deduped = dedupeByStem(all)
 
@@ -60,5 +61,7 @@ export function pickQuestions<T extends { stem: string; id?: string }>(
 
   if (mode === 'full') return deduped.slice(0, FULL_CAP)
   if (deduped.length <= QUICK_SIZE) return deduped
-  return shuffle(deduped).slice(0, QUICK_SIZE)
+  const rng = sampling.rng ?? Math.random
+  const ranked = rankUnseenFirst(deduped, item => (item.id != null ? [item.id] : []), sampling.seen, rng)
+  return servedOrder(ranked.slice(0, QUICK_SIZE), sampling)
 }

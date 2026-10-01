@@ -669,6 +669,12 @@ export const MIGRATIONS = [
   // ── P4 short onboarding: the scholarship-profile prompt on Today ──
   // Epoch ms the student dismissed it; 0 = never. Device-local: pullUserData doesn't restore it.
   `ALTER TABLE user_settings ADD COLUMN profile_prompt_dismissed_at INTEGER NOT NULL DEFAULT 0`,
+  // ── P4 practice core: per-question history lookups ──────────────────────────
+  // Unseen-first sampling reads MAX(answered_at) per (source_table, question_id)
+  // and Mistakes mode scans answered UPCAT attempts per question
+  // (services/questionHistory.ts). answered_at is included so the last-seen
+  // lookup is answered from the index alone.
+  `CREATE INDEX IF NOT EXISTS question_attempts_source_question_idx ON question_attempts (source_table, question_id, answered_at)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

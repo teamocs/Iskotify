@@ -41,6 +41,9 @@ export function swapPriority(rows: FocusListing[], slug: string, direction: 'up'
 export function useFocusListings() {
   const db = useDb()
   const [focusListingsList, setFocusListingsList] = useState<FocusListing[]>([])
+  // True once the first read finished: an empty list before that means
+  // "not read yet", not "no focus" (avoids focus-gated UI flicker).
+  const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     const rows = await db
@@ -79,6 +82,7 @@ export function useFocusListings() {
       }
     }
     setFocusListingsList(mapped)
+    setLoaded(true)
   }, [db])
 
   const refresh = useCallback(async () => {
@@ -141,5 +145,5 @@ export function useFocusListings() {
     return focusListingsList.find(r => r.slug === slug)?.priority ?? null
   }
 
-  return { focusListings: focusListingsList, addListing, removeListing, moveListing, isInFocus, getPriority, refresh }
+  return { focusListings: focusListingsList, loaded, addListing, removeListing, moveListing, isInFocus, getPriority, refresh }
 }
