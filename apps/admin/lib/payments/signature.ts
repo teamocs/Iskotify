@@ -16,8 +16,17 @@ export function safeEqual(received: string, expected: string): boolean {
 
 export type SignatureResult = { ok: true } | { ok: false; reason: 'missing' | 'malformed' | 'expired' | 'mismatch' }
 
-/** PayMongo signs `${t}.${rawBody}`; we reject anything older (or newer) than this. */
-export const PAYMONGO_TOLERANCE_SEC = 5 * 60
+// How old a signature may be. PayMongo retries a failed delivery up to 12 times
+// on an exponential backoff whose intervals it does not publish, and its docs do
+// not say whether a retry is re-signed with a fresh `t`. A 5-minute window could
+// therefore reject every retry of a paid event. Replays are instead stopped by
+// event-id idempotency (payment_events primary key): a replayed body can only
+// re-deliver an event already processed, which is a no-op. 3 days bounds how
+// long a captured request stays usable at all.
+// https://docs.paymongo.com/docs/developer-tools-retry-logic
+export const PAYMONGO_MAX_AGE_SEC = 3 * 24 * 60 * 60
+/** Clock skew allowed for a timestamp in the future. */
+export const PAYMONGO_MAX_SKEW_SEC = 5 * 60
 
 /**
  * Verifies a `Paymongo-Signature` header: `t=<unix seconds>,te=<test sig>,li=<live sig>`.
@@ -43,7 +52,8 @@ export function verifyPaymongoSignature(args: {
 
   const t = parts.t ?? ''
   if (!/^\d+$/.test(t)) return { ok: false, reason: 'malformed' }
-  if (Math.abs(nowMs / 1000 - Number(t)) > PAYMONGO_TOLERANCE_SEC) return { ok: false, reason: 'expired' }
+  const age = nowMs / 1000 - Number(t)
+  if (age > PAYMONGO_MAX_AGE_SEC || age < -PAYMONGO_MAX_SKEW_SEC) return { ok: false, reason: 'expired' }
 
   const received = (livemode ? parts.li : parts.te) ?? ''
   if (!secret || !received) return { ok: false, reason: 'mismatch' }

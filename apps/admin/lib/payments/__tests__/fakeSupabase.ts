@@ -8,10 +8,32 @@ export function fakeSupabase() {
   const entitlements = new Map<string, FakeRow>()
   const events = new Map<string, FakeRow>()
   const users = new Set<string>()
-  const fail = { insertEvent: false, upsert: false, select: false, getUserById: false }
+  const fail = { insertEvent: false, rpc: false, select: false, getUserById: false }
   const tokens = new Map<string, string>()
 
+  // Mirrors migration 067's grant_entitlement / revoke_play_entitlement.
+  const rpc = vi.fn(async (fn: string, args: { p_uid: string; p_source?: string }) => {
+    if (fail.rpc) return { data: null, error: { message: 'db down' } }
+    const now = new Date().toISOString()
+    const e = entitlements.get(args.p_uid)
+    if (fn === 'grant_entitlement') {
+      if (e && e.premium && args.p_source === 'play' && e.source !== 'play') return { data: false, error: null }
+      entitlements.set(args.p_uid, {
+        user_id: args.p_uid, premium: true, source: args.p_source,
+        granted_at: e?.premium ? (e.granted_at ?? now) : now, revoked_at: null, updated_at: now,
+      })
+      return { data: true, error: null }
+    }
+    if (fn === 'revoke_play_entitlement') {
+      if (!e || !e.premium || e.source !== 'play') return { data: false, error: null }
+      entitlements.set(args.p_uid, { ...e, premium: false, revoked_at: now, updated_at: now })
+      return { data: true, error: null }
+    }
+    throw new Error(`unexpected rpc ${fn}`)
+  })
+
   const client = {
+    rpc,
     auth: {
       getUser: vi.fn(async (token: string) => {
         const id = tokens.get(token)
@@ -32,12 +54,6 @@ export function fakeSupabase() {
         if (fail.insertEvent) return { error: { code: 'XX000', message: 'db down' } }
         if (events.has(row.id as string)) return { error: { code: '23505', message: 'duplicate key' } }
         events.set(row.id as string, row)
-        return { error: null }
-      }),
-      upsert: vi.fn(async (row: FakeRow) => {
-        if (table !== 'entitlements') throw new Error(`unexpected upsert into ${table}`)
-        if (fail.upsert) return { error: { message: 'db down' } }
-        entitlements.set(row.user_id as string, row)
         return { error: null }
       }),
       select: vi.fn(() => ({

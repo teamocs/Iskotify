@@ -1,5 +1,5 @@
 import type { createServerClient } from '@iskotify/utils'
-import { isUuid, planGrant, planRevoke, type EntitlementRow, type EntitlementSource } from './entitlementRules'
+import { isUuid, type EntitlementSource } from './entitlementRules'
 
 // Database side of the payment webhooks (migration 067), over the service-role
 // client. Every function throws on a database error so the route can answer 500
@@ -13,7 +13,8 @@ export type PaymentEvent = {
   user_id: string | null
   type: string
   amount_centavos: number | null
-  payload: unknown
+  /** A minimal record (see minimalPaymongoPayload / minimalRevenueCatPayload), never the raw body. */
+  payload: Record<string, unknown>
 }
 
 /** Inserts the event; 'duplicate' when its id was already recorded (a replay). */
@@ -39,33 +40,19 @@ export async function userExists(db: Db, id: unknown): Promise<boolean> {
   return false
 }
 
-async function readEntitlement(db: Db, userId: string): Promise<EntitlementRow | null> {
-  const { data, error } = await db
-    .from('entitlements')
-    .select('premium, source, granted_at, revoked_at')
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (error) throw new Error(`entitlements read failed: ${error.message}`)
-  return (data as EntitlementRow | null) ?? null
+/**
+ * Grants Full Access through the atomic SQL function (067). False when the rules
+ * left the row alone (a Play grant never overrides web/grandfather/admin).
+ */
+export async function grantEntitlement(db: Db, userId: string, source: EntitlementSource): Promise<boolean> {
+  const { data, error } = await db.rpc('grant_entitlement', { p_uid: userId, p_source: source })
+  if (error) throw new Error(`grant_entitlement failed: ${error.message}`)
+  return data === true
 }
 
-/**
- * Applies a grant or revoke per entitlementRules. Returns whether a row was
- * written ('unchanged' when the rules say leave it alone).
- */
-export async function applyEntitlement(
-  db: Db,
-  userId: string,
-  action: { kind: 'grant'; source: EntitlementSource } | { kind: 'revoke' },
-  now = new Date(),
-): Promise<'written' | 'unchanged'> {
-  const current = await readEntitlement(db, userId)
-  const iso = now.toISOString()
-  const next = action.kind === 'grant' ? planGrant(current, action.source, iso) : planRevoke(current, iso)
-  if (!next) return 'unchanged'
-  const { error } = await db
-    .from('entitlements')
-    .upsert({ user_id: userId, ...next, updated_at: iso }, { onConflict: 'user_id' })
-  if (error) throw new Error(`entitlements upsert failed: ${error.message}`)
-  return 'written'
+/** Revokes a 'play' grant only, atomically (067). False when there was none to revoke. */
+export async function revokePlayEntitlement(db: Db, userId: string): Promise<boolean> {
+  const { data, error } = await db.rpc('revoke_play_entitlement', { p_uid: userId })
+  if (error) throw new Error(`revoke_play_entitlement failed: ${error.message}`)
+  return data === true
 }

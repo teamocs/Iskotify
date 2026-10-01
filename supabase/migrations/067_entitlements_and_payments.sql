@@ -12,12 +12,26 @@
 --   source: 'play' (Google Play via RevenueCat), 'web' (PayMongo), 'grandfather'
 --   (early supporters), 'admin' (granted by staff). A Play refund or expiry only
 --   ever revokes a 'play' grant; the server never revokes the other sources.
+--   Writes go through grant_entitlement / revoke_play_entitlement below, each a
+--   single atomic statement, so two concurrent webhooks cannot interleave a
+--   read-then-write (e.g. a Play refund racing a web purchase).
 --
 -- public.payment_events: every verified webhook event, keyed by the provider's
 --   event id. The primary key is the idempotency guard (a replayed event conflicts
 --   and is skipped), and the rows are the purchase records. No client access at
 --   all. user_id has NO foreign key: purchase records are kept for tax after an
---   account is deleted, and delete_user_data sets user_id to NULL.
+--   account is deleted, and delete_user_data sets user_id to NULL. payload is a
+--   MINIMAL record built by the admin routes (event id, type, transaction/session
+--   id, amount, currency, mode/environment, store, product): never the provider's
+--   full body, so no name, email, phone, alias, metadata or user id is kept and
+--   nulling user_id really unlinks the person.
+--
+-- RevenueCat setup: Project settings -> Restore behavior must be
+--   "Keep with original App User ID". With "Transfer to new App User ID", a
+--   restore on another account moves the Play purchase; the webhook handles that
+--   TRANSFER event (revokes the senders' 'play' grants, grants the receivers
+--   'play'), but keeping purchases with the original id avoids the churn and the
+--   window between the two webhooks.
 --
 -- delete_user_data (064) is replaced with the same definition plus:
 --   'entitlements:user_id' in the delete list (before profiles), and
@@ -42,6 +56,15 @@
 --        select user_id from public.payment_events where id = 'evt_manual_test';
 --                                                    -- NULL (row kept)
 --   6. Clean up: delete from public.payment_events where id = 'evt_manual_test';
+--   7. Grant/revoke rules, as service_role on a throwaway user Z:
+--        select public.grant_entitlement('<Z>', 'play');      -- true, source play
+--        select public.grant_entitlement('<Z>', 'play');      -- true, granted_at unchanged
+--        select public.revoke_play_entitlement('<Z>');        -- true, premium false
+--        select public.grant_entitlement('<Z>', 'web');       -- true, source web
+--        select public.grant_entitlement('<Z>', 'play');      -- false (web kept)
+--        select public.revoke_play_entitlement('<Z>');        -- false (web kept)
+--      As authenticated: select public.grant_entitlement('<Z>', 'admin');
+--                                                    -- permission denied
 
 CREATE TABLE IF NOT EXISTS public.entitlements (
   user_id    uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -76,6 +99,72 @@ CREATE INDEX IF NOT EXISTS payment_events_user_id_idx ON public.payment_events (
 ALTER TABLE public.payment_events ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON public.payment_events FROM anon, authenticated;
+
+-- Grant Full Access atomically. Rules, enforced in one INSERT .. ON CONFLICT:
+--   • a 'play' grant never overrides an active web/grandfather/admin grant;
+--   • any other grant (including web over play) takes over the source;
+--   • re-granting an active grant keeps its original granted_at (replays);
+--   • revoked_at is cleared.
+-- Returns true when the row was written, false when the rules left it alone.
+-- Plain (SECURITY INVOKER) function: the service role already bypasses RLS and
+-- holds the table privileges; clients cannot execute it.
+CREATE OR REPLACE FUNCTION public.grant_entitlement(p_uid uuid, p_source text)
+RETURNS boolean
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  v_rows int;
+BEGIN
+  IF p_uid IS NULL THEN
+    RAISE EXCEPTION 'p_uid is required' USING ERRCODE = '22004';
+  END IF;
+  IF p_source IS NULL OR p_source NOT IN ('play', 'web', 'grandfather', 'admin') THEN
+    RAISE EXCEPTION 'invalid source %', p_source USING ERRCODE = '22023';
+  END IF;
+
+  INSERT INTO public.entitlements AS e (user_id, premium, source, granted_at, revoked_at, updated_at)
+  VALUES (p_uid, true, p_source, now(), NULL, now())
+  ON CONFLICT (user_id) DO UPDATE SET
+    premium    = true,
+    source     = EXCLUDED.source,
+    granted_at = CASE WHEN e.premium THEN COALESCE(e.granted_at, EXCLUDED.granted_at) ELSE EXCLUDED.granted_at END,
+    revoked_at = NULL,
+    updated_at = now()
+  WHERE NOT (e.premium AND EXCLUDED.source = 'play' AND e.source <> 'play');
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows > 0;
+END;
+$$;
+
+-- Revoke a Play grant (refund, expiry, transfer away) atomically. Never touches
+-- a web/grandfather/admin grant. Returns true when a row changed.
+CREATE OR REPLACE FUNCTION public.revoke_play_entitlement(p_uid uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+  v_rows int;
+BEGIN
+  IF p_uid IS NULL THEN
+    RAISE EXCEPTION 'p_uid is required' USING ERRCODE = '22004';
+  END IF;
+
+  UPDATE public.entitlements
+     SET premium = false, revoked_at = now(), updated_at = now()
+   WHERE user_id = p_uid AND premium AND source = 'play';
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RETURN v_rows > 0;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.grant_entitlement(uuid, text) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.grant_entitlement(uuid, text) TO service_role;
+REVOKE ALL ON FUNCTION public.revoke_play_entitlement(uuid) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.revoke_play_entitlement(uuid) TO service_role;
 
 -- 064's function, with entitlements deleted and payment_events unlinked.
 CREATE OR REPLACE FUNCTION public.delete_user_data(p_uid uuid)

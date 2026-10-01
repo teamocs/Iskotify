@@ -53,13 +53,18 @@ describe('verifyPaymongoSignature', () => {
     expect(verify(header({ t: T, te: sign(T) }), { body: pretty })).toMatchObject({ ok: false })
   })
 
-  it('rejects a timestamp older than 5 minutes (replay)', () => {
-    const old = T - 301
+  it('accepts an old timestamp within 3 days (a PayMongo retry may carry the original t)', () => {
+    const t = T - 3 * 24 * 3600 + 60
+    expect(verify(header({ t, te: sign(t) }))).toEqual({ ok: true })
+  })
+
+  it('rejects a timestamp older than 3 days', () => {
+    const old = T - 3 * 24 * 3600 - 1
     expect(verify(header({ t: old, te: sign(old) }))).toMatchObject({ ok: false, reason: 'expired' })
   })
 
-  it('accepts a timestamp just inside the 5 minute window', () => {
-    const t = T - 299
+  it('accepts a timestamp slightly in the future (clock skew within 5 minutes)', () => {
+    const t = T + 299
     expect(verify(header({ t, te: sign(t) }))).toEqual({ ok: true })
   })
 

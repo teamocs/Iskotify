@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
-import { classifyRevenueCatEvent, type RevenueCatDecision } from '@/lib/payments/entitlementRules'
+import { classifyRevenueCatEvent, minimalRevenueCatPayload, type RevenueCatDecision } from '@/lib/payments/entitlementRules'
 import { safeEqual } from '@/lib/payments/signature'
-import { applyEntitlement, forgetEvent, recordEvent, userExists } from '@/lib/payments/store'
+import { forgetEvent, grantEntitlement, recordEvent, revokePlayEntitlement, userExists } from '@/lib/payments/store'
 
 export const runtime = 'nodejs'
 
@@ -13,12 +13,17 @@ export const runtime = 'nodejs'
 // in RevenueCat's webhook settings). Body: { api_version, event: {...} }.
 // https://www.revenuecat.com/docs/integrations/webhooks
 //
-//   INITIAL_PURCHASE / NON_RENEWING_PURCHASE with 'premium' -> premium, source 'play'
+//   INITIAL_PURCHASE / NON_RENEWING_PURCHASE with 'premium' -> grant 'play'
 //   CANCELLATION (CUSTOMER_SUPPORT = refund) / EXPIRATION   -> revoke, ONLY a 'play' grant
-//   anonymous ids ($RCAnonymousID:...), unknown users, TRANSFER, other types
-//                                                           -> 200, logged, no change
-// Every verified event is recorded in payment_events (the idempotency key is
-// event.id). A failed write forgets the event and answers 500 so RevenueCat retries.
+//   TRANSFER -> revoke the senders' 'play' grants, grant the (existing) receivers
+//               'play'; otherwise a restore onto a second account followed by a
+//               refund would leave the first account premium for free
+//   anonymous ids ($RCAnonymousID:...), unknown users, other types -> 200, logged
+//   non-PRODUCTION events -> ignored unless REVENUECAT_ALLOW_SANDBOX === 'true'
+// Every verified event is recorded in payment_events as a MINIMAL record (no user
+// ids, aliases or subscriber attributes); event.id is the idempotency key. A
+// failed write forgets the event and answers 500 so RevenueCat retries; every
+// write is idempotent, so a retry may safely repeat a partly applied transfer.
 //
 // Not gated by PAYMENTS_ENABLED: a purchase that did happen is always honoured;
 // without REVENUECAT_WEBHOOK_AUTH nothing is accepted.
@@ -58,24 +63,36 @@ export async function POST(req: NextRequest) {
     return json({ error: 'not_configured' }, 500)
   }
 
-  let decision: RevenueCatDecision = classifyRevenueCatEvent(event)
-  if (decision.kind !== 'ignore') {
-    try {
+  let decision: RevenueCatDecision = classifyRevenueCatEvent(event, {
+    allowSandbox: process.env.REVENUECAT_ALLOW_SANDBOX === 'true',
+  })
+  try {
+    if (decision.kind === 'grant' || decision.kind === 'revoke') {
       if (!(await userExists(db, decision.userId))) decision = { kind: 'ignore', reason: 'no such user' }
-    } catch (err) {
-      console.error('[payments/revenuecat] user lookup failed:', err)
-      return json({ error: 'server_error' }, 500)
+    } else if (decision.kind === 'transfer') {
+      // Senders are revoked by id (a no-op for a missing row); receivers must exist.
+      const grantTo: string[] = []
+      for (const id of decision.grantTo) if (await userExists(db, id)) grantTo.push(id)
+      decision = { ...decision, grantTo }
     }
+  } catch (err) {
+    console.error('[payments/revenuecat] user lookup failed:', err)
+    return json({ error: 'server_error' }, 500)
   }
+
+  const linkedUser =
+    decision.kind === 'grant' || decision.kind === 'revoke' ? decision.userId
+    : decision.kind === 'transfer' ? decision.grantTo[0] ?? null
+    : null
 
   try {
     const recorded = await recordEvent(db, {
       id: eventId,
       provider: 'revenuecat',
-      user_id: decision.kind === 'ignore' ? null : decision.userId,
+      user_id: linkedUser,
       type,
       amount_centavos: amountCentavos(event),
-      payload: body,
+      payload: minimalRevenueCatPayload(event),
     })
     if (recorded === 'duplicate') return json({ received: true, duplicate: true })
   } catch (err) {
@@ -89,9 +106,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const action = decision.kind === 'grant' ? { kind: 'grant' as const, source: 'play' as const } : { kind: 'revoke' as const }
-    const result = await applyEntitlement(db, decision.userId, action)
-    console.info('[payments/revenuecat]', type, eventId, decision.kind, result)
+    if (decision.kind === 'grant') {
+      const written = await grantEntitlement(db, decision.userId, 'play')
+      console.info('[payments/revenuecat]', type, eventId, 'grant', written ? 'written' : 'unchanged')
+    } else if (decision.kind === 'revoke') {
+      const written = await revokePlayEntitlement(db, decision.userId)
+      console.info('[payments/revenuecat]', type, eventId, 'revoke', written ? 'written' : 'unchanged')
+    } else {
+      for (const id of decision.revokeFrom) await revokePlayEntitlement(db, id)
+      for (const id of decision.grantTo) await grantEntitlement(db, id, 'play')
+      console.info('[payments/revenuecat] TRANSFER', eventId, `revoked ${decision.revokeFrom.length}, granted ${decision.grantTo.length}`)
+    }
   } catch (err) {
     console.error('[payments/revenuecat] entitlement write failed:', err)
     await forgetEvent(db, eventId)

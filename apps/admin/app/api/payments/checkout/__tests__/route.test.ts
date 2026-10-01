@@ -179,11 +179,20 @@ describe('CORS for the web app', () => {
     expect(res.headers.get('Access-Control-Allow-Methods')).toMatch(/POST/)
   })
 
-  it('allows the Expo web dev server and nothing else', async () => {
+  it('allows the Expo web dev server outside production, and nothing else', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
     const dev = await OPTIONS({ headers: new Headers({ origin: 'http://localhost:8081' }) } as never)
     expect(dev.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:8081')
     const evil = await OPTIONS({ headers: new Headers({ origin: 'https://evil.example' }) } as never)
     expect(evil.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+
+  it('does not allow localhost in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const dev = await OPTIONS({ headers: new Headers({ origin: 'http://localhost:8081' }) } as never)
+    expect(dev.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    const prod = await OPTIONS({ headers: new Headers({ origin: 'https://app.iskotify.ph' }) } as never)
+    expect(prod.headers.get('Access-Control-Allow-Origin')).toBe('https://app.iskotify.ph')
   })
 
   it('adds the allow-origin header to real responses, including errors', async () => {

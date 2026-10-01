@@ -86,4 +86,48 @@ describe('migration 067: entitlements and payment_events', () => {
   it('documents manual verification', () => {
     expect(sql).toMatch(/MANUAL VERIFICATION/i)
   })
+
+  it('documents the RevenueCat restore behaviour the TRANSFER handling relies on', () => {
+    expect(sql).toMatch(/Keep with original App User ID/)
+  })
+})
+
+describe('migration 067: atomic grant/revoke functions (service role only)', () => {
+  const fn = (name: string) => {
+    const m = code.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\$\\$;`))
+    return m ? m[0] : ''
+  }
+  const grant = fn('grant_entitlement')
+  const revoke = fn('revoke_play_entitlement')
+
+  it('defines both functions with an empty search_path and NOT security definer', () => {
+    expect(grant).toMatch(/grant_entitlement\(p_uid uuid, p_source text\)/)
+    expect(revoke).toMatch(/revoke_play_entitlement\(p_uid uuid\)/)
+    for (const f of [grant, revoke]) {
+      expect(f).toMatch(/SET search_path = ''/)
+      expect(f).not.toMatch(/SECURITY DEFINER/i)
+      expect(f).toMatch(/p_uid IS NULL[\s\S]{0,80}RAISE EXCEPTION/)
+    }
+  })
+
+  it('grant is one atomic upsert: play never overrides another source, granted_at kept on replay', () => {
+    expect(grant).toMatch(/INSERT INTO public\.entitlements AS e/)
+    expect(grant).toMatch(/ON CONFLICT \(user_id\) DO UPDATE/)
+    expect(grant).toMatch(/WHERE NOT \(e\.premium AND EXCLUDED\.source = 'play' AND e\.source <> 'play'\)/)
+    expect(grant).toMatch(/granted_at = CASE WHEN e\.premium THEN COALESCE\(e\.granted_at, EXCLUDED\.granted_at\) ELSE EXCLUDED\.granted_at END/)
+    expect(grant).toMatch(/revoked_at = NULL/)
+    expect(grant).toMatch(/p_source NOT IN \('play', 'web', 'grandfather', 'admin'\)/)
+  })
+
+  it('revoke is one conditional UPDATE that only ever touches an active play grant', () => {
+    expect(revoke).toMatch(/UPDATE public\.entitlements\s+SET premium = false, revoked_at = now\(\), updated_at = now\(\)\s+WHERE user_id = p_uid AND premium AND source = 'play'/)
+  })
+
+  it('both are executable by the service role only', () => {
+    for (const sig of ['grant_entitlement\\(uuid, text\\)', 'revoke_play_entitlement\\(uuid\\)']) {
+      expect(code).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${sig} FROM public, anon, authenticated;`))
+      expect(code).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${sig} TO service_role;`))
+    }
+    expect(code).not.toMatch(/GRANT[^;]*(grant_entitlement|revoke_play_entitlement)[^;]*\b(anon|authenticated)\b/i)
+  })
 })

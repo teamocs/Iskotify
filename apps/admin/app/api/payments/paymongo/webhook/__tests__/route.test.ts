@@ -14,7 +14,8 @@ const SECRET = 'whsk_test'
 let db: ReturnType<typeof fakeSupabase>
 const fetchMock = vi.fn()
 
-function event(over: { id?: string; type?: string; livemode?: boolean; userId?: unknown } = {}) {
+type Over = { id?: string; type?: string; livemode?: boolean; userId?: unknown; amount?: number; currency?: string; ref?: string }
+function event(over: Over = {}) {
   return {
     data: {
       id: over.id ?? 'evt_1',
@@ -27,7 +28,9 @@ function event(over: { id?: string; type?: string; livemode?: boolean; userId?: 
           type: 'checkout_session',
           attributes: {
             metadata: 'userId' in over ? { user_id: over.userId } : { user_id: UID },
-            payments: [{ id: 'pay_1', attributes: { status: 'paid', amount: 50000 } }],
+            reference_number: over.ref ?? 'ISK-abc',
+            billing: { name: 'Juan Dela Cruz', email: 'juan@example.com', phone: '09170000000' },
+            payments: [{ id: 'pay_1', attributes: { status: 'paid', amount: over.amount ?? 50000, currency: over.currency ?? 'PHP' } }],
           },
         },
       },
@@ -58,6 +61,7 @@ beforeEach(() => {
   fetchMock.mockResolvedValue(new Response('{}', { status: 201 }))
   vi.stubGlobal('fetch', fetchMock)
   vi.stubEnv('PAYMONGO_WEBHOOK_SECRET', SECRET)
+  vi.stubEnv('PAYMONGO_SECRET_KEY', 'sk_test_abc')
   vi.stubEnv('REVENUECAT_SECRET_API_KEY', 'sk_rc_abc')
 })
 
@@ -87,14 +91,20 @@ describe('POST /api/payments/paymongo/webhook: signature', () => {
   })
 
   it('accepts a live event signed in li', async () => {
+    vi.stubEnv('PAYMONGO_SECRET_KEY', 'sk_live_abc')
     const res = await POST(signed(event({ livemode: true }), { livemode: true }))
     expect(res.status).toBe(200)
     expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'web' })
   })
 
-  it('401 for a replay older than 5 minutes', async () => {
-    const res = await POST(signed(event(), { t: Math.floor(Date.now() / 1000) - 600 }))
+  it('401 for a signature older than 3 days', async () => {
+    const res = await POST(signed(event(), { t: Math.floor(Date.now() / 1000) - 3 * 24 * 3600 - 60 }))
     expect(res.status).toBe(401)
+  })
+
+  it('accepts a retry carrying an hours-old timestamp (event-id idempotency guards replays)', async () => {
+    const res = await POST(signed(event(), { t: Math.floor(Date.now() / 1000) - 6 * 3600 }))
+    expect(res.status).toBe(200)
   })
 
   it('verifies against the RAW body, byte for byte', async () => {
@@ -122,7 +132,12 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
     expect(db.events.get('evt_1')).toMatchObject({
       id: 'evt_1', provider: 'paymongo', user_id: UID, type: 'checkout_session.payment.paid', amount_centavos: 50000,
     })
-    expect(db.events.get('evt_1')!.payload).toEqual(event())
+    expect(db.events.get('evt_1')!.payload).toEqual({
+      event_id: 'evt_1', type: 'checkout_session.payment.paid', livemode: false, session_id: 'cs_1',
+      reference_number: 'ISK-abc', payment_ids: ['pay_1'], amount_centavos: 50000, currency: 'PHP',
+    })
+    const stored = JSON.stringify(db.events.get('evt_1')!.payload)
+    for (const leak of [UID, 'juan', 'Juan', '0917', 'metadata', 'billing']) expect(stored, leak).not.toContain(leak)
 
     const row = db.entitlements.get(UID)!
     expect(row).toMatchObject({ user_id: UID, premium: true, source: 'web', revoked_at: null })
@@ -134,7 +149,7 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
     expect(url).toBe(`https://api.revenuecat.com/v1/subscribers/${UID}/entitlements/premium/promotional`)
     expect(init.method).toBe('POST')
     expect(init.headers.Authorization).toBe('Bearer sk_rc_abc')
-    expect(JSON.parse(init.body)).toEqual({ duration: 'lifetime' })
+    expect(JSON.parse(init.body)).toEqual({ end_time_ms: Date.UTC(2100, 0, 1) })
   })
 
   it('is idempotent: a replayed event is a 200 no-op', async () => {
@@ -204,11 +219,11 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
   })
 
   it('a failed grant forgets the event so the retry can grant', async () => {
-    db.fail.upsert = true
+    db.fail.rpc = true
     expect((await POST(signed(event()))).status).toBe(500)
     expect(db.events.has('evt_1')).toBe(false)
 
-    db.fail.upsert = false
+    db.fail.rpc = false
     expect((await POST(signed(event()))).status).toBe(200)
     expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'web' })
   })
@@ -217,6 +232,39 @@ describe('POST /api/payments/paymongo/webhook: checkout_session.payment.paid', (
     db.entitlements.set(UID, { user_id: UID, premium: true, source: 'play', granted_at: '2026-01-01T00:00:00.000Z', revoked_at: null })
     await POST(signed(event()))
     expect(db.entitlements.get(UID)).toMatchObject({ premium: true, source: 'web', granted_at: '2026-01-01T00:00:00.000Z' })
+  })
+
+  it('grants through the atomic grant_entitlement function', async () => {
+    await POST(signed(event()))
+    expect(db.client.rpc).toHaveBeenCalledWith('grant_entitlement', { p_uid: UID, p_source: 'web' })
+  })
+
+  describe('a paid checkout that does not look like ours is recorded for manual review, not granted', () => {
+    const cases: [string, Over, string?][] = [
+      ['wrong amount', { amount: 100 }],
+      ['wrong currency', { currency: 'USD' }],
+      ['foreign reference number', { ref: 'OTHER-1' }],
+      ['live event under a test key', { livemode: true }],
+    ]
+    for (const [name, over] of cases) {
+      it(name, async () => {
+        const body = event(over)
+        const res = await POST(signed(body, { livemode: body.data.attributes.livemode }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toMatchObject({ granted: false })
+        expect(db.events.has('evt_1')).toBe(true)
+        expect(db.entitlements.size).toBe(0)
+        expect(db.client.rpc).not.toHaveBeenCalled()
+        expect(fetchMock).not.toHaveBeenCalled()
+        expect(console.error).toHaveBeenCalled()
+      })
+    }
+  })
+
+  it('500 when PAYMONGO_SECRET_KEY is missing (the mode cannot be checked; PayMongo retries)', async () => {
+    vi.stubEnv('PAYMONGO_SECRET_KEY', '')
+    expect((await POST(signed(event()))).status).toBe(500)
+    expect(db.events.size).toBe(0)
   })
 
   it('500 when Supabase is not configured', async () => {

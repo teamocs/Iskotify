@@ -23,10 +23,13 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // The web app calls this cross-origin (app.iskotify.ph -> the admin host), and
 // the Authorization header forces a preflight. Native requests send no Origin.
-const ALLOWED_ORIGINS = new Set([
-  'https://app.iskotify.ph',
-  'http://localhost:8081', // Expo web dev server
-])
+// The Expo web dev server is allowed only outside production.
+const PROD_ORIGIN = 'https://app.iskotify.ph'
+const DEV_ORIGIN = 'http://localhost:8081'
+
+function isAllowedOrigin(origin: string): boolean {
+  return origin === PROD_ORIGIN || (origin === DEV_ORIGIN && process.env.NODE_ENV !== 'production')
+}
 
 // A student opens checkout a handful of times at most. Per IP, generous for a
 // school network or carrier NAT; every call still needs a valid token.
@@ -37,7 +40,7 @@ const PAYMONGO_CHECKOUT_URL = 'https://api.paymongo.com/v1/checkout_sessions'
 
 function corsHeaders(req: NextRequest): Record<string, string> {
   const origin = req.headers.get('origin')
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {}
+  if (!origin || !isAllowedOrigin(origin)) return {}
   return { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' }
 }
 
