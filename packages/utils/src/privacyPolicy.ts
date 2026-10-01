@@ -136,7 +136,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       {
         items: [
           { label: 'Supabase', text: 'stores our database and files, runs sign-in, and sends sign-in emails like password resets.' },
-          { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes your searches along.' },
+          { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes school-name lookups to Google Places.' },
           { label: 'Google', text: 'handles Google sign-in if you choose it. Google Places looks up a school name you type that isn’t on our list.' },
           { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device.' },
           { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on.' },

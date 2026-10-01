@@ -103,10 +103,10 @@ export const TERMS_SECTIONS: TermsSection[] = [
     ],
   },
   {
-    title: 'The on-device AI model',
+    title: 'AI-assisted content',
     blocks: [
-      'In Settings, you can download an optional AI model. It runs on your device, without internet, and writes extra answer choices for practice questions that don’t have enough. Your questions and answers stay on your device.',
-      'Like any AI, it can be wrong, for example by writing an answer choice that is also correct. If something looks wrong, report the question.',
+      'Some practice questions, answer choices and explanations are drafted with the help of AI tools by our team and checked before they reach the app. Those marked “AI-assisted” in a review were drafted this way.',
+      'Even after checking, AI-assisted content can be wrong, for example an answer choice that is also correct. If something looks wrong or inappropriate, use Report on the question and we will fix it.',
     ],
   },
   {
