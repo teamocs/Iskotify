@@ -37,28 +37,43 @@ beforeEach(() => {
   mockGetAllScheduledNotificationsAsync.mockResolvedValue([])
 })
 
-describe('scheduleIskotifyNotifications — daily body', () => {
-  it('uses the static fallback body when no plan summary is given', async () => {
+describe('scheduleIskotifyNotifications — repeating copy stays true', () => {
+  const STREAK_NUMBER = /\d+\s*-?\s*day|\bstreak of \d|🔥/i
+
+  it('the repeating DAILY body bakes in no streak number or flame', async () => {
     await scheduleIskotifyNotifications([])
     const [opts] = dailyCall()!
-    expect(opts.content.body).toBe('Keep your streak going and tackle those weak areas today!')
+    expect(opts.trigger).toMatchObject({ type: 'daily' })
+    expect(opts.content.body).not.toMatch(STREAK_NUMBER)
+    expect(opts.content.body.length).toBeGreaterThan(10)
   })
 
-  it('names the top plan item + streak when a summary is given', async () => {
+  it('a plan summary (the old streak-baking input) no longer changes the repeating body', async () => {
+    await scheduleIskotifyNotifications([])
+    const plain = dailyCall()![0].content.body
+    mockScheduleNotificationAsync.mockClear()
     await scheduleIskotifyNotifications([], {
       dailyPlanSummary: { topItemLabel: 'Practice Algebra — 8 questions queued', streakDays: 5 },
-    })
+    } as any)
     const [opts] = dailyCall()!
-    expect(opts.content.body).toContain('Practice Algebra — 8 questions queued')
-    expect(opts.content.body).toContain('5-day streak')
+    expect(opts.content.body).toBe(plain)
+    expect(opts.content.body).not.toContain('5-day streak')
+    expect(opts.content.body).not.toContain('Algebra')
   })
 
-  it('omits the streak clause when streakDays is 0', async () => {
-    await scheduleIskotifyNotifications([], {
-      dailyPlanSummary: { topItemLabel: 'Take a quick diagnostic', streakDays: 0 },
-    })
-    const [opts] = dailyCall()!
-    expect(opts.content.body).toBe('Take a quick diagnostic')
+  it('both scheduling paths (with and without extra options) produce identical content', async () => {
+    await scheduleIskotifyNotifications([], { dailyReminderHour: 9, weeklySummaryEnabled: true })
+    const first = [dailyCall()![0].content, weeklyCall()![0].content]
+    mockScheduleNotificationAsync.mockClear()
+    await scheduleIskotifyNotifications([])
+    expect([dailyCall()![0].content, weeklyCall()![0].content]).toEqual(first)
+  })
+
+  it('the weekly summary claims no numbers it cannot know', async () => {
+    await scheduleIskotifyNotifications([])
+    const [opts] = weeklyCall()!
+    expect(opts.content.body).not.toMatch(/\d/)
+    expect(opts.content.body).not.toMatch(/boost your exam score/i)
   })
 })
 

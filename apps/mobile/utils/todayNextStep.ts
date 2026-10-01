@@ -2,6 +2,7 @@
 // No React, no DB — fully unit-testable.
 
 import type { StudyPlanItemKind } from './studyPlan'
+import { daysUntilDate, localDayOffsetMs } from './localDay'
 
 export interface PlanItemLike {
   id: number
@@ -93,20 +94,30 @@ export interface CountdownListingLike {
 export interface Countdown {
   slug: string
   title: string
-  /** Whole days until the exam, a part-day rounded up; 0 when it starts now. */
+  /** Whole local calendar days until the exam date; 0 all through exam day. */
   days: number
   dateMs: number
 }
 
-const DAY_MS = 86_400_000
-
-/** The one focused-exam countdown: the soonest upcoming exam in Focus. */
-export function pickCountdown(listings: CountdownListingLike[], now: number): Countdown | null {
+/**
+ * The one focused-exam countdown: the soonest upcoming exam in Focus.
+ * Exam dates are date-only values (stored at UTC midnight of the calendar
+ * date), so they are compared against the LOCAL calendar day — an exam is 0
+ * days away all through its own day and gone the next. `offsetMs` pins the
+ * zone for tests (default: the device's).
+ */
+export function pickCountdown(
+  listings: CountdownListingLike[],
+  now: number,
+  offsetMs: number = localDayOffsetMs(),
+): Countdown | null {
   let best: Countdown | null = null
   for (const l of listings) {
-    if (l.type !== 'exam' || l.examDate == null || l.examDate < now) continue
+    if (l.type !== 'exam' || l.examDate == null) continue
+    const days = daysUntilDate(l.examDate, now, offsetMs)
+    if (days < 0) continue
     if (best && l.examDate >= best.dateMs) continue
-    best = { slug: l.slug, title: l.title, days: Math.ceil((l.examDate - now) / DAY_MS), dateMs: l.examDate }
+    best = { slug: l.slug, title: l.title, days, dateMs: l.examDate }
   }
   return best
 }

@@ -3,6 +3,7 @@ import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-nati
 import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
+import { localDayIndexOfDate } from '../../utils/localDay'
 
 const DAY_LETTERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const MAX_BACK_MONTHS = 24
@@ -11,7 +12,7 @@ const MAX_FORWARD_MONTHS = 24
 export interface MonthCell {
   date: Date         // local-time midnight of the cell
   inMonth: boolean   // true if this cell belongs to the displayed month
-  dayIndex: number   // floor(timestamp / 86_400_000)
+  dayIndex: number   // LOCAL calendar-day index (matches the practice-day buckets)
 }
 
 /**
@@ -28,7 +29,7 @@ export function buildMonthGrid(year: number, month: number): MonthCell[] {
     cells.push({
       date,
       inMonth: date.getMonth() === month,
-      dayIndex: Math.floor(date.getTime() / 86_400_000),
+      dayIndex: localDayIndexOfDate(date),
     })
   }
   return cells
@@ -47,7 +48,7 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
   const { theme: t, typo } = useTheme()
   const today = useMemo(() => {
     const d = new Date()
-    return { y: d.getFullYear(), m: d.getMonth(), dayIndex: Math.floor(d.getTime() / 86_400_000) }
+    return { y: d.getFullYear(), m: d.getMonth(), dayIndex: localDayIndexOfDate(d) }
   }, [])
   const [year, setYear] = useState(today.y)
   const [month, setMonth] = useState(today.m)

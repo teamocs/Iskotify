@@ -13,6 +13,9 @@ import {
   getListingAccuracy,
 } from '../services/homeAggregates'
 import { cachedQuery, subscribe } from '../services/queryCache'
+import { localDayOffsetMs, localDayIndex, calendarDayIndex, daysUntilDate } from '../utils/localDay'
+
+export { localDayOffsetMs }
 
 export interface WeakTopic {
   topicId: string
@@ -59,13 +62,25 @@ export interface HomeStats {
 // ── Pure functions (exported for unit tests) ─────────────────────────────────
 
 /**
- * localDayOffsetMs — milliseconds to ADD to an epoch timestamp so that
- * floor((ts + offset) / 86400000) buckets it into the device's LOCAL calendar
- * day instead of the UTC day. PH (UTC+8) → +8h. Read at call time per
- * computation — PH has no DST, so one read per refresh is fine.
+ * Day indices (local calendar) for the calendar's "important" markers. Exam and
+ * deadline values are date-only (UTC midnight of the calendar date) so they map
+ * straight to their own date; reminders are real instants and are bucketed by
+ * the LOCAL day, the same calendar the practice days use.
  */
-export function localDayOffsetMs(): number {
-  return -new Date().getTimezoneOffset() * 60_000
+export function computeImportantDayIndices(
+  focused: { examDate: number | null; deadline: number | null }[],
+  reminders: { reminderAt: number | null }[],
+  offsetMs: number = localDayOffsetMs(),
+): number[] {
+  return [
+    ...focused.flatMap(r => [
+      r.examDate != null ? calendarDayIndex(r.examDate) : null,
+      r.deadline != null ? calendarDayIndex(r.deadline) : null,
+    ]).filter((d): d is number => d != null),
+    ...reminders
+      .filter(r => r.reminderAt != null)
+      .map(r => localDayIndex(r.reminderAt as number, offsetMs)),
+  ]
 }
 
 export function computeStreak(rows: Array<{ answeredAt: number }>): number {
@@ -201,9 +216,7 @@ export function useHomeStats(): HomeStats {
         ])
 
         const listing = listingRows[0] ?? null
-        const daysLeft = listing?.examDate
-          ? Math.ceil((listing.examDate - Date.now()) / 86_400_000)
-          : null
+        const daysLeft = listing?.examDate ? daysUntilDate(listing.examDate, Date.now(), offsetMs) : null
 
         // School-level focus entries ("school:<id>") have no listings row, so the
         // leftJoin leaves title/type null — resolve the school names directly so
@@ -245,15 +258,7 @@ export function useHomeStats(): HomeStats {
           weakTopics,
           firstTopicId: firstTopicRows[0]?.id ?? null,
           fullName: settingsRows[0]?.fullName ?? '',
-          importantDayIndices: [
-            ...focusedRows.flatMap(r => [
-              r.examDate != null ? Math.floor(r.examDate / 86_400_000) : null,
-              r.deadline != null ? Math.floor(r.deadline / 86_400_000) : null,
-            ]).filter((d): d is number => d != null),
-            ...reminderRows
-              .filter(r => r.reminderAt != null)
-              .map(r => Math.floor(r.reminderAt! / 86_400_000)),
-          ],
+          importantDayIndices: computeImportantDayIndices(focusedRows, reminderRows, offsetMs),
           practiceDayIndices: dayIndices,
           focusedListings: focusedRows.map(r => ({
             slug: r.slug,

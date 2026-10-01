@@ -7,7 +7,7 @@ import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
 
 // Re-export the school-focus slug helpers so existing importers keep working.
 export { SCHOOL_FOCUS_PREFIX, schoolFocusSlug, isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
-import { syncOnLaunch, pushUserData } from '../services/sync'
+import { syncOnLaunch, schedulePushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { capture } from '../lib/analytics'
@@ -101,7 +101,7 @@ export function useFocusListings() {
     invalidate('practice:')
     invalidate('chat:')
     await load()
-    void pushUserData(db).catch(() => { /* best-effort backup */ })
+    schedulePushUserData(db)
   }
 
   async function removeListing(slug: string) {
@@ -119,7 +119,7 @@ export function useFocusListings() {
     invalidate('practice:')
     invalidate('chat:')
     await load()
-    void pushUserData(db).catch(() => { /* best-effort backup */ })
+    schedulePushUserData(db)
   }
 
   async function moveListing(slug: string, direction: 'up' | 'down') {

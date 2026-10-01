@@ -23,7 +23,6 @@ import { useNotifications } from '../../hooks/useNotifications'
 import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
-import { describeTopPlanItem } from '../../utils/studyPlan'
 import { pickNextStep } from '../../utils/todayNextStep'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
@@ -129,17 +128,12 @@ export default function TodayScreen() {
   const { enabled: remindersOn, schedule: scheduleReminders, toggle: toggleReminders } = useNotifications()
   const [remindersOpen, setRemindersOpen] = useState(false)
 
-  // The daily nudge names today's top not-yet-done plan item + streak
-  // (services/notifications.ts's dynamic body) — rescheduled whenever the
-  // plan or streak changes.
+  // Reminder copy is fixed (services/notifications.ts) — it must not depend on
+  // the plan or streak, so it only reschedules when the focus list changes.
   useEffect(() => {
     if (focusedListings.length === 0) return
-    const topItem = studyPlan.items.find(i => i.completedAt == null) ?? null
-    const summary = topItem
-      ? { topItemLabel: describeTopPlanItem(topItem, topicNameById.get(topItem.refId)), streakDays }
-      : null
-    void scheduleReminders(focusedListings, summary)
-  }, [focusedListings, scheduleReminders, studyPlan.items, streakDays, topicNameById])
+    void scheduleReminders(focusedListings)
+  }, [focusedListings, scheduleReminders])
 
   const nextStep = pickNextStep({
     items: studyPlan.items,

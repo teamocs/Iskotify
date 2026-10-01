@@ -9,6 +9,27 @@ describe('daysUntil', () => {
     expect(daysUntil('2026-06-01', today)).toBe(-2)
   })
 })
+describe('"today" is the local calendar date (Asia/Manila, +8h)', () => {
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
+  const manila = (d: number, h: number, m: number) => Date.UTC(2026, 9, d, h - 8, m)
+  const setNow = (now: number) => {
+    jest.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-480)
+    jest.useFakeTimers({ now })
+  }
+
+  it('01:00 on 2 Oct local is 2 Oct: a 1 Oct event is past though UTC still says 1 Oct', () => {
+    setNow(manila(2, 1, 0))
+    const ev = [item({ id: 'a', eventDate: '2026-10-01' }), item({ id: 'b', eventDate: '2026-10-02' })]
+    expect(upcomingEvents(ev).map(x => x.id)).toEqual(['b'])
+    expect(daysUntil('2026-10-02')).toBe(0)
+  })
+
+  it.each([[7, 59], [8, 1], [23, 59]])('%i:%i local on 1 Oct keeps a 1 Oct event upcoming (0 days)', (h, m) => {
+    setNow(manila(1, h, m))
+    expect(daysUntil('2026-10-01')).toBe(0)
+    expect(upcomingEvents([item({ id: 'a', eventDate: '2026-10-01' })]).map(x => x.id)).toEqual(['a'])
+  })
+})
 describe('sortBySeverityThenDate', () => {
   it('urgent first, then reportDate desc', () => {
     const a = item({ id:'a', severity:'info', reportDate:'2026-06-03' })

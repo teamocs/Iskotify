@@ -7,7 +7,6 @@ import {
   scheduleIskotifyNotifications,
   cancelAllIskotifyNotifications,
   type NotificationListing,
-  type DailyPlanSummary,
 } from '../services/notifications'
 
 export function useNotifications() {
@@ -35,11 +34,11 @@ export function useNotifications() {
       .catch(() => setReady(true))
   }, [db])
 
-  const schedule = useCallback(async (listings: NotificationListing[], dailyPlanSummary?: DailyPlanSummary | null) => {
+  const schedule = useCallback(async (listings: NotificationListing[]) => {
     if (!ready || !enabled) return
     const granted = await requestNotificationPermissions()
     if (granted) {
-      await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled, dailyPlanSummary }).catch(e =>
+      await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled }).catch(e =>
         console.warn('[useNotifications] schedule error:', e)
       )
     }

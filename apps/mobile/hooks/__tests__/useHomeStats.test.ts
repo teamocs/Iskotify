@@ -1,4 +1,4 @@
-import { computeStreak, computeStreakFromDays, computeTodayAccuracy, computeWeakTopics, localDayOffsetMs } from '../useHomeStats'
+import { computeStreak, computeStreakFromDays, computeTodayAccuracy, computeWeakTopics, localDayOffsetMs, computeImportantDayIndices } from '../useHomeStats'
 
 const DAY = 86_400_000
 const HOUR = 3_600_000
@@ -58,6 +58,28 @@ describe('computeStreakFromDays — offsetMs local-day bucketing', () => {
     jest.spyOn(Date, 'now').mockReturnValue(now)
     const utcToday = Math.floor(now / DAY)
     expect(computeStreakFromDays([utcToday, utcToday - 1])).toBe(2)
+  })
+})
+
+describe('computeImportantDayIndices (local calendar, Asia/Manila +8h)', () => {
+  const PH = 8 * HOUR
+  const idx = (m: number, d: number) => Date.UTC(2026, m, d) / DAY
+
+  it('puts an exam / deadline date-only value on its own calendar date', () => {
+    const out = computeImportantDayIndices(
+      [{ examDate: Date.UTC(2026, 9, 1), deadline: Date.UTC(2026, 9, 5) }], [], PH)
+    expect(out).toEqual([idx(9, 1), idx(9, 5)])
+  })
+
+  it('buckets a note reminder by its LOCAL day: 07:30 and 23:30 PH on 2 Oct are both 2 Oct', () => {
+    const early = Date.UTC(2026, 9, 1, 23, 30) // 07:30 PH 2 Oct (UTC is still 1 Oct)
+    const late = Date.UTC(2026, 9, 2, 15, 30) // 23:30 PH 2 Oct
+    expect(computeImportantDayIndices([], [{ reminderAt: early }, { reminderAt: late }], PH))
+      .toEqual([idx(9, 2), idx(9, 2)])
+  })
+
+  it('skips null dates', () => {
+    expect(computeImportantDayIndices([{ examDate: null, deadline: null }], [{ reminderAt: null }], PH)).toEqual([])
   })
 })
 

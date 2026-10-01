@@ -72,6 +72,30 @@ describe('pickNextStep', () => {
   })
 })
 
+describe('pickCountdown on the local calendar (Asia/Manila, +8h)', () => {
+  const PH = 8 * 3_600_000
+  const exam = Date.UTC(2026, 9, 1) // 'YYYY-MM-DD' exam date, stored at UTC midnight
+  const listing = [{ slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: exam }]
+  const at = (d: number, h: number, m = 0) => Date.UTC(2026, 8, d, h - 8, m) // local wall clock on Sep d (d=31 -> Oct 1)
+
+  it('stays at 0 days all through exam day, including after 08:00 local', () => {
+    for (const [h, m] of [[0, 0], [7, 59], [8, 1], [23, 59]] as const) {
+      expect(pickCountdown(listing, at(31, h, m), PH)?.days).toBe(0)
+    }
+  })
+
+  it('counts whole calendar days before the exam', () => {
+    expect(pickCountdown(listing, at(30, 23, 59), PH)?.days).toBe(1)
+    expect(pickCountdown(listing, at(30, 8, 1), PH)?.days).toBe(1)
+    expect(pickCountdown(listing, at(30, 7, 59), PH)?.days).toBe(1)
+    expect(pickCountdown(listing, at(29, 23, 59), PH)?.days).toBe(2)
+  })
+
+  it('drops the countdown the day after the exam', () => {
+    expect(pickCountdown(listing, at(32, 0, 1), PH)).toBeNull()
+  })
+})
+
 describe('pickCountdown', () => {
   const now = Date.UTC(2026, 8, 26, 2) // 26 Sep 2026, 10:00 PHT
 
@@ -91,8 +115,9 @@ describe('pickCountdown', () => {
     expect(c).toEqual({ slug: 'upcat', title: 'UPCAT 2027', days: 12, dateMs: now + 12 * DAY })
   })
 
-  it('rounds a part-day up, and an exam starting now is 0 days away', () => {
-    expect(pickCountdown([{ slug: 'u', title: 'U', type: 'exam', examDate: now + 3_600_000 }], now)?.days).toBe(1)
+  it('counts calendar days: an exam later the same day is 0, the next calendar day is 1', () => {
+    expect(pickCountdown([{ slug: 'u', title: 'U', type: 'exam', examDate: now + 3_600_000 }], now, 0)?.days).toBe(0)
+    expect(pickCountdown([{ slug: 'u', title: 'U', type: 'exam', examDate: now + DAY }], now, 0)?.days).toBe(1)
     expect(pickCountdown([{ slug: 'u', title: 'U', type: 'exam', examDate: now }], now)?.days).toBe(0)
   })
 })

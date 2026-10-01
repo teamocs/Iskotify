@@ -1,3 +1,5 @@
+import { localDateISO } from './localDay'
+
 export interface FeedItem {
   id: string
   reportDate: string
@@ -30,7 +32,7 @@ function parseUTCDate(iso: string): Date {
 
 /** Returns whole days between dateISO and todayISO (future = positive, past = negative). */
 export function daysUntil(dateISO: string, todayISO?: string): number {
-  const today = todayISO ?? new Date().toISOString().slice(0, 10)
+  const today = todayISO ?? localDateISO(Date.now())
   const target = parseUTCDate(dateISO).getTime()
   const base = parseUTCDate(today).getTime()
   return Math.round((target - base) / (1000 * 60 * 60 * 24))
@@ -48,7 +50,7 @@ export function sortBySeverityThenDate(items: FeedItem[]): FeedItem[] {
 
 /** Filter to items with a non-null eventDate that is today or in the future, sorted by eventDate asc. */
 export function upcomingEvents(items: FeedItem[], todayISO?: string): FeedItem[] {
-  const today = todayISO ?? new Date().toISOString().slice(0, 10)
+  const today = todayISO ?? localDateISO(Date.now())
   return items
     .filter((item) => item.eventDate !== null && daysUntil(item.eventDate!, today) >= 0)
     .sort((a, b) => a.eventDate!.localeCompare(b.eventDate!))

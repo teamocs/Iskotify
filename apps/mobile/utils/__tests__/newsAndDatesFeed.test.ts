@@ -17,6 +17,32 @@ function admission(overrides: Partial<FeedItem> = {}): FeedItem {
   }
 }
 
+describe('buildNewsAndDatesFeed on the local day (Asia/Manila, +8h)', () => {
+  const PH = 8 * 3_600_000
+  const examDay = Date.UTC(2026, 9, 1) // date-only exam value, UTC midnight
+  const manila = (d: number, h: number, m: number) => Date.UTC(2026, 9, d, h - 8, m)
+  const listing = [{ slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: examDay, deadline: null }]
+
+  it.each([[0, 0], [7, 59], [8, 1], [23, 59]])('keeps the exam in the feed all through exam day (%i:%i local)', (h, m) => {
+    const feed = buildNewsAndDatesFeed({ focusedListings: listing, noteReminders: [], admissionItems: [], now: manila(1, h, m), offsetMs: PH })
+    expect(feed.map(e => e.slug)).toEqual(['upcat'])
+  })
+
+  it('drops it the next local day', () => {
+    const feed = buildNewsAndDatesFeed({ focusedListings: listing, noteReminders: [], admissionItems: [], now: manila(2, 0, 1), offsetMs: PH })
+    expect(feed).toEqual([])
+  })
+
+  it('treats an admissions event dated "today" local as upcoming at 01:00 and a yesterday one as past', () => {
+    const items = [
+      admission({ id: 'today', eventDate: '2026-10-02', title: 'T' }),
+      admission({ id: 'yday', eventDate: '2026-10-01', title: 'Y' }),
+    ]
+    const feed = buildNewsAndDatesFeed({ focusedListings: [], noteReminders: [], admissionItems: items, now: manila(2, 1, 0), offsetMs: PH })
+    expect(feed.filter(e => e.kind === 'admission').map(e => e.title)).toEqual(['T'])
+  })
+})
+
 describe('buildNewsAndDatesFeed', () => {
   it('returns an empty feed when there is nothing to show', () => {
     const feed = buildNewsAndDatesFeed({ focusedListings: [], noteReminders: [], admissionItems: [], now: NOW })

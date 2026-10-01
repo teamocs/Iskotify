@@ -1,6 +1,6 @@
 import { useDb } from './useDb'
 import { practiceSessions } from '../db/schema'
-import { pushUserData } from '../services/sync'
+import { schedulePushUserData } from '../services/sync'
 import { invalidate } from '../services/queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { capture } from '../lib/analytics'
@@ -85,7 +85,7 @@ export function useRecordSession() {
       kind: record.kind,
     }).catch(err => console.warn('[recordSession] plan bookkeeping failed:', err))
     // Best-effort backup to Supabase if signed in. Don't block the UI on this.
-    void pushUserData(db).catch(err => console.warn('[recordSession] push failed:', err))
+    schedulePushUserData(db)
   }
 
   return { recordSession }

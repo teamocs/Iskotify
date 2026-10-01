@@ -102,21 +102,20 @@ export async function cancelAllIskotifyNotifications(): Promise<void> {
   )
 }
 
-/** Task I: today's top not-yet-done plan item + streak, for the dynamic daily body. */
-export interface DailyPlanSummary {
-  /** utils/studyPlan.ts's describeTopPlanItem() output. */
-  topItemLabel: string
-  streakDays: number
-}
-
 export interface ScheduleOptions {
   /** 0-23 local hour for the daily practice nudge. Defaults to 9 (the original hardcoded time). */
   dailyReminderHour?: number
   /** Settings → Notifications "weekly summary" toggle. Defaults to true. */
   weeklySummaryEnabled?: boolean
-  /** When present, the daily body names today's top plan item + streak instead of the static copy. */
-  dailyPlanSummary?: DailyPlanSummary | null
 }
+
+// Repeating notifications are scheduled once and fire for weeks, so their copy
+// is fixed text that stays true on any day: no streak count, no plan item, no
+// numbers the app cannot know at fire time. Every scheduling path (home
+// screen, settings) goes through scheduleIskotifyNotifications, so they all
+// produce exactly this content.
+export const DAILY_REMINDER_BODY = 'A few minutes of practice today keeps you on track for exam day.'
+export const WEEKLY_SUMMARY_BODY = 'Take a few minutes to review the topics you find hardest and check your progress.'
 
 export async function scheduleIskotifyNotifications(
   listings: NotificationListing[],
@@ -128,19 +127,15 @@ export async function scheduleIskotifyNotifications(
   await cancelAllIskotifyNotifications()
 
   // 1. Daily practice reminder — every day at the user's chosen hour (default 9 AM).
-  //    Body is dynamic when a plan summary is available (Task I): names today's
-  //    top plan item + current streak instead of the static copy.
+  //    Fixed, always-true copy (see DAILY_REMINDER_BODY): a repeating trigger
+  //    must not bake in a streak or plan item that goes stale the next day.
   const hour = options.dailyReminderHour ?? 9
-  const summary = options.dailyPlanSummary
-  const dailyBody = summary
-    ? `${summary.topItemLabel}${summary.streakDays > 0 ? ` · 🔥 ${summary.streakDays}-day streak` : ''}`
-    : 'Keep your streak going and tackle those weak areas today!'
 
   await N.scheduleNotificationAsync({
     identifier: 'daily-practice',
     content: {
       title: 'Iskotify — Time to Study! 📚',
-      body: dailyBody,
+      body: DAILY_REMINDER_BODY,
       sound: true,
     },
     trigger: {
@@ -158,7 +153,7 @@ export async function scheduleIskotifyNotifications(
       identifier: 'weekly-weak-areas',
       content: {
         title: 'Iskotify — Review Weak Areas 🎯',
-        body: 'Focus on your weak topics this week to boost your exam score!',
+        body: WEEKLY_SUMMARY_BODY,
         sound: true,
       },
       trigger: {
