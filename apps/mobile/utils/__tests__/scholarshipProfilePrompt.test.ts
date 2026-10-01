@@ -28,6 +28,18 @@ describe('scholarshipProfileGaps (what the short onboarding no longer asks)', ()
     expect(scholarshipProfileGaps({ ...COMPLETE, sensitiveConsentAt: 0 })).toEqual(['grades and income'])
     expect(scholarshipProfileGaps({ ...COMPLETE, gwa: null })).toEqual(['grades and income'])
   })
+
+  it('never re-asks for grades and income after the student said no (RA 10173 sensitive data)', () => {
+    expect(scholarshipProfileGaps({ ...COMPLETE, sensitiveConsentAt: 0, sensitiveWithdrawnAt: 1_700_000_000_000 })).toEqual([])
+  })
+
+  it('never nudges an under-18 student toward sharing grades and income', () => {
+    expect(scholarshipProfileGaps({ ...COMPLETE, sensitiveConsentAt: 0, ageBand: 'minor' })).toEqual([])
+  })
+
+  it('still asks an adult who opted in but has no GWA yet', () => {
+    expect(scholarshipProfileGaps({ ...COMPLETE, gwa: null, ageBand: 'adult' })).toEqual(['grades and income'])
+  })
 })
 
 describe('shouldShowScholarshipPrompt', () => {

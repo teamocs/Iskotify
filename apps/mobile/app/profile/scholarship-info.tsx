@@ -190,7 +190,7 @@ export default function ScholarshipInfoScreen() {
               <Text style={hintStyle} maxFontSizeMultiplier={2}>Where you study now</Text>
               <SchoolPicker
                 value={school}
-                onChange={v => { setSchool(v); setSchoolChanged(true) }}
+                onChange={v => { setSchool(v); setSchoolRegion(''); setSchoolChanged(true) }}
                 onSelectMeta={m => { setSchoolRegion(m.region ?? ''); setSchoolChanged(true) }}
               />
             </Card>

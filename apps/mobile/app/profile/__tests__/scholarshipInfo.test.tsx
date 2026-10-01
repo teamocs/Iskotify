@@ -26,13 +26,17 @@ jest.mock('../../../services/sync', () => ({ pushUserData: jest.fn().mockResolve
 // The picker and the courses card own their own data (Supabase / the local DB).
 jest.mock('../../../components/SchoolPicker', () => ({
   SchoolPicker: ({ value, onChange, onSelectMeta }: { value: string; onChange: (v: string) => void; onSelectMeta?: (m: { region?: string }) => void }) => {
-    const { TextInput } = require('react-native')
+    const { TextInput, View } = require('react-native')
     return (
-      <TextInput
-        testID="school-picker-mock"
-        value={value}
-        onChangeText={(v: string) => { onChange(v); onSelectMeta?.({ region: 'Region V' }) }}
-      />
+      <View>
+        <TextInput
+          testID="school-picker-mock"
+          value={value}
+          onChangeText={(v: string) => { onChange(v); onSelectMeta?.({ region: 'Region V' }) }}
+        />
+        {/* Typing a school that isn't on the list: no region comes with it. */}
+        <TextInput testID="school-picker-typed" value={value} onChangeText={(v: string) => onChange(v)} />
+      </View>
     )
   },
 }))
@@ -92,6 +96,15 @@ describe('Scholarship profile', () => {
     const patch = mockUpdate.mock.calls[0]![1] as Record<string, unknown>
     expect(patch).not.toHaveProperty('school')
     expect(patch).not.toHaveProperty('schoolRegion')
+  })
+
+  it('drops the old region when a school is typed instead of picked', async () => {
+    mockUpdate.mockResolvedValue(undefined)
+    render(<ScholarshipInfoScreen />)
+    await act(async () => {})
+    fireEvent.changeText(screen.getByTestId('school-picker-typed'), 'My Own School')
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Save' })) })
+    expect(mockUpdate.mock.calls[0]![1]).toMatchObject({ school: 'My Own School', schoolRegion: '' })
   })
 
   it('saves a newly picked school with its region', async () => {

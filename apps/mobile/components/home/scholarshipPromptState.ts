@@ -16,6 +16,8 @@ export async function readScholarshipPromptSettings(db: DrizzleClient): Promise<
       province: userSettings.province,
       targetCourses: userSettings.targetCourses,
       sensitiveConsentAt: userSettings.sensitiveConsentAt,
+      sensitiveWithdrawnAt: userSettings.sensitiveWithdrawnAt,
+      ageBand: userSettings.ageBand,
       gwa: userSettings.gwa,
       profilePromptDismissedAt: userSettings.profilePromptDismissedAt,
     })

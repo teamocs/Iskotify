@@ -12,6 +12,10 @@ export interface ScholarshipPromptSettings {
   /** JSON array of the picked courses, as user_settings stores it. */
   targetCourses?: string | null
   sensitiveConsentAt?: number | null
+  /** When the student said no to (or withdrew) sharing grades and income; 0 = never. */
+  sensitiveWithdrawnAt?: number | null
+  /** 'minor' | 'adult' | '' from the consent step. */
+  ageBand?: string | null
   gwa?: number | null
   /** When the student dismissed the prompt, epoch ms; 0 = never. */
   profilePromptDismissedAt?: number | null
@@ -34,8 +38,12 @@ export function scholarshipProfileGaps(s: ScholarshipPromptSettings): Scholarshi
   if (!s.school?.trim()) gaps.push('school')
   if (!hasCourses(s.targetCourses)) gaps.push('target courses')
   if (!s.province?.trim()) gaps.push('province')
-  // Grades and income need their own opt-in first; without a GWA the match can't use them.
-  if (!hasSensitiveConsent({ sensitiveConsentAt: s.sensitiveConsentAt }) || s.gwa == null) gaps.push('grades and income')
+  // Grades and income need their own opt-in. Ask an adult who opted in but has no
+  // GWA yet, or who never decided. Never re-ask after a no or a withdrawal, and
+  // never nudge an under-18 student toward sharing sensitive data (RA 10173).
+  const consented = hasSensitiveConsent({ sensitiveConsentAt: s.sensitiveConsentAt })
+  const declined = Number(s.sensitiveWithdrawnAt ?? 0) > 0
+  if (consented ? s.gwa == null : !declined && s.ageBand !== 'minor') gaps.push('grades and income')
   return gaps
 }
 
