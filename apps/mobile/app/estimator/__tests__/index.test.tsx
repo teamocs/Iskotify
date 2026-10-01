@@ -241,4 +241,17 @@ describe('EstimatorScreen', () => {
       expect(screen.getAllByRole('button', { name: /add your grades/i }).length).toBe(1)
     })
   })
+
+  // ── P1d: non-affiliation + no-guarantee footnote ───────────────────────────
+  describe.each(['ready', 'no-grades', 'not-ready', 'error'] as const)('footnote (%s)', (status) => {
+    it('says Iskotify isn’t affiliated with UP, cutoffs change, and the estimate isn’t a guarantee', () => {
+      mockState({ status, readiness: (status === 'ready' ? READY_READINESS : NOT_READY_READINESS) as any, result: READY_RESULT as any })
+      render(<EstimatorScreen />)
+      const note = screen.getByTestId('estimator-footnote')
+      expect(note).toHaveTextContent(/Iskotify isn’t affiliated with or endorsed by the University of the Philippines/)
+      expect(note).toHaveTextContent(/Cutoffs are historical and change every year/)
+      // The compliance guard allows "guarantee" only in this exact negation.
+      expect(note).toHaveTextContent(/This estimate is not a guarantee of admission\./)
+    })
+  })
 })

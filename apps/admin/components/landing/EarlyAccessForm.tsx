@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 type Status = 'idle' | 'submitting' | 'success' | 'error'
 
@@ -9,6 +10,8 @@ export function EarlyAccessForm() {
   const [email, setEmail] = useState('')
   const [school, setSchool] = useState('')
   const [gradeLevel, setGradeLevel] = useState('')
+  // Unticked until the visitor agrees; the form can't be sent without it.
+  const [agreed, setAgreed] = useState(false)
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -16,7 +19,7 @@ export function EarlyAccessForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (submitting) return
+    if (submitting || !agreed) return
     setStatus('submitting')
     setErrorMsg('')
 
@@ -143,6 +146,28 @@ export function EarlyAccessForm() {
           />
         </div>
 
+        <p className="text-sm font-body text-ink-muted leading-relaxed">
+          We&apos;ll use your details only to send you early access emails, as our{' '}
+          <Link href="/privacy" className="text-maroon underline">Privacy Policy</Link> explains.
+          If you&apos;re under 18, sign up with your parent or guardian&apos;s OK.
+        </p>
+
+        <div className="flex items-start gap-3">
+          <input
+            id="ea-consent"
+            name="consent"
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-maroon"
+            disabled={submitting}
+            required
+          />
+          <label htmlFor="ea-consent" className="text-sm font-body text-ink">
+            I&apos;ve read the Privacy Policy, and if I&apos;m under 18, my parent or guardian says it&apos;s OK.
+          </label>
+        </div>
+
         {status === 'error' && (
           <p role="alert" aria-live="assertive" className="text-sm font-body text-maroon">
             {errorMsg}
@@ -151,7 +176,7 @@ export function EarlyAccessForm() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !agreed}
           aria-busy={submitting}
           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-sm bg-maroon px-6 text-base font-semibold text-ink-inverse transition-colors hover:bg-maroon-hover disabled:cursor-not-allowed disabled:opacity-60"
         >

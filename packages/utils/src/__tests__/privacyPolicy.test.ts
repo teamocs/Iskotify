@@ -5,6 +5,11 @@ import {
   PRIVACY_SECTIONS,
   PRIVACY_SUMMARY,
   NPC_WEBSITE,
+  DPO_NAME,
+  DPO_EMAIL,
+  BUSINESS_ADDRESS,
+  SUPABASE_REGION,
+  UPSTASH_REGION,
   privacyPolicyText,
 } from '../privacyPolicy'
 
@@ -27,6 +32,7 @@ describe('privacy policy content (shared by the app and the website)', () => {
       'Who we are',
       'What we collect',
       'Why we use it',
+      'Our legal basis',
       'Where it’s stored',
       'Who we share it with',
       'How long we keep it',
@@ -91,11 +97,20 @@ describe('privacy policy content (shared by the app and the website)', () => {
     expect(PRIVACY_SUMMARY.join(' ')).not.toMatch(/Pwned/)
   })
 
-  it('is honest about minors without inventing a consent mechanism', () => {
-    const minors = JSON.stringify(PRIVACY_SECTIONS.find(s => s.title === 'Students under 18'))
+  it('matches the sign-up consent step for under-18s without inventing verification', () => {
+    const minors = section('Students under 18')
     expect(minors).toMatch(/under 18/)
-    expect(minors).toMatch(/doesn’t have a separate parent or guardian consent step/)
+    expect(minors).toMatch(/18 or older or under 18/)
+    expect(minors).toMatch(/parent or guardian has agreed/)
+    expect(minors).toMatch(/only if you turn on sharing them/)
+    expect(minors).toMatch(/analytics stays off unless you turn it on/)
+    expect(minors).toMatch(/under 13/)
+    expect(minors).toMatch(/we’ll delete it/)
+    expect(minors).not.toMatch(/doesn’t have a separate parent or guardian consent step/)
     expect(text).not.toMatch(/verified parental consent/i)
+    // The age band is asked; the birthday is not.
+    expect(section('What we collect')).toMatch(/whether you’re 18 or older/)
+    expect(section('What we collect')).toMatch(/don’t ask for your birthday/)
   })
 
   it('says analytics is linked to the account ID only, never the email', () => {
@@ -125,6 +140,77 @@ describe('privacy policy content (shared by the app and the website)', () => {
     expect(who).not.toMatch(/the Iskotify team/)
     // The owner's exact name only: no invented legal suffix.
     expect(text).not.toMatch(/\b(Inc\.|Corporation|Corp\.|OPC|Ltd\.?)\b/)
+  })
+})
+
+describe('P1d: lawful basis, processors, retention, DPO, rights, breaches', () => {
+  it('gives a lawful basis for each purpose, citing RA 10173 Sections 12 and 13', () => {
+    const basis = section('Our legal basis')
+    expect(basis).toMatch(/Section 12/)
+    expect(basis).toMatch(/Section 13\(a\)/)
+    expect(basis).toMatch(/Running the app and backing up your data:","text":"needed to provide/)
+    for (const d of ['grades', 'GWA', 'income bracket', 'Indigenous', 'school records']) expect(basis).toContain(d)
+    expect(basis).toMatch(/separate consent/)
+    expect(basis).toMatch(/Usage analytics:","text":"your consent/)
+    expect(basis).toMatch(/legitimate interest/)
+    expect(basis).toMatch(/spam/)
+  })
+
+  it('names the country of every service that receives data, and the service agreements', () => {
+    const share = section('Who we share it with')
+    // Supabase and Upstash name their region once the owner confirms it.
+    if (SUPABASE_REGION) expect(share).toMatch(new RegExp(`Supabase","text":"[^"]*Servers: ${SUPABASE_REGION}`))
+    for (const name of ['Vercel', 'Google', 'PostHog', 'Resend', 'Expo']) {
+      expect(share).toMatch(new RegExp(`"${name}","text":"[^"]*United States`))
+    }
+    if (UPSTASH_REGION) expect(share).toMatch(new RegExp(`Upstash","text":"[^"]*Servers: ${UPSTASH_REGION}`))
+    expect(share).toMatch(/first 5 characters/)
+    expect(share).toContain('We use service agreements requiring these providers to protect your data.')
+  })
+
+  it('states a retention period for each kind of data, with no open-ended "not yet" schedule', () => {
+    const keep = section('How long we keep it')
+    expect(keep).not.toMatch(/fixed schedule yet/)
+    expect(keep).toMatch(/Bug reports and their screenshots:","text":"[^"]*12 months after we close the report/)
+    expect(keep).toMatch(/Feedback, question reports and date suggestions:","text":"[^"]*12 months/)
+    expect(keep).toMatch(/Analytics:","text":"[^"]*12 months/)
+    expect(keep).toMatch(/Early access sign-ups:","text":"[^"]*6 months after Iskotify launches publicly/)
+    expect(keep).toMatch(/When you delete your account:/)
+  })
+
+  it('reaches the Data Protection Officer through a working inbox, leaving out details not supplied yet', () => {
+    const contact = section('Contact us')
+    expect(contact).toMatch(/Data Protection Officer/)
+    expect(contact).toContain(PRIVACY_CONTACT_EMAIL)
+    expect(contact).toContain('Online Creative Solutions')
+    // Each owner-supplied detail appears only once it is filled in.
+    for (const v of [DPO_NAME, DPO_EMAIL, BUSINESS_ADDRESS, SUPABASE_REGION, UPSTASH_REGION]) {
+      if (v) expect(text).toContain(v)
+    }
+    if (!DPO_EMAIL) expect(text).not.toContain('dpo@')
+    if (!SUPABASE_REGION) expect(section('Who we share it with')).not.toMatch(/Supabase[^}]*Servers:/)
+  })
+
+  it('never shows a bracketed placeholder publicly', () => {
+    expect(text).not.toMatch(/\[[^\]]*\]/)
+    expect(text).not.toMatch(/placeholder|to be appointed|region to confirm/i)
+  })
+
+  it('lets you withdraw consent and says where, and keeps the other rights', () => {
+    const rights = section('Your choices and your rights')
+    expect(rights).toMatch(/Withdraw consent/)
+    expect(rights).toMatch(/Profile, then Scholarship info/)
+    // The button the app actually shows (components/consent/WithdrawSensitiveButton.tsx).
+    expect(rights).toMatch(/Withdraw consent and clear these details/)
+    expect(rights).toMatch(/Settings, then Privacy/)
+    expect(rights).toMatch(/Object/)
+    expect(rights).toMatch(/National Privacy Commission at privacy\.gov\.ph/)
+    expect(rights).toMatch(/Export Data[^"]*answer history[^"]*notes/)
+    expect(rights).toMatch(/doesn’t include[^"]*email us/)
+  })
+
+  it('promises breach notification to the NPC and affected users', () => {
+    expect(section('Where it’s stored')).toMatch(/notify the National Privacy Commission and the affected users/)
   })
 })
 

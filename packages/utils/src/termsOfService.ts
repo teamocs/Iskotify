@@ -16,6 +16,15 @@ export const TERMS_LAST_UPDATED = 'October 1, 2026'
 export const TERMS_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const TERMS_OPERATOR = 'Online Creative Solutions'
 
+// Details the owner fills in before launch. Leave a value '' until it is real:
+// an empty detail is left out, never shown as a placeholder (a test fails if
+// any [bracketed] text renders). TERMS_BUSINESS_ADDRESS must equal
+// BUSINESS_ADDRESS in privacyPolicy.ts (a test checks it); this file imports
+// nothing, so it's repeated here.
+export const TERMS_BUSINESS_ADDRESS = ''
+export const TERMS_DTI_BN = ''
+export const DTI_CONSUMER_EMAIL = 'consumercare@dti.gov.ph'
+
 /** The words each renderer turns into a link to the privacy policy. */
 export const TERMS_PRIVACY_LINK = { text: 'Privacy Policy', href: '/privacy' } as const
 
@@ -35,7 +44,7 @@ export interface TermsSection {
 
 /** "The short version": a few lines above the full terms. */
 export const TERMS_SUMMARY: string[] = [
-  `Iskotify is a free study app run by ${TERMS_OPERATOR}. These terms are the rules for using it.`,
+  `Iskotify is a study app run by ${TERMS_OPERATOR}. Its core features are free. These terms are the rules for using it.`,
   'Use Iskotify for your own studying. Don’t cheat, scrape our content or harass anyone.',
   'Exam, school and scholarship details can change. Always check the official website before you act.',
   'The Estimated Admission Score is only an estimate. It is not an admission decision.',
@@ -46,14 +55,14 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: 'Who we are',
     blocks: [
-      `Iskotify is run by ${TERMS_OPERATOR}. In these terms, “we” and “us” means ${TERMS_OPERATOR}, and “you” means anyone who uses Iskotify.`,
+      `Iskotify is run by ${TERMS_OPERATOR}, a business in the Philippines.${TERMS_BUSINESS_ADDRESS ? ` Business address: ${TERMS_BUSINESS_ADDRESS}.` : ''}${TERMS_DTI_BN ? ` Business name registration: ${TERMS_DTI_BN}.` : ''} In these terms, “we” and “us” means ${TERMS_OPERATOR}, and “you” means anyone who uses Iskotify.`,
       'These terms cover the Iskotify app, on your phone or on the web, and the Iskotify website. By creating an account or using Iskotify, you agree to them. If you don’t agree, please don’t use Iskotify.',
     ],
   },
   {
     title: 'What Iskotify is',
     blocks: [
-      'Iskotify is a free study app for Filipino students getting ready for college entrance exams and scholarships. It includes:',
+      'Iskotify is a study app for Filipino students getting ready for college entrance exams and scholarships. It includes:',
       {
         items: [
           { label: 'Practice questions and mock exams,', text: 'with explanations, plus flashcards and a study plan.' },
@@ -66,10 +75,13 @@ export const TERMS_SECTIONS: TermsSection[] = [
     ],
   },
   {
-    title: 'Iskotify is free',
+    title: 'Free features and Iskotify Full Access',
     blocks: [
-      'Iskotify is free to use. There are no payments or in-app purchases today, and there are no ads.',
-      'If we ever add paid features, we’ll tell you first and update these terms before anyone is asked to pay.',
+      'Iskotify’s core features are free to use, and there are no ads. Nothing in Iskotify costs money today.',
+      'Later, we may offer Iskotify Full Access, an optional one-time purchase. It won’t be a subscription. Before you pay, we’ll show you the price in the app or the store, and what Full Access includes. We’ll update these terms before anyone is asked to pay.',
+      'Once you buy Full Access, you keep it for as long as we offer Iskotify.',
+      'If you buy Full Access on Google Play, refunds follow Google Play’s refund process. You can also email us for a refund if Full Access doesn’t work as described and we can’t fix it, or where the law gives you a right to one.',
+      'If you’re under 18, buy Full Access only with your parent or guardian’s permission. If a purchase was made without it, your parent or guardian can email us about it.',
     ],
   },
   {
@@ -83,8 +95,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: 'Students under 18',
     blocks: [
-      'Many Iskotify users are in senior high school, and some are under 18. If you’re under 18, please use Iskotify with a parent or guardian’s awareness, and read these terms and our Privacy Policy with them.',
-      'Iskotify isn’t meant for young children.',
+      'Many Iskotify users are in senior high school, and some are under 18. When you sign up, we ask whether you’re 18 or older or under 18. If you’re under 18, you confirm that a parent or guardian has agreed to you using Iskotify. Please read these terms and our Privacy Policy with them.',
+      'Iskotify isn’t for children under 13.',
     ],
   },
   {
@@ -92,7 +104,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       'Exam dates, school details, scholarship requirements and deadlines in Iskotify come from public sources and research by our staff. They can change, and they can contain mistakes.',
       'Always confirm the details on the official website of the school, exam or scholarship before you apply, pay a fee or make a decision. If you spot something wrong, you can suggest a correction in the app.',
-      'Iskotify isn’t affiliated with or endorsed by the University of the Philippines, DOST or any other school, agency or scholarship provider, unless we clearly say so.',
+      'Iskotify isn’t affiliated with or endorsed by the University of the Philippines, Ateneo de Manila University, De La Salle University, University of Santo Tomas, DOST-SEI or any other school, agency or scholarship provider, unless we clearly say so. Exam names, like UPCAT, are trademarks of their owners.',
+      'Cutoffs shown in Iskotify are historical, and they change from year to year. We can’t promise any exam result, admission or scholarship.',
     ],
   },
   {
@@ -173,6 +186,13 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Governing law',
     blocks: [
       'These terms are governed by the laws of the Philippines. If one part of them can’t be enforced, the rest still applies.',
+    ],
+  },
+  {
+    title: 'Complaints',
+    blocks: [
+      `If something went wrong, for example with a purchase, email ${TERMS_CONTACT_EMAIL} with “Complaint” in the subject. We’ll reply within 7 days and try to sort it out with you.`,
+      `If we can’t resolve it, you can contact the Department of Trade and Industry (DTI) at ${DTI_CONSUMER_EMAIL}. For complaints about your personal data, you can go to the National Privacy Commission, as our Privacy Policy explains.`,
     ],
   },
   {
