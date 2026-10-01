@@ -34,8 +34,17 @@ jest.mock('../../../services/export', () => ({
 
 jest.mock('../../../services/supabase', () => ({
   supabase: {
-    auth: { signOut: jest.fn().mockResolvedValue({ error: null }) },
+    auth: {
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+    },
   },
+}))
+
+const mockDeleteAccount = jest.fn()
+jest.mock('../../../services/deleteAccount', () => ({
+  ...jest.requireActual('../../../services/deleteAccount'),
+  deleteAccount: (...a: unknown[]) => mockDeleteAccount(...a),
 }))
 
 const mockSignOutOrder: string[] = []
@@ -491,5 +500,82 @@ describe('ProfileScreen — load failure', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('Maria Santos')).toBeTruthy()
     warn.mockRestore()
+  })
+})
+
+describe('ProfileScreen — Delete account', () => {
+  const signedInRow = {
+    fullName: 'Maria Santos', school: 'UPLB', gradeLevel: 11,
+    googleId: 'google-uid-123', email: 'maria@gmail.com', selectedListingSlug: '',
+  }
+  const signedOutRow = { ...signedInRow, fullName: 'Student', googleId: '', email: '' }
+  const setSession = (session: unknown) =>
+    require('../../../services/supabase').supabase.auth.getSession.mockResolvedValue({ data: { session } })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    setSession(null)
+    mockDeleteAccount.mockResolvedValue({ ok: true })
+    require('expo-router').router.replace.mockClear()
+  })
+
+  const open = async () => {
+    fireEvent.press(await screen.findByRole('button', { name: /^Delete account/ }))
+    return screen.findByText('Delete your account?')
+  }
+
+  it('shows the row under Your data when signed in (Google identity)', async () => {
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedInRow))
+    render(<ProfileScreen />)
+    expect(await screen.findByRole('button', { name: /^Delete account/ })).toBeTruthy()
+  })
+
+  it('shows the row for a signed-in email/password user (session, no Google id)', async () => {
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedOutRow))
+    setSession({ user: { id: 'u1' } })
+    render(<ProfileScreen />)
+    expect(await screen.findByRole('button', { name: /^Delete account/ })).toBeTruthy()
+  })
+
+  it('hides the row when signed out (nothing to delete; Reset app data stays)', async () => {
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedOutRow))
+    render(<ProfileScreen />)
+    await screen.findByText('Reset App Data')
+    await waitFor(() => expect(screen.getByText('Sign in with Google')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: /^Delete account/ })).toBeNull()
+  })
+
+  it('uses danger styling for the row icon (token, not a hex)', async () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'profile.tsx'), 'utf8')
+    expect(src).toMatch(/title="Delete account"[\s\S]{0,400}t\.danger/)
+  })
+
+  it('opens the confirmation sheet, which does not delete anything yet', async () => {
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedInRow))
+    render(<ProfileScreen />)
+    await open()
+    expect(mockDeleteAccount).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Type DELETE to confirm')).toBeTruthy()
+  })
+
+  it('on success routes to the landing screen (native)', async () => {
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedInRow))
+    render(<ProfileScreen />)
+    await open()
+    fireEvent.changeText(screen.getByLabelText('Type DELETE to confirm'), 'DELETE')
+    fireEvent.press(screen.getByRole('button', { name: 'Delete my account' }))
+    await waitFor(() => expect(require('expo-router').router.replace).toHaveBeenCalledWith('/landing'))
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1)
+  })
+
+  it('on failure shows the error and does not leave the screen', async () => {
+    mockDeleteAccount.mockResolvedValue({ ok: false, error: "We couldn't delete your account. Nothing was changed." })
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedInRow))
+    render(<ProfileScreen />)
+    await open()
+    fireEvent.changeText(screen.getByLabelText('Type DELETE to confirm'), 'DELETE')
+    fireEvent.press(screen.getByRole('button', { name: 'Delete my account' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(require('expo-router').router.replace).not.toHaveBeenCalled()
   })
 })

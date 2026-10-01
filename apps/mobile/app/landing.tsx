@@ -17,6 +17,8 @@ import { useTheme } from '../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../theme/tokens'
 import { useBreakpoint, pagePadding } from '../hooks/useBreakpoint'
 import { Button } from '../components/ui/Button'
+import { InfoBanner } from '../components/ui/InfoBanner'
+import { takeAccountNotice } from '../services/accountNotice'
 import { BrandBlock } from '../components/auth/AuthLayout'
 import { BrandPanel, PROMISE, VALUE } from '../components/auth/BrandPanel'
 import { decorative } from '../components/ui/a11y'
@@ -33,6 +35,8 @@ export default function LandingScreen() {
   const bp = useBreakpoint()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Set when the student has just deleted their account; shown once.
+  const [notice] = useState(takeAccountNotice)
 
   async function handleGoogleSignIn() {
     setSigningIn(true)
@@ -144,6 +148,7 @@ export default function LandingScreen() {
 
   const actions = (
     <View style={{ gap: spacing.sm }}>
+      {notice ? <InfoBanner tone="neutral" message={notice} /> : null}
       {error ? (
         <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={textStyle('bodySm', t.danger)}>
           {error}

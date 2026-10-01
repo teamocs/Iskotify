@@ -153,7 +153,7 @@ describe('Privacy copy (shared with the website via @iskotify/utils/privacy-poli
   it('shows the same "last updated" date as the website', () => {
     render(<PrivacyScreen />)
     expect(screen.getByText(`Privacy policy. Last updated: ${PRIVACY_LAST_UPDATED}`)).toBeTruthy()
-    expect(PRIVACY_LAST_UPDATED).toBe('September 26, 2026')
+    expect(PRIVACY_LAST_UPDATED).toBe('October 1, 2026')
   })
 
   it('drops the retired AI Coach and the Export-Data-in-Settings claim', () => {
@@ -182,7 +182,7 @@ describe('Terms copy (shared with the website via @iskotify/utils/terms-of-servi
   it('shows the same "last updated" date as the website', () => {
     render(<TermsScreen />)
     expect(screen.getByText(`Last updated: ${TERMS_LAST_UPDATED}`)).toBeTruthy()
-    expect(TERMS_LAST_UPDATED).toBe('September 26, 2026')
+    expect(TERMS_LAST_UPDATED).toBe('October 1, 2026')
   })
 
   it('names Online Creative Solutions and never mentions Calendar sync, payments rules or continued use', () => {

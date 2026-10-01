@@ -20,7 +20,7 @@ describe('public terms page (text shared with the app via @iskotify/utils/terms-
 
   it('shows the shared "last updated" date', () => {
     expect(html).toContain(`Last updated: ${TERMS_LAST_UPDATED}`)
-    expect(TERMS_LAST_UPDATED).toBe('September 26, 2026')
+    expect(TERMS_LAST_UPDATED).toBe('October 1, 2026')
   })
 
   it('drops Calendar sync, payments and "continued use means acceptance"', () => {

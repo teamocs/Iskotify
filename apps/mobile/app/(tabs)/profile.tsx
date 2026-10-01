@@ -36,6 +36,7 @@ import { supabase } from '../../services/supabase'
 import { clearWebData } from '../../services/webReset'
 import { userSettings, listings } from '../../db/schema'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
+import { DeleteAccountSheet } from '../../components/DeleteAccountSheet'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
 import { Card } from '../../components/ui/Card'
@@ -224,6 +225,10 @@ export default function ProfileScreen() {
   const { focusListings: focusListingsData, moveListing, removeListing } = useFocusListings()
   const { theme: t } = useTheme()
   const [draggingSlug, setDraggingSlug] = useState<string | null>(null)
+  // Signed in = a live Supabase session OR a stored Google identity. Web
+  // email/password students have a session but no Google id.
+  const [hasSession, setHasSession] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const sync = useSyncStatus()
   const isMountedRef = useRef(true)
@@ -279,9 +284,19 @@ export default function ProfileScreen() {
     return () => { isMountedRef.current = false }
   }, [])
 
+  const checkSession = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession()
+      if (isMountedRef.current) setHasSession(!!data.session)
+    } catch {
+      // Unknown: fall back to the stored identity alone.
+    }
+  }, [])
+
   useFocusEffect(useCallback(() => {
     void loadProfile()
-  }, [loadProfile]))
+    void checkSession()
+  }, [loadProfile, checkSession]))
 
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
@@ -404,6 +419,8 @@ export default function ProfileScreen() {
       },
     )
   }
+
+  const signedIn = hasSession || !!profile.googleId
 
   const rowIcon = (icon: typeof Gear1Outlined, color: string) => <Lineicons icon={icon} size={20} color={color} />
   const divided = (i: number) => ({ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider })
@@ -586,6 +603,16 @@ export default function ProfileScreen() {
               onPress={handleResetAppData}
             />
           </View>
+          {signedIn ? (
+            <View style={divided(1)}>
+              <ListRow
+                title="Delete account"
+                subtitle="Permanently delete your account, backup and reports"
+                leading={rowIcon(Trash3Outlined, t.danger)}
+                onPress={() => setDeleteOpen(true)}
+              />
+            </View>
+          ) : null}
         </Card>
       </View>
     </View>
@@ -624,6 +651,15 @@ export default function ProfileScreen() {
       </View>
 
       <TwoColumn primary={primary} secondary={secondary} />
+
+      <DeleteAccountSheet
+        visible={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          setDeleteOpen(false)
+          router.replace(postSignOutRoute)
+        }}
+      />
     </Screen>
   )
 }

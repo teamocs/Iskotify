@@ -31,6 +31,8 @@ import {
 import { checkPwnedPassword, BREACHED_PASSWORD_MESSAGE } from '../../services/pwnedPasswords'
 import { AuthLayout, BrandBlock, StatusPanel } from '../../components/auth/AuthLayout'
 import { Button } from '../../components/ui/Button'
+import { InfoBanner } from '../../components/ui/InfoBanner'
+import { takeAccountNotice } from '../../services/accountNotice'
 import { TextField } from '../../components/ui/TextField'
 import { focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 
@@ -63,6 +65,8 @@ export default function SignInScreen() {
   const { theme: t } = useTheme()
   const params = useLocalSearchParams<{ error?: string }>() ?? {}
   const returnReason = params.error ? RETURN_REASONS[params.error] ?? null : null
+  // Set when the student has just deleted their account; shown once.
+  const [notice] = useState(takeAccountNotice)
 
   // Activate Google One Tap when env var is set and no session exists.
   useGoogleOneTap()
@@ -225,6 +229,8 @@ export default function SignInScreen() {
     <AuthLayout>
       <View style={{ gap: spacing.xl }}>
         <BrandBlock />
+
+        {notice ? <InfoBanner tone="neutral" message={notice} /> : null}
 
         {returnReason ? (
           <Text accessibilityRole="alert" style={[textStyle('bodySm', t.danger), { textAlign: 'center' }]}>

@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import LandingScreen from '../landing'
+import { setAccountNotice, takeAccountNotice, ACCOUNT_DELETED_NOTICE } from '../../services/accountNotice'
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn() },
@@ -74,5 +75,23 @@ describe('LandingScreen (first impression)', () => {
   it('explains what signing in is for, without a cloud emoji', () => {
     render(<LandingScreen />)
     expect(screen.getByText(/Signing in backs up your progress/)).toBeTruthy()
+  })
+})
+
+describe('LandingScreen — after account deletion', () => {
+  beforeEach(() => { takeAccountNotice() })
+
+  it('tells the student their account was deleted (polite status, once)', () => {
+    setAccountNotice(ACCOUNT_DELETED_NOTICE)
+    const { unmount } = render(<LandingScreen />)
+    expect(screen.getByText('Your account was deleted.')).toBeTruthy()
+    unmount()
+    render(<LandingScreen />)
+    expect(screen.queryByText('Your account was deleted.')).toBeNull()
+  })
+
+  it('shows no notice on a normal visit', () => {
+    render(<LandingScreen />)
+    expect(screen.queryByText(/account was deleted/)).toBeNull()
   })
 })

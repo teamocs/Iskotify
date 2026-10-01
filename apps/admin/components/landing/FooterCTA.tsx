@@ -52,6 +52,7 @@ export function FooterCTA() {
             <ul className="flex flex-wrap items-center justify-center gap-x-3">
               <li><Link href="/privacy" className={FOOTER_LINK}>Privacy Policy</Link></li>
               <li><Link href="/terms" className={FOOTER_LINK}>Terms of Service</Link></li>
+              <li><Link href="/delete-account" className={FOOTER_LINK}>Delete account</Link></li>
               <li><Link href="/contact" className={FOOTER_LINK}>Contact</Link></li>
               <li>
                 <a

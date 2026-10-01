@@ -9,10 +9,11 @@ import {
 } from '../privacyPolicy'
 
 const text = privacyPolicyText()
+const section = (title: string) => JSON.stringify(PRIVACY_SECTIONS.find(s => s.title === title))
 
 describe('privacy policy content (shared by the app and the website)', () => {
   it('carries the current "last updated" date and the contact address', () => {
-    expect(PRIVACY_LAST_UPDATED).toBe('September 26, 2026')
+    expect(PRIVACY_LAST_UPDATED).toBe('October 1, 2026')
     expect(PRIVACY_CONTACT_EMAIL).toBe('teamocsph@gmail.com')
     expect(text).toContain('teamocsph@gmail.com')
   })
@@ -59,9 +60,23 @@ describe('privacy policy content (shared by the app and the website)', () => {
     // Local data is not encrypted by the app, and analytics is not anonymised.
     expect(text).not.toMatch(/encrypted SQLite/i)
     expect(text).not.toMatch(/anonymi[sz]ed/i)
-    // There is no in-app account deletion and no Google Calendar sync.
+    // No Google Calendar sync.
     expect(text).not.toMatch(/Google Calendar/i)
-    expect(text).toMatch(/There isn’t a delete-account button yet/)
+  })
+
+  it('describes in-app account deletion, the web page and the email fallback', () => {
+    expect(text).not.toMatch(/isn’t a delete-account button/)
+    const rights = section('Your choices and your rights')
+    expect(rights).toMatch(/Profile, then Your data, then Delete account/)
+    expect(rights).toMatch(/type DELETE/)
+    expect(rights).toContain('iskotify.ph/delete-account')
+    expect(rights).toMatch(/within 7 days/)
+    expect(rights).toMatch(/can’t be undone/)
+    // Honest about what the button does NOT reach.
+    expect(rights).toMatch(/PostHog/)
+    const keep = section('How long we keep it')
+    expect(keep).toMatch(/until you delete your account/)
+    expect(keep).not.toMatch(/until you ask us to delete your account/)
   })
 
   it('discloses the services that receive data, including the leaked-password check', () => {

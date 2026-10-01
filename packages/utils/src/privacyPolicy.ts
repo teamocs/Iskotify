@@ -10,7 +10,7 @@
 // date together. packages/utils/src/__tests__/privacyPolicy.test.ts guards the
 // structure and the claims that must (or must never) appear.
 
-export const PRIVACY_LAST_UPDATED = 'September 26, 2026'
+export const PRIVACY_LAST_UPDATED = 'October 1, 2026'
 export const PRIVACY_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const NPC_WEBSITE = 'privacy.gov.ph'
 
@@ -156,8 +156,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       {
         items: [
           { label: 'On your device:', text: 'until you clear it, reset the app or uninstall it.' },
-          { label: 'Your account and backup:', text: 'until you ask us to delete your account.' },
-          { label: 'Bug reports, feedback, question reports and date suggestions:', text: 'we don’t delete these on a fixed schedule yet. We keep them while they help us improve Iskotify, and we’ll delete yours if you ask.' },
+          { label: 'Your account and backup:', text: 'until you delete your account (in the app, or by emailing us).' },
+          { label: 'Bug reports, feedback, question reports and date suggestions:', text: 'we don’t delete these on a fixed schedule yet. We keep them while they help us improve Iskotify, and they’re deleted when you delete your account.' },
           { label: 'Analytics:', text: 'kept in PostHog. We can delete what’s linked to you if you ask.' },
           { label: 'Early access sign-ups:', text: 'until you ask us to remove them.' },
         ],
@@ -173,10 +173,10 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           { label: 'Skip optional details.', text: 'Scholarship and score details are optional.' },
           { label: 'Turn off reminders.', text: 'Go to Settings, then Notifications, or use your phone’s settings.' },
           { label: 'Download your data.', text: 'Go to Profile, then Your data, then Export Data. This saves a copy of your study data as a file.' },
-          { label: 'Clear your data from a device.', text: 'On the web, Clear data & sign out (in Profile, under Your data) removes everything Iskotify saved in that browser. On a phone, Reset App Data removes all your study data from that phone (your progress, answer history, flashcard reviews, study plan, focus list and settings) but keeps your notes; you can delete them in Notes. Uninstalling the app removes everything. Neither one deletes your backup.' },
+          { label: 'Clear your data from a device.', text: 'On the web, Clear data & sign out (in Profile, under Your data) removes everything Iskotify saved in that browser. On a phone, Reset App Data removes all your study data from that phone (your progress, answer history, flashcard reviews, study plan, focus list and settings) but keeps your notes; you can delete them in Notes. Uninstalling the app removes everything. Neither one deletes your account or your backup.' },
         ],
       },
-      `There isn’t a delete-account button yet. To delete your account and your backup, email ${PRIVACY_CONTACT_EMAIL} from the email address on your account. We’ll confirm it’s you, delete your data, and tell you when it’s done.`,
+      `Delete your account. Go to Profile, then Your data, then Delete account, and type DELETE to confirm. This permanently deletes your login, your backup, and the bug reports (with their screenshots), feedback, question reports and date suggestions you sent us. It can’t be undone, and we keep nothing about you afterwards except where the law requires it (today, nothing). Your notes and study data on that phone stay until you clear them. Can’t open the app? Go to iskotify.ph/delete-account, or email ${PRIVACY_CONTACT_EMAIL} with the subject Delete my Iskotify account, from the email address on your account. We’ll confirm it’s you and delete everything within 7 days. Analytics we keep in PostHog isn’t removed by the button; email us and we’ll delete what’s linked to you.`,
       'Under the Data Privacy Act, you have the right to:',
       {
         items: [
