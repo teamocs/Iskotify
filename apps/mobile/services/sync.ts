@@ -42,6 +42,7 @@ import {
 import { supabase } from './supabase'
 import { pushPendingReports } from './questionReports'
 import { batchUpsert } from './syncBatch'
+import { fetchContentStatusFeed, applyContentStatusFeed } from './contentStatusFeed'
 
 // Supabase caps a single SELECT at 1000 rows. For tables that exceed that
 // (flashcards, upcat_questions, course_school_rankings) we page with .range()
@@ -1010,6 +1011,12 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
     // actually receive their review deck.
     const allCards = await fetchFlashcardsForSlugs(contentSlugs, since)
 
+    // Unpublished / deleted questions, flashcards and topics (migration 065 hides
+    // them from the pulls above). Fetched AFTER the pulls so it reflects a state no
+    // older than theirs, and applied in the cursor transaction: a failed page throws
+    // here and the cursor stays put. null = old server without the feed.
+    const statusFeed = await fetchContentStatusFeed(since)
+
     // ── Tx 1: listings + admissions_updates ──────────────────────────────────
     // (Cursor write is intentionally LAST so an interrupted sync re-pulls next launch)
     await db.transaction((tx) => {
@@ -1359,6 +1366,8 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         note: row.note ?? '', minPercentile: row.min_percentile ?? null, displayOrder: row.display_order ?? 0,
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), examCourseNotes.id)
+
+      if (statusFeed) applyContentStatusFeed(tx, statusFeed)
 
       // Cursor write LAST so an interrupted sync re-pulls next launch.
       // selectedListingSlug is only (re)written when we actually have a slug —

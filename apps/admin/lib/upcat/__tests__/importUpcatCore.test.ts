@@ -86,6 +86,21 @@ describe('importUpcatCore', () => {
     expect(res).toEqual({ passages: 1, questions: 3, duplicatesDrafted: 0 })
   })
 
+  // Migration 065 makes the column default 'draft' and adds a draft/published
+  // CHECK: every upserted row must carry an explicit, valid status.
+  it('always sends an explicit draft/published status (anything not Approved is draft)', async () => {
+    const { client, inserted } = makeMockClient()
+    await importUpcatCore(client as any, [
+      row({ question_id: 'M1', question_text: 'Q1?', status: 'Approved' }),
+      row({ question_id: 'M2', question_text: 'Q2?', status: '' }),
+      row({ question_id: 'M3', question_text: 'Q3?', status: 'QA' }),
+      row({ question_id: 'M4', question_text: 'Q4?', status: ' approved ' }),
+    ])
+    expect(inserted.questions.map((q: any) => [q.question_id, q.status])).toEqual([
+      ['M1', 'published'], ['M2', 'draft'], ['M3', 'draft'], ['M4', 'published'],
+    ])
+  })
+
   it('demotes a published row that duplicates an EXISTING question (same text+options) to draft', async () => {
     const existing = [{ question_id: 'M999', question_text: 'Q?', options: ['a', 'b', 'c', 'd'] }]
     const { client, inserted } = makeMockClient(existing)
