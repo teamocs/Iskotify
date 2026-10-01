@@ -31,6 +31,16 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#831626"
       },
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+      ],
       "versionCode": 25
     },
     "web": {
@@ -43,29 +53,12 @@
       "expo-sqlite",
       "expo-web-browser",
       [
-        "@kesha-antonov/react-native-background-downloader",
-        {
-          "enableBackgroundMode": true
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
           "color": "#831626",
           "androidMode": "default",
           "androidCollapsedTitle": "Iskotify"
-        }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "permissions": [
-              "android.permission.FOREGROUND_SERVICE",
-              "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
-            ]
-          }
         }
       ],
       "expo-secure-store",

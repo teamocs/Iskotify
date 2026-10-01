@@ -26,7 +26,6 @@ import { pullUserData } from '../services/sync'
 import { installPushFlushListeners } from '../services/pushFlushListeners'
 import { WebSetupOverlay } from '../components/WebSetupOverlay'
 import { markFirstSyncDone } from '../services/syncStatus'
-import { runEnhancement } from '../hooks/useAiEnhancement'
 import { pruneOldTrashedNotesDb } from '../hooks/useNotes'
 import { notes as notesTable, userSettings, focusListings as focusListingsTable } from '../db/schema'
 import { eq, and, gt } from 'drizzle-orm'
@@ -184,7 +183,6 @@ function AppInit({ onReady }: { onReady: () => void }) {
         const freshTabsEntry = target === '/(tabs)' && Number(settings?.lastSyncedAt ?? 0) === 0
         if (!freshTabsEntry) markFirstSyncDone()
         void syncOnLaunch(db)
-          .then(() => { void runEnhancement(db) })
           .catch(e => console.warn('[layout] web bg sync:', e))
         return target
       }
@@ -280,10 +278,8 @@ function AppInit({ onReady }: { onReady: () => void }) {
 
     // Background sync — deferred until after all interactions/animations finish so
     // the initial navigation render is not jank-blocked by I/O.
-    // After sync completes, kick off AI enhancement in the background (fire-and-forget).
     InteractionManager.runAfterInteractions(() => {
       void syncOnLaunch(db)
-        .then(() => { void runEnhancement(db) })
         .catch(e => console.warn('[layout] bg sync:', e))
     })
 

@@ -20,7 +20,7 @@ describe('public privacy page (text shared with the app via @iskotify/utils/priv
 
   it('shows the shared "last updated" date', () => {
     expect(html).toContain(`Last updated: ${PRIVACY_LAST_UPDATED}`)
-    expect(PRIVACY_LAST_UPDATED).toBe('September 26, 2026')
+    expect(PRIVACY_LAST_UPDATED).toBe('October 1, 2026')
   })
 
   it('drops the retired AI Coach and the Export-Data-in-Settings claim', () => {

@@ -12,7 +12,6 @@ import {
   ExitOutlined,
   Bug1Outlined,
   Comment1Outlined,
-  Download1Outlined,
   ChevronLeftOutlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
@@ -23,7 +22,6 @@ import { InfoPage } from '../components/info/InfoPage'
 import { ListRow } from '../components/ui/ListRow'
 import { Avatar } from '../components/ui/Avatar'
 import { decorative, focusRing, heading, type WebPressableState } from '../components/ui/a11y'
-import { AiModelDownloadSheet } from '../components/AiModelDownloadSheet'
 import { useNotifications } from '../hooks/useNotifications'
 import { useHomeStats } from '../hooks/useHomeStats'
 
@@ -123,7 +121,6 @@ export default function SettingsScreen() {
   const { theme: t } = useTheme()
   const [profileName, setProfileName] = useState('Student')
   const [profileEmail, setProfileEmail] = useState('')
-  const [modelDownloadVisible, setModelDownloadVisible] = useState(false)
   const { focusedListings } = useHomeStats()
   const {
     enabled: notifEnabled, toggle: toggleNotifs,
@@ -216,15 +213,6 @@ export default function SettingsScreen() {
         </ControlRow>
       </Group>
 
-      <Group title="Offline tools">
-        <ListRow
-          title="On-device AI model"
-          subtitle="Writes extra answer choices for practice questions, offline"
-          leading={<IconTile icon={Download1Outlined} />}
-          onPress={() => setModelDownloadVisible(true)}
-        />
-      </Group>
-
       <Group title="Feedback">
         <ListRow title="Report a bug" leading={<IconTile icon={Bug1Outlined} />} onPress={() => router.push('/settings/report-bug')} />
         <Divider />
@@ -249,12 +237,6 @@ export default function SettingsScreen() {
       ) : null}
 
       <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]}>{`Iskotify v${version}`}</Text>
-
-      <AiModelDownloadSheet
-        visible={modelDownloadVisible}
-        onClose={() => setModelDownloadVisible(false)}
-        onReady={() => setModelDownloadVisible(false)}
-      />
     </InfoPage>
   )
 }

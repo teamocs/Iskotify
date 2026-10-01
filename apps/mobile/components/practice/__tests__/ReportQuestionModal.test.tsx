@@ -17,6 +17,14 @@ describe('ReportQuestionModal', () => {
     expect(screen.getByText('Other')).toBeTruthy()
   })
 
+  it('offers an AI-content reason (Play generative-AI policy) and submits it verbatim', () => {
+    const onSubmit = jest.fn()
+    render(<ReportQuestionModal visible onClose={jest.fn()} onSubmit={onSubmit} />)
+    fireEvent.press(screen.getByText('Inappropriate or wrong AI-written content'))
+    fireEvent.press(screen.getByText('Submit'))
+    expect(onSubmit).toHaveBeenCalledWith('Inappropriate or wrong AI-written content')
+  })
+
   it('Submit is disabled until a preset is chosen', () => {
     const onSubmit = jest.fn()
     render(<ReportQuestionModal visible onClose={jest.fn()} onSubmit={onSubmit} />)

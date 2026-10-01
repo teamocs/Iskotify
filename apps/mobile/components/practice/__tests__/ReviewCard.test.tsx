@@ -255,3 +255,17 @@ describe('ReviewCard', () => {
     expect(screen.queryByLabelText('Question figure')).toBeNull()
   })
 })
+
+describe('ReviewCard AI-assisted caption', () => {
+  const base = { index: 1, questionText: 'Q?', options: OPTIONS, correctIndex: 0, selectedIndex: 0, explanation: 'exp' }
+
+  it('discloses AI-written content when the question came from the AI pipeline', () => {
+    render(<ReviewCard {...base} aiAssisted />)
+    expect(screen.getByText('AI-assisted: the answer choices or explanation were written with AI and reviewed by our team.')).toBeTruthy()
+  })
+
+  it('shows no caption for human-written questions', () => {
+    render(<ReviewCard {...base} />)
+    expect(screen.queryByText(/AI-assisted/)).toBeNull()
+  })
+})

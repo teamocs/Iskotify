@@ -7,16 +7,15 @@ import { parseTopicIds } from '../../../hooks/useSavedDecks'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
-import { enhanceCardsByIds, type EnhanceProgress } from '../../../hooks/useAiEnhancement'
 import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
-import { SessionEmpty, SessionLoading, SessionPreparing } from '../../../components/practice/SessionStates'
+import { SessionEmpty, SessionLoading } from '../../../components/practice/SessionStates'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'enhancing' | 'chooser' | 'exam' | 'empty'
+type Phase = 'loading' | 'chooser' | 'exam' | 'empty'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,7 +38,6 @@ export default function DeckQuizScreen() {
   const [allQuestions, setAllQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   const [phase, setPhase] = useState<Phase>('loading')
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
-  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgress>({ done: 0, total: 0 })
   // Task H: due-today option — flashcardId → dueAt for cards in this deck that are due now.
   const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
 
@@ -89,18 +87,8 @@ export default function DeckQuizScreen() {
           .where(and(inArray(flashcardsTable.topicId, topicIds), eq(flashcardsTable.status, 'published')))
       }
 
-      let cardRows = await fetchCards()
+      const cardRows = await fetchCards()
 
-      // On-demand LLM enhancement of unenhanced cards before quiz starts.
-      const unenhancedIds = cardRows
-        .filter(r => r.aiEnhancedAt == null && safeParseOptions(r.options).length !== 4)
-        .map(r => r.id)
-      if (unenhancedIds.length > 0) {
-        setEnhanceProgress({ done: 0, total: unenhancedIds.length })
-        setPhase('enhancing')
-        await enhanceCardsByIds(db, unenhancedIds, p => setEnhanceProgress(p))
-        cardRows = await fetchCards()
-      }
 
       const rawCards: RawCard[] = cardRows.map(row => ({
         ...row,
@@ -133,7 +121,6 @@ export default function DeckQuizScreen() {
 
   if (phase === 'loading') return <SessionLoading label="Loading deck" />
 
-  if (phase === 'enhancing') return <SessionPreparing done={enhanceProgress.done} total={enhanceProgress.total} />
 
   if (phase === 'empty') {
     return (

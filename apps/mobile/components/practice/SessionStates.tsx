@@ -1,15 +1,12 @@
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { FileQuestionOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import { Screen } from '../ui/Screen'
-import { Card } from '../ui/Card'
 import { Skeleton } from '../ui/Skeleton'
-import { ProgressBar } from '../ui/ProgressBar'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
-import { PageTitle } from '../ui/PageTitle'
 import { DetailTopBar, goBackOr } from '../explore/DetailTopBar'
 
 /**
@@ -40,30 +37,6 @@ export function SessionLoading({ label, fallbackHref = '/practice' }: { label: s
         <Skeleton height={64} radius={radius.lg} />
         <Skeleton height={64} radius={radius.lg} />
       </View>
-    </Frame>
-  )
-}
-
-/**
- * First-time preparation of multiple-choice options (on-device AI). Shows
- * real progress, and says why it only happens once.
- */
-export function SessionPreparing({ done, total, fallbackHref = '/practice' }: { done: number; total: number; fallbackHref?: string }) {
-  const { theme: t } = useTheme()
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
-  return (
-    <Frame fallbackHref={fallbackHref}>
-      <PageTitle title="Preparing quiz options" lead="This runs only the first time you practise each card." />
-      <Card style={{ gap: spacing.md }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, flexWrap: 'wrap' }}>
-          <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>{`${done} of ${total} cards`}</Text>
-          <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={2}>{`${pct}%`}</Text>
-        </View>
-        <ProgressBar value={total > 0 ? done / total : 0} label="Preparing quiz options" />
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
-          The on-device AI writes the answer choices, so it works offline once it is done.
-        </Text>
-      </Card>
     </Frame>
   )
 }

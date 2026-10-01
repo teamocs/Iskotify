@@ -1,7 +1,7 @@
 // Offline "smart-ish" keyword + intent search over exam/scholarship listings.
-// This is the always-on base layer of the hybrid search: it runs instantly on every
-// keystroke and is the fallback when the AI layers (Gemini / on-device LLM) are
-// unavailable. Pure + dependency-light so it is easy to unit-test.
+// This is the only search layer (no AI provider, no on-device model): it runs
+// instantly on every keystroke, entirely on the device. Pure + dependency-light
+// so it is easy to unit-test.
 
 import { canonicalizeRegion } from './region'
 import { matchScholarship, type MatchInput, type MatchStatus, type StudentProfile } from './scholarshipMatch'

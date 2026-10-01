@@ -100,11 +100,6 @@ jest.mock('../../../services/homeAggregates', () => ({
   getListingAccuracy: jest.fn().mockResolvedValue([]),
 }))
 
-// Isolate the screen from the on-device LLM import chain.
-jest.mock('../../../services/listingSearch', () => ({
-  aiSearchListings: jest.fn().mockResolvedValue(null),
-}))
-
 jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
@@ -683,6 +678,14 @@ describe('ListsScreen', () => {
     expect(screen.getByLabelText('Search schools and exams')).toBeTruthy()
     fireEvent.press(screen.getByRole('tab', { name: 'Scholarships' }))
     expect(screen.getByLabelText('Search scholarships')).toBeTruthy()
+  })
+
+  it('ranks scholarship searches by keyword only: no AI wording, no network ranking step', () => {
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByRole('tab', { name: 'Scholarships' }))
+    fireEvent.changeText(screen.getByLabelText('Search scholarships'), 'engineering')
+    expect(screen.queryByText(/AI/)).toBeNull()
+    expect(screen.queryByText(/Press search/)).toBeNull()
   })
 
   it('shows a labelled skeleton (not a spinner) while scholarships load', () => {

@@ -15,7 +15,7 @@ interface Props {
   placeholder: string
   /** The field's accessible name, e.g. "Search scholarships". */
   accessibilityLabel: string
-  /** Show a spinner at the trailing edge (e.g. on-device AI ranking). */
+  /** Show a spinner at the trailing edge (e.g. while results load). */
   busy?: boolean
   testID?: string
 }

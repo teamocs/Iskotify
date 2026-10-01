@@ -6,7 +6,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   GraduationCap1Outlined, CertificateBadge1Outlined, Book1Outlined, Aeroplane1Outlined,
-  SearchMinusOutlined, SparkOutlined, Globe1Outlined,
+  SearchMinusOutlined, Globe1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -41,7 +41,6 @@ import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
-import { aiSearchListings } from '../../services/listingSearch'
 import { canonicalizeRegion } from '../../utils/region'
 import { cachedQuery, subscribe } from '../../services/queryCache'
 import { aggregateDestinationCountries } from '../../utils/destinationCountries'
@@ -194,9 +193,6 @@ export default function ExploreScreen() {
   const [tab, setTab] = useState<Tab>(() => parseExploreSection(tabParam) ?? 'universities')
   const [query, setQuery] = useState('')
 
-  // Hybrid search: keyword (instant) is the base; AI (on submit) reorders if available.
-  const [aiResults, setAiResults] = useState<ListingRow[] | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   // The section showing, readable from effects keyed on the URL alone.
@@ -210,7 +206,6 @@ export default function ExploreScreen() {
     tabRef.current = next
     setTab(next)
     setQuery('')
-    setAiResults(null)
     return true
   }, [])
 
@@ -382,12 +377,11 @@ export default function ExploreScreen() {
     [scholarships, query, userRegion],
   )
 
-  // Scholarships shown: AI results (if a submit produced them) else keyword
-  // results, in the profile-first display order; with no query, eligible and
-  // maybe first, then by title.
+  // Scholarships shown: keyword results in the profile-first display order;
+  // with no query, eligible and maybe first, then by title.
   const scholarshipData = useMemo(() => {
     if (query.trim()) {
-      return rankForDisplay(aiResults ?? keywordResults, {
+      return rankForDisplay(keywordResults, {
         tab: 'scholarships', query, profile, clusters: userClusters, region: userRegion, now: Date.now(),
       })
     }
@@ -397,26 +391,9 @@ export default function ExploreScreen() {
       if (ra !== rb) return ra - rb
       return a.title.localeCompare(b.title)
     })
-  }, [query, aiResults, keywordResults, scholarships, matchStatusMap, profile, userClusters, userRegion])
+  }, [query, keywordResults, scholarships, matchStatusMap, profile, userClusters, userRegion])
 
-  const runAiSearch = useCallback(async () => {
-    const q = query.trim()
-    if (!q) { setAiResults(null); return }
-    setAiLoading(true)
-    try {
-      setAiResults((await aiSearchListings(q, scholarships, userRegion)) as ListingRow[] | null)
-    } catch {
-      setAiResults(null)
-    } finally {
-      setAiLoading(false)
-    }
-  }, [query, scholarships, userRegion])
-
-  const onChangeQuery = useCallback((text: string) => {
-    setQuery(text)
-    setAiResults(null) // typing invalidates the previous AI ranking
-  }, [])
-  const clearQuery = useCallback(() => onChangeQuery(''), [onChangeQuery])
+  const clearQuery = useCallback(() => setQuery(''), [])
 
   // A section switch writes ?section= (dropping a legacy ?tab=), so a web
   // refresh, a bookmark or a shared link reopens the same section. setParams
@@ -642,7 +619,6 @@ export default function ExploreScreen() {
   }
 
   const search = tab === 'news' ? null : SECTION_SEARCH[tab]
-  const aiActive = tab === 'scholarships' && !!query.trim() && aiResults !== null
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -675,22 +651,10 @@ export default function ExploreScreen() {
           <View style={{ gap: spacing.xs, paddingBottom: spacing.md }}>
             <SearchField
               value={query}
-              onChangeText={onChangeQuery}
-              onSubmit={tab === 'scholarships' ? () => { void runAiSearch() } : undefined}
+              onChangeText={setQuery}
               placeholder={search.placeholder}
               accessibilityLabel={search.label}
-              busy={tab === 'scholarships' && aiLoading}
             />
-            {tab === 'scholarships' && query.trim() ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }} accessibilityLiveRegion="polite">
-                <View {...decorative}>
-                  <Lineicons icon={SparkOutlined} size={14} color={aiActive ? t.accentText : t.textSecondary} />
-                </View>
-                <Text style={textStyle('caption', aiActive ? t.accentText : t.textSecondary)} maxFontSizeMultiplier={1.6}>
-                  {aiActive ? 'Ranked by on-device AI' : 'Press search to rank these with on-device AI'}
-                </Text>
-              </View>
-            ) : null}
           </View>
         ) : null}
 
