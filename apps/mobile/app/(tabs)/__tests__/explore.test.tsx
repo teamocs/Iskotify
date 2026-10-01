@@ -535,7 +535,7 @@ describe('ListsScreen', () => {
   it('shows a scholarships results header with the match count when the profile is usable', async () => {
     const { getSettings } = require('../../../services/settings')
     getSettings.mockResolvedValue({
-      gwa: 95, province: 'Albay', incomeBracket: '<=100k',
+      gwa: 95, province: 'Albay', incomeBracket: '<=100k', sensitiveConsentAt: 1_700_000_000_000,
     })
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([
@@ -555,6 +555,25 @@ describe('ListsScreen', () => {
     })
     // 1 of the 2 grants is eligible for this profile
     expect(screen.getByText(/You match 1 of 2/i)).toBeTruthy()
+  })
+
+  it('without consent to use grades and income, a stored GWA is not used to count matches', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockResolvedValue({
+      gwa: 95, province: 'Albay', incomeBracket: '<=100k', sensitiveConsentAt: 0,
+    })
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([
+      { id: 's1', slug: 'open', title: 'Open Grant', type: 'scholarship', examDate: null, region: 'National', provider: 'X', incomeCeiling: 100000, gwaRequirement: 90, targetCourses: JSON.stringify(['all']) },
+    ]))
+    render(<ListsScreen />)
+    fireEvent.press(screen.getByText('Scholarships'))
+    await waitFor(() => expect(screen.getByText('Open Grant')).toBeTruthy())
+    const input = screen.getByPlaceholderText(SEARCH_PLACEHOLDER_SCHOLAR)
+    fireEvent.changeText(input, 'grant')
+    fireEvent(input, 'submitEditing')
+    await waitFor(() => expect(screen.getByText(/Top scholarships matching/i)).toBeTruthy())
+    expect(screen.queryByText(/You match 1 of 1/i)).toBeNull()
   })
 
   // ── Badge rules (Universities tab — ≤2 per row) ───────────────────────────

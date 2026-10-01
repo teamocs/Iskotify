@@ -15,6 +15,7 @@ jest.mock('../../services/settings', () => ({
     hsGwaG8: 90, hsGwaG9: 91, hsGwaG10: 92, hsGwaG11: 93,
     schoolType: 'public_general', isIndigenous: false,
     targetCampus: null, province: null, scoreDisclaimerAck: true,
+    sensitiveConsentAt: 1_700_000_000_000,
   }),
   updateSettings: jest.fn(),
 }))

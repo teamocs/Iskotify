@@ -22,6 +22,7 @@ import { takeAccountNotice } from '../services/accountNotice'
 import { BrandBlock } from '../components/auth/AuthLayout'
 import { BrandPanel, PROMISE, VALUE } from '../components/auth/BrandPanel'
 import { decorative } from '../components/ui/a11y'
+import { LegalLine } from '../components/consent/LegalLinks'
 
 /**
  * Native first impression (web visitors land on /auth/sign-in). One screen:
@@ -173,6 +174,7 @@ export default function LandingScreen() {
       <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center', marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
         Signing in backs up your progress so you can switch phones without losing it.
       </Text>
+      <LegalLine />
     </View>
   )
 

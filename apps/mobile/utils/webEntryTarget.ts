@@ -29,6 +29,9 @@ export function webEntryTarget(
 const AUTH_ROUTES = ['/auth/sign-in', '/auth/callback', '/auth/reset-password']
 // Entry screens a signed-in, onboarded student has no business seeing.
 const SIGNED_OUT_ONLY = ['/auth/sign-in', '/landing']
+// The legal pages are reachable by anyone (consent step, sign-in, landing) and
+// must stay readable: a late auth event must not bounce the reader away.
+const LEGAL_ROUTES = ['/terms', '/privacy']
 // Routes that route themselves once a session exists.
 const SELF_ROUTING = ['/auth/callback', '/auth/reset-password']
 
@@ -44,6 +47,7 @@ function clean(pathname: string): string {
  */
 export function webGateRedirect(pathname: string, target: EntryTarget): string | null {
   const path = clean(pathname)
+  if (LEGAL_ROUTES.includes(path)) return null
   if (target === '/auth/sign-in') return AUTH_ROUTES.includes(path) ? null : '/auth/sign-in'
   if (SELF_ROUTING.includes(path)) return null
   if (target === '/onboarding') return path === '/onboarding' ? null : '/onboarding'

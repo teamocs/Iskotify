@@ -43,7 +43,21 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       tour_seen_at INTEGER NOT NULL DEFAULT 0,
       owner_user_id TEXT NOT NULL DEFAULT '',
       push_dirty_at INTEGER NOT NULL DEFAULT 0,
-      last_pull_ok_at INTEGER NOT NULL DEFAULT 0
+      last_pull_ok_at INTEGER NOT NULL DEFAULT 0,
+
+      age_band TEXT NOT NULL DEFAULT '',
+
+      consent_version TEXT NOT NULL DEFAULT '',
+
+      consented_at INTEGER NOT NULL DEFAULT 0,
+
+      guardian_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      sensitive_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      analytics_opt_in INTEGER,
+      sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
+      analytics_choice_at INTEGER NOT NULL DEFAULT 0
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)

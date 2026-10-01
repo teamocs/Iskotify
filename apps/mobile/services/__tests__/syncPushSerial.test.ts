@@ -10,7 +10,11 @@ const mockState: { upsert: jest.Mock } = { upsert: jest.fn() }
 jest.mock('../supabase', () => ({
   supabase: {
     auth: { getUser: jest.fn(async () => ({ data: { user: { id: 'u1' } } })) },
-    from: jest.fn(() => ({ upsert: (...a: unknown[]) => mockState.upsert(...a) })),
+    from: jest.fn(() => ({
+      // The push reads the backup consent first; no backup row yet.
+      select: () => ({ eq: () => ({ limit: () => ({ single: async () => ({ data: null, error: { code: 'PGRST116' } }) }) }) }),
+      upsert: (...a: unknown[]) => mockState.upsert(...a),
+    })),
   },
 }))
 jest.mock('../questionReports', () => ({ pushPendingReports: jest.fn() }))

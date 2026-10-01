@@ -30,6 +30,9 @@ jest.mock('../sync', () => ({
   pushUserData: (...a: unknown[]) => mockPush(...a),
 }))
 
+const mockResetAnalytics = jest.fn()
+jest.mock('../../lib/analytics', () => ({ resetAnalytics: () => mockResetAnalytics() }))
+
 const db = { tag: 'db' } as never
 const okResponse = (status = 200, body: unknown = { ok: true }) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response
@@ -83,6 +86,17 @@ describe('deleteAccount', () => {
   it('never pushes a backup first (it would re-create what is being deleted)', async () => {
     await deleteAccount(db)
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('switches analytics off once the account is gone', async () => {
+    await deleteAccount(db)
+    expect(mockResetAnalytics).toHaveBeenCalled()
+  })
+
+  it('keeps analytics as it was when the deletion fails', async () => {
+    mockFetch.mockImplementation(async () => okResponse(500, {}))
+    await deleteAccount(db)
+    expect(mockResetAnalytics).not.toHaveBeenCalled()
   })
 
   it('leaves a notice for the landing screen on success', async () => {

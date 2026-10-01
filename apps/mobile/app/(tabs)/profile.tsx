@@ -31,9 +31,10 @@ import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useFocusListings, type FocusListing } from '../../hooks/useFocusListings'
 import { exportUserData, importUserData } from '../../services/export'
 import { resetStudyData } from '../../services/resetStudyData'
-import { scholarshipProfileIncomplete, type IncomeBracket } from '../../utils/scholarshipMatch'
+import { scholarshipProfileIncomplete, studentProfileFromSettings, type IncomeBracket } from '../../utils/scholarshipMatch'
 import { supabase } from '../../services/supabase'
 import { clearWebData } from '../../services/webReset'
+import { resetAnalytics } from '../../lib/analytics'
 import { userSettings, listings } from '../../db/schema'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { DeleteAccountSheet } from '../../components/DeleteAccountSheet'
@@ -263,10 +264,11 @@ export default function ProfileScreen() {
           googleId: row.googleId ?? '',
           email: row.email ?? '',
           listingTitle,
+          // Without consent to use income and GWA they count as not added, so the card prompts for them.
           scholarshipIncomplete: scholarshipProfileIncomplete({
-            gwa: row.gwa ?? null,
+            gwa: studentProfileFromSettings(row).gwa ?? null,
             province: row.province ?? null,
-            incomeBracket: (row.incomeBracket as IncomeBracket | null) ?? null,
+            incomeBracket: (studentProfileFromSettings(row).incomeBracket as IncomeBracket | undefined) ?? null,
           }),
         })
         setStatus('ready')
@@ -381,6 +383,8 @@ export default function ProfileScreen() {
         } catch (err) {
           console.warn('[profile] signOut failed:', err)
         }
+        // Forget the account id and stop analytics until the next person's own consent applies.
+        resetAnalytics()
         router.replace(postSignOutRoute)
       },
     )
@@ -401,6 +405,7 @@ export default function ProfileScreen() {
       resetMessage,
       Platform.OS === 'web' ? 'Clear & start over' : 'Reset Everything',
       async () => {
+        resetAnalytics()
         if (Platform.OS === 'web') {
           try {
             await clearWebData()

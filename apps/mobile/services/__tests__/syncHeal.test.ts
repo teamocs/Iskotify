@@ -110,7 +110,21 @@ function makeHealDb(): InstanceType<typeof Database> {
       tour_seen_at INTEGER NOT NULL DEFAULT 0,
       owner_user_id TEXT NOT NULL DEFAULT '',
       push_dirty_at INTEGER NOT NULL DEFAULT 0,
-      last_pull_ok_at INTEGER NOT NULL DEFAULT 0
+      last_pull_ok_at INTEGER NOT NULL DEFAULT 0,
+
+      age_band TEXT NOT NULL DEFAULT '',
+
+      consent_version TEXT NOT NULL DEFAULT '',
+
+      consented_at INTEGER NOT NULL DEFAULT 0,
+
+      guardian_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      sensitive_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      analytics_opt_in INTEGER,
+      sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
+      analytics_choice_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

@@ -2,6 +2,7 @@ import type { DrizzleClient } from '../db/client'
 import { supabase } from './supabase'
 import { resetStudyData } from './resetStudyData'
 import { setAccountNotice, ACCOUNT_DELETED_NOTICE } from './accountNotice'
+import { resetAnalytics } from '../lib/analytics'
 
 const ADMIN_BASE_URL = process.env.EXPO_PUBLIC_ADMIN_BASE_URL ?? 'https://iskotify.vercel.app'
 const REQUEST_TIMEOUT_MS = 30000
@@ -81,6 +82,8 @@ export async function deleteAccount(db: DrizzleClient): Promise<DeleteAccountRes
   } catch (e) {
     console.warn('[deleteAccount] signOut failed (non-fatal):', e)
   }
+  // Forget the account id and stop analytics: the next person here is asked afresh.
+  resetAnalytics()
   setAccountNotice(ACCOUNT_DELETED_NOTICE)
   return { ok: true }
 }

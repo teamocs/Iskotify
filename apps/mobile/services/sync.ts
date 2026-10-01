@@ -1,6 +1,7 @@
 import { eq, asc, inArray, sql, and, lte, isNotNull } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
+import { hasSensitiveConsent, mergeConsent, SENSITIVE_CLEARED, type ConsentSnapshot } from '../utils/consent'
 import { markSyncStart, markSyncDone, markSyncError, clearSyncError, BACKUP_FAILED_MESSAGE } from './syncStatus'
 export { BACKUP_FAILED_MESSAGE } from './syncStatus'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
@@ -10,6 +11,7 @@ import {
 } from './pushScheduler'
 import { pruneOldAttempts } from './pruneAttempts'
 import { STUDY_TABLES } from './resetStudyData'
+import { resetAnalytics } from '../lib/analytics'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -202,6 +204,34 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     console.warn('[sync] backup push skipped: empty device that has never pulled this account')
     return false
   }
+  // Consent (P1b). The backup may hold a choice made on another device after this
+  // one's: a withdrawal of the sensitive-data consent, analytics switched off. It is
+  // merged in first (same rules as a pull, utils/consent.ts mergeConsent), so this
+  // upload can never bring back withdrawn details or erase the withdrawal from the
+  // backup. If the backup cannot be read there is no upload: it could hold one.
+  let settingsRow = settings[0]
+  if (settingsRow) {
+    const remote = await fetchBackupSettings(user.id)
+    if (remote === 'unreadable') {
+      console.warn('[sync] backup push skipped: could not read the backup consent first')
+      markSyncError(BACKUP_FAILED_MESSAGE)
+      return false
+    }
+    if (remote) {
+      const consent = resolveConsent(settingsRow, remote, (settingsRow.lastPullOkAt ?? 0) === 0)
+      const before: Record<string, unknown> = settingsRow
+      if (Object.entries(consent).some(([k, v]) => before[k] !== v)) {
+        await db.update(userSettings).set(consent).where(eq(userSettings.id, 1))
+        settingsRow = { ...settingsRow, ...consent }
+        invalidate('settings:')
+        scheduleWebPersist()
+      }
+    }
+    // Sensitive details only travel with consent: values stored before consent
+    // existed (or left by an older build) are uploaded cleared.
+    if (!hasSensitiveConsent(settingsRow)) settingsRow = { ...settingsRow, ...SENSITIVE_CLEARED }
+  }
+
   // Every real upload attempt marks the data unsynced first (monotonic) and only a
   // confirmed success clears it. A failed upload — including the one right after a
   // first-sign-in merge — therefore leaves the device dirty, so the next pull pushes
@@ -218,7 +248,7 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     saved_decks: decks,
     user_progress: progress,
     practice_sessions: sessions,
-    settings: settings[0] ?? {},
+    settings: settingsRow ?? {},
     notes: noteRows,
     note_labels: labelRows,
     note_label_assignments: assignRows,
@@ -308,6 +338,15 @@ const USER_SETTINGS_RESET = {
   dailyReminderHour: 9,
   weeklySummaryEnabled: true,
   onboardingStep: '',
+  // Consent belongs to the person, not the device: the next account is asked afresh.
+  ageBand: '',
+  consentVersion: '',
+  consentedAt: 0,
+  guardianConsentAt: 0,
+  sensitiveConsentAt: 0,
+  analyticsOptIn: null,
+  sensitiveWithdrawnAt: 0,
+  analyticsChoiceAt: 0,
   pushDirtyAt: 0,
   lastPullOkAt: 0,
 } satisfies Partial<typeof userSettings.$inferInsert>
@@ -374,6 +413,8 @@ export async function reconcileAccountOwner(
       console.warn('[sync] could not cancel the previous account note reminders (non-fatal):', e)
     }
   }
+  // The previous person's analytics consent (and held id) must not carry over.
+  resetAnalytics()
   invalidate('')
   scheduleWebPersist()
   return 'switched'
@@ -436,6 +477,43 @@ async function applyCurated(
 
 const orderFocus = <T extends { listingSlug: string; priority: number; addedAt: number }>(rows: T[]): T[] =>
   [...rows].sort((a, b) => a.priority - b.priority || a.addedAt - b.addedAt || a.listingSlug.localeCompare(b.listingSlug))
+
+/** The settings object in this account's backup row, null when there is no backup yet. */
+async function fetchBackupSettings(
+  userId: string,
+): Promise<Partial<typeof userSettings.$inferInsert> | null | 'unreadable'> {
+  try {
+    const { data, error } = await supabase
+      .from('user_app_data').select('settings').eq('user_id', userId).limit(1).single()
+    if (error) return (error as { code?: string }).code === 'PGRST116' ? null : 'unreadable'
+    return (data?.settings as Partial<typeof userSettings.$inferInsert> | null | undefined) ?? null
+  } catch (e) {
+    console.warn('[sync] could not read the backup settings:', e)
+    return 'unreadable'
+  }
+}
+
+/** Consent columns to write on restore, plus the sensitive details to clear when the backup withdrew that consent. */
+function resolveConsent(
+  local: typeof userSettings.$inferSelect | undefined,
+  remote: Partial<typeof userSettings.$inferInsert>,
+  merging: boolean,
+) {
+  const snap = (r: Partial<typeof userSettings.$inferInsert> | undefined): ConsentSnapshot => ({
+    ageBand: r?.ageBand ?? '',
+    consentVersion: r?.consentVersion ?? '',
+    consentedAt: r?.consentedAt ?? 0,
+    guardianConsentAt: r?.guardianConsentAt ?? 0,
+    sensitiveConsentAt: r?.sensitiveConsentAt ?? 0,
+    sensitiveWithdrawnAt: r?.sensitiveWithdrawnAt ?? 0,
+    analyticsOptIn: r?.analyticsOptIn ?? null,
+    analyticsChoiceAt: r?.analyticsChoiceAt ?? 0,
+  })
+  const before = snap(local)
+  const merged = mergeConsent(before, snap(remote), merging)
+  const withdrawn = before.sensitiveConsentAt > 0 && merged.sensitiveConsentAt === 0
+  return withdrawn ? { ...merged, ...SENSITIVE_CLEARED } : merged
+}
 
 async function markPullOk(db: DrizzleClient): Promise<void> {
   try {
@@ -526,6 +604,11 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
       const local = localRows[0]
       const str = (remote: string | undefined | null, localVal: string | undefined | null, dflt: string) =>
         nonEmpty(remote) ? remote : (localVal && localVal !== '[]' ? localVal : (remote ?? dflt))
+      // Consent (P1b): each part is merged on its own (utils/consent.ts mergeConsent)
+      // and an older backup never blanks it. A withdrawal of the sensitive-data
+      // consent made on another device, if newer than this device's grant, also
+      // clears the details here, so no device keeps them without consent.
+      const consentValues = resolveConsent(local, remoteSettings, merging)
       const settingsValues = {
         id: 1,
         googleId: str(remoteSettings.googleId, local?.googleId, ''),
@@ -542,6 +625,7 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
         targetExams: str(remoteSettings.targetExams, local?.targetExams, '[]'),
         targetCourses: str(remoteSettings.targetCourses, local?.targetCourses, '[]'),
         schoolRegion: str(remoteSettings.schoolRegion, local?.schoolRegion, ''),
+        ...consentValues,
       }
       await db.insert(userSettings)
         .values(settingsValues)

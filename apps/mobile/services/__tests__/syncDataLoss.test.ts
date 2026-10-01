@@ -32,11 +32,12 @@ jest.mock('../supabase', () => ({
   supabase: {
     auth: { getUser: jest.fn(async () => ({ data: { user: mockState.user } })) },
     from: jest.fn(() => ({
-      select: () => ({
+      // The push reads the backup settings first (consent check): logged apart from the pull's select.
+      select: (cols?: string) => ({
         eq: () => ({
           limit: () => ({
             single: async () => {
-              mockState.log.push('select')
+              mockState.log.push(cols === 'settings' ? 'consent-check' : 'select')
               mockState.active++
               mockState.maxActive = Math.max(mockState.maxActive, mockState.active)
               if (mockState.selectDelayMs) await new Promise(r => setTimeout(r, mockState.selectDelayMs))

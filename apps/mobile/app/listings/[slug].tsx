@@ -33,7 +33,7 @@ import { daysUntilDate, fmtLongDate, matchBadge } from '../../components/explore
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
 import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
-import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
+import { matchScholarship, scholarshipProfileIncomplete, studentProfileFromSettings } from '../../utils/scholarshipMatch'
 import type { MatchResult, StudentProfile } from '../../utils/scholarshipMatch'
 
 interface FullListing {
@@ -186,17 +186,12 @@ export default function ListingDetailScreen() {
         setWatchingResults(watchRows.length > 0)
 
         if (l && l.type === 'scholarship') {
+          // Income and GWA only count while the student has consented to their use.
+          const studentProfile: StudentProfile = studentProfileFromSettings(settings)
           setProfileIncomplete(scholarshipProfileIncomplete({
-            gwa: settings.gwa ?? null, province: settings.province ?? null, incomeBracket: settings.incomeBracket ?? null,
+            gwa: studentProfile.gwa ?? null, province: studentProfile.province ?? null, incomeBracket: studentProfile.incomeBracket ?? null,
           }))
           const meta = parseJson<Record<string, unknown>>(l.scholarshipMeta, {})
-          const studentProfile: StudentProfile = {
-            gradeLevel: settings.gradeLevel ?? undefined,
-            incomeBracket: settings.incomeBracket ?? undefined,
-            gwa: settings.gwa ?? undefined,
-            province: settings.province ?? null,
-            city: settings.city ?? null,
-          }
           setMatchResult(matchScholarship({
             scope: (l.scope ?? 'national') as 'national' | 'regional' | 'provincial' | 'city' | 'school',
             isVerified: l.isVerified ?? false,

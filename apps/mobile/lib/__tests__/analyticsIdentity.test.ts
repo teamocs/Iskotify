@@ -24,7 +24,7 @@ describe('identifyUser sends the account ID only', () => {
         default: jest.fn().mockImplementation(() => ({ identify })),
       }))
       const a = require('../analytics.native')
-      a.initAnalytics()
+      a.setAnalyticsConsent(true)
       ;(a.identifyUser as (...args: unknown[]) => void)('user-1', { email: 'student@example.com', name: 'Juan' })
     })
     expect(identify).toHaveBeenCalledTimes(1)
@@ -37,7 +37,7 @@ describe('identifyUser sends the account ID only', () => {
       jest.doMock('posthog-js', () => ({ __esModule: true, default: { init: jest.fn(), identify } }))
       // Explicit extension: jest-expo would otherwise resolve the .native file.
       const a = require('../analytics.ts')
-      a.initAnalytics()
+      a.setAnalyticsConsent(true)
       ;(a.identifyUser as (...args: unknown[]) => void)('user-1', { email: 'student@example.com' })
     })
     expect(identify).toHaveBeenCalledTimes(1)

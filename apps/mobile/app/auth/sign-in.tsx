@@ -34,6 +34,7 @@ import { Button } from '../../components/ui/Button'
 import { InfoBanner } from '../../components/ui/InfoBanner'
 import { takeAccountNotice } from '../../services/accountNotice'
 import { TextField } from '../../components/ui/TextField'
+import { LegalLine } from '../../components/consent/LegalLinks'
 import { focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 
 type Mode = 'sign-in' | 'sign-up'
@@ -364,9 +365,7 @@ export default function SignInScreen() {
           fullWidth
         />
 
-        <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
-          By continuing you agree to use Iskotify for personal study purposes.
-        </Text>
+        <LegalLine />
       </View>
     </AuthLayout>
   )

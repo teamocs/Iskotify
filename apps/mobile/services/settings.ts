@@ -28,6 +28,16 @@ export interface UserSettingsData {
   isIndigenous?: boolean | null
   targetCampus?: string | null
   scoreDisclaimerAck?: boolean
+  /** P1b consent (see utils/consent.ts). ageBand '' = never asked; 0 timestamps = none; analyticsOptIn null = unset. */
+  ageBand?: string
+  consentVersion?: string
+  consentedAt?: number
+  guardianConsentAt?: number
+  sensitiveConsentAt?: number
+  analyticsOptIn?: number | null
+  /** When each choice was last made (0 = never); the latest wins across devices. */
+  sensitiveWithdrawnAt?: number
+  analyticsChoiceAt?: number
   /** JSON-encoded arrays (parsed by callers). */
   targetExams: string
   targetCourses: string
@@ -56,6 +66,14 @@ const DEFAULTS: UserSettingsData = {
   isIndigenous: null,
   targetCampus: null,
   scoreDisclaimerAck: false,
+  ageBand: '',
+  consentVersion: '',
+  consentedAt: 0,
+  guardianConsentAt: 0,
+  sensitiveConsentAt: 0,
+  analyticsOptIn: null,
+  sensitiveWithdrawnAt: 0,
+  analyticsChoiceAt: 0,
   targetExams: '[]',
   targetCourses: '[]',
   schoolRegion: '',
@@ -94,6 +112,14 @@ export async function getSettings(db: DrizzleClient): Promise<UserSettingsData> 
     isIndigenous: row.isIndigenous ?? null,
     targetCampus: row.targetCampus ?? null,
     scoreDisclaimerAck: row.scoreDisclaimerAck ?? false,
+    ageBand: row.ageBand ?? '',
+    consentVersion: row.consentVersion ?? '',
+    consentedAt: row.consentedAt ?? 0,
+    guardianConsentAt: row.guardianConsentAt ?? 0,
+    sensitiveConsentAt: row.sensitiveConsentAt ?? 0,
+    analyticsOptIn: row.analyticsOptIn ?? null,
+    sensitiveWithdrawnAt: row.sensitiveWithdrawnAt ?? 0,
+    analyticsChoiceAt: row.analyticsChoiceAt ?? 0,
     targetExams: row.targetExams ?? '[]',
     targetCourses: row.targetCourses ?? '[]',
     schoolRegion: row.schoolRegion ?? '',
@@ -128,6 +154,14 @@ export async function updateSettings(
   if ('isIndigenous' in patch) set.isIndigenous = patch.isIndigenous ?? null
   if ('targetCampus' in patch) set.targetCampus = patch.targetCampus ?? null
   if ('scoreDisclaimerAck' in patch) set.scoreDisclaimerAck = patch.scoreDisclaimerAck ?? false
+  if (patch.ageBand !== undefined) set.ageBand = patch.ageBand
+  if (patch.consentVersion !== undefined) set.consentVersion = patch.consentVersion
+  if (patch.consentedAt !== undefined) set.consentedAt = patch.consentedAt
+  if (patch.guardianConsentAt !== undefined) set.guardianConsentAt = patch.guardianConsentAt
+  if (patch.sensitiveConsentAt !== undefined) set.sensitiveConsentAt = patch.sensitiveConsentAt
+  if ('analyticsOptIn' in patch) set.analyticsOptIn = patch.analyticsOptIn ?? null
+  if (patch.sensitiveWithdrawnAt !== undefined) set.sensitiveWithdrawnAt = patch.sensitiveWithdrawnAt
+  if (patch.analyticsChoiceAt !== undefined) set.analyticsChoiceAt = patch.analyticsChoiceAt
   if (patch.targetExams !== undefined) set.targetExams = patch.targetExams
   if (patch.targetCourses !== undefined) set.targetCourses = patch.targetCourses
   if (patch.schoolRegion !== undefined) set.schoolRegion = patch.schoolRegion

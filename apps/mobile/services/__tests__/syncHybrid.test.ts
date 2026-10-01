@@ -26,10 +26,11 @@ jest.mock('../supabase', () => ({
   supabase: {
     auth: { getUser: jest.fn(async () => ({ data: { user: mockState.user } })) },
     from: jest.fn(() => ({
-      select: () => ({
+      // The push reads the backup settings first (consent check): logged apart from the pull's select.
+      select: (cols?: string) => ({
         eq: () => ({
           limit: () => ({
-            single: async () => { mockState.log.push('select'); return { data: mockState.remote, error: null } },
+            single: async () => { mockState.log.push(cols === 'settings' ? 'consent-check' : 'select'); return { data: mockState.remote, error: null } },
           }),
         }),
       }),

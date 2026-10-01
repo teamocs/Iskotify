@@ -43,7 +43,21 @@ function makeDb(): DrizzleClient {
       tour_seen_at INTEGER NOT NULL DEFAULT 0,
       owner_user_id TEXT NOT NULL DEFAULT '',
       push_dirty_at INTEGER NOT NULL DEFAULT 0,
-      last_pull_ok_at INTEGER NOT NULL DEFAULT 0
+      last_pull_ok_at INTEGER NOT NULL DEFAULT 0,
+
+      age_band TEXT NOT NULL DEFAULT '',
+
+      consent_version TEXT NOT NULL DEFAULT '',
+
+      consented_at INTEGER NOT NULL DEFAULT 0,
+
+      guardian_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      sensitive_consent_at INTEGER NOT NULL DEFAULT 0,
+
+      analytics_opt_in INTEGER,
+      sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
+      analytics_choice_at INTEGER NOT NULL DEFAULT 0
     );
   `)
   return drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -200,6 +214,30 @@ describe('updateSettings', () => {
     expect(s.hsGwaG8).toBeNull()
     expect(s.schoolType).toBeNull()
     expect(s.targetCampus).toBeNull()
+  })
+
+  it('defaults to no consent recorded', async () => {
+    const db = makeDb()
+    const s = await getSettings(db)
+    expect(s).toMatchObject({
+      ageBand: '', consentVersion: '', consentedAt: 0, guardianConsentAt: 0, sensitiveConsentAt: 0, analyticsOptIn: null,
+    })
+  })
+
+  it('round-trips the P1b consent fields, keeping analyticsOptIn tri-state', async () => {
+    const db = makeDb()
+    await updateSettings(db, {
+      ageBand: 'minor', consentVersion: '2026-10-01', consentedAt: 10, guardianConsentAt: 11,
+      sensitiveConsentAt: 12, analyticsOptIn: 0,
+    })
+    expect(await getSettings(db)).toMatchObject({
+      ageBand: 'minor', consentVersion: '2026-10-01', consentedAt: 10, guardianConsentAt: 11,
+      sensitiveConsentAt: 12, analyticsOptIn: 0,
+    })
+    await updateSettings(db, { analyticsOptIn: 1 })
+    expect((await getSettings(db)).analyticsOptIn).toBe(1)
+    await updateSettings(db, { analyticsOptIn: null })
+    expect((await getSettings(db)).analyticsOptIn).toBeNull()
   })
 
 })

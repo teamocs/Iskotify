@@ -24,6 +24,12 @@ import { TextField } from '../components/ui/TextField'
 import { heading } from '../components/ui/a11y'
 import { SearchField } from '../components/explore/SearchField'
 import { StepShell } from '../components/onboarding/StepShell'
+import { ConsentControls, type ConsentFormValue } from '../components/consent/ConsentControls'
+import { SensitiveConsentToggle } from '../components/consent/SensitiveConsentToggle'
+import { applyAnalyticsConsent } from '../services/analyticsConsent'
+import {
+  consentFormReason, consentPatch, hasSensitiveConsent, isConsentCurrent, sensitiveWithdrawal,
+} from '../utils/consent'
 import { ChoiceRow } from '../components/onboarding/ChoiceRow'
 import { QuestionView, ResultsView } from '../components/onboarding/PreAssessment'
 import {
@@ -96,8 +102,16 @@ export default function OnboardingScreen() {
   // Which question is on screen. `ready` stays false until the saved profile
   // has been read, so a relaunch opens straight on the resume step instead of
   // flashing the name question first.
-  const [step, setStep] = useState<StepId>('name')
+  const [step, setStep] = useState<StepId>('consent')
   const [ready, setReady] = useState(false)
+
+  // Consent (the first step): nothing is pre-chosen for a new student.
+  const [consentForm, setConsentForm] = useState<ConsentFormValue>({ ageBand: null, terms: false, guardian: false })
+  // Sensitive-data opt-in (grades, income): OFF until the student switches it on.
+  const [sensitiveOn, setSensitiveOn] = useState(false)
+  // When that consent was first given (kept while it stays on), 0 = none.
+  const sensitiveAtRef = useRef(0)
+  const hasFocusRef = useRef(false)
 
   // About you
   const [fullName, setFullName] = useState('')
@@ -195,20 +209,30 @@ export default function OnboardingScreen() {
           setSelectedExams(restored.selectedExams)
           setSelectedSlugs(restored.selectedSlugs)
           setSelectedCourses(restored.selectedCourses)
-          setIncomeBracket(restored.incomeBracket)
-          setGwaText(restored.gwaText)
+          // Income and GWA are sensitive: only brought back while the student's consent stands.
+          const sensitive = hasSensitiveConsent(s)
+          setSensitiveOn(sensitive)
+          sensitiveAtRef.current = sensitive ? Number(s.sensitiveConsentAt) : 0
+          setIncomeBracket(sensitive ? restored.incomeBracket : null)
+          setGwaText(sensitive ? restored.gwaText : '')
           setProvince(restored.province)
+          if (isConsentCurrent(s)) {
+            setConsentForm({ ageBand: s.ageBand as ConsentFormValue['ageBand'], terms: true, guardian: s.ageBand === 'minor' })
+          }
           furthestRef.current = s.onboardingStep ?? ''
           tourSeenRef.current = Number(s.tourSeenAt ?? 0)
         }
+        hasFocusRef.current = hasOnboardingFocus({
+          selectedListingSlug: s?.selectedListingSlug,
+          focusCount: focusSlugs.length,
+          targetExams: s?.targetExams,
+        })
         const resume = resumeStep({
+          consented: !!s && isConsentCurrent(s),
+          sensitive: !!s && hasSensitiveConsent(s),
           fullName: s?.fullName,
           gradeLevel: s?.gradeLevel,
-          hasFocus: hasOnboardingFocus({
-            selectedListingSlug: s?.selectedListingSlug,
-            focusCount: focusSlugs.length,
-            targetExams: s?.targetExams,
-          }),
+          hasFocus: hasFocusRef.current,
           furthest: s?.onboardingStep,
         })
         if (resume === 'done') {
@@ -233,8 +257,8 @@ export default function OnboardingScreen() {
   // in memory (sql.js) and reaches IndexedDB only on a 2s debounce or an async
   // pagehide save that a reload beats, so each answer is flushed right away —
   // otherwise a refresh mid-onboarding restarted at the name question.
-  const saveProfile = useCallback((patch: Partial<typeof userSettings.$inferInsert>) => {
-    void Promise.resolve(
+  const saveProfile = useCallback((patch: Partial<typeof userSettings.$inferInsert>): Promise<void> => {
+    return Promise.resolve(
       db.insert(userSettings)
         .values({ id: 1, ...patch } as typeof userSettings.$inferInsert)
         .onConflictDoUpdate({ target: userSettings.id, set: patch }),
@@ -352,24 +376,47 @@ export default function OnboardingScreen() {
     if (to) setStep(to)
   }
 
+  // ── Before we start ──────────────────────────────────────────────────────
+
+  function continueFromConsent() {
+    if (!consentForm.ageBand || consentFormReason(consentForm)) return
+    // Saved with the progress marker; the analytics rule (off for minors until
+    // they opt in, on for adults until they opt out) applies only after this.
+    void saveProfile({ ...consentPatch(consentForm.ageBand), onboardingStep: reached('consent') })
+      .then(() => applyAnalyticsConsent(db))
+      .catch((e: unknown) => console.warn('[onboarding] analytics consent:', e))
+    // Pick up where the student was: a new student asks their name; a student
+    // who was part-way through an older onboarding resumes there.
+    const next = resumeStep({
+      consented: true,
+      sensitive: sensitiveOn,
+      fullName,
+      gradeLevel,
+      hasFocus: hasFocusRef.current,
+      furthest: furthestRef.current,
+    })
+    if (next === 'done') router.replace('/(tabs)')
+    else setStep(next)
+  }
+
   // ── About you ────────────────────────────────────────────────────────────
 
   function continueFromName() {
     const name = fullName.trim()
     if (!name) return
-    go(nextStep('name'))
+    go(nextStep('name', sensitiveOn))
     // Persist NOW: fullName is what gates landing-vs-app on launch.
     saveProfile({ fullName: name, onboardingStep: reached('name') })
   }
 
   function continueFromGrade() {
     if (!gradeLevel) return
-    go(nextStep('grade'))
+    go(nextStep('grade', sensitiveOn))
     saveProfile({ fullName: fullName.trim(), gradeLevel, onboardingStep: reached('grade') })
   }
 
   function continueFromSchool(skip: boolean) {
-    go(nextStep('school'))
+    go(nextStep('school', sensitiveOn))
     const onboardingStep = reached('school')
     saveProfile(skip
       ? { onboardingStep }
@@ -443,7 +490,7 @@ export default function OnboardingScreen() {
     })
     // ALWAYS advance; sync content in the background.
     setSaving(false)
-    go(nextStep('goals'))
+    go(nextStep('goals', sensitiveOn))
     startContentSync('initial')
   }
 
@@ -464,17 +511,35 @@ export default function OnboardingScreen() {
     } else {
       saveProfile({ onboardingStep })
     }
-    go(nextStep('courses'))
+    go(nextStep('courses', sensitiveOn))
   }
 
   // ── Scholarship match ────────────────────────────────────────────────────
+
+  function continueFromSensitive() {
+    const onboardingStep = reached('sensitive')
+    if (sensitiveOn) {
+      const at = sensitiveAtRef.current > 0 ? sensitiveAtRef.current : Date.now()
+      sensitiveAtRef.current = at
+      saveProfile({ sensitiveConsentAt: at, onboardingStep })
+    } else {
+      // Declined (or withdrawn on Back): no consent, and nothing sensitive is kept.
+      // Stamped, so a backup still holding an earlier grant cannot bring it back.
+      sensitiveAtRef.current = 0
+      setIncomeBracket(null)
+      setIncomePreferNotToSay(false)
+      setGwaText('')
+      saveProfile({ ...sensitiveWithdrawal(), onboardingStep })
+    }
+    go(nextStep('sensitive', sensitiveOn))
+  }
 
   function continueFromIncome(skip: boolean) {
     const onboardingStep = reached('income')
     // "Prefer not to say" is an answer too: it clears a bracket restored on resume.
     const answered = !skip && (incomeBracket !== null || incomePreferNotToSay)
     saveProfile(answered ? { incomeBracket, onboardingStep } : { onboardingStep })
-    go(nextStep('income'))
+    go(nextStep('income', sensitiveOn))
   }
 
   function continueFromGwa(skip: boolean) {
@@ -489,13 +554,13 @@ export default function OnboardingScreen() {
     const onboardingStep = reached('gwa')
     saveProfile(gwaNum !== null ? { gwa: gwaNum, onboardingStep } : { onboardingStep })
     setGwaError(undefined)
-    go(nextStep('gwa'))
+    go(nextStep('gwa', sensitiveOn))
   }
 
   function continueFromProvince(skip: boolean) {
     const onboardingStep = reached('province')
     saveProfile(!skip && province.trim() ? { province: province.trim(), onboardingStep } : { onboardingStep })
-    go(nextStep('province'))
+    go(nextStep('province', sensitiveOn))
   }
 
   // ── Quick check ──────────────────────────────────────────────────────────
@@ -603,7 +668,7 @@ export default function OnboardingScreen() {
   // has no Back (the first question, mid-check, the gate) the system handles it.
   const backTarget: StepId | null = gateVisible || assessDone
     ? null
-    : step === 'check' ? (assessIdx === 0 ? prevStep('check') : null) : prevStep(step)
+    : step === 'check' ? (assessIdx === 0 ? prevStep('check', sensitiveOn) : null) : prevStep(step, sensitiveOn)
   const backTargetRef = useRef(backTarget)
   backTargetRef.current = backTarget
   useEffect(() => {
@@ -669,12 +734,32 @@ export default function OnboardingScreen() {
     )
   }
 
+  if (step === 'consent') {
+    const reason = consentFormReason(consentForm)
+    return (
+      <StepShell
+        step="consent"
+        sensitive={sensitiveOn}
+        title="Before we start"
+        description="Tell us your age and confirm you have read how we handle your information. You can read both first."
+        primaryLabel="Continue"
+        onPrimary={continueFromConsent}
+        primaryDisabled={!!reason}
+        primaryHint={reason ?? undefined}
+      >
+        <ConsentControls value={consentForm} onChange={setConsentForm} />
+      </StepShell>
+    )
+  }
+
   if (step === 'name') {
     return (
       <StepShell
         step="name"
+        sensitive={sensitiveOn}
         title="What should we call you?"
         description="Your name stays on this phone, and in your backup if you sign in."
+        onBack={() => go(prevStep('name', sensitiveOn))}
         primaryLabel="Continue"
         onPrimary={continueFromName}
         primaryDisabled={!fullName.trim()}
@@ -701,9 +786,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="grade"
+        sensitive={sensitiveOn}
         title="What grade are you in?"
         description="Philippine K-12. We pace your study plan to it."
-        onBack={() => go(prevStep('grade'))}
+        onBack={() => go(prevStep('grade', sensitiveOn))}
         primaryLabel="Continue"
         onPrimary={continueFromGrade}
         primaryDisabled={!gradeLevel}
@@ -729,9 +815,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="school"
+        sensitive={sensitiveOn}
         title="Where do you study?"
         description="We use your school's region to show nearby universities first."
-        onBack={() => go(prevStep('school'))}
+        onBack={() => go(prevStep('school', sensitiveOn))}
         onSkip={() => continueFromSchool(true)}
         primaryLabel="Continue"
         onPrimary={() => continueFromSchool(false)}
@@ -760,9 +847,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="goals"
+        sensitive={sensitiveOn}
         title="What are you preparing for?"
         description={`Pick one or more entrance exams or scholarships${schoolRegion ? `. Top national schools come first, then ${canonicalizeRegion(schoolRegion)}` : ''}.`}
-        onBack={() => go(prevStep('goals'))}
+        onBack={() => go(prevStep('goals', sensitiveOn))}
         primaryLabel={saving ? 'Saving…' : `Continue${selectedCount > 0 ? ` (${selectedCount})` : ''}`}
         onPrimary={() => void confirmGoals()}
         primaryDisabled={selectedCount === 0}
@@ -858,9 +946,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="courses"
+        sensitive={sensitiveOn}
         title="Which courses are you considering?"
         description={`Pick up to ${MAX_COURSES}. ${selectedCourses.length} of ${MAX_COURSES} picked.`}
-        onBack={() => go(prevStep('courses'))}
+        onBack={() => go(prevStep('courses', sensitiveOn))}
         onSkip={() => continueFromCourses(true)}
         primaryLabel={`Continue${selectedCourses.length > 0 ? ` (${selectedCourses.length})` : ''}`}
         onPrimary={() => continueFromCourses(false)}
@@ -902,13 +991,30 @@ export default function OnboardingScreen() {
     )
   }
 
+  if (step === 'sensitive') {
+    return (
+      <StepShell
+        step="sensitive"
+        sensitive={sensitiveOn}
+        title="Use your grades and family details?"
+        description="Your grades, household income and Indigenous Peoples status are sensitive. We only use them if you say yes."
+        onBack={() => go(prevStep('sensitive', sensitiveOn))}
+        primaryLabel="Continue"
+        onPrimary={continueFromSensitive}
+      >
+        <SensitiveConsentToggle value={sensitiveOn} onChange={setSensitiveOn} />
+      </StepShell>
+    )
+  }
+
   if (step === 'income') {
     return (
       <StepShell
         step="income"
+        sensitive={sensitiveOn}
         title="What is your household income?"
         description="A yearly estimate. Many scholarships have an income limit, so this helps us show the ones you can apply for. It stays private."
-        onBack={() => go(prevStep('income'))}
+        onBack={() => go(prevStep('income', sensitiveOn))}
         onSkip={() => continueFromIncome(true)}
         primaryLabel="Continue"
         onPrimary={() => continueFromIncome(false)}
@@ -944,9 +1050,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="gwa"
+        sensitive={sensitiveOn}
         title="What is your latest GWA?"
         description="Your general weighted average, as a percentage. Scholarships use it to check eligibility."
-        onBack={() => go(prevStep('gwa'))}
+        onBack={() => go(prevStep('gwa', sensitiveOn))}
         onSkip={() => continueFromGwa(true)}
         primaryLabel="Continue"
         onPrimary={() => continueFromGwa(false)}
@@ -973,9 +1080,10 @@ export default function OnboardingScreen() {
     return (
       <StepShell
         step="province"
+        sensitive={sensitiveOn}
         title="Which province do you live in?"
         description="Some scholarships are only for students from certain provinces."
-        onBack={() => go(prevStep('province'))}
+        onBack={() => go(prevStep('province', sensitiveOn))}
         onSkip={() => continueFromProvince(true)}
         primaryLabel={province ? `Continue with ${province}` : 'Continue'}
         onPrimary={() => continueFromProvince(false)}
@@ -1030,9 +1138,10 @@ export default function OnboardingScreen() {
   return (
     <StepShell
       step="check"
+      sensitive={sensitiveOn}
       title="A quick warm-up"
       description={`${preAssessQuestions.length} short questions. Answer what you can; it only sets your starting point.`}
-      onBack={assessIdx === 0 ? () => go(prevStep('check')) : undefined}
+      onBack={assessIdx === 0 ? () => go(prevStep('check', sensitiveOn)) : undefined}
       onSkip={finishOnboarding}
     >
       <QuestionView q={q} index={assessIdx} total={preAssessQuestions.length} onAnswer={handleAssessAnswer} />

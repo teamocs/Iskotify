@@ -17,6 +17,10 @@ import { Skeleton } from '../../components/ui/Skeleton'
 import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { getSettings, updateSettings } from '../../services/settings'
+import { grantSensitiveConsent } from '../../services/consent'
+import { hasSensitiveConsent } from '../../utils/consent'
+import { SensitiveConsentToggle } from '../../components/consent/SensitiveConsentToggle'
+import { WithdrawSensitiveButton } from '../../components/consent/WithdrawSensitiveButton'
 import { validateGwa, gwaFailingWarning } from '../../utils/estimatorInputs'
 
 // ── School type options ───────────────────────────────────────────────────────
@@ -76,6 +80,7 @@ export default function EstimatorGradesScreen() {
   const twoUp = columnCount(useBreakpoint()) === 2
 
   // GWA text state
+  const [consentError, setConsentError] = useState<string | null>(null)
   const [g8Text, setG8Text] = useState('')
   const [g9Text, setG9Text] = useState('')
   const [g10Text, setG10Text] = useState('')
@@ -92,6 +97,9 @@ export default function EstimatorGradesScreen() {
   const [isIndigenous, setIsIndigenous] = useState(false)
   const [targetCampus, setTargetCampus] = useState<string | null>(null)
 
+  // Grades and Indigenous status are sensitive: asked for only after a separate opt-in.
+  const [consented, setConsented] = useState(false)
+
   // UI
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -103,6 +111,7 @@ export default function EstimatorGradesScreen() {
       try {
         const s = await getSettings(db)
         if (cancelled) return
+        setConsented(hasSensitiveConsent(s))
         if (s.hsGwaG8 != null) setG8Text(String(s.hsGwaG8))
         if (s.hsGwaG9 != null) setG9Text(String(s.hsGwaG9))
         if (s.hsGwaG10 != null) setG10Text(String(s.hsGwaG10))
@@ -135,22 +144,44 @@ export default function EstimatorGradesScreen() {
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  async function optIn(on: boolean) {
+    if (!on) return
+    setConsentError(null)
+    try {
+      await grantSensitiveConsent(db)
+      setConsented(true)
+    } catch (e) {
+      console.warn('[estimator/grades] consent error:', e)
+      setConsentError("Couldn't save your choice. Please try again.")
+    }
+  }
+
+  // Withdrawn: the details were cleared in the database; clear them on screen too.
+  function onWithdrawn() {
+    setConsented(false)
+    setG8Text(''); setG9Text(''); setG10Text(''); setG11Text('')
+    setG8Error(null); setG9Error(null); setG10Error(null); setG11Error(null)
+    setIsIndigenous(false)
+  }
+
   async function handleSave() {
-    if (!validateAll()) return
+    if (consented && !validateAll()) return
     setSaving(true)
     try {
       const patch: Parameters<typeof updateSettings>[1] = {}
-      const g8 = parseGwaText(g8Text)
-      const g9 = parseGwaText(g9Text)
-      const g10 = parseGwaText(g10Text)
-      const g11 = parseGwaText(g11Text)
+      if (consented) {
+        const g8 = parseGwaText(g8Text)
+        const g9 = parseGwaText(g9Text)
+        const g10 = parseGwaText(g10Text)
+        const g11 = parseGwaText(g11Text)
 
-      if (g8 !== null) patch.hsGwaG8 = g8
-      if (g9 !== null) patch.hsGwaG9 = g9
-      if (g10 !== null) patch.hsGwaG10 = g10
-      if (g11 !== null) patch.hsGwaG11 = g11
+        if (g8 !== null) patch.hsGwaG8 = g8
+        if (g9 !== null) patch.hsGwaG9 = g9
+        if (g10 !== null) patch.hsGwaG10 = g10
+        if (g11 !== null) patch.hsGwaG11 = g11
+        patch.isIndigenous = isIndigenous
+      }
       if (schoolType !== null) patch.schoolType = schoolType
-      patch.isIndigenous = isIndigenous
       if (targetCampus !== null) patch.targetCampus = targetCampus
 
       await updateSettings(db, patch)
@@ -209,6 +240,13 @@ export default function EstimatorGradesScreen() {
 
   const form = (
     <View>
+      {!consented ? (
+        <SensitiveConsentToggle value={false} onChange={v => void optIn(v)} />
+      ) : null}
+      {consentError ? (
+        <Text accessibilityRole="alert" style={[textStyle('bodySm', t.dangerStrong), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>{consentError}</Text>
+      ) : null}
+      {consented ? (
       <View style={{ gap: spacing.lg }}>
         {gwaFields.map(f => (
           <View key={f.label} style={{ gap: spacing.xs }}>
@@ -227,6 +265,7 @@ export default function EstimatorGradesScreen() {
           </View>
         ))}
       </View>
+      ) : null}
 
       {sectionHead('School type')}
       <View accessibilityRole="radiogroup" accessibilityLabel="School type" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
@@ -241,7 +280,8 @@ export default function EstimatorGradesScreen() {
         ))}
       </View>
 
-      {sectionHead('Indigenous Peoples')}
+      {consented ? sectionHead('Indigenous Peoples') : null}
+      {consented ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
@@ -259,6 +299,7 @@ export default function EstimatorGradesScreen() {
           thumbColor={t.surfaceRaised}
         />
       </Card>
+      ) : null}
 
       {sectionHead('Target campus')}
       <View accessibilityRole="radiogroup" accessibilityLabel="Target campus" style={{ gap: spacing.sm }}>
@@ -307,12 +348,14 @@ export default function EstimatorGradesScreen() {
 
   const schoolTypeLabel = SCHOOL_TYPE_OPTIONS.find(o => o.value === schoolType)?.label ?? 'Not set'
   const summaryRows: [string, string][] = [
-    ['Grade 8', g8Text.trim() || 'Not set'],
-    ['Grade 9', g9Text.trim() || 'Not set'],
-    ['Grade 10', g10Text.trim() || 'Not set'],
-    ['Grade 11', g11Text.trim() || 'Not set'],
+    ...(consented ? [
+      ['Grade 8', g8Text.trim() || 'Not set'],
+      ['Grade 9', g9Text.trim() || 'Not set'],
+      ['Grade 10', g10Text.trim() || 'Not set'],
+      ['Grade 11', g11Text.trim() || 'Not set'],
+    ] as [string, string][] : []),
     ['School type', schoolTypeLabel],
-    ['Indigenous Peoples', isIndigenous ? 'Yes' : 'No'],
+    ...(consented ? [['Indigenous Peoples', isIndigenous ? 'Yes' : 'No']] as [string, string][] : []),
     ['Target campus', targetCampus ?? 'Not set'],
   ]
 
@@ -362,7 +405,9 @@ export default function EstimatorGradesScreen() {
       >
       <PageTitle
         title="Your grades"
-        lead="Enter your General Weighted Average (GWA) per grade year. All are on a 0–100 scale; decimals allowed."
+        lead={consented
+          ? 'Enter your General Weighted Average (GWA) per grade year. All are on a 0–100 scale; decimals allowed.'
+          : 'Your Estimated Admission Score needs your grades. Turn on the switch below to add them.'}
       />
       {twoUp ? (
         <TwoColumn primary={form} secondary={summary} />
@@ -372,6 +417,11 @@ export default function EstimatorGradesScreen() {
           {save}
         </View>
       )}
+      {consented ? (
+        <View style={{ marginTop: spacing.xxl }}>
+          <WithdrawSensitiveButton onWithdrawn={onWithdrawn} />
+        </View>
+      ) : null}
       </KeyboardAwareScrollView>
     </Screen>
   )

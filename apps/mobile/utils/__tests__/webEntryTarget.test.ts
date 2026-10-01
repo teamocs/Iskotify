@@ -90,4 +90,14 @@ describe('webGateRedirect', () => {
       expect(webGateRedirect('/auth/sign-in/', '/auth/sign-in')).toBeNull()
     })
   })
+
+  describe('the Terms and Privacy Policy pages (reached from the consent step, sign-in and landing)', () => {
+    it('are never redirected away, whoever is asking', () => {
+      for (const target of ['/auth/sign-in', '/onboarding', '/(tabs)'] as const) {
+        expect(webGateRedirect('/terms', target)).toBeNull()
+        expect(webGateRedirect('/privacy', target)).toBeNull()
+        expect(webGateRedirect('/privacy/', target)).toBeNull()
+      }
+    })
+  })
 })

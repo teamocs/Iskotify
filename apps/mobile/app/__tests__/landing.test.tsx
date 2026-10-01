@@ -95,3 +95,15 @@ describe('LandingScreen — after account deletion', () => {
     expect(screen.queryByText(/account was deleted/)).toBeNull()
   })
 })
+
+describe('LandingScreen — Terms and Privacy Policy', () => {
+  it('says what continuing means, with both documents one tap away', () => {
+    const { router } = require('expo-router')
+    render(<LandingScreen />)
+    expect(screen.getByText(/By continuing you agree to the/)).toBeTruthy()
+    fireEvent.press(screen.getByRole('link', { name: 'Terms' }))
+    expect(router.push).toHaveBeenCalledWith('/terms')
+    fireEvent.press(screen.getByRole('link', { name: 'Privacy Policy' }))
+    expect(router.push).toHaveBeenCalledWith('/privacy')
+  })
+})
