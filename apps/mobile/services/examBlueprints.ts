@@ -1,7 +1,8 @@
-import { eq, asc, and, inArray } from 'drizzle-orm'
+import { eq, asc, and, inArray, sql, count, or } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { examBlueprints, examBlueprintSections, examCourseNotes, upcatQuestions, upcatPassages, userSettings, careerCourses } from '../db/schema'
 import { isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage } from '../utils/upcatExam'
+import { examMinutes, plannedItemCount } from '../utils/examBuilder'
 
 export interface BlueprintSection {
   id: string; name: string; skillCategory: string; itemCount: number
@@ -126,4 +127,61 @@ export async function getTargetCourseClusters(db: DrizzleClient): Promise<string
   const clusters = new Set<string>()
   for (const r of ccRows) if (r.cluster) clusters.add(r.cluster)
   return Array.from(clusters)
+}
+
+/**
+ * How many runnable questions each skill category has, as a count query (no rows
+ * loaded): status = 'published' and not "figure required but missing"
+ * (has_visual with a null/empty image_url), the same filter getQuestionsByCategory
+ * applies. For screens that only need "is it ready / how many items" and so must not
+ * pull every question row.
+ */
+export async function getRunnableCountsByCategory(db: DrizzleClient, categories: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>()
+  if (categories.length === 0) return map
+  const rows = await db.select({ category: upcatQuestions.skillCategory, n: count() }).from(upcatQuestions)
+    .where(and(
+      inArray(upcatQuestions.skillCategory, categories),
+      eq(upcatQuestions.status, 'published'),
+      or(eq(upcatQuestions.hasVisual, false), and(sql`${upcatQuestions.imageUrl} is not null`, sql`${upcatQuestions.imageUrl} <> ''`)),
+    ))
+    .groupBy(upcatQuestions.skillCategory)
+  for (const r of rows) map.set(r.category ?? '', Number(r.n))
+  return map
+}
+
+export interface RunnableBlueprint extends PublishedBlueprint {
+  /** Items the exam would actually build now (sum of min(item_count, runnable) per section). */
+  items: number
+  /** The real timer: the section clocks for a section-locked exam, else the blueprint total. */
+  minutes: number
+}
+
+/**
+ * Published blueprints a student can actually take right now, sized and timed
+ * the way the runner will build them. A published exam whose sections have no
+ * runnable question (e.g. a Mechanical-Technical pool not written yet) is left
+ * out, so Practice and Home never offer an empty exam.
+ */
+export async function listRunnableBlueprints(db: DrizzleClient): Promise<RunnableBlueprint[]> {
+  const slugs = await listPublishedBlueprintSlugs(db)
+  const blueprints = (await Promise.all(slugs.map(slug => getExamBlueprint(db, slug))))
+    .filter((b): b is ExamBlueprint => b !== null)
+  const categories = Array.from(new Set(blueprints.flatMap(b => b.sections.map(s => s.skillCategory))))
+  const counts = await getRunnableCountsByCategory(db, categories)
+  const out: RunnableBlueprint[] = []
+  for (const bp of blueprints) {
+    const items = plannedItemCount(bp.sections, counts)
+    if (items <= 0) continue
+    out.push({
+      slug: bp.slug,
+      name: bp.name,
+      acronym: bp.acronym,
+      totalItems: bp.totalItems,
+      totalTimeMinutes: bp.totalTimeMinutes,
+      items,
+      minutes: examMinutes(bp),
+    })
+  }
+  return out
 }

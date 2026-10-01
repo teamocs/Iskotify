@@ -407,9 +407,9 @@ describe('syncHeal — syncRev cursor heal', () => {
 
     const row = raw.prepare('SELECT last_synced_at, sync_rev FROM user_settings WHERE id = 1').get() as any
     expect(row).toBeTruthy()
-    // lastSyncedAt is set to the current time during sync
-    expect(row.last_synced_at).toBeGreaterThanOrEqual(before)
-    expect(row.last_synced_at).toBeLessThanOrEqual(after + 100)
+    // B7: lastSyncedAt is the sync START time minus the 60s safety margin
+    expect(row.last_synced_at).toBeGreaterThanOrEqual(before - 60_000)
+    expect(row.last_synced_at).toBeLessThanOrEqual(after - 60_000 + 100)
     // syncRev written in the LAST transaction (the cursor write)
     expect(row.sync_rev).toBe(2)
   })

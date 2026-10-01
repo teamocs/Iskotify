@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Flag1Outlined } from '@lineiconshq/free-icons'
+import { Flag1Outlined, Locked1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
@@ -13,6 +13,8 @@ interface Props {
   flaggedIdxs?: Set<number>
   /** Questions before this index sit in an expired section and can't be revisited. */
   floorIdx?: number
+  /** Questions at or after this index sit in a later, not-yet-open section and can't be opened. */
+  ceilIdx?: number
   onPressCell: (idx: number) => void
 }
 
@@ -29,7 +31,7 @@ export const CELL = 48
  * and every cell's name spells its state out ("Question 5, unanswered, flagged").
  */
 export const QuestionGrid = memo(function QuestionGrid({
-  total, currentIdx, answeredIdxs, flaggedIdxs, floorIdx = 0, onPressCell,
+  total, currentIdx, answeredIdxs, flaggedIdxs, floorIdx = 0, ceilIdx, onPressCell,
 }: Props) {
   const { theme: t } = useTheme()
   return (
@@ -38,8 +40,8 @@ export const QuestionGrid = memo(function QuestionGrid({
         const answered = answeredIdxs.has(i)
         const flagged = !!flaggedIdxs?.has(i)
         const current = i === currentIdx
-        const locked = i < floorIdx
-        const label = `Question ${i + 1}, ${answered ? 'answered' : 'unanswered'}${flagged ? ', flagged' : ''}${current ? ', current question' : ''}`
+        const locked = i < floorIdx || (ceilIdx !== undefined && i >= ceilIdx)
+        const label = `Question ${i + 1}, ${answered ? 'answered' : 'unanswered'}${flagged ? ', flagged' : ''}${current ? ', current question' : ''}${locked ? ', locked until you finish this section' : ''}`
         return (
           <Pressable
             key={i}
@@ -76,6 +78,11 @@ export const QuestionGrid = memo(function QuestionGrid({
                 {...decorative}
                 style={{ position: 'absolute', bottom: 6, width: 14, height: 3, borderRadius: radius.pill, backgroundColor: t.accentText }}
               />
+            ) : null}
+            {locked ? (
+              <View testID="qgrid-lock-mark" {...decorative} style={{ position: 'absolute', bottom: 3, right: 3 }}>
+                <Lineicons icon={Locked1Outlined} size={12} color={t.textSecondary} />
+              </View>
             ) : null}
             {flagged ? (
               <View {...decorative} style={{ position: 'absolute', top: 3, right: 3 }}>

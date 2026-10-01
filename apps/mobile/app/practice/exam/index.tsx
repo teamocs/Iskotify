@@ -4,7 +4,8 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined, FileQuestionOutlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../../hooks/useDb'
-import { getExamBlueprint, listPublishedBlueprintSlugs, type ExamBlueprint } from '../../../services/examBlueprints'
+import { getExamBlueprint, getRunnableCountsByCategory, listPublishedBlueprintSlugs, type ExamBlueprint } from '../../../services/examBlueprints'
+import { plannedItemCount, examMinutes } from '../../../utils/examBuilder'
 import { getListingMockBest, getListingAccuracy } from '../../../services/homeAggregates'
 import { Screen } from '../../../components/ui/Screen'
 import { ListRow } from '../../../components/ui/ListRow'
@@ -16,7 +17,7 @@ import { focusRing, type WebPressableState } from '../../../components/ui/a11y'
 import { useTheme } from '../../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../../theme/tokens'
 
-type Row = { bp: ExamBlueprint; best: number | null }
+type Row = { bp: ExamBlueprint; best: number | null; ready: boolean; items: number }
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: Row[] }
 
 function length(minutes: number): string {
@@ -47,9 +48,14 @@ export default function ExamPicker() {
         const loaded = (await Promise.all(slugs.map(slug => getExamBlueprint(db, slug))))
           .filter((b): b is ExamBlueprint => b !== null)
         // Readiness: best mock %, falling back to listing accuracy (blueprint.slug IS the listing slug).
+        // A published blueprint is only "ready" when it would build at least one item. Items are
+        // what the prestart will build (sum of min(item_count, runnable), empty sections out),
+        // from a count query: never every question row just to size a list.
+        const cats = Array.from(new Set(loaded.flatMap(b => b.sections.map(s => s.skillCategory))))
+        const counts = await getRunnableCountsByCategory(db, cats)
         const best = new Map(mockBestRows.map(r => [r.listingSlug, r.bestPct]))
         const acc = new Map(accuracyRows.filter(r => r.total > 0).map(r => [r.listingSlug, Math.round((r.ok / r.total) * 100)]))
-        if (!cancelled) setState({ status: 'ready', rows: loaded.map(bp => ({ bp, best: best.get(bp.slug) ?? acc.get(bp.slug) ?? null })) })
+        if (!cancelled) setState({ status: 'ready', rows: loaded.map(bp => { const items = plannedItemCount(bp.sections, counts); return { bp, best: best.get(bp.slug) ?? acc.get(bp.slug) ?? null, ready: items > 0, items } }) })
       } catch (e) {
         console.warn('[practice/exam] load failed:', e)
         if (!cancelled) setState({ status: 'error' })
@@ -99,15 +105,24 @@ export default function ExamPicker() {
           />
         ) : (
           <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' }}>
-            {state.rows.map(({ bp, best }, i) => (
+            {state.rows.map(({ bp, best, ready, items }, i) => (
               <View key={bp.slug} style={i === 0 ? undefined : { borderTopWidth: 1, borderTopColor: t.divider }}>
+                {ready ? (
                 <ListRow
                   title={bp.name}
-                  subtitle={`${bp.totalItems} items · ${length(bp.totalTimeMinutes)}`}
-                  accessibilityLabel={`${bp.name}, ${bp.totalItems} items, ${length(bp.totalTimeMinutes)}, ${best == null ? 'not taken yet' : `best ${best}%`}`}
+                  subtitle={`${items} items · ${length(examMinutes(bp))}`}
+                  accessibilityLabel={`${bp.name}, ${items} items, ${length(examMinutes(bp))}, ${best == null ? 'not taken yet' : `best ${best}%`}`}
                   trailing={<StatNumber value={best == null ? '–' : `${best}%`} label={best == null ? 'New' : 'Best'} />}
                   onPress={() => router.push(`/practice/exam/${bp.slug}`)}
                 />
+                ) : (
+                  // Published, but nothing runnable yet: shown honestly, not tappable.
+                  <ListRow
+                    title={bp.name}
+                    subtitle="Questions coming soon"
+                    accessibilityLabel={`${bp.name}, questions coming soon`}
+                  />
+                )}
               </View>
             ))}
           </View>

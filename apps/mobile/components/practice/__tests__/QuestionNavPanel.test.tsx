@@ -50,7 +50,7 @@ describe('QuestionNavPanel (desktop side panel)', () => {
 
   it('disables questions in a locked (expired) section', () => {
     render(<QuestionNavPanel {...base} floorIdx={2} />)
-    const locked = screen.getByLabelText('Question 1, answered')
+    const locked = screen.getByLabelText('Question 1, answered, locked until you finish this section')
     expect(aria(locked, 'aria-disabled')).toBe(true)
     fireEvent.press(locked)
     expect(base.onJump).not.toHaveBeenCalled()
@@ -74,8 +74,22 @@ describe('QuestionNavPanel (desktop side panel)', () => {
 
     it('marks locked cells with aria-disabled', () => {
       render(<QuestionNavPanel {...base} floorIdx={2} />)
-      expect(cellProps('Question 1, answered')['aria-disabled']).toBe(true)
+      expect(cellProps('Question 1, answered, locked until you finish this section')['aria-disabled']).toBe(true)
       expect(cellProps('Question 3, unanswered, current question')['aria-disabled']).toBe(false)
     })
+  })
+})
+
+describe('QuestionNavPanel: section ceiling (B1)', () => {
+  beforeEach(() => base.onJump.mockClear())
+
+  it('locks cells at and beyond ceilIdx and never jumps into them', () => {
+    render(<QuestionNavPanel {...base} ceilIdx={4} />)
+    const cell = screen.getByLabelText('Question 5, unanswered, flagged, locked until you finish this section')
+    expect(aria(cell, 'aria-disabled')).toBe(true)
+    fireEvent.press(cell)
+    expect(base.onJump).not.toHaveBeenCalled()
+    fireEvent.press(screen.getByLabelText('Question 4, unanswered'))
+    expect(base.onJump).toHaveBeenCalledWith(3)
   })
 })

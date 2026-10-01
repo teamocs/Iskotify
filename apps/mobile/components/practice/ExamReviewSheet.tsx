@@ -27,6 +27,8 @@ interface ExamReviewSheetProps {
   onJumpSection?: (start: number) => void
   /** Questions before this index are locked by an expired section timer. */
   floorIdx?: number
+  /** First index of a later, not-yet-open section (section-locked exams). */
+  ceilIdx?: number
   /** When set, 'Submit exam' is disabled and this reason is shown (e.g. nothing answered yet). */
   submitBlockedMessage?: string
 }
@@ -45,7 +47,7 @@ interface ExamReviewSheetProps {
  */
 export function ExamReviewSheet({
   visible, total, currentIdx, answeredIdxs, flaggedIdxs, onJump, onClose, onSubmit,
-  sections, onJumpSection, floorIdx = 0, submitBlockedMessage,
+  sections, onJumpSection, floorIdx = 0, ceilIdx, submitBlockedMessage,
 }: ExamReviewSheetProps) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
@@ -157,6 +159,7 @@ export function ExamReviewSheet({
               answeredIdxs={answeredIdxs}
               flaggedIdxs={flaggedIdxs}
               floorIdx={floorIdx}
+              ceilIdx={ceilIdx}
               onPressCell={i => { onJump(i); onClose() }}
             />
           </ScrollView>

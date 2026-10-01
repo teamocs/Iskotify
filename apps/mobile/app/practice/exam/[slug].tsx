@@ -16,11 +16,12 @@ import {
   groupReviewBySection, sectionChipState, scaleBlueprintTiming, STUDY_SPRINT_MINUTES,
   type BuiltExam, type ReviewSection, type ScaledBlueprintTiming,
 } from '../../../utils/examBuilder'
+import { advanceSectionClocks, clampNavIndex } from '../../../utils/sectionClock'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { subtestBreakdown } from '../../../utils/subtestBreakdown'
-import { groupSectionResults, questionSubtest } from '../../../utils/examSubmit'
+import { groupSectionResults, questionSubtest, isReached } from '../../../utils/examSubmit'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
@@ -48,7 +49,7 @@ import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
-import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
 
@@ -64,16 +65,19 @@ function minutesLabel(minutes: number): { value: string; unit: string } {
 }
 
 /** Section boundary: the flat index where this runnable section begins, plus its time budget. */
-interface SectionBound { name: string; start: number; end: number; timeMinutes: number | null }
+interface SectionBound { name: string; start: number; end: number; timeMinutes: number }
 
-/** timing is null for the pre-scaling render pass, or when a section has no scaled
- *  entry — either way the declared (unscaled) section time is the correct fallback. */
+/** scaleBlueprintTiming resolves every runnable section of a section-blocked
+ *  blueprint to concrete minutes (a null budget becomes an equal share of the
+ *  total), so a section clock is never "0 minutes" here. timing is null only
+ *  for the pre-scaling render pass, where the declared time (or 1 minute) is
+ *  the fallback. */
 function computeBounds(built: BuiltExam, timing: ScaledBlueprintTiming | null): SectionBound[] {
   const bounds: SectionBound[] = []
   let cursor = 0
   for (const bs of built.runnable) {
     const len = bs.questions.length
-    const timeMinutes = timing?.sectionMinutes.get(bs.section.id) ?? bs.section.timeMinutes
+    const timeMinutes = timing?.sectionMinutes.get(bs.section.id) ?? bs.section.timeMinutes ?? 1
     bounds.push({ name: bs.section.name, start: cursor, end: cursor + len, timeMinutes })
     cursor += len
   }
@@ -251,7 +255,12 @@ export default function BlueprintExam() {
   // Question-report state: which indexes were reported + which index the modal is open for.
   const [reported, setReported] = useState<Record<number, boolean>>({})
   const [reportIdx, setReportIdx] = useState<number | null>(null)
-  const startRef = useState(() => Date.now())[0]
+  // Sitting start (ms). Reset when a run actually starts and restored from the saved
+  // run on resume, so duration and the attempt key describe the real sitting.
+  const [startedAt, setStartedAt] = useState(() => Date.now())
+  // Question indexes the student has actually seen (visited or answered). Questions never
+  // reached are not written as attempts when a run is submitted early / times out.
+  const visitedRef = useRef<Set<number>>(new Set())
   // Post-session Estimated Admission Score delta — UPCAT-only (the estimator
   // is UPCAT-specific); null for every other blueprint slug.
   const [scoreDelta, setScoreDelta] = useState<string | null>(null)
@@ -262,6 +271,10 @@ export default function BlueprintExam() {
   // Fix 1: leave-confirmation + resume-in-progress-run state.
   const [leaveConfirmed, setLeaveConfirmed] = useState(false)
   const [resumeAvailable, setResumeAvailable] = useState(false)
+  // The saved run's time already ran out: offer Submit / Discard, never a silent auto-submit.
+  const [resumeStale, setResumeStale] = useState(false)
+  // Set by "Submit what I answered": the restored run is submitted once the exam phase is up.
+  const [submitStale, setSubmitStale] = useState(false)
   const savedRunRef = useRef<Awaited<ReturnType<typeof loadRun>>>(null)
   // Review finding #2: true from the first synchronous line of submit()
   // until the screen leaves 'exam' phase — disables exam inputs so a tap
@@ -283,6 +296,12 @@ export default function BlueprintExam() {
   // Lowest flat index the user is still allowed to navigate back to (raised as sections expire).
   const [floorIdx, setFloorIdx] = useState(0)
   const submittedRef = useRef(false)
+  // Latest section position/clock, so a confirm dialog opened earlier can tell the
+  // section moved on (clock expiry) while it was open instead of acting on stale state.
+  const sectionIdxRef = useRef(0)
+  const sectionEndRef = useRef<number | null>(null)
+  sectionIdxRef.current = sectionIdx
+  sectionEndRef.current = sectionEndTime
   const submitRef = useRef<() => void>(() => {})
   // Question pane (middle scroll zone) — reset to top whenever the question changes
   // so scroll offset never carries over between questions.
@@ -308,13 +327,16 @@ export default function BlueprintExam() {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
     }
   }, [idx])
+  useEffect(() => {
+    if (phase === 'exam') visitedRef.current.add(idx)
+  }, [phase, idx])
 
   // Timer scaling (Task 4): when a thin question pool sampled fewer questions than
   // the blueprint declares, scale the total + per-section time budgets down by the
   // same ratio rather than running the full declared clock against a short exam.
   const timing = useMemo(
-    () => (blueprint && built ? scaleBlueprintTiming(blueprint, built) : null),
-    [blueprint, built],
+    () => (blueprint && built ? scaleBlueprintTiming({ ...blueprint, sectionBlocked: blueprint.sectionBlocked && examMode === 'full' }, built) : null),
+    [blueprint, built, examMode],
   )
   const bounds = useMemo(() => (built ? computeBounds(built, timing) : []), [built, timing])
   const sectionBlocked = examMode === 'full' && !!blueprint?.sectionBlocked && bounds.length > 0
@@ -360,6 +382,7 @@ export default function BlueprintExam() {
       if (cancelled) return
       if (run && run.questionIds.length > 0) {
         savedRunRef.current = run
+        setResumeStale(isRunExpired(run, Date.now()))
         setResumeAvailable(true)
       }
     })
@@ -389,9 +412,9 @@ export default function BlueprintExam() {
       floorIdx,
       endTime,
       sectionEndTime,
-      startedAt: startRef,
+      startedAt,
     }).catch(err => console.warn('[exam/[slug]] saveRun failed:', err))
-  }, [phase, slug, examMode, questions, answers, idx, sectionIdx, floorIdx, endTime, sectionEndTime, startRef, saveRun])
+  }, [phase, slug, examMode, questions, answers, idx, sectionIdx, floorIdx, endTime, sectionEndTime, startedAt, saveRun])
 
   // Fix 1: leave-confirmation — guards the back gesture, the Android hardware
   // back button, and the explicit ‹ button (all the same "remove this screen"
@@ -415,18 +438,21 @@ export default function BlueprintExam() {
    *  run's question ids (re-fetching the current pool + passages, already
    *  loaded by loadExam), then jump straight into 'exam' with the saved
    *  answers/position/timers restored. Absolute timestamps mean the existing
-   *  countdown effects below correctly auto-advance/auto-submit any section
-   *  that fully expired while the app was closed — no special-casing needed. */
-  function resumeExam() {
+   *  countdown effects below chain/fast-forward any section clock that expired
+   *  while the app was closed. A run whose TOTAL time already ran out never gets
+   *  here through "Resume": the prestart screen offers Submit / Discard instead
+   *  (see submitStaleRun / discardStaleRun). */
+  function restoreRun(): boolean {
     const run = savedRunRef.current
-    if (!blueprint || !run) return
+    if (!blueprint || !run) return false
     const allRaw = Array.from(poolsRef.current.values()).flat()
     const orderedRaw = reorderByIds<RawUpcatQuestion, 'questionId'>(allRaw, run.questionIds, 'questionId')
     if (orderedRaw.length === 0) {
       // Nothing left to resume (e.g. every sampled question was unpublished since).
       void clearRun(run.runKey)
       setResumeAvailable(false)
-      return
+      setResumeStale(false)
+      return false
     }
     const passageById = new Map(passagesRef.current.map(p => [p.setId, p.passageText]))
     const sectionByQuestionId = new Map(run.questionIds.map((id, i) => [id, run.sectionNames[i] ?? '']))
@@ -434,7 +460,8 @@ export default function BlueprintExam() {
       q: { ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null },
       sectionName: sectionByQuestionId.get(q.questionId) ?? '',
     }))
-    setBuilt(reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, flat))
+    const rebuilt = reconstructBuiltExamFromRun<BlueprintSection, ExamQuestion>(blueprint.sections, flat)
+    setBuilt(rebuilt)
     setExamMode(run.mode === 'sprint' ? 'sprint' : 'full')
     setQuestions(flat)
     // Review finding #1: reorderByIds compacts away vanished questions, so
@@ -443,12 +470,49 @@ export default function BlueprintExam() {
     // positions, which would land on the wrong question.
     const newIds = flat.map(fq => fq.q.questionId)
     setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
-    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
-    setFloorIdx(remapSingleIndex(run.questionIds, newIds, run.floorIdx))
-    setSectionIdx(run.sectionIdx)
+    let restoredIdx = remapSingleIndex(run.questionIds, newIds, run.idx)
+    let restoredFloor = remapSingleIndex(run.questionIds, newIds, run.floorIdx)
+    let restoredSection = run.sectionIdx
+    if (run.mode !== 'sprint' && blueprint.sectionBlocked) {
+      // A shorter rebuilt exam can have fewer sections than the saved one. An index past
+      // the end would leave no section ceiling (free navigation), silently lifting the
+      // lock, so pin the section into range and the position inside that section.
+      const rb = computeBounds(rebuilt, null)
+      if (rb.length > 0) {
+        restoredSection = Math.max(0, Math.min(run.sectionIdx, rb.length - 1))
+        const cur = rb[restoredSection]!
+        restoredFloor = Math.max(cur.start, Math.min(restoredFloor, cur.end - 1))
+        restoredIdx = Math.max(restoredFloor, Math.min(restoredIdx, cur.end - 1))
+      }
+    }
+    setIdx(restoredIdx)
+    setFloorIdx(restoredFloor)
+    setSectionIdx(restoredSection)
     setEndTime(run.endTime)
     setSectionEndTime(run.sectionEndTime)
+    setStartedAt(run.startedAt)
+    // Reached = answered, or visited up to the saved position (the saved run does not
+    // record which later questions were jumped over, so the position is the best bound).
+    const reached = new Set<number>(Object.keys(remapIndexedById(run.questionIds, newIds, run.answers)).map(Number))
+    for (let i = 0; i <= restoredIdx; i++) reached.add(i)
+    visitedRef.current = reached
     setPhase('exam')
+    return true
+  }
+
+  function resumeExam() { restoreRun() }
+
+  /** "Submit what I answered": restore the expired run, then submit it for what it holds. */
+  function submitStaleRun() {
+    if (restoreRun()) setSubmitStale(true)
+  }
+
+  function discardStaleRun() {
+    const run = savedRunRef.current
+    if (run) void clearRun(run.runKey)
+    savedRunRef.current = null
+    setResumeAvailable(false)
+    setResumeStale(false)
   }
 
   // Web: if the screen loaded before the fire-and-forget catalog sync delivered
@@ -472,6 +536,8 @@ export default function BlueprintExam() {
     if (!blueprint) return
     setExamMode(mode)
     const now = Date.now()
+    setStartedAt(now)
+    visitedRef.current = new Set()
 
     if (mode === 'sprint') {
       const sprintBuilt = buildStudySprintExam(blueprint, poolsRef.current, passagesRef.current, STUDY_SPRINT_MINUTES)
@@ -491,7 +557,7 @@ export default function BlueprintExam() {
       setSectionIdx(0)
       setIdx(first.start)
       setFloorIdx(first.start)
-      setSectionEndTime(now + (first.timeMinutes ?? totalMinutes) * 60_000)
+      setSectionEndTime(now + first.timeMinutes * 60_000)
     }
     setPhase('exam')
   }
@@ -528,13 +594,13 @@ export default function BlueprintExam() {
       // persisted under the section's CANONICAL subtest (the question's own),
       // not the display name — 'Language Proficiency (English & Filipino)'
       // matched no readiness/estimator label.
-      const sectionResults = groupSectionResults(questions, answers)
+      const sectionResults = groupSectionResults(questions, answers, visitedRef.current)
 
       // Task D: per-question attempt rows, written before recordSession so
       // they're committed before recordSession's fire-and-forget backup push.
       const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
       const rows = buildAttemptRows({
-        sessionKey: startRef,
+        sessionKey: startedAt,
         sourceTable: 'upcat_questions',
         listingSlug: slug,
         questions: questions.map(fq => ({
@@ -545,6 +611,7 @@ export default function BlueprintExam() {
         })),
         answers,
         elapsedByIdx,
+        reached: visitedRef.current,
       })
       // Finding #2: telemetry is best-effort — it must never gate the results
       // screen. submittedRef is already flipped above; if this insert rejects
@@ -559,6 +626,9 @@ export default function BlueprintExam() {
       // Every section row of this sitting shares attemptKey so Progress/Best
       // group them as one attempt; a Study Sprint is a different kind so it is
       // never mistaken for a full mock.
+      // sectionResults only holds REACHED questions (the same set the attempt rows
+      // cover), so a section's total is what the student saw and a section never
+      // reached (early submit / total timer ran out) has no row, not a 0% session.
       for (const sec of sectionResults) {
         void recordSession({
           listingSlug: slug,
@@ -566,10 +636,10 @@ export default function BlueprintExam() {
           deckId: '',
           score: sec.correct,
           total: sec.total,
-          startTime: startRef,
+          startTime: startedAt,
           subtest: sec.subtest,
           kind: examMode === 'sprint' ? 'sprint' : 'mock',
-          attemptKey: startRef,
+          attemptKey: startedAt,
         }).catch(err => console.warn('[exam/[slug]] recordSession failed:', err))
       }
     }
@@ -587,10 +657,19 @@ export default function BlueprintExam() {
   }
   submitRef.current = submit  // keep the timer's auto-submit pointed at the latest closure
 
+  // "Submit what I answered" on an expired run: submit once the restored exam phase is up.
+  // Declared BEFORE the countdown effects so submittedRef is already set when they run.
+  useEffect(() => {
+    if (phase !== 'exam' || !submitStale) return
+    setSubmitStale(false)
+    void submitRef.current()
+  }, [phase, submitStale])
+
   // --- Total countdown tick: auto-submits at zero. ---
   useEffect(() => {
     if (phase !== 'exam' || endTime == null) return
     const tick = () => {
+      if (submittedRef.current) return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
       if (rem <= 0) submitRef.current()
@@ -605,16 +684,20 @@ export default function BlueprintExam() {
   useEffect(() => {
     if (phase !== 'exam' || !sectionBlocked || sectionEndTime == null) return
     const tick = () => {
-      const rem = Math.max(0, Math.round((sectionEndTime - Date.now()) / 1000))
-      setSectionRemaining(rem)
-      if (rem <= 0) {
-        const next = sectionIdx + 1
-        if (next >= bounds.length) { submitRef.current(); return }
-        const nb = bounds[next]!
-        setSectionIdx(next)
+      if (submittedRef.current) return
+      const now = Date.now()
+      setSectionRemaining(Math.max(0, Math.round((sectionEndTime - now) / 1000)))
+      // Chain from the previous end and fast-forward through every section that already
+      // expired (e.g. the app was closed): see utils/sectionClock.ts.
+      const state = advanceSectionClocks({ sectionIdx, sectionEndTime, now, minutes: bounds.map(b => b.timeMinutes) })
+      if (state.finished) { submitRef.current(); return }
+      if (state.sectionIdx !== sectionIdx) {
+        const nb = bounds[state.sectionIdx]!
+        setSectionIdx(state.sectionIdx)
         setIdx(nb.start)
         setFloorIdx(nb.start)
-        setSectionEndTime(Date.now() + (nb.timeMinutes ?? 0) * 60_000)
+        setSectionEndTime(state.sectionEndTime)
+        setSectionRemaining(Math.max(0, Math.round((state.sectionEndTime - now) / 1000)))
       }
     }
     tick()
@@ -674,8 +757,10 @@ export default function BlueprintExam() {
     const declared = minutesLabel(blueprint.totalTimeMinutes)
     const scaledMinutes = timing?.totalMinutes ?? blueprint.totalTimeMinutes
     const scaled = minutesLabel(scaledMinutes)
-    const isScaled = scaledMinutes !== blueprint.totalTimeMinutes
-    const runnableNames = new Set(built.runnable.map(b => b.section.name))
+    // Only a genuinely thinner exam is "matched to the items available now"; section
+    // minutes that merely differ from the blueprint total are not that.
+    const declaredItems = built.runnable.reduce((n, bs) => n + bs.section.itemCount, 0) + built.comingSoon.reduce((n, sct) => n + sct.itemCount, 0)
+    const isScaled = built.totalQuestions < declaredItems && scaledMinutes !== blueprint.totalTimeMinutes
     const noItems = built.totalQuestions === 0
     return (
       <Screen header={<View style={{ paddingTop: spacing.sm }}><BackButton /></View>}>
@@ -685,15 +770,14 @@ export default function BlueprintExam() {
               {blueprint.name}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xxxl }}>
-              <StatNumber value={blueprint.totalItems} label="Items" />
-              <StatNumber value={declared.value} unit={declared.unit} label="Time" />
-              {built.totalQuestions !== blueprint.totalItems ? (
-                <StatNumber value={built.totalQuestions} label="Ready now" />
-              ) : null}
+              {/* What will really run: the built question count and the actual timer,
+                  not the declared blueprint figures (a short pool builds fewer items). */}
+              <StatNumber value={built.totalQuestions} label="Items" />
+              <StatNumber value={scaled.value} unit={scaled.unit} label="Time" />
             </View>
             {isScaled ? (
               <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-                Today&apos;s Full Mock timer is {scaled.value} {scaled.unit}, scaled to the items available now.
+                The full {blueprint.acronym || blueprint.name} runs {declared.value} {declared.unit}. Today&apos;s Full Mock timer is {scaled.value} {scaled.unit}, matched to the items available now.
               </Text>
             ) : null}
           </View>
@@ -717,7 +801,8 @@ export default function BlueprintExam() {
             <SectionHeader title="Structure" />
             <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
               {[...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((sec, i) => {
-                const live = runnableNames.has(sec.name)
+                const builtSec = built.runnable.find(b => b.section.id === sec.id)
+                const live = !!builtSec
                 const secMinutes = timing?.sectionMinutes.get(sec.id) ?? sec.timeMinutes
                 return (
                   <View
@@ -729,7 +814,7 @@ export default function BlueprintExam() {
                   >
                     <Text style={[textStyle('body', live ? t.textPrimary : t.textSecondary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{sec.name}</Text>
                     <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.6}>
-                      {live ? `${sec.itemCount} items${sectionBlocked && secMinutes ? ` · ${secMinutes} min` : ''}` : 'Coming soon'}
+                      {builtSec ? `${builtSec.questions.length} items${blueprint.sectionBlocked && secMinutes ? ` · ${secMinutes} min` : ''}` : 'Not available yet'}
                     </Text>
                   </View>
                 )
@@ -755,7 +840,19 @@ export default function BlueprintExam() {
           ) : null}
 
           <View style={{ gap: spacing.sm }}>
-            {resumeAvailable ? (
+            {resumeAvailable && resumeStale ? (
+              <>
+                <Panel tone="warning">
+                  <Text style={textStyle('titleSm', t.warningStrong)} maxFontSizeMultiplier={1.6}>Your last attempt ran out of time</Text>
+                  <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+                    You can submit the answers you gave (questions you never reached are not counted), or discard that attempt.
+                  </Text>
+                </Panel>
+                <Button label="Submit what I answered" onPress={submitStaleRun} fullWidth size="lg" />
+                <Button label="Discard" variant="secondary" fullWidth onPress={discardStaleRun} />
+              </>
+            ) : null}
+            {resumeAvailable && !resumeStale ? (
               <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
             ) : null}
             <Button
@@ -783,12 +880,14 @@ export default function BlueprintExam() {
   if (phase === 'results' && blueprint) {
     const correct = questions.reduce((n, fq, i) => n + (answers[i] === fq.q.correctIndex ? 1 : 0), 0)
     const wrong = questions.reduce((n, fq, i) => n + (answers[i] !== undefined && answers[i] !== fq.q.correctIndex ? 1 : 0), 0)
-    const total = questions.length
+    // Only the questions the student reached count, the same set the saved sessions use.
+    const total = questions.reduce((n, _fq, i) => n + (isReached(i, answers, visitedRef.current) ? 1 : 0), 0)
+    const unreached = questions.length - total
     const score = scoreBlueprintExam(total, correct, wrong, blueprint.hasGuessingPenalty, blueprint.guessingPenalty)
     const pct = total ? Math.round((correct / total) * 100) : 0
 
     // Per-subtest raw breakdown (neutral; see ResultsBreakdown).
-    const rows = subtestBreakdown(questions, answers)
+    const rows = subtestBreakdown(questions, answers, visitedRef.current)
 
     // Wave 3b: grouped review sections with wrong-first ordering
     const correctIndexes = questions.map(fq => fq.q.correctIndex)
@@ -824,6 +923,11 @@ export default function BlueprintExam() {
           </View>
 
           <ResultsBreakdown rows={rows} />
+          {unreached > 0 ? (
+            <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+              Questions you never reached are not counted.
+            </Text>
+          ) : null}
 
           {visibleNotes.length > 0 ? (
             <View>
@@ -884,8 +988,44 @@ export default function BlueprintExam() {
   const flaggedIdxs = new Set(Object.keys(reported).map(Number))
   const isLast = idx === questions.length - 1
   const canGoBack = idx > floorIdx
-  const jump = (i: number) => { if (!submitting && i >= floorIdx) setIdx(i) }
-  const jumpSection = (start: number) => { if (!submitting) setIdx(Math.max(start, floorIdx)) }
+  // Section lock (section-blocked blueprints): navigation stays inside the current
+  // section [floorIdx, sectionEnd). Free-navigation blueprints have no ceiling.
+  const sectionEnd = sectionBlocked ? bounds[sectionIdx]?.end : undefined
+  const lastInSection = sectionEnd !== undefined && idx === sectionEnd - 1 && !isLast
+  const jump = (i: number) => { if (!submitting && i >= floorIdx && (sectionEnd === undefined || i < sectionEnd)) setIdx(i) }
+  const jumpSection = (start: number) => { if (!submitting) setIdx(clampNavIndex(start, floorIdx, sectionEnd)) }
+  const stepForward = () => setIdx(i => clampNavIndex(i + 1, floorIdx, sectionEnd))
+  /** Finish the current section early: confirm, lock it, start the next section's clock. */
+  const finishSection = () => {
+    const next = sectionIdx + 1
+    const cur = bounds[sectionIdx]
+    const nb = bounds[next]
+    if (!cur || !nb || submitting) return
+    let unanswered = 0
+    for (let i = cur.start; i < cur.end; i++) if (answers[i] === undefined) unanswered++
+    const note = unanswered > 0 ? `You have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'} in this section. ` : ''
+    confirmAction(
+      'Finish this section?',
+      `${note}You can’t come back to ${cur.name} once you continue.`,
+      'Finish section',
+      () => {
+        // The dialog can sit open while the section clock runs out and the tick moves the
+        // student on (or the exam auto-submits). Act only if nothing moved meanwhile.
+        if (submittedRef.current || sectionIdxRef.current !== sectionIdx) return
+        const now = Date.now()
+        const clock = nb.timeMinutes * 60_000
+        // Finishing early starts the next clock now, but never later than the chain
+        // (this section's end + the next clock), the time it would have had anyway.
+        const chained = (sectionEndRef.current ?? now) + clock
+        sectionIdxRef.current = next
+        setSectionIdx(next)
+        setIdx(nb.start)
+        setFloorIdx(nb.start)
+        setSectionEndTime(Math.min(now + clock, chained))
+      },
+      { cancelLabel: 'Keep working', destructive: unanswered > 0 },
+    )
+  }
   const subjectTag = [q.mainSubject || fq.sectionName, q.topic].filter(Boolean).join(' · ')
   const column = { width: '100%' as const, maxWidth: READING, alignSelf: 'center' as const, paddingHorizontal: gutter }
   const options = (
@@ -969,13 +1109,17 @@ export default function BlueprintExam() {
                   onPress={() => setReviewOpen(true)}
                   style={{ flex: 1 }}
                 />
+              ) : lastInSection ? (
+                // Section-locked exams: the last question of a section never steps into
+                // the next one; the student explicitly finishes (and locks) the section.
+                <Button label="Finish section" disabled={submitting} onPress={finishSection} style={{ flex: 1 }} />
               ) : (
                 <>
-                  <Button label="Skip" variant="ghost" disabled={submitting} onPress={() => setIdx(i => i + 1)} />
+                  <Button label="Skip" variant="ghost" disabled={submitting} onPress={stepForward} />
                   <Button
                     label="Next"
                     disabled={sel === undefined || submitting}
-                    onPress={() => setIdx(i => i + 1)}
+                    onPress={stepForward}
                     style={{ flex: 1 }}
                   />
                 </>
@@ -991,6 +1135,7 @@ export default function BlueprintExam() {
             answeredIdxs={answeredIdxs}
             flaggedIdxs={flaggedIdxs}
             floorIdx={floorIdx}
+            ceilIdx={sectionEnd}
             onJump={jump}
             sections={sectionChips}
             onJumpSection={jumpSection}
@@ -1005,6 +1150,7 @@ export default function BlueprintExam() {
         answeredIdxs={answeredIdxs}
         flaggedIdxs={flaggedIdxs}
         floorIdx={floorIdx}
+        ceilIdx={sectionEnd}
         sections={sectionChips}
         onJumpSection={jumpSection}
         onJump={jump}

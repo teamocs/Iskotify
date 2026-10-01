@@ -209,6 +209,28 @@ describe('PUT /api/exam-blueprints', () => {
     expect(secInsert?.rows[0].name).toBe('Mathematics')
   })
 
+  it('derives total_items from the sections, ignoring a stale client value (DOST-SEI: 170 vs 210)', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
+    mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })
+    mockUpsert.mockReturnValue({ error: null })
+    mockDeleteEq.mockReturnValue({ error: null })
+    mockInsert.mockReturnValue({ error: null })
+
+    const { PUT } = await import('../route')
+    const res = await PUT(makeReq('PUT', {
+      blueprint: { slug: 'dost-sei', name: 'DOST-SEI', acronym: 'DOST', total_items: 170, total_time_minutes: 180, status: 'published' },
+      sections: [
+        { name: 'A', skill_category: 'Mathematics', item_count: 60, time_minutes: 60 },
+        { name: 'B', skill_category: 'Science', item_count: 45, time_minutes: 60 },
+        { name: 'C', skill_category: 'Reading', item_count: 105, time_minutes: 60 },
+      ],
+      courseNotes: [],
+    }))
+
+    expect(res.status).toBe(200)
+    expect(upsertCalls.find(c => c.table === 'exam_blueprints')?.data.total_items).toBe(210)
+  })
+
   it('does not insert sections when sections array is empty', async () => {
     mockGetUser.mockResolvedValueOnce({ data: { user: { id: 'admin-1' } } })
     mockProfileSingle.mockResolvedValueOnce({ data: { role: 'admin' }, error: null })

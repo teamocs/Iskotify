@@ -1,3 +1,5 @@
+import { isReached } from './examSubmit'
+
 export interface SubtestRow {
   name: string
   correct: number
@@ -6,14 +8,17 @@ export interface SubtestRow {
   pct: number
 }
 
-/** Per-subtest (section) raw score, in the order sections first appear. Pure. */
+/** Per-subtest (section) raw score, in the order sections first appear, over reached
+ *  questions only when `reached` is given (matches the persisted session rows). Pure. */
 export function subtestBreakdown(
   questions: ReadonlyArray<{ sectionName: string; q: { correctIndex: number } }>,
   answers: Record<number, number>,
+  reached?: ReadonlySet<number>,
 ): SubtestRow[] {
   const order: string[] = []
   const by = new Map<string, { correct: number; total: number }>()
   questions.forEach((fq, i) => {
+    if (!isReached(i, answers, reached)) return
     let cur = by.get(fq.sectionName)
     if (!cur) {
       cur = { correct: 0, total: 0 }

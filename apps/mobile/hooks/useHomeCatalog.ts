@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
 import { listings as listingsTable, careerCourses } from '../db/schema'
-import { listPublishedBlueprints } from '../services/examBlueprints'
+import { listRunnableBlueprints } from '../services/examBlueprints'
 import { getListingMockBest } from '../services/homeAggregates'
 import { getSettings } from '../services/settings'
 import { cachedQuery, subscribe } from '../services/queryCache'
@@ -103,7 +103,8 @@ export function useHomeCatalog(): HomeCatalog {
             scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
             grantAmount: listingsTable.grantAmount, monthlyStipend: listingsTable.monthlyStipend,
           }).from(listingsTable),
-          listPublishedBlueprints(db),
+          // Only exams that can actually run: an exam with no questions yet routes to its listing instead.
+          listRunnableBlueprints(db),
           db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
           getSettings(db),
           getListingMockBest(db),

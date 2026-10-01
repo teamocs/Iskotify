@@ -2,6 +2,15 @@ import { subtestBreakdown, nextFocusSubtest } from '../subtestBreakdown'
 
 const q = (sectionName: string, correctIndex: number) => ({ sectionName, q: { correctIndex } })
 
+describe('subtestBreakdown: reached only', () => {
+  it('leaves out questions never reached, and sections with nothing reached', () => {
+    const questions = [q('Math', 1), q('Math', 1), q('Sci', 1)]
+    expect(subtestBreakdown(questions, { 0: 1 }, new Set([0, 1]))).toEqual([
+      { name: 'Math', correct: 1, total: 2, pct: 50 },
+    ])
+  })
+})
+
 describe('subtestBreakdown', () => {
   it('groups by section in first-seen order with correct/total/pct', () => {
     const questions = [q('Math', 1), q('Science', 0), q('Math', 2), q('Science', 3), q('Math', 0)]

@@ -137,6 +137,12 @@ describe('scoreDiagnostic', () => {
     })
   })
 
+  it('with a reached set, unreached questions are not counted and empty subjects are dropped', () => {
+    const result = scoreDiagnostic(questions, { 0: 0 }, new Set([0, 1]))
+    expect(result.overall).toEqual({ correct: 1, total: 2 })
+    expect(result.bySubject).toEqual({ Mathematics: { correct: 1, total: 2 } })
+  })
+
   it('treats unanswered questions (missing index) as incorrect', () => {
     const result = scoreDiagnostic(questions, {})
     expect(result.overall).toEqual({ correct: 0, total: 3 })

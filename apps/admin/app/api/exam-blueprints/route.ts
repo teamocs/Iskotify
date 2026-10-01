@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { sectionItemCount, sumSectionItems } from '@/lib/blueprintTotals'
 
 export const runtime = 'nodejs'
 
@@ -39,10 +40,12 @@ export async function PUT(req: NextRequest) {
   const bp = body.blueprint
   if (!bp?.slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 })
   const slug = String(bp.slug).trim()
+  const sections = Array.isArray(body.sections) ? body.sections : []
 
   const { error: bpErr } = await supabase.from('exam_blueprints').upsert({
     slug, name: bp.name ?? '', acronym: bp.acronym ?? '',
-    total_items: Number(bp.total_items) || 0, total_time_minutes: Number(bp.total_time_minutes) || 0,
+    // Derived from the sections: a client-sent total_items is ignored (see lib/blueprintTotals.ts).
+    total_items: sumSectionItems(sections), total_time_minutes: Number(bp.total_time_minutes) || 0,
     has_guessing_penalty: !!bp.has_guessing_penalty, guessing_penalty: Number(bp.guessing_penalty) || 0.25,
     section_blocked: !!bp.section_blocked, scoring_note: bp.scoring_note ?? '', mechanics_note: bp.mechanics_note ?? '',
     status: bp.status === 'published' ? 'published' : 'draft', display_order: Number(bp.display_order) || 0,
@@ -53,11 +56,10 @@ export async function PUT(req: NextRequest) {
   await supabase.from('exam_blueprint_sections').delete().eq('blueprint_slug', slug)
   await supabase.from('exam_course_notes').delete().eq('blueprint_slug', slug)
 
-  const sections = Array.isArray(body.sections) ? body.sections : []
   if (sections.length) {
     const rows = sections.map((s: Record<string, unknown>, i: number) => ({
       id: `${slug}:${i + 1}`, blueprint_slug: slug, name: s.name ?? '', skill_category: s.skill_category ?? '',
-      item_count: Number(s.item_count) || 0, time_minutes: s.time_minutes != null && s.time_minutes !== '' ? Number(s.time_minutes) : null,
+      item_count: sectionItemCount(s.item_count), time_minutes: s.time_minutes != null && s.time_minutes !== '' ? Number(s.time_minutes) : null,
       requires_spatial_logic: !!s.requires_spatial_logic, display_order: i + 1,
     }))
     const { error } = await supabase.from('exam_blueprint_sections').insert(rows)

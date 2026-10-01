@@ -12,7 +12,7 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { useDb } from '../../hooks/useDb'
 import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useExamRunPersistence } from '../../hooks/useExamRunPersistence'
-import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
+import { listRunnableBlueprints, type RunnableBlueprint } from '../../services/examBlueprints'
 import { cachedQuery, invalidate, subscribe } from '../../services/queryCache'
 import { getSubjectRecentAccuracy } from '../../services/homeAggregates'
 import { subjectReadinessPct } from '../../utils/subjectReadiness'
@@ -135,12 +135,12 @@ export default function PracticeScreen() {
     return () => { cancelled = true }
   }, [db, reloadKey])
 
-  const [blueprints, setBlueprints] = useState<Load<PublishedBlueprint[]>>({ status: 'loading' })
+  const [blueprints, setBlueprints] = useState<Load<RunnableBlueprint[]>>({ status: 'loading' })
   const [blueprintsTry, setBlueprintsTry] = useState(0)
   useEffect(() => {
     let cancelled = false
     function pull() {
-      return cachedQuery('practice:blueprints:list', 30_000, () => listPublishedBlueprints(db))
+      return cachedQuery('practice:blueprints:list', 30_000, () => listRunnableBlueprints(db))
         .then(data => { if (!cancelled) setBlueprints({ status: 'ready', data }) })
         .catch(e => {
           console.warn('[practice/blueprints] load failed:', e)
@@ -219,7 +219,7 @@ export default function PracticeScreen() {
       dueCount: dueCounts.total,
       weakTopic,
       focusMock: focusBlueprint
-        ? { slug: focusBlueprint.slug, title: focusBlueprint.acronym, items: focusBlueprint.totalItems, minutes: focusBlueprint.totalTimeMinutes }
+        ? { slug: focusBlueprint.slug, title: focusBlueprint.acronym, items: focusBlueprint.items, minutes: focusBlueprint.minutes }
         : null,
     }))
   }, [dueCounts, resume, blueprints.status, weakTopic, focusBlueprint])
@@ -308,8 +308,8 @@ export default function PracticeScreen() {
               <ListRow
                 key={b.slug}
                 title={b.acronym}
-                subtitle={`${b.name} · ${b.totalItems} items · ${minutes(b.totalTimeMinutes)}`}
-                accessibilityLabel={`${b.acronym}, ${b.name}, ${b.totalItems} items, ${minutes(b.totalTimeMinutes)}${running ? ', in progress' : ''}`}
+                subtitle={`${b.name} · ${b.items} items · ${minutes(b.minutes)}`}
+                accessibilityLabel={`${b.acronym}, ${b.name}, ${b.items} items, ${minutes(b.minutes)}${running ? ', in progress' : ''}`}
                 trailing={running ? <Badge label="In progress" tone="accent" /> : undefined}
                 onPress={() => go(`/practice/exam/${b.slug}`)}
               />

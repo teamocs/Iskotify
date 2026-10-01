@@ -2,7 +2,7 @@ import {
   buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, scoreBand,
   groupReviewBySection, sectionChipState, orderBlueprintsForUser,
   scaleExamTimeMinutes, scaleSectionTimeMinutes, scaleBlueprintTiming,
-  computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES,
+  computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES, plannedItemCount,
 } from '../examBuilder'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
@@ -124,9 +124,83 @@ describe('scaleBlueprintTiming', () => {
     totalQuestions: 105,
   }
 
-  it('scales the total time using the blueprint-wide ratio', () => {
-    // 270 * 105/245 = 115.7 -> 116
-    expect(scaleBlueprintTiming(blueprint, built).totalMinutes).toBe(116)
+  it('scales the total time by sampled / SUM of section item_counts (blueprint.totalItems is ignored)', () => {
+    // declared = 90 + 60 = 150 (not totalItems 245); 270 * 105/150 = 189
+    expect(scaleBlueprintTiming(blueprint, built).totalMinutes).toBe(189)
+  })
+
+  it('B3: a stale/wrong blueprint.totalItems cannot change the timer (DOST-SEI: total_items 170, sections sum 210)', () => {
+    const dost = {
+      runnable: [
+        { section: { id: 'd:1', name: 'A', skillCategory: 'a', itemCount: 105, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 }, questions: new Array(100).fill({}), available: 100 },
+        { section: { id: 'd:2', name: 'B', skillCategory: 'b', itemCount: 105, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 2 }, questions: new Array(100).fill({}), available: 100 },
+      ],
+      comingSoon: [],
+      totalQuestions: 200,
+    }
+    // sampled 200 >= totalItems 170 used to mean "no scaling"; vs the real 210 it is 200/210.
+    expect(scaleBlueprintTiming({ totalItems: 170, totalTimeMinutes: 210 }, dost).totalMinutes).toBe(200)
+  })
+
+  describe('section-blocked blueprints (B3)', () => {
+    const sec = (id: string, itemCount: number, timeMinutes: number | null) =>
+      ({ id, name: id, skillCategory: id, itemCount, timeMinutes, requiresSpatialLogic: false, displayOrder: 1 })
+    const run = (section: ReturnType<typeof sec>, n: number) => ({ section, questions: new Array(n).fill({}), available: n })
+
+    it('total is never shorter than the sum of the runnable section clocks', () => {
+      // sections sum to 190 min but the blueprint says 180
+      const b = { runnable: [run(sec('a', 50, 100), 50), run(sec('b', 50, 90), 50)], comingSoon: [], totalQuestions: 100 }
+      const t = scaleBlueprintTiming({ totalItems: 100, totalTimeMinutes: 180, sectionBlocked: true }, b)
+      expect(t.totalMinutes).toBe(190)
+    })
+
+    it('with a coming-soon section dropped, total = sum of the scaled runnable sections', () => {
+      const b = {
+        runnable: [run(sec('a', 100, 60), 50), run(sec('b', 100, 60), 100)],
+        comingSoon: [sec('c', 100, 60)],
+        totalQuestions: 150,
+      }
+      const t = scaleBlueprintTiming({ totalItems: 300, totalTimeMinutes: 180, sectionBlocked: true }, b)
+      expect(t.sectionMinutes.get('a')).toBe(30)
+      expect(t.sectionMinutes.get('b')).toBe(60)
+      expect(t.totalMinutes).toBe(90)
+    })
+
+    it('a section with no declared minutes gets an equal share of the remaining total', () => {
+      // total 100, a=40 declared => 60 remain for the two null sections => 30 each
+      const b = { runnable: [run(sec('a', 10, 40), 10), run(sec('b', 10, null), 10), run(sec('c', 10, null), 10)], comingSoon: [], totalQuestions: 30 }
+      const t = scaleBlueprintTiming({ totalItems: 30, totalTimeMinutes: 100, sectionBlocked: true }, b)
+      expect(t.sectionMinutes.get('a')).toBe(40)
+      expect(t.sectionMinutes.get('b')).toBe(30)
+      expect(t.sectionMinutes.get('c')).toBe(30)
+      expect(t.totalMinutes).toBe(100)
+    })
+  })
+
+  describe('null-minutes share when declared minutes use up the total (item 5)', () => {
+    const sec = (id: string, itemCount: number, timeMinutes: number | null) =>
+      ({ id, name: id, skillCategory: id, itemCount, timeMinutes, requiresSpatialLogic: false, displayOrder: 1 })
+    const run = (section: ReturnType<typeof sec>, n: number) => ({ section, questions: new Array(n).fill({}), available: n })
+
+    it('falls back to the item-proportional share of the total instead of flooring to 1 minute', () => {
+      // a declares 100 of a 60-minute total, so nothing is "left"; b has 10 of 60 items => 10 min.
+      const b = { runnable: [run(sec('a', 50, 100), 50), run(sec('b', 10, null), 10)], comingSoon: [], totalQuestions: 60 }
+      const t = scaleBlueprintTiming({ totalItems: 60, totalTimeMinutes: 60, sectionBlocked: true }, b)
+      expect(t.sectionMinutes.get('b')).toBe(10)
+    })
+
+    it('never gives a section less than 1 minute per 2 questions', () => {
+      // total 20 min, a declares 20, b has 30 of 130 items => proportional 4.6, floor 15.
+      const b = { runnable: [run(sec('a', 100, 20), 100), run(sec('b', 30, null), 30)], comingSoon: [], totalQuestions: 130 }
+      const t = scaleBlueprintTiming({ totalItems: 130, totalTimeMinutes: 20, sectionBlocked: true }, b)
+      expect(t.sectionMinutes.get('b')).toBe(15)
+    })
+
+    it('a tiny positive remainder is also lifted to the floor', () => {
+      const b = { runnable: [run(sec('a', 10, 59), 10), run(sec('b', 10, null), 10)], comingSoon: [], totalQuestions: 20 }
+      const t = scaleBlueprintTiming({ totalItems: 20, totalTimeMinutes: 60, sectionBlocked: true }, b)
+      expect(t.sectionMinutes.get('b')).toBe(5)
+    })
   })
 
   it('scales each section using its OWN sampled/declared ratio, not the blueprint-wide one', () => {
@@ -413,5 +487,103 @@ describe('orderBlueprintsForUser', () => {
     const original = [...bps]
     orderBlueprintsForUser(bps, ['ustet'])
     expect(bps.map(b => b.slug)).toEqual(original.map(b => b.slug))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Batch B — B2: passage sets stay whole + contiguous; B-extra: no id in two sections
+// ---------------------------------------------------------------------------
+
+function setQs(setId: string, n: number): RawUpcatQuestion[] {
+  return Array.from({ length: n }, (_, i) => ({
+    // setPosition deliberately reversed vs array order so sorting is observable.
+    questionId: `${setId}-${i}`, subtest: 'Reading Comprehension', questionText: `${setId} Q${i}`, options: ['a', 'b', 'c', 'd'],
+    correctIndex: 0, explanation: '', setId, setPosition: n - i,
+  }))
+}
+const oneSection = (itemCount: number, skillCategory = 'Reading'): ExamBlueprint =>
+  bp({ sections: [{ id: 'x:1', name: 'RC', skillCategory, itemCount, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 }] })
+
+describe('buildBlueprintExam: passage sets (B2)', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  it('keeps every picked passage set whole, contiguous and ordered by setPosition', () => {
+    const pool = [...setQs('s1', 4), ...setQs('s2', 4), ...q('Reading', 6)]
+    const passages = [{ setId: 's1', subtest: 'RC', passageText: 'P1' }, { setId: 's2', subtest: 'RC', passageText: 'P2' }]
+    for (let seed = 0; seed < 30; seed++) {
+      let n = seed + 1
+      jest.spyOn(Math, 'random').mockImplementation(() => { n = (n * 9301 + 49297) % 233280; return n / 233280 })
+      const built = buildBlueprintExam(oneSection(8), new Map([['Reading', pool]]), passages)
+      const qs = built.runnable[0]!.questions
+      for (const sid of ['s1', 's2']) {
+        const at = qs.map((x, i) => (x.setId === sid ? i : -1)).filter(i => i >= 0)
+        if (at.length === 0) continue
+        expect(at).toHaveLength(4) // never a truncated set
+        expect(at[3]! - at[0]!).toBe(3) // contiguous
+        expect(at.map(i => qs[i]!.setPosition)).toEqual([1, 2, 3, 4]) // sorted by setPosition
+        expect(qs[at[0]!]!.passageText).toBe(sid === 's1' ? 'P1' : 'P2')
+      }
+      jest.restoreAllMocks()
+    }
+  })
+
+  it('takes a whole set that is larger than the target rather than truncating it', () => {
+    const built = buildBlueprintExam(oneSection(3), new Map([['Reading', setQs('s1', 5)]]), [])
+    expect(built.runnable[0]!.questions).toHaveLength(5)
+    expect(new Set(built.runnable[0]!.questions.map(x => x.setId))).toEqual(new Set(['s1']))
+  })
+
+  it('does not overshoot the target when whole units can fill it exactly', () => {
+    const pool = [...setQs('s1', 5), ...q('Reading', 10)]
+    for (let i = 0; i < 20; i++) {
+      const built = buildBlueprintExam(oneSection(3), new Map([['Reading', pool]]), [])
+      expect(built.runnable[0]!.questions).toHaveLength(3)
+    }
+  })
+})
+
+describe('buildBlueprintExam: no question in two sections', () => {
+  it('never reuses a questionId across sections that share a category', () => {
+    const two = bp({ sections: [
+      { id: 'x:1', name: 'A', skillCategory: 'Mathematics', itemCount: 3, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 },
+      { id: 'x:2', name: 'B', skillCategory: 'Mathematics', itemCount: 3, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 2 },
+    ] })
+    const built = buildBlueprintExam(two, new Map([['Mathematics', q('Mathematics', 4)]]), [])
+    const ids = built.runnable.flatMap(s => s.questions.map(x => x.questionId))
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toHaveLength(4)
+  })
+
+  it('a later section whose whole pool was consumed becomes comingSoon', () => {
+    const two = bp({ sections: [
+      { id: 'x:1', name: 'A', skillCategory: 'Mathematics', itemCount: 5, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 1 },
+      { id: 'x:2', name: 'B', skillCategory: 'Mathematics', itemCount: 3, timeMinutes: null, requiresSpatialLogic: false, displayOrder: 2 },
+    ] })
+    const built = buildBlueprintExam(two, new Map([['Mathematics', q('Mathematics', 4)]]), [])
+    expect(built.runnable.map(s => s.section.name)).toEqual(['A'])
+    expect(built.comingSoon.map(s => s.name)).toEqual(['B'])
+  })
+})
+
+describe('plannedItemCount (what the prestart will build, from counts alone)', () => {
+  const s = (id: string, skillCategory: string, itemCount: number, displayOrder: number) =>
+    ({ id, name: id, skillCategory, itemCount, timeMinutes: null, requiresSpatialLogic: false, displayOrder })
+
+  it('sums min(item_count, available) over sections, leaving empty sections out', () => {
+    const sections = [s('a', 'M', 50, 1), s('b', 'S', 30, 2), s('c', 'V', 20, 3)]
+    expect(plannedItemCount(sections, new Map([['M', 10], ['S', 100]]))).toBe(10 + 30) // V has nothing
+  })
+
+  it('sections sharing a category draw from one pool, in display order, never twice', () => {
+    const sections = [s('b', 'M', 110, 2), s('a', 'M', 100, 1)]
+    expect(plannedItemCount(sections, new Map([['M', 150]]))).toBe(150) // a takes 100, b only 50 left
+    expect(plannedItemCount(sections, new Map([['M', 500]]))).toBe(210)
+  })
+
+  it('matches buildBlueprintExam for the same pools', () => {
+    const pools = new Map([['Mathematics', q('Mathematics', 4)], ['Abstract/Non-Verbal Reasoning', q('Abstract', 1)]])
+    const built = buildBlueprintExam(bp(), pools, [])
+    const counts = new Map([...pools].map(([k, v]) => [k, v.length] as [string, number]))
+    expect(plannedItemCount(bp().sections, counts)).toBe(built.totalQuestions)
   })
 })

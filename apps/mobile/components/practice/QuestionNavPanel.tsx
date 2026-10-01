@@ -10,6 +10,8 @@ interface Props {
   answeredIdxs: Set<number>
   flaggedIdxs?: Set<number>
   floorIdx?: number
+  /** First index of a later, not-yet-open section (section-locked exams). */
+  ceilIdx?: number
   onJump: (idx: number) => void
   sections?: SectionGridSection[]
   onJumpSection?: (start: number) => void
@@ -23,7 +25,7 @@ interface Props {
  * lives in the review sheet so the question keeps the screen.
  */
 export function QuestionNavPanel({
-  total, currentIdx, answeredIdxs, flaggedIdxs, floorIdx = 0, onJump, sections, onJumpSection, width = 264,
+  total, currentIdx, answeredIdxs, flaggedIdxs, floorIdx = 0, ceilIdx, onJump, sections, onJumpSection, width = 264,
 }: Props) {
   const { theme: t } = useTheme()
   const answered = answeredIdxs.size
@@ -51,7 +53,8 @@ export function QuestionNavPanel({
           answeredIdxs={answeredIdxs}
           flaggedIdxs={flaggedIdxs}
           floorIdx={floorIdx}
-          onPressCell={i => { if (i >= floorIdx) onJump(i) }}
+          ceilIdx={ceilIdx}
+          onPressCell={i => { if (i >= floorIdx && (ceilIdx === undefined || i < ceilIdx)) onJump(i) }}
         />
       </ScrollView>
     </View>
