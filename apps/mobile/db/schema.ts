@@ -167,6 +167,9 @@ export const userSettings = sqliteTable('user_settings', {
   premiumCheckedAt: integer('premium_checked_at').notNull().default(0),
   // The Supabase user id premiumCached belongs to; '' = nobody. Trusted only for that account.
   premiumUserId: text('premium_user_id').notNull().default(''),
+  // When the student dismissed Today's "Complete your scholarship profile" prompt,
+  // epoch ms; 0 = never. Device-local: pullUserData doesn't restore it; reset on an account switch.
+  profilePromptDismissedAt: integer('profile_prompt_dismissed_at').notNull().default(0),
 })
 
 export const userProgress = sqliteTable('user_progress', {

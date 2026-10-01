@@ -665,6 +665,10 @@ export const MIGRATIONS = [
   // The cache is trusted only for that signed-in account, so an account switch
   // can never hand the previous account's access to the next one.
   `ALTER TABLE user_settings ADD COLUMN premium_user_id TEXT NOT NULL DEFAULT ''`,
+
+  // ── P4 short onboarding: the scholarship-profile prompt on Today ──
+  // Epoch ms the student dismissed it; 0 = never. Device-local: pullUserData doesn't restore it.
+  `ALTER TABLE user_settings ADD COLUMN profile_prompt_dismissed_at INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

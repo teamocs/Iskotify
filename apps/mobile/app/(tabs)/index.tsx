@@ -12,6 +12,7 @@ import { NextStepCard } from '../../components/home/NextStepCard'
 import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
 import { NewsAndDates } from '../../components/home/NewsAndDates'
+import { ScholarshipProfilePrompt } from '../../components/home/ScholarshipProfilePrompt'
 import { spacing, textStyle } from '../../theme/tokens'
 import { useTheme } from '../../theme/ThemeContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -203,6 +204,8 @@ export default function TodayScreen() {
               admissionsStatus={admissionsStatus}
               onRetry={reloadAdmissions}
             />
+            {/* Last, and quiet: what the short onboarding no longer asks (P4). */}
+            <ScholarshipProfilePrompt />
           </View>
         }
       />

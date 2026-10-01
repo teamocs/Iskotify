@@ -20,6 +20,26 @@ jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null 
 jest.mock('../../../hooks/useDb', () => { const db = { tag: 'db' }; return { useDb: () => db } })
 jest.mock('../../../services/sync', () => ({ pushUserData: jest.fn().mockResolvedValue(undefined) }))
 
+// The picker and the courses card own their own data (Supabase / the local DB).
+jest.mock('../../../components/SchoolPicker', () => ({
+  SchoolPicker: ({ value, onChange, onSelectMeta }: { value: string; onChange: (v: string) => void; onSelectMeta?: (m: { region?: string }) => void }) => {
+    const { TextInput } = require('react-native')
+    return (
+      <TextInput
+        testID="school-picker-mock"
+        value={value}
+        onChangeText={(v: string) => { onChange(v); onSelectMeta?.({ region: 'Region V' }) }}
+      />
+    )
+  },
+}))
+jest.mock('../../../components/TargetCoursesCard', () => ({
+  TargetCoursesCard: () => {
+    const { Text } = require('react-native')
+    return <Text>Target courses card</Text>
+  },
+}))
+
 let mockStored: Record<string, unknown>
 const mockUpdate = jest.fn().mockResolvedValue(undefined)
 jest.mock('../../../services/settings', () => ({

@@ -55,6 +55,8 @@ jest.mock('../../../services/notifications', () => ({
 }))
 
 jest.mock('../../../services/sync', () => ({ syncOnLaunch: jest.fn().mockResolvedValue(undefined) }))
+// Reads its own settings row (covered in components/home/__tests__/ScholarshipProfilePrompt.test.tsx).
+jest.mock('../../../components/home/ScholarshipProfilePrompt', () => ({ ScholarshipProfilePrompt: () => null }))
 
 const mockUseHomeStats = jest.fn()
 jest.mock('../../../hooks/useHomeStats', () => ({

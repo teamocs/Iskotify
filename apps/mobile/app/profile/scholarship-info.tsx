@@ -23,6 +23,11 @@ import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBrea
 import { FilterChip } from '../../components/ui/Chip'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { ErrorState } from '../../components/ui/ErrorState'
+import { SchoolPicker } from '../../components/SchoolPicker'
+import { TargetCoursesCard } from '../../components/TargetCoursesCard'
+import { canonicalizeRegion } from '../../utils/region'
+import { invalidate } from '../../services/queryCache'
+import { SCHOLARSHIP_PROMPT_KEY } from '../../components/home/scholarshipPromptState'
 
 const INCOME_OPTIONS: { label: string; value: IncomeBracket | null }[] = [
   { label: '₱100k or below / yr', value: '<=100k' },
@@ -48,6 +53,11 @@ export default function ScholarshipInfoScreen() {
   const [consented, setConsented] = useState(false)
   const [province, setProvince] = useState('')
   const [provinceQuery, setProvinceQuery] = useState('')
+  // The school moved here from onboarding (P4). Written only when changed, so
+  // saving the other fields never touches a school set elsewhere.
+  const [school, setSchool] = useState('')
+  const [schoolRegion, setSchoolRegion] = useState('')
+  const [schoolChanged, setSchoolChanged] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -70,6 +80,9 @@ export default function ScholarshipInfoScreen() {
         setGwaText(s.gwa != null ? String(s.gwa) : '')
         setProvince(s.province ?? '')
         setProvinceQuery(s.province ?? '')
+        setSchool(s.school ?? '')
+        setSchoolRegion(s.schoolRegion ?? '')
+        setSchoolChanged(false)
       } catch (e) {
         console.warn('[scholarship-info] load error:', e)
         if (!cancelled) setLoadFailed(true)
@@ -79,6 +92,10 @@ export default function ScholarshipInfoScreen() {
     })()
     return () => { cancelled = true }
   }, [db, loadKey])
+
+  // Courses save themselves (TargetCoursesCard), without a Save: re-read
+  // Today's scholarship-profile prompt on the way out so it never lists them stale.
+  useEffect(() => () => invalidate(SCHOLARSHIP_PROMPT_KEY), [])
 
   const labelStyle = useMemo(() => [textStyle('label', t.textPrimary), { marginBottom: spacing.sm }], [t])
   const hintStyle = useMemo(() => [textStyle('bodySm', t.textSecondary), { marginBottom: spacing.sm }], [t])
@@ -104,9 +121,10 @@ export default function ScholarshipInfoScreen() {
     setSaving(true)
     try {
       // Without consent only the (non-sensitive) province is written.
+      const schoolPatch = schoolChanged ? { school: school.trim(), schoolRegion: canonicalizeRegion(schoolRegion) } : {}
       await updateSettings(db, consented
-        ? { incomeBracket: incomePreferNotToSay ? null : incomeBracket, gwa: gwaNum, province: province.trim() || null }
-        : { province: province.trim() || null })
+        ? { incomeBracket: incomePreferNotToSay ? null : incomeBracket, gwa: gwaNum, province: province.trim() || null, ...schoolPatch }
+        : { province: province.trim() || null, ...schoolPatch })
       void pushUserData(db).catch(() => {})
       router.back()
     } catch (e) {
@@ -115,7 +133,7 @@ export default function ScholarshipInfoScreen() {
     } finally {
       setSaving(false)
     }
-  }, [db, consented, incomeBracket, incomePreferNotToSay, gwaText, province])
+  }, [db, consented, incomeBracket, incomePreferNotToSay, gwaText, province, school, schoolRegion, schoolChanged])
 
   const optIn = useCallback(async (on: boolean) => {
     if (!on) return
@@ -151,7 +169,7 @@ export default function ScholarshipInfoScreen() {
         <View testID="scholarship-form" style={[{ gap: spacing.md, width: '100%' }, column]}>
         <PageTitle
           title="Scholarship profile"
-          lead="These details power scholarship eligibility matching. All fields are optional, and the more you add, the better your matches."
+          lead="These details power scholarship matching and put nearby universities first. All fields are optional, and the more you add, the better your matches."
         />
 
         {!loaded ? (
@@ -166,6 +184,20 @@ export default function ScholarshipInfoScreen() {
           />
         ) : (
           <>
+            {/* School: its region orders universities and scholarships nearby first. */}
+            <Card>
+              <Text {...heading(2)} style={labelStyle} maxFontSizeMultiplier={2}>School</Text>
+              <Text style={hintStyle} maxFontSizeMultiplier={2}>Where you study now</Text>
+              <SchoolPicker
+                value={school}
+                onChange={v => { setSchool(v); setSchoolRegion(''); setSchoolChanged(true) }}
+                onSelectMeta={m => { setSchoolRegion(m.region ?? ''); setSchoolChanged(true) }}
+              />
+            </Card>
+
+            {/* Target courses: the card saves itself as courses are picked. */}
+            <TargetCoursesCard />
+
             {consented ? (
             <>
             {/* Income bracket */}

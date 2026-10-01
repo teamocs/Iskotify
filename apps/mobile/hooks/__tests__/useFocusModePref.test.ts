@@ -60,7 +60,8 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       analytics_choice_at INTEGER NOT NULL DEFAULT 0,
       premium_cached INTEGER NOT NULL DEFAULT 0,
       premium_checked_at INTEGER NOT NULL DEFAULT 0,
-      premium_user_id TEXT NOT NULL DEFAULT ''
+      premium_user_id TEXT NOT NULL DEFAULT '',
+      profile_prompt_dismissed_at INTEGER NOT NULL DEFAULT 0
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)

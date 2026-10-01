@@ -363,6 +363,8 @@ const USER_SETTINGS_RESET = {
   premiumCached: false,
   premiumCheckedAt: 0,
   premiumUserId: '',
+  // The next person sees Today's scholarship-profile prompt afresh.
+  profilePromptDismissedAt: 0,
   pushDirtyAt: 0,
   lastPullOkAt: 0,
 } satisfies Partial<typeof userSettings.$inferInsert>
