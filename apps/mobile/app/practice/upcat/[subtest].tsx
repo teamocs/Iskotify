@@ -43,7 +43,7 @@ import { practiceAllowanceNow, fullMockAllowedNow } from '../../../services/prem
 import { usePremium } from '../../../hooks/usePremium'
 import { trimToAllowance } from '../../../utils/premiumLimits'
 import { UpgradeCard, PRACTICE_CAP_BODY, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
-import { lastSeenOrEmpty, getOpenMistakeIds } from '../../../services/questionHistory'
+import { lastSeenOrEmpty, getOpenMistakeIds, mistakesInScope } from '../../../services/questionHistory'
 import { buildMistakesExam } from '../../../utils/mistakes'
 
 type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results' | 'capped'
@@ -99,6 +99,8 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   // which served questions are mistakes (the rest are passage-set companions).
   const openMistakesRef = useRef<string[]>([])
   const [mistakeIds, setMistakeIds] = useState<Set<string>>(() => new Set())
+  // Mistakes is UPCAT-only: without UPCAT in focus the route shows a short note.
+  const [mistakesOutOfScope, setMistakesOutOfScope] = useState(false)
   const rawPassagesRef = useRef<{ setId: string; subtest: string; passageText: string }[]>([])
   const runKey = runKeyFor('upcat', subtestParam ?? 'all', mode === 'quick' ? 'quick' : 'full')
   // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
@@ -225,7 +227,9 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         parsedRef.current = parsed
         rawPassagesRef.current = passages
         if (isMistakes) {
-          openMistakesRef.current = await getOpenMistakeIds(db)
+          const inScope = await mistakesInScope(db)
+          setMistakesOutOfScope(!inScope)
+          openMistakesRef.current = inScope ? await getOpenMistakeIds(db) : []
           setMistakeIds(new Set(openMistakesRef.current))
         }
 
@@ -464,6 +468,16 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   }
 
   if (phase === 'results') {
+    if (questions.length === 0 && isMistakes && mistakesOutOfScope) {
+      return (
+        <SessionEmpty
+          title="Mistakes covers UPCAT practice."
+          body="Add UPCAT to your focus exams to retry the UPCAT questions you missed."
+          fallbackHref="/practice"
+          actionLabel="Practice"
+        />
+      )
+    }
     if (questions.length === 0 && isMistakes) {
       return (
         <SessionEmpty
@@ -555,7 +569,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
           <View style={{ gap: spacing.sm }}>
             <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
             <Button
-              label={isMistakes ? 'Review mistakes again' : 'Retake exam'}
+              label={isMistakes ? 'Retry mistakes' : 'Retake exam'}
               variant="secondary"
               fullWidth
               onPress={() => router.replace(isMistakes ? '/practice/mistakes' : `/practice/upcat/${subtestParam}?mode=${mode}`)}

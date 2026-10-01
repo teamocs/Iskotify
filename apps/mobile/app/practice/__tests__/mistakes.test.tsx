@@ -71,8 +71,10 @@ jest.mock('../../../hooks/usePremium', () => ({ usePremium: () => ({ ...mockPrem
 
 let mockMistakeIds: string[] = []
 const mockGetOpenMistakeIds = jest.fn(async () => mockMistakeIds)
+const mockScope = { upcatInFocus: true }
 jest.mock('../../../services/questionHistory', () => ({
   getOpenMistakeIds: () => mockGetOpenMistakeIds(),
+  mistakesInScope: async () => mockScope.upcatInFocus,
   lastSeenOrEmpty: jest.fn(async () => new Map()),
 }))
 
@@ -128,6 +130,7 @@ describe('Mistakes mode (/practice/mistakes)', () => {
     mockFullMockAllowed.mockClear()
     mockGate.allowance = Infinity
     mockMistakeIds = []
+    mockScope.upcatInFocus = true
     mockQuestionRows = []
     mockPassageRows = []
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
@@ -167,15 +170,34 @@ describe('Mistakes mode (/practice/mistakes)', () => {
     await reviewAndConfirmSubmit(alertSpy)
 
     const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
-    expect(rows.map(r => [r.questionId, r.sourceTable, r.correct])).toEqual([
-      ['Q3', 'upcat_questions', true],
-      ['Q1', 'upcat_questions', false],
+    // A retry is still UPCAT practice: saved under the upcat listing (feeds the UPCAT estimator and Mistakes).
+    expect(rows.map(r => [r.questionId, r.sourceTable, r.listingSlug, r.correct])).toEqual([
+      ['Q3', 'upcat_questions', 'upcat', true],
+      ['Q1', 'upcat_questions', 'upcat', false],
     ])
     // A drill (counts toward the free daily cap), labelled Mistakes.
     expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({
       listingSlug: 'upcat', topicId: 'mistakes', subtest: 'Mathematics', kind: 'drill', score: 1, total: 2,
     }))
     expect(await screen.findByText('You fixed 1 of 2 mistakes.')).toBeTruthy()
+
+    // Results: the primary opens the review; the secondary starts a NEW run, so it says so.
+    expect(screen.getByRole('button', { name: 'Review mistakes' })).toBeTruthy()
+    expect(screen.queryByText('Review mistakes again')).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Retry mistakes' }))
+    expect(mockReplace).toHaveBeenCalledWith('/practice/mistakes')
+  })
+
+  it('UPCAT not in focus: a short note instead of a run, and no mistakes are read or served', async () => {
+    mockScope.upcatInFocus = false
+    mockQuestionRows = [row('Q1', 'One?')]
+    mockMistakeIds = ['Q1']
+    render(<MistakesScreen />)
+    expect(await screen.findByText('Mistakes covers UPCAT practice.')).toBeTruthy()
+    expect(screen.getByText('Add UPCAT to your focus exams to retry the UPCAT questions you missed.')).toBeTruthy()
+    expect(screen.queryByText('One?')).toBeNull()
+    expect(mockGetOpenMistakeIds).not.toHaveBeenCalled()
+    expect(mockPracticeAllowance).not.toHaveBeenCalled()
   })
 
   it('serves a whole passage set when one member is a mistake, but counts only the mistake', async () => {

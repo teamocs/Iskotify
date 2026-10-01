@@ -19,10 +19,11 @@ interface Props {
 }
 
 /**
- * The Practice tab's quick-start row (P4): four equal tiles, two per line on
+ * The Practice tab's quick-start row (P4): three or four equal tiles, two per line on
  * phones and four across from medium up (they wrap by width). Each tile is
  * one button with a spoken "Title, subtitle" name and a 64pt minimum height.
  * Secondary to the Next step card: surface tiles, never the maroon fill.
+ * A disabled tile (target still loading) is announced as such and ignores taps.
  */
 export function QuickStartRow({ tiles, onPress }: Props) {
   const { theme: t } = useTheme()
@@ -32,6 +33,8 @@ export function QuickStartRow({ tiles, onPress }: Props) {
         <Pressable
           key={tile.key}
           onPress={() => onPress(tile)}
+          disabled={tile.disabled}
+          aria-disabled={tile.disabled}
           accessibilityRole="button"
           accessibilityLabel={`${tile.title}, ${tile.subtitle}`}
           style={(state) => {

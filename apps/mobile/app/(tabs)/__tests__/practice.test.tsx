@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react-native'
 import { Alert } from 'react-native'
 import PracticeScreen from '../practice'
+import { aria } from '../../../test-utils/aria'
 
 // Redesign M2 (direction C, "One Next Step"): Practice leads with ONE next
 // practice action, then Mock exams, Subjects, Your decks and Tools as flat
@@ -121,15 +122,33 @@ describe('PracticeScreen (redesign M2)', () => {
   describe('quick start', () => {
     const quick = () => screen.getByTestId('practice-quick-start')
 
-    it('offers four tiles, each a 44pt+ button', async () => {
+    it('offers three tiles without UPCAT in focus (Mistakes is UPCAT-only), each a 44pt+ button', async () => {
       await renderSettled()
       const tiles = within(quick()).getAllByRole('button')
       expect(tiles.map(b => b.props.accessibilityLabel)).toEqual([
         'Diagnostic, See where you stand',
         'Sprint, Pick an exam · 30 min',
         'Drill, Choose an exam first',
-        'Mistakes, None yet',
       ])
+    })
+
+    it('adds the Mistakes tile when UPCAT is in focus', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      await renderSettled()
+      expect(within(quick()).getAllByRole('button').map(b => b.props.accessibilityLabel)).toContain('Mistakes, None yet')
+    })
+
+    it('while mock exams load: neutral subtitles, and Sprint/Diagnostic/Drill do nothing on tap', async () => {
+      mockListPublishedBlueprints.mockReturnValue(new Promise(() => {}))
+      mockFocusListings.push({ slug: 'acet', priority: 1, addedAt: 0, title: 'ACET', type: 'exam' })
+      await renderSettled()
+      const sprint = within(quick()).getByRole('button', { name: 'Sprint, 30 min' })
+      expect(aria(sprint, 'aria-disabled')).toBe(true)
+      expect(within(quick()).queryByText(/Pick an exam/)).toBeNull()
+      fireEvent.press(sprint)
+      fireEvent.press(within(quick()).getByRole('button', { name: /^Diagnostic/ }))
+      fireEvent.press(within(quick()).getByRole('button', { name: /^Drill/ }))
+      expect(router.push).not.toHaveBeenCalled()
     })
 
     it('Diagnostic targets a non-UPCAT focus exam that has a runnable blueprint', async () => {
@@ -178,6 +197,7 @@ describe('PracticeScreen (redesign M2)', () => {
     })
 
     it('Mistakes shows the count and opens Mistakes mode', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
       mockCountOpenMistakes.mockResolvedValue(3)
       await renderSettled()
       fireEvent.press(within(quick()).getByRole('button', { name: 'Mistakes, 3 to retry' }))
@@ -185,12 +205,14 @@ describe('PracticeScreen (redesign M2)', () => {
     })
 
     it('Mistakes with none yet still opens (to the empty state)', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
       await renderSettled()
       fireEvent.press(within(quick()).getByRole('button', { name: 'Mistakes, None yet' }))
       expect(router.push).toHaveBeenCalledWith('/practice/mistakes')
     })
 
     it('a failed count reads as unknown, never as an error', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
       jest.spyOn(console, 'warn').mockImplementationOnce(() => {})
       mockCountOpenMistakes.mockRejectedValue(new Error('db'))
       await renderSettled()

@@ -8,7 +8,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
 import type { DrizzleClient } from '../../db/client'
-import { getLastSeenByQuestionId, lastSeenOrEmpty, getOpenMistakeIds, countOpenMistakes, SEEN_CHUNK_SIZE } from '../questionHistory'
+import { getLastSeenByQuestionId, lastSeenOrEmpty, getOpenMistakeIds, countOpenMistakes, mistakesInScope, SEEN_CHUNK_SIZE } from '../questionHistory'
 
 function makeDb() {
   const raw = new Database(':memory:')
@@ -24,17 +24,18 @@ function attempt(
   selectedIndex: number | null,
   correct: boolean,
   sourceTable = 'upcat_questions',
+  listingSlug = 'upcat',
 ) {
   return db.insert(schema.questionAttempts).values({
-    sessionKey: answeredAt, sourceTable, questionId, listingSlug: 'upcat', subtest: 'Mathematics', topic: null,
+    sessionKey: answeredAt, sourceTable, questionId, listingSlug, subtest: 'Mathematics', topic: null,
     selectedIndex, correctIndex: 0, correct, elapsedMs: 1000, answeredAt,
   })
 }
 
-function question(db: DrizzleClient, questionId: string, status = 'published') {
+function question(db: DrizzleClient, questionId: string, status = 'published', over: { hasVisual?: boolean; imageUrl?: string | null } = {}) {
   return db.insert(schema.upcatQuestions).values({
     questionId, subtest: 'Mathematics', questionText: questionId, options: '["a","b","c","d"]',
-    correctIndex: 0, explanation: '', status,
+    correctIndex: 0, explanation: '', status, ...over,
   })
 }
 
@@ -124,5 +125,43 @@ describe('getOpenMistakeIds / countOpenMistakes', () => {
     const { db } = makeDb()
     expect(await getOpenMistakeIds(db)).toEqual([])
     expect(await countOpenMistakes(db)).toBe(0)
+  })
+
+  it("is UPCAT-only: a wrong answer in another exam's mock (UPCAT bank question, other listing) never appears", async () => {
+    const { db } = makeDb()
+    for (const id of ['q1', 'q2']) await question(db, id)
+    await attempt(db, 'q1', 100, 1, false, 'upcat_questions', 'dcat-dlsu') // DCAT mock reusing a bank question
+    await attempt(db, 'q2', 200, 1, false) // UPCAT drill
+    expect(await getOpenMistakeIds(db)).toEqual(['q2'])
+    expect(await countOpenMistakes(db)).toBe(1)
+  })
+
+  it("a correct answer in another exam's mock does not clear a UPCAT mistake either", async () => {
+    const { db } = makeDb()
+    await question(db, 'q1')
+    await attempt(db, 'q1', 100, 1, false)
+    await attempt(db, 'q1', 200, 0, true, 'upcat_questions', 'acet')
+    expect(await getOpenMistakeIds(db)).toEqual(['q1'])
+  })
+
+  it('leaves out questions whose required figure is missing (the run would drop them), so the count matches the run', async () => {
+    const { db } = makeDb()
+    await question(db, 'fig-missing', 'published', { hasVisual: true, imageUrl: null })
+    await question(db, 'fig-ok', 'published', { hasVisual: true, imageUrl: 'https://x/fig.png' })
+    await question(db, 'plain')
+    for (const [id, at] of [['fig-missing', 300], ['fig-ok', 200], ['plain', 100]] as const) await attempt(db, id, at, 1, false)
+    expect(await getOpenMistakeIds(db)).toEqual(['fig-ok', 'plain'])
+    expect(await countOpenMistakes(db)).toBe(2)
+  })
+})
+
+describe('mistakesInScope', () => {
+  it('is true only when UPCAT is one of the focus exams (Mistakes is UPCAT-only)', async () => {
+    const { db } = makeDb()
+    expect(await mistakesInScope(db)).toBe(false)
+    await db.insert(schema.focusListings).values({ listingSlug: 'dcat-dlsu', priority: 1, addedAt: 1 })
+    expect(await mistakesInScope(db)).toBe(false)
+    await db.insert(schema.focusListings).values({ listingSlug: 'upcat', priority: 2, addedAt: 2 })
+    expect(await mistakesInScope(db)).toBe(true)
   })
 })

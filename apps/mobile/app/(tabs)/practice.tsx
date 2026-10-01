@@ -255,7 +255,10 @@ export default function PracticeScreen() {
     blueprints: blueprints.status === 'ready' ? blueprints.data : [],
     weakTopic,
     mistakesCount,
-  }), [focusSlugs, blueprints, weakTopic, mistakesCount])
+    // Until both are known the exam-dependent tiles are neutral and disabled
+    // (no "Pick an exam" flashing before the focus exam's target appears).
+    loading: blueprints.status === 'loading' || !focusLoaded,
+  }), [focusSlugs, blueprints, weakTopic, mistakesCount, focusLoaded])
 
   // The estimator is UPCAT-only: its row shows only once focus has loaded and
   // includes UPCAT (no flash of it for everyone else). /estimator stays reachable.
@@ -316,7 +319,10 @@ export default function PracticeScreen() {
   const deckDue = (d: SavedDeck) => d.topicIds.reduce((n, id) => n + (dueCounts?.byTopic[id] ?? 0), 0)
 
   const go = (href: string) => router.push(href as never)
-  const openQuickTile = (tile: QuickStartTile) => { if (tile.href) go(tile.href); else setSubtestOpen(true) }
+  const openQuickTile = (tile: QuickStartTile) => {
+    if (tile.disabled) return
+    if (tile.href) go(tile.href); else setSubtestOpen(true)
+  }
 
   // ── Sections ─────────────────────────────────────────────────────────────
 

@@ -20,8 +20,29 @@ describe('primaryFocusExam / upcatInFocus', () => {
 })
 
 describe('quickStartTiles', () => {
-  it('always returns the four tiles in order', () => {
-    expect(quickStartTiles(base).map(t => t.key)).toEqual(['diagnostic', 'sprint', 'drill', 'mistakes'])
+  it('returns the four tiles in order when UPCAT is in focus', () => {
+    expect(quickStartTiles({ ...base, focusSlugs: ['upcat'] }).map(t => t.key)).toEqual(['diagnostic', 'sprint', 'drill', 'mistakes'])
+  })
+
+  it('leaves Mistakes out when UPCAT is not in focus (Mistakes is UPCAT-only)', () => {
+    expect(quickStartTiles(base).map(t => t.key)).toEqual(['diagnostic', 'sprint', 'drill'])
+    expect(quickStartTiles({ ...base, focusSlugs: ['acet', 'dcat-dlsu'], mistakesCount: 4 }).map(t => t.key)).toEqual(['diagnostic', 'sprint', 'drill'])
+  })
+
+  describe('while blueprints load', () => {
+    it('shows neutral subtitles and disables the exam-dependent tiles (no flicker of a wrong target)', () => {
+      const tiles = quickStartTiles({ ...base, focusSlugs: ['acet', 'upcat'], blueprints: [], loading: true })
+      const by = (k: string) => tiles.find(t => t.key === k)!
+      expect(by('sprint').subtitle).toBe('30 min')
+      expect(by('sprint').subtitle).not.toMatch(/Pick an exam/)
+      expect(by('diagnostic').subtitle).toBe('See where you stand')
+      expect(by('drill').subtitle).toBe('Quick practice')
+      for (const k of ['diagnostic', 'sprint', 'drill']) expect(by(k).disabled).toBe(true)
+      expect(by('mistakes').disabled).toBe(false)
+    })
+    it('nothing is disabled once loaded', () => {
+      expect(quickStartTiles({ ...base, focusSlugs: ['upcat'] }).every(t => !t.disabled)).toBe(true)
+    })
   })
 
   describe('Diagnostic', () => {
@@ -49,10 +70,21 @@ describe('quickStartTiles', () => {
   })
 
   describe('Drill', () => {
-    it('opens the UPCAT subtest picker when UPCAT is in focus', () => {
-      const t = tile({ focusSlugs: ['acet', 'upcat'], weakTopic: { id: 't1', name: 'Fractions' } }, 'drill')
+    it('opens the UPCAT subtest picker when UPCAT is the primary focus exam', () => {
+      const t = tile({ focusSlugs: ['upcat', 'acet'], weakTopic: { id: 't1', name: 'Fractions' } }, 'drill')
       expect(t.href).toBeNull()
       expect(t.subtitle).toBe('Pick a UPCAT subtest')
+    })
+    it('follows the same primary focus exam as Sprint/Diagnostic: a non-UPCAT primary never opens the UPCAT picker', () => {
+      expect(tile({ focusSlugs: ['acet', 'upcat'] }, 'drill').href).toBe('/practice/review/acet')
+      expect(tile({ focusSlugs: ['acet', 'upcat'], weakTopic: { id: 't1', name: 'Fractions' } }, 'drill').href).toBe('/practice/t1')
+    })
+    it('a non-runnable focus exam ahead of UPCAT does not steal Drill from the primary (UPCAT)', () => {
+      expect(tile({ focusSlugs: ['dcat-dlsu', 'upcat'] }, 'drill').href).toBeNull()
+    })
+    it('with no runnable focus exam, falls back to the first focus exam (UPCAT picker if that is UPCAT)', () => {
+      expect(tile({ focusSlugs: ['upcat'], blueprints: [] }, 'drill').href).toBeNull()
+      expect(tile({ focusSlugs: ['dcat-dlsu'], blueprints: [] }, 'drill').href).toBe('/practice/review/dcat-dlsu')
     })
     it('otherwise drills the weakest flashcard topic', () => {
       const t = tile({ focusSlugs: ['acet'], weakTopic: { id: 't1', name: 'Fractions' } }, 'drill')
@@ -76,24 +108,24 @@ describe('quickStartTiles', () => {
 
   describe('Mistakes', () => {
     it('shows the count and opens Mistakes mode', () => {
-      const t = tile({ mistakesCount: 7 }, 'mistakes')
+      const t = tile({ focusSlugs: ['upcat'], mistakesCount: 7 }, 'mistakes')
       expect(t.href).toBe('/practice/mistakes')
       expect(t.subtitle).toBe('7 to retry')
       expect(t.muted).toBe(false)
     })
     it('looks quiet with "None yet" at 0 but still opens (to the empty state)', () => {
-      const t = tile({ mistakesCount: 0 }, 'mistakes')
+      const t = tile({ focusSlugs: ['upcat'], mistakesCount: 0 }, 'mistakes')
       expect(t.href).toBe('/practice/mistakes')
       expect(t.subtitle).toBe('None yet')
       expect(t.muted).toBe(true)
     })
     it('says nothing about the count while it loads', () => {
-      const t = tile({ mistakesCount: null }, 'mistakes')
+      const t = tile({ focusSlugs: ['upcat'], mistakesCount: null }, 'mistakes')
       expect(t.subtitle).toBe('Retry what you missed')
       expect(t.muted).toBe(false)
     })
     it('singular for one', () => {
-      expect(tile({ mistakesCount: 1 }, 'mistakes').subtitle).toBe('1 to retry')
+      expect(tile({ focusSlugs: ['upcat'], mistakesCount: 1 }, 'mistakes').subtitle).toBe('1 to retry')
     })
   })
 })

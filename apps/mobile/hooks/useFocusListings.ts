@@ -46,42 +46,48 @@ export function useFocusListings() {
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
-    const rows = await db
-      .select({
-        slug: focusListings.listingSlug,
-        priority: focusListings.priority,
-        addedAt: focusListings.addedAt,
-        title: listings.title,
-        type: listings.type,
-      })
-      .from(focusListings)
-      .leftJoin(listings, eq(listings.slug, focusListings.listingSlug))
-      .orderBy(asc(focusListings.priority))
-    const mapped = rows.map(r => ({
-      slug: r.slug,
-      priority: r.priority,
-      addedAt: r.addedAt,
-      title: r.title ?? r.slug,
-      type: r.type ?? 'exam',
-    }))
-    // School-level focus entries ("school:<id>") have no listings row, so the
-    // leftJoin left them bare — resolve the school name + tag type='school'.
-    const schoolIds = mapped.filter(m => isSchoolFocusSlug(m.slug)).map(m => schoolIdFromFocusSlug(m.slug))
-    if (schoolIds.length > 0) {
-      const schoolRows = await db
-        .select({ id: tertiarySchools.id, name: tertiarySchools.name, acronym: tertiarySchools.acronym })
-        .from(tertiarySchools)
-        .where(inArray(tertiarySchools.id, schoolIds))
-      const byId = new Map(schoolRows.map(sr => [sr.id, sr]))
-      for (const m of mapped) {
-        if (isSchoolFocusSlug(m.slug)) {
-          const sr = byId.get(schoolIdFromFocusSlug(m.slug))
-          m.title = sr?.name ?? sr?.acronym ?? m.title
-          m.type = 'school'
+    try {
+      const rows = await db
+        .select({
+          slug: focusListings.listingSlug,
+          priority: focusListings.priority,
+          addedAt: focusListings.addedAt,
+          title: listings.title,
+          type: listings.type,
+        })
+        .from(focusListings)
+        .leftJoin(listings, eq(listings.slug, focusListings.listingSlug))
+        .orderBy(asc(focusListings.priority))
+      const mapped = rows.map(r => ({
+        slug: r.slug,
+        priority: r.priority,
+        addedAt: r.addedAt,
+        title: r.title ?? r.slug,
+        type: r.type ?? 'exam',
+      }))
+      // School-level focus entries ("school:<id>") have no listings row, so the
+      // leftJoin left them bare — resolve the school name + tag type='school'.
+      const schoolIds = mapped.filter(m => isSchoolFocusSlug(m.slug)).map(m => schoolIdFromFocusSlug(m.slug))
+      if (schoolIds.length > 0) {
+        const schoolRows = await db
+          .select({ id: tertiarySchools.id, name: tertiarySchools.name, acronym: tertiarySchools.acronym })
+          .from(tertiarySchools)
+          .where(inArray(tertiarySchools.id, schoolIds))
+        const byId = new Map(schoolRows.map(sr => [sr.id, sr]))
+        for (const m of mapped) {
+          if (isSchoolFocusSlug(m.slug)) {
+            const sr = byId.get(schoolIdFromFocusSlug(m.slug))
+            m.title = sr?.name ?? sr?.acronym ?? m.title
+            m.type = 'school'
+          }
         }
       }
+      setFocusListingsList(mapped)
+    } catch (err) {
+      // A failed read must not leave focus-gated UI hidden forever: finish
+      // loading with whatever we have (empty on a first read).
+      console.warn('[useFocusListings] focus read failed:', err)
     }
-    setFocusListingsList(mapped)
     setLoaded(true)
   }, [db])
 
