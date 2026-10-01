@@ -312,6 +312,15 @@ export default function EstimatorScreen() {
         lead="An unofficial estimate from your grades and practice, based on historical cutoffs."
       />
       {body}
+      {/* Non-affiliation + no-guarantee (P1d). The last sentence is the exact
+          negation the compliance guard allows for "guarantee". */}
+      <Text
+        testID="estimator-footnote"
+        style={[textStyle('caption', t.textSecondary), { marginTop: spacing.xl }]}
+        maxFontSizeMultiplier={2}
+      >
+        Iskotify isn’t affiliated with or endorsed by the University of the Philippines. Cutoffs are historical and change every year. This estimate is not a guarantee of admission.
+      </Text>
     </Screen>
   )
 }

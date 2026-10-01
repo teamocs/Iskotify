@@ -14,6 +14,14 @@ export const PRIVACY_LAST_UPDATED = 'October 1, 2026'
 export const PRIVACY_CONTACT_EMAIL = 'teamocsph@gmail.com'
 export const NPC_WEBSITE = 'privacy.gov.ph'
 
+// Placeholders the owner must fill before launch (square brackets on purpose,
+// so they stand out on the page). termsOfService.ts repeats BUSINESS_ADDRESS
+// (it imports nothing); a test keeps the two equal.
+export const DPO_NAME = '[name to be appointed]'
+/** Not a working inbox yet: the policy labels it a placeholder next to the address that works. */
+export const DPO_EMAIL = 'dpo@iskotify.ph'
+export const BUSINESS_ADDRESS = '[business address]'
+
 /** One bullet in a list. `label` is shown in bold before the text. */
 export interface PrivacyListItem {
   label?: string
@@ -62,7 +70,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           },
           {
             label: 'Scholarship and score details (optional).',
-            text: 'Your family’s income bracket, your GWA, your province, your Grade 8 to 11 grades, your school type, your target campus, and whether you belong to an Indigenous community. You can leave these blank.',
+            text: 'Your family’s income bracket, your GWA, your province, your Grade 8 to 11 grades, your school type, your target campus, and whether you belong to an Indigenous community. We collect your grades, GWA, income bracket and Indigenous community only if you turn on sharing them, which is off until you choose. You can leave all of these blank.',
           },
           {
             label: 'Your study activity.',
@@ -87,7 +95,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         ],
       },
       'Some of this, like your grades and whether you belong to an Indigenous community, counts as sensitive personal information under the Data Privacy Act. We use it only for the features it powers.',
-      'We don’t ask for your birthday, phone number, home address or any ID, and Iskotify doesn’t use your phone’s GPS.',
+      'When you sign up, we ask whether you’re 18 or older or under 18. We don’t ask for your birthday, phone number, home address or any ID, and Iskotify doesn’t use your phone’s GPS.',
     ],
   },
   {
@@ -105,6 +113,22 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         ],
       },
       'We don’t sell your data, and we don’t use it for ads.',
+    ],
+  },
+  {
+    title: 'Our legal basis',
+    blocks: [
+      'The Data Privacy Act only lets us use your data for a reason it allows (Section 12, and Section 13 for sensitive personal information). Here is our reason for each use:',
+      {
+        items: [
+          { label: 'Running the app and backing up your data:', text: 'needed to provide the service you signed up for (Section 12(b)).' },
+          { label: 'Your grades, GWA, income bracket, Indigenous community and school records:', text: 'only with your separate consent, which you give by turning on sharing them (Section 13(a)). It’s off until you choose, and you can withdraw it at any time.' },
+          { label: 'Usage analytics:', text: 'your consent (Section 12(a)). If you’re under 18, analytics stays off unless you turn it on. If you’re 18 or older, it’s on when you finish signing up and you can turn it off at any time. Nothing is recorded before you make this choice.' },
+          { label: 'Early access sign-ups:', text: 'your consent, when you fill in the form (Section 12(a)).' },
+          { label: 'Bug reports, feedback, question reports, date suggestions, and stopping spam and abuse:', text: 'our legitimate interest in keeping Iskotify working, accurate and safe (Section 12(f)). We use only what we need for this.' },
+          { label: 'When the law requires it:', text: 'to meet a legal obligation, like a valid court order (Section 12(c)).' },
+        ],
+      },
     ],
   },
   {
@@ -126,7 +150,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
           },
         ],
       },
-      'Some of the services we use have servers outside the Philippines. Our analytics service, for example, is in the United States. We choose services that protect data carefully, but no system is perfectly secure.',
+      'Some of the services we use have servers outside the Philippines, so your data may be sent abroad. The next section lists each one and where it is. We choose services that protect data carefully, but no system is perfectly secure.',
+      'If a breach puts your data at risk, we’ll notify the National Privacy Commission and the affected users, as the law requires.',
     ],
   },
   {
@@ -135,16 +160,17 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       'We don’t sell or rent your data. We share it only with the services that help run Iskotify, and each one gets only what it needs:',
       {
         items: [
-          { label: 'Supabase', text: 'stores our database and files, runs sign-in, and sends sign-in emails like password resets.' },
-          { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes school-name lookups to Google Places.' },
-          { label: 'Google', text: 'handles Google sign-in if you choose it. Google Places looks up a school name you type that isn’t on our list.' },
-          { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device.' },
-          { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on.' },
-          { label: 'Expo', text: 'delivers app updates to your phone.' },
-          { label: 'Resend', text: 'sends early access emails, so it gets your name and email address.' },
-          { label: 'Upstash', text: 'briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour.' },
+          { label: 'Supabase', text: 'stores our database and files, runs sign-in, and sends sign-in emails like password resets. Servers: [region to confirm].' },
+          { label: 'Vercel', text: 'hosts the Iskotify website and web app, and runs the small server that passes school-name lookups to Google Places. Servers: United States.' },
+          { label: 'Google', text: 'handles Google sign-in if you choose it. Google Places looks up a school name you type that isn’t on our list. Servers: United States.' },
+          { label: 'Have I Been Pwned', text: 'helps check whether a new password has shown up in a known data leak. When you create or reset a password, the app scrambles it on your device into a code (a SHA-1 hash) and sends only the first 5 characters of that code to the Pwned Passwords service (api.pwnedpasswords.com). Your password and the full code never leave your device, so this service gets nothing that identifies you.' },
+          { label: 'PostHog', text: 'runs our usage analytics, when analytics is switched on. Servers: United States.' },
+          { label: 'Expo', text: 'delivers app updates to your phone. Servers: United States.' },
+          { label: 'Resend', text: 'sends early access emails, so it gets your name and email address. Servers: United States.' },
+          { label: 'Upstash', text: 'briefly keeps your IP address to stop spam on some forms and searches. It’s deleted automatically within about an hour. Servers: [region to confirm].' },
         ],
       },
+      'We use service agreements requiring these providers to protect your data.',
       'Some practice questions, answer choices and explanations are drafted with the help of AI tools by our team and checked before they reach the app. Nothing you type or do in the app is sent to those tools. If an explanation looks wrong or inappropriate, use Report on the question.',
       'Our team, including the content staff who help us check questions and dates, can see the reports, suggestions and feedback you send.',
       'We may also share data if the law requires it, for example because of a valid court order.',
@@ -157,9 +183,11 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         items: [
           { label: 'On your device:', text: 'until you clear it, reset the app or uninstall it.' },
           { label: 'Your account and backup:', text: 'until you delete your account (in the app, or by emailing us).' },
-          { label: 'Bug reports, feedback, question reports and date suggestions:', text: 'we don’t delete these on a fixed schedule yet. We keep them while they help us improve Iskotify, and they’re deleted when you delete your account.' },
-          { label: 'Analytics:', text: 'kept in PostHog. We can delete what’s linked to you if you ask.' },
-          { label: 'Early access sign-ups:', text: 'until you ask us to remove them.' },
+          { label: 'Bug reports and their screenshots:', text: '12 months after we close the report, then deleted.' },
+          { label: 'Feedback, question reports and date suggestions:', text: '12 months after you send them, then deleted.' },
+          { label: 'Analytics:', text: '12 months in PostHog, then deleted automatically. We can delete what’s linked to you sooner if you ask.' },
+          { label: 'Early access sign-ups:', text: 'until 6 months after Iskotify launches publicly, or sooner if you ask us to remove them.' },
+          { label: 'When you delete your account:', text: 'your account, your backup, and the reports, feedback and suggestions you sent us are deleted at the same time, even if the periods above haven’t ended.' },
         ],
       },
     ],
@@ -171,8 +199,9 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
       {
         items: [
           { label: 'Skip optional details.', text: 'Scholarship and score details are optional.' },
+          { label: 'Withdraw consent.', text: 'To stop sharing your grades, GWA, income bracket and Indigenous community, go to Profile, then Scholarship info, and turn sharing off. This also clears those details from the app and your backup. To turn analytics off, go to Settings, then Privacy. Withdrawing doesn’t affect what we did with your consent before.' },
           { label: 'Turn off reminders.', text: 'Go to Settings, then Notifications, or use your phone’s settings.' },
-          { label: 'Download your data.', text: 'Go to Profile, then Your data, then Export Data. This saves a copy of your study data as a file.' },
+          { label: 'Download your data.', text: 'Go to Profile, then Your data, then Export Data. This saves a file with your settings, focus list, saved decks, progress, practice sessions, answer history, flashcard schedule, study plan, and notes with their labels. It doesn’t include the reports and feedback you sent us or your analytics; email us for a copy of those.' },
           { label: 'Clear your data from a device.', text: 'On the web, Clear data & sign out (in Profile, under Your data) removes everything Iskotify saved in that browser. On a phone, Reset App Data removes all your study data from that phone (your progress, answer history, flashcard reviews, study plan, focus list and settings) but keeps your notes; you can delete them in Notes. Uninstalling the app removes everything. Neither one deletes your account or your backup.' },
         ],
       },
@@ -182,7 +211,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
         items: [
           { label: 'Be informed', text: 'about how your data is collected and used. That’s what this policy is for.' },
           { label: 'Access', text: 'your data and get a copy of it.' },
-          { label: 'Object', text: 'to how we use your data.' },
+          { label: 'Object', text: 'to how we use your data, including uses based on our legitimate interest.' },
+          { label: 'Withdraw consent', text: 'you gave us, at any time (see above for how).' },
           { label: 'Erasure or blocking:', text: 'ask us to delete your data or stop using it.' },
           { label: 'Rectification:', text: 'ask us to correct data that’s wrong.' },
           { label: 'Data portability:', text: 'get your data in a format you can take elsewhere.' },
@@ -196,8 +226,9 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     title: 'Students under 18',
     blocks: [
       'Iskotify is made for students getting ready for college, so many of our users are in senior high school and some are under 18.',
-      'We don’t ask for your age, and the app doesn’t have a separate parent or guardian consent step. If you’re under 18, please read this policy with a parent or guardian before you sign up. Talk to them before you share optional details like your family’s income.',
-      'Parents and guardians can email us to see, correct or delete their child’s data. Iskotify isn’t meant for young children. If we learn we have data from a child under 13, we’ll delete it.',
+      'When you sign up, we ask whether you’re 18 or older or under 18. If you’re under 18, you confirm that a parent or guardian has agreed to you using Iskotify, and to this policy and our terms. Please read this policy with them.',
+      'If you’re under 18, we collect your grades, GWA, income bracket and Indigenous community only if you turn on sharing them, and analytics stays off unless you turn it on. Talk to your parent or guardian before you turn either on.',
+      'Parents and guardians can email us to see, correct or delete their child’s data. Iskotify isn’t for children under 13. If we learn we have data from a child under 13, we’ll delete it.',
     ],
   },
   {
@@ -211,6 +242,14 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     blocks: [
       'Questions, requests or worries about your data? Email us. Please use the email address on your Iskotify account so we can find your data.',
       PRIVACY_CONTACT_EMAIL,
+      'You can also write to our Data Protection Officer:',
+      {
+        items: [
+          { label: 'Data Protection Officer:', text: DPO_NAME },
+          { label: 'Email:', text: `${DPO_EMAIL} [placeholder, not active yet] or ${PRIVACY_CONTACT_EMAIL}` },
+          { label: 'Address:', text: `Online Creative Solutions, ${BUSINESS_ADDRESS}` },
+        ],
+      },
     ],
   },
 ]

@@ -6,8 +6,11 @@ import {
   TERMS_PRIVACY_LINK,
   TERMS_SECTIONS,
   TERMS_SUMMARY,
+  TERMS_BUSINESS_ADDRESS,
+  TERMS_DTI_BN,
   termsOfServiceText,
 } from '../termsOfService'
+import { BUSINESS_ADDRESS } from '../privacyPolicy'
 
 const text = termsOfServiceText()
 const section = (title: string) => JSON.stringify(TERMS_SECTIONS.find(s => s.title === title))
@@ -29,7 +32,7 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(TERMS_SECTIONS.map(s => s.title)).toEqual([
       'Who we are',
       'What Iskotify is',
-      'Iskotify is free',
+      'Free features and Iskotify Full Access',
       'Your account',
       'Students under 18',
       'Exam, school and scholarship details',
@@ -43,6 +46,7 @@ describe('terms of service content (shared by the app and the website)', () => {
       'Your privacy',
       'Changes to these terms',
       'Governing law',
+      'Complaints',
       'Contact us',
     ])
     for (const s of TERMS_SECTIONS) expect(s.blocks.length).toBeGreaterThan(0)
@@ -64,11 +68,52 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(text).not.toMatch(/AI Coach/i)
   })
 
-  it('is free, with no payments section and no refund rules', () => {
-    expect(TERMS_SECTIONS.map(s => s.title).join(' ')).not.toMatch(/payment/i)
-    expect(section('Iskotify is free')).toMatch(/no payments/)
-    expect(section('Iskotify is free')).toMatch(/we’ll tell you first/)
-    expect(text).not.toMatch(/non-refundable|fees are shown|one-time or paid/i)
+  it('keeps the core free and describes the optional one-time Full Access honestly, in the future tense', () => {
+    const paid = section('Free features and Iskotify Full Access')
+    expect(paid).toMatch(/core features are free/)
+    expect(paid).toMatch(/Nothing in Iskotify costs money today/)
+    expect(paid).toMatch(/may offer Iskotify Full Access/)
+    expect(paid).toMatch(/one-time purchase/)
+    expect(paid).toMatch(/won’t be a subscription/)
+    expect(paid).toMatch(/Before you pay, we’ll show you the price/)
+    expect(paid).toMatch(/what Full Access includes/)
+    expect(paid).toMatch(/for as long as we offer Iskotify/)
+    expect(TERMS_SUMMARY.join(' ')).not.toMatch(/Iskotify is a free study app/)
+    expect(text).not.toMatch(/Iskotify is free to use/)
+  })
+
+  it('gives real refund routes and never says "no refunds"', () => {
+    const paid = section('Free features and Iskotify Full Access')
+    expect(paid).toMatch(/Google Play’s refund process/)
+    expect(paid).toMatch(/email us for a refund/)
+    expect(paid).toMatch(/doesn’t work as described and we can’t fix it/)
+    expect(paid).toMatch(/where the law gives you a right to one/)
+    expect(text).not.toMatch(/no refunds|all sales are final|non-refundable/i)
+  })
+
+  it('asks under-18s to buy only with a parent or guardian’s permission', () => {
+    const paid = section('Free features and Iskotify Full Access')
+    expect(paid).toMatch(/under 18[^"]*parent or guardian’s permission/)
+    expect(paid).toMatch(/parent or guardian can email us/)
+  })
+
+  it('names the business behind Iskotify, with placeholders for its address and registration', () => {
+    expect(TERMS_BUSINESS_ADDRESS).toBe('[business address]')
+    expect(TERMS_DTI_BN).toBe('[DTI BN No.]')
+    // One address for the whole business: the privacy policy uses the same placeholder.
+    expect(TERMS_BUSINESS_ADDRESS).toBe(BUSINESS_ADDRESS)
+    const who = section('Who we are')
+    expect(who).toContain(TERMS_BUSINESS_ADDRESS)
+    expect(who).toContain(TERMS_DTI_BN)
+  })
+
+  it('explains how to complain, how fast we reply and how to escalate to the DTI', () => {
+    const complaints = section('Complaints')
+    expect(complaints).toContain(TERMS_CONTACT_EMAIL)
+    expect(complaints).toMatch(/within 7 days/)
+    expect(complaints).toMatch(/Department of Trade and Industry/)
+    expect(complaints).toContain('consumercare@dti.gov.ph')
+    expect(complaints).toMatch(/National Privacy Commission/)
   })
 
   it('never treats continued use as acceptance of changes', () => {
@@ -91,9 +136,14 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(info).toMatch(/can change/)
     expect(info).toMatch(/mistakes/)
     expect(info).toMatch(/official website/)
-    expect(info).toMatch(/isn’t affiliated with/)
-    expect(info).toMatch(/University of the Philippines/)
-    expect(info).toMatch(/DOST/)
+    expect(info).toMatch(/isn’t affiliated with or endorsed by/)
+    for (const org of ['University of the Philippines', 'Ateneo de Manila University', 'De La Salle University', 'University of Santo Tomas', 'DOST-SEI']) {
+      expect(info).toContain(org)
+    }
+    expect(info).toMatch(/Exam names[^"]*trademarks of their owners/)
+    expect(info).toMatch(/Cutoffs[^"]*historical[^"]*change/)
+    // No promise of a result (the word "guarantee" stays banned, see below).
+    expect(info).toMatch(/can’t promise any exam result, admission or scholarship/)
   })
 
   it('keeps the Estimated Admission Score an estimate from historical cutoffs, never a decision', () => {
@@ -117,8 +167,11 @@ describe('terms of service content (shared by the app and the website)', () => {
     expect(ai).toMatch(/Report/)
   })
 
-  it('asks under-18s to use Iskotify with a parent or guardian’s awareness, without an invented age check', () => {
-    expect(section('Students under 18')).toMatch(/parent or guardian’s awareness/)
+  it('matches the sign-up step for under-18s (age band + parent or guardian agreement), without an invented age check', () => {
+    const minors = section('Students under 18')
+    expect(minors).toMatch(/18 or older or under 18/)
+    expect(minors).toMatch(/parent or guardian has agreed/)
+    expect(minors).toContain(TERMS_PRIVACY_LINK.text)
     expect(text).not.toMatch(/verify your age|age verification|verified parental consent/i)
   })
 

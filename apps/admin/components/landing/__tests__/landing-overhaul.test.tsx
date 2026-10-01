@@ -181,4 +181,19 @@ describe('EarlyAccessForm', () => {
     expect(html).toContain('free early access')
     expect(html).not.toContain('August 2, 2026')
   })
+
+  it('links the Privacy Policy and asks under-18s to sign up with a parent or guardian’s OK', () => {
+    expect(html).toMatch(/<a[^>]*href="\/privacy"[^>]*>Privacy Policy<\/a>/)
+    expect(html).toMatch(/under 18, sign up with your parent or guardian(’|&#x27;|')s OK/)
+  })
+
+  it('has a required agreement checkbox that starts unticked, and blocks submit until it’s ticked', () => {
+    const box = html.match(/<input[^>]*id="ea-consent"[^>]*>/)?.[0] ?? ''
+    expect(box).toContain('type="checkbox"')
+    expect(box).toContain('required')
+    expect(box).not.toMatch(/checked/)
+    expect(html).toContain('for="ea-consent"')
+    const submit = html.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? ''
+    expect(submit).toMatch(/disabled/)
+  })
 })

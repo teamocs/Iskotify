@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import {
+  DTI_CONSUMER_EMAIL,
   TERMS_CONTACT_EMAIL,
   TERMS_LAST_UPDATED,
   TERMS_PRIVACY_LINK,
@@ -16,23 +17,23 @@ import {
 
 export const metadata: Metadata = {
   title: 'Terms of Service — Iskotify',
-  description: 'The rules for using Iskotify, the free study app for Filipino students, in plain language.',
+  description: 'The rules for using Iskotify, the study app for Filipino students, in plain language.',
   alternates: { canonical: '/terms' },
 }
 
 const LINK_CLASS = 'text-maroon underline'
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const LINK_PATTERN = new RegExp(`(${escape(TERMS_CONTACT_EMAIL)}|${escape(TERMS_PRIVACY_LINK.text)})`)
+const LINK_PATTERN = new RegExp(`(${escape(TERMS_CONTACT_EMAIL)}|${escape(DTI_CONSUMER_EMAIL)}|${escape(TERMS_PRIVACY_LINK.text)})`)
 
-/** Turns the contact address and "Privacy Policy" into links; everything else stays text. */
+/** Turns the contact and DTI addresses and "Privacy Policy" into links; everything else stays text. */
 function Linked({ text }: { text: string }) {
   const parts = text.split(LINK_PATTERN)
   return (
     <>
       {parts.map((part, i) => {
-        if (part === TERMS_CONTACT_EMAIL) {
-          return <a key={i} href={`mailto:${TERMS_CONTACT_EMAIL}`} className={LINK_CLASS}>{part}</a>
+        if (part === TERMS_CONTACT_EMAIL || part === DTI_CONSUMER_EMAIL) {
+          return <a key={i} href={`mailto:${part}`} className={LINK_CLASS}>{part}</a>
         }
         if (part === TERMS_PRIVACY_LINK.text) {
           return <Link key={i} href={TERMS_PRIVACY_LINK.href} className={LINK_CLASS}>{part}</Link>

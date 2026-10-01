@@ -23,11 +23,15 @@ describe('public terms page (text shared with the app via @iskotify/utils/terms-
     expect(TERMS_LAST_UPDATED).toBe('October 1, 2026')
   })
 
-  it('drops Calendar sync, payments and "continued use means acceptance"', () => {
+  it('drops Calendar sync, "no refunds" wording and "continued use means acceptance"', () => {
     expect(html).not.toMatch(/Google Calendar/i)
-    expect(html).not.toMatch(/non-refundable/i)
+    expect(html).not.toMatch(/non-refundable|no refunds|all sales are final/i)
     expect(html).not.toMatch(/continued use/i)
-    expect(h2s.join(' ')).not.toMatch(/Payments/)
+  })
+
+  it('links the DTI consumer-care address in Complaints', () => {
+    expect(h2s).toContain('Complaints')
+    expect(html).toContain('href="mailto:consumercare@dti.gov.ph"')
   })
 
   it('names Online Creative Solutions and links the contact address', () => {
