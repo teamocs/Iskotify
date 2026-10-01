@@ -47,8 +47,17 @@ describe('Expo project ownership', () => {
     expect(deps['@kesha-antonov/react-native-background-downloader']).toBeUndefined()
   })
 
-  it('ships the 1.8.0 runtime with runtimeVersion tied to the app version', () => {
-    expect(app.version).toBe('1.8.0')
+  // 1.9.0 adds react-native-purchases (RevenueCat, P3 Full Access): a native
+  // module, so a new binary and a new runtime. Old 1.8.0 OTA bundles can't reach it.
+  it('ships the 1.9.0 runtime with runtimeVersion tied to the app version', () => {
+    expect(app.version).toBe('1.9.0')
+    expect(app.android.versionCode).toBe(26)
     expect(app.runtimeVersion).toEqual({ policy: 'appVersion' })
+  })
+
+  it('bundles the Google Play billing SDK (RevenueCat) and never blocks the billing permission', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
+    expect(pkg.dependencies['react-native-purchases']).toBeDefined()
+    expect(app.android.blockedPermissions).not.toContain('com.android.vending.BILLING')
   })
 })

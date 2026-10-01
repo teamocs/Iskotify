@@ -79,6 +79,14 @@ jest.mock('../../../../hooks/useExamRunPersistence', () => ({
   useExamRunPersistence: () => ({ saveRun: mockSaveRun, loadRun: mockLoadRun, clearRun: mockClearRun }),
 }))
 
+// P3 Full Access gates. Default: no limit (paywall flag off), so every test
+// above runs exactly as before; the 'free limits' block below sets them.
+const mockGate = { allowance: Infinity, fullMockAllowed: true }
+jest.mock('../../../../services/premiumGate', () => ({
+  practiceAllowanceNow: jest.fn(async () => mockGate.allowance),
+  fullMockAllowedNow: jest.fn(async () => mockGate.fullMockAllowed),
+}))
+
 let mockQuestionRows: any[] = []
 let mockPassageRows: any[] = []
 
@@ -135,6 +143,8 @@ describe('UpcatExam', () => {
     mockLoadRun.mockClear().mockResolvedValue(null)
     mockClearRun.mockClear()
     mockSearchParams = {}
+    mockGate.allowance = Infinity
+    mockGate.fullMockAllowed = true
     mockQuestionRows = []
     mockPassageRows = []
     mockLoadSnapshot.mockReset()
@@ -602,6 +612,55 @@ describe('UpcatExam', () => {
       expect(await screen.findByRole('header', { name: 'Tapos na! Practice complete.' })).toBeTruthy()
       expect(screen.getByTestId('screen-scroll')).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Back to exams' })).toBeTruthy()
+    })
+  })
+  describe('free limits (P3 Full Access)', () => {
+    const q = (n: number) => ({
+      questionId: `Q${n}`, subtest: 'Mathematics', questionText: `${n}+${n}?`, options: JSON.stringify(['1', '2', '3', '4']),
+      correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null,
+    })
+
+    it('stops at the daily cap with a friendly card linking to /upgrade', async () => {
+      mockSearchParams = { subtest: 'Mathematics', mode: 'quick' }
+      mockQuestionRows = [q(1), q(2)]
+      mockGate.allowance = 0
+      render(<UpcatExam />)
+      expect(await screen.findByText("You've done your 30 free questions today. Come back tomorrow, or unlock unlimited practice.")).toBeTruthy()
+      expect(screen.queryByText('1+1?')).toBeNull()
+      fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
+      expect(mockPush).toHaveBeenCalledWith('/upgrade?from=practice_cap')
+    })
+
+    it("serves only what is left of today's free questions", async () => {
+      mockSearchParams = { subtest: 'Mathematics', mode: 'quick' }
+      mockQuestionRows = [q(1), q(2), q(3)]
+      mockGate.allowance = 1
+      render(<UpcatExam />)
+      await waitFor(() => expect(screen.getByText(/Question 1 of 1/)).toBeTruthy())
+    })
+
+    it('the full four-subtest mock is gated as a full mock, not as practice', async () => {
+      mockSearchParams = { subtest: 'all', mode: 'full' }
+      mockQuestionRows = [q(1)]
+      mockGate.allowance = 0
+      mockGate.fullMockAllowed = false
+      render(<UpcatExam />)
+      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+    })
+
+    it('a saved run can always be resumed', async () => {
+      mockSearchParams = { subtest: 'Mathematics' }
+      mockQuestionRows = [q(1), q(2)]
+      mockGate.allowance = 0
+      mockLoadRun.mockResolvedValue({
+        runKey: 'upcat:Mathematics:full', kind: 'upcat', slug: 'Mathematics', mode: 'full',
+        questionIds: ['Q1', 'Q2'], sectionNames: ['Mathematics', 'Mathematics'],
+        answers: {}, idx: 0, sectionIdx: 0, floorIdx: 0,
+        endTime: Date.now() + 60_000, sectionEndTime: null, startedAt: Date.now(), updatedAt: Date.now(),
+      })
+      render(<UpcatExam />)
+      fireEvent.press(await screen.findByText('Resume where you left off'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     })
   })
 })

@@ -50,6 +50,8 @@ import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { runKeyFor, reorderByIds, reconstructBuiltExamFromRun, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
+import { fullMockAllowedNow } from '../../../services/premiumGate'
+import { UpgradeCard, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 
 type Phase = 'loading' | 'prestart' | 'empty' | 'error' | 'exam' | 'results'
 
@@ -271,6 +273,8 @@ export default function BlueprintExam() {
   // Fix 1: leave-confirmation + resume-in-progress-run state.
   const [leaveConfirmed, setLeaveConfirmed] = useState(false)
   const [resumeAvailable, setResumeAvailable] = useState(false)
+  // P3 Full Access: the free full mock for this exam is used up (never true with the paywall flag off).
+  const [fullMockLocked, setFullMockLocked] = useState(false)
   // The saved run's time already ran out: offer Submit / Discard, never a silent auto-submit.
   const [resumeStale, setResumeStale] = useState(false)
   // Set by "Submit what I answered": the restored run is submitted once the exam phase is up.
@@ -388,6 +392,15 @@ export default function BlueprintExam() {
     })
     return () => { cancelled = true }
   }, [phase, slug, loadRun])
+
+  // P3 Full Access: a free student gets one full mock per exam. Study Sprint and
+  // resuming a started run are never gated.
+  useEffect(() => {
+    if (phase !== 'prestart' || !slug) return
+    let cancelled = false
+    void fullMockAllowedNow(db, slug).then(ok => { if (!cancelled) setFullMockLocked(!ok) })
+    return () => { cancelled = true }
+  }, [phase, slug, db])
 
   // Fix 1: persist answers/position/timers on every change while the run is
   // in progress — cleared on submit (see submit()). Best-effort: a save
@@ -534,6 +547,7 @@ export default function BlueprintExam() {
   //     never section-locks (examMode gates `sectionBlocked` above). ---
   function startExam(mode: 'full' | 'sprint') {
     if (!blueprint) return
+    if (mode === 'full' && fullMockLocked) return
     setExamMode(mode)
     const now = Date.now()
     setStartedAt(now)
@@ -855,15 +869,19 @@ export default function BlueprintExam() {
             {resumeAvailable && !resumeStale ? (
               <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
             ) : null}
-            <Button
-              label="Full Mock"
-              variant={resumeAvailable ? 'secondary' : 'primary'}
-              size={resumeAvailable ? 'md' : 'lg'}
-              fullWidth
-              disabled={noItems}
-              onPress={() => startExam('full')}
-              accessibilityHint={resumeAvailable ? 'Starts a new attempt instead of resuming' : undefined}
-            />
+            {fullMockLocked ? (
+              <UpgradeCard title="Your free full mock is done" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
+            ) : (
+              <Button
+                label="Full Mock"
+                variant={resumeAvailable ? 'secondary' : 'primary'}
+                size={resumeAvailable ? 'md' : 'lg'}
+                fullWidth
+                disabled={noItems}
+                onPress={() => startExam('full')}
+                accessibilityHint={resumeAvailable ? 'Starts a new attempt instead of resuming' : undefined}
+              />
+            )}
             <Button
               label={`Study Sprint · ${STUDY_SPRINT_MINUTES} min`}
               variant="secondary"

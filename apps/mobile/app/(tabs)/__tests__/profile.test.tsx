@@ -59,6 +59,12 @@ jest.mock('../../../lib/analytics', () => ({
   resetAnalytics: () => mockResetAnalytics(),
 }))
 
+// P3 Full Access: flag off by default, so every existing test is unchanged.
+const mockPremium = { enabled: false, isPremium: false, unlimited: true, loading: false, refresh: jest.fn() }
+jest.mock('../../../hooks/usePremium', () => ({ usePremium: () => mockPremium }))
+const mockSignOutPremium = jest.fn(async (..._a: unknown[]) => undefined)
+jest.mock('../../../services/premiumState', () => ({ signOutPremium: (...a: unknown[]) => mockSignOutPremium(...a) }))
+
 jest.mock('../../../services/webReset', () => ({
   clearWebData: jest.fn().mockResolvedValue(undefined),
 }))
@@ -605,5 +611,48 @@ describe('ProfileScreen — Delete account', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Delete my account' }))
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(require('expo-router').router.replace).not.toHaveBeenCalled()
+  })
+})
+
+describe('ProfileScreen — Iskotify Full Access (P3)', () => {
+  beforeEach(() => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb())
+    Object.assign(mockPremium, { enabled: false, isPremium: false, unlimited: true })
+    mockSignOutPremium.mockClear()
+  })
+
+  it('shows no Full Access row with the paywall flag off', () => {
+    render(<ProfileScreen />)
+    expect(screen.queryByText('Iskotify Full Access')).toBeNull()
+  })
+
+  it('with the flag on, offers the Full Access row and opens /upgrade', () => {
+    Object.assign(mockPremium, { enabled: true, unlimited: false })
+    const { router } = require('expo-router')
+    router.push.mockClear()
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByText('Iskotify Full Access'))
+    expect(router.push).toHaveBeenCalledWith('/upgrade?from=profile')
+    expect(screen.queryByText('Active')).toBeNull()
+  })
+
+  it('says Active when the student has Full Access', () => {
+    Object.assign(mockPremium, { enabled: true, isPremium: true, unlimited: true })
+    render(<ProfileScreen />)
+    expect(screen.getByText('Iskotify Full Access')).toBeTruthy()
+    expect(screen.getByText('Active')).toBeTruthy()
+  })
+
+  it('Sign Out and Reset App Data forget Full Access on this device', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((x: any) => x.style === 'destructive')?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Sign Out'))
+    await waitFor(() => expect(mockSignOutPremium).toHaveBeenCalledTimes(1))
+    fireEvent.press(getByText('Reset App Data'))
+    await waitFor(() => expect(mockSignOutPremium).toHaveBeenCalledTimes(2))
+    alertSpy.mockRestore()
   })
 })

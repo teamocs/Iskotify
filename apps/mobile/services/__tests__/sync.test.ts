@@ -260,7 +260,9 @@ function makeTestDb(): DrizzleClient {
 
       analytics_opt_in INTEGER,
       sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
-      analytics_choice_at INTEGER NOT NULL DEFAULT 0
+      analytics_choice_at INTEGER NOT NULL DEFAULT 0,
+      premium_cached INTEGER NOT NULL DEFAULT 0,
+      premium_checked_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,
@@ -756,7 +758,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
 
       analytics_opt_in INTEGER,
       sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0,
-      analytics_choice_at INTEGER NOT NULL DEFAULT 0
+      analytics_choice_at INTEGER NOT NULL DEFAULT 0,
+      premium_cached INTEGER NOT NULL DEFAULT 0,
+      premium_checked_at INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

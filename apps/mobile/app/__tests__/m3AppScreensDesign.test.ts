@@ -37,6 +37,7 @@ const SCREENS = [
   'app/requirements/index.tsx',
   'app/profile/scholarship-info.tsx',
   'app/results-tracker.tsx',
+  'app/upgrade.tsx',
 ]
 
 const COMPONENTS = [
@@ -54,6 +55,7 @@ const COMPONENTS = [
   'components/practice/runner/RunnerFrame.tsx',
   'components/practice/runner/RunnerReview.tsx',
   'components/estimator/ScoreDisclaimerModal.tsx',
+  'components/premium/UpgradeCard.tsx',
 ]
 
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g

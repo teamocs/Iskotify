@@ -16,6 +16,7 @@ import {
   Trash3Outlined,
   TrendUp1Outlined,
   GraduationCap1Outlined,
+  Crown3Outlined,
 } from '@lineiconshq/free-icons'
 import Animated, {
   useAnimatedStyle,
@@ -53,6 +54,8 @@ import { decorative, focusRing, type WebPressableState } from '../../components/
 import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
+import { usePremium } from '../../hooks/usePremium'
+import { signOutPremium } from '../../services/premiumState'
 
 interface ProfileData {
   fullName: string
@@ -220,6 +223,8 @@ function FocusListItem({
  */
 export default function ProfileScreen() {
   const db = useDb()
+  // P3: the Full Access row exists only with the paywall flag on.
+  const premium = usePremium()
   const bp = useBreakpoint()
   const [profile, setProfile] = useState<ProfileData>(DEFAULT)
   const [status, setStatus] = useState<LoadStatus>('loading')
@@ -385,6 +390,8 @@ export default function ProfileScreen() {
         }
         // Forget the account id and stop analytics until the next person's own consent applies.
         resetAnalytics()
+        // RevenueCat forgets the account and this device starts free (never throws).
+        await signOutPremium(db)
         router.replace(postSignOutRoute)
       },
     )
@@ -406,6 +413,7 @@ export default function ProfileScreen() {
       Platform.OS === 'web' ? 'Clear & start over' : 'Reset Everything',
       async () => {
         resetAnalytics()
+        await signOutPremium(db)
         if (Platform.OS === 'web') {
           try {
             await clearWebData()
@@ -571,6 +579,18 @@ export default function ProfileScreen() {
             onPress={() => router.push('/profile/scholarship-info')}
           />
         </View>
+        {premium.enabled ? (
+          <View style={divided(2)}>
+            <ListRow
+              title="Iskotify Full Access"
+              subtitle={premium.isPremium ? 'Unlimited practice and full mocks' : 'Unlimited practice, full mocks and answer reasons. One-time payment'}
+              leading={rowIcon(Crown3Outlined, premium.isPremium ? t.successStrong : t.accentText)}
+              trailing={premium.isPremium ? <Badge label="Active" tone="success" /> : undefined}
+              accessibilityLabel={premium.isPremium ? 'Iskotify Full Access, active' : undefined}
+              onPress={() => router.push('/upgrade?from=profile')}
+            />
+          </View>
+        ) : null}
       </Card>
 
       <View>

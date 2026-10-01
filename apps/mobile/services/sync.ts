@@ -3,6 +3,7 @@ import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { hasSensitiveConsent, mergeConsent, SENSITIVE_CLEARED, type ConsentSnapshot } from '../utils/consent'
 import { markSyncStart, markSyncDone, markSyncError, clearSyncError, BACKUP_FAILED_MESSAGE } from './syncStatus'
+import { forgetPremiumState } from './premiumState'
 export { BACKUP_FAILED_MESSAGE } from './syncStatus'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
 import {
@@ -158,6 +159,16 @@ export async function syncPrimaryListing(db: DrizzleClient): Promise<void> {
 // Push local user data to Supabase for backup (requires signed-in session).
 // Resolves true when the backup row was written, false when signed out or when
 // the upsert was rejected (the error is logged; the next push retries in full).
+/**
+ * The Full Access cache (premium_cached / premium_checked_at) is this device's
+ * copy of the store / server answer, not the student's data: it never goes into
+ * the backup (and the restore below never reads it back).
+ */
+function withoutPremiumCache<T extends { premiumCached?: unknown; premiumCheckedAt?: unknown }>(row: T): Omit<T, 'premiumCached' | 'premiumCheckedAt'> {
+  const { premiumCached: _p, premiumCheckedAt: _c, ...rest } = row
+  return rest
+}
+
 export async function pushUserData(db: DrizzleClient): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
@@ -249,7 +260,7 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     saved_decks: decks,
     user_progress: progress,
     practice_sessions: sessions,
-    settings: settingsRow ?? {},
+    settings: settingsRow ? withoutPremiumCache(settingsRow) : {},
     notes: noteRows,
     note_labels: labelRows,
     note_label_assignments: assignRows,
@@ -348,6 +359,9 @@ const USER_SETTINGS_RESET = {
   analyticsOptIn: null,
   sensitiveWithdrawnAt: 0,
   analyticsChoiceAt: 0,
+  // Full Access belongs to the account: the next one starts free until its own check.
+  premiumCached: false,
+  premiumCheckedAt: 0,
   pushDirtyAt: 0,
   lastPullOkAt: 0,
 } satisfies Partial<typeof userSettings.$inferInsert>
@@ -416,6 +430,8 @@ export async function reconcileAccountOwner(
   }
   // The previous person's analytics consent (and held id) must not carry over.
   resetAnalytics()
+  // Nor their Full Access (the cache columns were reset above).
+  forgetPremiumState()
   invalidate('')
   scheduleWebPersist()
   return 'switched'

@@ -4,7 +4,7 @@
     "slug": "iskotify",
     "owner": "teamocsph",
     "scheme": "iskotify",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -41,7 +41,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
       ],
-      "versionCode": 25
+      "versionCode": 26
     },
     "web": {
       "bundler": "metro",

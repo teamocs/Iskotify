@@ -12,9 +12,18 @@ import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
 let mockSearchParams: { slug?: string } = {}
 const mockRouterBack = jest.fn()
 
+const mockRouterPush = jest.fn()
 jest.mock('expo-router', () => ({
-  router: { push: () => {}, replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a) },
+  router: { push: (...a: unknown[]) => mockRouterPush(...a), replace: () => {}, back: (...a: unknown[]) => mockRouterBack(...a) },
   useLocalSearchParams: () => mockSearchParams,
+}))
+
+// P3 Full Access: default no limit (paywall flag off) so every existing test is unchanged.
+const mockGate = { fullMockAllowed: true }
+const mockFullMockAllowedNow = jest.fn(async (..._a: unknown[]) => mockGate.fullMockAllowed)
+jest.mock('../../../../services/premiumGate', () => ({
+  fullMockAllowedNow: (...a: unknown[]) => mockFullMockAllowedNow(...a),
+  practiceAllowanceNow: jest.fn(async () => Infinity),
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -139,6 +148,9 @@ describe('BlueprintExam', () => {
     mockLoadRun.mockClear().mockResolvedValue(null)
     mockClearRun.mockClear()
     mockSearchParams = { slug: 'test-mock' }
+    mockGate.fullMockAllowed = true
+    mockFullMockAllowedNow.mockClear()
+    mockRouterPush.mockClear()
 
     mockGetExamBlueprint.mockResolvedValue(BLUEPRINT)
     mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [Q1, Q2]]]))
@@ -550,6 +562,24 @@ describe('BlueprintExam', () => {
 
       // No save was re-triggered by the (blocked) tap, or by reaching results.
       expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
+    })
+  })
+  describe('free full mock (P3 Full Access)', () => {
+    it('after the free full mock, the prestart offers Full Access instead, and Study Sprint stays free', async () => {
+      mockGate.fullMockAllowed = false
+      render(<BlueprintExam />)
+      expect(await screen.findByText(/used your free full mock/i)).toBeTruthy()
+      expect(mockFullMockAllowedNow).toHaveBeenCalledWith(expect.anything(), 'test-mock')
+      expect(screen.queryByRole('button', { name: 'Full Mock' })).toBeNull()
+      expect(screen.getByRole('button', { name: /Study Sprint/ })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'Unlock Full Access' }))
+      expect(mockRouterPush).toHaveBeenCalledWith('/upgrade?from=full_mock_cap')
+    })
+
+    it('with a free mock left (or the flag off), Full Mock starts as before', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      expect(screen.queryByText(/used your free full mock/i)).toBeNull()
     })
   })
 })

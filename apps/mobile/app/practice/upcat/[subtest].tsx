@@ -39,8 +39,10 @@ import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { upcatDrillKind } from '../../../utils/sessionKind'
 import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
+import { practiceAllowanceNow, fullMockAllowedNow } from '../../../services/premiumGate'
+import { UpgradeCard, PRACTICE_CAP_BODY, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
 
-type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results'
+type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results' | 'capped'
 
 export default function UpcatExam() {
   const { subtest: subtestParam, mode } = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
@@ -90,6 +92,8 @@ export default function UpcatExam() {
   // Fix 3: "Review mistakes" (the results screen's primary action) opens every
   // review section at once, as in the mock exam runner.
   const [reviewMistakesTapped, setReviewMistakesTapped] = useState(false)
+  // P3 Full Access: which free limit stopped a new run (never set with the paywall flag off).
+  const [cap, setCap] = useState<'practice' | 'mock' | null>(null)
 
   useEffect(() => {
     qPaneRef.current?.scrollTo({ y: 0, animated: false })
@@ -120,11 +124,23 @@ export default function UpcatExam() {
   }
 
   /** Builds a brand-new sample from the already-fetched pool and arms the timer. */
-  function buildFreshExam() {
+  async function buildFreshExam() {
     const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
-    const built = targetSubtests.flatMap(st =>
+    let built = targetSubtests.flatMap(st =>
       buildExam(parsedRef.current, rawPassagesRef.current, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
     )
+    // P3 Full Access: a free student gets one full mock and 30 practice questions
+    // a day. Both checks answer "no limit" with the paywall flag off. A saved run
+    // (Resume) is never gated: it already started.
+    if (built.length > 0) {
+      if (upcatDrillKind(subtestParam, mode) === 'mock') {
+        if (!(await fullMockAllowedNow(db, 'upcat'))) { setCap('mock'); setPhase('capped'); return }
+      } else {
+        const allowance = await practiceAllowanceNow(db)
+        if (allowance <= 0) { setCap('practice'); setPhase('capped'); return }
+        if (built.length > allowance) built = built.slice(0, allowance)
+      }
+    }
     setQuestions(built)
     prefetchSessionImages(built) // fire-and-forget; never blocks session start
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
@@ -170,7 +186,7 @@ export default function UpcatExam() {
           return
         }
 
-        buildFreshExam()
+        await buildFreshExam()
       } catch (err) {
         // A read failure is not an empty bank: offer a retry rather than the
         // "no questions" page (and never hang on loading).
@@ -191,7 +207,7 @@ export default function UpcatExam() {
     const ordered = reorderByIds<RawUpcatQuestion, 'questionId'>(parsedRef.current, run.questionIds, 'questionId')
     if (ordered.length === 0) {
       void clearRun(run.runKey)
-      buildFreshExam()
+      void buildFreshExam()
       return
     }
     const passageById = new Map(rawPassagesRef.current.map(p => [p.setId, p.passageText]))
@@ -210,7 +226,7 @@ export default function UpcatExam() {
   function startOver() {
     if (savedRunRef.current) void clearRun(savedRunRef.current.runKey)
     savedRunRef.current = null
-    buildFreshExam()
+    void buildFreshExam()
   }
 
   // Fix 1: persist answers/position/timer on every change while in progress.
@@ -355,6 +371,21 @@ export default function UpcatExam() {
         fallbackHref="/practice/upcat"
         onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
       />
+    )
+  }
+
+  if (phase === 'capped') {
+    return (
+      <Screen header={<DetailTopBar bare fallbackHref="/practice/upcat" />}>
+        <View style={{ gap: spacing.md }}>
+          {cap === 'mock' ? (
+            <UpgradeCard title="Your free full mock is done" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
+          ) : (
+            <UpgradeCard title="That's today's free practice" body={PRACTICE_CAP_BODY} source="practice_cap" />
+          )}
+          <Button label="Back to UPCAT practice" variant="secondary" fullWidth onPress={() => router.replace('/practice/upcat')} />
+        </View>
+      </Screen>
     )
   }
 
