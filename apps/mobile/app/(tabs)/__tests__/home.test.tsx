@@ -95,6 +95,13 @@ jest.mock('../../../hooks/useStudyPlan', () => ({
 }))
 
 const DAY = 86_400_000
+// Noon (Manila) N calendar days ahead. "now + N days" crosses Manila midnight near
+// the end/start of a day and shows an off-by-one countdown.
+const manilaNoonInDays = (days: number) => {
+  const MANILA = 8 * 3_600_000
+  const todayStart = Math.floor((Date.now() + MANILA) / DAY) * DAY - MANILA
+  return todayStart + days * DAY + 12 * 3_600_000
+}
 
 const emptyStudyPlan = {
   items: [] as any[],
@@ -326,8 +333,8 @@ describe('Today', () => {
       mockUseHomeStats.mockReturnValue({
         ...emptyStats,
         focusedListings: [
-          { slug: 'acet', priority: 2, title: 'ACET 2027', type: 'exam', examDate: Date.now() + 40 * DAY - 1000, deadline: null },
-          { slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: Date.now() + 10 * DAY - 1000, deadline: null },
+          { slug: 'acet', priority: 2, title: 'ACET 2027', type: 'exam', examDate: manilaNoonInDays(40), deadline: null },
+          { slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(10), deadline: null },
         ],
       })
       render(<HomeScreen />)
@@ -464,7 +471,7 @@ describe('Today', () => {
     it('shows a focused exam date with its day count', async () => {
       mockUseHomeStats.mockReturnValue({
         ...emptyStats,
-        focusedListings: [{ slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: Date.now() + 10 * DAY - 1000, deadline: null }],
+        focusedListings: [{ slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: manilaNoonInDays(10), deadline: null }],
       })
       render(<HomeScreen />)
       expect(await screen.findByText('10 days')).toBeTruthy()
@@ -512,7 +519,7 @@ describe('Today', () => {
       mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, items: [planItem()] })
       mockUseHomeStats.mockReturnValue({
         ...emptyStats,
-        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: Date.now() + 20 * DAY, deadline: null }],
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(20), deadline: null }],
       })
       render(<HomeScreen />)
       const texts = allText()

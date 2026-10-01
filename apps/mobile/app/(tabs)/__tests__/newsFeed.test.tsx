@@ -64,7 +64,9 @@ jest.mock('../../../components/calendar/MonthSheet', () => ({
 // ── DB factory ────────────────────────────────────────────────────────────────
 
 const TODAY = new Date().toISOString().slice(0, 10)
-const FUTURE = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10)
+// The Manila calendar date five days ahead (toISOString alone gives the UTC date,
+// a day behind Manila between midnight and 8 am).
+const FUTURE = new Date(Date.now() + 8 * 3_600_000 + 5 * 86_400_000).toISOString().slice(0, 10)
 
 const makeDb = (rows: any[] = []) => ({
   select: jest.fn(() => ({
