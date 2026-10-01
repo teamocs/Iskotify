@@ -15,6 +15,12 @@ export interface PreAssessQuestion {
   imageAlt?: string | null
   imageWidth?: number | null
   imageHeight?: number | null
+  /** Exam diagnostics only: the question's canonical upcat_questions.subtest (`subject` is then the blueprint section's display name). */
+  subtest?: string | null
+  /** Exam diagnostics only: the question's topic, recorded on its attempt row. */
+  topic?: string | null
+  /** Exam diagnostics only: the passage a question is anchored to (whole sets are always served together). */
+  passageText?: string | null
 }
 
 export const PRE_ASSESS_QUESTIONS: PreAssessQuestion[] = [
