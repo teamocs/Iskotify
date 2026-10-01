@@ -7,9 +7,17 @@
  * subtest, so a student who only takes UPCAT drills/mocks still gets one) →
  * take the focus exam's mock → the diagnostic, for a student who has not taken
  * it yet → otherwise a short drill (never the diagnostic again).
+ *
+ * The UPCAT steps (weak subtest, UPCAT diagnostic, UPCAT drill) apply only
+ * when UPCAT is the practice focus exam or nothing is in focus
+ * (utils/practiceQuickStart.practiceFocusExam). For any other exam: its own
+ * diagnostic when it has a runnable blueprint and it was not taken yet, else
+ * its practice chooser (or its page, when nothing can be practised yet).
  */
 
 import { WEAK_THRESHOLD } from './weakness'
+import { isSchoolFocusSlug } from './focusSlug'
+import { UPCAT_SLUG } from './practiceQuickStart'
 
 export interface NextPracticeInput {
   /** A saved, unfinished blueprint mock run (from examRuns). */
@@ -21,8 +29,14 @@ export interface NextPracticeInput {
   focusMock: { slug: string; title: string; items: number; minutes: number } | null
   /** Recent UPCAT question accuracy per subtest (services/practiceSignals.getUpcatSubtestAccuracy). */
   subtestAccuracy?: { subtest: string; pct: number }[]
-  /** A diagnostic sitting is already recorded (practice_sessions kind 'diagnostic'). */
+  /** The focus exam's diagnostic is already recorded (services/practiceSignals.hasTakenDiagnostic for that exam). */
   hasTakenDiagnostic?: boolean
+  /**
+   * The practice focus exam (practiceQuickStart.practiceFocusExam). Absent,
+   * null or UPCAT: the UPCAT steps apply. `runnable` = it has a runnable
+   * blueprint; `hasReview` = it has topic review content.
+   */
+  focusExam?: { slug: string; label: string; runnable: boolean; hasReview: boolean } | null
 }
 
 export type NextPractice =
@@ -31,18 +45,27 @@ export type NextPractice =
   | { kind: 'topic'; topicId: string; topicName: string }
   | { kind: 'subtest'; subtest: string }
   | { kind: 'mock'; slug: string; title: string; items: number; minutes: number }
-  | { kind: 'diagnostic' }
+  /** `exam` = a non-UPCAT exam's own diagnostic; absent = the UPCAT diagnostic. */
+  | { kind: 'diagnostic'; exam?: string }
+  /** A non-UPCAT focus exam's practice: its chooser when something is ready, else its page. */
+  | { kind: 'practise'; slug: string; label: string; ready: boolean }
   /** Keep-sharp drill after the diagnostic: the lowest subtest, or all four mixed (null). */
   | { kind: 'drill'; subtest: string | null }
 
 export function pickNextPractice(input: NextPracticeInput): NextPractice {
-  const { resume, dueCount, weakTopic, focusMock, subtestAccuracy = [], hasTakenDiagnostic = false } = input
+  const { resume, dueCount, weakTopic, focusMock, subtestAccuracy = [], hasTakenDiagnostic = false, focusExam } = input
+  const otherExam = focusExam && focusExam.slug !== UPCAT_SLUG ? focusExam : null
   const lowest = subtestAccuracy.reduce<{ subtest: string; pct: number } | null>(
     (worst, s) => (!worst || s.pct < worst.pct ? s : worst), null,
   )
   if (resume && resume.total > 0) return { kind: 'resume', ...resume }
   if (dueCount > 0) return { kind: 'due', count: dueCount }
   if (weakTopic) return { kind: 'topic', topicId: weakTopic.id, topicName: weakTopic.name }
+  if (otherExam) {
+    if (focusMock) return { kind: 'mock', ...focusMock }
+    if (otherExam.runnable && !hasTakenDiagnostic) return { kind: 'diagnostic', exam: otherExam.slug }
+    return { kind: 'practise', slug: otherExam.slug, label: otherExam.label, ready: otherExam.runnable || otherExam.hasReview }
+  }
   if (lowest && lowest.pct < WEAK_THRESHOLD * 100) return { kind: 'subtest', subtest: lowest.subtest }
   if (focusMock) return { kind: 'mock', ...focusMock }
   if (!hasTakenDiagnostic) return { kind: 'diagnostic' }
@@ -109,8 +132,23 @@ export function nextPracticeCopy(next: NextPractice): NextPracticeCopy {
         title: 'Find your starting point',
         body: 'A short diagnostic shows which subjects to practise first. No timer pressure.',
         actionLabel: 'Take the diagnostic',
-        href: '/practice/diagnostic',
+        href: next.exam ? `/practice/diagnostic?exam=${encodeURIComponent(next.exam)}` : '/practice/diagnostic',
       }
+    case 'practise':
+      // A school-level focus has no page of its own here: its chooser always has general practice.
+      return next.ready || isSchoolFocusSlug(next.slug)
+        ? {
+            title: `Keep your ${next.label} practice going`,
+            body: 'Nothing is due and nothing is weak. A short review keeps your skills moving.',
+            actionLabel: 'Choose practice',
+            href: `/practice/start/${encodeURIComponent(next.slug)}`,
+          }
+        : {
+            title: `${next.label} practice is coming soon`,
+            body: 'There are no questions for this exam yet. Its dates and requirements are ready now.',
+            actionLabel: 'Open exam page',
+            href: `/listings/${encodeURIComponent(next.slug)}`,
+          }
     case 'drill':
       return {
         title: next.subtest ? `Keep ${next.subtest} sharp` : 'Keep your skills sharp',

@@ -6,7 +6,9 @@
  * student who only takes UPCAT drills/mocks still gets a weak-area step, and
  * whether a diagnostic was already taken, so it is not offered again. Also
  * whether an exam has flashcard topics to review, so a "Practise" button only
- * appears where there is something to practise.
+ * appears where there is something to practise. hasReviewContent is the one
+ * source of truth for that: Today, the diagnostic, Practice and the listing and
+ * school pages all ask it, so their CTAs cannot disagree.
  */
 
 import { sql, eq, and, like } from 'drizzle-orm'
@@ -52,10 +54,16 @@ export async function getUpcatSubtestAccuracy(db: DrizzleClient): Promise<Subtes
   }))
 }
 
-/** True once any diagnostic sitting is recorded (practice_sessions kind 'diagnostic'). */
-export async function hasTakenDiagnostic(db: DrizzleClient): Promise<boolean> {
+/**
+ * True once a diagnostic sitting is recorded (practice_sessions kind
+ * 'diagnostic'): for `examSlug` only when given. The UPCAT diagnostic records
+ * listing_slug 'upcat' (utils/diagnosticExam), an exam diagnostic its own slug
+ * (utils/diagnosticTarget).
+ */
+export async function hasTakenDiagnostic(db: DrizzleClient, examSlug?: string): Promise<boolean> {
+  const isDiagnostic = eq(practiceSessions.kind, 'diagnostic')
   const rows = await db.select({ id: practiceSessions.id }).from(practiceSessions)
-    .where(eq(practiceSessions.kind, 'diagnostic')).limit(1)
+    .where(examSlug ? and(isDiagnostic, eq(practiceSessions.listingSlug, examSlug)) : isDiagnostic).limit(1)
   return rows.length > 0
 }
 
@@ -70,4 +78,14 @@ export async function hasReviewContent(db: DrizzleClient, slug: string): Promise
     .where(and(eq(flashcards.status, 'published'), like(flashcards.listingSlugs, `%"${slug}"%`)))
     .limit(1)
   return rows.length > 0
+}
+
+/**
+ * The exams among `slugs` that have topic review content (hasReviewContent,
+ * the one source of truth for every "Review topics" / "coming soon" decision).
+ */
+export async function reviewContentSlugs(db: DrizzleClient, slugs: readonly string[]): Promise<Set<string>> {
+  const unique = [...new Set(slugs)]
+  const has = await Promise.all(unique.map(slug => hasReviewContent(db, slug)))
+  return new Set(unique.filter((_, i) => has[i]))
 }

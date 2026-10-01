@@ -62,19 +62,6 @@ export function normalizeExamParam(v: string | string[] | undefined | null): str
   return s ? s : undefined
 }
 
-/**
- * Whether /practice/review/<slug> would list anything: a loaded flashcard topic
- * tagged to the exam (the same filter review/[slug].tsx applies).
- */
-export function hasReviewTopics(
-  slug: string,
-  topicRows: readonly { topic: { id: string } }[],
-  topicIdsByListingSlug: Record<string, string[]>,
-): boolean {
-  const ids = new Set(topicIdsByListingSlug[slug] ?? [])
-  return topicRows.some(r => ids.has(r.topic.id))
-}
-
 /** Whole-diagnostic budget for an exam diagnostic (a finished passage can overshoot slightly). */
 export const BLUEPRINT_DIAGNOSTIC_MAX_QUESTIONS = 30
 const BLUEPRINT_DIAGNOSTIC_PER_SECTION = 5

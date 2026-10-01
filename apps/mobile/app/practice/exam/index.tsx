@@ -61,7 +61,7 @@ export default function ExamPicker() {
             status: 'ready',
             rows: loaded.map(bp => {
               const items = plannedItemCount(bp.sections, counts)
-              // Honest availability: "Full mock ready" / "Partial — N of M sections" / "Coming soon".
+              // Honest availability: "Full mock ready" / "Partial — N of M sections" (or "fewer items per section") / "Coming soon".
               const coverage = mockCoverage(bp.sections, counts)
               return { bp, best: best.get(bp.slug) ?? acc.get(bp.slug) ?? null, ready: items > 0, items, coverage }
             }),

@@ -1,4 +1,4 @@
-import { quickStartTiles, primaryFocusExam, upcatInFocus, upcatSubtestHref, type QuickStartInput } from '../practiceQuickStart'
+import { quickStartTiles, primaryFocusExam, practiceFocusExam, upcatInFocus, upcatSubtestHref, type QuickStartInput } from '../practiceQuickStart'
 
 const BPS = [
   { slug: 'upcat', acronym: 'UPCAT' },
@@ -12,6 +12,12 @@ describe('primaryFocusExam / upcatInFocus', () => {
   it('is the first focus exam with a runnable blueprint (the diagnostic target rule)', () => {
     expect(primaryFocusExam(['school:abc', 'dcat-dlsu', 'acet', 'upcat'], ['upcat', 'acet'])).toBe('acet')
     expect(primaryFocusExam(['dcat-dlsu'], ['upcat'])).toBeNull()
+  })
+  it('practiceFocusExam: the primary focus exam, else the first exam in focus, else a school focus', () => {
+    expect(practiceFocusExam(['dcat-dlsu', 'acet', 'upcat'], ['upcat', 'acet'])).toBe('acet')
+    expect(practiceFocusExam(['school:abc', 'dcat-dlsu'], ['upcat'])).toBe('dcat-dlsu')
+    expect(practiceFocusExam(['school:abc'], ['upcat'])).toBe('school:abc')
+    expect(practiceFocusExam([], ['upcat'])).toBeNull()
   })
   it('UPCAT is in focus only when its listing slug is', () => {
     expect(upcatInFocus(['acet', 'upcat'])).toBe(true)

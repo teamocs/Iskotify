@@ -136,6 +136,13 @@ describe('resolveFocusTileRoute', () => {
     expect(resolveFocusTileRoute('acet', false, [])).toBe('/listings/acet')
   })
 
+  it('has no route (null) while availability is unknown, unless the route does not depend on it', () => {
+    expect(resolveFocusTileRoute('acet', false, [], new Set(), false)).toBeNull()
+    expect(resolveFocusTileRoute('random-exam', false, [], new Set(), false)).toBeNull()
+    expect(resolveFocusTileRoute('acet', true, [], new Set(), false)).toBe('/practice/start/acet')
+    expect(resolveFocusTileRoute('upcat', false, [], new Set(), false)).toBe('/practice/diagnostic')
+  })
+
   it('url-encodes the exam slug', () => {
     expect(resolveFocusTileRoute('a b&c', false, ['a b&c'])).toBe('/practice/diagnostic?exam=a%20b%26c')
     expect(resolveFocusTileRoute('a b&c', false, [])).toBe('/listings/a%20b%26c')

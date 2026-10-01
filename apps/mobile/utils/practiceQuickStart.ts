@@ -43,6 +43,19 @@ export function primaryFocusExam(focusSlugs: readonly string[], runnableSlugs: r
   return focusSlugs.find(s => runnableSlugs.includes(s)) ?? null
 }
 
+/**
+ * The exam the Practice tab practises for: the primary focus exam, else the
+ * first exam in focus, else a school-level focus entry (it studies the general
+ * entrance subjects), else null (nothing in focus). Drill and the next step
+ * (utils/nextPracticeAction) both follow it.
+ */
+export function practiceFocusExam(focusSlugs: readonly string[], runnableSlugs: readonly string[]): string | null {
+  return primaryFocusExam(focusSlugs, runnableSlugs)
+    ?? focusSlugs.find(s => !isSchoolFocusSlug(s))
+    ?? focusSlugs.find(isSchoolFocusSlug)
+    ?? null
+}
+
 /** UPCAT is in focus when its listing is (focus_listings slug 'upcat'). */
 export function upcatInFocus(focusSlugs: readonly string[]): boolean {
   return focusSlugs.includes(UPCAT_SLUG)
@@ -99,20 +112,19 @@ export function quickStartTiles(input: QuickStartInput): QuickStartTile[] {
     disabled: false,
   }
 
-  // Drill follows the same exam as Sprint/Diagnostic: the primary focus exam
-  // (first focus exam with a runnable blueprint), else the first focus exam.
-  // That exam is UPCAT -> the UPCAT subtest picker; otherwise the weakest
-  // practised topic, else that exam by subject.
-  const drillExam = primary ?? focusSlugs.find(s => !isSchoolFocusSlug(s)) ?? null
-  const hasSchoolFocus = focusSlugs.some(isSchoolFocusSlug)
+  // Drill follows the same exam as Sprint/Diagnostic (practiceFocusExam): the
+  // primary focus exam, else the first focus exam. That exam is UPCAT -> the
+  // UPCAT subtest picker; otherwise the weakest practised topic, else that
+  // exam by subject.
+  const drillExam = practiceFocusExam(focusSlugs, blueprints.map(b => b.slug))
   let drill: QuickStartTile
   if (drillExam === UPCAT_SLUG) {
     drill = { key: 'drill', title: 'Drill', subtitle: 'Pick a UPCAT subtest', href: null, muted: false, disabled: false }
   } else if (weakTopic) {
     drill = { key: 'drill', title: 'Drill', subtitle: weakTopic.name, href: `/practice/${encodeURIComponent(weakTopic.id)}`, muted: false, disabled: false }
-  } else if (drillExam || hasSchoolFocus) {
+  } else if (drillExam) {
     // A school-level focus has no content of its own: it studies the general entrance subjects (as app/practice/start does).
-    const slug = drillExam ?? 'general-cet'
+    const slug = isSchoolFocusSlug(drillExam) ? 'general-cet' : drillExam
     drill = { key: 'drill', title: 'Drill', subtitle: 'By subject', href: `/practice/review/${encodeURIComponent(slug)}`, muted: false, disabled: false }
   } else {
     drill = { key: 'drill', title: 'Drill', subtitle: 'Choose an exam first', href: '/(tabs)/explore', muted: false, disabled: false }

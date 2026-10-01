@@ -133,15 +133,19 @@ export function practiceAvailabilityLabel(a: PracticeAvailability): string | nul
  *   - Without one, never a dead-end diagnostic (and never UPCAT questions under
  *     the student's exam): its review chooser when it has topics to review,
  *     else its listing page, which says practice is coming soon.
+ *   - null while availability is not known yet (`availabilityKnown` false) and
+ *     the route depends on it: the tap must wait, never guess a route.
  */
 export function resolveFocusTileRoute(
   slug: string,
   hasScore: boolean,
   runnableSlugs: readonly string[],
   reviewSlugs: ReadonlySet<string> = new Set(),
-): string {
+  availabilityKnown = true,
+): string | null {
   if (hasScore) return `/practice/start/${slug}`
   if (slug === 'upcat') return '/practice/diagnostic'
+  if (!availabilityKnown) return null
   const availability = practiceAvailability(slug, runnableSlugs, reviewSlugs)
   if (availability === 'mock') return `/practice/diagnostic?exam=${encodeURIComponent(slug)}`
   if (availability === 'review') return `/practice/start/${encodeURIComponent(slug)}`

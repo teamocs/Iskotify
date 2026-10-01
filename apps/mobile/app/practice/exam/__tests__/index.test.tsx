@@ -102,9 +102,9 @@ describe('Mock exams list (redesign M2)', () => {
     mockCounts.mockResolvedValue(new Map([['Mathematics', 60], ['Verbal', 500], ['Spatial', 0]]))
     render(<ExamPicker />)
     await act(async () => {})
-    // 60 (pool smaller than 180) + 50 + 0 (nothing runnable in Spatial): only Verbal is whole.
-    expect(screen.getByRole('button', { name: 'UPCAT, Partial — 1 of 3 sections, 110 items, 2.5 h, best 72%' })).toBeTruthy()
-    expect(screen.getByText('Partial — 1 of 3 sections · 110 items · 2.5 h')).toBeTruthy()
+    // 60 (pool smaller than 180) + 50 + 0 (nothing runnable in Spatial): Math and Verbal run, Spatial does not.
+    expect(screen.getByRole('button', { name: 'UPCAT, Partial — 2 of 3 sections, 110 items, 2.5 h, best 72%' })).toBeTruthy()
+    expect(screen.getByText('Partial — 2 of 3 sections · 110 items · 2.5 h')).toBeTruthy()
   })
 
   it('sizes a mock from its sections, not a drifted total_items (DOST-SEI: 170 vs 210)', async () => {

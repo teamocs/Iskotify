@@ -3,7 +3,7 @@ import { View, Text, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
-import { usePracticeData } from '../../../hooks/usePracticeData'
+import { hasReviewContent } from '../../../services/practiceSignals'
 import { upcatQuestions } from '../../../db/schema'
 import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
@@ -48,7 +48,7 @@ import {
 import {
   resolveDiagnosticTarget, buildBlueprintDiagnostic, blueprintDiagnosticPool,
   buildBlueprintDiagnosticSessionParams, blueprintDiagnosticToAttemptMeta,
-  diagnosticRunKey, diagnosticRunSlug, examSlugLabel, firstParam, normalizeExamParam, hasReviewTopics,
+  diagnosticRunKey, diagnosticRunSlug, examSlugLabel, firstParam, normalizeExamParam,
   type DiagnosticTarget,
 } from '../../../utils/diagnosticTarget'
 
@@ -89,7 +89,6 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
-  const practice = usePracticeData()
 
   const [phase, setPhase] = useState<Phase>('loading')
   // Bumped by "Try again" after a failed question load to re-run the load effect.
@@ -125,6 +124,22 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   // Blueprint sections with nothing runnable yet, shown on the results.
   const [comingSoon, setComingSoon] = useState<string[]>([])
   const isBlueprint = target?.kind === 'blueprint'
+  // Whether the exam has topic reviews (hasReviewContent: the same DB check the
+  // listing, school and Today pages use). null until known.
+  const reviewSlug = target && target.kind !== 'upcat' ? target.slug : null
+  const [canReview, setCanReview] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!reviewSlug) return
+    let cancelled = false
+    setCanReview(null)
+    hasReviewContent(db, reviewSlug)
+      .then(v => { if (!cancelled) setCanReview(v) })
+      .catch(e => {
+        console.warn('[practice/diagnostic] review lookup failed:', e)
+        if (!cancelled) setCanReview(false)
+      })
+    return () => { cancelled = true }
+  }, [db, reviewSlug])
   const runKey = target ? diagnosticRunKey(target, subjectParam) : ''
 
   // Countdown timer (60s/question). Auto-submits at zero. endTime is an absolute
@@ -485,18 +500,19 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
 
   if (phase === 'unavailable') {
     const slug = target?.kind === 'unavailable' ? target.slug : ''
-    const canReview = !!slug && hasReviewTopics(slug, practice.topicRows, practice.topicIdsByListingSlug)
     return (
       <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
         <PageTitle
           title={`A diagnostic for ${examLabel} isn't available yet`}
           lead={canReview
             ? `There aren't enough published questions for this exam to build one yet. Its topic reviews are ready now.`
-            : `There aren't enough published questions for this exam to build one yet. Practice for ${examLabel} is coming soon.`}
+            : canReview === false
+              ? `There aren't enough published questions for this exam to build one yet. Practice for ${examLabel} is coming soon.`
+              : `There aren't enough published questions for this exam to build one yet.`}
         />
         <View style={{ gap: spacing.sm }}>
           {/* Never the UPCAT diagnostic here: those questions are not this exam's. */}
-          {!slug || !practice.loaded ? null : canReview ? (
+          {!slug || canReview === null ? null : canReview ? (
             <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${slug}`)} fullWidth size="lg" />
           ) : (
             <Button label="See exam details" onPress={() => router.push(`/listings/${encodeURIComponent(slug)}`)} fullWidth size="lg" />
@@ -614,7 +630,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
             {target?.kind === 'blueprint' ? (
               // Review lists flashcard topics tagged to the exam: only send the student there
               // when it has some, else a mock exam (which every runnable blueprint has).
-              hasReviewTopics(target.slug, practice.topicRows, practice.topicIdsByListingSlug) ? (
+              canReview ? (
                 <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${target.slug}`)} fullWidth size="lg" />
               ) : (
                 // The blueprint is runnable (that is how this diagnostic was built): straight to its prestart.

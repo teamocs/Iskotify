@@ -67,6 +67,15 @@ jest.mock('../../../services/examBlueprints', () => ({
   listRunnableBlueprints: (...args: any[]) => mockListPublishedBlueprints(...args),
 }))
 
+const mockSubtestAccuracy = jest.fn()
+const mockHasTakenDiagnostic = jest.fn()
+const mockHasReviewContent = jest.fn()
+jest.mock('../../../services/practiceSignals', () => ({
+  getUpcatSubtestAccuracy: (...a: any[]) => mockSubtestAccuracy(...a),
+  hasTakenDiagnostic: (...a: any[]) => mockHasTakenDiagnostic(...a),
+  hasReviewContent: (...a: any[]) => mockHasReviewContent(...a),
+}))
+
 const mockLoadRun = jest.fn()
 jest.mock('../../../hooks/useExamRunPersistence', () => ({
   useExamRunPersistence: () => ({ loadRun: (...a: any[]) => mockLoadRun(...a), saveRun: jest.fn(), clearRun: jest.fn() }),
@@ -115,6 +124,9 @@ describe('PracticeScreen (redesign M2)', () => {
     mockFocusListings.splice(0)
     mockFocusLoaded.value = true
     mockCountOpenMistakes.mockReset().mockResolvedValue(0)
+    mockSubtestAccuracy.mockReset().mockResolvedValue([])
+    mockHasTakenDiagnostic.mockReset().mockResolvedValue(false)
+    mockHasReviewContent.mockReset().mockResolvedValue(false)
     mockDecks.splice(0)
   })
 
@@ -258,6 +270,57 @@ describe('PracticeScreen (redesign M2)', () => {
       expect(screen.getByRole('header', { name: 'Find your starting point' })).toBeTruthy()
       fireEvent.press(screen.getByRole('button', { name: 'Take the diagnostic' }))
       expect(router.push).toHaveBeenCalledWith('/practice/diagnostic')
+    })
+
+    it('no longer offers the diagnostic once it was taken: a short UPCAT drill instead', async () => {
+      mockHasTakenDiagnostic.mockResolvedValue(true)
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Keep your skills sharp' })).toBeTruthy(), { timeout: 10_000 })
+      expect(screen.queryByRole('button', { name: 'Take the diagnostic' })).toBeNull()
+      expect(mockHasTakenDiagnostic).toHaveBeenCalledWith(expect.anything(), 'upcat')
+    })
+
+    it('a UPCAT student with a weak subtest is sent to drill it', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockSubtestAccuracy.mockResolvedValue([{ subtest: 'Science', pct: 80, answered: 20 }, { subtest: 'Mathematics', pct: 35, answered: 20 }])
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Drill Mathematics' })).toBeTruthy(), { timeout: 10_000 })
+      fireEvent.press(screen.getByRole('button', { name: 'Start drill' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/upcat/Mathematics?mode=quick')
+    })
+
+    describe('a DCAT-focused student never gets UPCAT screens', () => {
+      const DCAT = { slug: 'dcat-dlsu', name: 'DLSU College Admission Test', acronym: 'DCAT', totalItems: 100, totalTimeMinutes: 90, items: 100, minutes: 90 }
+      beforeEach(() => {
+        mockFocusListings.push({ slug: 'dcat-dlsu', priority: 1, addedAt: 0, title: 'DCAT', type: 'exam' })
+        // Weak UPCAT numbers from some old drills must not pull a DCAT student into UPCAT.
+        mockSubtestAccuracy.mockResolvedValue([{ subtest: 'Mathematics', pct: 20, answered: 20 }])
+      })
+      const pushedUpcat = () => router.push.mock.calls.some(([h]: [string]) => /^\/practice\/upcat\/|^\/practice\/diagnostic$/.test(h))
+
+      it("with review topics but no runnable mock, opens DCAT's practice chooser", async () => {
+        mockHasReviewContent.mockResolvedValue(true)
+        await renderSettled()
+        await waitFor(() => expect(screen.getByRole('header', { name: 'Keep your DCAT practice going' })).toBeTruthy(), { timeout: 10_000 })
+        fireEvent.press(screen.getByRole('button', { name: 'Choose practice' }))
+        expect(router.push).toHaveBeenCalledWith('/practice/start/dcat-dlsu')
+        expect(pushedUpcat()).toBe(false)
+        expect(mockHasTakenDiagnostic).toHaveBeenCalledWith(expect.anything(), 'dcat-dlsu')
+      })
+
+      it('with nothing to practise yet, opens the DCAT page, not the UPCAT diagnostic', async () => {
+        await renderSettled()
+        await waitFor(() => expect(screen.getByRole('header', { name: 'DCAT practice is coming soon' })).toBeTruthy(), { timeout: 10_000 })
+        fireEvent.press(screen.getByRole('button', { name: 'Open exam page' }))
+        expect(router.push).toHaveBeenCalledWith('/listings/dcat-dlsu')
+        expect(pushedUpcat()).toBe(false)
+      })
+
+      it('with a runnable DCAT blueprint, the mock leads (never a UPCAT step)', async () => {
+        mockListPublishedBlueprints.mockResolvedValue([UPCAT, DCAT])
+        await renderSettled()
+        await waitFor(() => expect(screen.getByRole('header', { name: 'Take a DCAT mock' })).toBeTruthy(), { timeout: 10_000 })
+      })
     })
 
     it('leads with due cards when any are due', async () => {

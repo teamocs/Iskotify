@@ -108,9 +108,14 @@ export function FocusExamsFold({
   // "Practice coming soon" / "Mock exam coming soon": only once we actually know.
   const missingLabel = (a: PracticeAvailability): string | null => (availabilityKnown ? practiceAvailabilityLabel(a) : null)
 
+  // null while availability is unknown and the route depends on it: the row waits (aria-disabled).
+  const routeFor = (slug: string) =>
+    resolveFocusTileRoute(slug, readinessFor(slug) != null, blueprintSlugs, reviewSlugs, availabilityKnown)
+
   function onRowPress(slot: Exclude<FocusExamSlot, { kind: 'blank' }>) {
     if (slot.kind === 'suggested') { void onAddListing(slot.slug); return }
-    router.push(resolveFocusTileRoute(slot.slug, readinessFor(slot.slug) != null, blueprintSlugs, reviewSlugs) as never)
+    const route = routeFor(slot.slug)
+    if (route) router.push(route as never)
   }
 
   const nothingYet = focusedExams.length === 0
@@ -172,6 +177,7 @@ export function FocusExamsFold({
                   </Text>
                 }
                 onPress={() => onRowPress(slot)}
+                disabled={routeFor(slot.slug) === null}
                 accessibilityLabel={`${slot.title}, ${pct != null ? `best score ${pct}%` : 'no score yet'}${missing ? `, ${missing.toLowerCase()}` : ''}`}
               />
             )

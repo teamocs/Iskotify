@@ -25,7 +25,7 @@ import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { pickNextStep } from '../../utils/todayNextStep'
-import { hasReviewTopics } from '../../utils/diagnosticTarget'
+import { reviewContentSlugs } from '../../services/practiceSignals'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
@@ -45,7 +45,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
 export default function TodayScreen() {
   const stats = useHomeStats()
   const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays } = stats
-  const { topicRows, topicIdsByListingSlug, loaded: practiceLoaded } = usePracticeData()
+  const { topicRows } = usePracticeData()
   const { addListing } = useFocusListings()
   const catalog = useHomeCatalog()
   const db = useDb()
@@ -57,10 +57,23 @@ export default function TodayScreen() {
     [topicRows],
   )
   // Exams with flashcard topics to review: practice exists even without a mock.
-  const reviewSlugs = useMemo(
-    () => new Set(Object.keys(topicIdsByListingSlug).filter(slug => hasReviewTopics(slug, topicRows, topicIdsByListingSlug))),
-    [topicRows, topicIdsByListingSlug],
+  // From the DB (hasReviewContent), the same source the listing, school and
+  // diagnostic pages use. null until known.
+  const reviewCandidates = useMemo(
+    () => [...new Set([...focusedListings.map(l => l.slug), ...catalog.examListings.map(l => l.slug)])].sort().join('|'),
+    [focusedListings, catalog.examListings],
   )
+  const [reviewSlugs, setReviewSlugs] = useState<ReadonlySet<string> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    reviewContentSlugs(db, reviewCandidates ? reviewCandidates.split('|') : [])
+      .then(set => { if (!cancelled) setReviewSlugs(set) })
+      .catch(e => {
+        console.warn('[today/reviewSlugs] load failed:', e)
+        if (!cancelled) setReviewSlugs(new Set())
+      })
+    return () => { cancelled = true }
+  }, [db, reviewCandidates])
 
   // ── Admissions feed (for "Coming up") ───────────────────────────────────────
   const [admissionItems, setAdmissionItems] = useState<FeedItem[]>([])
@@ -194,8 +207,8 @@ export default function TodayScreen() {
               focusedListings={focusedListings}
               examListings={catalog.examListings}
               blueprintSlugs={catalog.blueprintSlugs}
-              reviewSlugs={reviewSlugs}
-              availabilityKnown={catalog.loaded && practiceLoaded}
+              reviewSlugs={reviewSlugs ?? undefined}
+              availabilityKnown={catalog.loaded && reviewSlugs !== null}
               blueprintInfo={catalog.blueprintInfo}
               listingMockBest={catalog.listingMockBest}
               listingAccuracy={listingAccuracy}

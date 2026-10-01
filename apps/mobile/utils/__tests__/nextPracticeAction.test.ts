@@ -87,6 +87,52 @@ describe('pickNextPractice', () => {
     const next = pickNextPractice({ ...none, resume: { slug: 'x', title: 'X', answered: 0, total: 0 }, dueCount: -1 })
     expect(next).toEqual({ kind: 'diagnostic' })
   })
+
+  describe('a non-UPCAT primary focus exam never gets UPCAT steps', () => {
+    const dcat = { slug: 'dcat-dlsu', label: 'DCAT', runnable: true, hasReview: true }
+
+    it('skips the UPCAT weak-subtest drill', () => {
+      const next = pickNextPractice({ ...none, focusExam: dcat, hasTakenDiagnostic: true, subtestAccuracy: [{ subtest: 'Mathematics', pct: 20 }] })
+      expect(next).toEqual({ kind: 'practise', slug: 'dcat-dlsu', label: 'DCAT', ready: true })
+    })
+
+    it("offers that exam's own diagnostic when it has a runnable blueprint", () => {
+      expect(pickNextPractice({ ...none, focusExam: dcat })).toEqual({ kind: 'diagnostic', exam: 'dcat-dlsu' })
+    })
+
+    it('without a runnable blueprint, offers its practice chooser, never the UPCAT diagnostic', () => {
+      const next = pickNextPractice({ ...none, focusExam: { ...dcat, runnable: false } })
+      expect(next).toEqual({ kind: 'practise', slug: 'dcat-dlsu', label: 'DCAT', ready: true })
+    })
+
+    it('with nothing to practise yet, points to the exam page', () => {
+      const next = pickNextPractice({ ...none, focusExam: { ...dcat, runnable: false, hasReview: false } })
+      expect(next).toEqual({ kind: 'practise', slug: 'dcat-dlsu', label: 'DCAT', ready: false })
+    })
+
+    it('after its diagnostic, never the UPCAT mixed drill', () => {
+      const next = pickNextPractice({ ...none, focusExam: dcat, hasTakenDiagnostic: true })
+      expect(next.kind).toBe('practise')
+    })
+
+    it('a weak flashcard topic and due cards still come first', () => {
+      expect(pickNextPractice({ ...none, focusExam: dcat, weakTopic: { id: 't1', name: 'Fractions' } }).kind).toBe('topic')
+      expect(pickNextPractice({ ...none, focusExam: dcat, dueCount: 2 }).kind).toBe('due')
+    })
+  })
+
+  describe('UPCAT primary focus (or no focus) keeps the UPCAT steps', () => {
+    const upcat = { slug: 'upcat', label: 'UPCAT', runnable: false, hasReview: false }
+    it('drills a weak UPCAT subtest', () => {
+      const next = pickNextPractice({ ...none, focusExam: upcat, subtestAccuracy: [{ subtest: 'Science', pct: 30 }] })
+      expect(next).toEqual({ kind: 'subtest', subtest: 'Science' })
+    })
+    it('offers the UPCAT diagnostic, then the UPCAT drill once taken', () => {
+      expect(pickNextPractice({ ...none, focusExam: upcat })).toEqual({ kind: 'diagnostic' })
+      expect(pickNextPractice({ ...none, focusExam: upcat, hasTakenDiagnostic: true })).toEqual({ kind: 'drill', subtest: null })
+      expect(pickNextPractice({ ...none, focusExam: null })).toEqual({ kind: 'diagnostic' })
+    })
+  })
 })
 
 describe('nextPracticeCopy', () => {
@@ -146,5 +192,20 @@ describe('nextPracticeCopy', () => {
     expect(c.title).toBe('Find your starting point')
     expect(c.actionLabel).toBe('Take the diagnostic')
     expect(c.href).toBe('/practice/diagnostic')
+  })
+
+  it("names the exam's own diagnostic for a non-UPCAT exam", () => {
+    const c = nextPracticeCopy({ kind: 'diagnostic', exam: 'dcat-dlsu' })
+    expect(c.actionLabel).toBe('Take the diagnostic')
+    expect(c.href).toBe('/practice/diagnostic?exam=dcat-dlsu')
+  })
+
+  it("routes a non-UPCAT exam's practice to its chooser, or its page when nothing is ready", () => {
+    const ready = nextPracticeCopy({ kind: 'practise', slug: 'dcat-dlsu', label: 'DCAT', ready: true })
+    expect(ready.title).toBe('Keep your DCAT practice going')
+    expect(ready.href).toBe('/practice/start/dcat-dlsu')
+    const soon = nextPracticeCopy({ kind: 'practise', slug: 'dcat-dlsu', label: 'DCAT', ready: false })
+    expect(soon.title).toBe('DCAT practice is coming soon')
+    expect(soon.href).toBe('/listings/dcat-dlsu')
   })
 })

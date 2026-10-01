@@ -29,11 +29,11 @@ jest.mock('../../../../services/diagnosticSource', () => ({
   },
 }))
 
-// Review topics available for the exam (the source /practice/review/<slug> lists from).
-let mockPractice: { topicRows: any[]; topicIdsByListingSlug: Record<string, string[]>; loaded: boolean } =
-  { topicRows: [], topicIdsByListingSlug: {}, loaded: true }
-jest.mock('../../../../hooks/usePracticeData', () => ({
-  usePracticeData: () => mockPractice,
+// Exams with review topics (services/practiceSignals.hasReviewContent: the one
+// source of truth the listing, school and Today pages use too).
+let mockReviewSlugs: string[] = []
+jest.mock('../../../../services/practiceSignals', () => ({
+  hasReviewContent: async (_db: unknown, slug: string) => mockReviewSlugs.includes(slug),
 }))
 
 jest.mock('expo-router', () => ({
@@ -121,7 +121,7 @@ describe('DiagnosticExam', () => {
     mockSources = {}
     mockLookupError = null
     mockSourceGate = null
-    mockPractice = { topicRows: [], topicIdsByListingSlug: {}, loaded: true }
+    mockReviewSlugs = []
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
   })
 
@@ -770,7 +770,7 @@ describe('DiagnosticExam', () => {
 
     it('review fix 1: with review topics for the exam, the next step is its review topics', async () => {
       setupAcet()
-      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { acet: ['t1'] }, loaded: true }
+      mockReviewSlugs = ['acet']
       mockSearchParams = { exam: 'acet' }
       render(<DiagnosticExam />)
       await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
@@ -783,7 +783,7 @@ describe('DiagnosticExam', () => {
 
     it('review fix 1: with no review topics for the exam, it goes straight to the mock exam (no chooser hop)', async () => {
       setupAcet()
-      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { upcat: ['t1'] }, loaded: true }
+      mockReviewSlugs = ['upcat']
       mockSearchParams = { exam: 'acet' }
       render(<DiagnosticExam />)
       await waitFor(() => expect(screen.getByText('Question 1 of 10')).toBeTruthy())
@@ -945,7 +945,7 @@ describe('DiagnosticExam', () => {
 
     it('an exam with no runnable blueprint but review topics offers its topic review', async () => {
       mockSearchParams = { exam: 'dcat-dlsu' }
-      mockPractice = { topicRows: [{ topic: { id: 't1' } }], topicIdsByListingSlug: { 'dcat-dlsu': ['t1'] }, loaded: true }
+      mockReviewSlugs = ['dcat-dlsu']
       render(<DiagnosticExam />)
       expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet")).toBeTruthy()
       expect(screen.queryByRole('button', { name: 'See exam details' })).toBeNull()
