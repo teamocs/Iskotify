@@ -1,9 +1,8 @@
-// Pure helper for Home's "Subject preparedness" grid (SubjectPreparednessGrid).
+// Pure helper for Progress's "Readiness by subject" list.
 //
-// Unlike utils/subjectsToImprove.ts (which falls back to raw flashcard accuracy
-// when a subject has NO session data at all, for the practice tab's "Subjects to
-// improve" list), this grid is a strict readiness snapshot: subjectReadinessPct
-// only, 0% when nothing is known yet (Global Constraints — no invented formula).
+// A strict readiness snapshot: subjectReadinessPct only. A subject with too few
+// answered questions has pct null ("Not started") — it used to be coerced to
+// 0% and shown as "needs work" for something the student simply hadn't tried.
 //
 // No React, no DB — fully unit-testable.
 
@@ -16,45 +15,40 @@ export interface SubjectTopicRow {
 export interface SubjectPreparednessEntry {
   id: string
   name: string
-  pct: number
+  /** 0–100, or null when there is not enough practice yet ("Not started"). */
+  pct: number | null
 }
 
 export const SUBJECT_PREPAREDNESS_LIMIT = 6
 
 /**
- * subjectPreparedness — per-subject readiness (0–100, ascending — lowest/most
- * in-need first), capped to `limit` subjects. Only subjects with at least one
- * topic are included.
+ * subjectPreparedness — per-subject readiness, lowest (most in need) first,
+ * subjects with no number last, capped to `limit`. Only subjects with at least
+ * one topic are included.
  */
 export function subjectPreparedness(
   topicRows: SubjectTopicRow[],
   subjects: Array<{ id: string; name: string }>,
-  perTopicBestById: Map<string, number>,
-  subjectBestByName: Map<string, number>,
+  subjectPctByName: Map<string, number>,
   limit: number = SUBJECT_PREPAREDNESS_LIMIT,
 ): SubjectPreparednessEntry[] {
   const nameById = new Map(subjects.map(s => [s.id, s.name]))
 
-  const topicsBySubject = new Map<string, Array<{ id: string }>>()
   const order: string[] = []
+  const seen = new Set<string>()
   for (const row of topicRows) {
     const sid = row.topic.subjectId
-    let bucket = topicsBySubject.get(sid)
-    if (!bucket) {
-      bucket = []
-      topicsBySubject.set(sid, bucket)
-      order.push(sid)
-    }
-    bucket.push({ id: row.topic.id })
+    if (!seen.has(sid)) { seen.add(sid); order.push(sid) }
   }
 
   const result: SubjectPreparednessEntry[] = order.map(sid => {
-    const topics = topicsBySubject.get(sid)!
     const name = nameById.get(sid) ?? sid
-    const pct = subjectReadinessPct(topics, perTopicBestById, name, subjectBestByName) ?? 0
-    return { id: sid, name, pct }
+    return { id: sid, name, pct: subjectReadinessPct(name, subjectPctByName) }
   })
 
-  result.sort((a, b) => a.pct - b.pct)
+  result.sort((a, b) => {
+    if ((a.pct == null) !== (b.pct == null)) return a.pct == null ? 1 : -1
+    return (a.pct ?? 0) - (b.pct ?? 0)
+  })
   return result.slice(0, limit)
 }

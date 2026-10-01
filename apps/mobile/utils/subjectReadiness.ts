@@ -1,65 +1,44 @@
-// Pure readiness helpers shared by Subject Details and the Home "Subjects to
-// improve" grid so both surfaces report the SAME session-based readiness.
+// Pure readiness helpers shared by Subject Details, Progress and Practice so
+// they all report the SAME number.
 //
-// Readiness reflects ALL practice sessions:
-//   - topic-review sessions (getTopicBestSessionPercentages, keyed by topicId)
-//   - subject-level MOCK sessions (getSubjectSessionPercentages, keyed by the
-//     subject NAME — a blueprint section / UPCAT subtest whose name equals the
-//     subject name).
-// A mock covering a subject lifts every topic in it; an individual topic review
-// can exceed the mock. No React, no DB — fully unit-testable.
+// Readiness = weighted recent accuracy: over the most recent READINESS_WINDOW
+// ANSWERED questions in a subject (or topic), correct / answered. It is
+// computed by services/homeAggregates (getSubjectRecentAccuracy /
+// getTopicRecentAccuracy); this module only holds the shared constants and the
+// lookups on top of those maps. Replaces the old all-time best session %, which
+// stuck a student at one lucky result forever, and the max(topic, subject)
+// lift, which hid a weak topic behind a strong subject.
+//
+// Below READINESS_MIN_ANSWERED answers there is not enough evidence for a
+// number: readiness is null and the UI says "Not started".
+// No React, no DB — fully unit-testable.
+
+/** How many of the most recent answered questions readiness looks at. */
+export const READINESS_WINDOW = 60
+/** Fewer answered questions than this shows "Not started" instead of a number. */
+export const READINESS_MIN_ANSWERED = 10
 
 function clampPct(n: number): number {
   return Math.max(0, Math.min(100, n))
 }
 
 /**
- * topicReadiness — readiness for ONE topic = the max of:
- *   - topicBest: that topic's own best topic-review session %, and
- *   - subjectBest: the subject-level mock best % (lifts every topic in the subject).
- * Either may be null (absent). Returns null only when BOTH are absent.
+ * topicReadiness — a topic's readiness is its own recent accuracy, or null when
+ * it has too few answers. Deliberately NOT lifted by the subject's result.
  */
-export function topicReadiness(
-  { topicBest, subjectBest }: { topicBest: number | null; subjectBest: number | null },
-): number | null {
-  if (topicBest == null && subjectBest == null) return null
-  return Math.max(topicBest ?? -Infinity, subjectBest ?? -Infinity)
+export function topicReadiness(topicPct: number | null | undefined): number | null {
+  return topicPct == null ? null : clampPct(Math.round(topicPct))
 }
 
 /**
- * subjectReadinessPct — the subject's grid/summary % = the average of
- * topicReadiness across the subject's topics (skipping topics with no readiness).
- *
- * Fallbacks:
- *   - if NO topic has any readiness, fall back to the subject-level mock best
- *     (subjectBestByName[subjectName]) so a subject practiced only via a mock
- *     (with no per-topic rows yet) still shows its real %;
- *   - null when nothing is known at all.
- * Result is rounded and clamped to 0–100.
+ * subjectReadinessPct — the subject's recent accuracy by NAME (flashcard
+ * subjects are projected from the UPCAT subtests, so the name matches the
+ * canonical subtest on attempts), or null when there is too little evidence.
  */
 export function subjectReadinessPct(
-  topics: Array<{ id: string }>,
-  perTopicBestById: Map<string, number>,
   subjectName: string,
-  subjectBestByName: Map<string, number>,
+  subjectPctByName: Map<string, number>,
 ): number | null {
-  const subjectBest = subjectBestByName.get(subjectName) ?? null
-
-  let sum = 0
-  let n = 0
-  for (const topic of topics) {
-    const r = topicReadiness({
-      topicBest: perTopicBestById.get(topic.id) ?? null,
-      subjectBest,
-    })
-    if (r != null) {
-      sum += r
-      n += 1
-    }
-  }
-
-  if (n > 0) return clampPct(Math.round(sum / n))
-  // No topic readiness — fall back to the subject-level mock best, if any.
-  if (subjectBest != null) return clampPct(Math.round(subjectBest))
-  return null
+  const pct = subjectPctByName.get(subjectName)
+  return pct == null ? null : clampPct(Math.round(pct))
 }

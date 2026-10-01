@@ -3,13 +3,13 @@ import { useDb } from './useDb'
 import { usePracticeData } from './usePracticeData'
 import { useFocusEffect } from 'expo-router'
 import { cachedQuery, invalidate, subscribe } from '../services/queryCache'
-import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../services/homeAggregates'
+import { getSubjectRecentAccuracy } from '../services/homeAggregates'
 import { subjectPreparedness, type SubjectPreparednessEntry } from '../utils/subjectPreparedness'
 
 const CACHE_KEY = 'home:sessionReadiness'
 
 export interface SubjectReadiness {
-  /** Per-subject readiness 0–100, lowest (most in need) first. */
+  /** Per-subject readiness 0–100 (null = not started), lowest (most in need) first. */
   entries: SubjectPreparednessEntry[]
   loading: boolean
   error: boolean
@@ -18,32 +18,24 @@ export interface SubjectReadiness {
 
 /**
  * Readiness by subject for Progress (moved from Today in redesign M2).
- * SESSION-based: per-topic review bests + subject-level mock bests
- * (subtest == subject name), never a flashcard-accuracy fallback. Cached
- * under a 'home:' key so a finished session's invalidate('home:') refreshes it.
+ * Weighted recent accuracy per subject (the latest 60 answered questions,
+ * minimum 10 — see homeAggregates.getSubjectRecentAccuracy); a subject without
+ * enough practice is null ("Not started"). Cached under a 'home:' key so a
+ * finished session's invalidate('home:') refreshes it.
  */
 export function useSubjectReadiness(): SubjectReadiness {
   const db = useDb()
   const { subjects, topicRows } = usePracticeData()
-  const [maps, setMaps] = useState(() => ({ perTopic: new Map<string, number>(), subject: new Map<string, number>() }))
+  const [subjectPct, setSubjectPct] = useState(() => new Map<string, number>())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const mounted = useRef(true)
 
   const load = useCallback(async () => {
     try {
-      const data = await cachedQuery(CACHE_KEY, 30_000, async () => {
-        const [topicBest, subjectBest] = await Promise.all([
-          getTopicBestSessionPercentages(db),
-          getSubjectSessionPercentages(db),
-        ])
-        return { topicBest, subjectBest }
-      })
+      const rows = await cachedQuery(CACHE_KEY, 30_000, () => getSubjectRecentAccuracy(db))
       if (!mounted.current) return
-      setMaps({
-        perTopic: new Map(data.topicBest.map(r => [r.topicId, r.bestPct])),
-        subject: new Map(data.subjectBest.map(r => [r.subject, r.bestPct])),
-      })
+      setSubjectPct(new Map(rows.map(r => [r.subject, r.pct])))
       setError(false)
     } catch (e) {
       console.warn('[useSubjectReadiness] load failed:', e)
@@ -70,8 +62,8 @@ export function useSubjectReadiness(): SubjectReadiness {
   }, [load])
 
   const entries = useMemo(
-    () => subjectPreparedness(topicRows, subjects, maps.perTopic, maps.subject),
-    [topicRows, subjects, maps],
+    () => subjectPreparedness(topicRows, subjects, subjectPct),
+    [topicRows, subjects, subjectPct],
   )
 
   return { entries, loading, error, refresh }

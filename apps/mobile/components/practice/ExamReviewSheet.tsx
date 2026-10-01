@@ -27,6 +27,8 @@ interface ExamReviewSheetProps {
   onJumpSection?: (start: number) => void
   /** Questions before this index are locked by an expired section timer. */
   floorIdx?: number
+  /** When set, 'Submit exam' is disabled and this reason is shown (e.g. nothing answered yet). */
+  submitBlockedMessage?: string
 }
 
 /**
@@ -43,7 +45,7 @@ interface ExamReviewSheetProps {
  */
 export function ExamReviewSheet({
   visible, total, currentIdx, answeredIdxs, flaggedIdxs, onJump, onClose, onSubmit,
-  sections, onJumpSection, floorIdx = 0,
+  sections, onJumpSection, floorIdx = 0, submitBlockedMessage,
 }: ExamReviewSheetProps) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
@@ -78,6 +80,7 @@ export function ExamReviewSheet({
     : `${unansweredCount} unanswered.`
 
   function requestSubmit() {
+    if (submitBlockedMessage) return
     const message = unansweredCount === 0
       ? 'All questions answered. Once submitted you can’t change your answers.'
       : `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}. Once submitted you can’t change your answers.`
@@ -135,6 +138,11 @@ export function ExamReviewSheet({
           <Text style={[textStyle('bodySm', t.textSecondary), { marginTop: 2, marginBottom: spacing.lg }]} maxFontSizeMultiplier={1.4}>
             {summary}
           </Text>
+          {submitBlockedMessage ? (
+            <Text style={[textStyle('bodySm', t.textPrimary), { marginBottom: spacing.lg }]} maxFontSizeMultiplier={1.4}>
+              {submitBlockedMessage}
+            </Text>
+          ) : null}
 
           <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: spacing.lg, paddingBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
             {sections && sections.length > 1 && onJumpSection ? (
@@ -155,7 +163,7 @@ export function ExamReviewSheet({
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg }}>
             <Button label="Back to exam" variant="secondary" onPress={onClose} />
-            <Button label="Submit exam" onPress={requestSubmit} style={{ flexGrow: 1 }} />
+            <Button label="Submit exam" onPress={requestSubmit} disabled={!!submitBlockedMessage} style={{ flexGrow: 1 }} />
           </View>
         </View>
         <Pressable

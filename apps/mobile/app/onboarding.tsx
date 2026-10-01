@@ -557,6 +557,10 @@ export default function OnboardingScreen() {
               total: stats.total,
               durationSecs: 0,
               completedAt: now,
+              // Excluded from Progress stats (utils/sessionKind isProgressSession);
+              // still counts toward streak days.
+              kind: 'onboarding',
+              attemptKey: now,
             }).run()
           }
         })

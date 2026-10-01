@@ -124,7 +124,9 @@ function makeHealDb(): InstanceType<typeof Database> {
       score INTEGER NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
-      completed_at INTEGER NOT NULL
+      completed_at INTEGER NOT NULL,
+      kind TEXT,
+      attempt_key INTEGER
     );
     CREATE TABLE notes (
       id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '',

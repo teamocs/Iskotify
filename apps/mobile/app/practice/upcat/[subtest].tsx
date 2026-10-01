@@ -37,6 +37,7 @@ import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
+import { upcatDrillKind } from '../../../utils/sessionKind'
 import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
 
 type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results'
@@ -307,7 +308,9 @@ export default function UpcatExam() {
         total: b.total,
         startTime: startRef,
         subtest: st,
-      })
+        kind: upcatDrillKind(subtestParam, mode),
+        attemptKey: startRef,
+      }).catch(err => console.warn('[practice/upcat/[subtest]] recordSession failed:', err))
     }
 
     // Post-session delta: snapshot again now that this session's attempts are

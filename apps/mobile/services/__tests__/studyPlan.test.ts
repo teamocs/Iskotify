@@ -87,7 +87,18 @@ describe('gatherPlanInputs', () => {
     expect(input.weakTopics).toEqual([{ topicId: 't1', topicName: 'Algebra', accuracy: 20 }])
     expect(input.hasAnyReadinessData).toBe(true)
   })
-})
+
+  it('does not call a topic weak on fewer than MIN_SAMPLE answers (A9)', async () => {
+    await db.insert(topics).values([{ id: 't1', name: 'Algebra', subjectId: 's', status: 'published' }])
+    await db.insert(flashcards).values([
+      { id: 'fc1', topicId: 't1', question: 'q', answer: 'a', explanation: 'e', status: 'published' },
+    ])
+    await db.insert(userProgress).values([
+      { flashcardId: 'fc1', correct: false, answeredAt: NOW }, { flashcardId: 'fc1', correct: false, answeredAt: NOW },
+    ])
+    const input = await gatherPlanInputs(db, TODAY)
+    expect(input.weakTopics).toEqual([])
+  })})
 
 describe('persistPlanItems + getPlanItemsForDate', () => {
   it('inserts drafts and reads them back for the same plan date', async () => {

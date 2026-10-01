@@ -216,3 +216,21 @@ describe('describeTopPlanItem', () => {
     expect(describeTopPlanItem({ kind: 'diagnostic', refId: '', targetCount: 1 })).toMatch(/diagnostic/i)
   })
 })
+
+describe('itemMatchesSession — mock_section uses session kind (A10)', () => {
+  const item = { kind: 'mock_section' as const, refId: 'upcat' }
+
+  it('only a kind=mock sitting satisfies the mock item', () => {
+    expect(itemMatchesSession(item, { topicId: '', listingSlug: 'upcat', subtest: 'Mathematics', kind: 'mock' })).toBe(true)
+  })
+
+  it('sprints, drills and diagnostics do NOT satisfy the mock item', () => {
+    for (const kind of ['sprint', 'drill', 'diagnostic'] as const) {
+      expect(itemMatchesSession(item, { topicId: '', listingSlug: 'upcat', subtest: 'Mathematics', kind })).toBe(false)
+    }
+  })
+
+  it('a mock on another listing does not match', () => {
+    expect(itemMatchesSession(item, { topicId: '', listingSlug: 'acet', subtest: 'Mathematics', kind: 'mock' })).toBe(false)
+  })
+})

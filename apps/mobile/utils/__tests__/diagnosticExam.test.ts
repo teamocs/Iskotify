@@ -7,6 +7,7 @@ import {
   scoreDiagnostic,
   buildDiagnosticSessionParams,
   weakestSubject,
+  isBundledDiagnosticId,
 } from '../diagnosticExam'
 import type { UpcatLocalRow } from '../preAssessmentSource'
 import { PRE_ASSESS_QUESTIONS } from '../../data/preAssessment'
@@ -61,16 +62,16 @@ describe('buildDiagnosticQuestions', () => {
     expect(out.every(q => q.subject === 'Mathematics')).toBe(true)
   })
 
-  it('falls back to the whole bundle when the bundle has no matching subject (e.g. Reading Comprehension)', () => {
-    const out = buildDiagnosticQuestions([], ['Reading Comprehension'], 10)
-    expect(out).toEqual(PRE_ASSESS_QUESTIONS)
+  it('returns [] — never the cross-subject bundle — when nothing exists for the requested subtest (e.g. Reading Comprehension)', () => {
+    expect(buildDiagnosticQuestions([], ['Reading Comprehension'], 10)).toEqual([])
   })
 
   it('skips passage-linked rows (setId set) — mirrors buildPreAssessFromUpcat', () => {
     const rows = [row({ questionId: 'R1', subtest: 'Reading Comprehension', setId: 'PASS-1' })]
     const out = buildDiagnosticQuestions(rows, ['Reading Comprehension'], 10)
-    // Bank yields nothing (only row is passage-linked) → falls back to the bundle.
-    expect(out).toEqual(PRE_ASSESS_QUESTIONS)
+    // Bank yields nothing (only row is passage-linked) and the bundle has no
+    // Reading Comprehension items → empty, so the screen shows its empty state.
+    expect(out).toEqual([])
   })
 
   it('backfills only the subtest the bank yielded zero questions for (mixed coverage), leaving the others bank-sourced', () => {
@@ -150,8 +151,8 @@ describe('buildDiagnosticSessionParams', () => {
     }
     const params = buildDiagnosticSessionParams(bySubject, 1_000)
     expect(params).toEqual([
-      { listingSlug: 'upcat', topicId: '', deckId: '', score: 7, total: 10, startTime: 1_000, subtest: 'Mathematics' },
-      { listingSlug: 'upcat', topicId: '', deckId: '', score: 4, total: 10, startTime: 1_000, subtest: 'Science' },
+      { listingSlug: 'upcat', topicId: '', deckId: '', score: 7, total: 10, startTime: 1_000, subtest: 'Mathematics', kind: 'diagnostic', attemptKey: 1_000 },
+      { listingSlug: 'upcat', topicId: '', deckId: '', score: 4, total: 10, startTime: 1_000, subtest: 'Science', kind: 'diagnostic', attemptKey: 1_000 },
     ])
   })
 
@@ -180,5 +181,13 @@ describe('weakestSubject', () => {
 
   it('returns null when nothing was attempted', () => {
     expect(weakestSubject({})).toBeNull()
+  })
+})
+
+describe('isBundledDiagnosticId (A5)', () => {
+  it('recognises the static bundle ids so they are never recorded as upcat_questions attempts', () => {
+    expect(isBundledDiagnosticId('pre-math-1')).toBe(true)
+    expect(isBundledDiagnosticId(PRE_ASSESS_QUESTIONS[0]!.id)).toBe(true)
+    expect(isBundledDiagnosticId('M001')).toBe(false)
   })
 })

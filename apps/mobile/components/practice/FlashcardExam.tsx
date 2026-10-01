@@ -104,67 +104,89 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function submit() {
     if (submittedRef.current) return  // guard against double-submit (re-tap after a mid-submit failure)
+    // Nothing answered = nothing to record (the review sheet blocks this; belt and braces).
+    if (Object.keys(answers).length === 0) return
     submittedRef.current = true
     setSubmitting(true)
-    const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
-
-    // Task D: per-question attempt rows + the user_progress producer fix,
-    // written before recordSession so they're committed before its
-    // fire-and-forget backup push. answeredAt is shared across both writes
-    // so they line up as "this run".
-    const answeredAt = Date.now()
-    const elapsedByIdx = finalizeTiming(timingRef.current, answeredAt)
-    const rows = buildAttemptRows({
-      sessionKey: attemptStartRef.current,
-      sourceTable: 'flashcards',
-      listingSlug: listingSlug ?? '',
-      questions: questions.map((q, i) => ({
-        questionId: q.id ?? String(i),
-        correctIndex: q.answerIndex,
-        subtest: subtest ?? null,
-        topic: topicId ?? null,
-      })),
-      answers,
-      elapsedByIdx,
-      answeredAt,
-    })
-    // Finding #2: telemetry is best-effort — it must never gate the results
-    // screen. submittedRef is already flipped above; if this insert rejects
-    // (disk full, storage quota, etc.) the student must still reach results.
+    // try/finally: whatever persistence does, the student always reaches results.
     try {
-      await recordAttempts(rows)
-    } catch (err) {
-      console.warn('[FlashcardExam] recordAttempts failed:', err)
+      const score = questions.filter((q, i) => answers[i] === q.answerIndex).length
+
+      // Task D: per-question attempt rows + the user_progress producer fix,
+      // written before recordSession so they're committed before its
+      // fire-and-forget backup push. answeredAt is shared across both writes
+      // so they line up as "this run".
+      const answeredAt = Date.now()
+      const elapsedByIdx = finalizeTiming(timingRef.current, answeredAt)
+      const rows = buildAttemptRows({
+        sessionKey: attemptStartRef.current,
+        sourceTable: 'flashcards',
+        listingSlug: listingSlug ?? '',
+        questions: questions.map((q, i) => ({
+          questionId: q.id ?? String(i),
+          correctIndex: q.answerIndex,
+          subtest: subtest ?? null,
+          topic: topicId ?? null,
+        })),
+        answers,
+        elapsedByIdx,
+        answeredAt,
+      })
+      // Finding #2: telemetry is best-effort — it must never gate the results
+      // screen. submittedRef is already flipped above; if this insert rejects
+      // (disk full, storage quota, etc.) the student must still reach results.
+      try {
+        await recordAttempts(rows)
+      } catch (err) {
+        console.warn('[FlashcardExam] recordAttempts failed:', err)
+      }
+      // Only ANSWERED questions are evidence: an unanswered card is not a wrong
+      // answer, and recording it as one dragged weak-topic stats down and gave the
+      // card an SRS lapse. (The attempt rows above keep the skip, with a null pick.)
+      const answeredIdxList = questions.map((_, i) => i).filter(i => answers[i] !== undefined)
+      // Persistence must never strand the student behind the double-submit guard
+      // (submittedRef is already true): log and still reach results.
+      try {
+        await recordProgress(answeredIdxList.map(i => ({
+          flashcardId: questions[i]!.id ?? String(i),
+          correct: answers[i] === questions[i]!.answerIndex,
+          answeredAt,
+        })))
+      } catch (err) {
+        console.warn('[FlashcardExam] recordProgress failed:', err)
+      }
+
+      // Task H: SRS scheduling is derived bookkeeping, not the attempt record
+      // itself (user_progress/question_attempts above already captured this
+      // run) — fire-and-forget + error-isolated so a flashcard_srs write
+      // failure can never strand the student behind the double-submit guard.
+      // Same convention as recordSession below and useRecordAttempts's
+      // fire-and-forget prune.
+      void recordSrs(answeredIdxList.map(i => ({
+        flashcardId: questions[i]!.id ?? String(i),
+        correct: answers[i] === questions[i]!.answerIndex,
+        elapsedMs: elapsedByIdx[i] ?? 0,
+      }))).catch(err => console.warn('[FlashcardExam] recordSrs failed:', err))
+
+      void recordSession({
+        listingSlug: listingSlug ?? '',
+        topicId: topicId ?? '',
+        deckId: deckId ?? '',
+        score,
+        // Out of every question, as the results card shows it (an exam-style
+        // score: a skip earns nothing). Readiness is answer-based instead — it
+        // reads user_progress, which has no rows for skipped cards.
+        total: questions.length,
+        // attemptStartRef (reset on retake), not startRef — a retake is a new sitting.
+        startTime: attemptStartRef.current,
+        subtest,
+        kind: 'flashcard',
+        attemptKey: attemptStartRef.current,
+      }).catch(err => console.warn('[FlashcardExam] recordSession failed:', err))
+    } finally {
+      setSubmitting(false)
+      setPhase('results')
     }
-    await recordProgress(questions.map((q, i) => ({
-      flashcardId: q.id ?? String(i),
-      correct: answers[i] === q.answerIndex,
-      answeredAt,
-    })))
-
-    // Task H: SRS scheduling is derived bookkeeping, not the attempt record
-    // itself (user_progress/question_attempts above already captured this
-    // run) — fire-and-forget + error-isolated so a flashcard_srs write
-    // failure can never strand the student behind the double-submit guard.
-    // Same convention as recordSession below and useRecordAttempts's
-    // fire-and-forget prune.
-    void recordSrs(questions.map((q, i) => ({
-      flashcardId: q.id ?? String(i),
-      correct: answers[i] === q.answerIndex,
-      elapsedMs: elapsedByIdx[i] ?? 0,
-    }))).catch(err => console.warn('[FlashcardExam] recordSrs failed:', err))
-
-    void recordSession({
-      listingSlug: listingSlug ?? '',
-      topicId: topicId ?? '',
-      deckId: deckId ?? '',
-      score,
-      total: questions.length,
-      startTime: startRef,
-      subtest,
-    })
-    setSubmitting(false)
-    setPhase('results')
   }
 
   // ── Report a question ──────────────────────────────────────────────────────
@@ -333,6 +355,7 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
         onJump={jump}
         onClose={() => setReviewOpen(false)}
         onSubmit={() => { setReviewOpen(false); void submit() }}
+        submitBlockedMessage={answeredIdxs.size === 0 ? 'Answer at least one question to submit.' : undefined}
       />
 
       <ReportQuestionModal

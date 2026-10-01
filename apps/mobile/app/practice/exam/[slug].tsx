@@ -20,6 +20,7 @@ import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from
 import { buildAttemptRows } from '../../../utils/attemptRows'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { subtestBreakdown } from '../../../utils/subtestBreakdown'
+import { groupSectionResults, questionSubtest } from '../../../utils/examSubmit'
 import type { ExamQuestion, RawUpcatQuestion, RawUpcatPassage } from '../../../utils/upcatExam'
 import { QuestionCard } from '../../../components/practice/QuestionCard'
 import { OptionList } from '../../../components/practice/OptionList'
@@ -523,14 +524,11 @@ export default function BlueprintExam() {
     }
 
     if (blueprint) {
-      // Group raw correct/total by section for the gamification record.
-      const bySection = new Map<string, { correct: number; total: number }>()
-      questions.forEach((fq, i) => {
-        const cur = bySection.get(fq.sectionName) ?? { correct: 0, total: 0 }
-        cur.total++
-        if (answers[i] === fq.q.correctIndex) cur.correct++
-        bySection.set(fq.sectionName, cur)
-      })
+      // Group raw correct/total by section for the session rows. Each row is
+      // persisted under the section's CANONICAL subtest (the question's own),
+      // not the display name — 'Language Proficiency (English & Filipino)'
+      // matched no readiness/estimator label.
+      const sectionResults = groupSectionResults(questions, answers)
 
       // Task D: per-question attempt rows, written before recordSession so
       // they're committed before recordSession's fire-and-forget backup push.
@@ -542,7 +540,7 @@ export default function BlueprintExam() {
         questions: questions.map(fq => ({
           questionId: fq.q.questionId,
           correctIndex: fq.q.correctIndex,
-          subtest: fq.sectionName,
+          subtest: questionSubtest(fq),
           topic: fq.q.topic ?? null,
         })),
         answers,
@@ -558,16 +556,21 @@ export default function BlueprintExam() {
         console.warn('[exam/[slug]] recordAttempts failed:', err)
       }
 
-      for (const [section, b] of bySection) {
+      // Every section row of this sitting shares attemptKey so Progress/Best
+      // group them as one attempt; a Study Sprint is a different kind so it is
+      // never mistaken for a full mock.
+      for (const sec of sectionResults) {
         void recordSession({
           listingSlug: slug,
           topicId: '',
           deckId: '',
-          score: b.correct,
-          total: b.total,
+          score: sec.correct,
+          total: sec.total,
           startTime: startRef,
-          subtest: section,
-        })
+          subtest: sec.subtest,
+          kind: examMode === 'sprint' ? 'sprint' : 'mock',
+          attemptKey: startRef,
+        }).catch(err => console.warn('[exam/[slug]] recordSession failed:', err))
       }
     }
 

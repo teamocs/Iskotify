@@ -262,3 +262,46 @@ describe('computeMockAttemptHistory', () => {
     expect(history.map(h => h.completedAt)).toEqual([1_000, 2_000])
   })
 })
+
+describe('computeAccuracyTrend — weighted (A7)', () => {
+  it('weights the bucket by question count and counts sittings, not rows', () => {
+    const now = Date.now()
+    const points = computeAccuracyTrend([
+      { completedAt: now, score: 1, total: 1, attemptKey: 1, durationSecs: 0 },
+      { completedAt: now, score: 1, total: 9, attemptKey: 1, durationSecs: 0 },
+    ], 8)
+    const last = points[points.length - 1]!
+    expect(last.accuracy).toBe(20)
+    expect(last.sessionCount).toBe(1)
+  })
+})
+
+describe('computeMockAttemptHistory — kind / attempt_key (A10)', () => {
+  const row = (over: Record<string, unknown>) => ({
+    listingSlug: 'upcat', topicId: '', subtest: 'Mathematics', score: 5, total: 10,
+    completedAt: 1_000_000, durationSecs: 10, kind: 'mock', attemptKey: 1, ...over,
+  })
+
+  it('groups by attemptKey even when completedAt/duration differ per section row', () => {
+    const history = computeMockAttemptHistory([
+      row({ score: 8, completedAt: 1_000_000, durationSecs: 10 }),
+      row({ subtest: 'Science', score: 2, completedAt: 1_900_000, durationSecs: 900 }),
+    ] as any)
+    expect(history).toHaveLength(1)
+    expect(history[0]!.pct).toBe(50)
+  })
+
+  it('sprint, drill and diagnostic rows are not mock attempts', () => {
+    const history = computeMockAttemptHistory([
+      row({ kind: 'sprint', attemptKey: 2 }),
+      row({ kind: 'drill', attemptKey: 3 }),
+      row({ kind: 'diagnostic', attemptKey: 4 }),
+    ] as any)
+    expect(history).toEqual([])
+  })
+
+  it('legacy rows (no kind) keep the old inference', () => {
+    const history = computeMockAttemptHistory([row({ kind: null, attemptKey: null })] as any)
+    expect(history).toHaveLength(1)
+  })
+})

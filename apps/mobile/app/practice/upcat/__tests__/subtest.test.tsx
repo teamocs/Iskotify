@@ -176,9 +176,22 @@ describe('UpcatExam', () => {
     })
 
     // recordSession (the aggregate practice_sessions row) still fires alongside.
+    // A single-subtest run is a drill (A1) — never counted as a full mock.
     expect(mockRecordSession).toHaveBeenCalledWith(
-      expect.objectContaining({ listingSlug: 'upcat', subtest: 'Mathematics', score: 2, total: 2 }),
+      expect.objectContaining({ listingSlug: 'upcat', subtest: 'Mathematics', score: 2, total: 2, kind: 'drill', attemptKey: rows[0].sessionKey }),
     )
+  })
+
+  it('the all-subtests full run is the only upcat route recorded as a mock (A1)', async () => {
+    mockSearchParams = { subtest: 'all', mode: 'full' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    render(<UpcatExam />)
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+    await reviewAndConfirmSubmit(alertSpy)
+    expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Mathematics', kind: 'mock' }))
   })
 
   it('records an incorrect attempt row when the selected answer is wrong', async () => {

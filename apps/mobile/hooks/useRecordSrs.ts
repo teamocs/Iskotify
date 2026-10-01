@@ -48,9 +48,16 @@ export function useRecordSrs() {
     const existingRows = await db.select().from(flashcardSrs).where(inArray(flashcardSrs.flashcardId, ids))
     const existingById = new Map(existingRows.map(r => [r.flashcardId, r]))
     const now = Date.now()
+    // Reviews that actually advanced a schedule (new card, or due now).
+    let scheduledCount = 0
 
     for (const review of reviews) {
       const existingRow = existingById.get(review.flashcardId)
+      // The ladder assumes one review per due date: a card that isn't due yet
+      // keeps its schedule (re-answering it in a topic quiz must neither push it
+      // up the ladder nor lapse it).
+      if (existingRow && existingRow.dueAt > now) continue
+      scheduledCount++
       const nextState = applyReview(
         existingRow ? rowToState(existingRow) : null,
         review.correct,
@@ -62,13 +69,15 @@ export function useRecordSrs() {
         .onConflictDoUpdate({ target: flashcardSrs.flashcardId, set: nextState })
     }
 
+    if (scheduledCount === 0) return
+
     scheduleWebPersist()
 
     // Task I: best-effort "Today's Plan" mark-done bookkeeping. Fire-and-forget
     // — the real flashcard_srs upserts above are already committed, so a
     // failure here must never surface to the caller (same convention as
     // useRecordSession's markPlanItemsDoneForSession call).
-    void markPlanItemsDoneForSrsReview(db, reviews.length)
+    void markPlanItemsDoneForSrsReview(db, scheduledCount)
       .then(() => invalidate('home:'))
       .catch(err => console.warn('[useRecordSrs] plan bookkeeping failed:', err))
   }

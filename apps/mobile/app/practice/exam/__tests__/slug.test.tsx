@@ -159,7 +159,7 @@ describe('BlueprintExam', () => {
     alertSpy.mockRestore()
   })
 
-  it('writes a question_attempts row per question, tagged with the section name as subtest, on submit (Task D)', async () => {
+  it('writes a question_attempts row per question, tagged with the canonical subtest of the question, on submit (Task D)', async () => {
     render(<BlueprintExam />)
 
     // Prestart screen loads first.
@@ -181,18 +181,65 @@ describe('BlueprintExam', () => {
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({
       sourceTable: 'upcat_questions', listingSlug: 'test-mock', questionId: 'Q2',
-      subtest: 'Math', topic: 'Geometry', selectedIndex: 3, correctIndex: 3, correct: true,
+      subtest: 'Mathematics', topic: 'Geometry', selectedIndex: 3, correctIndex: 3, correct: true,
     })
     expect(rows[1]).toMatchObject({
       sourceTable: 'upcat_questions', listingSlug: 'test-mock', questionId: 'Q1',
-      subtest: 'Math', topic: 'Arithmetic', selectedIndex: 1, correctIndex: 1, correct: true,
+      subtest: 'Mathematics', topic: 'Arithmetic', selectedIndex: 1, correctIndex: 1, correct: true,
     })
     expect(typeof rows[0].sessionKey).toBe('number')
     expect(rows[0].sessionKey).toBe(rows[1].sessionKey) // one run = one sessionKey
 
     expect(mockRecordSession).toHaveBeenCalledWith(
-      expect.objectContaining({ listingSlug: 'test-mock', subtest: 'Math', score: 2, total: 2 }),
+      expect.objectContaining({
+        listingSlug: 'test-mock', subtest: 'Mathematics', score: 2, total: 2,
+        kind: 'mock', attemptKey: rows[0].sessionKey,
+      }),
     )
+  })
+
+  // A2: a section's display name (e.g. 'Language Proficiency (English &
+  // Filipino)') matches no readiness/estimator label — rows are persisted under
+  // the question's own subtest, while the results screen keeps the display name.
+  it('persists the canonical subtest, not the section display name', async () => {
+    mockGetExamBlueprint.mockResolvedValue({
+      ...BLUEPRINT,
+      sections: [{ ...BLUEPRINT.sections[0]!, name: 'Language Proficiency (English & Filipino)' }],
+    })
+    mockGetQuestionsByCategory.mockResolvedValue(new Map([['quant', [
+      { ...Q1, subtest: 'Language Proficiency' }, { ...Q2, subtest: 'Language Proficiency' },
+    ]]]))
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+    fireEvent.press(screen.getByText('Full Mock'))
+    await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+    fireEvent.press(screen.getByText('2'))
+    await reviewAndConfirmSubmit(alertSpy)
+
+    const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
+    expect(rows.every(r => r.subtest === 'Language Proficiency')).toBe(true)
+    expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Language Proficiency' }))
+    // The in-memory results UI still names the section.
+    expect(screen.getAllByText('Language Proficiency (English & Filipino)', { exact: false }).length).toBeGreaterThan(0)
+  })
+
+  it('a Study Sprint sitting is recorded as kind=sprint, never as a mock', async () => {
+    render(<BlueprintExam />)
+    await waitFor(() => expect(screen.getByText(/Study Sprint/)).toBeTruthy())
+    fireEvent.press(screen.getByText(/Study Sprint/))
+    await waitFor(() => expect(screen.getByText('Next')).toBeTruthy())
+    const optionLabel = screen.queryByText('4') ? '4' : '2'
+    fireEvent.press(screen.getByText(optionLabel))
+    // Walk to the last question, answering nothing else.
+    for (let i = 0; i < 5 && screen.queryByText('Next'); i++) {
+      if (screen.queryByText('Skip')) fireEvent.press(screen.getByText('Skip')); else break
+    }
+    await reviewAndConfirmSubmit(alertSpy)
+    expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ kind: 'sprint' }))
+    expect(mockRecordSession).not.toHaveBeenCalledWith(expect.objectContaining({ kind: 'mock' }))
   })
 
   it('finding #2: a rejected recordAttempts insert still reaches the results screen (telemetry is best-effort)', async () => {

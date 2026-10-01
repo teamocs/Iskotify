@@ -1,9 +1,9 @@
 import { renderHook, waitFor, act } from '@testing-library/react-native'
 import { useSubjectReadiness } from '../useSubjectReadiness'
 
-// Readiness by subject moved from Today to Progress (redesign M2: Progress
-// owns readiness). Same SESSION-based source as before: per-topic review
-// bests + subject-level mock bests, never a flashcard-accuracy fallback.
+// Readiness by subject on Progress. Source is weighted RECENT accuracy per
+// subject (homeAggregates.getSubjectRecentAccuracy, answered questions only,
+// minimum sample) — a subject without enough practice is null = "Not started".
 
 const mockDb = {}
 jest.mock('../useDb', () => ({ useDb: () => mockDb }))
@@ -21,11 +21,9 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (cb: () => void) => { mockFocus.cb = cb },
 }))
 
-const mockTopicBest = { value: [] as Array<{ topicId: string; bestPct: number }>, fail: false }
-const mockSubjectBest = { value: [] as Array<{ subject: string; bestPct: number }> }
+const mockSubjectPct = { value: [] as Array<{ subject: string; pct: number; answered: number }>, fail: false }
 jest.mock('../../services/homeAggregates', () => ({
-  getTopicBestSessionPercentages: () => (mockTopicBest.fail ? Promise.reject(new Error('x')) : Promise.resolve(mockTopicBest.value)),
-  getSubjectSessionPercentages: () => Promise.resolve(mockSubjectBest.value),
+  getSubjectRecentAccuracy: () => (mockSubjectPct.fail ? Promise.reject(new Error('x')) : Promise.resolve(mockSubjectPct.value)),
 }))
 
 const mockPractice = {
@@ -37,39 +35,40 @@ const mockPractice = {
 }
 jest.mock('../usePracticeData', () => ({ usePracticeData: () => mockPractice }))
 
+const math = (pct: number) => [{ subject: 'Math', pct, answered: 20 }]
+
 beforeEach(() => {
-  mockTopicBest.value = []
-  mockTopicBest.fail = false
-  mockSubjectBest.value = []
+  mockSubjectPct.value = []
+  mockSubjectPct.fail = false
   mockListeners.length = 0
   mockFocus.cb = null
 })
 
 describe('useSubjectReadiness', () => {
-  it('computes per-subject readiness from session bests, lowest first', async () => {
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 80 }]
+  it('computes per-subject readiness from recent accuracy, lowest first, not-started last', async () => {
+    mockSubjectPct.value = math(80)
     const { result } = renderHook(() => useSubjectReadiness())
     expect(result.current.loading).toBe(true)
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.entries).toEqual([
-      { id: 's-sci', name: 'Science', pct: 0 },
       { id: 's-math', name: 'Math', pct: 80 },
+      { id: 's-sci', name: 'Science', pct: null },
     ])
   })
 
-  it('uses 0% (not flashcard accuracy) when a subject has no sessions', async () => {
+  it('a subject with too little practice is null (Not started), never 0%', async () => {
     const { result } = renderHook(() => useSubjectReadiness())
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(0)
+    expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBeNull()
   })
 
   it('reports a failure and recovers on refresh', async () => {
-    mockTopicBest.fail = true
+    mockSubjectPct.fail = true
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const { result } = renderHook(() => useSubjectReadiness())
     await waitFor(() => expect(result.current.error).toBe(true))
-    mockTopicBest.fail = false
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 55 }]
+    mockSubjectPct.fail = false
+    mockSubjectPct.value = math(55)
     await act(async () => { await result.current.refresh() })
     expect(result.current.error).toBe(false)
     expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(55)
@@ -77,21 +76,21 @@ describe('useSubjectReadiness', () => {
   })
 
   it('reloads when a finished session invalidates home: (Progress tab stays mounted)', async () => {
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 40 }]
+    mockSubjectPct.value = math(40)
     const { result } = renderHook(() => useSubjectReadiness())
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(mockListeners.some(l => l.prefix === 'home:')).toBe(true)
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 75 }]
+    mockSubjectPct.value = math(75)
     await act(async () => { mockListeners.forEach(l => l.fn()) })
     await waitFor(() => expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(75))
   })
 
   it('reloads when the screen regains focus', async () => {
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 40 }]
+    mockSubjectPct.value = math(40)
     const { result } = renderHook(() => useSubjectReadiness())
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(mockFocus.cb).not.toBeNull()
-    mockTopicBest.value = [{ topicId: 't1', bestPct: 60 }]
+    mockSubjectPct.value = math(60)
     await act(async () => { mockFocus.cb?.() })
     await waitFor(() => expect(result.current.entries.find(e => e.name === 'Math')?.pct).toBe(60))
   })

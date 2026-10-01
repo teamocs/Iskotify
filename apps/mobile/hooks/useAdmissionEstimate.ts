@@ -5,7 +5,7 @@
 // upcat_cutoffs into an estimate. Fully on-device: no network call.
 import { useCallback, useEffect, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { inArray } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, notLike } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { useDb } from './useDb'
 import { getSettings, updateSettings } from '../services/settings'
@@ -52,7 +52,17 @@ export async function loadAdmissionEstimateSnapshot(db: DrizzleClient): Promise<
   const attemptRows = await db
     .select({ subtest: questionAttempts.subtest, correct: questionAttempts.correct, answeredAt: questionAttempts.answeredAt })
     .from(questionAttempts)
-    .where(inArray(questionAttempts.subtest, UPCAT_SUBTEST_LABELS))
+    // The estimator is UPCAT-specific: only ANSWERED attempts on upcat_questions
+    // under the 'upcat' listing. Other exams' Mathematics/Science, flashcard
+    // attempts and skipped questions (a skip is not a wrong answer) must not move it.
+    .where(and(
+      inArray(questionAttempts.subtest, UPCAT_SUBTEST_LABELS),
+      eq(questionAttempts.sourceTable, 'upcat_questions'),
+      eq(questionAttempts.listingSlug, 'upcat'),
+      isNotNull(questionAttempts.selectedIndex),
+      // Older devices recorded bundled diagnostic questions ('pre-math-1') as bank attempts.
+      notLike(questionAttempts.questionId, 'pre-%'),
+    ))
   const readiness = subtestReadiness(attemptRows.map(a => ({
     subtest: a.subtest,
     correct: a.correct,

@@ -269,7 +269,9 @@ function makeTestDb(): DrizzleClient {
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
       completed_at INTEGER NOT NULL,
-      subtest TEXT
+      subtest TEXT,
+      kind TEXT,
+      attempt_key INTEGER
     );
     CREATE TABLE notes (
       id TEXT PRIMARY KEY NOT NULL,
@@ -412,6 +414,29 @@ describe('pullUserData', () => {
     const sessionRows = await db.select().from(schema.practiceSessions)
     expect(sessionRows).toHaveLength(2)
     expect(sessionRows.find(s => s.topicId === 'pre-assess-Mathematics')?.score).toBe(4)
+  })
+
+  it('A1: a restored practice_sessions row keeps its kind and attemptKey', async () => {
+    const fromBuilder = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: {
+          focus_listings: [], saved_decks: [], user_progress: [],
+          practice_sessions: [
+            { listingSlug: 'upcat', topicId: '', deckId: '', score: 5, total: 10, durationSecs: 60, completedAt: 9000, subtest: 'Mathematics', kind: 'mock', attemptKey: 4242 },
+          ],
+          settings: null,
+        },
+        error: null,
+      }),
+    }
+    supabase.from.mockReturnValue(fromBuilder)
+    const db = makeTestDb()
+    await pullUserData(db)
+    const rows = await db.select().from(schema.practiceSessions)
+    expect(rows[0]).toMatchObject({ kind: 'mock', attemptKey: 4242, subtest: 'Mathematics' })
   })
 
   it('restores full settings row including selectedListingSlug, notificationsEnabled, theme, focusModeEnabled', async () => {
@@ -722,7 +747,9 @@ function makeRawFlashcardDb(): InstanceType<typeof Database> {
       score INTEGER NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
-      completed_at INTEGER NOT NULL
+      completed_at INTEGER NOT NULL,
+      kind TEXT,
+      attempt_key INTEGER
     );
     CREATE TABLE notes (
       id TEXT PRIMARY KEY NOT NULL,

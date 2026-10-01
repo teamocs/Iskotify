@@ -166,16 +166,89 @@ describe('computeTopicMastery', () => {
     expect(mastery).toHaveLength(0)
   })
 
+  it('counts sittings, not rows: two sections of one mock on the same subtest are one session', () => {
+    const now = Date.now()
+    const sessions = [
+      { topicId: '', deckId: '', subtest: 'Language Proficiency', listingSlug: 'acet', score: 5, total: 10, completedAt: now, attemptKey: 42, durationSecs: 600 },
+      { topicId: '', deckId: '', subtest: 'Language Proficiency', listingSlug: 'acet', score: 7, total: 10, completedAt: now + 900_000, attemptKey: 42, durationSecs: 1500 },
+    ]
+    const mastery = computeTopicMastery(sessions as any, topicNameMap, deckMap)
+    expect(mastery[0]).toMatchObject({ label: 'Language Proficiency', sessionCount: 1, accuracy: 60 })
+  })
+
   it('orders by sessionCount descending (most practiced first) within slice', () => {
     const now = Date.now()
     const sessions = [
       { topicId: '', deckId: '', subtest: 'English', listingSlug: 'upcat', score: 8, total: 10, completedAt: now },
       { topicId: '', deckId: '', subtest: 'Science', listingSlug: 'upcat', score: 7, total: 10, completedAt: now },
-      { topicId: '', deckId: '', subtest: 'Science', listingSlug: 'upcat', score: 9, total: 10, completedAt: now },
+      { topicId: '', deckId: '', subtest: 'Science', listingSlug: 'upcat', score: 9, total: 10, completedAt: now + 60_000 },
     ]
     const mastery = computeTopicMastery(sessions as any, topicNameMap, deckMap)
     // Science has 2 sessions → should rank first
     expect(mastery[0]!.label).toBe('Science')
     expect(mastery[0]!.sessionCount).toBe(2)
+  })
+})
+
+describe('Progress weighting + sittings (A7)', () => {
+  const now = Date.now()
+
+  it('computeWeeklyData weights by question count, not per-row percentage', () => {
+    const bars = computeWeeklyData([
+      { completedAt: now, score: 1, total: 1 },
+      { completedAt: now + 1, score: 1, total: 9 },
+    ])
+    expect(bars[bars.length - 1]!.accuracy).toBe(20)
+  })
+
+  it('computeWeeklyData counts one mock (3 section rows) as one session', () => {
+    const rows = [
+      { completedAt: now, score: 5, total: 10, attemptKey: 111, durationSecs: 5 },
+      { completedAt: now + 2000, score: 5, total: 10, attemptKey: 111, durationSecs: 7 },
+      { completedAt: now + 4000, score: 5, total: 10, attemptKey: 111, durationSecs: 9 },
+    ]
+    expect(computeWeeklyData(rows)[6]!.sessionCount).toBe(1)
+  })
+
+  it('computeTopicMastery ignores onboarding pre-assess rows', () => {
+    const sessions = [
+      { topicId: 'pre-assess-Mathematics', deckId: '', subtest: null, kind: 'onboarding', score: 1, total: 20 },
+      { topicId: 't1', deckId: '', subtest: null, kind: 'drill', score: 8, total: 10 },
+    ]
+    const mastery = computeTopicMastery(sessions as any, new Map([['t1', 'Algebra']]), new Map())
+    expect(mastery.map(m => m.label)).toEqual(['Algebra'])
+  })
+
+  it('computeTopicMastery weights accuracy by question count', () => {
+    const sessions = [
+      { topicId: 't1', deckId: '', subtest: null, score: 1, total: 1 },
+      { topicId: 't1', deckId: '', subtest: null, score: 1, total: 9 },
+    ]
+    const mastery = computeTopicMastery(sessions as any, new Map([['t1', 'Algebra']]), new Map())
+    expect(mastery[0]!.accuracy).toBe(20)
+  })
+
+  it('computeTopicMastery labels a missing deck "Saved deck" and an unknown topic via resolveTopicLabel, never a raw id', () => {
+    const sessions = [
+      { topicId: '', deckId: 'deck-gone', subtest: null, score: 5, total: 10 },
+    ]
+    const mastery = computeTopicMastery(sessions as any, new Map(), new Map())
+    expect(mastery[0]!.label).toBe('Saved deck')
+  })
+
+  it('useAnalytics excludes onboarding rows from counts/averages but the streak source is untouched', async () => {
+    mockGetPracticeDayIndices.mockReset()
+    mockGetPracticeDayIndices.mockResolvedValue([])
+    mockSessionRows = [
+      { id: 1, listingSlug: '', topicId: 'pre-assess-Mathematics', deckId: '', subtest: null, kind: 'onboarding', attemptKey: 1, score: 0, total: 20, durationSecs: 0, completedAt: now },
+      { id: 2, listingSlug: 'upcat', topicId: 't1', deckId: '', subtest: null, kind: 'drill', attemptKey: 2, score: 8, total: 10, durationSecs: 60, completedAt: now },
+      { id: 3, listingSlug: 'upcat', topicId: '', deckId: '', subtest: 'Mathematics', kind: 'mock', attemptKey: 3, score: 5, total: 10, durationSecs: 60, completedAt: now },
+      { id: 4, listingSlug: 'upcat', topicId: '', deckId: '', subtest: 'Science', kind: 'mock', attemptKey: 3, score: 5, total: 10, durationSecs: 70, completedAt: now + 5000 },
+    ]
+    const { result } = renderHook(() => useAnalytics('overall'))
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.sessionCount).toBe(2) // drill + one mock sitting
+    expect(result.current.avgAccuracy).toBe(60) // 18/30
+    expect(result.current.recentSessions.every(s => !s.title.startsWith('Pre-Assessment'))).toBe(true)
   })
 })

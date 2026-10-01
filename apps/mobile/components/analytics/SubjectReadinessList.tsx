@@ -40,12 +40,14 @@ export function SubjectReadinessList({ entries, loading, error, refresh }: Subje
       {entries.map((s, i) => {
         const tone = readinessTone(s.pct)
         const word = WORD[tone]
+        // null = not enough answered questions yet: say so instead of showing 0%.
+        const pctText = s.pct == null ? '–' : `${s.pct}%`
         return (
           <Pressable
             key={s.id}
             onPress={() => router.push(`/practice/diagnostic?subject=${encodeURIComponent(s.name)}` as never)}
             accessibilityRole="button"
-            accessibilityLabel={`${s.name}, ${s.pct}%, ${word}`}
+            accessibilityLabel={s.pct == null ? `${s.name}, ${word}` : `${s.name}, ${s.pct}%, ${word}`}
             accessibilityHint="Opens a diagnostic for this subject"
             style={(state) => {
               const { pressed, hovered, focused } = state as WebPressableState
@@ -65,10 +67,10 @@ export function SubjectReadinessList({ entries, loading, error, refresh }: Subje
               </Text>
               <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{word}</Text>
               <Text style={[textStyle('titleSm', t.textPrimary), { fontVariant: ['tabular-nums'], minWidth: 44, textAlign: 'right' }]} maxFontSizeMultiplier={1.5}>
-                {s.pct}%
+                {pctText}
               </Text>
             </View>
-            <ProgressBar value={s.pct / 100} label={`${s.name} readiness`} tone={BAR_TONE[tone]} />
+            <ProgressBar value={(s.pct ?? 0) / 100} label={`${s.name} readiness`} tone={BAR_TONE[tone]} />
           </Pressable>
         )
       })}
