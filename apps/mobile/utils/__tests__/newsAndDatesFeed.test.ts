@@ -1,4 +1,4 @@
-import { buildNewsAndDatesFeed } from '../newsAndDatesFeed'
+import { buildNewsAndDatesFeed, entryDaysAway } from '../newsAndDatesFeed'
 import type { FeedItem } from '../admissionsFeed'
 
 const NOW = new Date('2026-07-24T00:00:00Z').getTime()
@@ -126,5 +126,26 @@ describe('buildNewsAndDatesFeed', () => {
     // Still surfaces as a news row (severity-ranked), just not as a dated entry.
     expect(feed).toHaveLength(1)
     expect(feed[0]!.kind).toBe('news')
+  })
+})
+
+describe('entryDaysAway on the local day (Asia/Manila, +8h)', () => {
+  const PH = 8 * 3_600_000
+  const manila = (d: number, h: number, m: number) => Date.UTC(2026, 9, d, h - 8, m)
+  const oct1 = Date.UTC(2026, 9, 1) // date-only value
+  const oct2 = Date.UTC(2026, 9, 2)
+
+  it.each([[0, 30], [7, 59], [8, 1], [23, 59]])('a date-only exam on 1 Oct is "today" (0) at %i:%i local', (h, m) => {
+    expect(entryDaysAway({ kind: 'listing', date: oct1 }, manila(1, h, m), PH)).toBe(0)
+  })
+
+  it.each([[0, 30], [7, 59], [8, 1], [23, 59]])('a date-only deadline on 2 Oct is 1 day away at %i:%i local on 1 Oct', (h, m) => {
+    expect(entryDaysAway({ kind: 'listing', date: oct2 }, manila(1, h, m), PH)).toBe(1)
+    expect(entryDaysAway({ kind: 'admission', date: oct2 }, manila(1, h, m), PH)).toBe(1)
+  })
+
+  it.each([[0, 30], [7, 59], [8, 1], [23, 59]])('a reminder at 23:00 local on 1 Oct is today at %i:%i; 00:10 on 2 Oct is tomorrow', (h, m) => {
+    expect(entryDaysAway({ kind: 'reminder', date: manila(1, 23, 0) }, manila(1, h, m), PH)).toBe(0)
+    expect(entryDaysAway({ kind: 'reminder', date: manila(2, 0, 10) }, manila(1, h, m), PH)).toBe(1)
   })
 })

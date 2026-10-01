@@ -8,6 +8,7 @@ import { useTheme } from '../theme/ThemeContext'
 import { userSettings, courseTaxonomyMap, careerCourses } from '../db/schema'
 import { allCourseOptions, type CourseOption } from '../utils/targetExams'
 import { supabase } from '../services/supabase'
+import { schedulePushUserData } from '../services/pushScheduler'
 
 const MAX_COURSES = 3
 
@@ -101,6 +102,7 @@ export function TargetCoursesCard() {
       await db.insert(userSettings)
         .values({ id: 1, targetCourses: json } as typeof userSettings.$inferInsert)
         .onConflictDoUpdate({ target: userSettings.id, set: { targetCourses: json } })
+      schedulePushUserData(db)
     } catch (e) {
       console.warn('[courses-card] persist:', e)
     }

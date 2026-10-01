@@ -18,6 +18,7 @@ import {
   studyPlanItems,
 } from '../db/schema'
 import { invalidate } from './queryCache'
+import { schedulePushUserData } from './pushScheduler'
 
 const { StorageAccessFramework } = FileSystem
 
@@ -335,4 +336,6 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
 
   // Invalidate all caches after a full data import
   invalidate('')
+  // The imported file is now the user's data: back it up before a pull can revert it.
+  schedulePushUserData(db)
 }

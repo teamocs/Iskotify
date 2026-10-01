@@ -130,6 +130,7 @@ export function useFocusListings() {
       }
     })
     setFocusListingsList(updated)
+    schedulePushUserData(db)
   }
 
   function isInFocus(slug: string): boolean {

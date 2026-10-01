@@ -45,3 +45,11 @@ export function daysUntilDate(dateOnlyMs: number, now: number, offsetMs: number 
 export function localDayIndexOfDate(d: Date): number {
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS)
 }
+
+/** Local day indices of note reminders (real instants), for the calendar dots. */
+export function reminderDayIndices(
+  reminders: readonly { reminderAt: number }[],
+  offsetMs: number = localDayOffsetMs(),
+): Set<number> {
+  return new Set(reminders.map(r => localDayIndex(r.reminderAt, offsetMs)))
+}

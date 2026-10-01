@@ -40,7 +40,8 @@ function makeDb(initialFocusEnabled = 1): DrizzleClient {
       daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
       onboarding_step TEXT NOT NULL DEFAULT '',
-      tour_seen_at INTEGER NOT NULL DEFAULT 0
+      tour_seen_at INTEGER NOT NULL DEFAULT 0,
+      owner_user_id TEXT NOT NULL DEFAULT ''
     );
     INSERT INTO user_settings (id, focus_mode_enabled) VALUES (1, ${initialFocusEnabled});
   `)

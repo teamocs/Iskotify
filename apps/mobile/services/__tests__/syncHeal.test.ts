@@ -107,7 +107,8 @@ function makeHealDb(): InstanceType<typeof Database> {
       daily_reminder_hour INTEGER NOT NULL DEFAULT 9,
       weekly_summary_enabled INTEGER NOT NULL DEFAULT 1,
       onboarding_step TEXT NOT NULL DEFAULT '',
-      tour_seen_at INTEGER NOT NULL DEFAULT 0
+      tour_seen_at INTEGER NOT NULL DEFAULT 0,
+      owner_user_id TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE focus_listings (
       listing_slug TEXT PRIMARY KEY NOT NULL,

@@ -12,7 +12,7 @@
 
 import { upcomingEvents, sortBySeverityThenDate } from './admissionsFeed'
 import type { FeedItem } from './admissionsFeed'
-import { calendarDayIndex, localDateISO, localDayIndex, localDayOffsetMs } from './localDay'
+import { calendarDayIndex, daysUntilDate, localDateISO, localDayIndex, localDayOffsetMs } from './localDay'
 
 export type FeedEntryKind = 'listing' | 'reminder' | 'admission' | 'news'
 
@@ -137,4 +137,19 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
     }))
 
   return [...dated, ...newsEntries].slice(0, limit)
+}
+
+/**
+ * Whole local calendar days from `now` to a dated feed entry (0 = today).
+ * Reminders are real instants (local-day difference); listing/admission dates
+ * are date-only values stored as UTC midnight (their calendar date is what counts).
+ */
+export function entryDaysAway(
+  entry: { kind: FeedEntryKind; date: number },
+  now: number = Date.now(),
+  offsetMs: number = localDayOffsetMs(),
+): number {
+  return entry.kind === 'reminder'
+    ? localDayIndex(entry.date, offsetMs) - localDayIndex(now, offsetMs)
+    : daysUntilDate(entry.date, now, offsetMs)
 }

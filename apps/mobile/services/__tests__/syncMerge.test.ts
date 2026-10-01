@@ -109,7 +109,7 @@ describe('pullUserData merge (C1)', () => {
     expect(get('c').i).toBe(2)
   })
 
-  it('study plan items merge by day/kind/ref and keep a completion from either side', async () => {
+  it('study plan items are a curated list: a non-empty remote replaces local (no merge)', async () => {
     const { raw, db } = makeDb()
     raw.exec(`INSERT INTO study_plan_items (plan_date, kind, ref_id, created_at) VALUES ('2026-09-30', 'srs_review', '', 1), ('2026-09-30', 'topic_practice', 'local-only', 1)`)
     mockState.remote = {
@@ -120,21 +120,21 @@ describe('pullUserData merge (C1)', () => {
     }
     await pullUserData(db)
     await pullUserData(db)
-    expect(count(raw, 'study_plan_items')).toBe(3)
+    expect(count(raw, 'study_plan_items')).toBe(2)
+    expect(raw.prepare(`SELECT 1 FROM study_plan_items WHERE ref_id='local-only'`).get()).toBeUndefined()
     expect((raw.prepare(`SELECT completed_at AS c FROM study_plan_items WHERE kind='srs_review'`).get() as any).c).toBe(99)
   })
 
-  it('notes merge by id: local-only kept, newer wins, remote-only added', async () => {
+  it('notes are a curated list: remote replaces local, so a delete made on another device propagates', async () => {
     const { raw, db } = makeDb()
     raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES
-      ('local', 'L', 'x', 1, 1), ('both', 'new-local', 'x', 1, 50), ('both2', 'old-local', 'x', 1, 5)`)
+      ('deleted-elsewhere', 'L', 'x', 1, 1), ('both', 'old-local', 'x', 1, 5)`)
     const n = (id: string, title: string, updatedAt: number) => ({ id, title, content: 'y', type: 'text', isPinned: false, isArchived: false, isTrashed: false, createdAt: 1, updatedAt })
-    mockState.remote = { notes: [n('both', 'old-remote', 10), n('both2', 'new-remote', 20), n('remote', 'R', 1)] }
+    mockState.remote = { notes: [n('both', 'remote-title', 10), n('remote', 'R', 1)] }
     await pullUserData(db)
     const t = (id: string) => (raw.prepare(`SELECT title FROM notes WHERE id=?`).get(id) as any)?.title
-    expect(t('local')).toBe('L')
-    expect(t('both')).toBe('new-local')
-    expect(t('both2')).toBe('new-remote')
+    expect(t('deleted-elsewhere')).toBeUndefined()
+    expect(t('both')).toBe('remote-title')
     expect(t('remote')).toBe('R')
   })
 

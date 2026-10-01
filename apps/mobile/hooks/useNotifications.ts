@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { eq } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { userSettings } from '../db/schema'
+import { schedulePushUserData } from '../services/pushScheduler'
 import {
   requestNotificationPermissions,
   scheduleIskotifyNotifications,
@@ -49,6 +50,7 @@ export function useNotifications() {
     setDailyReminderHour(hour) // optimistic
     try {
       await db.update(userSettings).set({ dailyReminderHour: hour }).where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
       if (enabled) {
         // Same permission gate as schedule()/toggle() — an ungranted (or
         // revoked) OS permission must never be silently rescheduled against.
@@ -68,6 +70,7 @@ export function useNotifications() {
     setWeeklySummaryEnabled(next) // optimistic
     try {
       await db.update(userSettings).set({ weeklySummaryEnabled: next }).where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
       if (enabled) {
         // Same permission gate as schedule()/toggle() — see setReminderHour above.
         const granted = await requestNotificationPermissions()
@@ -89,6 +92,7 @@ export function useNotifications() {
       await db.update(userSettings)
         .set({ notificationsEnabled: next })
         .where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
 
       if (next) {
         const granted = await requestNotificationPermissions()
@@ -100,6 +104,7 @@ export function useNotifications() {
           await db.update(userSettings)
             .set({ notificationsEnabled: false })
             .where(eq(userSettings.id, 1))
+          schedulePushUserData(db)
         }
       } else {
         await cancelAllIskotifyNotifications()

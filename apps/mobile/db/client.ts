@@ -631,6 +631,11 @@ export const MIGRATIONS = [
   `ALTER TABLE practice_sessions ADD COLUMN attempt_key INTEGER`,
   // Logic audit A: readiness and the estimator scan attempts by source + subtest, newest first.
   `CREATE INDEX IF NOT EXISTS question_attempts_source_subtest_idx ON question_attempts (source_table, subtest, answered_at)`,
+
+  // ── Batch C review: which account owns the local data ──────────────────────
+  // Auth uid recorded at sign-in; a different uid on a later sign-in wipes the
+  // previous user's tables (services/sync.ts reconcileAccountOwner).
+  `ALTER TABLE user_settings ADD COLUMN owner_user_id TEXT NOT NULL DEFAULT ''`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

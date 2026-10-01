@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { Platform, View, Text, ActivityIndicator } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../../services/supabase'
-import { pullUserData, pushUserData } from '../../services/sync'
+import { pullUserData, pushUserData, reconcileAccountOwner } from '../../services/sync'
 import { useDb } from '../../hooks/useDb'
 import { invalidate } from '../../services/queryCache'
 import { userSettings, focusListings } from '../../db/schema'
@@ -142,6 +142,13 @@ export default function AuthCallback() {
 
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
+          // A different account on this device must not inherit (or upload) the
+          // previous user's data: reconcile BEFORE the profile write below. Anonymous
+          // -> first sign-in keeps the local data. A failure here is safe: the pull and
+          // push below re-check ownership and refuse to mix accounts.
+          try { await reconcileAccountOwner(db, user.id) } catch (e) {
+            console.warn('[auth/callback] account owner check failed (non-fatal):', e)
+          }
           // Preserve a name the user typed during (anonymous) onboarding — only fall
           // back to the Google display name when there's no local name yet. Writing the
           // Google name unconditionally would clobber the onboarding name (or blank it

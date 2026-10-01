@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { supabase } from '../services/supabase'
-import { pullUserData, pushUserData } from '../services/sync'
+import { pullUserData, pushUserData, reconcileAccountOwner } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { invalidate } from '../services/queryCache'
 import { userSettings, focusListings } from '../db/schema'
@@ -69,6 +69,11 @@ export default function LandingScreen() {
             if (!exchangeError || session) {
               const { data: { user } } = await supabase.auth.getUser()
               if (user) {
+                // Wipe a previous account's data before this one is written/synced
+                // (anonymous -> first sign-in keeps local data). Pull/push re-check.
+                try { await reconcileAccountOwner(db, user.id) } catch (e) {
+                  console.warn('[landing] account owner check failed (non-fatal):', e)
+                }
                 // Preserve a name typed during anonymous onboarding; only fall back to
                 // the Google display name when there's no local name yet.
                 const existing = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)

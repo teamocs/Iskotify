@@ -21,6 +21,7 @@ import { getWeakTopicStats, getTopicNames, getPracticeDayIndices } from './homeA
 import { pickWeakTopics } from '../utils/weakness'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
 import { scheduleWebPersist } from '../db/webPersist'
+import { schedulePushUserData } from './pushScheduler'
 import {
   itemMatchesSession, itemMatchesSrsReview, formatPlanDate,
   type GenerateStudyPlanInput, type StudyPlanItemDraft, type StudyPlanItemKind,
@@ -130,6 +131,7 @@ export async function persistPlanItems(
   }))
   await db.insert(studyPlanItems).values(values)
   scheduleWebPersist()
+  schedulePushUserData(db)
   return getPlanItemsForDate(db, planDate)
 }
 
@@ -139,6 +141,7 @@ export async function markPlanItemDone(db: DrizzleClient, id: number, now: numbe
     .set({ completedAt: now })
     .where(and(eq(studyPlanItems.id, id), isNull(studyPlanItems.completedAt)))
   scheduleWebPersist()
+  schedulePushUserData(db)
 }
 
 async function openItemsForToday(db: DrizzleClient, now: number) {
@@ -165,7 +168,10 @@ export async function markPlanItemsDoneForSession(
       await db.update(studyPlanItems).set({ completedAt: now }).where(eq(studyPlanItems.id, item.id))
     }
   }
-  if (openItems.length > 0) scheduleWebPersist()
+  if (openItems.length > 0) {
+    scheduleWebPersist()
+    schedulePushUserData(db)
+  }
 }
 
 /**
@@ -185,5 +191,8 @@ export async function markPlanItemsDoneForSrsReview(
       await db.update(studyPlanItems).set({ completedAt: now }).where(eq(studyPlanItems.id, item.id))
     }
   }
-  if (openItems.length > 0) scheduleWebPersist()
+  if (openItems.length > 0) {
+    scheduleWebPersist()
+    schedulePushUserData(db)
+  }
 }

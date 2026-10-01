@@ -1,6 +1,7 @@
 import { eq, and, asc, lt, ne } from 'drizzle-orm'
 import type { DrizzleClient } from '../db/client'
 import { coachPhrases, userRequirements } from '../db/schema'
+import { schedulePushUserData } from './pushScheduler'
 
 export const COACH_CATEGORIES = [
   'motivation',
@@ -133,4 +134,5 @@ export async function toggleRequirement(
         eq(userRequirements.requirementIndex, requirementIndex),
       ))
   }
+  schedulePushUserData(db)
 }

@@ -60,6 +60,7 @@ jest.mock('../../../utils/webEntryTarget', () => ({
 jest.mock('../../../services/sync', () => ({
   pullUserData: jest.fn().mockResolvedValue(undefined),
   pushUserData: jest.fn().mockResolvedValue(undefined),
+  reconcileAccountOwner: jest.fn().mockResolvedValue('claimed'),
 }))
 
 // ── Supabase ─────────────────────────────────────────────────────────────────
@@ -296,5 +297,26 @@ describe('auth/callback — status and failure copy', () => {
     mockGetSession.mockResolvedValue({ data: { session: null } })
     render(<AuthCallback />)
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/sign-in?error=link'))
+  })
+})
+
+// ── Account switch (batch C review) ──────────────────────────────────────────
+describe('auth/callback — account owner reconcile', () => {
+  it('reconciles the owner with the signed-in user id BEFORE writing settings and syncing', async () => {
+    const sync = require('../../../services/sync')
+    const order: string[] = []
+    sync.reconcileAccountOwner.mockImplementation(async () => { order.push('reconcile') })
+    sync.pushUserData.mockImplementation(async () => { order.push('push') })
+    mockInsertValues.mockImplementationOnce(() => {
+      order.push('settings-write')
+      return { onConflictDoUpdate: mockOnConflictDoUpdate }
+    })
+    setupSuccessfulExchange('user-B')
+
+    render(<AuthCallback />)
+    await waitFor(() => expect(order).toContain('push'))
+
+    expect(sync.reconcileAccountOwner).toHaveBeenCalledWith(mockDb, 'user-B')
+    expect(order).toEqual(['reconcile', 'settings-write', 'push'])
   })
 })

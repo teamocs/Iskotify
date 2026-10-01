@@ -1,5 +1,5 @@
 import {
-  localDayIndex, localDateISO, calendarDayIndex, daysUntilDate, localDayIndexOfDate, localDayOffsetMs,
+  localDayIndex, localDateISO, calendarDayIndex, daysUntilDate, localDayIndexOfDate, localDayOffsetMs, reminderDayIndices,
 } from '../localDay'
 
 const H = 3_600_000
@@ -69,5 +69,15 @@ describe('localDayOffsetMs', () => {
     const spy = jest.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-480)
     expect(localDayOffsetMs()).toBe(PH)
     spy.mockRestore()
+  })
+})
+
+describe('reminderDayIndices (local calendar day of each reminder instant)', () => {
+  it('buckets a 07:59 and a 08:01 local reminder on the same day, and 23:30 on it too', () => {
+    const idx = reminderDayIndices([{ reminderAt: at(7, 59) }, { reminderAt: at(8, 1) }, { reminderAt: at(23, 30) }], PH)
+    expect([...idx]).toEqual([Date.UTC(2026, 9, 1) / DAY])
+  })
+  it('a 00:30 local reminder is not pulled back to the previous UTC day', () => {
+    expect([...reminderDayIndices([{ reminderAt: at(0, 30) }], PH)]).toEqual([Date.UTC(2026, 9, 1) / DAY])
   })
 })

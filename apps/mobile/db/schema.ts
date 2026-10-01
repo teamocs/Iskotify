@@ -130,6 +130,10 @@ export const userSettings = sqliteTable('user_settings', {
   // It opens automatically after onboarding only while this is 0. Device-local:
   // pullUserData doesn't restore it, and the launch gates never route to the tour.
   tourSeenAt: integer('tour_seen_at').notNull().default(0),
+  // Supabase auth uid of the account whose data is on this device; '' = never
+  // signed in (anonymous). Device-local bookkeeping read by services/sync.ts so
+  // signing in as a DIFFERENT account never mixes the previous user's data in.
+  ownerUserId: text('owner_user_id').notNull().default(''),
 })
 
 export const userProgress = sqliteTable('user_progress', {
