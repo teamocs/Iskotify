@@ -41,10 +41,11 @@ describe('DeleteAccountSheet', () => {
     expect(screen.getByText(/can.t be undone/i)).toBeTruthy()
   })
 
-  it('says what is not deleted, and that nothing is kept for legal reasons today', () => {
+  it('says what is not deleted, and that only unlinked purchase records are kept for tax', () => {
     render(<DeleteAccountSheet visible onClose={jest.fn()} onDeleted={jest.fn()} />)
     expect(screen.getByText(/We keep nothing about you/i)).toBeTruthy()
-    expect(screen.getByText(/legally required/i)).toBeTruthy()
+    expect(screen.getByText(/purchase records/i)).toBeTruthy()
+    expect(screen.queryByText(/No records are legally required/i)).toBeNull()
     expect(screen.getByText(/notes on this device/i)).toBeTruthy()
     expect(screen.getByText(/analytics/i)).toBeTruthy()
   })

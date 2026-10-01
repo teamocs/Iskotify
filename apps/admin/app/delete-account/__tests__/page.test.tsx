@@ -43,10 +43,11 @@ describe('public /delete-account page (Google Play data deletion link)', () => {
     expect(text).toMatch(/early.access sign-up/i)
   })
 
-  it('says what is kept: nothing, except where the law requires (none today)', () => {
+  it('says what is kept: only purchase records the law requires, unlinked from you', () => {
     expect(text).toMatch(/We keep nothing about you/i)
-    expect(text).toMatch(/where the law requires/i)
-    expect(text).toMatch(/none today/i)
+    expect(text).toMatch(/purchase records/i)
+    expect(text).toMatch(/no longer linked to you/i)
+    expect(text).not.toMatch(/none today/i)
     expect(text).toMatch(/PostHog/)
   })
 
