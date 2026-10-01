@@ -4,6 +4,7 @@ import {
   scaleExamTimeMinutes, scaleSectionTimeMinutes, scaleBlueprintTiming,
   computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES, plannedItemCount,
 } from '../examBuilder'
+import { seqRng } from '../unseenFirst'
 import type { ExamBlueprint } from '../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../upcatExam'
 
@@ -585,5 +586,43 @@ describe('plannedItemCount (what the prestart will build, from counts alone)', (
     const built = buildBlueprintExam(bp(), pools, [])
     const counts = new Map([...pools].map(([k, v]) => [k, v.length] as [string, number]))
     expect(plannedItemCount(bp().sections, counts)).toBe(built.totalQuestions)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P4: unseen-first sampling (new runs only; a resumed run is rebuilt by ids)
+// ---------------------------------------------------------------------------
+
+describe('buildBlueprintExam / buildStudySprintExam: unseen-first sampling', () => {
+  it('serves every never-seen question before any seen one', () => {
+    const pool = q('Reading', 10)
+    // Reading-0..6 seen, Reading-7..9 never seen.
+    const seen = new Map(pool.slice(0, 7).map((x, i) => [x.questionId, 1000 + i]))
+    for (const r of [0, 0.25, 0.5, 0.75, 0.99]) {
+      const built = buildBlueprintExam(oneSection(3), new Map([['Reading', pool]]), [], undefined, { seen, rng: seqRng(r, 0.37) })
+      expect(new Set(built.runnable[0]!.questions.map(x => x.questionId))).toEqual(new Set(['Reading-7', 'Reading-8', 'Reading-9']))
+    }
+  })
+
+  it('once everything was seen, takes the least recently seen first', () => {
+    const pool = q('Reading', 5)
+    const seen = new Map([['Reading-0', 500], ['Reading-1', 100], ['Reading-2', 400], ['Reading-3', 200], ['Reading-4', 300]])
+    const built = buildBlueprintExam(oneSection(2), new Map([['Reading', pool]]), [], undefined, { seen, rng: seqRng(0.6) })
+    expect(new Set(built.runnable[0]!.questions.map(x => x.questionId))).toEqual(new Set(['Reading-1', 'Reading-3']))
+  })
+
+  it('counts a passage set as seen when any member was served, and keeps it whole', () => {
+    const pool = [...setQs('s1', 3), ...setQs('s2', 3)]
+    const seen = new Map([['s1-1', 50]])
+    const built = buildBlueprintExam(oneSection(3), new Map([['Reading', pool]]), [], undefined, { seen, rng: seqRng(0.1) })
+    expect(built.runnable[0]!.questions.map(x => x.setId)).toEqual(['s2', 's2', 's2'])
+  })
+
+  it('Study Sprint uses the same rule', () => {
+    const pool = q('Mathematics', 12)
+    const seen = new Map(pool.slice(2).map(x => [x.questionId, 1]))
+    // 60-minute blueprint, 3-item Math section: a 30-minute sprint keeps round(3*30/60) = 2 items.
+    const built = buildStudySprintExam(bp(), new Map([['Mathematics', pool]]), [], STUDY_SPRINT_MINUTES, { seen, rng: seqRng(0.8) })
+    expect(new Set(built.runnable[0]!.questions.map(x => x.questionId))).toEqual(new Set(['Mathematics-0', 'Mathematics-1']))
   })
 })

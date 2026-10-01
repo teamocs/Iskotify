@@ -1,3 +1,5 @@
+import { rankUnseenFirst, servedOrder, type SamplingOptions } from './unseenFirst'
+
 export const SUBTESTS = ['Mathematics', 'Science', 'Language Proficiency', 'Reading Comprehension'] as const
 export type Subtest = typeof SUBTESTS[number]
 
@@ -35,12 +37,6 @@ export function isMissingRequiredFigure(q: Pick<RawUpcatQuestion, 'hasVisual' | 
   return !!q.hasVisual && !q.imageUrl
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j]!, a[i]!] }
-  return a
-}
-
 /** A passage set (sorted by setPosition) or a single standalone question. */
 export type QuestionUnit = RawUpcatQuestion[]
 
@@ -75,10 +71,16 @@ export function groupIntoUnits(questions: readonly RawUpcatQuestion[]): Question
   return units
 }
 
+/**
+ * Build a UPCAT subtest run. 'full' serves every unit in order of first
+ * appearance; 'quick' samples about QUICK_TARGET questions (never over
+ * QUICK_MAX) in whole units, unseen-first when `seen` is given (P4: pass it
+ * for NEW runs only; utils/unseenFirst), then served in random order.
+ */
 export function buildExam(
   questions: RawUpcatQuestion[],
   passages: RawUpcatPassage[],
-  opts: { subtest: Subtest; mode: 'quick' | 'full' },
+  opts: { subtest: Subtest; mode: 'quick' | 'full' } & SamplingOptions,
 ): ExamQuestion[] {
   const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
   const inSubtest = questions.filter(q => q.subtest === opts.subtest && !isMissingRequiredFigure(q))
@@ -90,15 +92,16 @@ export function buildExam(
   if (opts.mode === 'full') {
     chosen = units
   } else {
+    const rng = opts.rng ?? Math.random
     const picked: QuestionUnit[] = []
     let count = 0
-    for (const u of shuffle(units)) {
+    for (const u of rankUnseenFirst(units, unit => unit.map(q => q.questionId), opts.seen, rng)) {
       if (count >= QUICK_TARGET) break
       if (count + u.length > QUICK_MAX) continue
       picked.push(u); count += u.length
     }
     if (picked.length === 0 && units.length) { picked.push(units[0]!) }
-    chosen = picked
+    chosen = servedOrder(picked, opts)
   }
 
   return chosen.flat().map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))

@@ -1,4 +1,5 @@
 import { buildExam, scoreExam, SUBTESTS, isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage } from '../upcatExam'
+import { seqRng } from '../unseenFirst'
 
 function q(p: Partial<RawUpcatQuestion>): RawUpcatQuestion {
   return {
@@ -108,5 +109,33 @@ describe('scoreExam', () => {
     expect(res.overall).toEqual({ correct: 2, total: 3 })
     expect(res.bySubtest['Mathematics']).toEqual({ correct: 1, total: 2 })
     expect(res.bySubtest['Science']).toEqual({ correct: 1, total: 1 })
+  })
+})
+
+describe('buildExam quick mode: unseen-first sampling (P4)', () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => q({ questionId: `M${String(i).padStart(3, '0')}` }))
+
+  it('takes never-seen questions before seen ones', () => {
+    const qs = many(40)
+    // 25 seen, 15 never seen (M025..M039): a 15-question quick drill is all new.
+    const seen = new Map(qs.slice(0, 25).map((x, i) => [x.questionId, i + 1]))
+    for (const r of [0, 0.3, 0.9]) {
+      const out = buildExam(qs, [], { subtest: 'Mathematics', mode: 'quick', seen, rng: seqRng(r, 0.61) })
+      expect(out).toHaveLength(15)
+      expect(out.every(x => !seen.has(x.questionId))).toBe(true)
+    }
+  })
+
+  it('then the least recently seen', () => {
+    const qs = many(20)
+    const seen = new Map(qs.map((x, i) => [x.questionId, 1000 - i])) // M019 oldest
+    const out = buildExam(qs, [], { subtest: 'Mathematics', mode: 'quick', seen, rng: seqRng(0.5) })
+    expect(new Set(out.map(x => x.questionId))).toEqual(new Set(qs.slice(5).map(x => x.questionId)))
+  })
+
+  it('full mode is unaffected (every question, in order)', () => {
+    const qs = many(5)
+    const out = buildExam(qs, [], { subtest: 'Mathematics', mode: 'full', seen: new Map([['M000', 1]]) })
+    expect(out.map(x => x.questionId)).toEqual(['M000', 'M001', 'M002', 'M003', 'M004'])
   })
 })

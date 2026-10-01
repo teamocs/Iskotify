@@ -43,11 +43,27 @@ import { practiceAllowanceNow, fullMockAllowedNow } from '../../../services/prem
 import { usePremium } from '../../../hooks/usePremium'
 import { trimToAllowance } from '../../../utils/premiumLimits'
 import { UpgradeCard, PRACTICE_CAP_BODY, FULL_MOCK_CAP_BODY } from '../../../components/premium/UpgradeCard'
+import { lastSeenOrEmpty, getOpenMistakeIds, mistakesInScope } from '../../../services/questionHistory'
+import { buildMistakesExam } from '../../../utils/mistakes'
 
 type Phase = 'loading' | 'load-error' | 'resume-prompt' | 'exam' | 'results' | 'capped'
 
-export default function UpcatExam() {
-  const { subtest: subtestParam, mode } = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
+/** Route slug + session label of Mistakes mode (app/practice/mistakes.tsx). */
+const MISTAKES_SLUG = 'mistakes'
+
+/**
+ * The UPCAT runner. `variant: 'mistakes'` (P4, /practice/mistakes) serves the
+ * student's open mistakes (utils/mistakes) instead of sampling a subtest, on
+ * the same runner: a quick-mode drill, so the free daily cap applies, recorded
+ * with topicId 'mistakes'. Everything else (resume, timer, review, reports) is
+ * shared.
+ */
+export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
+  const params = useLocalSearchParams<{ subtest: string; mode?: 'quick' | 'full' }>()
+  const isMistakes = variant === 'mistakes'
+  const subtestParam = isMistakes ? MISTAKES_SLUG : params.subtest
+  const mode = isMistakes ? 'quick' : params.mode
+  const homeHref = isMistakes ? '/practice' : '/practice/upcat'
   const db = useDb()
   const { theme: t } = useTheme()
   // Redesign M3: the question navigator is a side panel on expanded widths and
@@ -79,6 +95,12 @@ export default function UpcatExam() {
   // exam/[slug].tsx's submitting flag for the full rationale).
   const [submitting, setSubmitting] = useState(false)
   const parsedRef = useRef<RawUpcatQuestion[]>([])
+  // Mistakes mode: the open mistakes (newest first), read once per load, and
+  // which served questions are mistakes (the rest are passage-set companions).
+  const openMistakesRef = useRef<string[]>([])
+  const [mistakeIds, setMistakeIds] = useState<Set<string>>(() => new Set())
+  // Mistakes is UPCAT-only: without UPCAT in focus the route shows a short note.
+  const [mistakesOutOfScope, setMistakesOutOfScope] = useState(false)
   const rawPassagesRef = useRef<{ setId: string; subtest: string; passageText: string }[]>([])
   const runKey = runKeyFor('upcat', subtestParam ?? 'all', mode === 'quick' ? 'quick' : 'full')
   // Countdown timer (UPCAT pace ≈ 60s/question). Auto-submits at zero. endTime is
@@ -128,10 +150,23 @@ export default function UpcatExam() {
 
   /** Builds a brand-new sample from the already-fetched pool and arms the timer. */
   async function buildFreshExam() {
-    const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
-    let built = targetSubtests.flatMap(st =>
-      buildExam(parsedRef.current, rawPassagesRef.current, { subtest: st, mode: mode === 'quick' ? 'quick' : 'full' }),
-    )
+    let built: ExamQuestion[]
+    if (isMistakes) {
+      const m = buildMistakesExam(parsedRef.current, rawPassagesRef.current, openMistakesRef.current)
+      setMistakeIds(m.mistakeIds)
+      built = m.questions
+    } else {
+      const targetSubtests: Subtest[] = subtestParam === 'all' ? [...SUBTESTS] : [subtestParam as Subtest]
+      const quick = mode === 'quick'
+      // P4: a NEW quick drill is unseen-first (a full run serves every question
+      // anyway, and a resumed run is rebuilt from its saved ids, never here).
+      const seen = quick
+        ? await lastSeenOrEmpty(db, 'upcat_questions', parsedRef.current.filter(q => (targetSubtests as string[]).includes(q.subtest)).map(q => q.questionId))
+        : undefined
+      built = targetSubtests.flatMap(st =>
+        buildExam(parsedRef.current, rawPassagesRef.current, { subtest: st, mode: quick ? 'quick' : 'full', seen }),
+      )
+    }
     // P3 Full Access: a free student gets one full mock and 30 practice questions
     // a day. Both checks answer "no limit" with the paywall flag off. A saved run
     // (Resume) is never gated: it already started.
@@ -191,6 +226,12 @@ export default function UpcatExam() {
         const passages = pRows.map(p => ({ setId: p.setId, subtest: p.subtest, passageText: p.passageText }))
         parsedRef.current = parsed
         rawPassagesRef.current = passages
+        if (isMistakes) {
+          const inScope = await mistakesInScope(db)
+          setMistakesOutOfScope(!inScope)
+          openMistakesRef.current = inScope ? await getOpenMistakeIds(db) : []
+          setMistakeIds(new Set(openMistakesRef.current))
+        }
 
         // Fix 1: a saved in-progress run pre-empts starting a brand-new sample —
         // ask the student first (there's no separate prestart screen on this
@@ -211,7 +252,7 @@ export default function UpcatExam() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subtestParam, mode, loadAttempt])
+  }, [db, subtestParam, mode, loadAttempt, isMistakes])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's question ids, restoring answers/position/timer. The absolute-
@@ -334,7 +375,8 @@ export default function UpcatExam() {
       const b = result.bySubtest[st]!
       void recordSession({
         listingSlug: 'upcat',
-        topicId: '',
+        // Mistakes mode is labelled by its topic; a subtest run has none.
+        topicId: isMistakes ? MISTAKES_SLUG : '',
         deckId: '',
         score: b.correct,
         total: b.total,
@@ -378,13 +420,13 @@ export default function UpcatExam() {
   // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
 
   if (phase === 'loading') {
-    return <SessionLoading label="Loading exam" fallbackHref="/practice/upcat" />
+    return <SessionLoading label={isMistakes ? 'Loading your mistakes' : 'Loading exam'} fallbackHref={homeHref} />
   }
 
   if (phase === 'load-error') {
     return (
       <SessionError
-        fallbackHref="/practice/upcat"
+        fallbackHref={homeHref}
         onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
       />
     )
@@ -392,14 +434,19 @@ export default function UpcatExam() {
 
   if (phase === 'capped') {
     return (
-      <Screen header={<DetailTopBar bare fallbackHref="/practice/upcat" />}>
+      <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <View style={{ gap: spacing.md }}>
           {cap === 'mock' ? (
             <UpgradeCard title="Your free full mock is done" body={FULL_MOCK_CAP_BODY} source="full_mock_cap" />
           ) : (
             <UpgradeCard title="That's today's free practice" body={PRACTICE_CAP_BODY} source="practice_cap" />
           )}
-          <Button label="Back to UPCAT practice" variant="secondary" fullWidth onPress={() => router.replace('/practice/upcat')} />
+          <Button
+            label={isMistakes ? 'Back to Practice' : 'Back to UPCAT practice'}
+            variant="secondary"
+            fullWidth
+            onPress={() => router.replace(homeHref)}
+          />
         </View>
       </Screen>
     )
@@ -407,7 +454,7 @@ export default function UpcatExam() {
 
   if (phase === 'resume-prompt') {
     return (
-      <Screen header={<DetailTopBar bare fallbackHref="/practice/upcat" />}>
+      <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <PageTitle
           title="Resume where you left off?"
           lead="You have an in-progress attempt. Your answers and timer were saved."
@@ -421,6 +468,26 @@ export default function UpcatExam() {
   }
 
   if (phase === 'results') {
+    if (questions.length === 0 && isMistakes && mistakesOutOfScope) {
+      return (
+        <SessionEmpty
+          title="Mistakes covers UPCAT practice."
+          body="Add UPCAT to your focus exams to retry the UPCAT questions you missed."
+          fallbackHref="/practice"
+          actionLabel="Practice"
+        />
+      )
+    }
+    if (questions.length === 0 && isMistakes) {
+      return (
+        <SessionEmpty
+          title="No mistakes to review."
+          body="Questions you get wrong will show up here."
+          fallbackHref="/practice"
+          actionLabel="Practice"
+        />
+      )
+    }
     if (questions.length === 0) {
       return (
         <SessionEmpty
@@ -435,13 +502,18 @@ export default function UpcatExam() {
     const res = scoreExam(scored)
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
     const label = subtestParam === 'all' ? 'the full mock' : (subtestParam ?? 'this subtest')
+    // Mistakes mode counts only the missed questions (not their passage-set companions).
+    const missed = questions.filter(q => mistakeIds.has(q.questionId))
+    const fixed = missed.filter(q => answers[questions.indexOf(q)] === q.correctIndex).length
     return (
       <Screen>
         <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
           {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
           <PageTitle
             title="Tapos na! Practice complete."
-            lead={`Here is how ${label} went. Every session shows you what to practise next.`}
+            lead={isMistakes
+              ? `You fixed ${fixed} of ${missed.length} mistake${missed.length === 1 ? '' : 's'}.`
+              : `Here is how ${label} went. Every session shows you what to practise next.`}
           />
 
           {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
@@ -497,12 +569,17 @@ export default function UpcatExam() {
           <View style={{ gap: spacing.sm }}>
             <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
             <Button
-              label="Retake exam"
+              label={isMistakes ? 'Retry mistakes' : 'Retake exam'}
               variant="secondary"
               fullWidth
-              onPress={() => router.replace(`/practice/upcat/${subtestParam}?mode=${mode}`)}
+              onPress={() => router.replace(isMistakes ? '/practice/mistakes' : `/practice/upcat/${subtestParam}?mode=${mode}`)}
             />
-            <Button label="Back to exams" variant="ghost" fullWidth onPress={() => router.replace('/practice/upcat')} />
+            <Button
+              label={isMistakes ? 'Back to Practice' : 'Back to exams'}
+              variant="ghost"
+              fullWidth
+              onPress={() => router.replace(homeHref)}
+            />
           </View>
         </View>
       </Screen>
@@ -521,7 +598,9 @@ export default function UpcatExam() {
       scrollRef={qPaneRef}
       header={
         <ExamFocusHeader
-          title={subtestParam === 'all' ? `Full mock · ${q.subtest}` : (subtestParam ?? q.subtest)}
+          title={isMistakes
+            ? `Mistakes · ${mistakeIds.has(q.questionId) ? 'missed before' : 'same passage'}`
+            : subtestParam === 'all' ? `Full mock · ${q.subtest}` : (subtestParam ?? q.subtest)}
           position={idx + 1}
           total={questions.length}
           answered={answeredIdxs.size}

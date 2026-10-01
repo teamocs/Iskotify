@@ -79,6 +79,10 @@ describe('Android (Google Play)', () => {
     expect(screen.getByRole('header', { name: 'Iskotify Full Access' })).toBeTruthy()
     expect(await screen.findByText(/₱500\.00/)).toBeTruthy()
     expect(screen.getByText(/Unlimited practice questions/)).toBeTruthy()
+    expect(screen.getByText(/Unlimited full mock exams/)).toBeTruthy()
+    // Per-option explanations are free for everyone, never sold as Full Access.
+    expect(allText()).not.toMatch(/wrong choice is wrong|every answer choice/i)
+    expect(screen.getByText(/every explanation/i)).toBeTruthy()
     expect(screen.getByText(/one-time payment/i)).toBeTruthy()
     expect(screen.getByText(/not a subscription/i)).toBeTruthy()
     expect(screen.getByText('Under 18? Ask your parent or guardian before you buy.')).toBeTruthy()

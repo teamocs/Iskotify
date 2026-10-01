@@ -202,6 +202,8 @@ export const questionAttempts = sqliteTable('question_attempts', {
   index('question_attempts_question_id_idx').on(t.questionId),
   // Readiness and the estimator filter by source + subtest and order by recency.
   index('question_attempts_source_subtest_idx').on(t.sourceTable, t.subtest, t.answeredAt),
+  // P4: last-seen lookups (unseen-first sampling) and Mistakes mode, per source + question.
+  index('question_attempts_source_question_idx').on(t.sourceTable, t.questionId, t.answeredAt),
 ])
 
 // Task H: SM-2-lite spaced-repetition state, one row per flashcard the user has

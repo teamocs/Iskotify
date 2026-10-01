@@ -91,6 +91,14 @@ jest.mock('../../../../services/premiumGate', () => ({
 const mockPremium = { enabled: false, isPremium: false, unlimited: true, loading: false }
 jest.mock('../../../../hooks/usePremium', () => ({ usePremium: () => ({ ...mockPremium, refresh: async () => mockPremium.isPremium }) }))
 
+// P4 unseen-first sampling: the student's last-seen map (default: nothing seen).
+let mockLastSeen = new Map<string, number>()
+const mockLastSeenOrEmpty = jest.fn(async (..._a: unknown[]) => mockLastSeen)
+jest.mock('../../../../services/questionHistory', () => ({
+  lastSeenOrEmpty: (...a: unknown[]) => mockLastSeenOrEmpty(...a),
+  getOpenMistakeIds: jest.fn(async () => []),
+}))
+
 let mockQuestionRows: any[] = []
 let mockPassageRows: any[] = []
 
@@ -159,6 +167,38 @@ describe('UpcatExam', () => {
   })
 
   afterEach(() => alertSpy.mockRestore())
+
+  it('P4: a new quick drill serves never-seen questions before seen ones', async () => {
+    mockLastSeen = new Map()
+    mockLastSeenOrEmpty.mockClear()
+    mockSearchParams = { subtest: 'Mathematics', mode: 'quick' }
+    mockQuestionRows = Array.from({ length: 30 }, (_, i) => ({
+      questionId: `Q${i}`, subtest: 'Mathematics', questionText: `Question ${i}?`, options: JSON.stringify(['1', '2', '3', '4']),
+      correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null,
+    }))
+    // Q0..Q14 were served before; Q15..Q29 never.
+    mockLastSeen = new Map(Array.from({ length: 15 }, (_, i) => [`Q${i}`, 1000 + i]))
+    render(<UpcatExam />)
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled(), { timeout: 10_000 })
+    expect(mockLastSeenOrEmpty).toHaveBeenCalledWith(expect.anything(), 'upcat_questions', expect.arrayContaining(['Q0', 'Q29']))
+    const ids = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0].questionIds as string[]
+    expect(ids).toHaveLength(15)
+    expect(new Set(ids)).toEqual(new Set(Array.from({ length: 15 }, (_, i) => `Q${i + 15}`)))
+    mockLastSeen = new Map()
+  })
+
+  it('P4: resuming a saved run never re-samples (no history lookup)', async () => {
+    mockLastSeenOrEmpty.mockClear()
+    mockSearchParams = { subtest: 'Mathematics', mode: 'quick' }
+    mockQuestionRows = [
+      { questionId: 'Q1', subtest: 'Mathematics', questionText: '1+1?', options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '', setId: null, setPosition: null, topic: null },
+    ]
+    mockLoadRun.mockResolvedValue({ runKey: 'upcat:Mathematics:quick', questionIds: ['Q1'], answers: {}, idx: 0, endTime: Date.now() + 60_000 })
+    render(<UpcatExam />)
+    fireEvent.press(await screen.findByText('Resume where you left off'))
+    expect(await screen.findByText('1+1?')).toBeTruthy()
+    expect(mockLastSeenOrEmpty).not.toHaveBeenCalled()
+  })
 
   it('writes a question_attempts row per question (with topic) on submit (Task D)', async () => {
     mockSearchParams = { subtest: 'Mathematics' }
@@ -351,7 +391,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled())
+    await waitFor(() => expect(mockSaveRun).toHaveBeenCalled(), { timeout: 10_000 })
     const lastCall = mockSaveRun.mock.calls[mockSaveRun.mock.calls.length - 1]![0]
     expect(lastCall).toMatchObject({
       runKey: 'upcat:Mathematics:full',

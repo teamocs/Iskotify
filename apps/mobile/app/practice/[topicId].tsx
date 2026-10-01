@@ -9,6 +9,7 @@ import { prefetchSessionImages } from '../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../utils/parseAiOptions'
 import { pickQuestions, dedupeByStem } from '../../utils/flashcardExam'
 import { getDueFlashcards } from '../../services/srsAggregates'
+import { lastSeenOrEmpty } from '../../services/questionHistory'
 import { FlashcardExam } from '../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../components/practice/SessionChooser'
 import { SessionEmpty, SessionLoading } from '../../components/practice/SessionStates'
@@ -40,6 +41,9 @@ export default function QuizScreen() {
   const [examQuestions, setExamQuestions] = useState<ReturnType<typeof buildQuizQuestions>>([])
   // Task H: due-today option — flashcardId → dueAt for cards in this topic that are due now.
   const [dueAtById, setDueAtById] = useState<Record<string, number>>({})
+  // P4: when each card was last served, read once per load; the quick quiz deals
+  // never-seen cards first (history only improves the mix, never blocks it).
+  const seenRef = useRef<Map<string, number>>(new Map())
 
   // Task H bugfix: dedupedQuestions/dueQuestions are the SAME deduped-by-stem
   // pool pickQuestions itself would produce — every count shown below is that
@@ -101,6 +105,7 @@ export default function QuizScreen() {
     setAllQuestions(parsed)
     if (parsed.length > 0) loadedRef.current = true
     setPhase(parsed.length === 0 ? 'empty' : 'chooser')
+    void lastSeenOrEmpty(db, 'flashcards', parsed.map(q => q.id).filter((id): id is string => id != null)).then(m => { seenRef.current = m })
 
     // Task H: which of this topic's cards are due right now.
     try {
@@ -153,7 +158,7 @@ export default function QuizScreen() {
   // ── Phase: chooser ──────────────────────────────────────────────────────────
 
   function choose(mode: 'quick' | 'full' | 'due') {
-    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode)
+    const q = mode === 'due' ? dueQuestions : pickQuestions(allQuestions, mode, undefined, { seen: seenRef.current })
     setExamQuestions(q)
     setPhase('exam')
   }
