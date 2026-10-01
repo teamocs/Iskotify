@@ -28,14 +28,16 @@ const card = (id: string, slugs = ['upcat']) => ({
 })
 
 let mockCards: any[] = []
+let mockProgress: any[] = []
 jest.mock('../../../../hooks/useDb', () => {
   const db = {
     select: (cols: any) => ({
       from: () => {
         // listing title: select({title}).from().where().limit(); cards: select({...}).from(); progress: select().from()
         if (cols && 'title' in cols) return { where: () => ({ limit: () => Promise.resolve([{ title: 'UPCAT' }]) }) }
-        if (cols && 'flashcardId' in cols) return Promise.resolve([])
-        return Promise.resolve(mockCards)
+        if (cols && 'flashcardId' in cols) return Promise.resolve(mockProgress)
+        // cards: from().where() (published + listing filter) — the mock returns the pool either way
+        return Object.assign(Promise.resolve(mockCards), { where: () => Promise.resolve(mockCards) })
       },
     }),
   }
@@ -43,7 +45,7 @@ jest.mock('../../../../hooks/useDb', () => {
 })
 
 describe('listing review chooser — redesign M3', () => {
-  beforeEach(() => { mockParams.value = { slug: 'upcat', mode: undefined } })
+  beforeEach(() => { mockParams.value = { slug: 'upcat', mode: undefined }; mockProgress = [] })
 
   it('titles the page in sentence case and names the listing in the lead', async () => {
     mockCards = [card('c1'), card('c2'), card('c3', ['acet'])]
@@ -59,6 +61,25 @@ describe('listing review chooser — redesign M3', () => {
     await act(async () => {})
     fireEvent.press(within(screen.getByTestId('chooser-recommended')).getByRole('button', { name: /Start quick set/ }))
     expect(screen.getByTestId('exam').props.children).toBe('Full review · UPCAT|2')
+  })
+
+  // A9: the weak quiz uses the shared rule — <60% over at least MIN_SAMPLE answers.
+  it('weak mode serves a topic that is weak over enough answers', async () => {
+    mockParams.value = { slug: 'upcat', mode: 'weak' }
+    mockCards = [card('c1'), card('c2')]
+    mockProgress = Array.from({ length: 5 }, () => ({ flashcardId: 'c1', correct: false }))
+    render(<ListingQuizScreen />)
+    await act(async () => {})
+    expect(screen.getByText(/2 cards to practise/)).toBeTruthy()
+  })
+
+  it('weak mode ignores a topic with fewer than the minimum sample, even at 0%', async () => {
+    mockParams.value = { slug: 'upcat', mode: 'weak' }
+    mockCards = [card('c1')]
+    mockProgress = [{ flashcardId: 'c1', correct: false }, { flashcardId: 'c1', correct: false }]
+    render(<ListingQuizScreen />)
+    await act(async () => {})
+    expect(screen.getByText('No weak topics yet')).toBeTruthy()
   })
 
   it('weak mode with nothing weak shows an encouraging empty state with one way back', async () => {

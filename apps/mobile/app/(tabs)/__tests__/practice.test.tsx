@@ -44,10 +44,9 @@ jest.mock('../../../hooks/useDb', () => {
   return { useDb: () => db }
 })
 
-const mockGetTopicBest = jest.fn()
+const mockGetSubjectPct = jest.fn()
 jest.mock('../../../services/homeAggregates', () => ({
-  getTopicBestSessionPercentages: (...a: any[]) => mockGetTopicBest(...a),
-  getSubjectSessionPercentages: jest.fn().mockResolvedValue([]),
+  getSubjectRecentAccuracy: (...a: any[]) => mockGetSubjectPct(...a),
 }))
 
 const mockGetDueCounts = jest.fn()
@@ -103,7 +102,7 @@ describe('PracticeScreen (redesign M2)', () => {
     mockUsePracticeData.mockReturnValue(emptyPracticeData)
     mockListPublishedBlueprints.mockReset().mockResolvedValue([])
     mockGetDueCounts.mockReset().mockResolvedValue({ total: 0, byTopic: {} })
-    mockGetTopicBest.mockReset().mockResolvedValue([])
+    mockGetSubjectPct.mockReset().mockResolvedValue([])
     mockLoadRun.mockReset().mockResolvedValue(null)
     mockCreateDeck.mockClear()
     mockFocusListings.splice(0)
@@ -309,11 +308,12 @@ describe('PracticeScreen (redesign M2)', () => {
 
     it('lists subjects A–Z with topic count and readiness as a number', async () => {
       mockUsePracticeData.mockReturnValue(data)
-      mockGetTopicBest.mockResolvedValue([{ topicId: 't1', bestPct: 80 }, { topicId: 't3', bestPct: 60 }])
+      mockGetSubjectPct.mockResolvedValue([{ subject: 'Algebra', pct: 70, answered: 25 }])
       await renderSettled()
       const section = screen.getByTestId('practice-subjects')
       const rows = within(section).getAllByRole('button')
       expect(rows[0]!.props.accessibilityLabel).toBe('Algebra, 2 topics, ready 70%')
+      // Too few answers = not started, never a 0% verdict.
       expect(rows[1]!.props.accessibilityLabel).toBe('Science, 1 topic, not practised yet')
       fireEvent.press(rows[0]!)
       expect(router.push).toHaveBeenCalledWith('/subjects/s1')
@@ -336,7 +336,7 @@ describe('PracticeScreen (redesign M2)', () => {
     it('shows a retryable error when readiness fails to load', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
       mockUsePracticeData.mockReturnValue(data)
-      mockGetTopicBest.mockRejectedValueOnce(new Error('db'))
+      mockGetSubjectPct.mockRejectedValueOnce(new Error('db'))
       await renderSettled()
       const section = screen.getByTestId('practice-subjects')
       expect(within(section).getByText("Couldn't load your subjects")).toBeTruthy()

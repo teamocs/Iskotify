@@ -151,6 +151,14 @@ describe('AnalyticsDashboard (Progress)', () => {
       expect(screen.getByRole('button', { name: 'Math, 80%, strong' })).toBeTruthy()
     })
 
+    // A8: too little practice is "Not started", not a 0% "needs work".
+    it('shows Not started — never 0% — for a subject without enough practice', () => {
+      mockReadiness.mockReturnValue({ ...readiness, entries: [{ id: 's-sci', name: 'Science', pct: null }, { id: 's-math', name: 'Math', pct: 80 }] })
+      render(<AnalyticsDashboard />)
+      expect(screen.getByRole('button', { name: 'Science, not started' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /Science, 0%/ })).toBeNull()
+    })
+
     it('opens the diagnostic for that subject', () => {
       const { router } = require('expo-router')
       render(<AnalyticsDashboard />)

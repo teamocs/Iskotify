@@ -18,7 +18,7 @@ import { studyPlanItems, focusListings, listings as listingsTable } from '../db/
 import type { DrizzleClient } from '../db/client'
 import { getDueCounts } from './srsAggregates'
 import { getWeakTopicStats, getTopicNames, getPracticeDayIndices } from './homeAggregates'
-import { resolveTopicLabel } from '../utils/topicLabel'
+import { pickWeakTopics } from '../utils/weakness'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
 import { scheduleWebPersist } from '../db/webPersist'
 import {
@@ -82,15 +82,8 @@ export async function gatherPlanInputs(db: DrizzleClient, today: Date): Promise<
   ])
 
   const topicMap = new Map(topicNames.map(t => [t.id, t.name]))
-  const weakTopics = weakStats
-    .map(s => ({
-      topicId: s.topicId,
-      topicName: resolveTopicLabel(s.topicId, topicMap),
-      accuracy: Math.round((s.ok / s.total) * 100),
-    }))
-    .filter(t => t.accuracy < 60)
-    .sort((a, b) => a.accuracy - b.accuracy || a.topicId.localeCompare(b.topicId))
-    .slice(0, 4)
+  // Shared weak rule (<60% over >= MIN_SAMPLE answers) — same as Home and Practice.
+  const weakTopics = pickWeakTopics(weakStats, topicMap)
 
   // Nearest focused exam WITH a future date. School-level focus entries
   // ("school:<id>") have no exam date of their own and are skipped.

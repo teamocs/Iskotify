@@ -22,6 +22,8 @@
 //    is "all caught up" — the generator returns an empty plan rather than
 //    inventing busywork; hooks/useStudyPlan.ts renders the all-done state.
 
+import { isMockSession } from './sessionKind'
+
 export type StudyPlanItemKind = 'srs_review' | 'topic_practice' | 'mock_section' | 'diagnostic'
 
 export interface StudyPlanItemDraft {
@@ -148,6 +150,8 @@ export interface SessionCompletionSignal {
   topicId: string
   listingSlug: string
   subtest: string | null
+  /** Sitting kind (hooks/useRecordSession); undefined/null = legacy row. */
+  kind?: string | null
 }
 
 /**
@@ -161,7 +165,9 @@ export function itemMatchesSession(item: PlanItemRef, session: SessionCompletion
     case 'topic_practice':
       return session.topicId !== '' && session.topicId === item.refId
     case 'mock_section':
-      return !!session.subtest && session.listingSlug === item.refId
+      // Only a real full mock counts — sprints/drills/diagnostics also carry a
+      // subtest but are not the weekly mock.
+      return session.listingSlug === item.refId && isMockSession(session)
     // A diagnostic item's job is "get the user practicing something to
     // establish a baseline" — ANY completed session fulfills it, so it never
     // sits half-finished when noSignal state already gated its generation.

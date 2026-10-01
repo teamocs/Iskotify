@@ -8,7 +8,7 @@ import { useRecordSession } from '../../../hooks/useRecordSession'
 import { useRecordAttempts } from '../../../hooks/useRecordAttempts'
 import {
   resolveDiagnosticSubtests, buildDiagnosticQuestions, scoreDiagnostic,
-  buildDiagnosticSessionParams, weakestSubject, SECONDS_PER_QUESTION, QUESTIONS_PER_SUBTEST,
+  buildDiagnosticSessionParams, weakestSubject, isBundledDiagnosticId, SECONDS_PER_QUESTION, QUESTIONS_PER_SUBTEST,
 } from '../../../utils/diagnosticExam'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { createTimingState, onIdxChange, finalizeTiming, type TimingState } from '../../../utils/attemptTiming'
@@ -260,18 +260,21 @@ export default function DiagnosticExam() {
       answers,
       elapsedByIdx,
     })
+    // Bundled fallback questions (ids like 'pre-math-1') are not upcat_questions
+    // rows, so they are scored in the session below but never recorded as attempts.
+    const bankRows = rows.filter(r => !isBundledDiagnosticId(r.questionId))
     // Finding #2: telemetry is best-effort — it must never gate the results
     // screen. submittedRef is already flipped above; if this insert rejects
     // (disk full, storage quota, etc.) the student must still reach
     // results, not get stranded behind the double-submit guard.
     try {
-      await recordAttempts(rows)
+      if (bankRows.length > 0) await recordAttempts(bankRows)
     } catch (err) {
       console.warn('[practice/diagnostic] recordAttempts failed:', err)
     }
 
     for (const params of buildDiagnosticSessionParams(score.bySubject, startRef)) {
-      void recordSession(params)
+      void recordSession(params).catch(err => console.warn('[practice/diagnostic] recordSession failed:', err))
     }
     setPhase('results')
   }

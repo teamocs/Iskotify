@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLocalSearchParams, router } from 'expo-router'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
 import { subscribe } from '../../services/queryCache'
 import { flashcards as flashcardsTable, topics } from '../../db/schema'
@@ -80,7 +80,9 @@ export default function QuizScreen() {
         imageAlt: flashcardsTable.imageAlt,
         imageWidth: flashcardsTable.imageWidth,
         imageHeight: flashcardsTable.imageHeight,
-      }).from(flashcardsTable).where(eq(flashcardsTable.topicId, topicId))
+      }).from(flashcardsTable)
+        // Published only — a draft/archived card must never be served in a quiz.
+        .where(and(eq(flashcardsTable.topicId, topicId), eq(flashcardsTable.status, 'published')))
     }
 
     let cardRows = await fetchCards()

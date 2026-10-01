@@ -28,11 +28,11 @@ export function resolveDiagnosticSubtests(subjectParam?: string | null): string[
  * buildDiagnosticQuestions — 10 questions per requested subtest from the exam-tagged
  * bank (buildPreAssessFromUpcat). Falls back to the bundled static items
  * (data/preAssessment.ts) when the bank yields nothing for the requested subtests —
- * same fallback onboarding.tsx uses. The fallback is scoped to the requested
- * subtests when the bundle has matching questions (its taxonomy covers Mathematics
- * and Science); otherwise it falls back further to the whole bundle rather than
- * showing no questions at all (the bundle has no Language Proficiency / Reading
- * Comprehension-labeled items).
+ * same fallback onboarding.tsx uses — but ONLY items of the requested subjects
+ * (the bundle covers Mathematics and Science). When the bundle has nothing for the
+ * request (e.g. Reading Comprehension) this returns [] so the screen shows its
+ * honest empty state: the old whole-bundle fallback served English/Filipino/
+ * Abstract Reasoning items to someone who asked for a different subtest.
  *
  * The bank build is per-subtest under the hood (each subtest's rows are filtered/
  * shuffled independently), so it's possible for the bank to yield questions for
@@ -52,7 +52,7 @@ export function buildDiagnosticQuestions(
   const built = buildPreAssessFromUpcat(rows, subtests, perSubtest, rng)
   if (built.length === 0) {
     const scoped = PRE_ASSESS_QUESTIONS.filter(q => subtests.includes(q.subject))
-    return scoped.length > 0 ? scoped : PRE_ASSESS_QUESTIONS
+    return scoped
   }
 
   const covered = new Set(built.map(q => q.subject))
@@ -63,6 +63,18 @@ export function buildDiagnosticQuestions(
     PRE_ASSESS_QUESTIONS.filter(q => q.subject === st).slice(0, perSubtest),
   )
   return [...built, ...backfill]
+}
+
+const BUNDLED_IDS = new Set(PRE_ASSESS_QUESTIONS.map(q => q.id))
+
+/**
+ * True for a question that came from the static bundle (ids like 'pre-math-1')
+ * rather than the upcat_questions bank. Its attempts must NOT be written as
+ * source_table 'upcat_questions' rows — no such question exists there, and the
+ * estimator/analytics would count a phantom id.
+ */
+export function isBundledDiagnosticId(id: string): boolean {
+  return BUNDLED_IDS.has(id)
 }
 
 export interface DiagnosticScore {
@@ -83,7 +95,7 @@ export function scoreDiagnostic(
 /**
  * buildDiagnosticSessionParams — one useRecordSession param set per subject, mirroring
  * the mock engines (topicId: '', subtest: <subject name>) so results feed
- * getSubjectSessionPercentages → subjectReadinessPct.
+ * the readiness aggregates (kind='diagnostic', shared attemptKey).
  */
 export function buildDiagnosticSessionParams(
   bySubject: Record<string, { correct: number; total: number }>,
@@ -97,6 +109,8 @@ export function buildDiagnosticSessionParams(
     total: b.total,
     startTime,
     subtest: subject,
+    kind: 'diagnostic' as const,
+    attemptKey: startTime,
   }))
 }
 

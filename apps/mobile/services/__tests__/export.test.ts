@@ -187,6 +187,52 @@ function mockImportFile(payload: Record<string, unknown>) {
   FileSystem.readAsStringAsync.mockResolvedValue(JSON.stringify(payload))
 }
 
+describe('importUserData restores practice_sessions classification (A4)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    require('react-native').Platform.OS = 'android'
+  })
+
+  it('keeps subtest, kind and attemptKey from camelCase (app export) rows', async () => {
+    mockImportFile({
+      ...BASE_PAYLOAD,
+      practice_sessions: [{
+        listingSlug: 'upcat', topicId: '', deckId: '', score: 7, total: 10, durationSecs: 60,
+        completedAt: 5000, subtest: 'Mathematics', kind: 'mock', attemptKey: 1234,
+      }],
+    })
+    const { db, insertedRows } = makeImportDb()
+    await importUserData(db as any)
+    const row = insertedRows.find(r => r.table === 'practice_sessions')!.row
+    expect(row).toMatchObject({ subtest: 'Mathematics', kind: 'mock', attemptKey: 1234, score: 7 })
+  })
+
+  it('keeps them from snake_case rows too', async () => {
+    mockImportFile({
+      ...BASE_PAYLOAD,
+      practice_sessions: [{
+        listing_slug: 'upcat', topic_id: '', deck_id: '', score: 1, total: 2, duration_secs: 3,
+        completed_at: 5000, subtest: 'Science', kind: 'sprint', attempt_key: 99,
+      }],
+    })
+    const { db, insertedRows } = makeImportDb()
+    await importUserData(db as any)
+    expect(insertedRows.find(r => r.table === 'practice_sessions')!.row)
+      .toMatchObject({ subtest: 'Science', kind: 'sprint', attemptKey: 99 })
+  })
+
+  it('legacy rows without them import as null (not the string "null" or 0)', async () => {
+    mockImportFile({
+      ...BASE_PAYLOAD,
+      practice_sessions: [{ listingSlug: 'upcat', topicId: 't1', deckId: '', score: 1, total: 2, durationSecs: 3, completedAt: 5000 }],
+    })
+    const { db, insertedRows } = makeImportDb()
+    await importUserData(db as any)
+    expect(insertedRows.find(r => r.table === 'practice_sessions')!.row)
+      .toMatchObject({ subtest: null, kind: null, attemptKey: null })
+  })
+})
+
 describe('importUserData guards deletes on the field being present (Finding #3)', () => {
   beforeEach(() => {
     jest.clearAllMocks()

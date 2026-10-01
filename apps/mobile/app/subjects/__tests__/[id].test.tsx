@@ -28,20 +28,19 @@ function flat(style: unknown): Record<string, any> {
   return Object.assign({}, ...[style].flat(Infinity as 1).filter(Boolean))
 }
 
-// The session aggregates are unit-tested in services/__tests__; here we control
-// their output so the screen's compose + sort can be asserted. The screen now
-// also loads getSubjectSessionPercentages (subject-level mock bests) so a subject
-// practiced only via a mock still shows its readiness per topic.
+// The recent-accuracy aggregate is unit-tested in services/__tests__; here we
+// control its output so the screen's compose + sort can be asserted. Topic
+// readiness is the topic's OWN recent accuracy (A8) — no subject-level lift.
 jest.mock('../../../services/homeAggregates', () => ({
-  getTopicBestSessionPercentages: jest.fn(),
-  getSubjectSessionPercentages: jest.fn(),
+  getTopicRecentAccuracy: jest.fn(),
+  getSubjectRecentAccuracy: jest.fn().mockResolvedValue([]),
 }))
 
 // ---------------------------------------------------------------------------
 // DB mock — the screen's cached fetcher runs, in order:
 //   1. subject name: select().from().where().limit()
 //   2. topics:       select().from().where()
-// (getTopicBestSessionPercentages is mocked separately, above.)
+// (getTopicRecentAccuracy is mocked separately, above.)
 // ---------------------------------------------------------------------------
 
 function makeDb(subjectRows: any[], topicRows: any[]) {
@@ -64,13 +63,9 @@ const TOPICS = [
   { id: 't3', name: 'Trigonometry' },
 ]
 
-function setBest(
-  map: Array<{ topicId: string; bestPct: number }>,
-  subjectMap: Array<{ subject: string; bestPct: number }> = [],
-) {
-  const { getTopicBestSessionPercentages, getSubjectSessionPercentages } = require('../../../services/homeAggregates')
-  getTopicBestSessionPercentages.mockResolvedValue(map)
-  getSubjectSessionPercentages.mockResolvedValue(subjectMap)
+function setBest(map: Array<{ topicId: string; bestPct: number }>) {
+  const { getTopicRecentAccuracy } = require('../../../services/homeAggregates')
+  getTopicRecentAccuracy.mockResolvedValue(map.map(r => ({ topicId: r.topicId, pct: r.bestPct, answered: 20 })))
 }
 
 describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
@@ -101,7 +96,7 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     expect(screen.getAllByText('Mathematics').length).toBeGreaterThan(0)
   })
 
-  it('shows "X%" for a topic with a best session', async () => {
+  it('shows "X%" for a topic with enough recent answers', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
     setBest([
@@ -115,16 +110,16 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     expect(screen.getByText('55%')).toBeTruthy()
   })
 
-  it('shows "—" and "No sessions yet" for a topic without a session', async () => {
+  it('shows "—" and "Not started" for a topic without enough answers', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
     // only t1 has a record; t2 and t3 have none
     setBest([{ topicId: 't1', bestPct: 80 }])
     render(<SubjectDetailsScreen />)
     await waitFor(() => expect(screen.getByText('80%')).toBeTruthy())
-    // t2 and t3 have no session → two "—" placeholders + two "No sessions yet"
+    // t2 and t3 have too few answers → two "—" placeholders + two "Not started"
     expect(screen.getAllByText('—').length).toBe(2)
-    expect(screen.getAllByText('No sessions yet').length).toBe(2)
+    expect(screen.getAllByText('Not started').length).toBe(2)
   })
 
   it('sorts topics lowest-readiness-first, then topics with no session last', async () => {
@@ -170,49 +165,25 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     await waitFor(() => expect(screen.getByText('No topics in this subject yet.')).toBeTruthy())
   })
 
-  // ── REGRESSION: subject practiced ONLY via a mock (subtest session) ──────────
-  // The mock writes topic_id='' + subtest='Mathematics' (== subject name), so
-  // there are NO per-topic rows. Every topic in the subject must still show the
-  // subject-level mock readiness (NOT "No sessions yet").
-  it('a subject practiced ONLY via mock shows the mock % on every topic (not "No sessions")', async () => {
+  // A8: a topic is never lifted by its subject's overall result (the old
+  // max(topic, subject) hid a weak topic behind a strong subject).
+  it('a topic without its own enough answers stays Not started — no subject lift', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
-    // No per-topic bests; only a subject-level mock best keyed by the subject name.
-    setBest([], [{ subject: 'Mathematics', bestPct: 65 }])
-    render(<SubjectDetailsScreen />)
-    await waitFor(() => expect(screen.getAllByText('65%').length).toBe(3), { timeout: 5000 })
-    // No topic should fall back to the "No sessions yet" placeholder.
-    expect(screen.queryAllByText('No sessions yet').length).toBe(0)
-    expect(screen.queryAllByText('—').length).toBe(0)
-  })
-
-  it('a per-topic review beats the subject-level mock for that topic', async () => {
-    const { useDb } = require('../../../hooks/useDb')
-    useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
-    // t1 review (90) beats the subject mock (50); t2, t3 lifted to the mock (50).
-    setBest([{ topicId: 't1', bestPct: 90 }], [{ subject: 'Mathematics', bestPct: 50 }])
+    setBest([{ topicId: 't1', bestPct: 90 }])
     render(<SubjectDetailsScreen />)
     await waitFor(() => expect(screen.getByText('90%')).toBeTruthy(), { timeout: 5000 })
-    // t2 and t3 show the mock-lifted 50%
-    expect(screen.getAllByText('50%').length).toBe(2)
+    expect(screen.getAllByText('Not started').length).toBe(2)
   })
 
-  it('sorts by combined readiness (review-or-mock), lowest first', async () => {
+  it('a weak topic stays weak next to a strong one', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
-    // The subject mock (50) lifts EVERY topic; an individual review can exceed it.
-    // t1 review=90 (beats mock); t2 review=40 → max(40,50)=50; t3 no review → 50.
-    // readiness: t1=90, t2=50, t3=50 → lowest-first order: t2, t3 (tie, alpha), t1.
-    setBest(
-      [{ topicId: 't1', bestPct: 90 }, { topicId: 't2', bestPct: 40 }],
-      [{ subject: 'Mathematics', bestPct: 50 }],
-    )
+    setBest([{ topicId: 't1', bestPct: 90 }, { topicId: 't2', bestPct: 40 }])
     render(<SubjectDetailsScreen />)
-    await waitFor(() => expect(screen.getByText('90%')).toBeTruthy(), { timeout: 5000 })
-    // t2 and t3 are both lifted to the mock 50%
-    expect(screen.getAllByText('50%').length).toBe(2)
+    await waitFor(() => expect(screen.getByText('40%')).toBeTruthy(), { timeout: 5000 })
     const names = screen.getAllByTestId('topic-name').map(n => n.props.children)
-    expect(names).toEqual(['Geometry', 'Trigonometry', 'Algebra'])
+    expect(names).toEqual(['Geometry', 'Algebra', 'Trigonometry'])
   })
 
   // ── Redesign M2: every data state, and neutral readiness ────────────────────
@@ -267,14 +238,27 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
       expect(screen.getByRole('button', { name: 'Go back' })).toBeTruthy()
     })
 
-    it('summarises the subject: topics practised and average readiness', async () => {
+    it('summarises the subject: topics practised and the same subject readiness Progress shows', async () => {
       const { useDb } = require('../../../hooks/useDb')
+      const { getSubjectRecentAccuracy } = require('../../../services/homeAggregates')
       useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
       setBest([{ topicId: 't1', bestPct: 80 }, { topicId: 't2', bestPct: 40 }])
+      // Mock and drill answers count toward the subject even though they carry
+      // no flashcard topic — so the headline is the subject figure, not a topic mean.
+      getSubjectRecentAccuracy.mockResolvedValueOnce([{ subject: 'Mathematics', pct: 70, answered: 40 }])
       render(<SubjectDetailsScreen />)
       await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
       expect(screen.getByLabelText('Topics practised: 2 of 3')).toBeTruthy()
-      expect(screen.getByLabelText('Average readiness: 60 %')).toBeTruthy()
+      expect(screen.getByLabelText('Subject readiness: 70 %')).toBeTruthy()
+    })
+
+    it('shows the subject as not started when it has too few answers overall', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+      setBest([])
+      render(<SubjectDetailsScreen />)
+      await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+      expect(screen.getByLabelText('Subject readiness: None yet')).toBeTruthy()
     })
 
     it('puts the topics and the summary side by side on desktop', async () => {

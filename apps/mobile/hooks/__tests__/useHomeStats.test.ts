@@ -86,6 +86,7 @@ describe('computeTodayAccuracy', () => {
 })
 
 describe('computeWeakTopics', () => {
+  // A9: weak = <60% over at least MIN_SAMPLE (5) answers, shared with the plan.
   const fcList = [
     { id: 'fc1', topicId: 't1' },
     { id: 'fc2', topicId: 't1' },
@@ -95,17 +96,17 @@ describe('computeWeakTopics', () => {
     { id: 't1', name: 'Algebra' },
     { id: 't2', name: 'Biology' },
   ]
+  const many = (flashcardId: string, correct: number, wrong: number) => [
+    ...Array.from({ length: correct }, () => ({ flashcardId, correct: true })),
+    ...Array.from({ length: wrong }, () => ({ flashcardId, correct: false })),
+  ]
 
   it('returns empty array with no progress', () => {
     expect(computeWeakTopics([], fcList, topicList)).toEqual([])
   })
 
   it('returns topics with accuracy < 60', () => {
-    const progress = [
-      { flashcardId: 'fc1', correct: false },
-      { flashcardId: 'fc2', correct: false },
-    ]
-    const result = computeWeakTopics(progress, fcList, topicList)
+    const result = computeWeakTopics(many('fc1', 0, 5), fcList, topicList)
     expect(result).toHaveLength(1)
     const topic = result[0]!
     expect(topic.topicId).toBe('t1')
@@ -113,35 +114,30 @@ describe('computeWeakTopics', () => {
     expect(topic.topicName).toBe('Algebra')
   })
 
+  it('does not flag a topic with fewer than the minimum sample', () => {
+    expect(computeWeakTopics(many('fc1', 0, 4), fcList, topicList)).toEqual([])
+  })
+
   it('excludes topics with accuracy >= 60', () => {
-    const progress = [
-      { flashcardId: 'fc1', correct: true },
-      { flashcardId: 'fc2', correct: true },
-    ]
-    expect(computeWeakTopics(progress, fcList, topicList)).toHaveLength(0)
+    expect(computeWeakTopics(many('fc1', 3, 2), fcList, topicList)).toHaveLength(0)
   })
 
   it('sorts by accuracy ascending', () => {
     const progress = [
-      { flashcardId: 'fc1', correct: true },   // t1: 1/2 = 50%
-      { flashcardId: 'fc2', correct: false },
-      { flashcardId: 'fc3', correct: false },   // t2: 0%
+      ...many('fc1', 2, 3),   // t1: 40%
+      ...many('fc3', 0, 5),   // t2: 0%
     ]
     const result = computeWeakTopics(progress, fcList, topicList)
     expect(result).toHaveLength(2)
     const [first, second] = result
     expect(first!.topicId).toBe('t2')   // 0% first
-    expect(second!.topicId).toBe('t1')   // 50% second
+    expect(second!.topicId).toBe('t1')   // 40% second
   })
 
   it('renders pre-assess synthetic topic IDs as "Pre-Assessment: <Subject>"', () => {
-    const progress = [
-      { flashcardId: 'pa-q1', correct: false },
-      { flashcardId: 'pa-q2', correct: false },
-    ]
+    const progress = many('pa-q1', 0, 5)
     const fcList = [
       { id: 'pa-q1', topicId: 'pre-assess-Mathematics' },
-      { id: 'pa-q2', topicId: 'pre-assess-Mathematics' },
     ]
     const topicList: Array<{ id: string; name: string }> = []  // empty map
     const out = computeWeakTopics(progress, fcList, topicList)

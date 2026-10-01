@@ -23,8 +23,8 @@ import {
   getWeakTopicStats,
   getTopicCardCounts,
   getListingAccuracy,
-  getTopicBestSessionPercentages,
-  getSubjectSessionPercentages,
+  getTopicRecentAccuracy,
+  getSubjectRecentAccuracy,
   getListingMockBest,
 } from '../homeAggregates'
 
@@ -126,7 +126,9 @@ function makeDb(): { raw: InstanceType<typeof Database>; db: DrizzleClient } {
       total INTEGER NOT NULL DEFAULT 0,
       duration_secs INTEGER NOT NULL DEFAULT 0,
       completed_at INTEGER NOT NULL,
-      subtest TEXT
+      subtest TEXT,
+      kind TEXT,
+      attempt_key INTEGER
     );
   `)
   const db = drizzle(raw, { schema }) as unknown as DrizzleClient
@@ -487,162 +489,85 @@ describe('getListingAccuracy — per-listing accuracy from practice_sessions', (
   })
 })
 
-// ── getTopicBestSessionPercentages — highest attained % per topic ─────────────
-// Powers the Subject Details readiness bars: per topic, MAX(round(score*100/total))
-// across that user's topic-review practice_sessions. Full-mock UPCAT sessions
-// write topic_id='' (+ subtest) so they're excluded — readiness is per-topic only.
+// ── A8: weighted RECENT accuracy per subject / per topic ──────────────────────
+// Replaces the all-time "best session %" (one lucky 100% stuck forever). Evidence
+// is answered questions only: user_progress (flashcard quizzes, subject via
+// topic -> subject) plus question_attempts from upcat_questions with a selected
+// answer (mocks/drills/diagnostics, keyed by the canonical subtest). The most
+// recent READINESS_WINDOW answers count; fewer than READINESS_MIN_ANSWERED
+// answers means "not started" (absent from the result).
 
-describe('getTopicBestSessionPercentages — best (highest) % per topic', () => {
-  function insertTopicSession(topicId: string, score: number, total: number) {
-    raw.prepare(
-      'INSERT INTO practice_sessions (listing_slug, topic_id, score, total, completed_at) VALUES (?, ?, ?, ?, ?)'
-    ).run('', topicId, score, total, Date.now())
+describe('getSubjectRecentAccuracy / getTopicRecentAccuracy (A8)', () => {
+  beforeEach(() => {
+    raw.exec('DELETE FROM user_progress')
+    raw.exec(`
+      CREATE TABLE IF NOT EXISTS question_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        session_key INTEGER NOT NULL, source_table TEXT NOT NULL, question_id TEXT NOT NULL,
+        listing_slug TEXT NOT NULL DEFAULT '', subtest TEXT, topic TEXT, selected_index INTEGER,
+        correct_index INTEGER NOT NULL, correct INTEGER NOT NULL, elapsed_ms INTEGER NOT NULL DEFAULT 0,
+        answered_at INTEGER NOT NULL
+      );
+      INSERT INTO subjects (id, name) VALUES ('s1', 'Mathematics'), ('s2', 'Science');
+    `)
+  })
+
+  const progress = (flashcardId: string, correct: number, wrong: number, at = 1_000) => {
+    const stmt = raw.prepare('INSERT INTO user_progress (flashcard_id, correct, answered_at) VALUES (?, ?, ?)')
+    for (let i = 0; i < correct; i++) stmt.run(flashcardId, 1, at + i)
+    for (let i = 0; i < wrong; i++) stmt.run(flashcardId, 0, at + correct + i)
   }
-
-  it('returns MAX rounded percentage across multiple sessions for one topic', async () => {
-    insertTopicSession('t1', 3, 10)   // 30%
-    insertTopicSession('t1', 7, 10)   // 70% ← best
-    insertTopicSession('t1', 5, 10)   // 50%
-    const rows = await getTopicBestSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
-    expect(map.get('t1')).toBe(70)
-  })
-
-  it('rounds the percentage to an integer', async () => {
-    insertTopicSession('t2', 2, 3)    // 66.66.. → 67
-    const rows = await getTopicBestSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
-    expect(map.get('t2')).toBe(67)
-  })
-
-  it("excludes sessions with topic_id='' (full-mock UPCAT subtest sessions)", async () => {
-    insertTopicSession('', 9, 10)     // empty topic_id → excluded
-    insertTopicSession('t3', 4, 10)   // real topic
-    const rows = await getTopicBestSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
-    expect(map.get('')).toBeUndefined()
-    expect(map.get('t3')).toBe(40)
-  })
-
-  it('excludes sessions with total=0 (division-by-zero guard)', async () => {
-    insertTopicSession('t4', 0, 0)    // total=0 → excluded entirely
-    const rows = await getTopicBestSessionPercentages(db)
-    expect(rows.find(r => r.topicId === 't4')).toBeUndefined()
-  })
-
-  it('a topic whose ONLY session has total=0 is absent from the result', async () => {
-    insertTopicSession('t5', 5, 10)   // 50% — qualifying
-    insertTopicSession('t5', 0, 0)    // excluded; must not zero out t5's best
-    const rows = await getTopicBestSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
-    expect(map.get('t5')).toBe(50)
-  })
-
-  it('topics with no sessions are absent from the result', async () => {
-    insertTopicSession('t1', 6, 10)
-    const rows = await getTopicBestSessionPercentages(db)
-    const ids = new Set(rows.map(r => r.topicId))
-    expect(ids.has('t1')).toBe(true)
-    expect(ids.has('t2')).toBe(false)
-    expect(ids.has('t3')).toBe(false)
-  })
-
-  it('returns empty array when there are no practice_sessions', async () => {
-    const rows = await getTopicBestSessionPercentages(db)
-    expect(rows).toEqual([])
-  })
-
-  it('returns one row per topic across many topics', async () => {
-    insertTopicSession('t1', 9, 10)   // 90
-    insertTopicSession('t2', 3, 10)   // 30
-    insertTopicSession('t2', 8, 10)   // 80 ← best for t2
-    insertTopicSession('t3', 5, 10)   // 50
-    const rows = await getTopicBestSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.topicId, r.bestPct]))
-    expect(rows).toHaveLength(3)
-    expect(map.get('t1')).toBe(90)
-    expect(map.get('t2')).toBe(80)
-    expect(map.get('t3')).toBe(50)
-  })
-})
-
-// ── getSubjectSessionPercentages — highest attained % per SUBJECT (subtest) ───
-// Mock sessions (blueprint section + UPCAT subtest) write topic_id='' and tag the
-// session's `subtest` with the SECTION/SUBTEST name, which equals the flashcard
-// SUBJECT name (subjects were projected from UPCAT subtests). This aggregate
-// surfaces those mock sessions per subject so readiness reflects mocks too.
-
-describe('getSubjectSessionPercentages — best (highest) % per subject (subtest)', () => {
-  function insertSubtestSession(subtest: string | null, score: number, total: number) {
+  const attempt = (subtest: string, correct: boolean, answeredAt: number, over: { selected?: number | null; source?: string } = {}) =>
     raw.prepare(
-      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, completed_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run('', '', subtest, score, total, Date.now())
-  }
+      "INSERT INTO question_attempts (session_key, source_table, question_id, subtest, selected_index, correct_index, correct, answered_at) VALUES (1, ?, 'q', ?, ?, 0, ?, ?)"
+    ).run(over.source ?? 'upcat_questions', subtest, over.selected === undefined ? 0 : over.selected, correct ? 1 : 0, answeredAt)
 
-  it('returns MAX rounded percentage across multiple sessions for one subject', async () => {
-    insertSubtestSession('Reading Comprehension', 3, 10)  // 30%
-    insertSubtestSession('Reading Comprehension', 7, 10)  // 70% ← best
-    insertSubtestSession('Reading Comprehension', 5, 10)  // 50%
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(map.get('Reading Comprehension')).toBe(70)
+  it('requires a minimum number of answers — fewer means not started (absent)', async () => {
+    progress('fc1', 5, 4) // 9 answers, below the minimum of 10
+    expect(await getSubjectRecentAccuracy(db)).toEqual([])
+    expect(await getTopicRecentAccuracy(db)).toEqual([])
   })
 
-  it('rounds the percentage to an integer', async () => {
-    insertSubtestSession('Mathematics', 2, 3)  // 66.66.. → 67
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(map.get('Mathematics')).toBe(67)
+  it('is weighted over answers (sum correct / sum answered) once the minimum is met', async () => {
+    progress('fc1', 8, 2) // t1 / Mathematics: 8/10
+    const subj = await getSubjectRecentAccuracy(db)
+    expect(subj).toEqual([{ subject: 'Mathematics', pct: 80, answered: 10 }])
+    const top = await getTopicRecentAccuracy(db)
+    expect(top).toEqual([{ topicId: 't1', pct: 80, answered: 10 }])
   })
 
-  it('ignores rows with a NULL subtest (topic-review sessions)', async () => {
-    insertSubtestSession(null, 9, 10)                   // NULL subtest → excluded
-    insertSubtestSession('Science', 4, 10)              // real subject
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(rows).toHaveLength(1)
-    expect(map.get('Science')).toBe(40)
+  it('only the most recent 60 answers count — an old lucky streak ages out', async () => {
+    progress('fc1', 60, 0, 1_000)   // old: 60 correct
+    progress('fc1', 0, 30, 100_000) // recent: 30 wrong, newest 60 = 30 right + 30 wrong
+    const subj = await getSubjectRecentAccuracy(db)
+    expect(subj[0]).toMatchObject({ subject: 'Mathematics', answered: 60, pct: 50 })
   })
 
-  it("ignores rows with an empty-string subtest ('')", async () => {
-    insertSubtestSession('', 9, 10)                     // '' subtest → excluded
-    insertSubtestSession('Language Proficiency', 6, 10) // real subject
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(map.get('')).toBeUndefined()
-    expect(map.get('Language Proficiency')).toBe(60)
+  it('merges upcat attempts (by canonical subtest) with flashcard answers for the same subject', async () => {
+    progress('fc1', 5, 0)                                  // Mathematics via t1: 5 right
+    for (let i = 0; i < 5; i++) attempt('Mathematics', false, 5_000 + i) // + 5 wrong mock answers
+    const subj = await getSubjectRecentAccuracy(db)
+    expect(subj).toEqual([{ subject: 'Mathematics', pct: 50, answered: 10 }])
   })
 
-  it('excludes sessions with total=0 (division-by-zero guard)', async () => {
-    insertSubtestSession('Mathematics', 0, 0)           // total=0 → excluded
-    const rows = await getSubjectSessionPercentages(db)
-    expect(rows.find(r => r.subject === 'Mathematics')).toBeUndefined()
+  it('skipped attempts (selected_index NULL) and flashcard-source attempts never count', async () => {
+    for (let i = 0; i < 10; i++) attempt('Science', false, 5_000 + i, { selected: null })      // skipped
+    for (let i = 0; i < 10; i++) attempt('Science', true, 6_000 + i, { source: 'flashcards' }) // duplicate of user_progress
+    expect(await getSubjectRecentAccuracy(db)).toEqual([])
   })
 
-  it('a subject whose ONLY non-zero session is kept; the total=0 row does not zero it', async () => {
-    insertSubtestSession('Science', 5, 10)              // 50% — qualifying
-    insertSubtestSession('Science', 0, 0)              // excluded; must not zero out
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(map.get('Science')).toBe(50)
+  it('legacy bundled diagnostic answers (ids like pre-math-1) never count', async () => {
+    const stmt = raw.prepare(
+      "INSERT INTO question_attempts (session_key, source_table, question_id, subtest, selected_index, correct_index, correct, answered_at) VALUES (1, 'upcat_questions', ?, 'Science', 0, 0, 1, ?)"
+    )
+    for (let i = 0; i < 12; i++) stmt.run(`pre-sci-${i}`, 7_000 + i)
+    expect(await getSubjectRecentAccuracy(db)).toEqual([])
   })
 
-  it('returns empty array when there are no practice_sessions', async () => {
-    const rows = await getSubjectSessionPercentages(db)
-    expect(rows).toEqual([])
-  })
-
-  it('returns one row per subject across many subjects', async () => {
-    insertSubtestSession('Mathematics', 9, 10)          // 90
-    insertSubtestSession('Science', 3, 10)              // 30
-    insertSubtestSession('Science', 8, 10)              // 80 ← best for Science
-    insertSubtestSession('Reading Comprehension', 5, 10) // 50
-    const rows = await getSubjectSessionPercentages(db)
-    const map = new Map(rows.map(r => [r.subject, r.bestPct]))
-    expect(rows).toHaveLength(3)
-    expect(map.get('Mathematics')).toBe(90)
-    expect(map.get('Science')).toBe(80)
-    expect(map.get('Reading Comprehension')).toBe(50)
+  it('draft flashcards do not count', async () => {
+    raw.exec("UPDATE flashcards SET status = 'draft' WHERE id = 'fc1'")
+    progress('fc1', 10, 0)
+    expect(await getSubjectRecentAccuracy(db)).toEqual([])
   })
 })
 
@@ -758,5 +683,35 @@ describe('getListingMockBest — best overall mock attempt % per listing', () =>
   it('returns empty array when there are no practice_sessions', async () => {
     const rows = await getListingMockBest(db)
     expect(rows).toEqual([])
+  })
+})
+
+// ── A10: kind-aware mock best ─────────────────────────────────────────────────
+describe('getListingMockBest — kind / attempt_key (A10)', () => {
+  const ins = (kind: string | null, attemptKey: number | null, subtest: string, score: number, total: number, completedAt: number, durationSecs = 10) =>
+    raw.prepare(
+      'INSERT INTO practice_sessions (listing_slug, topic_id, subtest, score, total, duration_secs, completed_at, kind, attempt_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run('upcat', '', subtest, score, total, durationSecs, completedAt, kind, attemptKey)
+
+  it('groups section rows by attempt_key even when completed_at/duration differ wildly', async () => {
+    ins('mock', 1_000, 'Mathematics', 8, 10, 500_000, 10)
+    ins('mock', 1_000, 'Science', 2, 10, 900_000, 10)
+    const rows = await getListingMockBest(db)
+    expect(rows).toEqual([{ listingSlug: 'upcat', bestPct: 50 }])
+  })
+
+  it('a sprint or drill or diagnostic never counts as a mock attempt', async () => {
+    ins('sprint', 2_000, 'Mathematics', 10, 10, 600_000)
+    ins('drill', 3_000, 'Science', 10, 10, 700_000)
+    ins('diagnostic', 4_000, 'Science', 10, 10, 800_000)
+    ins('mock', 1_000, 'Mathematics', 4, 10, 500_000)
+    const rows = await getListingMockBest(db)
+    expect(rows).toEqual([{ listingSlug: 'upcat', bestPct: 40 }])
+  })
+
+  it('legacy rows with kind NULL keep the old inference and still count', async () => {
+    ins(null, null, 'Mathematics', 7, 10, 1_000_000, 0)
+    const rows = await getListingMockBest(db)
+    expect(rows).toEqual([{ listingSlug: 'upcat', bestPct: 70 }])
   })
 })

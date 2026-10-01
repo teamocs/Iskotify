@@ -9,10 +9,11 @@
  * real-SQLite services Jest project.
  */
 
-import { sql, and, gte, like, eq, ne, isNotNull } from 'drizzle-orm'
+import { sql, and, gte, like, eq, ne } from 'drizzle-orm'
 import { union } from 'drizzle-orm/sqlite-core'
 import { userProgress, flashcards, topics, practiceSessions } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
+import { READINESS_WINDOW, READINESS_MIN_ANSWERED } from '../utils/subjectReadiness'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -42,14 +43,16 @@ export interface ListingAccuracyRow {
   total: number
 }
 
-export interface TopicBestSessionRow {
+export interface TopicRecentAccuracyRow {
   topicId: string
-  bestPct: number
+  pct: number
+  answered: number
 }
 
-export interface SubjectBestSessionRow {
+export interface SubjectRecentAccuracyRow {
   subject: string
-  bestPct: number
+  pct: number
+  answered: number
 }
 
 export interface ListingMockBestRow {
@@ -223,82 +226,83 @@ export async function getListingAccuracy(
   }))
 }
 
-/**
- * getTopicBestSessionPercentages — per-topic BEST (highest attained) result %.
- *
- * SELECT topic_id, MAX(round(score * 100.0 / total)) AS bestPct
- * FROM practice_sessions
- * WHERE topic_id != '' AND total > 0
- * GROUP BY topic_id
- *
- * Powers the Subject Details readiness bars: each topic's readiness is the highest
- * percentage the user has ever scored across their topic-review sessions on it.
- *
- * Full-mock UPCAT sessions (Epic A) write topic_id='' + a subtest tag, so the
- * topic_id != '' filter correctly excludes them — per-topic best comes only from
- * individual topic-review sessions. Rows with total=0 are excluded (division-by-zero
- * guard), so a topic whose only session is empty is absent rather than shown as 0%.
- * Returns rounded integer percentages.
- */
-export async function getTopicBestSessionPercentages(
-  db: DrizzleClient,
-): Promise<TopicBestSessionRow[]> {
-  const rows = await db
-    .select({
-      topicId: practiceSessions.topicId,
-      bestPct: sql<number>`max(round(${practiceSessions.score} * 100.0 / ${practiceSessions.total}))`.as('best_pct'),
-    })
-    .from(practiceSessions)
-    .where(and(
-      ne(practiceSessions.topicId, ''),
-      sql`${practiceSessions.total} > 0`,
-    ))
-    .groupBy(practiceSessions.topicId)
+interface RecentAccuracyRaw { key: string; answered: number; ok: number }
 
+/**
+ * getSubjectRecentAccuracy — per-SUBJECT readiness: weighted accuracy over the
+ * most recent READINESS_WINDOW (60) ANSWERED questions, keyed by subject NAME.
+ *
+ * Flashcard answers resolve to a subject via flashcards.topic_id -> topics ->
+ * subjects; UPCAT attempts use their canonical `subtest`, which equals the
+ * subject name because flashcard subjects are projected from the UPCAT subtests.
+ * A subject with fewer than READINESS_MIN_ANSWERED (10) answers is absent
+ * ("Not started"). Replaces the all-time best session % (a single lucky result
+ * stuck forever). Returns rounded integer percentages.
+ */
+export async function getSubjectRecentAccuracy(db: DrizzleClient): Promise<SubjectRecentAccuracyRow[]> {
+  const rows = await db.all<RecentAccuracyRaw>(sql`
+    WITH evidence AS (
+      SELECT s.name AS k, up.correct AS correct, up.answered_at AS at, 'p' || up.id AS tie
+        FROM user_progress up
+        JOIN flashcards f ON f.id = up.flashcard_id
+        JOIN topics t ON t.id = f.topic_id
+        JOIN subjects s ON s.id = t.subject_id
+       WHERE f.status = 'published'
+      UNION ALL
+      SELECT qa.subtest AS k, qa.correct AS correct, qa.answered_at AS at, 'a' || qa.id AS tie
+        FROM question_attempts qa
+       WHERE qa.source_table = 'upcat_questions'
+         AND qa.selected_index IS NOT NULL
+         -- Older devices recorded bundled diagnostic questions ('pre-math-1')
+         -- as bank attempts; no such question exists, so they never count.
+         AND qa.question_id NOT LIKE 'pre-%'
+         AND qa.subtest IS NOT NULL AND qa.subtest != ''
+    ),
+    ranked AS (
+      SELECT k, correct, ROW_NUMBER() OVER (PARTITION BY k ORDER BY at DESC, tie DESC) AS rn
+      FROM evidence
+    )
+    SELECT k AS key, COUNT(*) AS answered, SUM(correct) AS ok
+    FROM ranked
+    WHERE rn <= ${READINESS_WINDOW}
+    GROUP BY k
+    HAVING COUNT(*) >= ${READINESS_MIN_ANSWERED}
+  `)
   return rows.map(r => ({
-    topicId: r.topicId,
-    bestPct: Number(r.bestPct ?? 0),
+    subject: String(r.key),
+    pct: Math.round((Number(r.ok) * 100) / Number(r.answered)),
+    answered: Number(r.answered),
   }))
 }
 
 /**
- * getSubjectSessionPercentages — per-SUBJECT BEST (highest attained) result %.
- *
- * SELECT subtest, MAX(round(score * 100.0 / total)) AS bestPct
- * FROM practice_sessions
- * WHERE subtest IS NOT NULL AND subtest != '' AND total > 0
- * GROUP BY subtest
- *
- * Mock sessions (blueprint section in app/practice/exam/[slug].tsx and UPCAT
- * subtest in app/practice/upcat/[subtest].tsx) write topic_id='' and tag the
- * row's `subtest` with the SECTION/SUBTEST name. Because the flashcard SUBJECTS
- * were projected from UPCAT subtests, that `subtest` value EQUALS the subject
- * NAME (e.g. "Reading Comprehension", "Mathematics"). So this aggregate is the
- * subject-level mock readiness, keyed by subject name.
- *
- * Topic-review sessions write a NULL subtest and are excluded here (they're
- * covered by getTopicBestSessionPercentages). Rows with total=0 are excluded
- * (division-by-zero guard). Returns rounded integer percentages.
+ * getTopicRecentAccuracy — per-TOPIC readiness: weighted accuracy over the most
+ * recent READINESS_WINDOW answered flashcards of the topic (user_progress joined
+ * to published flashcards). Absent below READINESS_MIN_ANSWERED answers. Not
+ * lifted by the subject's result — a weak topic must stay visibly weak.
  */
-export async function getSubjectSessionPercentages(
-  db: DrizzleClient,
-): Promise<SubjectBestSessionRow[]> {
-  const rows = await db
-    .select({
-      subject: practiceSessions.subtest,
-      bestPct: sql<number>`max(round(${practiceSessions.score} * 100.0 / ${practiceSessions.total}))`.as('best_pct'),
-    })
-    .from(practiceSessions)
-    .where(and(
-      isNotNull(practiceSessions.subtest),
-      ne(practiceSessions.subtest, ''),
-      sql`${practiceSessions.total} > 0`,
-    ))
-    .groupBy(practiceSessions.subtest)
-
+export async function getTopicRecentAccuracy(db: DrizzleClient): Promise<TopicRecentAccuracyRow[]> {
+  const rows = await db.all<RecentAccuracyRaw>(sql`
+    WITH evidence AS (
+      SELECT f.topic_id AS k, up.correct AS correct, up.answered_at AS at, up.id AS tie
+        FROM user_progress up
+        JOIN flashcards f ON f.id = up.flashcard_id
+       WHERE f.status = 'published'
+    ),
+    ranked AS (
+      SELECT k, correct, ROW_NUMBER() OVER (PARTITION BY k ORDER BY at DESC, tie DESC) AS rn
+      FROM evidence
+    )
+    SELECT k AS key, COUNT(*) AS answered, SUM(correct) AS ok
+    FROM ranked
+    WHERE rn <= ${READINESS_WINDOW}
+    GROUP BY k
+    HAVING COUNT(*) >= ${READINESS_MIN_ANSWERED}
+  `)
   return rows.map(r => ({
-    subject: String(r.subject ?? ''),
-    bestPct: Number(r.bestPct ?? 0),
+    topicId: String(r.key),
+    pct: Math.round((Number(r.ok) * 100) / Number(r.answered)),
+    answered: Number(r.answered),
   }))
 }
 
@@ -309,10 +313,9 @@ export async function getSubjectSessionPercentages(
  * useRecordSession) writes ONE practice_sessions row per SECTION, each with
  * topic_id='' (the mock sentinel), a non-empty `subtest` (the section name),
  * and that section's raw score/total. Every section row of one attempt shares
- * the same attempt start time, reconstructable as
- *   completed_at - duration_secs*1000
- * bucketed to the second (cast(.../1000 as integer)) to absorb the few-ms
- * spread across the write loop.
+ * the same attempt_key (the sitting start). Legacy rows (attempt_key NULL)
+ * reconstruct it as completed_at - duration_secs*1000 bucketed to the second.
+ * Only kind='mock' rows count (legacy kind NULL keeps the old inference).
  *
  * Two-level aggregation:
  *   inner  — SELECT listing_slug, <attemptKey>, round(sum(score)*100.0/sum(total))
@@ -333,20 +336,21 @@ export async function getListingMockBest(
   const attempts = db
     .select({
       listingSlug: practiceSessions.listingSlug,
-      attemptKey: sql<number>`cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer)`.as('attempt_key'),
+      attemptKey: sql<number>`coalesce(${practiceSessions.attemptKey}, cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer))`.as('attempt_key'),
       attemptPct: sql<number>`round(sum(${practiceSessions.score}) * 100.0 / sum(${practiceSessions.total}))`.as('attempt_pct'),
     })
     .from(practiceSessions)
     .where(and(
-      eq(practiceSessions.topicId, ''),
-      isNotNull(practiceSessions.subtest),
-      ne(practiceSessions.subtest, ''),
+      // Explicit kind='mock', or (legacy, kind NULL) the old inference. Sprints,
+      // drills and diagnostics also write topic_id='' + a subtest, so the
+      // inference alone counted them as full mocks.
+      sql`(${practiceSessions.kind} = 'mock' or (${practiceSessions.kind} is null and ${practiceSessions.topicId} = '' and ${practiceSessions.subtest} is not null and ${practiceSessions.subtest} != ''))`,
       sql`${practiceSessions.total} > 0`,
       ne(practiceSessions.listingSlug, ''),
     ))
     .groupBy(
       practiceSessions.listingSlug,
-      sql`cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer)`,
+      sql`coalesce(${practiceSessions.attemptKey}, cast((${practiceSessions.completedAt} - ${practiceSessions.durationSecs} * 1000) / 1000 as integer))`,
     )
     .as('attempts')
 

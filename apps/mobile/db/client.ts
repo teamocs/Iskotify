@@ -622,6 +622,15 @@ export const MIGRATIONS = [
   // pullUserData), so a returning student on a new phone is never auto-toured:
   // only finishing onboarding opens it. Replayable from Help.
   `ALTER TABLE user_settings ADD COLUMN tour_seen_at INTEGER NOT NULL DEFAULT 0`,
+
+  // ── Logic audit A1: classify each practice_sessions row ────────────────────
+  // kind ('mock'|'sprint'|'diagnostic'|'drill'|'flashcard'|'onboarding') and
+  // attempt_key (the sitting's start ms, shared by every section row). Both
+  // NULL on legacy rows, which keep the old inference.
+  `ALTER TABLE practice_sessions ADD COLUMN kind TEXT`,
+  `ALTER TABLE practice_sessions ADD COLUMN attempt_key INTEGER`,
+  // Logic audit A: readiness and the estimator scan attempts by source + subtest, newest first.
+  `CREATE INDEX IF NOT EXISTS question_attempts_source_subtest_idx ON question_attempts (source_table, subtest, answered_at)`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {

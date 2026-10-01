@@ -17,12 +17,12 @@
  *
  * Two data-quality caveats these functions must never violate (see Task D
  * review notes):
- *   1. Diagnostic bundled-fallback questions are tagged sourceTable
- *      'upcat_questions' even though their content comes from bundled JSON,
- *      not the local upcat_questions table — a join against upcat_questions
- *      can silently miss them. None of the functions below join against
- *      upcat_questions at all (mistake grouping uses only the attempt row's
- *      own topic/subtest fields), which sidesteps that fragility entirely.
+ *   1. Diagnostic bundled-fallback questions are NOT recorded as attempts any
+ *      more (utils/diagnosticExam isBundledDiagnosticId), but older devices may
+ *      still hold such rows tagged sourceTable 'upcat_questions'. None of the
+ *      functions below join against upcat_questions (mistake grouping uses only
+ *      the attempt row's own topic/subtest fields), so those legacy rows can't
+ *      break anything here.
  *   2. `topic` coverage on attempt rows is PARTIAL for the diagnostic/
  *      upcat-legacy engines (diagnostic always writes topic: null) and FULL
  *      for blueprint mocks. Every grouping function below falls back to
@@ -32,6 +32,7 @@
  */
 
 import { scoreBand, type ScoreBand } from '../utils/examBuilder'
+import { isMockSession, sittingKey, countSittings, weightedAccuracy } from '../utils/sessionKind'
 
 // ── Shared input shape ───────────────────────────────────────────────────────
 
@@ -262,7 +263,7 @@ export interface TrendPoint {
  * this longer trend doesn't change that function's 7-bars-always contract.
  */
 export function computeAccuracyTrend(
-  sessions: { completedAt: number; score: number; total: number }[],
+  sessions: { completedAt: number; score: number; total: number; attemptKey?: number | null; durationSecs?: number }[],
   weeks = 8,
 ): TrendPoint[] {
   const dayMs = 86_400_000
@@ -275,10 +276,10 @@ export function computeAccuracyTrend(
     const endExclusive = todayStartExclusive - i * weekMs
     const start = endExclusive - weekMs
     const bucket = sessions.filter(s => s.completedAt >= start && s.completedAt < endExclusive && s.total > 0)
-    const accuracy = bucket.length > 0
-      ? Math.round(bucket.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / bucket.length)
-      : null
-    points.push({ weekStart: start, accuracy, sessionCount: bucket.length })
+    // Weighted (sum score / sum total): a 1-question row must not outweigh a
+    // 100-question one. sessionCount = sittings (a mock's section rows are one).
+    const accuracy = weightedAccuracy(bucket)
+    points.push({ weekStart: start, accuracy, sessionCount: countSittings(bucket) })
   }
   return points
 }
@@ -300,11 +301,14 @@ export interface MockAttemptScore {
 /**
  * computeMockAttemptHistory — one entry per full mock-exam ATTEMPT (not per
  * section row), each scored through scoreBand. Mirrors
- * homeAggregates.ts's getListingMockBest attempt-key trick (SQL there; plain
- * JS here since useAnalytics.ts already has the full sessions array in
- * memory) — a mock attempt writes one practice_sessions row per section, all
- * sharing one start time, reconstructable as
+ * homeAggregates.ts's getListingMockBest (SQL there; plain JS here since
+ * useAnalytics.ts already has the full sessions array in memory) — a mock
+ * attempt writes one practice_sessions row per section, all sharing one
+ * attemptKey (the sitting start). Legacy rows (no attemptKey) reconstruct it as
  *   completedAt - durationSecs*1000, bucketed to the second.
+ * Only kind='mock' rows count (sprints/drills/diagnostics also carry a subtest
+ * and used to be mistaken for mocks); legacy rows without a kind keep the old
+ * topicId='' + subtest inference.
  *
  * Returns attempts sorted oldest-first (chronological, for a history/trend
  * view). A user with no mock attempts gets an empty array.
@@ -318,14 +322,15 @@ export function computeMockAttemptHistory(
     total: number
     completedAt: number
     durationSecs: number
+    kind?: string | null
+    attemptKey?: number | null
   }>,
 ): MockAttemptScore[] {
-  const mockRows = sessions.filter(s => s.topicId === '' && s.subtest && s.total > 0)
+  const mockRows = sessions.filter(s => isMockSession(s) && s.total > 0)
 
   const grouped = new Map<string, { listingSlug: string; completedAt: number; score: number; total: number }>()
   for (const s of mockRows) {
-    const attemptKey = Math.floor((s.completedAt - s.durationSecs * 1000) / 1000)
-    const key = `${s.listingSlug}:${attemptKey}`
+    const key = `${s.listingSlug}:${s.attemptKey != null ? 'a' : 'l'}:${sittingKey(s)}`
     const cur = grouped.get(key) ?? { listingSlug: s.listingSlug, completedAt: s.completedAt, score: 0, total: 0 }
     cur.score += s.score
     cur.total += s.total

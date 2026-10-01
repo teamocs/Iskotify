@@ -5,7 +5,7 @@ import { InteractionManager } from 'react-native'
 import { useDb } from './useDb'
 import { userSettings, listings as listingsTable, topics, focusListings, notes as notesTable, tertiarySchools } from '../db/schema'
 import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../utils/focusSlug'
-import { resolveTopicLabel } from '../utils/topicLabel'
+import { pickWeakTopics } from '../utils/weakness'
 import {
   getTodayAccuracy,
   getPracticeDayIndices,
@@ -117,15 +117,10 @@ export function computeWeakTopics(
     topicStats.set(tid, s)
   }
   const topicMap = new Map(topicList.map(t => [t.id, t.name]))
-  return Array.from(topicStats.entries())
-    .map(([tid, { correct, total }]) => ({
-      topicId: tid,
-      topicName: resolveTopicLabel(tid, topicMap),
-      accuracy: Math.round((correct / total) * 100),
-    }))
-    .filter(t => t.accuracy < 60)
-    .sort((a, b) => a.accuracy - b.accuracy || a.topicId.localeCompare(b.topicId))
-    .slice(0, 4)
+  return pickWeakTopics(
+    Array.from(topicStats.entries()).map(([topicId, { correct, total }]) => ({ topicId, total, ok: correct })),
+    topicMap,
+  )
 }
 
 // ── React hook ───────────────────────────────────────────────────────────────
@@ -240,15 +235,7 @@ export function useHomeStats(): HomeStats {
         }
 
         const topicMap = new Map(allTopics.map(t => [t.id, t.name]))
-        const weakTopics: WeakTopic[] = weakStats
-          .map(s => ({
-            topicId: s.topicId,
-            topicName: resolveTopicLabel(s.topicId, topicMap),
-            accuracy: Math.round((s.ok / s.total) * 100),
-          }))
-          .filter(t => t.accuracy < 60)
-          .sort((a, b) => a.accuracy - b.accuracy || a.topicId.localeCompare(b.topicId))
-          .slice(0, 4)
+        const weakTopics: WeakTopic[] = pickWeakTopics(weakStats, topicMap)
 
         return {
           listing: listing ? { title: listing.title, examDate: listing.examDate ?? null } : null,

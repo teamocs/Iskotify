@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocalSearchParams, router } from 'expo-router'
 import { useDb } from '../../../hooks/useDb'
 import { flashcards as flashcardsTable, userProgress, listings as listingsTable } from '../../../db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq, like } from 'drizzle-orm'
 import { buildQuizQuestions, safeParseOptions, type RawCard } from '../../../utils/mcDistractors'
 import { prefetchSessionImages } from '../../../utils/prefetchQuestionImages'
 import { parseAiOptions } from '../../../utils/parseAiOptions'
@@ -11,6 +11,7 @@ import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bulb2Outlined } from '@lineiconshq/free-icons'
 import { pickQuestions, dedupeByStem } from '../../../utils/flashcardExam'
+import { classify } from '../../../utils/weakness'
 import { getDueFlashcards } from '../../../services/srsAggregates'
 import { FlashcardExam } from '../../../components/practice/FlashcardExam'
 import { FlashcardModeChooser } from '../../../components/practice/SessionChooser'
@@ -83,6 +84,12 @@ export default function ListingQuizScreen() {
           imageWidth: flashcardsTable.imageWidth,
           imageHeight: flashcardsTable.imageHeight,
         }).from(flashcardsTable)
+          // Published only, and narrowed to the listing in SQL (the LIKE is a
+          // coarse prefilter; filterToListing below keeps the exact JSON check).
+          .where(and(
+            eq(flashcardsTable.status, 'published'),
+            like(flashcardsTable.listingSlugs, `%"${slug}"%`),
+          ))
       }
 
       const [listingRows, initialCards, progress] = await Promise.all([
@@ -130,7 +137,8 @@ export default function ListingQuizScreen() {
           const tp = progress.filter(p => fcIds.includes(p.flashcardId))
           if (tp.length === 0) continue
           const correct = tp.filter(p => p.correct === true || (p.correct as unknown as number) === 1).length
-          if (correct / tp.length < 0.6) weakTopicIds.add(topicId)
+          // Shared weak rule (utils/weakness.ts): <60% over >= MIN_SAMPLE answers.
+          if (classify(correct, tp.length) === 'weak') weakTopicIds.add(topicId)
         }
         filtered = matching.filter(c => weakTopicIds.has(c.topicId))
       }

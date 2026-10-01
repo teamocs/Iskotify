@@ -160,6 +160,8 @@ export const questionAttempts = sqliteTable('question_attempts', {
 }, (t) => [
   index('question_attempts_answered_at_idx').on(t.answeredAt),
   index('question_attempts_question_id_idx').on(t.questionId),
+  // Readiness and the estimator filter by source + subtest and order by recency.
+  index('question_attempts_source_subtest_idx').on(t.sourceTable, t.subtest, t.answeredAt),
 ])
 
 // Task H: SM-2-lite spaced-repetition state, one row per flashcard the user has
@@ -202,6 +204,9 @@ export const practiceSessions = sqliteTable('practice_sessions', {
   durationSecs: integer('duration_secs').notNull().default(0),
   completedAt:  integer('completed_at').notNull(),
   subtest:      text('subtest'),
+  // Sitting classification + grouping key (null on legacy rows) — see utils/sessionKind.
+  kind:         text('kind'),
+  attemptKey:   integer('attempt_key'),
 })
 
 export const coachPhrases = sqliteTable('coach_phrases', {

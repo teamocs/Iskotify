@@ -21,6 +21,7 @@ import {
   DEFAULT_SUGGESTED_EXAM_SLUGS, type FocusExamSlot,
 } from '../../utils/focusExamSlots'
 import { pickCountdown } from '../../utils/todayNextStep'
+import { focusExamScore } from '../../utils/focusExamScore'
 import type { ExamListingSummary, BlueprintInfo } from '../../hooks/useHomeCatalog'
 
 interface FocusedExamInput {
@@ -94,8 +95,8 @@ export function FocusExamsFold({
     [focusedExams],
   )
 
-  const readinessFor = (slug: string): number | null =>
-    listingMockBest.get(slug) ?? listingAccuracy[slug] ?? null
+  const scoreFor = (slug: string) => focusExamScore(listingMockBest.get(slug), listingAccuracy[slug])
+  const readinessFor = (slug: string): number | null => scoreFor(slug).pct
 
   function onRowPress(slot: Exclude<FocusExamSlot, { kind: 'blank' }>) {
     if (slot.kind === 'suggested') { void onAddListing(slot.slug); return }
@@ -148,12 +149,12 @@ export function FocusExamsFold({
                 />
               )
             }
-            const pct = readinessFor(slot.slug)
+            const { pct, label: scoreLabel } = scoreFor(slot.slug)
             return (
               <ListRow
                 key={slot.slug}
                 title={slot.title}
-                subtitle={pct != null ? 'Best score' : 'No score yet'}
+                subtitle={scoreLabel}
                 trailing={
                   <Text style={textStyle('numeric', pct != null ? t.textPrimary : t.textSecondary)} maxFontSizeMultiplier={1.5}>
                     {pct != null ? `${pct}%` : '—'}

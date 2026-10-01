@@ -212,6 +212,11 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       total: Number(row.total ?? 0),
       durationSecs: Number(row.durationSecs ?? row.duration_secs ?? 0),
       completedAt: Number(row.completedAt ?? row.completed_at ?? Date.now()),
+      // Dropping these on restore turned every mock/sprint/drill into an
+      // unclassified legacy row and lost the subject of each section row.
+      subtest: row.subtest != null ? String(row.subtest) : null,
+      kind: row.kind != null ? String(row.kind) : null,
+      attemptKey: row.attemptKey != null ? Number(row.attemptKey) : row.attempt_key != null ? Number(row.attempt_key) : null,
     })
   }
 

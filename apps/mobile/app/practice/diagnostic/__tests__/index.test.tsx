@@ -107,6 +107,27 @@ describe('DiagnosticExam', () => {
     expect(screen.getAllByText('Mathematics').length).toBeGreaterThan(0)
   })
 
+  // A5: the bundled fallback is not an upcat_questions row, so its answers are
+  // scored but never recorded as attempts under that source.
+  it('does not record question_attempts for bundled fallback questions, but still records the session', async () => {
+    mockSearchParams = { subject: 'Mathematics' }
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('If 2x + 5 = 13, what is the value of x?')).toBeTruthy())
+    // Skip to the last bundled question, answer nothing else, and submit.
+    for (let i = 0; i < 20 && !screen.queryByText('Review & submit'); i++) fireEvent.press(screen.getByText('Skip'))
+    await reviewAndConfirmSubmit(alertSpy)
+    await waitFor(() => expect(mockRecordSession).toHaveBeenCalledTimes(1))
+    expect(mockRecordAttempts).not.toHaveBeenCalled()
+  })
+
+  it('shows the empty state instead of cross-subject bundled questions when nothing exists for the subject', async () => {
+    mockSearchParams = { subject: 'Reading Comprehension' }
+    render(<DiagnosticExam />)
+    await waitFor(() => expect(screen.getByText('No diagnostic questions yet')).toBeTruthy())
+    // Nothing from the bundle (English / Filipino / Abstract Reasoning...) leaks in.
+    expect(screen.queryByText(/Question 1/)).toBeNull()
+  })
+
   it('builds questions from the bank when it has rows for the requested subject', async () => {
     mockSearchParams = { subject: 'Science' }
     mockBankRows = [
@@ -131,7 +152,7 @@ describe('DiagnosticExam', () => {
 
     await waitFor(() => expect(mockRecordSession).toHaveBeenCalledTimes(1))
     expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({
-      listingSlug: 'upcat', topicId: '', subtest: 'Science', score: 1, total: 1,
+      listingSlug: 'upcat', topicId: '', subtest: 'Science', score: 1, total: 1, kind: 'diagnostic',
     }))
 
     await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())

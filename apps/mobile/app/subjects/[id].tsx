@@ -21,7 +21,7 @@ import { ProgressBar } from '../../components/ui/ProgressBar'
 import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
 import { spacing, radius, textStyle } from '../../theme/tokens'
 import { cachedQuery, invalidate } from '../../services/queryCache'
-import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
+import { getSubjectRecentAccuracy, getTopicRecentAccuracy } from '../../services/homeAggregates'
 import { topicReadiness } from '../../utils/subjectReadiness'
 import { subjectColor } from '../../utils/subjectColors'
 
@@ -32,14 +32,16 @@ import { subjectColor } from '../../utils/subjectColors'
 interface TopicRow {
   id: string
   name: string
-  // Highest attained result % across this topic's review sessions, or null when
-  // the topic has never been practiced (no qualifying session).
-  bestPct: number | null
+  // Recent weighted accuracy over this topic's latest answered questions, or
+  // null when there are too few answers yet ("Not started").
+  pct: number | null
 }
 
 interface SubjectData {
   subjectName: string
   rows: TopicRow[]
+  /** Recent accuracy across all of the subject's answers; null until enough answers. */
+  subjectPct: number | null
 }
 
 // Cached for 5 min so re-opening the same subject is instant (no re-query/re-sort).
@@ -51,11 +53,11 @@ const SUBJECT_TTL = 300_000
 // ---------------------------------------------------------------------------
 
 function byReadiness(a: TopicRow, b: TopicRow): number {
-  const an = a.bestPct == null
-  const bn = b.bestPct == null
+  const an = a.pct == null
+  const bn = b.pct == null
   if (an !== bn) return an ? 1 : -1            // null (no session) sinks to the bottom
-  if (!an && !bn && a.bestPct !== b.bestPct) {
-    return (a.bestPct as number) - (b.bestPct as number) // ascending: lowest first
+  if (!an && !bn && a.pct !== b.pct) {
+    return (a.pct as number) - (b.pct as number) // ascending: lowest first
   }
   return a.name.localeCompare(b.name)          // alpha tiebreak
 }
@@ -67,13 +69,13 @@ function byReadiness(a: TopicRow, b: TopicRow): number {
 
 const TopicProgressRow = memo(function TopicProgressRow({ row }: { row: TopicRow }) {
   const { theme: t } = useTheme()
-  const pctLabel = row.bestPct != null ? `${row.bestPct}%` : '—'
+  const pctLabel = row.pct != null ? `${row.pct}%` : '—'
 
   return (
     <Pressable
       onPress={() => router.push(`/practice/${row.id}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${row.name}, ${row.bestPct != null ? `readiness ${pctLabel}` : 'no sessions yet'}`}
+      accessibilityLabel={`${row.name}, ${row.pct != null ? `readiness ${pctLabel}` : 'not started'}`}
       accessibilityHint="Opens practice for this topic"
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
@@ -92,18 +94,18 @@ const TopicProgressRow = memo(function TopicProgressRow({ row }: { row: TopicRow
           <Text testID="topic-name" style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>
             {row.name}
           </Text>
-          {row.bestPct == null ? (
-            <Text style={textStyle('caption', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.8}>No sessions yet</Text>
+          {row.pct == null ? (
+            <Text style={textStyle('caption', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.8}>Not started</Text>
           ) : null}
         </View>
-        <Text style={[textStyle('numeric', row.bestPct == null ? t.textSecondary : t.textPrimary)]} maxFontSizeMultiplier={1.4}>
+        <Text style={[textStyle('numeric', row.pct == null ? t.textSecondary : t.textPrimary)]} maxFontSizeMultiplier={1.4}>
           {pctLabel}
         </Text>
         <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
           <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textTertiary} />
         </View>
       </View>
-      {row.bestPct != null ? <ProgressBar value={row.bestPct / 100} label={`${row.name} readiness`} height={4} /> : null}
+      {row.pct != null ? <ProgressBar value={row.pct / 100} label={`${row.name} readiness`} height={4} /> : null}
     </Pressable>
   )
 })
@@ -134,38 +136,35 @@ export default function SubjectDetailsScreen() {
     void (async () => {
       try {
         const result = await cachedQuery<SubjectData>(`subject:topics:${id}`, SUBJECT_TTL, async () => {
-          // Per-topic review bests + subject-level mock bests both feed readiness,
-          // so a subject practiced only via a mock (subtest == subject name) still
-          // shows its readiness on every topic. All fetched together (independent).
-          const [subjectRows, topicRows, topicBestRows, subjectBestRows] = await Promise.all([
+          // Readiness per topic = the topic's own recent accuracy (latest 60 answered
+          // questions, minimum 10) — not lifted by the subject's overall result.
+          const [subjectRows, topicRows, topicPctRows, subjectPctRows] = await Promise.all([
             db.select({ id: subjectsTable.id, name: subjectsTable.name })
               .from(subjectsTable).where(eq(subjectsTable.id, id)).limit(1),
             db.select({ id: topicsTable.id, name: topicsTable.name })
               .from(topicsTable)
               .where(and(eq(topicsTable.subjectId, id), eq(topicsTable.status, 'published'))),
-            getTopicBestSessionPercentages(db),
-            getSubjectSessionPercentages(db),
+            getTopicRecentAccuracy(db),
+            getSubjectRecentAccuracy(db),
           ])
 
-          const topicBestMap = new Map(topicBestRows.map(r => [r.topicId, r.bestPct]))
-          const subjectBestMap = new Map(subjectBestRows.map(r => [r.subject, r.bestPct]))
+          const topicPctMap = new Map(topicPctRows.map(r => [r.topicId, r.pct]))
 
           const subjectName = (subjectRows[0]?.name as string | undefined) ?? 'Subject'
-          // subtest (mock) sessions are keyed by the subject NAME.
-          const subjectBest = subjectBestMap.get(subjectName) ?? null
 
           const rows: TopicRow[] = (topicRows as Array<{ id: string; name: string }>).map(tp => ({
             id: tp.id,
             name: tp.name,
-            // readiness = max(this topic's review best, the subject mock best).
-            bestPct: topicReadiness({
-              topicBest: topicBestMap.get(tp.id) ?? null,
-              subjectBest,
-            }),
+            pct: topicReadiness(topicPctMap.get(tp.id)),
           }))
           rows.sort(byReadiness)
 
-          return { subjectName, rows }
+          // The headline is the subject's own recent accuracy — the same figure
+          // Progress and Practice show. It includes mock and drill answers,
+          // which have no flashcard topic, so a mean of the topics would differ.
+          const subjectPct = subjectPctRows.find(r => r.subject === subjectName)?.pct ?? null
+
+          return { subjectName, rows, subjectPct }
         })
         if (alive) setState({ status: 'ready', data: result })
       } catch (e) {
@@ -202,11 +201,8 @@ export default function SubjectDetailsScreen() {
     )
   }
 
-  const { subjectName, rows } = state.data
-  const practised = rows.filter(r => r.bestPct != null)
-  const average = practised.length > 0
-    ? Math.round(practised.reduce((sum, r) => sum + (r.bestPct as number), 0) / practised.length)
-    : null
+  const { subjectName, rows, subjectPct } = state.data
+  const practised = rows.filter(r => r.pct != null)
   // Rows are sorted lowest readiness first, so the first row is the next step.
   const next = rows[0] as TopicRow | undefined
 
@@ -248,7 +244,7 @@ export default function SubjectDetailsScreen() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xl }}>
         <StatNumber label="Topics practised" value={practised.length} unit={`of ${rows.length}`} />
         {/* Value and unit as separate texts so the number stays tabular. */}
-        <StatNumber label="Average readiness" value={average ?? 'None yet'} unit={average != null ? '%' : undefined} />
+        <StatNumber label="Subject readiness" value={subjectPct ?? 'None yet'} unit={subjectPct != null ? '%' : undefined} />
       </View>
       {next ? <Button
         label={`Practise ${next.name}`}

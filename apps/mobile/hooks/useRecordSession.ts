@@ -6,6 +6,9 @@ import { scheduleWebPersist } from '../db/webPersist'
 import { capture } from '../lib/analytics'
 import { markPlanItemsDoneForSession } from '../services/studyPlan'
 
+import type { SessionKind } from '../utils/sessionKind'
+export type { SessionKind }
+
 export interface SessionParams {
   listingSlug: string
   topicId: string
@@ -14,6 +17,11 @@ export interface SessionParams {
   total: number
   startTime: number
   subtest?: string
+  kind: SessionKind
+  /** Shared by every row of one sitting (mock/diagnostic write one row per
+   *  section). Defaults to startTime — pass the SITTING's start explicitly
+   *  when startTime differs per row. */
+  attemptKey?: number
 }
 
 export interface SessionRecord {
@@ -25,6 +33,8 @@ export interface SessionRecord {
   durationSecs: number
   completedAt: number
   subtest: string | null
+  kind: SessionKind
+  attemptKey: number
 }
 
 export function buildSessionRecord(params: SessionParams): SessionRecord {
@@ -38,6 +48,8 @@ export function buildSessionRecord(params: SessionParams): SessionRecord {
     durationSecs: Math.round((completedAt - params.startTime) / 1000),
     completedAt,
     subtest: params.subtest ?? null,
+    kind: params.kind,
+    attemptKey: params.attemptKey ?? params.startTime,
   }
 }
 
@@ -51,6 +63,7 @@ export function useRecordSession() {
       listingSlug: record.listingSlug || null,
       topicId: record.topicId,
       subtest: record.subtest,
+      kind: record.kind,
       score: record.score,
       total: record.total,
       pct: record.total > 0 ? Math.round((record.score / record.total) * 100) : 0,
@@ -69,6 +82,7 @@ export function useRecordSession() {
       topicId: record.topicId,
       listingSlug: record.listingSlug,
       subtest: record.subtest,
+      kind: record.kind,
     }).catch(err => console.warn('[recordSession] plan bookkeeping failed:', err))
     // Best-effort backup to Supabase if signed in. Don't block the UI on this.
     void pushUserData(db).catch(err => console.warn('[recordSession] push failed:', err))

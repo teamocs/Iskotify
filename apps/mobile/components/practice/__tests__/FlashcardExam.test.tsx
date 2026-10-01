@@ -571,6 +571,7 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
   it('shows results on a titled page with a way back that calls onExit', async () => {
     const onExit = jest.fn()
     render(<FlashcardExam {...DEFAULT_PROPS} onExit={onExit} />)
+    fireEvent.press(screen.getByText('4')) // submit is blocked until something is answered
     fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
     fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
     const alertSpy = Alert.alert as jest.Mock
@@ -606,5 +607,91 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
 
     await act(async () => { resolveAttempts() })
     expect(await screen.findByText('3/3 correct')).toBeTruthy()
+  })
+})
+
+describe('FlashcardExam — logic audit A6', () => {
+  it('only answered questions reach user_progress and SRS (an unanswered card is not a lapse)', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('Skip'))           // q1 unanswered
+    fireEvent.press(screen.getByText('Manila'))         // q2 correct
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Red'))            // q3 wrong
+    await reviewAndConfirmSubmit()
+
+    const progressRows = mockRecordProgress.mock.calls[0]![0] as any[]
+    expect(progressRows.map(r => r.flashcardId)).toEqual(['q2', 'q3'])
+    const srsRows = mockRecordSrs.mock.calls[0]![0] as any[]
+    expect(srsRows.map(r => r.flashcardId)).toEqual(['q2', 'q3'])
+  })
+
+  it('blocks submitting a run with nothing answered (no all-wrong record)', async () => {
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('Skip'))
+    fireEvent.press(screen.getByText('Skip'))
+    fireEvent.press(screen.getByText('Review & submit'))
+    expect(await screen.findByText(/answer at least one question/i)).toBeTruthy()
+    const btn = screen.getByRole('button', { name: /submit exam/i })
+    expect(aria(btn, 'aria-disabled')).toBe(true)
+    fireEvent.press(btn)
+    expect(mockRecordProgress).not.toHaveBeenCalled()
+    expect(mockRecordSession).not.toHaveBeenCalled()
+  })
+
+  it('a rejected recordProgress never strands the student — results still render', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordProgress.mockRejectedValueOnce(new Error('disk full'))
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+    await reviewAndConfirmSubmit()
+    expect(screen.getByText('100%')).toBeTruthy()
+    expect(warnSpy).toHaveBeenCalledWith('[FlashcardExam] recordProgress failed:', expect.any(Error))
+    expect(mockRecordSession).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('a rejected recordSession is caught (no unhandled rejection) and results render', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRecordSession.mockRejectedValueOnce(new Error('locked'))
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    fireEvent.press(screen.getByText('4'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Manila'))
+    fireEvent.press(screen.getByText('Next'))
+    fireEvent.press(screen.getByText('Blue'))
+    await reviewAndConfirmSubmit()
+    await new Promise(r => setTimeout(r, 0))
+    expect(screen.getByText('100%')).toBeTruthy()
+    expect(warnSpy).toHaveBeenCalledWith('[FlashcardExam] recordSession failed:', expect.any(Error))
+    warnSpy.mockRestore()
+  })
+
+  it('records kind=flashcard and a retake starts a fresh sitting (startTime/attemptKey advance)', async () => {
+    let t = 2_000_000
+    const dateSpy = jest.spyOn(Date, 'now').mockImplementation(() => t)
+    render(<FlashcardExam {...DEFAULT_PROPS} />)
+    const answerAll = () => {
+      fireEvent.press(screen.getByText('4')); fireEvent.press(screen.getByText('Next'))
+      fireEvent.press(screen.getByText('Manila')); fireEvent.press(screen.getByText('Next'))
+      fireEvent.press(screen.getByText('Blue'))
+    }
+    answerAll()
+    t += 100
+    await reviewAndConfirmSubmit()
+    const first = mockRecordSession.mock.calls[0]![0]
+    expect(first.kind).toBe('flashcard')
+
+    t += 5000
+    await act(async () => { fireEvent.press(screen.getByText('Retake exam')) })
+    answerAll()
+    t += 100
+    await reviewAndConfirmSubmit()
+    const second = mockRecordSession.mock.calls[1]![0]
+    expect(second.startTime).toBeGreaterThan(first.startTime)
+    dateSpy.mockRestore()
   })
 })

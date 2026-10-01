@@ -2,6 +2,7 @@ import React from 'react'
 import { render, fireEvent, screen } from '@testing-library/react-native'
 import { Alert, AccessibilityInfo } from 'react-native'
 import { ExamReviewSheet } from '../ExamReviewSheet'
+import { aria } from '../../../test-utils/aria'
 
 describe('ExamReviewSheet', () => {
   let alertSpy: jest.SpyInstance
@@ -212,5 +213,18 @@ describe('ExamReviewSheet', () => {
       rerender(<ExamReviewSheet {...baseProps} visible={true} />)
       expect(focusSpy).toHaveBeenCalledTimes(1)
     })
+  })
+
+  // A6: a run with nothing answered would write an all-wrong record, so a
+  // runner can block the submit with a clear reason.
+  it('blocks submit and says why when the runner passes submitBlockedMessage', () => {
+    const onSubmit = jest.fn()
+    render(<ExamReviewSheet {...baseProps} answeredIdxs={new Set()} onSubmit={onSubmit} submitBlockedMessage="Answer at least one question to submit." />)
+    expect(screen.getByText('Answer at least one question to submit.')).toBeTruthy()
+    const btn = screen.getByRole('button', { name: /submit exam/i })
+    expect(aria(btn, 'aria-disabled')).toBe(true)
+    fireEvent.press(btn)
+    expect(alertSpy).not.toHaveBeenCalled()
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 })

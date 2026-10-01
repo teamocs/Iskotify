@@ -141,10 +141,10 @@ describe('useStudyPlan', () => {
     await db.insert(flashcards).values({
       id: 'fc1', topicId: 't1', question: 'q', answer: 'a', explanation: 'e', status: 'published',
     })
-    await db.insert(userProgress).values([
-      { flashcardId: 'fc1', correct: false, answeredAt: now },
-      { flashcardId: 'fc1', correct: false, answeredAt: now },
-    ])
+    // Five wrong answers: weak needs MIN_SAMPLE (5) answers (utils/weakness.ts).
+    await db.insert(userProgress).values(
+      Array.from({ length: 5 }, () => ({ flashcardId: 'fc1', correct: false, answeredAt: now })),
+    )
 
     const { result } = renderHook(() => useStudyPlan())
     await waitFor(() => expect(result.current.loading).toBe(false))

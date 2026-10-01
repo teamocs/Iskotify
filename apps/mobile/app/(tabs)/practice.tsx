@@ -14,11 +14,11 @@ import { useSavedDecks, type SavedDeck } from '../../hooks/useSavedDecks'
 import { useExamRunPersistence } from '../../hooks/useExamRunPersistence'
 import { listPublishedBlueprints, type PublishedBlueprint } from '../../services/examBlueprints'
 import { cachedQuery, invalidate, subscribe } from '../../services/queryCache'
-import { getTopicBestSessionPercentages, getSubjectSessionPercentages } from '../../services/homeAggregates'
+import { getSubjectRecentAccuracy } from '../../services/homeAggregates'
+import { subjectReadinessPct } from '../../utils/subjectReadiness'
 import { getDueCounts, type DueCounts } from '../../services/srsAggregates'
 import { syncOnLaunch } from '../../services/sync'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
-import { subjectsToImprove } from '../../utils/subjectsToImprove'
 import { runKeyFor } from '../../utils/examRunPersistence'
 import { pickNextPractice, nextPracticeCopy, type NextPracticeInput } from '../../utils/nextPracticeAction'
 import { useTheme } from '../../theme/ThemeContext'
@@ -105,23 +105,15 @@ export default function PracticeScreen() {
   // ── Data ─────────────────────────────────────────────────────────────────
   // Each section owns its load state so one failure never blanks the page.
 
-  const [readiness, setReadiness] = useState<Load<{ perTopicBest: Map<string, number>; subjectBest: Map<string, number> }>>({ status: 'loading' })
+  const [readiness, setReadiness] = useState<Load<Map<string, number>>>({ status: 'loading' })
   const [readinessTry, setReadinessTry] = useState(0)
   useEffect(() => {
     let cancelled = false
     setReadiness({ status: 'loading' })
-    cachedQuery('practice:sessionReadiness', 30_000, () => Promise.all([
-      getTopicBestSessionPercentages(db),
-      getSubjectSessionPercentages(db),
-    ])).then(([topicBest, subjectBest]) => {
+    // Weighted recent accuracy per subject (null/absent = not started yet).
+    cachedQuery('practice:sessionReadiness', 30_000, () => getSubjectRecentAccuracy(db)).then(rows => {
       if (!cancelled) {
-        setReadiness({
-          status: 'ready',
-          data: {
-            perTopicBest: new Map(topicBest.map(r => [r.topicId, r.bestPct])),
-            subjectBest: new Map(subjectBest.map(r => [r.subject, r.bestPct])),
-          },
-        })
+        setReadiness({ status: 'ready', data: new Map(rows.map(r => [r.subject, r.pct])) })
       }
     }).catch(e => {
       console.warn('[practice/sessionReadiness] load failed:', e)
@@ -232,17 +224,12 @@ export default function PracticeScreen() {
     }))
   }, [dueCounts, resume, blueprints.status, weakTopic, focusBlueprint])
 
-  // Subjects A–Z with session-based readiness (same maths as Subject details).
+  // Subjects A–Z with recent-accuracy readiness (same source as Progress).
   const subjectRows = useMemo(() => {
     if (readiness.status !== 'ready') return []
-    const pctById = new Map(
-      subjectsToImprove(topicRows, subjects, readiness.data.perTopicBest, readiness.data.subjectBest).map(m => [m.id, m.pct]),
-    )
     const topicCount = new Map<string, number>()
-    const practised = new Set<string>()
     for (const r of topicRows) {
       topicCount.set(r.topic.subjectId, (topicCount.get(r.topic.subjectId) ?? 0) + 1)
-      if (r.strength !== 'New' || readiness.data.perTopicBest.has(r.topic.id)) practised.add(r.topic.subjectId)
     }
     return subjects
       .filter(s => (topicCount.get(s.id) ?? 0) > 0)
@@ -250,7 +237,7 @@ export default function PracticeScreen() {
         id: s.id,
         name: s.name,
         topics: topicCount.get(s.id) ?? 0,
-        pct: practised.has(s.id) || readiness.data.subjectBest.has(s.name) ? (pctById.get(s.id) ?? null) : null,
+        pct: subjectReadinessPct(s.name, readiness.data),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [readiness, topicRows, subjects])

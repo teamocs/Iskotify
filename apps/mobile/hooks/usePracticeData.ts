@@ -6,6 +6,7 @@ import { useDb } from './useDb'
 import { subjects, topics, flashcards, userProgress, userSettings } from '../db/schema'
 import { getTopicCardCounts } from '../services/homeAggregates'
 import { cachedQuery, invalidate, subscribe } from '../services/queryCache'
+import { classify } from '../utils/weakness'
 
 export type Strength = 'New' | 'Weak' | 'Review' | 'Strong'
 
@@ -43,12 +44,11 @@ export function computeStrength(
 ): Strength {
   const fcIds = new Set(fcList.filter(f => f.topicId === topicId).map(f => f.id))
   const tp = progress.filter(p => fcIds.has(p.flashcardId))
-  if (tp.length === 0) return 'New'
   const correct = tp.filter(p => isCorrectAnswer(p.correct)).length
-  const acc = correct / tp.length
-  if (acc >= 0.8) return 'Strong'
-  if (acc >= 0.5) return 'Review'
-  return 'Weak'
+  // Shared rule (utils/weakness.ts): 'New' until MIN_SAMPLE answers, then
+  // Weak <60% / Review <80% / Strong.
+  const c = classify(correct, tp.length)
+  return c === 'new' ? 'New' : c === 'weak' ? 'Weak' : c === 'review' ? 'Review' : 'Strong'
 }
 
 const STRENGTH_PRIORITY: Record<Strength, number> = { New: 0, Weak: 1, Review: 2, Strong: 3 }
@@ -100,7 +100,10 @@ export function usePracticeData(): PracticeData {
             id: flashcards.id,
             topicId: flashcards.topicId,
             listingSlugs: flashcards.listingSlugs,
-          }).from(flashcards),
+          }).from(flashcards)
+            // Published only — drafts/archived cards aren't served, so they must not
+            // inflate card counts or create ghost topics.
+            .where(eq(flashcards.status, 'published')),
           db.select({
             flashcardId: userProgress.flashcardId,
             correct: userProgress.correct,
