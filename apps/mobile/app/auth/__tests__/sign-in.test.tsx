@@ -8,7 +8,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn() },
+  router: { replace: jest.fn(), push: jest.fn() },
   useLocalSearchParams: () => ({}),
 }))
 
@@ -504,5 +504,18 @@ describe('SignInScreen — after account deletion (web)', () => {
     unmount()
     render(<SignInScreen />)
     expect(screen.queryByText('Your account was deleted.')).toBeNull()
+  })
+})
+
+describe('SignInScreen — Terms and Privacy Policy', () => {
+  it('says what continuing means, with both documents one tap away (not the old study-purposes line)', () => {
+    const { router } = require('expo-router')
+    render(<SignInScreen />)
+    expect(screen.getByText(/By continuing you agree to the/)).toBeTruthy()
+    expect(screen.queryByText(/personal study purposes/)).toBeNull()
+    fireEvent.press(screen.getByRole('link', { name: 'Terms' }))
+    expect(router.push).toHaveBeenCalledWith('/terms')
+    fireEvent.press(screen.getByRole('link', { name: 'Privacy Policy' }))
+    expect(router.push).toHaveBeenCalledWith('/privacy')
   })
 })

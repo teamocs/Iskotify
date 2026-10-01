@@ -1,3 +1,5 @@
+import { gateSensitive } from './consent'
+
 export type IncomeBracket = '<=100k' | '100k-300k' | '300k-600k' | '600k-1.2M' | '>1.2M' | 'unknown'
 export const INCOME_BANDS: Record<Exclude<IncomeBracket, 'unknown'>, [number, number]> = {
   '<=100k': [0, 100000],
@@ -10,6 +12,31 @@ export const INCOME_BANDS: Record<Exclude<IncomeBracket, 'unknown'>, [number, nu
 const HUC = new Set(['Cebu City','Lapu-Lapu City','Mandaue City','Davao City','Iloilo City','Bacolod City','Cagayan de Oro City','Zamboanga City','General Santos City','Angeles City','Olongapo City','Baguio City','Butuan City','Iligan City','Tacloban City','Puerto Princesa City','Lucena City','Naga City','Cotabato City'])
 
 export interface StudentProfile { gradeLevel?: number; incomeBracket?: IncomeBracket; gwa?: number; province?: string | null; city?: string | null }
+
+/**
+ * The profile scholarship matching may use, from the stored settings. Household
+ * income and GWA are sensitive personal information: without the student's
+ * consent they read as "not provided" (even if still stored), so matching asks
+ * for them instead of using them.
+ */
+export function studentProfileFromSettings(s: {
+  gradeLevel?: number | null
+  incomeBracket?: IncomeBracket | string | null
+  gwa?: number | null
+  province?: string | null
+  city?: string | null
+  sensitiveConsentAt?: number | null
+}): StudentProfile {
+  const g = gateSensitive(s)
+  return {
+    gradeLevel: g.gradeLevel ?? undefined,
+    incomeBracket: (g.incomeBracket as IncomeBracket | null | undefined) ?? undefined,
+    gwa: g.gwa ?? undefined,
+    province: g.province ?? undefined,
+    city: g.city ?? undefined,
+  }
+}
+
 export interface MatchInput {
   scope: 'national'|'regional'|'provincial'|'city'|'school'
   isVerified: boolean

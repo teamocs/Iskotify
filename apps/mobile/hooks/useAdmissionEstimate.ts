@@ -12,6 +12,7 @@ import { getSettings, updateSettings } from '../services/settings'
 import { questionAttempts, upcatCutoffs } from '../db/schema'
 import { subscribe } from '../services/queryCache'
 import { computeHsGwa, isTargetCampusFar } from '../utils/estimatorInputs'
+import { gateSensitive } from '../utils/consent'
 import { subtestReadiness, UPCAT_SUBTEST_LABELS, type Readiness } from '../utils/subtestReadiness'
 import { estimateAdmissionScore, type EstimateResult, type CutoffRow } from '../utils/admissionEstimate'
 import type { EstimateCardStatus } from '../utils/estimateSummary'
@@ -36,7 +37,9 @@ export interface AdmissionEstimateSnapshot {
  * component.
  */
 export async function loadAdmissionEstimateSnapshot(db: DrizzleClient): Promise<AdmissionEstimateSnapshot> {
-  const settings = await getSettings(db)
+  // Grades and Indigenous status are sensitive: without the student's consent they
+  // read as "not provided" (even if still stored), so the estimate asks for them.
+  const settings = gateSensitive(await getSettings(db))
 
   if (!settings.scoreDisclaimerAck) {
     return { status: 'disclaimer', readiness: null, result: null }

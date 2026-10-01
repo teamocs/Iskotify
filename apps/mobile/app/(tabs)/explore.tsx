@@ -38,7 +38,7 @@ import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
 import { getSettings } from '../../services/settings'
 import { getListingMockBest, getListingAccuracy } from '../../services/homeAggregates'
 import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
-import { matchScholarship, scholarshipProfileIncomplete } from '../../utils/scholarshipMatch'
+import { matchScholarship, scholarshipProfileIncomplete, studentProfileFromSettings } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
 import { canonicalizeRegion } from '../../utils/region'
@@ -273,13 +273,8 @@ export default function ExploreScreen() {
       }
       setUserClusters(uClusters)
       setBlueprintSlugs(new Set(bpSlugs))
-      setProfile({
-        gradeLevel: settings.gradeLevel ?? undefined,
-        incomeBracket: settings.incomeBracket ?? undefined,
-        gwa: settings.gwa ?? undefined,
-        province: settings.province ?? undefined,
-        city: settings.city ?? undefined,
-      })
+      // Income and GWA only count while the student has consented to their use.
+      setProfile(studentProfileFromSettings(settings))
       setListStatus('ready')
     } catch (e) {
       if (!isCurrent()) return

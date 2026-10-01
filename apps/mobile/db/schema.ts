@@ -141,6 +141,24 @@ export const userSettings = sqliteTable('user_settings', {
   // Last time a pull for this device's owner completed (epoch ms, 0 = never). pushUserData
   // refuses to overwrite a backup with an empty, never-pulled device.
   lastPullOkAt: integer('last_pull_ok_at').notNull().default(0),
+  // ── Consent (P1b; RA 10173 / NPC Advisory 2024-03) ─────────────────────────────
+  // Age band chosen on the consent step: 'adult' | 'minor'; '' = never asked.
+  ageBand: text('age_band').notNull().default(''),
+  // Version (ISO date) of the Terms/Privacy Policy the student accepted; '' = none.
+  consentVersion: text('consent_version').notNull().default(''),
+  // When the Terms/Privacy consent was given, epoch ms; 0 = never.
+  consentedAt: integer('consented_at').notNull().default(0),
+  // When a parent/guardian attestation was given (under-18 only), epoch ms; 0 = none.
+  guardianConsentAt: integer('guardian_consent_at').notNull().default(0),
+  // Separate opt-in for grades / household income / Indigenous status, epoch ms; 0 = no consent (or withdrawn).
+  sensitiveConsentAt: integer('sensitive_consent_at').notNull().default(0),
+  // Analytics opt-in: 1 = on, 0 = off, NULL = never chosen (derive from the age band).
+  analyticsOptIn: integer('analytics_opt_in'),
+  // When sensitive consent was last withdrawn (or declined), epoch ms; 0 = never. The
+  // latest of this and sensitiveConsentAt decides across devices (utils/consent.ts).
+  sensitiveWithdrawnAt: integer('sensitive_withdrawn_at').notNull().default(0),
+  // When the analytics switch was last set, epoch ms; 0 = never chosen. Latest choice wins.
+  analyticsChoiceAt: integer('analytics_choice_at').notNull().default(0),
 })
 
 export const userProgress = sqliteTable('user_progress', {

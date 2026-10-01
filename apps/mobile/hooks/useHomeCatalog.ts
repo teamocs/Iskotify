@@ -6,7 +6,7 @@ import { listRunnableBlueprints } from '../services/examBlueprints'
 import { getListingMockBest } from '../services/homeAggregates'
 import { getSettings } from '../services/settings'
 import { cachedQuery, subscribe } from '../services/queryCache'
-import type { StudentProfile } from '../utils/scholarshipMatch'
+import { studentProfileFromSettings, type StudentProfile } from '../utils/scholarshipMatch'
 import type { RankableListing } from '../utils/listingSearch'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -149,13 +149,8 @@ export function useHomeCatalog(): HomeCatalog {
       setListingMockBest(mockBest)
       setClusters(uClusters)
       setRegion(data.settings.schoolRegion ?? '')
-      setProfile({
-        gradeLevel: data.settings.gradeLevel ?? undefined,
-        incomeBracket: data.settings.incomeBracket ?? undefined,
-        gwa: data.settings.gwa ?? undefined,
-        province: data.settings.province ?? undefined,
-        city: data.settings.city ?? undefined,
-      })
+      // Income and GWA only count while the student has consented to their use.
+      setProfile(studentProfileFromSettings(data.settings))
       setError(false)
     } catch (e) {
       console.warn('[useHomeCatalog] load failed:', e)

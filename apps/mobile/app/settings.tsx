@@ -13,6 +13,7 @@ import {
   Bug1Outlined,
   Comment1Outlined,
   ChevronLeftOutlined,
+  Locked1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../hooks/useDb'
 import { userSettings } from '../db/schema'
@@ -24,6 +25,10 @@ import { Avatar } from '../components/ui/Avatar'
 import { decorative, focusRing, heading, type WebPressableState } from '../components/ui/a11y'
 import { useNotifications } from '../hooks/useNotifications'
 import { useHomeStats } from '../hooks/useHomeStats'
+import { getSettings } from '../services/settings'
+import { setAnalyticsOptIn } from '../services/consent'
+import { applyAnalyticsConsent } from '../services/analyticsConsent'
+import { analyticsAllowed } from '../utils/consent'
 
 function formatHour(hour: number): string {
   const h12 = hour % 12 === 0 ? 12 : hour % 12
@@ -138,6 +143,35 @@ export default function SettingsScreen() {
     void load()
   }, [db])
 
+  // Analytics sharing: off for under-18s until they opt in, on for adults until
+  // they opt out. Nothing runs before consent (utils/consent.ts analyticsAllowed).
+  // null until the saved choice loads: the switch stays disabled so it neither
+  // flickers nor rolls back to a value that was never saved.
+  const [analyticsOn, setAnalyticsOn] = useState<boolean | null>(null)
+  useEffect(() => {
+    let alive = true
+    void getSettings(db)
+      .then(s => { if (alive) setAnalyticsOn(analyticsAllowed(s)) })
+      .catch(e => {
+        console.warn('[settings] could not read analytics choice:', e)
+        // Unknown: show OFF (analytics stays off too, analyticsConsent fails closed).
+        if (alive) setAnalyticsOn(false)
+      })
+    return () => { alive = false }
+  }, [db])
+
+  async function toggleAnalytics(next: boolean) {
+    const before = analyticsOn
+    setAnalyticsOn(next)
+    try {
+      await setAnalyticsOptIn(db, next)
+      await applyAnalyticsConsent(db)
+    } catch (e) {
+      console.warn('[settings] could not save analytics choice:', e)
+      setAnalyticsOn(before)
+    }
+  }
+
   function handleExitApp() {
     Alert.alert(
       'Exit Iskotify?',
@@ -211,6 +245,28 @@ export default function SettingsScreen() {
             {...switchColors}
           />
         </ControlRow>
+      </Group>
+
+      <Group title="Privacy" note="You choose what is shared">
+        <ControlRow
+          label="Share anonymous usage analytics"
+          sub="Helps us see which parts of Iskotify get used and fix problems. No names or emails."
+        >
+          <Switch
+            accessibilityLabel="Share anonymous usage analytics"
+            value={analyticsOn ?? false}
+            disabled={analyticsOn === null}
+            onValueChange={v => void toggleAnalytics(v)}
+            {...switchColors}
+          />
+        </ControlRow>
+        <Divider />
+        <ListRow
+          title="Grades and family details"
+          subtitle="Choose whether we use them, or clear them"
+          leading={<IconTile icon={Locked1Outlined} />}
+          onPress={() => router.push('/profile/scholarship-info')}
+        />
       </Group>
 
       <Group title="Feedback">

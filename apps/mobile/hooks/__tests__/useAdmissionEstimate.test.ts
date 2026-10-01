@@ -86,6 +86,7 @@ const BASE_SETTINGS = {
   schoolType: 'public_general', isIndigenous: false,
   targetCampus: null, province: null,
   scoreDisclaimerAck: true,
+  sensitiveConsentAt: 1_700_000_000_000,
 }
 
 function readyAttempt(subtest: string, i: number) {
@@ -128,6 +129,15 @@ describe('useAdmissionEstimate', () => {
     mockGetSettings.mockResolvedValue({ ...BASE_SETTINGS, hsGwaG8: null, hsGwaG9: null, hsGwaG10: null, hsGwaG11: null })
     const { result } = renderHook(() => useAdmissionEstimate())
     await waitFor(() => expect(result.current.status).toBe('no-grades'))
+  })
+
+  it('without consent to use grades, stored grades are ignored: it asks for them instead of breaking', async () => {
+    setCutoffs(CUTOFFS)
+    setAttempts(READY_ATTEMPTS)
+    mockGetSettings.mockResolvedValue({ ...BASE_SETTINGS, sensitiveConsentAt: 0, isIndigenous: true })
+    const { result } = renderHook(() => useAdmissionEstimate())
+    await waitFor(() => expect(result.current.status).toBe('no-grades'))
+    expect(result.current.result).toBeNull()
   })
 
   it('reports not-ready status with per-subtest readiness when subtests are unpracticed', async () => {

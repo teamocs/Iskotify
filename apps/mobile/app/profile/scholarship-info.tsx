@@ -5,6 +5,10 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { router } from 'expo-router'
 import { useDb } from '../../hooks/useDb'
 import { getSettings, updateSettings } from '../../services/settings'
+import { grantSensitiveConsent } from '../../services/consent'
+import { hasSensitiveConsent } from '../../utils/consent'
+import { SensitiveConsentToggle } from '../../components/consent/SensitiveConsentToggle'
+import { WithdrawSensitiveButton } from '../../components/consent/WithdrawSensitiveButton'
 import { pushUserData } from '../../services/sync'
 import type { IncomeBracket } from '../../utils/scholarshipMatch'
 import { PH_PROVINCES } from '../../data/phProvinces'
@@ -40,6 +44,8 @@ export default function ScholarshipInfoScreen() {
   const [incomePreferNotToSay, setIncomePreferNotToSay] = useState(false)
   const [gwaText, setGwaText] = useState('')
   const [gwaError, setGwaError] = useState<string | null>(null)
+  // Income and GWA are sensitive: they are only asked for (and used) after a separate opt-in.
+  const [consented, setConsented] = useState(false)
   const [province, setProvince] = useState('')
   const [provinceQuery, setProvinceQuery] = useState('')
   const [saving, setSaving] = useState(false)
@@ -57,6 +63,7 @@ export default function ScholarshipInfoScreen() {
         setLoadFailed(false)
         const s = await getSettings(db)
         if (cancelled) return
+        setConsented(hasSensitiveConsent(s))
         setIncomeBracket(s.incomeBracket)
         // A saved null income with the rest filled in reads as "prefer not to say".
         setIncomePreferNotToSay(s.incomeBracket === null && (s.gwa != null || !!s.province))
@@ -87,8 +94,8 @@ export default function ScholarshipInfoScreen() {
     : PH_PROVINCES
 
   const handleSave = useCallback(async () => {
-    const gwaNum = gwaText.trim() ? parseFloat(gwaText.trim()) : null
-    if (gwaText.trim() && (isNaN(gwaNum!) || gwaNum! < 75 || gwaNum! > 100)) {
+    const gwaNum = consented && gwaText.trim() ? parseFloat(gwaText.trim()) : null
+    if (consented && gwaText.trim() && (isNaN(gwaNum!) || gwaNum! < 75 || gwaNum! > 100)) {
       setGwaError('GWA must be between 75 and 100.')
       return
     }
@@ -96,11 +103,10 @@ export default function ScholarshipInfoScreen() {
     setSaveError(null)
     setSaving(true)
     try {
-      await updateSettings(db, {
-        incomeBracket: incomePreferNotToSay ? null : incomeBracket,
-        gwa: gwaNum,
-        province: province.trim() || null,
-      })
+      // Without consent only the (non-sensitive) province is written.
+      await updateSettings(db, consented
+        ? { incomeBracket: incomePreferNotToSay ? null : incomeBracket, gwa: gwaNum, province: province.trim() || null }
+        : { province: province.trim() || null })
       void pushUserData(db).catch(() => {})
       router.back()
     } catch (e) {
@@ -109,7 +115,29 @@ export default function ScholarshipInfoScreen() {
     } finally {
       setSaving(false)
     }
-  }, [db, incomeBracket, incomePreferNotToSay, gwaText, province])
+  }, [db, consented, incomeBracket, incomePreferNotToSay, gwaText, province])
+
+  const optIn = useCallback(async (on: boolean) => {
+    if (!on) return
+    try {
+      await grantSensitiveConsent(db)
+      setConsented(true)
+    } catch (e) {
+      console.warn('[scholarship-info] consent error:', e)
+      setSaveError("Couldn't save your choice. Please try again.")
+    }
+  }, [db])
+
+  // Withdrawn: the details were cleared in the database; clear them on screen too.
+  const onWithdrawn = useCallback(() => {
+    setConsented(false)
+    setIncomeBracket(null)
+    setIncomePreferNotToSay(false)
+    setGwaText('')
+    setGwaError(null)
+  }, [])
+
+  const hasStoredSensitive = incomeBracket !== null || incomePreferNotToSay || gwaText.trim() !== ''
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top']}>
@@ -138,6 +166,8 @@ export default function ScholarshipInfoScreen() {
           />
         ) : (
           <>
+            {consented ? (
+            <>
             {/* Income bracket */}
             <Card>
               <Text {...heading(2)} style={labelStyle} maxFontSizeMultiplier={2}>Household income bracket</Text>
@@ -187,6 +217,10 @@ export default function ScholarshipInfoScreen() {
                 </Text>
               ) : null}
             </Card>
+            </>
+            ) : (
+              <SensitiveConsentToggle value={false} onChange={v => void optIn(v)} />
+            )}
 
             {/* Province */}
             <Card>
@@ -255,6 +289,11 @@ export default function ScholarshipInfoScreen() {
             <View style={{ marginTop: spacing.sm }}>
               <Button label="Save" accessibilityLabel="Save" size="lg" onPress={() => void handleSave()} fullWidth={bp === 'compact'} loading={saving} disabled={!loaded} />
             </View>
+            {consented || hasStoredSensitive ? (
+              <View style={{ marginTop: spacing.lg }}>
+                <WithdrawSensitiveButton onWithdrawn={onWithdrawn} />
+              </View>
+            ) : null}
           </>
         )}
         </View>

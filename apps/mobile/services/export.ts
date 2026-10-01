@@ -102,6 +102,33 @@ export async function exportUserData(db: DrizzleClient): Promise<ExportResult> {
 
 type ExportRow = Record<string, unknown>
 
+/**
+ * The P1b consent record from an export row (camelCase from the app, snake_case
+ * from older tooling). Only keys present in the file are returned, so an old
+ * export without consent never blanks the consent already on this device.
+ */
+function consentFromRow(s: ExportRow): Partial<typeof userSettings.$inferInsert> {
+  const pick = (camel: string, snake: string) => (s[camel] !== undefined ? s[camel] : s[snake])
+  const out: Partial<typeof userSettings.$inferInsert> = {}
+  const age = pick('ageBand', 'age_band')
+  if (age !== undefined && age !== null) out.ageBand = String(age)
+  const ver = pick('consentVersion', 'consent_version')
+  if (ver !== undefined && ver !== null) out.consentVersion = String(ver)
+  const at = pick('consentedAt', 'consented_at')
+  if (at !== undefined && at !== null) out.consentedAt = Number(at) || 0
+  const guardian = pick('guardianConsentAt', 'guardian_consent_at')
+  if (guardian !== undefined && guardian !== null) out.guardianConsentAt = Number(guardian) || 0
+  const sensitive = pick('sensitiveConsentAt', 'sensitive_consent_at')
+  if (sensitive !== undefined && sensitive !== null) out.sensitiveConsentAt = Number(sensitive) || 0
+  const analytics = pick('analyticsOptIn', 'analytics_opt_in')
+  if (analytics !== undefined) out.analyticsOptIn = analytics === null ? null : Number(analytics) ? 1 : 0
+  const withdrawn = pick('sensitiveWithdrawnAt', 'sensitive_withdrawn_at')
+  if (withdrawn !== undefined && withdrawn !== null) out.sensitiveWithdrawnAt = Number(withdrawn) || 0
+  const choiceAt = pick('analyticsChoiceAt', 'analytics_choice_at')
+  if (choiceAt !== undefined && choiceAt !== null) out.analyticsChoiceAt = Number(choiceAt) || 0
+  return out
+}
+
 export async function importUserData(db: DrizzleClient): Promise<void> {
   // ── Web: import is out of scope for W1 — show a helpful message ──────────
   if (Platform.OS === 'web') {
@@ -146,6 +173,7 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
     notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
     dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
     weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
+    ...consentFromRow(s),
   }).onConflictDoUpdate({
     target: userSettings.id,
     set: {
@@ -158,6 +186,7 @@ export async function importUserData(db: DrizzleClient): Promise<void> {
       notificationsEnabled: Boolean(s.notificationsEnabled ?? s.notifications_enabled ?? true),
       dailyReminderHour: Number(s.dailyReminderHour ?? s.daily_reminder_hour ?? 9),
       weeklySummaryEnabled: Boolean(s.weeklySummaryEnabled ?? s.weekly_summary_enabled ?? true),
+      ...consentFromRow(s),
     },
   })
 

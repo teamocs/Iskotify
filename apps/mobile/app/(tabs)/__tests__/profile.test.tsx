@@ -53,6 +53,12 @@ jest.mock('../../../services/sync', () => ({
   pushBeforeSignOut: jest.fn(async () => { mockSignOutOrder.push('push') }),
 }))
 
+const mockResetAnalytics = jest.fn()
+jest.mock('../../../lib/analytics', () => ({
+  ...jest.requireActual('../../../lib/analytics'),
+  resetAnalytics: () => mockResetAnalytics(),
+}))
+
 jest.mock('../../../services/webReset', () => ({
   clearWebData: jest.fn().mockResolvedValue(undefined),
 }))
@@ -369,6 +375,28 @@ describe('ProfileScreen — interactions', () => {
     supabase.auth.signOut.mockClear()
     fireEvent.press(getByText('Sign Out'))
     await waitFor(() => expect(supabase.auth.signOut).toHaveBeenCalled())
+    alertSpy.mockRestore()
+  })
+
+  it('Sign Out switches analytics off and forgets the account id (the next person is asked afresh)', async () => {
+    mockResetAnalytics.mockClear()
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((x: any) => x.style === 'destructive')?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Sign Out'))
+    await waitFor(() => expect(mockResetAnalytics).toHaveBeenCalled())
+    alertSpy.mockRestore()
+  })
+
+  it('Reset App Data also switches analytics off', async () => {
+    mockResetAnalytics.mockClear()
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      buttons?.find((x: any) => x.style === 'destructive')?.onPress?.()
+    })
+    const { getByText } = render(<ProfileScreen />)
+    fireEvent.press(getByText('Reset App Data'))
+    await waitFor(() => expect(mockResetAnalytics).toHaveBeenCalled())
     alertSpy.mockRestore()
   })
 

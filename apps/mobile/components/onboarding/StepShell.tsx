@@ -39,6 +39,14 @@ interface Props {
   onPrimary?: () => void
   primaryDisabled?: boolean
   primaryLoading?: boolean
+  /** Plain-words reason Continue is disabled, shown next to the button. */
+  primaryHint?: string
+  /**
+   * Whether the student opted in to sharing sensitive details. When false the
+   * income and GWA steps are not in their flow, so they are not counted.
+   * Defaults to true (the full 11 steps).
+   */
+  sensitive?: boolean
   /** Scroll the body (default). Set false when the body owns a list. */
   scroll?: boolean
   children: React.ReactNode
@@ -138,13 +146,13 @@ function SectionRail({ current }: { current: Section }) {
  */
 export function StepShell({
   step, title, description, onBack, onSkip, primaryLabel, onPrimary, primaryDisabled, primaryLoading,
-  scroll = true, children,
+  primaryHint, sensitive = true, scroll = true, children,
 }: Props) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const wide = bp === 'expanded'
   const gutter = wide ? spacing.xxxl : pagePadding(bp)
-  const pos = stepPosition(step)
+  const pos = stepPosition(step, sensitive)
   const titleRef = useRef<Text>(null)
 
   useEffect(() => {
@@ -237,7 +245,16 @@ export function StepShell({
 
       {primaryLabel && onPrimary ? (
         <View style={wide ? undefined : { borderTopWidth: 1, borderTopColor: t.border, backgroundColor: t.bg }}>
-          <View style={[column, { paddingVertical: wide ? spacing.xl : spacing.md }]}>
+          <View style={[column, { paddingVertical: wide ? spacing.xl : spacing.md, gap: spacing.sm }]}>
+            {primaryHint ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]}
+                maxFontSizeMultiplier={2}
+              >
+                {primaryHint}
+              </Text>
+            ) : null}
             <Button
               label={primaryLabel}
               onPress={onPrimary}

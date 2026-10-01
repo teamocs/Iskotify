@@ -294,11 +294,19 @@ describe('ListingDetailScreen — scholarship', () => {
 
   it('with a profile, eligibility shows a labelled status before the actions', async () => {
     const { getSettings } = require('../../../services/settings')
-    getSettings.mockResolvedValue({ gwa: 95, province: 'Albay', incomeBracket: '<=100k', gradeLevel: 'G12' })
+    getSettings.mockResolvedValue({ gwa: 95, province: 'Albay', incomeBracket: '<=100k', gradeLevel: 'G12', sensitiveConsentAt: 1_700_000_000_000 })
     render(<ListingDetailScreen />)
     const status = await screen.findByText(/^(Eligible|Maybe eligible|Not eligible)$/)
     const order = textOrder()
     expect(order.indexOf(`"${status.props.children}"`)).toBeLessThan(order.indexOf('Add to Focus'))
+  })
+
+  it('without consent to use grades and income, a stored GWA is ignored: it invites the student to add details instead of a verdict', async () => {
+    const { getSettings } = require('../../../services/settings')
+    getSettings.mockResolvedValue({ gwa: 95, province: 'Albay', incomeBracket: '<=100k', gradeLevel: 'G12', sensitiveConsentAt: 0 })
+    render(<ListingDetailScreen />)
+    expect(await screen.findByRole('button', { name: 'Complete profile' })).toBeTruthy()
+    expect(screen.queryByText(/^(Eligible|Not eligible)$/)).toBeNull()
   })
 
   it('the service obligation is visible without expanding anything', async () => {

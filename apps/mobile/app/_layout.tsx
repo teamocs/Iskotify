@@ -34,8 +34,10 @@ import { webEntryTarget } from '../utils/webEntryTarget'
 import { runWebEntryGate } from '../components/auth/webEntryGate'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
-import { initAnalytics, identifyUser, resetAnalytics } from '../lib/analytics'
+import { identifyUser, resetAnalytics } from '../lib/analytics'
+import { applyAnalyticsConsent, identifyAfterConsent } from '../services/analyticsConsent'
 import { AnalyticsScreenTracker } from '../components/AnalyticsScreenTracker'
+import { ConsentGate } from '../components/consent/ConsentGate'
 
 // KeyboardProvider is native-only (react-native-keyboard-controller).
 // On web, render children directly — the provider import itself is safe to
@@ -82,7 +84,7 @@ export default function RootLayout() {
         <KeyboardProviderCompat>
           <DrizzleProvider>
             <ThemeProvider>
-              <AppInit onReady={handleReady} />
+              <AppInit onReady={handleReady} ready={appReady} />
               <WebSetupOverlay />
             </ThemeProvider>
           </DrizzleProvider>
@@ -109,7 +111,7 @@ export default function RootLayout() {
         <SQLiteProvider databaseName="iskotify.db" options={{ enableChangeListener: true }}>
           <DrizzleProvider>
             <ThemeProvider>
-              <AppInit onReady={handleReady} />
+              <AppInit onReady={handleReady} ready={appReady} />
             </ThemeProvider>
           </DrizzleProvider>
         </SQLiteProvider>
@@ -135,20 +137,26 @@ export default function RootLayout() {
   )
 }
 
-function AppInit({ onReady }: { onReady: () => void }) {
+function AppInit({ onReady, ready }: { onReady: () => void; ready: boolean }) {
   const db = useDb()
 
   const initialize = useCallback(async () => {
-    // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set. Runs on
-    // every platform; identify an existing session by account ID only (never
-    // email or name) so events tie to the user.
-    initAnalytics()
-    supabase.auth.getSession()
-      .then(({ data }) => {
-        const u = data.session?.user
-        if (u) identifyUser(u.id)
-      })
-      .catch(() => { /* non-fatal */ })
+    // Analytics — env-gated no-op until EXPO_PUBLIC_POSTHOG_KEY is set, and
+    // consent-gated: it starts only if the student's stored consent allows it
+    // (never on a fresh install, off for minors until they opt in). Identify an
+    // existing session by account ID only (never email or name) so events tie to
+    // the user; the id is held until analytics is allowed. Web identifies after
+    // its backup pull instead (resolveTarget below): this browser's database may
+    // still hold a previous account's consent until that pull reconciles it.
+    await applyAnalyticsConsent(db)
+    if (Platform.OS !== 'web') {
+      supabase.auth.getSession()
+        .then(({ data }) => {
+          const u = data.session?.user
+          if (u) identifyUser(u.id)
+        })
+        .catch(() => { /* non-fatal */ })
+    }
 
     // ── Web: auth-first entry gate ─────────────────────────────────────────
     // On web, session is the source of truth for routing. We check it first,
@@ -162,13 +170,14 @@ function AppInit({ onReady }: { onReady: () => void }) {
       // data lands. Only an onboarded student landing in the tabs with an empty
       // local DB (a fresh browser) keeps the "Setting up your data" overlay;
       // everyone else has it pre-dismissed via markFirstSyncDone.
-      const resolveTarget = async (reason: 'launch' | 'signed-in') => {
-        if (reason === 'signed-in') {
-          const { data: { session } } = await supabase.auth.getSession()
-          const u = session?.user
-          if (u) identifyUser(u.id)
-        }
+      const resolveTarget = async () => {
         try { await pullUserData(db) } catch (e) { console.warn('[layout] web pullUserData (non-fatal):', e) }
+        // Only now: the pull has reset analytics on an account switch and restored
+        // this student's own choice, so another person's consent never covers this id.
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) await identifyAfterConsent(db, session.user.id)
+        } catch { /* analytics is non-fatal */ }
         const [rows, focusRows] = await Promise.all([
           db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
           db.select().from(focusListingsTable).limit(1),
@@ -321,7 +330,11 @@ function AppInit({ onReady }: { onReady: () => void }) {
     <>
       <StatusBar style="dark" />
       <AnalyticsScreenTracker />
-      {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
+      {/* Consent for the current Terms covers every route, deep links included. It
+          starts checking once the launch routing below has run (`ready`). */}
+      <ConsentGate enabled={ready}>
+        {Platform.OS === 'web' ? <RouteFade>{stack}</RouteFade> : stack}
+      </ConsentGate>
     </>
   )
 }

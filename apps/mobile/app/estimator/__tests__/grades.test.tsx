@@ -51,7 +51,7 @@ describe('EstimatorGradesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockBp.value = 'compact'
-    mockGetSettings.mockResolvedValue({})
+    mockGetSettings.mockResolvedValue({ sensitiveConsentAt: 1_700_000_000_000 })
     mockUpdateSettings.mockResolvedValue(undefined)
   })
 

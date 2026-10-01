@@ -11,6 +11,8 @@ import OnboardingScreen from '../onboarding'
 import { userSettings } from '../../db/schema'
 import { aria } from '../../test-utils/aria'
 
+const SENSITIVE_LABEL = 'Use my grades and family details to match scholarships and estimate my admission score'
+
 jest.mock('../../components/SchoolPicker', () => ({
   SchoolPicker: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
     const { TextInput } = require('react-native')
@@ -18,10 +20,13 @@ jest.mock('../../components/SchoolPicker', () => ({
   },
 }))
 
+const mockApplyAnalytics = jest.fn().mockResolvedValue(true)
+jest.mock('../../services/analyticsConsent', () => ({ applyAnalyticsConsent: (...a: unknown[]) => mockApplyAnalytics(...a) }))
+
 jest.mock('../../components/practice/QuestionFigure', () => ({ QuestionFigure: () => null }))
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn() },
+  router: { replace: jest.fn(), push: jest.fn() },
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -67,6 +72,9 @@ let mockBackHandler: (() => boolean) | null = null
 
 // DB: `select` resolves the saved settings row (resume source); inserts are recorded.
 let mockSavedSettings: Record<string, unknown>[] = []
+// Existing flow tests run as an already-consented student; consent tests turn this off.
+let mockConsented = true
+const CONSENT_ROW = { ageBand: 'adult', consentVersion: '2026-10-01', consentedAt: 1_700_000_000_000, guardianConsentAt: 0 }
 let mockFocusRows: Record<string, unknown>[] = []
 const mockInserts: { table: unknown; values: Record<string, unknown> }[] = []
 jest.mock('../../hooks/useDb', () => {
@@ -74,7 +82,12 @@ jest.mock('../../hooks/useDb', () => {
   const db = {
     select: jest.fn(() => ({
       from: jest.fn((table: unknown) => {
-        const rows = () => (table === userSettings ? mockSavedSettings : table === focusListings ? mockFocusRows : [])
+        const rows = () => {
+          if (table === focusListings) return mockFocusRows
+          if (table !== userSettings) return []
+          if (!mockConsented) return mockSavedSettings
+          return (mockSavedSettings.length ? mockSavedSettings : [{ id: 1 }]).map(r => ({ ...CONSENT_ROW, ...r }))
+        }
         const chain: Record<string, unknown> = {}
         chain.where = jest.fn(() => chain)
         chain.orderBy = jest.fn(() => chain)
@@ -107,6 +120,7 @@ jest.mock('../../hooks/useDb', () => {
 beforeEach(() => {
   jest.clearAllMocks()
   mockSavedSettings = []
+  mockConsented = true
   mockFocusRows = []
   mockInserts.length = 0
   mockSyncImpl = () => Promise.resolve()
@@ -145,7 +159,7 @@ describe('Onboarding: one question per step', () => {
   it('opens on the name question with the step indicator', async () => {
     await renderFresh()
     expect(screen.getByRole('header', { name: 'What should we call you?' })).toBeTruthy()
-    expect(screen.getByText('Step 1 of 9')).toBeTruthy()
+    expect(screen.getByText('Step 2 of 9')).toBeTruthy()
     expect(screen.getByRole('progressbar')).toBeTruthy()
     // Only the name field on this step: no grade picker, no school picker.
     expect(screen.queryByRole('radio', { name: 'Grade 11' })).toBeNull()
@@ -173,7 +187,7 @@ describe('Onboarding: one question per step', () => {
     pressContinue()
     await flush()
     expect(screen.getByRole('header', { name: 'What grade are you in?' })).toBeTruthy()
-    expect(screen.getByText('Step 2 of 9')).toBeTruthy()
+    expect(screen.getByText('Step 3 of 9')).toBeTruthy()
     const g11 = screen.getByRole('radio', { name: 'Grade 11' })
     expect(aria(g11, 'aria-checked')).toBe(false)
     fireEvent.press(g11)
@@ -211,7 +225,8 @@ describe('Onboarding: one question per step', () => {
     expect(screen.getByLabelText('Full name').props.value).toBe('Juan')
   })
 
-  it('has no Back button on the first question', async () => {
+  it('has no Back button on the very first screen (consent)', async () => {
+    mockConsented = false
     await renderFresh()
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
   })
@@ -232,7 +247,8 @@ describe('Onboarding: Android Back', () => {
     expect(screen.getByLabelText('Full name').props.value).toBe('Juan')
   })
 
-  it('on the first question it lets the system handle Back', async () => {
+  it('on the first screen it lets the system handle Back', async () => {
+    mockConsented = false
     await renderFresh()
     expect(mockBackHandler!()).toBe(false)
   })
@@ -254,7 +270,7 @@ describe('Onboarding: resume-safe', () => {
     mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, school: '', schoolRegion: '' }]
     await renderFresh()
     await waitFor(() => expect(screen.getByRole('header', { name: 'What are you preparing for?' })).toBeTruthy())
-    expect(screen.getByText('Step 4 of 9')).toBeTruthy()
+    expect(screen.getByText('Step 5 of 9')).toBeTruthy()
   })
 
   it('resumes at the grade when only the name is saved (e.g. from Google sign-in)', async () => {
@@ -289,7 +305,7 @@ describe('Onboarding: resume-safe', () => {
     mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, school: '', schoolRegion: '', onboardingStep: 'grade' }]
     await renderFresh()
     await waitFor(() => expect(screen.getByRole('header', { name: 'Where do you study?' })).toBeTruthy())
-    expect(screen.getByText('Step 3 of 9')).toBeTruthy()
+    expect(screen.getByText('Step 4 of 9')).toBeTruthy()
   })
 
   it('resumes after the goal at the courses, with the exams restored and recommendations shown', async () => {
@@ -343,11 +359,12 @@ describe('Onboarding: resume-safe', () => {
       targetExams: JSON.stringify([{ schoolId: 'upd', schoolName: 'UP Diliman', examAcronym: 'UPCAT' }]),
       targetCourses: JSON.stringify([{ id: 'tax:bscs', label: 'BS Computer Science', careerCourseId: null }]),
       incomeBracket: '100k-300k', gwa: 90.5, province: 'Albay',
+      sensitiveConsentAt: 1_700_000_000_001,
       onboardingStep: 'province',
     }]
     mockFocusRows = [{ listingSlug: 'upcat', priority: 1, addedAt: 1 }]
     await renderFresh()
-    await waitFor(() => expect(screen.getByText('Step 9 of 9')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Step 11 of 11')).toBeTruthy())
 
     fireEvent.press(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('button', { name: 'Continue with Albay' })).toBeTruthy()
@@ -355,6 +372,9 @@ describe('Onboarding: resume-safe', () => {
     expect(screen.getByLabelText('GWA').props.value).toBe('90.5')
     fireEvent.press(screen.getByRole('button', { name: 'Back' }))
     expect(aria(screen.getByRole('radio', { name: '₱100k to ₱300k' }), 'aria-checked')).toBe(true)
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    // The opt-in step sits between the courses and income.
+    expect(screen.getByRole('switch', { name: SENSITIVE_LABEL }).props.value).toBe(true)
     fireEvent.press(screen.getByRole('button', { name: 'Back' }))
     await flush()
     expect(aria(screen.getByRole('checkbox', { name: 'BS Computer Science' }), 'aria-checked')).toBe(true)
@@ -402,12 +422,18 @@ async function advanceToCheck({ syncImpl }: { syncImpl: () => Promise<void> }) {
   expect(aria(screen.getByRole('checkbox', { name: /University of the Philippines Diliman/ }), 'aria-checked')).toBe(true)
   await act(async () => { pressContinue(); await Promise.resolve() })
   await flush()
-  // courses, income, gwa, province: all optional
-  for (const header of ['Which courses are you considering?', 'What is your household income?', 'What is your latest GWA?', 'Which province do you live in?']) {
-    expect(screen.getByRole('header', { name: header })).toBeTruthy()
-    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })); await Promise.resolve() })
-    await flush()
-  }
+  // courses: optional
+  expect(screen.getByRole('header', { name: 'Which courses are you considering?' })).toBeTruthy()
+  await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })); await Promise.resolve() })
+  await flush()
+  // The sensitive opt-in is left OFF: income and GWA are skipped entirely.
+  expect(screen.getByRole('header', { name: 'Use your grades and family details?' })).toBeTruthy()
+  await act(async () => { pressContinue(); await Promise.resolve() })
+  await flush()
+  // province: optional
+  expect(screen.getByRole('header', { name: 'Which province do you live in?' })).toBeTruthy()
+  await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Skip this question' })); await Promise.resolve() })
+  await flush()
   expect(screen.getByText('Step 9 of 9')).toBeTruthy()
 }
 
@@ -503,5 +529,196 @@ describe('Onboarding: quick check results', () => {
     expect(screen.getByRole('header', { name: 'Your starting point' })).toBeTruthy()
     expect(screen.queryByText(/fail|pass|Assessment Complete/i)).toBeNull()
     expect(screen.getByRole('button', { name: /Start studying/ })).toBeTruthy()
+  })
+})
+
+// ─── P1b: consent first, then the sensitive-data opt-in ────────────────────────
+
+const READ_BOX = "I've read the Terms and the Privacy Policy"
+const GUARDIAN_BOX = 'My parent or guardian has read the Privacy Policy and agrees to me using Iskotify'
+
+function savedConsentWrites() {
+  return mockInserts.filter(i => i.table === userSettings).map(i => i.values).filter(v => 'consentVersion' in v)
+}
+
+describe('Onboarding: "Before we start" consent step', () => {
+  beforeEach(() => { mockConsented = false })
+
+  it('is the first screen for a new student, with the three controls unticked', async () => {
+    await renderFresh()
+    expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
+    expect(screen.getByText('Step 1 of 9')).toBeTruthy()
+    expect(aria(screen.getByRole('radio', { name: "I'm 18 or older" }), 'aria-checked')).toBe(false)
+    expect(aria(screen.getByRole('radio', { name: "I'm under 18" }), 'aria-checked')).toBe(false)
+    expect(aria(screen.getByRole('checkbox', { name: READ_BOX }), 'aria-checked')).toBe(false)
+    expect(screen.queryByRole('checkbox', { name: GUARDIAN_BOX })).toBeNull()
+    expect(screen.queryByLabelText('Full name')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+  })
+
+  it('keeps Continue disabled and says why, until the age and the Terms box are done', async () => {
+    await renderFresh()
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(true)
+    expect(screen.getByText('Choose your age to continue.')).toBeTruthy()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    expect(screen.getByText('Tick that you have read the Terms and the Privacy Policy.')).toBeTruthy()
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(true)
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(false)
+    expect(screen.queryByText(/Tick that you have read/)).toBeNull()
+  })
+
+  it('an under-18 also needs the parent or guardian box', async () => {
+    await renderFresh()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm under 18" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(true)
+    expect(screen.getByText(/parent or guardian needs to agree/i)).toBeTruthy()
+    fireEvent.press(screen.getByRole('checkbox', { name: GUARDIAN_BOX }))
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(false)
+  })
+
+  it('opens the in-app Terms and Privacy Policy from links', async () => {
+    const { router } = require('expo-router')
+    await renderFresh()
+    fireEvent.press(screen.getByRole('button', { name: 'Read the Privacy Policy' }))
+    expect(router.push).toHaveBeenCalledWith('/privacy')
+    fireEvent.press(screen.getByRole('button', { name: 'Read the Terms' }))
+    expect(router.push).toHaveBeenCalledWith('/terms')
+  })
+
+  it('an adult who agrees is saved with the version and time, no guardian, then asked their name', async () => {
+    await renderFresh()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    pressContinue()
+    await flush()
+    expect(savedConsentWrites()).toEqual([expect.objectContaining({
+      ageBand: 'adult', consentVersion: '2026-10-01', guardianConsentAt: 0, onboardingStep: 'consent',
+      consentedAt: expect.any(Number),
+    })])
+    expect(savedConsentWrites()[0]!.consentedAt as number).toBeGreaterThan(0)
+    expect(screen.getByRole('header', { name: 'What should we call you?' })).toBeTruthy()
+    expect(screen.getByText('Step 2 of 9')).toBeTruthy()
+  })
+
+  it('a minor is saved with a guardian attestation time', async () => {
+    await renderFresh()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm under 18" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    fireEvent.press(screen.getByRole('checkbox', { name: GUARDIAN_BOX }))
+    pressContinue()
+    await flush()
+    const w = savedConsentWrites()[0]!
+    expect(w.ageBand).toBe('minor')
+    expect(w.guardianConsentAt as number).toBeGreaterThan(0)
+  })
+
+  it('applies the analytics rule once consent is saved (never before)', async () => {
+    await renderFresh()
+    expect(mockApplyAnalytics).not.toHaveBeenCalled()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    expect(mockApplyAnalytics).not.toHaveBeenCalled()
+    pressContinue()
+    await flush()
+    expect(mockApplyAnalytics).toHaveBeenCalledTimes(1)
+  })
+
+  it('Back from the name returns to consent, with what was agreed still ticked', async () => {
+    await renderFresh()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    pressContinue()
+    await flush()
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
+    expect(aria(screen.getByRole('checkbox', { name: READ_BOX }), 'aria-checked')).toBe(true)
+  })
+
+  it('a student mid-way through an older onboarding is asked for consent first, then resumes where they were', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, onboardingStep: 'grade' }]
+    await renderFresh()
+    expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    pressContinue()
+    await flush()
+    expect(screen.getByRole('header', { name: 'Where do you study?' })).toBeTruthy()
+    // The progress marker never moves backwards because of the new first step.
+    expect(savedConsentWrites()[0]!.onboardingStep).toBe('grade')
+  })
+
+  it('an outdated consent version is asked again', async () => {
+    mockSavedSettings = [{ id: 1, fullName: 'Juan', gradeLevel: 11, ageBand: 'adult', consentVersion: '2025-01-01', consentedAt: 5, onboardingStep: 'grade' }]
+    await renderFresh()
+    expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
+  })
+})
+
+describe('Onboarding: sensitive-data opt-in (grades and family details)', () => {
+  async function toOptIn(rows: Record<string, unknown> = {}) {
+    mockSavedSettings = [{
+      id: 1, fullName: 'Juan', gradeLevel: 11, selectedListingSlug: 'upcat',
+      targetExams: '[{"schoolId":"upd","schoolName":"UP","examAcronym":"UPCAT"}]', onboardingStep: 'courses', ...rows,
+    }]
+    mockFocusRows = [{ listingSlug: 'upcat', priority: 1, addedAt: 1 }]
+    await renderFresh()
+    await waitFor(() => screen.getByRole('header', { name: 'Use your grades and family details?' }))
+  }
+  const sw = () => screen.getByRole('switch', { name: SENSITIVE_LABEL })
+
+  it('is asked after the courses, as a separate switch that starts OFF', async () => {
+    await toOptIn()
+    expect(sw().props.value).toBe(false)
+    expect(screen.getByText(/withdraw your consent anytime/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Skip this question' })).toBeNull()
+    expect(aria(screen.getByRole('button', { name: 'Continue' }), 'aria-disabled')).toBe(false)
+  })
+
+  it('left OFF, it skips income and GWA, still asks the province, and stores no consent', async () => {
+    await toOptIn()
+    pressContinue()
+    await flush()
+    expect(screen.getByRole('header', { name: 'Which province do you live in?' })).toBeTruthy()
+    expect(screen.queryByRole('header', { name: 'What is your household income?' })).toBeNull()
+    const last = mockInserts.filter(i => i.table === userSettings).at(-1)!.values
+    expect(last).toMatchObject({ sensitiveConsentAt: 0, onboardingStep: 'sensitive' })
+    // Back from the province returns to the opt-in, not to the skipped steps.
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('header', { name: 'Use your grades and family details?' })).toBeTruthy()
+  })
+
+  it('switched ON, it records the consent time and then asks income and GWA', async () => {
+    await toOptIn()
+    fireEvent(sw(), 'valueChange', true)
+    pressContinue()
+    await flush()
+    const last = mockInserts.filter(i => i.table === userSettings).at(-1)!.values
+    expect(last.sensitiveConsentAt as number).toBeGreaterThan(0)
+    expect(screen.getByRole('header', { name: 'What is your household income?' })).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Skip this question' }))
+    await flush()
+    expect(screen.getByRole('header', { name: 'What is your latest GWA?' })).toBeTruthy()
+    expect(screen.getByText('Step 9 of 11')).toBeTruthy()
+  })
+
+  it('turning it OFF after it was ON clears the saved details', async () => {
+    await toOptIn({ sensitiveConsentAt: 5, gwa: 90, incomeBracket: '<=100k' })
+    expect(sw().props.value).toBe(true)
+    fireEvent(sw(), 'valueChange', false)
+    pressContinue()
+    await flush()
+    const last = mockInserts.filter(i => i.table === userSettings).at(-1)!.values
+    expect(last).toMatchObject({ sensitiveConsentAt: 0, gwa: null, incomeBracket: null, isIndigenous: false })
+    // Stamped, so a backup or another device still holding the grant cannot bring it back.
+    expect(last.sensitiveWithdrawnAt as number).toBeGreaterThan(0)
+  })
+
+  it('Back from the opt-in goes to the courses', async () => {
+    await toOptIn()
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }))
+    await flush()
+    expect(screen.getByRole('header', { name: 'Which courses are you considering?' })).toBeTruthy()
   })
 })

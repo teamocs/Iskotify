@@ -7,7 +7,7 @@
  */
 import React from 'react'
 import { Platform, Text } from 'react-native'
-import { act, render, screen } from '@testing-library/react-native'
+import { act, render, screen, waitFor } from '@testing-library/react-native'
 
 const mockMounts = { tabs: 0, tabsUnmounts: 0 }
 let mockTabBarProp: ((p: unknown) => React.ReactNode) | undefined
@@ -26,7 +26,8 @@ jest.mock('expo-router', () => {
     return React.createElement(Text, { testID: 'tabs-navigator' }, 'tabs')
   }
   Tabs.Screen = function TabsScreen() { return null }
-  return { Tabs, router: { push: jest.fn(), navigate: jest.fn() }, usePathname: () => '/' }
+  const Redirect = ({ href }: { href: string }) => React.createElement(Text, { testID: 'redirect' }, href)
+  return { Tabs, Redirect, router: { push: jest.fn(), navigate: jest.fn() }, usePathname: () => '/' }
 })
 
 jest.mock('../../../hooks/useBreakpoint', () => ({
@@ -34,6 +35,9 @@ jest.mock('../../../hooks/useBreakpoint', () => ({
   useBreakpoint: () => mockBp,
 }))
 jest.mock('../../../hooks/useDb', () => ({ useDb: () => ({}) }))
+// Consent covers the current texts unless a test says otherwise.
+let mockConsent: Record<string, unknown> = { ageBand: 'adult', consentVersion: '2026-10-01', consentedAt: 5, guardianConsentAt: 0 }
+jest.mock('../../../services/settings', () => ({ getSettings: jest.fn(async () => mockConsent) }))
 jest.mock('../../../services/sync', () => ({ syncOnLaunch: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('../../../components/SyncErrorBanner', () => ({ SyncErrorBanner: () => null }))
 jest.mock('../../../components/TabBar', () => ({
@@ -57,6 +61,7 @@ beforeEach(() => {
   mockMounts.tabsUnmounts = 0
   mockBp = 'compact'
   Platform.OS = 'web'
+  mockConsent = { ageBand: 'adult', consentVersion: '2026-10-01', consentedAt: 5, guardianConsentAt: 0 }
 })
 afterAll(() => { Platform.OS = originalOS })
 
@@ -106,5 +111,12 @@ describe('TabLayout across the desktop breakpoint', () => {
     render(<TabLayout />)
     expect(screen.queryByTestId('sidebar-nav')).toBeNull()
     expect(renderTabBar().getByText('bottom-tab-bar')).toBeTruthy()
+  })
+
+  it('renders the tabs straight away: consent is gated once at the root (components/consent/ConsentGate.tsx)', async () => {
+    mockConsent = { ageBand: '', consentVersion: '', consentedAt: 0, guardianConsentAt: 0 }
+    render(<TabLayout />)
+    expect(screen.getByTestId('tabs-navigator')).toBeTruthy()
+    await waitFor(() => expect(screen.queryByTestId('redirect')).toBeNull())
   })
 })

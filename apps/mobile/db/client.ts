@@ -640,6 +640,21 @@ export const MIGRATIONS = [
   // ── Batch C data-loss review: durable unsynced marker + pull-completed marker ─
   `ALTER TABLE user_settings ADD COLUMN push_dirty_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE user_settings ADD COLUMN last_pull_ok_at INTEGER NOT NULL DEFAULT 0`,
+
+  // ── P1b consent: age band, accepted-texts version, guardian + sensitive + analytics ──
+  // All device-local defaults mean "no consent yet"; services/sync.ts backs them up and restores them.
+  `ALTER TABLE user_settings ADD COLUMN age_band TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE user_settings ADD COLUMN consent_version TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE user_settings ADD COLUMN consented_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN guardian_consent_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN sensitive_consent_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN analytics_opt_in INTEGER`,
+
+  // ── P1b review: when each choice was made, so the latest one wins across devices ──
+  // utils/consent.ts mergeConsent: a sensitive-data withdrawal vs grant, and the
+  // analytics switch, are decided by these timestamps, not by the Terms version.
+  `ALTER TABLE user_settings ADD COLUMN sensitive_withdrawn_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_settings ADD COLUMN analytics_choice_at INTEGER NOT NULL DEFAULT 0`,
 ]
 
 export function createDrizzleClient(rawDb: SQLiteDatabase) {
