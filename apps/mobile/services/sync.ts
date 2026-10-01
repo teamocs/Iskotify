@@ -1,4 +1,4 @@
-import { eq, asc } from 'drizzle-orm'
+import { eq, asc, inArray } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
 import { markSyncStart, markSyncDone, markSyncError } from './syncStatus'
@@ -356,8 +356,19 @@ export async function pullUserData(db: DrizzleClient): Promise<void> {
   }
 }
 
+/**
+ * Safety margin subtracted from the stored sync cursor. A row committed on the
+ * server while a pull is in flight (or with a slightly skewed clock) can carry an
+ * updated_at between "when the first query ran" and "when the cursor was written";
+ * with the cursor at the post-fetch time such a row would never be pulled again.
+ * Re-pulling a minute of overlap is idempotent (upserts), so it only costs a few rows.
+ */
+export const SYNC_CURSOR_MARGIN_MS = 60_000
+
 export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
   markSyncStart()
+  // Captured BEFORE the first query: the cursor written at the end is this minus the margin.
+  const syncStartedAt = Date.now()
   try {
     const [settingsRows, focusRows] = await Promise.all([
       db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
@@ -481,6 +492,35 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       supabase.from('exam_course_notes').select('id,blueprint_slug,course_cluster,note,min_percentile,display_order,updated_at')
         .gt('updated_at', since),
     ])
+
+    // Sections are replaced per blueprint (a section the admin removed leaves no row to
+    // arrive in a delta pull, so upserting alone keeps it on devices forever). For every
+    // blueprint touched by this pull (blueprint row or any of its sections changed) fetch
+    // ALL of its sections, so a partial delta can never delete the untouched ones. If that
+    // read fails, fall back to upserting the delta and keep local sections (never delete
+    // on an unreliable read). The read is paged (a truncated read must not delete the
+    // rest), and a slug is only replaced when the read returned at least one row for it:
+    // an empty result can be the admin's non-atomic delete-then-insert window, and a
+    // blueprint with no sections is not a state worth wiping a device to match.
+    const changedBlueprintSlugs = [...new Set<string>([
+      ...(blueprintsRes.data ?? []).map((r: any) => r.slug as string),
+      ...(sectionsRes.data ?? []).map((r: any) => r.blueprint_slug as string),
+    ].filter(Boolean))]
+    let fullSectionRows: any[] | null = null
+    if (changedBlueprintSlugs.length > 0) {
+      try {
+        fullSectionRows = await fetchAllPaginated((from, to) => supabase.from('exam_blueprint_sections')
+          .select('id,blueprint_slug,name,skill_category,item_count,time_minutes,requires_spatial_logic,display_order,updated_at')
+          .in('blueprint_slug', changedBlueprintSlugs)
+          .order('id')
+          .range(from, to))
+      } catch (err) {
+        console.warn('[sync] exam_blueprint_sections full fetch failed — keeping local sections:', err)
+      }
+    }
+    const replaceSectionSlugs = fullSectionRows
+      ? changedBlueprintSlugs.filter(slug => fullSectionRows!.some(r => r.blueprint_slug === slug))
+      : []
 
     // Per-slug flashcards pull — the ONLY step that genuinely needs focus slugs.
     // Skipped entirely for focus-less sessions; the catalog above still synced.
@@ -822,7 +862,10 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
         remoteUpdatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
       })), examBlueprints.slug)
 
-      batchUpsert(tx, examBlueprintSections, (sectionsRes.data ?? []).map((row) => ({
+      if (replaceSectionSlugs.length > 0) {
+        tx.delete(examBlueprintSections).where(inArray(examBlueprintSections.blueprintSlug, replaceSectionSlugs)).run()
+      }
+      batchUpsert(tx, examBlueprintSections, (fullSectionRows ?? sectionsRes.data ?? []).map((row: any) => ({
         id: row.id, blueprintSlug: row.blueprint_slug, name: row.name, skillCategory: row.skill_category ?? '',
         itemCount: row.item_count ?? 0, timeMinutes: row.time_minutes ?? null,
         requiresSpatialLogic: !!row.requires_spatial_logic, displayOrder: row.display_order ?? 0,
@@ -840,7 +883,7 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
       // a focus-less session must not clobber it with undefined/empty. Uses
       // contentSlugs so a school-only focus stores 'general-cet' (a real
       // content slug) instead of the school pseudo-slug.
-      const syncedAt = Date.now()
+      const syncedAt = syncStartedAt - SYNC_CURSOR_MARGIN_MS
       if (contentSlugs.length > 0) {
         tx.insert(userSettings)
           .values({ id: 1, selectedListingSlug: contentSlugs[0]!, lastSyncedAt: syncedAt, syncRev: SYNC_REV })

@@ -39,17 +39,26 @@ export function mostCommonSubtest(subtests: string[]): string | null {
   return best
 }
 
+/** A question counts once the student answered it or looked at it. */
+export function isReached(i: number, answers: Record<number, number>, reached?: ReadonlySet<number>): boolean {
+  return !reached || answers[i] !== undefined || reached.has(i)
+}
+
 /**
- * Per-section correct/total in first-seen order. A section's questions share
+ * Per-section correct/total in first-seen order, over the REACHED questions only
+ * (when `reached` is given), so the totals agree with the attempt rows, which
+ * also skip unreached questions. A section with nothing reached gets no row. A section's questions share
  * one skill_category and so one subtest; if they ever mix, the most common wins.
  */
 export function groupSectionResults(
   questions: readonly SubmitQuestion[],
   answers: Record<number, number>,
+  reached?: ReadonlySet<number>,
 ): SectionResult[] {
   const order: string[] = []
   const by = new Map<string, { correct: number; total: number; subtests: string[] }>()
   questions.forEach((fq, i) => {
+    if (!isReached(i, answers, reached)) return
     let cur = by.get(fq.sectionName)
     if (!cur) {
       cur = { correct: 0, total: 0, subtests: [] }

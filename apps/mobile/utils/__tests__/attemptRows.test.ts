@@ -132,3 +132,18 @@ describe('buildAttemptRows', () => {
     })).toEqual([])
   })
 })
+
+describe('buildAttemptRows: reached filter (B5)', () => {
+  const questions = [0, 1, 2, 3].map(i => ({ questionId: `q${i}`, correctIndex: 0, subtest: 'Mathematics' }))
+  const base = { sessionKey: 1, sourceTable: 'upcat_questions' as const, listingSlug: 'x', questions, elapsedByIdx: {} }
+
+  it('writes only answered or reached questions; reached-but-unanswered are skips (selectedIndex null)', () => {
+    const rows = buildAttemptRows({ ...base, answers: { 0: 0 }, reached: new Set([1]) })
+    expect(rows.map(r => r.questionId)).toEqual(['q0', 'q1'])
+    expect(rows[1]).toMatchObject({ selectedIndex: null, correct: false })
+  })
+
+  it('without a reached set every question still gets a row (other engines unchanged)', () => {
+    expect(buildAttemptRows({ ...base, answers: {} })).toHaveLength(4)
+  })
+})

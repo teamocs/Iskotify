@@ -57,7 +57,7 @@ jest.mock('../../../services/srsAggregates', () => ({
 const mockListPublishedBlueprints = jest.fn()
 jest.mock('../../../services/examBlueprints', () => ({
   ...jest.requireActual('../../../services/examBlueprints'),
-  listPublishedBlueprints: (...args: any[]) => mockListPublishedBlueprints(...args),
+  listRunnableBlueprints: (...args: any[]) => mockListPublishedBlueprints(...args),
 }))
 
 const mockLoadRun = jest.fn()
@@ -86,8 +86,8 @@ const emptyPracticeData = {
   loaded: true,
 }
 
-const UPCAT = { slug: 'upcat', name: 'UP College Admission Test', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 150 }
-const ACET = { slug: 'acet', name: 'Ateneo College Entrance Test', acronym: 'ACET', totalItems: 120, totalTimeMinutes: 120 }
+const UPCAT = { slug: 'upcat', name: 'UP College Admission Test', acronym: 'UPCAT', totalItems: 180, totalTimeMinutes: 150, items: 180, minutes: 150 }
+const ACET = { slug: 'acet', name: 'Ateneo College Entrance Test', acronym: 'ACET', totalItems: 120, totalTimeMinutes: 120, items: 120, minutes: 120 }
 
 async function renderSettled() {
   render(<PracticeScreen />)
@@ -238,9 +238,9 @@ describe('PracticeScreen (redesign M2)', () => {
       mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
       mockListPublishedBlueprints.mockResolvedValue([
         ACET, UPCAT,
-        { slug: 'ustet', name: 'UST', acronym: 'USTET', totalItems: 100, totalTimeMinutes: 120 },
-        { slug: 'dcat', name: 'DLSU', acronym: 'DCAT', totalItems: 80, totalTimeMinutes: 90 },
-        { slug: 'extra', name: 'Extra', acronym: 'EXTRA', totalItems: 60, totalTimeMinutes: 60 },
+        { slug: 'ustet', name: 'UST', acronym: 'USTET', totalItems: 100, totalTimeMinutes: 120, items: 100, minutes: 120 },
+        { slug: 'dcat', name: 'DLSU', acronym: 'DCAT', totalItems: 80, totalTimeMinutes: 90, items: 80, minutes: 90 },
+        { slug: 'extra', name: 'Extra', acronym: 'EXTRA', totalItems: 60, totalTimeMinutes: 60, items: 60, minutes: 60 },
       ])
       await renderSettled()
       const section = screen.getByTestId('practice-mocks')

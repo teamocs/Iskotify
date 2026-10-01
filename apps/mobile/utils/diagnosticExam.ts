@@ -86,8 +86,12 @@ export interface DiagnosticScore {
 export function scoreDiagnostic(
   questions: PreAssessQuestion[],
   answers: Record<number, number>,
+  reached?: ReadonlySet<number>,
 ): DiagnosticScore {
-  const scored = questions.map((q, i) => ({ subtest: q.subject, correct: answers[i] === q.answerIndex }))
+  const scored = questions
+    .map((q, i) => ({ q, i }))
+    .filter(({ i }) => !reached || answers[i] !== undefined || reached.has(i))
+    .map(({ q, i }) => ({ subtest: q.subject, correct: answers[i] === q.answerIndex }))
   const { overall, bySubtest } = scoreExam(scored)
   return { overall, bySubject: bySubtest }
 }

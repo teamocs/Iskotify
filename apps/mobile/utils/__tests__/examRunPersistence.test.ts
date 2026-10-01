@@ -154,3 +154,15 @@ describe('remapSingleIndex', () => {
     expect(remapSingleIndex(originalIds, [], 3)).toBe(0)
   })
 })
+
+describe('isRunExpired (B5)', () => {
+  const { isRunExpired } = require('../examRunPersistence')
+  it('is true once the saved total end time has passed', () => {
+    expect(isRunExpired({ endTime: 1_000 }, 1_000)).toBe(true)
+    expect(isRunExpired({ endTime: 1_000 }, 2_000)).toBe(true)
+  })
+  it('is false while time remains, or when the run has no end time', () => {
+    expect(isRunExpired({ endTime: 5_000 }, 1_000)).toBe(false)
+    expect(isRunExpired({ endTime: null }, 1_000)).toBe(false)
+  })
+})

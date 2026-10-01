@@ -27,6 +27,15 @@ export function reorderByIds<T, K extends keyof T>(pool: readonly T[], ids: read
   return out
 }
 
+/**
+ * True when a saved run's total time has already run out. Such a run must not be
+ * silently resumed (the first tick would auto-submit it and write every unreached
+ * question as wrong): the screen offers Submit / Discard instead.
+ */
+export function isRunExpired(run: { endTime: number | null }, now: number): boolean {
+  return run.endTime != null && run.endTime <= now
+}
+
 /** JSON.parse that never throws — falls back on null/undefined/invalid input. */
 export function safeParseJson<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback

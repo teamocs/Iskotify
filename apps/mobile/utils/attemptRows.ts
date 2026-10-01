@@ -40,6 +40,13 @@ export interface BuildAttemptRowsParams {
   elapsedByIdx: Record<number, number>
   /** Defaults to Date.now(); pass explicitly in tests for determinism. */
   answeredAt?: number
+  /**
+   * Question indexes the student actually saw. When given, a question that was neither
+   * answered nor reached is NOT written (an early submit / expired run must not record
+   * every unseen question as a wrong attempt); reached-but-unanswered ones are skips
+   * (selectedIndex null). Omit to keep one row per question.
+   */
+  reached?: ReadonlySet<number>
 }
 
 /**
@@ -51,9 +58,10 @@ export interface BuildAttemptRowsParams {
  */
 export function buildAttemptRows(params: BuildAttemptRowsParams): QuestionAttemptRow[] {
   const answeredAt = params.answeredAt ?? Date.now()
-  return params.questions.map((q, i) => {
+  return params.questions.flatMap((q, i) => {
+    if (params.reached && params.answers[i] === undefined && !params.reached.has(i)) return []
     const selectedIndex = params.answers[i] ?? null
-    return {
+    return [{
       sessionKey: params.sessionKey,
       sourceTable: params.sourceTable,
       questionId: q.questionId,
@@ -65,6 +73,6 @@ export function buildAttemptRows(params: BuildAttemptRowsParams): QuestionAttemp
       correct: selectedIndex !== null && selectedIndex === q.correctIndex,
       elapsedMs: params.elapsedByIdx[i] ?? 0,
       answeredAt,
-    }
+    }]
   })
 }

@@ -37,7 +37,7 @@ import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
-import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex } from '../../../utils/examRunPersistence'
+import { runKeyFor, reorderByIds, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
 import { buildPreAssessFromUpcat, type UpcatLocalRow } from '../../../utils/preAssessmentSource'
 import { PRE_ASSESS_QUESTIONS } from '../../../data/preAssessment'
 
@@ -70,7 +70,14 @@ export default function DiagnosticExam() {
   const [questions, setQuestions] = useState<PreAssessQuestion[]>([])
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
-  const startRef = useState(() => Date.now())[0]
+  // Sitting start (ms): restored from the saved run on resume so duration and the
+  // attempt key describe the real sitting.
+  const [startedAt, setStartedAt] = useState(() => Date.now())
+  // Indexes the student has actually seen; unreached questions are not written as attempts.
+  const visitedRef = useRef<Set<number>>(new Set())
+  // The saved run's time already ran out: offer Submit / Discard instead of Resume.
+  const [resumeStale, setResumeStale] = useState(false)
+  const [submitStale, setSubmitStale] = useState(false)
   // Fix 2: last-question review sheet (never submits directly).
   const [reviewOpen, setReviewOpen] = useState(false)
   // Fix 1: leave-confirmation + resume-in-progress-run state.
@@ -109,12 +116,17 @@ export default function DiagnosticExam() {
       timingRef.current = onIdxChange(timingRef.current, idx, Date.now())
     }
   }, [idx])
+  useEffect(() => {
+    if (phase === 'exam') visitedRef.current.add(idx)
+  }, [phase, idx])
 
   /** Builds a brand-new sample from the already-fetched bank rows and arms the timer. */
   function buildFreshExam() {
     const built = buildDiagnosticQuestions(bankRowsRef.current, subtestsRef.current, QUESTIONS_PER_SUBTEST)
     prefetchSessionImages(built) // fire-and-forget; never blocks session start
     setQuestions(built)
+    setStartedAt(Date.now())
+    visitedRef.current = new Set()
     if (built.length) setEndTime(Date.now() + built.length * SECONDS_PER_QUESTION * 1000)
     setPhase(built.length ? 'exam' : 'results')
   }
@@ -145,6 +157,7 @@ export default function DiagnosticExam() {
         const run = await loadRun(runKey)
         if (run && run.questionIds.length > 0) {
           savedRunRef.current = run
+          setResumeStale(isRunExpired(run, Date.now()))
           setPhase('resume-prompt')
           return
         }
@@ -169,25 +182,39 @@ export default function DiagnosticExam() {
    *  silently dropped (see utils/examRunPersistence.ts's reorderByIds) —
    *  resuming with slightly fewer questions is safer than resuming with a
    *  missing/stale one. */
-  function resumeExam() {
+  function restoreRun(): boolean {
     const run = savedRunRef.current
-    if (!run) return
+    if (!run) return false
     const exhaustivePool = buildPreAssessFromUpcat(bankRowsRef.current, subtestsRef.current, 9999)
     const candidatePool = [...exhaustivePool, ...PRE_ASSESS_QUESTIONS]
     const ordered = reorderByIds<PreAssessQuestion, 'id'>(candidatePool, run.questionIds, 'id')
     if (ordered.length === 0) {
       void clearRun(run.runKey)
       buildFreshExam()
-      return
+      return false
     }
     setQuestions(ordered)
     // Review finding #1: remap answers/idx through the surviving id order —
     // reorderByIds() compacted away vanished questions.
     const newIds = ordered.map(q => q.id)
     setAnswers(remapIndexedById(run.questionIds, newIds, run.answers))
-    setIdx(remapSingleIndex(run.questionIds, newIds, run.idx))
+    const restoredIdx = remapSingleIndex(run.questionIds, newIds, run.idx)
+    setIdx(restoredIdx)
     setEndTime(run.endTime)
+    setStartedAt(run.startedAt)
+    // Reached = answered, or visited up to the saved position.
+    const reached = new Set<number>(Object.keys(remapIndexedById(run.questionIds, newIds, run.answers)).map(Number))
+    for (let i = 0; i <= restoredIdx; i++) reached.add(i)
+    visitedRef.current = reached
     setPhase('exam')
+    return true
+  }
+
+  function resumeExam() { restoreRun() }
+
+  /** "Submit what I answered" on a run whose time ran out: restore it, then submit it as it stands. */
+  function submitStaleRun() {
+    if (restoreRun()) setSubmitStale(true)
   }
 
   function startOver() {
@@ -214,9 +241,9 @@ export default function DiagnosticExam() {
       floorIdx: 0,
       endTime,
       sectionEndTime: null,
-      startedAt: startRef,
+      startedAt,
     }).catch(err => console.warn('[practice/diagnostic] saveRun failed:', err))
-  }, [phase, runKey, subjectParam, questions, answers, idx, endTime, startRef, saveRun])
+  }, [phase, runKey, subjectParam, questions, answers, idx, endTime, startedAt, saveRun])
 
   // Fix 1: leave-confirmation.
   usePreventLeave(phase === 'exam' && !leaveConfirmed, () => {
@@ -242,13 +269,16 @@ export default function DiagnosticExam() {
     // Fix 1: run finished — stop offering "Resume" for a completed attempt.
     void clearRun(runKey).catch(err => console.warn('[practice/diagnostic] clearRun failed:', err))
 
-    const score = scoreDiagnostic(questions, answers)
+    // Scored over REACHED questions only (the same set as the attempt rows), so a
+    // subject's session total is what the student saw and a subject never reached has
+    // no row at all, not a 0% session.
+    const reachedBySubject = scoreDiagnostic(questions, answers, visitedRef.current).bySubject
 
     // Task D: per-question attempt rows, written before recordSession so
     // they're committed before recordSession's fire-and-forget backup push.
     const elapsedByIdx = timingRef.current ? finalizeTiming(timingRef.current, Date.now()) : {}
     const rows = buildAttemptRows({
-      sessionKey: startRef,
+      sessionKey: startedAt,
       sourceTable: 'upcat_questions',
       listingSlug: 'upcat',
       questions: questions.map(q => ({
@@ -259,6 +289,7 @@ export default function DiagnosticExam() {
       })),
       answers,
       elapsedByIdx,
+      reached: visitedRef.current,
     })
     // Bundled fallback questions (ids like 'pre-math-1') are not upcat_questions
     // rows, so they are scored in the session below but never recorded as attempts.
@@ -273,18 +304,27 @@ export default function DiagnosticExam() {
       console.warn('[practice/diagnostic] recordAttempts failed:', err)
     }
 
-    for (const params of buildDiagnosticSessionParams(score.bySubject, startRef)) {
+    for (const params of buildDiagnosticSessionParams(reachedBySubject, startedAt)) {
       void recordSession(params).catch(err => console.warn('[practice/diagnostic] recordSession failed:', err))
     }
     setPhase('results')
   }
   submitRef.current = submit // keep the timer's auto-submit pointed at the latest closure
 
+  // "Submit what I answered" on an expired run: submit once the restored exam phase is up.
+  // Declared BEFORE the countdown effect so submittedRef is already set when it runs.
+  useEffect(() => {
+    if (phase !== 'exam' || !submitStale) return
+    setSubmitStale(false)
+    void submitRef.current()
+  }, [phase, submitStale])
+
   // Countdown tick — recomputed from the absolute endTime each second so it stays
   // accurate; auto-submits when it reaches zero.
   useEffect(() => {
     if (phase !== 'exam' || endTime == null) return
     const tick = () => {
+      if (submittedRef.current) return
       const rem = Math.max(0, Math.round((endTime - Date.now()) / 1000))
       setRemaining(rem)
       if (rem <= 0) submitRef.current()
@@ -315,12 +355,23 @@ export default function DiagnosticExam() {
     return (
       <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
         <PageTitle
-          title="Resume where you left off?"
-          lead="You have an in-progress diagnostic. Your answers and timer were saved."
+          title={resumeStale ? 'Your last diagnostic ran out of time' : 'Resume where you left off?'}
+          lead={resumeStale
+            ? 'You can submit the answers you gave (questions you never reached are not counted), or discard that attempt and start fresh.'
+            : 'You have an in-progress diagnostic. Your answers and timer were saved.'}
         />
         <View style={{ gap: spacing.sm }}>
-          <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
-          <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
+          {resumeStale ? (
+            <>
+              <Button label="Submit what I answered" onPress={submitStaleRun} fullWidth size="lg" />
+              <Button label="Discard" variant="secondary" fullWidth onPress={startOver} />
+            </>
+          ) : (
+            <>
+              <Button label="Resume where you left off" onPress={resumeExam} fullWidth size="lg" />
+              <Button label="Start over" variant="secondary" fullWidth onPress={startOver} />
+            </>
+          )}
         </View>
       </Screen>
     )
@@ -337,7 +388,8 @@ export default function DiagnosticExam() {
         />
       )
     }
-    const score = scoreDiagnostic(questions, answers)
+    const score = scoreDiagnostic(questions, answers, visitedRef.current)
+    const unreached = questions.length - score.overall.total
     const overallPct = score.overall.total ? Math.round((score.overall.correct / score.overall.total) * 100) : 0
     const weakest = weakestSubject(score.bySubject)
     return (
@@ -369,6 +421,11 @@ export default function DiagnosticExam() {
                 )
               })}
             </View>
+            {unreached > 0 ? (
+              <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.sm }]} maxFontSizeMultiplier={2}>
+                Questions you never reached are not counted.
+              </Text>
+            ) : null}
           </View>
 
           <RunnerReview

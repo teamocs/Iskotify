@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
 import { examBlueprints, examBlueprintSections, examCourseNotes, userSettings, careerCourses } from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
-import { getExamBlueprint, listPublishedBlueprintSlugs, listPublishedBlueprints, getQuestionsByCategory, getTargetCourseClusters } from '../examBlueprints'
+import { getExamBlueprint, listPublishedBlueprintSlugs, listPublishedBlueprints, listRunnableBlueprints, getQuestionsByCategory, getTargetCourseClusters, getRunnableCountsByCategory } from '../examBlueprints'
 import { upcatQuestions } from '../../db/schema'
 
 function makeDb() {
@@ -199,5 +199,85 @@ describe('getTargetCourseClusters', () => {
     })
     const clusters = await getTargetCourseClusters(db)
     expect(clusters).toEqual(['Engineering'])
+  })
+})
+
+describe('getRunnableCountsByCategory', () => {
+  const row = (id: string, cat: string | null, over: Record<string, unknown> = {}) => ({
+    questionId: id, subtest: 'Mathematics', skillCategory: cat, questionText: 'q', options: '[]', correctIndex: 0, explanation: '', ...over,
+  })
+
+  it('counts published questions per skill_category without loading the rows', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values([
+      row('a1', 'Mathematics'), row('a2', 'Mathematics'), row('a3', 'Mathematics', { status: 'draft' }),
+      row('b1', 'Science'), row('c1', 'Verbal'),
+    ])
+    const counts = await getRunnableCountsByCategory(db, ['Mathematics', 'Science', 'Spatial'])
+    expect(counts.get('Mathematics')).toBe(2)
+    expect(counts.get('Science')).toBe(1)
+    expect(counts.get('Spatial') ?? 0).toBe(0)
+    expect(counts.has('Verbal')).toBe(false) // not asked for
+  })
+
+  it('leaves out visual questions whose figure is missing, keeps visual ones that have it', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values([
+      row('v1', 'Abstract', { hasVisual: true, imageUrl: null }),
+      row('v2', 'Abstract', { hasVisual: true, imageUrl: '' }),
+      row('v3', 'Abstract', { hasVisual: true, imageUrl: 'https://x/y.png' }),
+      row('v4', 'Abstract', { hasVisual: false, imageUrl: null }),
+    ])
+    expect((await getRunnableCountsByCategory(db, ['Abstract'])).get('Abstract')).toBe(2)
+  })
+
+  it('agrees with the pools getQuestionsByCategory hands the runner', async () => {
+    const db = makeDb()
+    await db.insert(upcatQuestions).values([
+      row('a1', 'Mathematics'), row('a2', 'Mathematics', { hasVisual: true, imageUrl: null }), row('a3', 'Mathematics', { status: 'draft' }),
+    ])
+    const pools = await getQuestionsByCategory(db, ['Mathematics'])
+    expect((await getRunnableCountsByCategory(db, ['Mathematics'])).get('Mathematics')).toBe(pools.get('Mathematics')!.length)
+  })
+
+  it('returns an empty map for no categories', async () => {
+    expect((await getRunnableCountsByCategory(makeDb(), [])).size).toBe(0)
+  })
+})
+
+describe('listRunnableBlueprints (what Practice and Home offer)', () => {
+  const q = (id: string, cat: string) => ({
+    questionId: id, subtest: 'Mathematics', skillCategory: cat, questionText: 'q', options: '[]', correctIndex: 0, explanation: '',
+  })
+
+  it('leaves out a published exam none of whose sections has a runnable question', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values([
+      { slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', status: 'published', totalItems: 4, totalTimeMinutes: 60, displayOrder: 1 },
+      { slug: 'mech', name: 'Mech', acronym: 'MT', status: 'published', totalItems: 40, totalTimeMinutes: 40, displayOrder: 2 },
+    ])
+    await db.insert(examBlueprintSections).values([
+      { id: 'upcat:1', blueprintSlug: 'upcat', name: 'Math', skillCategory: 'Mathematics', itemCount: 3, displayOrder: 1 },
+      { id: 'mech:1', blueprintSlug: 'mech', name: 'Mechanical', skillCategory: 'Mechanical-Technical', itemCount: 40, displayOrder: 1 },
+    ])
+    await db.insert(upcatQuestions).values([q('m1', 'Mathematics'), q('m2', 'Mathematics')])
+    const list = await listRunnableBlueprints(db)
+    expect(list.map(b => b.slug)).toEqual(['upcat'])
+    // Sized by what would actually be built (2 runnable of 3 planned), not total_items.
+    expect(list[0]!.items).toBe(2)
+  })
+
+  it('times a section-locked exam by its section clocks', async () => {
+    const db = makeDb()
+    await db.insert(examBlueprints).values(
+      { slug: 'acet', name: 'ACET', acronym: 'ACET', status: 'published', totalItems: 2, totalTimeMinutes: 999, sectionBlocked: true, displayOrder: 1 },
+    )
+    await db.insert(examBlueprintSections).values([
+      { id: 'acet:1', blueprintSlug: 'acet', name: 'Math', skillCategory: 'Mathematics', itemCount: 1, timeMinutes: 30, displayOrder: 1 },
+      { id: 'acet:2', blueprintSlug: 'acet', name: 'Sci', skillCategory: 'Science', itemCount: 1, timeMinutes: 20, displayOrder: 2 },
+    ])
+    await db.insert(upcatQuestions).values([q('m1', 'Mathematics'), q('s1', 'Science')])
+    const [acet] = await listRunnableBlueprints(db)
+    expect(acet!.minutes).toBe(50)
   })
 })

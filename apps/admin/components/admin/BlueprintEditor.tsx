@@ -12,6 +12,7 @@ import { Button, IconButton } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { DiscardChangesDialog } from '@/components/ui/Dialog'
 import { errorMessage } from '@/lib/errorMessage'
+import { sumSectionItems } from '@/lib/blueprintTotals'
 
 interface Blueprint {
   slug: string
@@ -191,7 +192,7 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
       const res = await fetch('/api/exam-blueprints', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blueprint, sections, courseNotes: notes }),
+        body: JSON.stringify({ blueprint: { ...blueprint, total_items: totalItems }, sections, courseNotes: notes }),
       })
       const body = await res.json()
       if (!res.ok) {
@@ -244,6 +245,8 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
   }
 
   const busy = saving || deleting
+  // Derived, never typed: the server recomputes it from the sections on save as well.
+  const totalItems = sumSectionItems(sections)
   const title = isNew ? 'New Blueprint' : (blueprint.name || blueprint.slug || 'Edit Blueprint')
 
   return (
@@ -276,9 +279,9 @@ export function BlueprintEditor({ initialBlueprint, initialSections, initialNote
               </Field>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Field label="Total items" id={fieldId('total_items')}>
+                <Field label="Total items" id={fieldId('total_items')} hint="Added up from the sections below.">
                   {p => (
-                    <input {...p} type="number" min={0} value={blueprint.total_items} onChange={e => setBp('total_items', Number(e.target.value))} className={`${controlClass} tabular-nums`} />
+                    <input {...p} type="number" readOnly value={totalItems} className={`${controlClass} tabular-nums`} />
                   )}
                 </Field>
                 <Field label="Total minutes" id={fieldId('total_time_minutes')}>

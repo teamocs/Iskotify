@@ -1,5 +1,5 @@
 import type { ExamBlueprint, BlueprintSection } from '../services/examBlueprints'
-import { isMissingRequiredFigure, type RawUpcatQuestion, type RawUpcatPassage, type ExamQuestion } from './upcatExam'
+import { isMissingRequiredFigure, groupIntoUnits, type QuestionUnit, type RawUpcatQuestion, type RawUpcatPassage, type ExamQuestion } from './upcatExam'
 
 // ---------------------------------------------------------------------------
 // Section chip state (B2)
@@ -37,10 +37,39 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-/** Build a timed mock from a blueprint: each section samples up to item_count questions
+/**
+ * Pick whole units (passage sets / single questions) for a section target.
+ * A passage set is never truncated or split. Units are visited in shuffled
+ * order and taken only while they still fit within `target`; if a gap remains
+ * and the smallest leftover unit lands closer to the target than staying short
+ * does, that one unit is added (so a section overshoots by less than the gap it
+ * would otherwise leave). When nothing fits (every unit is larger than the
+ * target, e.g. one 5-question passage for a 3-item section) the smallest unit
+ * is taken whole: a section may therefore exceed its target, but only by
+ * finishing a passage, never by cutting one.
+ */
+function pickUnits(units: QuestionUnit[], target: number): QuestionUnit[] {
+  const goal = Math.max(1, target)
+  const picked: QuestionUnit[] = []
+  const leftover: QuestionUnit[] = []
+  let count = 0
+  for (const u of shuffle(units)) {
+    if (count + u.length <= goal) { picked.push(u); count += u.length } else leftover.push(u)
+  }
+  if (leftover.length === 0) return picked
+  const smallest = leftover.reduce((a, b) => (b.length < a.length ? b : a))
+  if (picked.length === 0) return [smallest]
+  const deficit = goal - count
+  if (deficit > 0 && smallest.length - deficit < deficit) picked.push(smallest)
+  return picked
+}
+
+/** Build a timed mock from a blueprint: each section samples about item_count questions
  *  from its skill_category pool. Sections whose pool is empty are returned as comingSoon
  *  (shown in the structure preview, excluded from the runnable timed exam). Passage sets
- *  are kept contiguous and the passage text is attached. */
+ *  are kept whole and contiguous (sorted by setPosition) with the passage text attached to
+ *  every question of the set, using the same grouping as the UPCAT subtest builder, and a
+ *  question is never placed in two sections. */
 export function buildBlueprintExam(
   blueprint: ExamBlueprint,
   questionsByCategory: Map<string, RawUpcatQuestion[]>,
@@ -50,15 +79,19 @@ export function buildBlueprintExam(
   const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
   const runnable: BuiltSection[] = []
   const comingSoon: BlueprintSection[] = []
+  // Ids already placed in an earlier section: sections sharing a skill_category
+  // must not serve the same question twice in one sitting.
+  const used = new Set<string>()
   for (const section of [...blueprint.sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
     // Exclude questions whose required figure is missing (has_visual=true,
     // image_url=null) — a student must never see "refer to the diagram" with
     // no diagram. Filtered here (not just at the getQuestionsByCategory source)
     // so this holds regardless of how questionsByCategory was produced.
-    const pool = (questionsByCategory.get(section.skillCategory) ?? []).filter(q => !isMissingRequiredFigure(q))
+    const pool = (questionsByCategory.get(section.skillCategory) ?? []).filter(q => !isMissingRequiredFigure(q) && !used.has(q.questionId))
     if (pool.length === 0) { comingSoon.push(section); continue }
     const target = itemCountFor ? itemCountFor(section) : section.itemCount
-    const picked = shuffle(pool).slice(0, Math.max(1, target))
+    const picked = pickUnits(groupIntoUnits(pool), target).flat()
+    for (const q of picked) used.add(q.questionId)
     const questions: ExamQuestion[] = picked.map(q => ({ ...q, passageText: q.setId ? (passageById.get(q.setId) ?? null) : null }))
     runnable.push({ section, questions, available: pool.length })
   }
@@ -99,7 +132,8 @@ export function scaleSectionTimeMinutes(sectionTimeMinutes: number | null, sampl
 
 export interface ScaledBlueprintTiming {
   totalMinutes: number
-  /** section.id -> scaled minutes (null when the section has no declared time budget). */
+  /** section.id -> scaled minutes. Null only for a section without a declared time
+   *  budget on a NON-blocked blueprint (its per-section clock never runs). */
   sectionMinutes: Map<string, number | null>
 }
 
@@ -107,17 +141,59 @@ export interface ScaledBlueprintTiming {
  * Combine the two scalers over a built exam — the single call site (startExam
  * in app/practice/exam/[slug].tsx) needs both the total countdown and, for
  * section-blocked blueprints, each section's own countdown.
+ *
+ * The declared item total is the SUM of the sections' item_counts (runnable and
+ * coming-soon alike), never blueprint.totalItems: that column can drift from
+ * the sections (DOST-SEI live data: total_items 170, sections sum to 210), and
+ * a ratio against the wrong denominator mis-sizes the whole clock.
+ *
+ * Section-blocked blueprints run one clock per section, so:
+ *  - a section with no declared minutes takes an equal share of what is left of
+ *    the (scaled) blueprint total after the sections that do declare minutes,
+ *    so a null never means "expires instantly" in one place and "whole exam"
+ *    in another. If the declared sections already use the whole total, its share
+ *    is its item-proportional slice (its questions / all questions * scaled
+ *    total) instead; either way never less than 1 minute per 2 questions;
+ *  - the total is the SUM of the scaled section clocks, which also means it can
+ *    never be shorter than the sections it contains (a coming-soon section
+ *    dropping out, or sections declaring more than the blueprint total, used to
+ *    let the total clock auto-submit before the last section clock ended).
  */
 export function scaleBlueprintTiming(
-  blueprint: { totalItems: number; totalTimeMinutes: number },
+  blueprint: { totalItems?: number; totalTimeMinutes: number; sectionBlocked?: boolean },
   built: BuiltExam,
 ): ScaledBlueprintTiming {
-  const totalMinutes = scaleExamTimeMinutes(blueprint.totalTimeMinutes, built.totalQuestions, blueprint.totalItems)
+  const declaredTotal =
+    built.runnable.reduce((n, bs) => n + bs.section.itemCount, 0) +
+    built.comingSoon.reduce((n, s) => n + s.itemCount, 0)
+  const scaledTotal = scaleExamTimeMinutes(blueprint.totalTimeMinutes, built.totalQuestions, declaredTotal)
   const sectionMinutes = new Map<string, number | null>()
   for (const bs of built.runnable) {
     sectionMinutes.set(bs.section.id, scaleSectionTimeMinutes(bs.section.timeMinutes, bs.questions.length, bs.section.itemCount))
   }
-  return { totalMinutes, sectionMinutes }
+  if (!blueprint.sectionBlocked) return { totalMinutes: scaledTotal, sectionMinutes }
+
+  const nullSections = built.runnable.filter(bs => sectionMinutes.get(bs.section.id) == null)
+  if (nullSections.length > 0) {
+    let declared = 0
+    for (const m of sectionMinutes.values()) declared += m ?? 0
+    const remaining = scaledTotal - declared
+    const sumItems = built.runnable.reduce((n, bs) => n + bs.questions.length, 0)
+    for (const bs of nullSections) {
+      const n = bs.questions.length
+      // Normal case: an equal share of what the declared sections left over. When the
+      // declared sections already use up the whole total there is nothing left to share,
+      // so fall back to this section's item-proportional slice of the scaled total.
+      const base = remaining > 0
+        ? remaining / nullSections.length
+        : sumItems > 0 ? (n / sumItems) * scaledTotal : 1
+      // Never tighter than 1 minute per 2 questions (and never under 1 minute).
+      sectionMinutes.set(bs.section.id, Math.max(1, Math.ceil(n / 2), Math.round(base)))
+    }
+  }
+  let sum = 0
+  for (const m of sectionMinutes.values()) sum += m ?? 0
+  return { totalMinutes: sum > 0 ? sum : scaledTotal, sectionMinutes }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +239,30 @@ export function buildStudySprintExam(
 ): BuiltExam {
   const counts = computeSprintItemCounts(blueprint.sections, blueprint.totalTimeMinutes, sprintMinutes)
   return buildBlueprintExam(blueprint, questionsByCategory, passages, sec => counts.get(sec.id) ?? sec.itemCount)
+}
+
+/**
+ * The item count the prestart will build, from per-category runnable counts alone (no
+ * question rows): sections in display order each take min(item_count, still unused in
+ * their category) since sections sharing a category never serve a question twice, and a
+ * section with nothing left is left out, like buildBlueprintExam's comingSoon. Passage
+ * sets are kept whole when the real build picks units, so it can overshoot by finishing a
+ * passage; this is the item_count / pool-size figure.
+ */
+export function plannedItemCount(
+  sections: readonly { skillCategory: string; itemCount: number; displayOrder: number }[],
+  runnableByCategory: ReadonlyMap<string, number>,
+): number {
+  const left = new Map(runnableByCategory)
+  let total = 0
+  for (const sec of [...sections].sort((a, b) => a.displayOrder - b.displayOrder)) {
+    const avail = left.get(sec.skillCategory) ?? 0
+    const take = Math.min(sec.itemCount, avail)
+    if (take <= 0) continue
+    left.set(sec.skillCategory, avail - take)
+    total += take
+  }
+  return total
 }
 
 export interface PenaltyScore { raw: number; adjusted: number; correct: number; wrong: number; blank: number }
@@ -287,4 +387,14 @@ export function groupReviewBySection(
     const total = questionRefs.length
     return { sectionName: name, questionRefs, correct, total }
   })
+}
+
+/**
+ * The exam's real timer for lists and labels: a section-locked exam runs on its
+ * section clocks, so their sum is what the student gets; otherwise the
+ * blueprint total. (The runner may scale either down for a thin pool.)
+ */
+export function examMinutes(bp: { sectionBlocked?: boolean; totalTimeMinutes: number; sections: readonly { timeMinutes: number | null }[] }): number {
+  const sectionMinutes = bp.sections.reduce((n, s) => n + (s.timeMinutes ?? 0), 0)
+  return bp.sectionBlocked && sectionMinutes > 0 ? sectionMinutes : bp.totalTimeMinutes
 }

@@ -41,4 +41,18 @@ describe('groupSectionResults', () => {
     const qs = [fq('Mixed', 'Science'), fq('Mixed', 'Mathematics'), fq('Mixed', 'Mathematics')]
     expect(groupSectionResults(qs, {})[0]!.subtest).toBe('Mathematics')
   })
+
+  it('counts only reached questions (answered or visited) in a section total', () => {
+    const qs = [fq('Math', 'Mathematics', 1), fq('Math', 'Mathematics', 1), fq('Math', 'Mathematics', 1), fq('Sci', 'Science', 1)]
+    // q0 answered right, q1 visited (skipped), q2 and the whole Science section never reached.
+    const res = groupSectionResults(qs, { 0: 1 }, new Set([0, 1]))
+    expect(res).toEqual([
+      { sectionName: 'Math', subtest: 'Mathematics', correct: 1, total: 2 },
+    ])
+  })
+
+  it('an answered question counts as reached even when missing from the visited set', () => {
+    const res = groupSectionResults([fq('Math', 'Mathematics', 1), fq('Math', 'Mathematics', 1)], { 1: 1 }, new Set())
+    expect(res).toEqual([{ sectionName: 'Math', subtest: 'Mathematics', correct: 1, total: 1 }])
+  })
 })

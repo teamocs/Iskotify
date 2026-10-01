@@ -41,16 +41,19 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-export function buildExam(
-  questions: RawUpcatQuestion[],
-  passages: RawUpcatPassage[],
-  opts: { subtest: Subtest; mode: 'quick' | 'full' },
-): ExamQuestion[] {
-  const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
-  const inSubtest = questions.filter(q => q.subtest === opts.subtest && !isMissingRequiredFigure(q))
+/** A passage set (sorted by setPosition) or a single standalone question. */
+export type QuestionUnit = RawUpcatQuestion[]
 
+/**
+ * Group questions into contiguous units: every passage set (shared setId) becomes
+ * one unit sorted by setPosition, placed at the position of its first member in
+ * `questions`; a question without a setId is a unit of one. Shared by the UPCAT
+ * subtest builder and the blueprint builder so a Reading Comprehension passage
+ * is never split or interleaved.
+ */
+export function groupIntoUnits(questions: readonly RawUpcatQuestion[]): QuestionUnit[] {
   const setGroups = new Map<string, RawUpcatQuestion[]>()
-  for (const q of inSubtest) {
+  for (const q of questions) {
     if (q.setId) {
       if (!setGroups.has(q.setId)) setGroups.set(q.setId, [])
       setGroups.get(q.setId)!.push(q)
@@ -58,12 +61,9 @@ export function buildExam(
   }
   for (const g of setGroups.values()) g.sort((a, b) => (a.setPosition ?? 0) - (b.setPosition ?? 0))
 
-  // Build units in ORDER OF FIRST APPEARANCE in inSubtest, keeping each
-  // passage set contiguous at the position of its first member.
-  type Unit = RawUpcatQuestion[]
   const emitted = new Set<string>()
-  const units: Unit[] = []
-  for (const q of inSubtest) {
+  const units: QuestionUnit[] = []
+  for (const q of questions) {
     if (q.setId) {
       if (emitted.has(q.setId)) continue
       emitted.add(q.setId)
@@ -72,12 +72,25 @@ export function buildExam(
       units.push([q])
     }
   }
+  return units
+}
 
-  let chosen: Unit[]
+export function buildExam(
+  questions: RawUpcatQuestion[],
+  passages: RawUpcatPassage[],
+  opts: { subtest: Subtest; mode: 'quick' | 'full' },
+): ExamQuestion[] {
+  const passageById = new Map(passages.map(p => [p.setId, p.passageText]))
+  const inSubtest = questions.filter(q => q.subtest === opts.subtest && !isMissingRequiredFigure(q))
+
+  // Units in ORDER OF FIRST APPEARANCE, each passage set contiguous.
+  const units = groupIntoUnits(inSubtest)
+
+  let chosen: QuestionUnit[]
   if (opts.mode === 'full') {
     chosen = units
   } else {
-    const picked: Unit[] = []
+    const picked: QuestionUnit[] = []
     let count = 0
     for (const u of shuffle(units)) {
       if (count >= QUICK_TARGET) break

@@ -64,6 +64,12 @@ describe('BlueprintEditor', () => {
     expect(controlFor(html, 'Mechanics note')).not.toContain('required=""')
   })
 
+  it('shows Total items as a read-only figure derived from the sections (stale stored value ignored)', () => {
+    const control = controlFor(render(), 'Total items')
+    expect(control).toContain('readOnly=""')
+    expect(control).toContain('value="50"') // the one section's 50 items, not the stored 200
+  })
+
   it('does not repeat the page title as a heading', () => {
     expect(render()).not.toMatch(/<h[12][^>]*>UP College Admission Test<\/h[12]>/)
   })

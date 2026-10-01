@@ -552,4 +552,89 @@ describe('DiagnosticExam', () => {
       expect(screen.getByTestId('screen-scroll')).toBeTruthy()
     })
   })
+
+  // ── Logic audit B5: a saved run whose time has run out ─────────────────────
+  describe('B5: stale saved run', () => {
+    const row = (id: string, subtest: string, text: string) =>
+      ({ questionId: id, subtest, questionText: text, options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null })
+    const savedRun = (over: Record<string, unknown> = {}) => ({
+      runKey: 'diagnostic:Science', kind: 'diagnostic', slug: 'Science', mode: '',
+      questionIds: ['S1', 'S2', 'S3'], sectionNames: ['Science', 'Science', 'Science'],
+      answers: { 0: 0 }, idx: 0, sectionIdx: 0, floorIdx: 0,
+      endTime: Date.now() - 3_600_000, sectionEndTime: null, startedAt: 777000, updatedAt: Date.now() - 3_600_000,
+      ...over,
+    })
+    beforeEach(() => {
+      mockSearchParams = { subject: 'Science' }
+      mockBankRows = [row('S1', 'Science', 'Sci Q1'), row('S2', 'Science', 'Sci Q2'), row('S3', 'Science', 'Sci Q3')]
+    })
+
+    it('offers Submit / Discard instead of Resume and never auto-submits', async () => {
+      mockLoadRun.mockResolvedValue(savedRun())
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
+      expect(screen.getByText('Discard')).toBeTruthy()
+      expect(screen.queryByText('Resume where you left off')).toBeNull()
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+      expect(mockRecordSession).not.toHaveBeenCalled()
+    })
+
+    it('Submit records only reached questions, under the saved startedAt', async () => {
+      mockLoadRun.mockResolvedValue(savedRun())
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
+      fireEvent.press(screen.getByText('Submit what I answered'))
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+      const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
+      expect(rows.map(r => r.questionId)).toEqual(['S1']) // S2/S3 were never reached
+      expect(rows[0].sessionKey).toBe(777000)
+      expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ attemptKey: 777000, startTime: 777000 }))
+    })
+
+    it('persists and shows the subject total over reached questions only (1/1, not 1/3)', async () => {
+      mockLoadRun.mockResolvedValue(savedRun())
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
+      fireEvent.press(screen.getByText('Submit what I answered'))
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+      expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Science', score: 1, total: 1 }))
+      expect(screen.getByText('1/1 correct · 100%')).toBeTruthy()
+      expect(screen.getByText(/Questions you never reached are not counted/)).toBeTruthy()
+    })
+
+    it('Discard clears the saved run and starts a fresh sample', async () => {
+      mockLoadRun.mockResolvedValue(savedRun())
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Discard')).toBeTruthy())
+      fireEvent.press(screen.getByText('Discard'))
+      expect(mockClearRun).toHaveBeenCalledWith('diagnostic:Science')
+      await waitFor(() => expect(screen.getByText('Question 1 of 3')).toBeTruthy())
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+    })
+
+    it('does not write a 0% session for a subject the student never reached', async () => {
+      mockSearchParams = {}
+      mockBankRows = [row('S1', 'Science', 'Sci Q1'), row('M1', 'Mathematics', 'Math Q1')]
+      mockLoadRun.mockResolvedValue(savedRun({
+        runKey: 'diagnostic:all', slug: 'all', questionIds: ['S1', 'M1'], sectionNames: ['Science', 'Mathematics'],
+      }))
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
+      fireEvent.press(screen.getByText('Submit what I answered'))
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy())
+      expect(mockRecordSession).toHaveBeenCalledTimes(1)
+      expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ subtest: 'Science' }))
+    })
+
+    it('resuming a live run keeps the saved startedAt as the attempt key', async () => {
+      mockLoadRun.mockResolvedValue(savedRun({ endTime: Date.now() + 600_000, idx: 2, answers: { 0: 0, 1: 0, 2: 0 } }))
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
+      fireEvent.press(screen.getByText('Resume where you left off'))
+      await waitFor(() => expect(screen.getByText('Review & submit')).toBeTruthy())
+      await reviewAndConfirmSubmit(alertSpy)
+      await waitFor(() => expect(mockRecordAttempts).toHaveBeenCalled())
+      expect(mockRecordAttempts.mock.calls[0]![0][0].sessionKey).toBe(777000)
+    })
+  })
 })
