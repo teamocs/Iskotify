@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { eq } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { userSettings } from '../db/schema'
+import { schedulePushUserData } from '../services/pushScheduler'
 import {
   requestNotificationPermissions,
   scheduleIskotifyNotifications,
   cancelAllIskotifyNotifications,
   type NotificationListing,
-  type DailyPlanSummary,
 } from '../services/notifications'
 
 export function useNotifications() {
@@ -35,11 +35,11 @@ export function useNotifications() {
       .catch(() => setReady(true))
   }, [db])
 
-  const schedule = useCallback(async (listings: NotificationListing[], dailyPlanSummary?: DailyPlanSummary | null) => {
+  const schedule = useCallback(async (listings: NotificationListing[]) => {
     if (!ready || !enabled) return
     const granted = await requestNotificationPermissions()
     if (granted) {
-      await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled, dailyPlanSummary }).catch(e =>
+      await scheduleIskotifyNotifications(listings, { dailyReminderHour, weeklySummaryEnabled }).catch(e =>
         console.warn('[useNotifications] schedule error:', e)
       )
     }
@@ -50,6 +50,7 @@ export function useNotifications() {
     setDailyReminderHour(hour) // optimistic
     try {
       await db.update(userSettings).set({ dailyReminderHour: hour }).where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
       if (enabled) {
         // Same permission gate as schedule()/toggle() — an ungranted (or
         // revoked) OS permission must never be silently rescheduled against.
@@ -69,6 +70,7 @@ export function useNotifications() {
     setWeeklySummaryEnabled(next) // optimistic
     try {
       await db.update(userSettings).set({ weeklySummaryEnabled: next }).where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
       if (enabled) {
         // Same permission gate as schedule()/toggle() — see setReminderHour above.
         const granted = await requestNotificationPermissions()
@@ -90,6 +92,7 @@ export function useNotifications() {
       await db.update(userSettings)
         .set({ notificationsEnabled: next })
         .where(eq(userSettings.id, 1))
+      schedulePushUserData(db)
 
       if (next) {
         const granted = await requestNotificationPermissions()
@@ -101,6 +104,7 @@ export function useNotifications() {
           await db.update(userSettings)
             .set({ notificationsEnabled: false })
             .where(eq(userSettings.id, 1))
+          schedulePushUserData(db)
         }
       } else {
         await cancelAllIskotifyNotifications()

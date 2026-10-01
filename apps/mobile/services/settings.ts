@@ -4,6 +4,7 @@ import { userSettings } from '../db/schema'
 import type { IncomeBracket } from '../utils/scholarshipMatch'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
+import { schedulePushUserData } from './pushScheduler'
 
 export interface UserSettingsData {
   selectedListingSlug: string
@@ -140,4 +141,5 @@ export async function updateSettings(
   invalidate('settings:')
   invalidate('home:')
   scheduleWebPersist()
+  schedulePushUserData(db)
 }

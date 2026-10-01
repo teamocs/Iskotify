@@ -23,6 +23,7 @@ import { useDb } from '../hooks/useDb'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
+import { installPushFlushListeners } from '../services/pushFlushListeners'
 import { WebSetupOverlay } from '../components/WebSetupOverlay'
 import { markFirstSyncDone } from '../services/syncStatus'
 import { runEnhancement } from '../hooks/useAiEnhancement'
@@ -70,6 +71,10 @@ export default function RootLayout() {
 
   // Stable callback — never changes, safe as useCallback dep
   const handleReady = useCallback(() => setAppReady(true), [])
+
+  // Send any debounced backup edit as soon as the page is hidden / the app is
+  // backgrounded, so a pull on the next launch cannot revert it.
+  useEffect(() => installPushFlushListeners(), [])
 
   // ── Web: no SQLiteProvider (sql.js used instead via WebDrizzleProvider) ──
   if (Platform.OS === 'web') {

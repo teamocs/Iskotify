@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useDb } from './useDb'
+import { schedulePushUserData } from '../services/pushScheduler'
 import { savedDecks as savedDecksTable } from '../db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -65,6 +66,7 @@ export function useSavedDecks(): UseSavedDecks {
       topicIds: JSON.stringify(topicIds),
       createdAt: Date.now(),
     })
+    schedulePushUserData(db)
     const rows = await db.select().from(savedDecksTable).orderBy(savedDecksTable.createdAt)
     setDecks(rows.map(r => ({
       id: r.id,
@@ -76,6 +78,7 @@ export function useSavedDecks(): UseSavedDecks {
 
   const deleteDeck = useCallback(async (id: string) => {
     await db.delete(savedDecksTable).where(eq(savedDecksTable.id, id))
+    schedulePushUserData(db)
     setDecks(prev => prev.filter(d => d.id !== id))
   }, [db])
 

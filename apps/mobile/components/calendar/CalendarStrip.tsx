@@ -13,6 +13,7 @@
 import { useState, useMemo } from 'react'
 import { StyleSheet, View, Text, Pressable } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { localDayIndex } from '../../utils/localDay'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -57,7 +58,8 @@ export function CalendarStrip({
 
   const [weekOffset, setWeekOffset] = useState(0)
 
-  const todayDay = Math.floor(Date.now() / 86_400_000)
+  // Local calendar day (not the UTC day): matches the practice-day buckets.
+  const todayDay = localDayIndex(Date.now())
   const centerDay = todayDay + weekOffset * 7
 
   const days: Array<{

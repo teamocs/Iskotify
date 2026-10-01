@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { eq } from 'drizzle-orm'
 import { useDb } from './useDb'
 import { userSettings } from '../db/schema'
+import { schedulePushUserData } from '../services/pushScheduler'
 
 export interface UseFocusModePref {
   enabled: boolean
@@ -48,6 +49,7 @@ export function useFocusModePref(): UseFocusModePref {
       .insert(userSettings)
       .values({ id: 1, focusModeEnabled: v })
       .onConflictDoUpdate({ target: userSettings.id, set: { focusModeEnabled: v } })
+      .then(() => schedulePushUserData(db))
       .catch(err => console.warn('[useFocusModePref] persist failed:', err))
   }, [db])
 

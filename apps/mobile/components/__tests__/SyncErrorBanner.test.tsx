@@ -31,6 +31,14 @@ beforeEach(() => {
 })
 
 describe('SyncErrorBanner', () => {
+  it('says the changes are safe but not backed up when the backup upload is what failed', () => {
+    const { BACKUP_FAILED_MESSAGE } = jest.requireActual('../../services/syncStatus') as typeof import('../../services/syncStatus')
+    render(<SyncErrorBanner onRetry={() => {}} />)
+    act(() => { markSyncError(BACKUP_FAILED_MESSAGE) })
+    expect(screen.getByText(BACKUP_FAILED_MESSAGE)).toBeTruthy()
+    expect(screen.queryByText(/check your connection/i)).toBeNull()
+  })
+
   it('renders null when there is no error (initial state)', () => {
     const { toJSON } = render(<SyncErrorBanner onRetry={() => {}} />)
     expect(toJSON()).toBeNull()

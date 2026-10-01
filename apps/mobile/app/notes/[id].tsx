@@ -18,6 +18,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../theme/tokens'
 import { useDb } from '../../hooks/useDb'
+import { schedulePushUserData } from '../../services/pushScheduler'
 import { useNoteLabels } from '../../hooks/useNoteLabels'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { parseChecklistItems, type NoteColor, type NoteType, type ChecklistItem } from '../../hooks/useNotes'
@@ -174,6 +175,7 @@ export default function NoteEditorScreen() {
     await db.update(notesTable)
       .set({ title: t2, content: finalContent, color: clr, updatedAt: Date.now() })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
   }, [id, loaded, type, db])
 
   useEffect(() => {
@@ -192,6 +194,7 @@ export default function NoteEditorScreen() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     await save(title, content, checkItems, color)
     await db.update(notesTable).set({ isArchived: true, updatedAt: Date.now() }).where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     goBackOr('/notes')
   }, [id, db, save, title, content, checkItems, color])
 
@@ -205,6 +208,7 @@ export default function NoteEditorScreen() {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
         await save(title, content, checkItems, color)
         await db.update(notesTable).set({ isTrashed: true, trashedAt: Date.now(), updatedAt: Date.now() }).where(eq(notesTable.id, id))
+        schedulePushUserData(db)
         goBackOr('/notes')
       },
       { destructive: true },
@@ -250,6 +254,7 @@ export default function NoteEditorScreen() {
     await db.update(notesTable)
       .set({ reminderAt: ms, updatedAt: Date.now() })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     if (ms != null) {
       await scheduleNoteReminder(id, title, new Date(ms))
     } else {

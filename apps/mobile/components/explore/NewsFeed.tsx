@@ -32,6 +32,8 @@ import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notific
 import type { QuickReminderPayload } from '../calendar/QuickReminderForm'
 import type { BadgeSpec } from './exploreModel'
 import { useLatestRequest } from './useLatestRequest'
+import { reminderDayIndices } from '../../utils/localDay'
+import { schedulePushUserData } from '../../services/pushScheduler'
 
 // ── Severity ───────────────────────────────────────────────────────────────────
 
@@ -193,10 +195,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
   const { importantDayIndices, practiceDayIndices, noteReminders, refresh } = useHomeStats()
   const importantDays = useMemo(() => new Set(importantDayIndices), [importantDayIndices])
   const practiceDays = useMemo(() => new Set(practiceDayIndices), [practiceDayIndices])
-  const reminderDays = useMemo(
-    () => new Set(noteReminders.map(r => Math.floor(r.reminderAt / 86_400_000))),
-    [noteReminders],
-  )
+  const reminderDays = useMemo(() => reminderDayIndices(noteReminders), [noteReminders])
 
   // ── Reminders ────────────────────────────────────────────────────────────────
 
@@ -215,6 +214,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
       createdAt: now,
       updatedAt: now,
     })
+    schedulePushUserData(db)
     try {
       await scheduleNoteReminder(id, payload.title, new Date(payload.reminderAt))
     } catch (err) {
@@ -238,6 +238,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
     await db.update(notesTable)
       .set({ reminderAt: null, updatedAt: Date.now() })
       .where(eq(notesTable.id, noteId))
+    schedulePushUserData(db)
     try { await cancelNoteReminder(noteId) } catch { /* already cancelled */ }
     void refresh()
   }

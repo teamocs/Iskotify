@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { desc, and, eq, lt } from 'drizzle-orm'
 import { useDb } from './useDb'
+import { schedulePushUserData } from '../services/pushScheduler'
 import { notes as notesTable, noteLabelAssignments } from '../db/schema'
 import type { DrizzleClient } from '../db/client'
 
@@ -159,6 +160,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
       createdAt: now,
       updatedAt: now,
     })
+    schedulePushUserData(db)
     return id
   }, [db])
 
@@ -170,6 +172,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     await db.update(notesTable)
       .set({ ...patch, updatedAt: now })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.map(n =>
       n.id === id ? { ...n, ...patch, updatedAt: now } : n
     ))
@@ -180,6 +183,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     await db.update(notesTable)
       .set({ isTrashed: true, trashedAt: now, updatedAt: now })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.filter(n => n.id !== id))
   }, [db])
 
@@ -188,6 +192,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     await db.update(notesTable)
       .set({ isArchived: true, updatedAt: now })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.filter(n => n.id !== id))
   }, [db])
 
@@ -196,6 +201,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     await db.update(notesTable)
       .set({ isArchived: false, updatedAt: now })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.filter(n => n.id !== id))
   }, [db])
 
@@ -204,12 +210,14 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     await db.update(notesTable)
       .set({ isTrashed: false, trashedAt: null, updatedAt: now })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.filter(n => n.id !== id))
   }, [db])
 
   const permanentlyDeleteNote = useCallback(async (id: string) => {
     await db.delete(noteLabelAssignments).where(eq(noteLabelAssignments.noteId, id))
     await db.delete(notesTable).where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.filter(n => n.id !== id))
   }, [db])
 
@@ -220,6 +228,7 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
       await db.delete(noteLabelAssignments).where(eq(noteLabelAssignments.noteId, row.id))
     }
     await db.delete(notesTable).where(eq(notesTable.isTrashed, true))
+    schedulePushUserData(db)
     setNotesList([])
   }, [db])
 
@@ -233,12 +242,14 @@ export function useNotes(filter: 'active' | 'archived' | 'trashed' = 'active'): 
     }
     await db.delete(notesTable)
       .where(and(eq(notesTable.isTrashed, true), lt(notesTable.trashedAt, cutoff)))
+    if (old.length > 0) schedulePushUserData(db)
   }, [db])
 
   const setReminder = useCallback(async (id: string, reminderAt: number | null) => {
     await db.update(notesTable)
       .set({ reminderAt, updatedAt: Date.now() })
       .where(eq(notesTable.id, id))
+    schedulePushUserData(db)
     setNotesList(prev => prev.map(n =>
       n.id === id ? { ...n, reminderAt } : n
     ))
@@ -273,4 +284,5 @@ export async function pruneOldTrashedNotesDb(db: DrizzleClient): Promise<void> {
   }
   await db.delete(notesTable)
     .where(and(eq(notesTable.isTrashed, true), lt(notesTable.trashedAt, cutoff)))
+  if (old.length > 0) schedulePushUserData(db)
 }

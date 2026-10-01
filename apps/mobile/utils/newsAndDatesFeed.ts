@@ -12,6 +12,7 @@
 
 import { upcomingEvents, sortBySeverityThenDate } from './admissionsFeed'
 import type { FeedItem } from './admissionsFeed'
+import { calendarDayIndex, daysUntilDate, localDateISO, localDayIndex, localDayOffsetMs } from './localDay'
 
 export type FeedEntryKind = 'listing' | 'reminder' | 'admission' | 'news'
 
@@ -51,12 +52,20 @@ export interface BuildNewsAndDatesFeedOpts {
   admissionItems: FeedItem[]
   /** Clock for "future only" filtering. Defaults to Date.now(). */
   now?: number
+  /** Day-boundary offset (ms) — defaults to the device's; tests pin +8h. */
+  offsetMs?: number
   limit?: number
 }
 
 export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFeedEntry[] {
   const now = opts.now ?? Date.now()
   const limit = opts.limit ?? NEWS_AND_DATES_LIMIT
+  const offsetMs = opts.offsetMs ?? localDayOffsetMs()
+  const today = localDayIndex(now, offsetMs)
+  // Reminders carry a real instant; listing and admissions dates are date-only
+  // (UTC midnight of the calendar date) and stay ahead through their whole local day.
+  const isStillAhead = (e: { kind: FeedEntryKind; date: number | null }): boolean =>
+    e.date != null && (e.kind === 'reminder' ? e.date >= now : calendarDayIndex(e.date) >= today)
 
   const listingEntries: MergedFeedEntry[] = opts.focusedListings
     .map(l => {
@@ -70,7 +79,7 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
         slug: l.slug,
       }
     })
-    .filter(e => e.date != null && e.date >= now)
+    .filter(isStillAhead)
 
   const reminderEntries: MergedFeedEntry[] = opts.noteReminders
     .map(r => ({
@@ -81,12 +90,12 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
       date: r.reminderAt as number | null,
       slug: r.noteId,
     }))
-    .filter(e => e.date != null && e.date >= now)
+    .filter(isStillAhead)
 
   // Future admissions events (urgent/important/info) folded in as dated entries.
   // `nowISO` keeps upcomingEvents' "future" check pinned to the injected clock
   // (not the real wall clock) so this function stays deterministic under test.
-  const nowISO = new Date(now).toISOString().slice(0, 10)
+  const nowISO = localDateISO(now, offsetMs)
   const futureEvents = upcomingEvents(opts.admissionItems, nowISO).filter(
     item => item.severity === 'urgent' || item.severity === 'important' || item.severity === 'info',
   )
@@ -109,7 +118,7 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
     .filter(a => !listingEntries.some(l => l.date === a.date))
 
   const dated = [...listingEntries, ...reminderEntries, ...admissionEntries]
-    .filter(e => e.date != null && e.date >= now)
+    .filter(isStillAhead)
     .sort((a, b) => (a.date ?? 0) - (b.date ?? 0))
 
   // News rows: every admissions item not already surfaced as a dated event above,
@@ -128,4 +137,19 @@ export function buildNewsAndDatesFeed(opts: BuildNewsAndDatesFeedOpts): MergedFe
     }))
 
   return [...dated, ...newsEntries].slice(0, limit)
+}
+
+/**
+ * Whole local calendar days from `now` to a dated feed entry (0 = today).
+ * Reminders are real instants (local-day difference); listing/admission dates
+ * are date-only values stored as UTC midnight (their calendar date is what counts).
+ */
+export function entryDaysAway(
+  entry: { kind: FeedEntryKind; date: number },
+  now: number = Date.now(),
+  offsetMs: number = localDayOffsetMs(),
+): number {
+  return entry.kind === 'reminder'
+    ? localDayIndex(entry.date, offsetMs) - localDayIndex(now, offsetMs)
+    : daysUntilDate(entry.date, now, offsetMs)
 }

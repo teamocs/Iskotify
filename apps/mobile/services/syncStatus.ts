@@ -128,6 +128,21 @@ export function markSyncError(message: string): void {
   }
 }
 
+/** Shown on the sync error banner while backup uploads keep failing. */
+export const BACKUP_FAILED_MESSAGE = "Your latest changes haven't been backed up yet. They're safe on this device."
+
+/**
+ * Clear lastError only if it is exactly `message` — e.g. a backup-upload failure
+ * cleared by the next successful upload, without hiding an unrelated sync error.
+ */
+export function clearSyncError(message: string): void {
+  if (_lastError !== message) return
+  _lastError = null
+  if (_sync()) {
+    _notify()
+  }
+}
+
 /**
  * Reset to initial state. Intended for tests only.
  * Always creates a new snapshot object so identity comparisons in tests work.

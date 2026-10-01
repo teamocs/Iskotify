@@ -13,7 +13,7 @@ import { Skeleton } from '../ui/Skeleton'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
 import {
-  buildNewsAndDatesFeed, type FocusedListingLike, type NoteReminderLike, type MergedFeedEntry,
+  buildNewsAndDatesFeed, entryDaysAway, type FocusedListingLike, type NoteReminderLike, type MergedFeedEntry,
 } from '../../utils/newsAndDatesFeed'
 import type { FeedItem } from '../../utils/admissionsFeed'
 
@@ -21,10 +21,6 @@ import type { FeedItem } from '../../utils/admissionsFeed'
 export const COMING_UP_LIMIT = 3
 
 const SHORT_DATE = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' })
-
-function daysFrom(ms: number): number {
-  return Math.ceil((ms - Date.now()) / 86_400_000)
-}
 
 function dayLabel(days: number): string {
   if (days < 1) return 'Today'
@@ -93,7 +89,7 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
               </View>
             )
           }
-          const days = daysFrom(item.date)
+          const days = entryDaysAway({ kind: item.kind, date: item.date })
           const when = dayLabel(days)
           const date = SHORT_DATE.format(new Date(item.date))
           return (

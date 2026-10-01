@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { supabase } from '../services/supabase'
-import { pullUserData, pushUserData } from '../services/sync'
+import { pullUserData, pushUserData, reconcileAccountOwner } from '../services/sync'
 import { useDb } from '../hooks/useDb'
 import { invalidate } from '../services/queryCache'
 import { userSettings, focusListings } from '../db/schema'
@@ -69,6 +69,14 @@ export default function LandingScreen() {
             if (!exchangeError || session) {
               const { data: { user } } = await supabase.auth.getUser()
               if (user) {
+                // Wipe a previous account's data before this one is written/synced
+                // (anonymous -> first sign-in keeps local data). Pull/push re-check.
+                // If the wipe fails, stop: B's name/email must not land on A's data.
+                try { await reconcileAccountOwner(db, user.id, user.email) } catch (e) {
+                  console.warn('[landing] account owner check failed, sign-in stopped:', e)
+                  setError("Couldn't switch accounts on this device. Please try again.")
+                  return
+                }
                 // Preserve a name typed during anonymous onboarding; only fall back to
                 // the Google display name when there's no local name yet.
                 const existing = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
@@ -83,17 +91,20 @@ export default function LandingScreen() {
                 invalidate('settings:')
                 // Restore an existing cloud backup, or push this device's anonymous
                 // onboarding data up on a first sign-in. Non-fatal.
-                let hasCloudBackup = false
+                // 'unknown' (the check errored) must neither pull nor push — it would push
+                // this device's data over a real backup.
+                let backupState: 'exists' | 'none' | 'unknown' = 'unknown'
                 try {
-                  const { data: backup } = await supabase
+                  const { data: backup, error: backupError } = await supabase
                     .from('user_app_data').select('user_id').eq('user_id', user.id).limit(1).maybeSingle()
-                  hasCloudBackup = !!backup
+                  if (backupError) console.warn('[landing] backup check failed, skipping sync (non-fatal):', backupError)
+                  else backupState = backup ? 'exists' : 'none'
                 } catch (e) {
-                  console.warn('[landing] backup check failed (non-fatal):', e)
+                  console.warn('[landing] backup check failed, skipping sync (non-fatal):', e)
                 }
                 try {
-                  if (hasCloudBackup) await pullUserData(db)
-                  else await pushUserData(db)
+                  if (backupState === 'exists') await pullUserData(db)
+                  else if (backupState === 'none') await pushUserData(db)
                 } catch (restoreErr) {
                   console.warn('[landing] sync failed (non-fatal):', restoreErr)
                 }

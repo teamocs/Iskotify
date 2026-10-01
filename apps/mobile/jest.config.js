@@ -3,6 +3,8 @@ module.exports = {
   // → results) run ~4-5s locally and exceeded Jest's 5s default on the shared
   // CI runner. 20s is the ceiling for any single test, not a target.
   testTimeout: 20000,
+  // One timezone everywhere (see jest.tz.setup.js).
+  globalSetup: '<rootDir>/jest.tz.setup.js',
   projects: [
     {
       displayName: 'services',
