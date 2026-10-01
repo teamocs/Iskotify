@@ -15,6 +15,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSyncStatus } from '../hooks/useSyncStatus'
 import { useTheme } from '../theme/ThemeContext'
+import { BACKUP_FAILED_MESSAGE } from '../services/syncStatus'
 import { spacing, radius } from '../theme/tokens'
 
 interface SyncErrorBannerProps {
@@ -51,7 +52,7 @@ export function SyncErrorBanner({ onRetry }: SyncErrorBannerProps) {
         style={[styles.message, { color: theme.textPrimary, fontSize: typo.sm }]}
         maxFontSizeMultiplier={1.4}
       >
-        Couldn't refresh data — check your connection.
+        {lastError === BACKUP_FAILED_MESSAGE ? BACKUP_FAILED_MESSAGE : "Couldn't refresh data — check your connection."}
       </Text>
 
       <Pressable

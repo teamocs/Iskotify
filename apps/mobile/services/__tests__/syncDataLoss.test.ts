@@ -16,6 +16,7 @@ import {
   pullUserData, pushUserData, schedulePushUserData, reconcileAccountOwner, PUSH_DEBOUNCE_MS, _resetPushSchedulerForTests,
 } from '../sync'
 import { _clearForTests } from '../queryCache'
+import { getSyncStatus, resetSyncStatus } from '../syncStatus'
 
 const mockState: {
   remote: Record<string, unknown> | null
@@ -105,7 +106,8 @@ describe('1. durable unsynced marker', () => {
     mockState.upsertError = { message: 'offline' }
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     expect(await pushUserData(db)).toBe(false)
-    expect(setting(raw, 'push_dirty_at')).toBe(5)
+    // Still unsynced (the attempt stamps it with its own time, never lowering it).
+    expect(Number(setting(raw, 'push_dirty_at'))).toBeGreaterThanOrEqual(5)
     mockState.upsertError = null
     expect(await pushUserData(db)).toBe(true)
     expect(setting(raw, 'push_dirty_at')).toBe(0)
@@ -119,10 +121,12 @@ describe('1. durable unsynced marker', () => {
     const supa = require('../supabase').supabase
     const realFrom = supa.from.getMockImplementation()
     supa.from.mockImplementationOnce(() => ({
-      upsert: async () => { raw.exec(`UPDATE user_settings SET push_dirty_at = 9 WHERE id = 1`); return { error: null } },
+      // An edit during the upload marks dirty the way schedulePushUserData does:
+      // max(now, previous + 1) — always later than the upload's own stamp.
+      upsert: async () => { raw.exec(`UPDATE user_settings SET push_dirty_at = push_dirty_at + 1 WHERE id = 1`); return { error: null } },
     }))
     await pushUserData(db)
-    expect(setting(raw, 'push_dirty_at')).toBe(9)
+    expect(Number(setting(raw, 'push_dirty_at'))).toBeGreaterThan(0)
     supa.from.mockImplementation(realFrom)
   })
 
@@ -259,6 +263,58 @@ describe('4. anonymous -> first sign-in with an existing backup merges curated d
     // and the merged result is backed up
     expect(mockState.log).toContain('upsert')
     expect((mockState.remote!.notes as unknown[]).length).toBe(2)
+  })
+})
+
+describe('4b. a failed upload after the first-sign-in merge cannot lose the merged data (re-review B1)', () => {
+  it('leaves the device marked unsynced, so the next pull pushes first and never replaces the merged notes', async () => {
+    const { raw, db } = makeDb()
+    raw.exec(`INSERT INTO user_settings (id, full_name) VALUES (1, 'Anon')`)
+    raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES ('anon-note', 'Anon note', 'x', 1, 1)`)
+    const backup = { notes: [note('remote-note', 'Remote note')] }
+    mockState.remote = backup
+    mockState.upsertError = { message: 'network' }        // the post-merge upload fails
+    expect(await reconcileAccountOwner(db, 'u1')).toBe('claimed')
+    await pullUserData(db)
+    expect(count(raw, 'notes')).toBe(2)                     // merged locally
+    expect(Number(setting(raw, 'push_dirty_at'))).toBeGreaterThan(0)
+
+    // Next launch: the backup still holds only the remote note, and uploads still fail.
+    mockState.remote = backup
+    await pullUserData(db)
+    expect(raw.prepare(`SELECT id FROM notes ORDER BY id`).all()).toEqual([{ id: 'anon-note' }, { id: 'remote-note' }])
+
+    // Once an upload succeeds the union is backed up and the marker clears.
+    mockState.upsertError = null
+    expect(await pushUserData(db)).toBe(true)
+    expect(Number(setting(raw, 'push_dirty_at'))).toBe(0)
+    expect((mockState.remote!.notes as unknown[]).length).toBe(2)
+  })
+
+  it('any upload attempt that fails leaves the data marked unsynced, even if no edit had marked it', async () => {
+    const { raw, db } = makeDb()
+    own(raw)
+    raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES ('n1', 'N', 'x', 1, 1)`)
+    mockState.upsertError = { message: 'boom' }
+    expect(await pushUserData(db)).toBe(false)
+    expect(Number(setting(raw, 'push_dirty_at'))).toBeGreaterThan(0)
+  })
+})
+
+describe('4c. a failing backup is never silent', () => {
+  it('shows the sync error banner message while uploads fail, and clears it once one succeeds', async () => {
+    resetSyncStatus()
+    const { raw, db } = makeDb()
+    own(raw)
+    raw.exec(`INSERT INTO notes (id, title, content, created_at, updated_at) VALUES ('n1', 'N', 'x', 1, 1)`)
+    mockState.upsertError = { message: 'boom' }
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    await pushUserData(db)
+    expect(getSyncStatus().lastError).toMatch(/haven.t been backed up/i)
+    mockState.upsertError = null
+    await pushUserData(db)
+    expect(getSyncStatus().lastError).toBeNull()
+    warn.mockRestore()
   })
 })
 

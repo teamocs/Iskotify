@@ -1,7 +1,8 @@
 import { eq, asc, inArray, sql, and, lte, isNotNull } from 'drizzle-orm'
 import { invalidate } from './queryCache'
 import { scheduleWebPersist } from '../db/webPersist'
-import { markSyncStart, markSyncDone, markSyncError } from './syncStatus'
+import { markSyncStart, markSyncDone, markSyncError, clearSyncError, BACKUP_FAILED_MESSAGE } from './syncStatus'
+export { BACKUP_FAILED_MESSAGE } from './syncStatus'
 import { isSchoolFocusSlug } from '../utils/focusSlug'
 import {
   registerPusher, schedulePushUserData, flushPendingPush, cancelPendingPush,
@@ -163,12 +164,14 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
   // 5000 rows) — this SELECT is a full-table read, but the table itself is
   // capped, so this payload does NOT grow without bound across a user's
   // lifetime the way it would without that retention pruning.
-  const [focus, decks, progress, sessions, settings, noteRows, labelRows, assignRows, reqRows, attempts, srsRows, planRows] = await Promise.all([
+  // Settings (the owner) first: an account-switch wipe that lands mid-read must not
+  // leave an old-owner check paired with emptied tables.
+  const settings = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
+  const [focus, decks, progress, sessions, noteRows, labelRows, assignRows, reqRows, attempts, srsRows, planRows] = await Promise.all([
     db.select().from(focusListings),
     db.select().from(savedDecks),
     db.select().from(userProgress),
     db.select().from(practiceSessions),
-    db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1),
     db.select().from(notesTable),
     db.select().from(noteLabels),
     db.select().from(noteLabelAssignments),
@@ -199,7 +202,15 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
     console.warn('[sync] backup push skipped: empty device that has never pulled this account')
     return false
   }
-  const dirtyAtSeen = settings[0]?.pushDirtyAt ?? 0
+  // Every real upload attempt marks the data unsynced first (monotonic) and only a
+  // confirmed success clears it. A failed upload — including the one right after a
+  // first-sign-in merge — therefore leaves the device dirty, so the next pull pushes
+  // before it would ever replace curated data with an older backup.
+  const dirtyAtSeen = Math.max(settings[0]?.pushDirtyAt ?? 0, Date.now())
+  if (settings[0]) {
+    await db.update(userSettings).set({ pushDirtyAt: dirtyAtSeen })
+      .where(and(eq(userSettings.id, 1), lte(userSettings.pushDirtyAt, dirtyAtSeen)))
+  }
 
   const { error } = await supabase.from('user_app_data').upsert({
     user_id: user.id,
@@ -219,11 +230,15 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
   }, { onConflict: 'user_id' })
   if (error) {
     console.warn('[sync] backup push failed:', error)
+    // Never silent: while uploads fail this device keeps its edits (marked unsynced)
+    // and stops taking curated updates from other devices — say so, with Retry.
+    markSyncError(BACKUP_FAILED_MESSAGE)
     return false
   }
+  clearSyncError(BACKUP_FAILED_MESSAGE)
   // The upsert truly succeeded: clear the unsynced marker — but only if no edit marked
   // it dirty again while this push was in flight (that edit is not in this snapshot).
-  if (dirtyAtSeen > 0) {
+  if (settings[0]) {
     await db.update(userSettings).set({ pushDirtyAt: 0 })
       .where(and(eq(userSettings.id, 1), lte(userSettings.pushDirtyAt, dirtyAtSeen)))
   }
