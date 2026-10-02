@@ -32,6 +32,17 @@ describe('QuestionSyncView', () => {
     expect(html).toMatch(/600 draft questions across 1 file/)
   })
 
+  it('says per file how many drafts are ready to publish and how many are held, and why', () => {
+    const html = render([
+      file({}),
+      file({ drive_file_id: 'f2', name: 'USTET_Mental Ability_300.xlsx', rows_drafted: 300, rows_missing_media: 0 }),
+    ])
+    expect(html).toContain('448 ready')
+    expect(html).toContain('152 held: need a figure')
+    expect(html).toContain('300 ready')
+    expect(html).toContain('Ready to publish')
+  })
+
   it('moves a published file out of Preview and into History, with its last publish result', () => {
     const html = render(
       [file({ published_at: '2026-09-25T00:00:00Z' })],
@@ -41,6 +52,7 @@ describe('QuestionSyncView', () => {
     expect(html).toContain('Nothing waiting to publish')
     expect(html).toContain('448 questions published')
     expect(html).toContain('Held back: 152 missing a figure')
+    expect(html).not.toContain('3 choices')
     // The held-back drafts stay reachable from History.
     expect(html).toContain('Review held back')
   })

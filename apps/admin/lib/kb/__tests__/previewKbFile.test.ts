@@ -14,7 +14,7 @@ function seed() {
     upcat_questions: [
       q('k:1'),
       q('k:2', { has_visual: true, image_url: null }),
-      q('k:3', { options: ['x', 'y', 'z'] }),
+      q('k:3', { options: ['x'] }),
       q('k:4', { status: 'published' }),
       q('k:5', { set_id: 'f:S1' }),
     ],
@@ -24,9 +24,16 @@ function seed() {
 
 describe('holdReason', () => {
   it('names why a draft would be held back at publish', () => {
-    expect(holdReason({ has_visual: true, image_url: null, options: ['a', 'b', 'c', 'd'] })).toBe('missing_figure')
-    expect(holdReason({ has_visual: false, image_url: null, options: ['a', 'b', 'c'] })).toBe('few_options')
-    expect(holdReason({ has_visual: true, image_url: 'u', options: ['a', 'b', 'c', 'd'] })).toBeNull()
+    expect(holdReason({ has_visual: true, image_url: null, options: ['a', 'b', 'c', 'd'], correct_index: 0 })).toBe('missing_figure')
+    expect(holdReason({ has_visual: false, image_url: null, options: ['a'], correct_index: 0 })).toBe('few_options')
+    expect(holdReason({ has_visual: false, image_url: null, options: null, correct_index: 0 })).toBe('few_options')
+    expect(holdReason({ has_visual: false, image_url: null, options: ['a', 'b', 'c'], correct_index: 3 })).toBe('few_options')
+    expect(holdReason({ has_visual: true, image_url: 'u', options: ['a', 'b', 'c', 'd'], correct_index: 3 })).toBeNull()
+  })
+
+  it('lets 3-option (True/False/Cannot be certain) and 2-option questions through', () => {
+    expect(holdReason({ has_visual: false, image_url: null, options: ['TRUE', 'FALSE', 'Cannot be certain'], correct_index: 2 })).toBeNull()
+    expect(holdReason({ has_visual: false, image_url: null, options: ['True', 'False'], correct_index: 0 })).toBeNull()
   })
 })
 

@@ -8,7 +8,7 @@ import { Badge, type BadgeTone } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { notifyError, notifySuccess } from '@/lib/toast'
-import { splitStages, poolOf } from '@/lib/kb/syncStages'
+import { splitStages, poolOf, draftReadiness } from '@/lib/kb/syncStages'
 import { PreviewDrawer } from './PreviewDrawer'
 import { MappingDialog } from './MappingDialog'
 import { fmtDateTime, type KbFileRow, type PublishEventRow, type SyncRunRow } from './types'
@@ -132,7 +132,18 @@ export function QuestionSyncView({ files, runs, events }: { files: KbFileRow[]; 
 
   const previewColumns: Column<KbFileRow>[] = [
     { id: 'name', header: 'File', sortValue: f => f.name, searchValue: f => `${f.name} ${f.path}`, cell: f => <FileName f={f} /> },
-    { id: 'drafts', header: 'New drafts', numeric: true, sortValue: f => f.rows_drafted, cell: f => f.rows_drafted },
+    {
+      id: 'drafts', header: 'Ready to publish', sortValue: f => draftReadiness(f).ready,
+      cell: f => {
+        const { ready, heldMissingFigure } = draftReadiness(f)
+        return (
+          <span className="whitespace-nowrap text-ui">
+            <span className="font-medium text-ink">{ready} ready</span>
+            {heldMissingFigure > 0 && <span className="block text-xs text-warning-strong">{heldMissingFigure} held: need a figure</span>}
+          </span>
+        )
+      },
+    },
     {
       id: 'missing', header: 'Missing figures', sortValue: f => f.rows_missing_media,
       cell: f => f.rows_missing_media > 0 ? (
@@ -189,7 +200,7 @@ export function QuestionSyncView({ files, runs, events }: { files: KbFileRow[]; 
         if (!e) return <span className="text-ink-muted">{f.rows_drafted === 0 ? 'Nothing new to review' : '—'}</span>
         const held = [
           e.held_missing_media ? `${e.held_missing_media} missing a figure` : '',
-          e.held_few_options ? `${e.held_few_options} with 3 choices` : '',
+          e.held_few_options ? `${e.held_few_options} with too few choices` : '',
           e.held_duplicate ? `${e.held_duplicate} duplicates` : '',
         ].filter(Boolean)
         return (

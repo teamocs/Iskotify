@@ -1,14 +1,23 @@
 // Publishes the drafts one Drive file imported, after admin review. Guards the
 // live bank: a question is left as a draft when its figure is missing, when it
-// has fewer than 4 options (3-option items stay parked until the product
-// decision to ship them), or when the same question+options is already live
-// under another id. Then re-runs the flashcard projection so the topic/deck
+// can't be answered (fewer than 2 options, or a correct_index outside them), or
+// when the same question+options is already live under another id. 2- and
+// 3-option items (True/False, True/False/Cannot be certain syllogisms) publish:
+// every mobile engine renders any number of choices (OptionList, ReviewCard,
+// buildQuizQuestions — see their 3-option tests). Then re-runs the flashcard projection so the topic/deck
 // quiz sees the new questions too.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { contentKey } from '../upcat/importUpcatCore'
 
-export const MIN_OPTIONS_TO_PUBLISH = 4
+export const MIN_OPTIONS_TO_PUBLISH = 2
+
+/** At least two choices, and the answer key points at one of them. */
+export function hasAnswerableChoices(q: { options: string[] | null; correct_index: number | null }): boolean {
+  const n = (q.options ?? []).length
+  const ci = q.correct_index
+  return n >= MIN_OPTIONS_TO_PUBLISH && Number.isInteger(ci) && ci! >= 0 && ci! < n
+}
 
 export interface PublishResult {
   published: number
@@ -22,6 +31,7 @@ interface QRow {
   question_id: string
   question_text: string
   options: string[] | null
+  correct_index: number | null
   status: string
   has_visual: boolean
   image_url: string | null
@@ -41,7 +51,7 @@ export async function publishKbFile(db: SupabaseClient, driveFileId: string, pub
   for (let i = 0; i < ids.length; i += 200) {
     const { data, error } = await db
       .from('upcat_questions')
-      .select('question_id, question_text, options, status, has_visual, image_url')
+      .select('question_id, question_text, options, correct_index, status, has_visual, image_url')
       .in('question_id', ids.slice(i, i + 200))
     if (error) throw new Error(`upcat_questions read failed: ${error.message}`)
     rows.push(...((data ?? []) as QRow[]))
@@ -71,7 +81,7 @@ export async function publishKbFile(db: SupabaseClient, driveFileId: string, pub
   for (const q of rows) {
     if (q.status === 'published') { result.alreadyPublished++; continue }
     if (q.has_visual && !q.image_url) { result.skippedMissingMedia++; continue }
-    if ((q.options ?? []).length < MIN_OPTIONS_TO_PUBLISH) { result.skippedFewOptions++; continue }
+    if (!hasAnswerableChoices(q)) { result.skippedFewOptions++; continue }
     const k = contentKey(q.question_text ?? '', q.options ?? [])
     const liveOthers = [...(liveKeyIds.get(k) ?? [])].some(id => id !== q.question_id)
     if (liveOthers || seen.has(k)) { result.skippedDuplicate++; continue }

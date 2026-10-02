@@ -19,7 +19,7 @@ async function fetchPreview(id: string, filter: PreviewFilter, offset: number): 
   return body
 }
 
-const HOLD_LABEL = { missing_figure: 'Missing figure', few_options: 'Only 3 choices' } as const
+const HOLD_LABEL = { missing_figure: 'Missing figure', few_options: 'Too few choices' } as const
 
 const FILTERS: { id: PreviewFilter; label: (c: PreviewResult['counts']) => string }[] = [
   { id: 'all', label: c => `All drafts (${c.drafts})` },
@@ -143,7 +143,7 @@ export function PreviewDrawer({ file, onClose, onPublish, publishing }: {
         )}
         {counts && (counts.missingFigure > 0 || counts.fewOptions > 0) && (
           <p className="text-xs text-ink-muted">
-            Held back: {[counts.missingFigure ? `${counts.missingFigure} need a figure that isn’t in Drive yet` : '', counts.fewOptions ? `${counts.fewOptions} have only 3 choices` : ''].filter(Boolean).join(' · ')}.
+            Held back: {[counts.missingFigure ? `${counts.missingFigure} need a figure that isn’t in Drive yet` : '', counts.fewOptions ? `${counts.fewOptions} have fewer than 2 choices or an answer key outside them` : ''].filter(Boolean).join(' · ')}.
             Duplicates of live questions are also skipped at publish.
           </p>
         )}

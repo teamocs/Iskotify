@@ -101,9 +101,13 @@ export function convertRecords(
     const letter = answerLetter(get('Answer', 'Correct Answer', 'correct_option'), numeric)
     const question = get('Question')
 
+    // Choices fill from A: 2-option (True/False) and 3-option items are fine,
+    // a blank between two choices is not (it would become an empty button).
+    const lastFilled = options.map(Boolean).lastIndexOf(true)
     const reason =
       !question ? 'missing question text'
-      : options.slice(0, 3).some(o => !o) ? 'fewer than 3 options'
+      : options.filter(Boolean).length < 2 ? 'fewer than 2 options'
+      : options.slice(0, lastFilled).some(o => !o) ? 'a blank option between choices'
       : !letter ? 'unreadable correct answer'
       : !options[LETTERS.indexOf(letter)] ? 'correct answer points at a blank option'
       : ''

@@ -1,10 +1,10 @@
 // The Preview step of the Drive sync: the draft questions one file imported,
-// each tagged with why Publish would hold it back (a missing figure, or only 3
-// options — see publishKbFile). Duplicate-of-live checks need the whole bank,
+// each tagged with why Publish would hold it back (a missing figure, or fewer
+// than 2 options / an answer key outside them — see publishKbFile). Duplicate-of-live checks need the whole bank,
 // so they are left to Publish itself.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { MIN_OPTIONS_TO_PUBLISH } from './publishKbFile'
+import { hasAnswerableChoices } from './publishKbFile'
 
 export type HoldReason = 'missing_figure' | 'few_options'
 export type PreviewFilter = 'all' | 'ready' | 'held'
@@ -35,9 +35,9 @@ const COLUMNS = 'question_id, question_text, options, correct_index, explanation
 
 type Row = Omit<PreviewItem, 'passage_text' | 'hold'> & { set_id: string | null; status: string }
 
-export function holdReason(q: { has_visual: boolean; image_url: string | null; options: string[] | null }): HoldReason | null {
+export function holdReason(q: { has_visual: boolean; image_url: string | null; options: string[] | null; correct_index: number | null }): HoldReason | null {
   if (q.has_visual && !q.image_url) return 'missing_figure'
-  if ((q.options ?? []).length < MIN_OPTIONS_TO_PUBLISH) return 'few_options'
+  if (!hasAnswerableChoices(q)) return 'few_options'
   return null
 }
 
