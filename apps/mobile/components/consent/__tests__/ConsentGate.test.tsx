@@ -199,6 +199,31 @@ describe('ConsentGate — guest preview', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/consent'))
   })
 
+  // Security hardening: a signed-out web visitor has agreed to nothing on ANY
+  // route; a consenting account's stored choice on this browser is never applied.
+  it.each(['/', '/practice/upcat/all', '/settings'])(
+    'never applies stored consent for a signed-out web visitor on %s', async (p) => {
+      mockPath = p
+      mockGuest = true
+      mockSettings = CURRENT
+      renderGate()
+      await waitFor(() => expect(mockSetAnalytics).toHaveBeenCalledWith(false), { timeout: 10_000 })
+      expect(mockSetAnalytics).not.toHaveBeenCalledWith(true)
+    },
+  )
+
+  it.each(['/landing', '/auth/sign-in', '/terms'])(
+    'turns analytics off for a signed-out web visitor on the exempt route %s too', async (p) => {
+      mockPath = p
+      mockGuest = true
+      mockSettings = CURRENT
+      renderGate()
+      await waitFor(() => expect(mockSetAnalytics).toHaveBeenCalledWith(false), { timeout: 10_000 })
+      expect(mockSetAnalytics).not.toHaveBeenCalledWith(true)
+      expect(covered()).toBe(false)
+    },
+  )
+
   it('keeps the guest routes out of the static exemption list (it depends on being signed out)', () => {
     expect(isConsentExemptPath('/try')).toBe(false)
     expect(isConsentExemptPath('/practice/diagnostic')).toBe(false)

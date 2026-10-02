@@ -25,6 +25,15 @@ jest.mock('../../lib/analytics', () => ({
   setAnalyticsConsent: (v: boolean) => mockSetConsent(v),
 }))
 jest.mock('../../db/webPersist', () => ({ scheduleWebPersist: jest.fn() }))
+const mockCalls: string[] = []
+const mockResetStudyData = jest.fn(async (..._a: unknown[]) => { mockCalls.push('reset') })
+jest.mock('../resetStudyData', () => ({ resetStudyData: (...a: unknown[]) => mockResetStudyData(...a) }))
+let mockFreshMarker = false
+const mockMarkGuestPreview = jest.fn(() => { mockCalls.push('mark') })
+jest.mock('../guestPreviewMarker', () => ({
+  hasFreshGuestPreviewMarker: () => mockFreshMarker,
+  markGuestPreview: () => mockMarkGuestPreview(),
+}))
 
 type Row = Record<string, unknown> | undefined
 function makeDb(row: Row) {
@@ -33,7 +42,7 @@ function makeDb(row: Row) {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => (row ? [row] : []) }) }) }),
     insert: () => ({
       values: (values: unknown) => ({
-        onConflictDoNothing: async () => { inserts.push({ values, conflict: 'nothing' }) },
+        onConflictDoNothing: async () => { mockCalls.push('ensure'); inserts.push({ values, conflict: 'nothing' }) },
         onConflictDoUpdate: async () => { inserts.push({ values, conflict: 'update' }) },
       }),
     }),
@@ -44,6 +53,8 @@ function makeDb(row: Row) {
 beforeEach(() => {
   jest.clearAllMocks()
   _resetGuestPreviewForTests()
+  mockCalls.length = 0
+  mockFreshMarker = false
 })
 
 describe('ensureGuestSettings', () => {
@@ -106,10 +117,32 @@ describe('startGuestPreview', () => {
     expect(mockResetAnalytics).toHaveBeenCalled()
   })
 
-  it('a guest returning to the same browser keeps their row and results', async () => {
+  it('a guest back in the same tab (fresh marker) keeps their row and results', async () => {
+    mockFreshMarker = true
     const { db, inserts } = makeDb({ id: 1, ownerUserId: '', fullName: '', lastSyncedAt: 5 })
     const { state } = await startGuestPreview(db)
     expect(state).toBe('guest')
     expect(inserts).toEqual([{ values: { id: 1 }, conflict: 'nothing' }])
+    expect(mockResetStudyData).not.toHaveBeenCalled()
+    expect(mockMarkGuestPreview).toHaveBeenCalled()
+  })
+
+  // Security review (RA 10173): an owner-less browser without this tab's fresh
+  // marker may hold an earlier visitor's run. The new guest must never see it
+  // ("Resume") nor carry it into their account.
+  it('an owner-less browser without a fresh marker is cleared before the preview, then marked', async () => {
+    const { db, inserts } = makeDb({ id: 1, ownerUserId: '', fullName: '', lastSyncedAt: 5 })
+    const { state } = await startGuestPreview(db)
+    expect(state).toBe('guest')
+    expect(mockResetStudyData).toHaveBeenCalledWith(db)
+    expect(mockCalls).toEqual(['reset', 'ensure', 'mark'])
+    expect(inserts).toEqual([{ values: { id: 1 }, conflict: 'nothing' }])
+  })
+
+  it('a held browser is neither cleared nor marked', async () => {
+    const { db } = makeDb({ id: 1, ownerUserId: 'user-a', fullName: 'Ana' })
+    await startGuestPreview(db)
+    expect(mockResetStudyData).not.toHaveBeenCalled()
+    expect(mockMarkGuestPreview).not.toHaveBeenCalled()
   })
 })

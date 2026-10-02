@@ -10,10 +10,13 @@
  *  - analytics off (nothing is recorded as consent).
  *
  * The guest's diagnostic sessions and attempts stay on this browser. The device
- * has no owner, so the first sign-in claims it and MERGES them into the
- * account's backup (services/sync.ts reconcileAccountOwner 'claimed' +
- * pullUserData's first-sign-in merge). A browser that still holds an account
- * that signed out is 'held': the preview writes nothing there, so a guest's run
+ * has no owner, so a sign-in from the SAME tab, soon after, claims it and MERGES
+ * them into the account's backup (services/sync.ts reconcileAccountOwner
+ * 'claimed' + pullUserData's first-sign-in merge). That is decided by a
+ * tab-scoped marker (services/guestPreviewMarker.ts): without a fresh one the
+ * local study data is an earlier visitor's on a shared browser, so it is cleared
+ * before a new guest starts and reset (not merged) at sign-in. A browser that
+ * still holds an account that signed out is 'held': the preview writes nothing there, so a guest's run
  * can never land in, or be uploaded with, someone else's data.
  */
 import { eq } from 'drizzle-orm'
@@ -22,6 +25,8 @@ import { userSettings } from '../db/schema'
 import { scheduleWebPersist } from '../db/webPersist'
 import { resetAnalytics } from '../lib/analytics'
 import { isDeviceHeldByAccount } from '../utils/guestPreview'
+import { hasFreshGuestPreviewMarker, markGuestPreview } from './guestPreviewMarker'
+import { resetStudyData } from './resetStudyData'
 import { syncOnLaunch } from './sync'
 import { markFirstSyncDone } from './syncStatus'
 
@@ -47,7 +52,11 @@ async function start(db: DrizzleClient): Promise<GuestPreviewStart> {
   resetAnalytics()
   const rows = await db.select().from(userSettings).where(eq(userSettings.id, 1)).limit(1)
   if (isDeviceHeldByAccount(rows[0])) return { state: 'held', catalog: Promise.resolve() }
+  // Owner-less leftovers without this tab's fresh marker belong to an earlier
+  // visitor: the new guest must never see (or "Resume") their run.
+  if (!hasFreshGuestPreviewMarker()) await resetStudyData(db)
   await ensureGuestSettings(db)
+  markGuestPreview()
   // The intro page shows its own loading state instead of the full-screen
   // "Setting up your data" overlay.
   markFirstSyncDone()

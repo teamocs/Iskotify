@@ -34,16 +34,22 @@ export function ConsentGate({ enabled, children }: { enabled: boolean; children:
   const exempt = isConsentExemptPath(pathname)
 
   useEffect(() => {
-    if (!enabled || exempt) return
+    if (!enabled) return
     let alive = true
     void (async () => {
       let next: Status = 'ok'
       let analytics = false
-      // The web glimpse (P4): a signed-out visitor on the guest diagnostic has
-      // agreed to nothing here, and any settings this browser holds belong to
-      // someone else. Never sent to re-consent, analytics off.
-      if (isGuestPath(pathname) && await isSignedOutWebGuest()) {
-        if (!alive) return
+      // The web glimpse (P4): a signed-out web visitor has agreed to nothing
+      // here, on any route, and any settings this browser holds belong to
+      // someone else: their stored consent is never applied, analytics off.
+      const signedOutGuest = await isSignedOutWebGuest()
+      if (!alive) return
+      if (exempt) {
+        if (signedOutGuest) setAnalyticsConsent(false)
+        return
+      }
+      // On the guest diagnostic they are also never sent to re-consent.
+      if (signedOutGuest && isGuestPath(pathname)) {
         setAnalyticsConsent(false)
         setStatus('ok')
         return
@@ -58,7 +64,7 @@ export function ConsentGate({ enabled, children }: { enabled: boolean; children:
         if (onboarded && !isConsentCurrent(s)) next = 'needed'
         // Consent may have just arrived (or gone) with a restored backup or an
         // account switch: analytics follows the stored choice either way.
-        analytics = analyticsAllowed(s)
+        analytics = !signedOutGuest && analyticsAllowed(s)
       } catch (e) {
         console.warn('[consent] could not check consent (not blocking, analytics off):', e)
       }

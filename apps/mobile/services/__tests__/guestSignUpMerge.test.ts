@@ -114,3 +114,66 @@ describe('guest -> sign-up keeps the guest diagnostic', () => {
     expect((mockState.remote!.practice_sessions as unknown[]).length).toBe(3)
   })
 })
+
+// Security review (RA 10173). On web the guest's run is merged only when THIS
+// tab just ran the preview (a fresh sessionStorage marker). A run left on a
+// shared browser by an earlier visitor is never merged into whoever signs in
+// next: the device is reset as for an account switch.
+describe('web: the guest run merges only from the tab that just ran the preview', () => {
+  const RN = require('react-native') as { Platform: { OS: string } }
+  const g = globalThis as { sessionStorage?: unknown }
+  function storage(v: string | null) {
+    return { getItem: () => v, setItem: () => undefined, removeItem: () => undefined }
+  }
+  beforeEach(() => { RN.Platform.OS = 'web' })
+  afterEach(() => { RN.Platform.OS = 'ios'; delete g.sessionStorage })
+
+  it('fresh marker (same tab): claimed and merged, as on native', async () => {
+    g.sessionStorage = storage(String(Date.now() - 60_000))
+    const { raw, db } = await guestDevice()
+    expect(await reconcileAccountOwner(db, 'new-user', 'new@x.ph')).toBe('claimed')
+    expect(count(raw, 'practice_sessions')).toBe(2)
+  })
+
+  it.each([
+    ['no marker (another tab, days later)', () => storage(null)],
+    ['a stale marker (over 6 hours old)', () => storage(String(Date.now() - 7 * 60 * 60 * 1000))],
+    ['sessionStorage that throws', () => ({ getItem: () => { throw new Error('blocked') } })],
+    ['no sessionStorage at all', () => undefined],
+  ])('%s: switched, the earlier visitor\'s run is wiped, never merged', async (_n, make) => {
+    const s = make()
+    if (s === undefined) delete g.sessionStorage
+    else g.sessionStorage = s
+    const { raw, db } = await guestDevice()
+    expect(await reconcileAccountOwner(db, 'new-user', 'new@x.ph')).toBe('switched')
+    expect(count(raw, 'practice_sessions')).toBe(0)
+    expect(count(raw, 'question_attempts')).toBe(0)
+    expect(settings(raw)).toMatchObject({ owner_user_id: 'new-user' })
+    await pullUserData(db)
+    expect(count(raw, 'practice_sessions')).toBe(0)
+  })
+
+  it('a legacy install whose stored auth id is this user is still claimed (it is theirs)', async () => {
+    g.sessionStorage = storage(null)
+    const { raw, db } = await guestDevice()
+    raw.exec("UPDATE user_settings SET google_id = 'new-user' WHERE id = 1")
+    expect(await reconcileAccountOwner(db, 'new-user', 'new@x.ph')).toBe('claimed')
+    expect(count(raw, 'practice_sessions')).toBe(2)
+  })
+})
+
+// Security review: a push queued during the guest run can fire after sign-in but
+// before the pull's reconcile. It must not claim the device and overwrite an
+// existing account's backup with guest-only data.
+describe('a push never claims an owner-less device that has never pulled', () => {
+  it('returns false, uploads nothing, leaves the device unowned', async () => {
+    const { raw, db } = await guestDevice()
+    mockState.user = { id: 'old-user', email: 'old@x.ph' }
+    mockState.remote = { settings: { fullName: 'Ana' }, practice_sessions: [{ id: 7 }] }
+    const { pushUserData } = require('../sync') as typeof import('../sync')
+    expect(await pushUserData(db)).toBe(false)
+    expect(mockState.log).not.toContain('upsert')
+    expect(mockState.remote).toMatchObject({ settings: { fullName: 'Ana' } })
+    expect(settings(raw)).toMatchObject({ owner_user_id: '' })
+  })
+})

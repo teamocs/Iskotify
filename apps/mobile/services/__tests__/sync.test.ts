@@ -1826,7 +1826,9 @@ describe('pushUserData includes notes', () => {
     const { supabase } = require('../supabase')
     const upsertMock = jest.fn().mockResolvedValue({ error: null })
     ;(supabase.auth.getUser as jest.Mock).mockResolvedValue({ data: { user: { id: 'user-1' } } })
-    ;(supabase.from as jest.Mock).mockReturnValue({ upsert: upsertMock })
+    // No backup consent to merge yet (PGRST116 = no row).
+    const noBackup = { eq: () => ({ limit: () => ({ single: async () => ({ data: null, error: { code: 'PGRST116' } }) }) }) }
+    ;(supabase.from as jest.Mock).mockReturnValue({ upsert: upsertMock, select: () => noBackup })
 
     const makeFrom = (rows: unknown[] = []) => {
       const p = Promise.resolve(rows) as any
@@ -1838,11 +1840,13 @@ describe('pushUserData includes notes', () => {
 
     const db: any = {
       select: jest.fn()
+        // userSettings (read first): this account's device, already pulled. A push
+        // never claims an unowned device that has never pulled.
+        .mockReturnValueOnce({ from: jest.fn(() => makeFrom([{ id: 1, ownerUserId: 'user-1', lastPullOkAt: 1 }])) })
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // focusListings
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // savedDecks
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userProgress
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // practiceSessions
-        .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // userSettings
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // notes
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabels
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // noteLabelAssignments
@@ -1850,6 +1854,8 @@ describe('pushUserData includes notes', () => {
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // questionAttempts
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) })   // flashcardSrs
         .mockReturnValueOnce({ from: jest.fn(() => makeFrom()) }),  // studyPlanItems
+      // The pushDirtyAt bookkeeping around the upload.
+      update: jest.fn(() => ({ set: () => ({ where: async () => undefined }) })),
     }
 
     const { pushUserData } = require('../sync')
