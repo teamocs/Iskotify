@@ -7,6 +7,8 @@ import { getSettings } from '../../services/settings'
 import { setAnalyticsConsent } from '../../lib/analytics'
 import { analyticsAllowed, isConsentCurrent, isConsentExemptPath } from '../../utils/consent'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
+import { isGuestPath } from '../../utils/webEntryTarget'
+import { isSignedOutWebGuest } from '../../services/guestSession'
 import { useTheme } from '../../theme/ThemeContext'
 
 type Status = 'checking' | 'ok' | 'needed'
@@ -37,6 +39,15 @@ export function ConsentGate({ enabled, children }: { enabled: boolean; children:
     void (async () => {
       let next: Status = 'ok'
       let analytics = false
+      // The web glimpse (P4): a signed-out visitor on the guest diagnostic has
+      // agreed to nothing here, and any settings this browser holds belong to
+      // someone else. Never sent to re-consent, analytics off.
+      if (isGuestPath(pathname) && await isSignedOutWebGuest()) {
+        if (!alive) return
+        setAnalyticsConsent(false)
+        setStatus('ok')
+        return
+      }
       try {
         const [s, focusRows] = await Promise.all([getSettings(db), db.select().from(focusListings).limit(1)])
         const onboarded = !!s.fullName?.trim() && hasOnboardingFocus({

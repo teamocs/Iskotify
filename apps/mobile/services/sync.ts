@@ -867,7 +867,16 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
  */
 export const SYNC_CURSOR_MARGIN_MS = 60_000
 
-export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
+export interface SyncOnLaunchOptions {
+  /**
+   * The web glimpse (P4): a signed-out guest mirrors the public catalog only.
+   * The backup is never pushed (a push would read the session and could claim
+   * the device) and queued question reports are not sent.
+   */
+  guest?: boolean
+}
+
+export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions = {}): Promise<void> {
   markSyncStart()
   // Captured BEFORE the first query: the cursor written at the end is this minus the margin.
   const syncStartedAt = Date.now()
@@ -1412,6 +1421,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // Schedule a web DB persist after sync (no-op on native)
     scheduleWebPersist()
+
+    // A guest has no backup: catalog only.
+    if (opts.guest) return
 
     // Also push user data backup if signed in
     await pushUserData(db)

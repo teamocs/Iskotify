@@ -1,4 +1,4 @@
-import { webEntryTarget } from '../webEntryTarget'
+import { webEntryTarget, webGateRedirect, GUEST_ROUTES, isGuestPath } from '../webEntryTarget'
 
 describe('webEntryTarget', () => {
   it('returns /auth/sign-in when no session', () => {
@@ -24,7 +24,6 @@ describe('webEntryTarget', () => {
   })
 })
 
-import { webGateRedirect } from '../webEntryTarget'
 
 // Where the web gate sends a page load. `null` means "stay", which keeps the
 // URL AND its query string (the ?error=link reason, a ?code=, a recovery hash).
@@ -99,5 +98,51 @@ describe('webGateRedirect', () => {
         expect(webGateRedirect('/privacy/', target)).toBeNull()
       }
     })
+  })
+})
+
+// The web glimpse (P4): a signed-out visitor may try the free diagnostic. The
+// allowlist is explicit and small: the intro page and the diagnostic run (its
+// review and results are views of that one route). Nothing else opens.
+describe('guest preview allowlist', () => {
+  it('is exactly the intro page and the diagnostic', () => {
+    expect([...GUEST_ROUTES]).toEqual(['/try', '/practice/diagnostic'])
+  })
+
+  it('recognises the guest routes, with or without a trailing slash or query', () => {
+    for (const p of ['/try', '/try/', '/practice/diagnostic', '/practice/diagnostic/', '/practice/diagnostic?exam=upcat']) {
+      expect(isGuestPath(p)).toBe(true)
+    }
+  })
+
+  it('does not stretch to neighbouring routes', () => {
+    for (const p of ['/', '/tryx', '/try/more', '/practice', '/practice/diagnostic/x', '/practice/upcat/all',
+      '/practice/exam/upcat', '/practice/review/upcat', '/practice/start/upcat', '/practice/mistakes', '/upgrade', '/(tabs)']) {
+      expect(isGuestPath(p)).toBe(false)
+    }
+  })
+
+  it('lets a signed-out visitor stay on the guest routes', () => {
+    expect(webGateRedirect('/try', '/auth/sign-in')).toBeNull()
+    expect(webGateRedirect('/practice/diagnostic', '/auth/sign-in')).toBeNull()
+    expect(webGateRedirect('/practice/diagnostic/', '/auth/sign-in')).toBeNull()
+  })
+
+  it('still sends a signed-out visitor everywhere else to sign-in', () => {
+    for (const p of ['/', '/practice', '/practice/upcat/all', '/practice/exam/upcat', '/practice/review/upcat',
+      '/practice/diagnostic/x', '/tryx', '/upgrade', '/notes', '/settings', '/onboarding', '/landing']) {
+      expect(webGateRedirect(p, '/auth/sign-in')).toBe('/auth/sign-in')
+    }
+  })
+
+  it('sends a signed-in student off the guest intro (to onboarding, or to Today once onboarded)', () => {
+    expect(webGateRedirect('/try', '/onboarding')).toBe('/onboarding')
+    expect(webGateRedirect('/try', '/(tabs)')).toBe('/(tabs)')
+    expect(webGateRedirect('/try/', '/(tabs)')).toBe('/(tabs)')
+  })
+
+  it('treats the diagnostic as an ordinary app route once signed in', () => {
+    expect(webGateRedirect('/practice/diagnostic', '/onboarding')).toBe('/onboarding')
+    expect(webGateRedirect('/practice/diagnostic', '/(tabs)')).toBeNull()
   })
 })

@@ -32,6 +32,7 @@ import { eq, and, gt } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../utils/onboardingStatus'
 import { webEntryTarget } from '../utils/webEntryTarget'
 import { runWebEntryGate } from '../components/auth/webEntryGate'
+import { WebGuestRouteGuard } from '../components/auth/WebGuestRouteGuard'
 import { supabase } from '../services/supabase'
 import { requestNotificationPermissions, scheduleNoteReminder } from '../services/notifications'
 import { identifyUser, resetAnalytics } from '../lib/analytics'
@@ -162,9 +163,11 @@ function AppInit({ onReady, ready }: { onReady: () => void; ready: boolean }) {
     // existing session by account ID only (never email or name) so events tie to
     // the user; the id is held until analytics is allowed. Web identifies after
     // its backup pull instead (resolveTarget below): this browser's database may
-    // still hold a previous account's consent until that pull reconciles it.
-    await applyAnalyticsConsent(db)
+    // still hold a previous account's consent until that pull reconciles it,
+    // so web applies it there too (identifyAfterConsent), and a signed-out web
+    // visitor (a guest trying the diagnostic) never runs on someone else's choice.
     if (Platform.OS !== 'web') {
+      await applyAnalyticsConsent(db)
       supabase.auth.getSession()
         .then(({ data }) => {
           const u = data.session?.user
@@ -345,6 +348,8 @@ function AppInit({ onReady, ready }: { onReady: () => void; ready: boolean }) {
     <>
       <StatusBar style="dark" />
       <AnalyticsScreenTracker />
+      {/* Web, signed out: only the auth, legal and guest-diagnostic routes, on every navigation. */}
+      <WebGuestRouteGuard enabled={ready} />
       {/* Consent for the current Terms covers every route, deep links included. It
           starts checking once the launch routing below has run (`ready`). */}
       <ConsentGate enabled={ready}>
