@@ -13,6 +13,8 @@ import {
 import { pruneOldAttempts } from './pruneAttempts'
 import { STUDY_TABLES } from './resetStudyData'
 import { resetAnalytics } from '../lib/analytics'
+import { Platform } from 'react-native'
+import { hasFreshGuestPreviewMarker } from './guestPreviewMarker'
 
 // ── Sync heal ──────────────────────────────────────────────────────────────────
 // Bump this when a bug causes devices to miss rows they should have synced.
@@ -200,6 +202,14 @@ export async function pushUserData(db: DrizzleClient): Promise<boolean> {
   const storedOwner = settings[0]?.ownerUserId ?? ''
   if (storedOwner && storedOwner !== user.id) {
     console.warn('[sync] backup push skipped: local data belongs to a different account')
+    return false
+  }
+  // A push never claims a device that has never pulled: one queued while signed
+  // out (a web guest's run) can fire after sign-in but before the pull's
+  // reconcile, and would overwrite an existing account's backup with guest-only
+  // data. The pull claims (or resets) first, then its post-merge push uploads.
+  if (!storedOwner && (settings[0]?.lastPullOkAt ?? 0) === 0) {
+    console.warn('[sync] backup push skipped: unowned device that has never pulled (the pull claims it first)')
     return false
   }
   if (!storedOwner && settings[0]) {
@@ -392,7 +402,15 @@ export async function reconcileAccountOwner(
     const foreign = legacyId
       ? legacyId !== userId
       : !!(legacyEmail && trimmed(email) && legacyEmail !== trimmed(email).toLowerCase())
-    if (!foreign) {
+    // Web (RA 10173): unowned local data with no legacy proof that it is this
+    // user's is a signed-out guest's diagnostic. It is merged only when THIS tab
+    // just ran the preview (services/guestPreviewMarker.ts, 6 h); otherwise it is
+    // an earlier visitor's run on a shared browser and is reset, never merged.
+    // Unreadable storage reads as no marker. Native is unchanged.
+    const provenOwn = legacyId === userId ||
+      !!(legacyEmail && trimmed(email) && legacyEmail === trimmed(email).toLowerCase())
+    const strangersRun = Platform.OS === 'web' && !provenOwn && !hasFreshGuestPreviewMarker()
+    if (!foreign && !strangersRun) {
       await db.insert(userSettings)
         .values({ id: 1, ownerUserId: userId })
         .onConflictDoUpdate({ target: userSettings.id, set: { ownerUserId: userId } })
@@ -867,7 +885,16 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
  */
 export const SYNC_CURSOR_MARGIN_MS = 60_000
 
-export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
+export interface SyncOnLaunchOptions {
+  /**
+   * The web glimpse (P4): a signed-out guest mirrors the public catalog only.
+   * The backup is never pushed (a push would read the session and could claim
+   * the device) and queued question reports are not sent.
+   */
+  guest?: boolean
+}
+
+export async function syncOnLaunch(db: DrizzleClient, opts: SyncOnLaunchOptions = {}): Promise<void> {
   markSyncStart()
   // Captured BEFORE the first query: the cursor written at the end is this minus the margin.
   const syncStartedAt = Date.now()
@@ -1412,6 +1439,9 @@ export async function syncOnLaunch(db: DrizzleClient): Promise<void> {
 
     // Schedule a web DB persist after sync (no-op on native)
     scheduleWebPersist()
+
+    // A guest has no backup: catalog only.
+    if (opts.guest) return
 
     // Also push user data backup if signed in
     await pushUserData(db)

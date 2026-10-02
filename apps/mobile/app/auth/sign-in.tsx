@@ -13,8 +13,8 @@
  * the request runs and announces aria-busy.
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { View, Text, TextInput, Pressable } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { View, Text, TextInput, Pressable, Platform } from 'react-native'
+import { router, useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
@@ -36,6 +36,7 @@ import { takeAccountNotice } from '../../services/accountNotice'
 import { TextField } from '../../components/ui/TextField'
 import { LegalLine } from '../../components/consent/LegalLinks'
 import { focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
+import { GUEST_INTRO_HREF } from '../../utils/guestPreview'
 
 type Mode = 'sign-in' | 'sign-up'
 
@@ -64,7 +65,7 @@ function Divider({ label }: { label: string }) {
 
 export default function SignInScreen() {
   const { theme: t } = useTheme()
-  const params = useLocalSearchParams<{ error?: string }>() ?? {}
+  const params = useLocalSearchParams<{ error?: string; mode?: string }>() ?? {}
   const returnReason = params.error ? RETURN_REASONS[params.error] ?? null : null
   // Set when the student has just deleted their account; shown once.
   const [notice] = useState(takeAccountNotice)
@@ -72,7 +73,8 @@ export default function SignInScreen() {
   // Activate Google One Tap when env var is set and no session exists.
   useGoogleOneTap()
 
-  const [mode, setMode] = useState<Mode>('sign-in')
+  // ?mode=signup (the guest diagnostic's results) opens on the create-account form.
+  const [mode, setMode] = useState<Mode>(() => (params.mode === 'signup' ? 'sign-up' : 'sign-in'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -364,6 +366,18 @@ export default function SignInScreen() {
           size="lg"
           fullWidth
         />
+
+        {/* The web glimpse (P4): iOS has no app yet, so a visitor can try the free
+            diagnostic before making an account. Web only. */}
+        {Platform.OS === 'web' ? (
+          <Button
+            label="Try a free diagnostic — no account needed"
+            variant="ghost"
+            onPress={() => router.push(GUEST_INTRO_HREF)}
+            disabled={loading}
+            fullWidth
+          />
+        ) : null}
 
         <LegalLine />
       </View>

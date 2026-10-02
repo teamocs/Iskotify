@@ -26,6 +26,7 @@ const ALLOWED: Record<string, string> = {
   'components/home/scholarshipPromptState.ts': 'device-local profilePromptDismissedAt, never restored',
   'hooks/useFocusListings.ts': 'covered: add/remove/move all schedule (see curatedWritesSchedulePush.test.tsx)',
   'services/premiumCache.ts': 'device-local Full Access cache, never backed up nor restored (premiumSync.test.ts)',
+  'services/guestPreview.ts': 'a signed-out guest\'s bare settings row (insert-if-missing); a guest has no backup, and must never push (guestPreview.test.ts)',
 }
 
 function walk(dir: string, out: string[] = []): string[] {

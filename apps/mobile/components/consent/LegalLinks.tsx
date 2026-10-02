@@ -25,13 +25,14 @@ function LegalLink({ label, to }: { label: string; to: '/terms' | '/privacy' }) 
 
 /**
  * "By continuing you agree to the Terms and acknowledge the Privacy Policy",
- * with both documents one tap away (landing and sign-in).
+ * with both documents one tap away (landing and sign-in). `verb` words the
+ * action ("By starting" on the guest diagnostic's intro).
  */
-export function LegalLine() {
+export function LegalLine({ verb = 'continuing' }: { verb?: string } = {}) {
   const { theme: t } = useTheme()
   return (
     <Text style={[textStyle('caption', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
-      {'By continuing you agree to the '}
+      {`By ${verb} you agree to the `}
       <LegalLink label="Terms" to="/terms" />
       {' and acknowledge the '}
       <LegalLink label="Privacy Policy" to="/privacy" />

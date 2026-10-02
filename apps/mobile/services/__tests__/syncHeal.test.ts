@@ -437,3 +437,50 @@ describe('syncHeal — syncRev cursor heal', () => {
     expect(row.sync_rev).toBe(2)
   })
 })
+
+// The web glimpse (P4): a signed-out guest mirrors the public catalog only. No
+// backup push (which reads the session and would claim the device), no backup
+// pull, no queued-report upload.
+describe('syncOnLaunch — guest (catalog only)', () => {
+  let supabaseMock: any
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    supabaseMock = require('../supabase').supabase
+    supabaseMock.auth.getUser.mockResolvedValue({ data: { user: null } })
+  })
+
+  function seed() {
+    const raw = makeHealDb()
+    raw.prepare('INSERT INTO user_settings (id) VALUES (1)').run()
+    makeEmptySupabase({ value: null })
+    return { raw, db: makeHealSyncDb(raw, { id: 1, selectedListingSlug: '', lastSyncedAt: 0, syncRev: 0 }) }
+  }
+
+  it('mirrors the catalog (questions, passages, blueprints, sections) and writes the cursor', async () => {
+    const { raw, db } = seed()
+    await syncOnLaunch(db as any, { guest: true })
+    const tables = supabaseMock.from.mock.calls.map((c: unknown[]) => c[0])
+    for (const t of ['upcat_questions', 'upcat_passages', 'exam_blueprints', 'exam_blueprint_sections']) {
+      expect(tables).toContain(t)
+    }
+    const row = raw.prepare('SELECT last_synced_at, sync_rev, full_name, consented_at, owner_user_id FROM user_settings WHERE id = 1').get() as any
+    expect(row.sync_rev).toBe(2)
+    expect(row.last_synced_at).toBeGreaterThan(0)
+    // Nothing personal appears.
+    expect(row).toMatchObject({ full_name: '', consented_at: 0, owner_user_id: '' })
+  })
+
+  it('never touches the backup: no session read, no user_app_data push or pull', async () => {
+    const { db } = seed()
+    await syncOnLaunch(db as any, { guest: true })
+    expect(supabaseMock.auth.getUser).not.toHaveBeenCalled()
+    expect(supabaseMock.from.mock.calls.map((c: unknown[]) => c[0])).not.toContain('user_app_data')
+  })
+
+  it('a normal launch still attempts the backup push (the guest skip is the only difference)', async () => {
+    const { db } = seed()
+    await syncOnLaunch(db as any)
+    expect(supabaseMock.auth.getUser).toHaveBeenCalled()
+  })
+})

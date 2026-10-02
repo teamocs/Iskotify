@@ -37,6 +37,8 @@ const SCREENS = [
   'app/profile/scholarship-info.tsx',
   'app/results-tracker.tsx',
   'app/upgrade.tsx',
+  // P4 web glimpse: the guest diagnostic's intro.
+  'app/try.tsx',
 ]
 
 const COMPONENTS = [

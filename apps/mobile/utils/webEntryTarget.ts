@@ -27,8 +27,12 @@ export function webEntryTarget(
 // sign-in shows ?error=link, callback exchanges the code, reset-password says
 // when a link has expired. Replacing them would drop the query string.
 const AUTH_ROUTES = ['/auth/sign-in', '/auth/callback', '/auth/reset-password']
+// The web glimpse (P4): what a signed-out visitor may open without an account.
+// The intro page and the free diagnostic, whose run, review and results are all
+// views of that one route. Nothing else: every other route still goes to sign-in.
+export const GUEST_ROUTES: readonly string[] = ['/try', '/practice/diagnostic']
 // Entry screens a signed-in, onboarded student has no business seeing.
-const SIGNED_OUT_ONLY = ['/auth/sign-in', '/landing']
+const SIGNED_OUT_ONLY = ['/auth/sign-in', '/landing', '/try']
 // The legal pages are reachable by anyone (consent step, sign-in, landing) and
 // must stay readable: a late auth event must not bounce the reader away.
 const LEGAL_ROUTES = ['/terms', '/privacy']
@@ -40,6 +44,11 @@ function clean(pathname: string): string {
   return p.length > 1 ? p.replace(/\/+$/, '') : p
 }
 
+/** True for a route a signed-out web visitor may open (the guest diagnostic). */
+export function isGuestPath(pathname: string): boolean {
+  return GUEST_ROUTES.includes(clean(pathname))
+}
+
 /**
  * Where the web gate should send the page the student is on, or `null` to
  * stay. Staying keeps the whole URL, query included. A returning student is
@@ -48,7 +57,7 @@ function clean(pathname: string): string {
 export function webGateRedirect(pathname: string, target: EntryTarget): string | null {
   const path = clean(pathname)
   if (LEGAL_ROUTES.includes(path)) return null
-  if (target === '/auth/sign-in') return AUTH_ROUTES.includes(path) ? null : '/auth/sign-in'
+  if (target === '/auth/sign-in') return AUTH_ROUTES.includes(path) || GUEST_ROUTES.includes(path) ? null : '/auth/sign-in'
   if (SELF_ROUTING.includes(path)) return null
   if (target === '/onboarding') return path === '/onboarding' ? null : '/onboarding'
   // Onboarded. Onboarding itself is left alone: the student has a focus as soon

@@ -77,6 +77,10 @@ jest.mock('../../../../hooks/useExamRunPersistence', () => ({
   useExamRunPersistence: () => ({ saveRun: mockSaveRun, loadRun: mockLoadRun, clearRun: mockClearRun }),
 }))
 
+// The web glimpse (P4): a signed-out web visitor. Default: a member (native / signed in).
+let mockGuest: { mode: 'checking' | 'member' | 'guest' | 'held'; catalogReady: boolean } = { mode: 'member', catalogReady: true }
+jest.mock('../../../../hooks/useGuestMode', () => ({ useGuestMode: () => mockGuest }))
+
 let mockBankRows: any[] = []
 // Return a STABLE db reference (like the real Context-provided client) so the
 // screen's load effect (deps: [db, subjectParam]) doesn't refire on every
@@ -122,6 +126,7 @@ describe('DiagnosticExam', () => {
     mockLookupError = null
     mockSourceGate = null
     mockReviewSlugs = []
+    mockGuest = { mode: 'member', catalogReady: true }
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {})
   })
 
@@ -1001,6 +1006,90 @@ describe('DiagnosticExam', () => {
       expect(screen.getByText('Question 1 of 2')).toBeTruthy()
       expect(screen.getByText('Math')).toBeTruthy()
       expect(screen.getByRole('radio', { name: 'c', checked: true })).toBeTruthy()
+    })
+  })
+
+  // The web glimpse (P4): a signed-out web visitor takes the free diagnostic,
+  // then is invited to create a free account. No route in their results leads
+  // anywhere a guest cannot go, and no upgrade UI shows (the diagnostic is free).
+  describe('guest (signed-out web visitor)', () => {
+    const SIGNUP = 'Create a free account to save this and keep practising'
+    const scienceBank = () => {
+      mockSearchParams = { subject: 'Science' }
+      mockBankRows = [
+        { questionId: 'S1', subtest: 'Science', questionText: 'Sci Q1', options: JSON.stringify(['a', 'b', 'c', 'd']), correctIndex: 0, explanation: '', setId: null },
+      ]
+    }
+
+    it('results invite the guest to create a free account, with a way back to the start', async () => {
+      mockGuest = { mode: 'guest', catalogReady: true }
+      scienceBank()
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy(), { timeout: 10_000 })
+      fireEvent.press(screen.getByText('a'))
+      await reviewAndConfirmSubmit(alertSpy)
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy(), { timeout: 10_000 })
+
+      // The run is still recorded locally: it joins the account the guest creates.
+      expect(mockRecordSession).toHaveBeenCalledTimes(1)
+      expect(screen.getByText(/stay on this device/)).toBeTruthy()
+
+      fireEvent.press(screen.getByRole('button', { name: SIGNUP }))
+      expect(mockPush).toHaveBeenCalledWith('/auth/sign-in?mode=signup')
+      fireEvent.press(screen.getByRole('button', { name: 'Back to start' }))
+      expect(mockReplace).toHaveBeenCalledWith('/try')
+
+      // Nothing that needs an account.
+      expect(screen.queryByText(/Practice weakest subject|Practice all subjects/)).toBeNull()
+      expect(screen.queryByText('Back to Home')).toBeNull()
+    })
+
+    it('shows no upgrade UI with the paywall on', async () => {
+      const prev = process.env.EXPO_PUBLIC_PAYWALL_ENABLED
+      process.env.EXPO_PUBLIC_PAYWALL_ENABLED = '1'
+      try {
+        mockGuest = { mode: 'guest', catalogReady: true }
+        scienceBank()
+        render(<DiagnosticExam />)
+        await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy(), { timeout: 10_000 })
+        fireEvent.press(screen.getByText('a'))
+        await reviewAndConfirmSubmit(alertSpy)
+        await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy(), { timeout: 10_000 })
+        expect(screen.queryByText(/Full Access|Upgrade|₱/)).toBeNull()
+      } finally {
+        process.env.EXPO_PUBLIC_PAYWALL_ENABLED = prev
+      }
+    })
+
+    it('waits for the catalog sync before building the sample', async () => {
+      mockGuest = { mode: 'guest', catalogReady: false }
+      scienceBank()
+      const { rerender } = render(<DiagnosticExam />)
+      await new Promise(r => setTimeout(r, 0))
+      expect(screen.queryByText('Sci Q1')).toBeNull()
+      expect(mockLoadRun).not.toHaveBeenCalled()
+      mockGuest = { mode: 'guest', catalogReady: true }
+      rerender(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy(), { timeout: 10_000 })
+    })
+
+    it('a browser still holding a signed-out account is sent back to /try (nothing is written)', async () => {
+      mockGuest = { mode: 'held', catalogReady: true }
+      scienceBank()
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/try'))
+      expect(screen.queryByText('Sci Q1')).toBeNull()
+    })
+
+    it('a signed-in student keeps the normal results actions', async () => {
+      scienceBank()
+      render(<DiagnosticExam />)
+      await waitFor(() => expect(screen.getByText('Sci Q1')).toBeTruthy(), { timeout: 10_000 })
+      fireEvent.press(screen.getByText('a'))
+      await reviewAndConfirmSubmit(alertSpy)
+      await waitFor(() => expect(screen.getByText('Diagnostic results')).toBeTruthy(), { timeout: 10_000 })
+      expect(screen.queryByText(SIGNUP)).toBeNull()
+      expect(screen.getByText('Back to Home')).toBeTruthy()
     })
   })
 })

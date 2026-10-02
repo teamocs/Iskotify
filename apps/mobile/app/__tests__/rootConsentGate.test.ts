@@ -33,3 +33,23 @@ describe('web sign-in identity', () => {
     expect(body).not.toMatch(/identifyUser\(/)
   })
 })
+
+// The web glimpse (P4). A signed-out web visitor (a guest trying the diagnostic)
+// has consented to nothing, but this browser may still hold another person's
+// stored consent. On web, the stored choice is applied only for a signed-in
+// student, after the backup pull (identifyAfterConsent applies it); never at
+// launch before the session is known.
+describe('web guest preview', () => {
+  const src = read('app/_layout.tsx')
+  const init = src.slice(src.indexOf('const initialize = useCallback'), src.indexOf('// ── Web: auth-first entry gate'))
+
+  it('applies stored analytics consent at launch on native only', () => {
+    expect(init).toMatch(/if \(Platform\.OS !== 'web'\) \{\s*await applyAnalyticsConsent\(db\)/)
+    expect(init.replace(/if \(Platform\.OS !== 'web'\) \{\s*await applyAnalyticsConsent\(db\)/, '')).not.toMatch(/applyAnalyticsConsent\(/)
+  })
+
+  it('re-applies the signed-out allowlist on every route change (in-app links from the guest diagnostic)', () => {
+    expect(src).toMatch(/import \{ WebGuestRouteGuard \} from '..\/components\/auth\/WebGuestRouteGuard'/)
+    expect(src).toMatch(/<WebGuestRouteGuard enabled=\{ready\} \/>/)
+  })
+})

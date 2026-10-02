@@ -7,9 +7,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
+let mockParams: Record<string, string> = {}
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn() },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -517,5 +518,49 @@ describe('SignInScreen — Terms and Privacy Policy', () => {
     expect(router.push).toHaveBeenCalledWith('/terms')
     fireEvent.press(screen.getByRole('link', { name: 'Privacy Policy' }))
     expect(router.push).toHaveBeenCalledWith('/privacy')
+  })
+})
+
+// The web glimpse (P4): iOS has no app yet, so the web sign-in offers a free
+// diagnostic without an account. Native never shows it (native never routes
+// here, and has its own "start without an account" path on the landing screen).
+describe('SignInScreen — guest diagnostic (web only)', () => {
+  const GUEST_LABEL = 'Try a free diagnostic — no account needed'
+  let restoreOS: { restore(): void } | null = null
+  beforeEach(() => {
+    // An earlier test swaps the params hook on the module; read mockParams again.
+    require('expo-router').useLocalSearchParams = () => mockParams
+  })
+  afterEach(() => {
+    restoreOS?.restore()
+    restoreOS = null
+    mockParams = {}
+  })
+
+  it('on web, offers the free diagnostic as a secondary action that opens /try', () => {
+    const RN = require('react-native')
+    restoreOS = jest.replaceProperty(RN.Platform, 'OS', 'web')
+    render(<SignInScreen />)
+    const btn = screen.getByRole('button', { name: GUEST_LABEL })
+    fireEvent.press(btn)
+    const { router } = require('expo-router')
+    expect(router.push).toHaveBeenCalledWith('/try')
+  })
+
+  it('is not shown on native', () => {
+    render(<SignInScreen />)
+    expect(screen.queryByText(GUEST_LABEL)).toBeNull()
+  })
+
+  it('opens on the create-account form when sent with ?mode=signup (from guest results)', () => {
+    mockParams = { mode: 'signup' }
+    render(<SignInScreen />)
+    expect(screen.getByText('Create your account')).toBeTruthy()
+    expect(screen.queryByText('Welcome back')).toBeNull()
+  })
+
+  it('opens on sign-in otherwise', () => {
+    render(<SignInScreen />)
+    expect(screen.getByText('Welcome back')).toBeTruthy()
   })
 })

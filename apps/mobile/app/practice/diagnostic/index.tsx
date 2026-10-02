@@ -36,6 +36,8 @@ import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { ExamReviewSheet } from '../../../components/practice/ExamReviewSheet'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
+import { useGuestMode } from '../../../hooks/useGuestMode'
+import { GUEST_INTRO_HREF, GUEST_SIGNUP_HREF } from '../../../utils/guestPreview'
 import { useExamRunPersistence } from '../../../hooks/useExamRunPersistence'
 import { confirmAction } from '../../../utils/confirmAction'
 import { reorderByIds, remapIndexedById, remapSingleIndex, isRunExpired } from '../../../utils/examRunPersistence'
@@ -89,6 +91,17 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   const { recordSession } = useRecordSession()
   const { recordAttempts } = useRecordAttempts()
   const { saveRun, loadRun, clearRun } = useExamRunPersistence()
+  // The web glimpse (P4): a signed-out web visitor. Their sample is built once
+  // the catalog has synced; their results invite them to make a free account and
+  // never link anywhere a guest cannot go. A browser still holding an account
+  // that signed out is 'held': back to /try, nothing is written.
+  const { mode: guestMode, catalogReady } = useGuestMode()
+  const guest = guestMode === 'guest'
+  const waiting = guestMode === 'checking' || guestMode === 'held' || (guest && !catalogReady)
+  const homeHref = guest ? GUEST_INTRO_HREF : '/(tabs)'
+  useEffect(() => {
+    if (guestMode === 'held') router.replace(GUEST_INTRO_HREF)
+  }, [guestMode])
 
   const [phase, setPhase] = useState<Phase>('loading')
   // Bumped by "Try again" after a failed question load to re-run the load effect.
@@ -193,6 +206,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   }
 
   useEffect(() => {
+    if (waiting) return
     let alive = true
     void (async () => {
       try {
@@ -299,7 +313,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
     })()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, subjectParam, examParamRaw, loadAttempt])
+  }, [db, subjectParam, examParamRaw, loadAttempt, waiting])
 
   /** Fix 1: rebuild the exact previously-sampled question set from the saved
    *  run's ids. The diagnostic's question pool mixes bank rows (real
@@ -486,13 +500,13 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   // run, a focus-mode runner (RunnerFrame) during it. One maroon action per phase.
 
   if (phase === 'loading') {
-    return <SessionLoading label="Loading diagnostic" fallbackHref="/(tabs)" />
+    return <SessionLoading label="Loading diagnostic" fallbackHref={homeHref} />
   }
 
   if (phase === 'load-error') {
     return (
       <SessionError
-        fallbackHref="/(tabs)"
+        fallbackHref={homeHref}
         onRetry={() => { setPhase('loading'); setLoadAttempt(n => n + 1) }}
       />
     )
@@ -501,7 +515,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   if (phase === 'unavailable') {
     const slug = target?.kind === 'unavailable' ? target.slug : ''
     return (
-      <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
+      <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <PageTitle
           title={`A diagnostic for ${examLabel} isn't available yet`}
           lead={canReview
@@ -511,13 +525,20 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
               : `There aren't enough published questions for this exam to build one yet.`}
         />
         <View style={{ gap: spacing.sm }}>
-          {/* Never the UPCAT diagnostic here: those questions are not this exam's. */}
-          {!slug || canReview === null ? null : canReview ? (
-            <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${slug}`)} fullWidth size="lg" />
+          {/* Never the UPCAT diagnostic here: those questions are not this exam's.
+              A guest has neither page: only the way back to the start. */}
+          {guest ? (
+            <Button label="Back to start" fullWidth size="lg" onPress={() => router.replace(GUEST_INTRO_HREF)} />
           ) : (
-            <Button label="See exam details" onPress={() => router.push(`/listings/${encodeURIComponent(slug)}`)} fullWidth size="lg" />
+            <>
+              {!slug || canReview === null ? null : canReview ? (
+                <Button label={`Review ${examLabel} topics`} onPress={() => router.push(`/practice/review/${slug}`)} fullWidth size="lg" />
+              ) : (
+                <Button label="See exam details" onPress={() => router.push(`/listings/${encodeURIComponent(slug)}`)} fullWidth size="lg" />
+              )}
+              <Button label="Back to Home" variant="secondary" fullWidth onPress={() => router.replace('/(tabs)')} />
+            </>
           )}
-          <Button label="Back to Home" variant="secondary" fullWidth onPress={() => router.replace('/(tabs)')} />
         </View>
       </Screen>
     )
@@ -526,7 +547,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
   if (phase === 'resume-prompt') {
     const diagnosticName = isBlueprint ? `${examLabel} diagnostic` : 'diagnostic'
     return (
-      <Screen header={<DetailTopBar bare fallbackHref="/(tabs)" />}>
+      <Screen header={<DetailTopBar bare fallbackHref={homeHref} />}>
         <PageTitle
           title={resumeStale ? `Your last ${diagnosticName} ran out of time` : 'Resume where you left off?'}
           lead={resumeStale
@@ -555,9 +576,11 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
       return (
         <SessionEmpty
           title="No diagnostic questions yet"
-          body="The question bank is still syncing. Check back soon, or practise a subject in the meantime."
-          fallbackHref="/(tabs)"
-          actionLabel="Back to Home"
+          body={guest
+            ? 'The question bank is still syncing. Check back soon.'
+            : 'The question bank is still syncing. Check back soon, or practise a subject in the meantime.'}
+          fallbackHref={homeHref}
+          actionLabel={guest ? 'Back to start' : 'Back to Home'}
         />
       )
     }
@@ -626,6 +649,17 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
             answers={answers}
           />
 
+          {guest ? (
+            // The web glimpse (P4): the one next step is a free account. The run is
+            // already on this device and joins the account made here.
+            <View style={{ gap: spacing.sm }}>
+              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+                These results stay on this device. Create a free account to keep them and get practice built around them.
+              </Text>
+              <Button label="Create a free account to save this and keep practising" onPress={() => router.push(GUEST_SIGNUP_HREF)} fullWidth size="lg" />
+              <Button label="Back to start" variant="secondary" fullWidth onPress={() => router.replace(GUEST_INTRO_HREF)} />
+            </View>
+          ) : (
           <View style={{ gap: spacing.sm }}>
             {target?.kind === 'blueprint' ? (
               // Review lists flashcard topics tagged to the exam: only send the student there
@@ -647,6 +681,7 @@ function DiagnosticRun({ subjectParam, examParamRaw }: { subjectParam?: string; 
             )}
             <Button label="Back to Home" variant="secondary" fullWidth onPress={() => router.replace('/(tabs)')} />
           </View>
+          )}
         </View>
       </Screen>
     )
