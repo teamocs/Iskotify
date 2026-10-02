@@ -425,6 +425,8 @@ describe('BlueprintExam', () => {
       await reachResults()
       expect(screen.getByText('Review mistakes')).toBeTruthy()
       expect(screen.getByText('Retake exam')).toBeTruthy()
+      // Truthful label: it lands on the Mock exams list.
+      expect(screen.getByText('Back to mock exams')).toBeTruthy()
     })
   })
 

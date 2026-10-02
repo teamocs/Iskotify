@@ -9,13 +9,16 @@ import { ErrorState } from '../ui/ErrorState'
 import { focusRing, type WebPressableState } from '../ui/a11y'
 import { readinessTone } from '../../utils/readinessTone'
 import type { SubjectReadiness } from '../../hooks/useSubjectReadiness'
+import { DIAGNOSTIC_SUBTESTS } from '../../utils/diagnosticExam'
 
 const WORD = { strong: 'strong', fair: 'getting there', weak: 'needs work', none: 'not started' } as const
 const BAR_TONE = { strong: 'success', fair: 'warning', weak: 'danger', none: 'accent' } as const
 
 /**
  * Readiness by subject (moved from Today): percentage, a bar and a word, so
- * colour is never the only signal. Tapping a subject opens its diagnostic.
+ * colour is never the only signal. Tapping one of the four UPCAT subtests
+ * opens its diagnostic; any other subject (the diagnostic would silently run
+ * all four subtests for it) opens its own topics page.
  */
 export function SubjectReadinessList({ entries, loading, error, refresh }: SubjectReadiness) {
   const { theme: t } = useTheme()
@@ -42,13 +45,16 @@ export function SubjectReadinessList({ entries, loading, error, refresh }: Subje
         const word = WORD[tone]
         // null = not enough answered questions yet: say so instead of showing 0%.
         const pctText = s.pct == null ? '–' : `${s.pct}%`
+        const hasDiagnostic = DIAGNOSTIC_SUBTESTS.includes(s.name)
         return (
           <Pressable
             key={s.id}
-            onPress={() => router.push(`/practice/diagnostic?subject=${encodeURIComponent(s.name)}` as never)}
+            onPress={() => router.push((hasDiagnostic
+              ? `/practice/diagnostic?subject=${encodeURIComponent(s.name)}`
+              : `/subjects/${encodeURIComponent(s.id)}`) as never)}
             accessibilityRole="button"
             accessibilityLabel={s.pct == null ? `${s.name}, ${word}` : `${s.name}, ${s.pct}%, ${word}`}
-            accessibilityHint="Opens a diagnostic for this subject"
+            accessibilityHint={hasDiagnostic ? 'Opens a diagnostic for this subject' : 'Opens this subject\'s topics to practise'}
             style={(state) => {
               const { pressed, hovered, focused } = state as WebPressableState
               return [

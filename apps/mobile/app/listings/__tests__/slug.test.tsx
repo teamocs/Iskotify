@@ -46,7 +46,11 @@ jest.mock('../../../services/settings', () => ({
 }))
 
 jest.mock('../../../services/examBlueprints', () => ({
-  listPublishedBlueprintSlugs: jest.fn().mockResolvedValue([]),
+  listRunnableBlueprints: jest.fn().mockResolvedValue([]),
+}))
+
+jest.mock('../../../services/practiceSignals', () => ({
+  hasReviewContent: jest.fn().mockResolvedValue(false),
 }))
 
 const DAY = 86_400_000
@@ -134,8 +138,10 @@ function resetMocks() {
   mockFocus.inFocus = false
   const { getSettings } = require('../../../services/settings')
   getSettings.mockResolvedValue({})
-  const { listPublishedBlueprintSlugs } = require('../../../services/examBlueprints')
-  listPublishedBlueprintSlugs.mockResolvedValue([])
+  const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+  listRunnableBlueprints.mockResolvedValue([])
+  const { hasReviewContent } = require('../../../services/practiceSignals')
+  hasReviewContent.mockResolvedValue(false)
   const { router } = require('expo-router')
   router.canGoBack.mockReturnValue(true)
 }
@@ -184,18 +190,36 @@ describe('ListingDetailScreen — exam', () => {
     expect(save).toBeLessThan(about)
   })
 
-  it('without a mock blueprint the primary action is practice', async () => {
+  it('without a runnable mock but with review topics, the primary action opens the exam review chooser', async () => {
     const { router } = require('expo-router')
+    const { hasReviewContent } = require('../../../services/practiceSignals')
+    hasReviewContent.mockResolvedValue(true)
     render(<ListingDetailScreen />)
     fireEvent.press(await screen.findByRole('button', { name: 'Practise for this exam' }))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/practice')
+    expect(router.push).toHaveBeenCalledWith('/practice/start/upcat')
+    expect(hasReviewContent).toHaveBeenCalledWith(expect.anything(), 'upcat')
     expect(screen.queryByRole('button', { name: 'Take a mock exam' })).toBeNull()
   })
 
-  it('with a published blueprint the primary action is the mock exam', async () => {
+  it('with nothing to practise yet there is no practice button, just an honest note', async () => {
+    render(<ListingDetailScreen />)
+    expect(await screen.findByText('Practice coming soon')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Practise for this exam' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Take a mock exam' })).toBeNull()
+  })
+
+  it('a published blueprint with no runnable questions never offers the mock', async () => {
+    const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listRunnableBlueprints.mockResolvedValue([{ slug: 'acet' }])
+    render(<ListingDetailScreen />)
+    expect(await screen.findByText('Practice coming soon')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Take a mock exam' })).toBeNull()
+  })
+
+  it('with a runnable blueprint the primary action is the mock exam', async () => {
     const { router } = require('expo-router')
-    const { listPublishedBlueprintSlugs } = require('../../../services/examBlueprints')
-    listPublishedBlueprintSlugs.mockResolvedValue(['upcat'])
+    const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listRunnableBlueprints.mockResolvedValue([{ slug: 'upcat' }])
     render(<ListingDetailScreen />)
     fireEvent.press(await screen.findByRole('button', { name: 'Take a mock exam' }))
     expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')

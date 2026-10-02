@@ -19,3 +19,11 @@ export function isSchoolFocusSlug(slug: string): boolean {
 export function schoolIdFromFocusSlug(slug: string): string {
   return slug.slice(SCHOOL_FOCUS_PREFIX.length)
 }
+
+/** The general entrance exam a school-level focus studies (it has no content of its own). */
+export const GENERAL_CONTENT_SLUG = 'general-cet'
+
+/** The content slug a focus entry practises: a school focus -> 'general-cet'; any other slug as is. */
+export function focusContentSlug(slug: string): string {
+  return isSchoolFocusSlug(slug) ? GENERAL_CONTENT_SLUG : slug
+}

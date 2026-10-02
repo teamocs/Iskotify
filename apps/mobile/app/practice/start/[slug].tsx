@@ -3,7 +3,7 @@ import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
 import { listings as listingsTable, tertiarySchools } from '../../../db/schema'
-import { listPublishedBlueprintSlugs } from '../../../services/examBlueprints'
+import { listRunnableBlueprints } from '../../../services/examBlueprints'
 import { isSchoolFocusSlug, schoolIdFromFocusSlug } from '../../../utils/focusSlug'
 import { SessionChooser } from '../../../components/practice/SessionChooser'
 import { SessionLoading } from '../../../components/practice/SessionStates'
@@ -34,15 +34,16 @@ export default function PracticeStartScreen() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const [titleRows, slugs] = await Promise.all([
+      const [titleRows, runnable] = await Promise.all([
         isSchool
           ? db.select({ title: tertiarySchools.name }).from(tertiarySchools).where(eq(tertiarySchools.id, schoolIdFromFocusSlug(slug))).limit(1)
           : db.select({ title: listingsTable.title }).from(listingsTable).where(eq(listingsTable.slug, slug)).limit(1),
-        listPublishedBlueprintSlugs(db),
+        listRunnableBlueprints(db),
       ])
       if (!alive) return
       setListingTitle(titleRows[0]?.title ?? slug)
-      setMockAvailable(slugs.includes(contentSlug))
+      // Runnable only: a published mock with no questions yet is "coming soon", not a dead end.
+      setMockAvailable(runnable.some(b => b.slug === contentSlug))
       setLoaded(true)
     })()
     return () => { alive = false }

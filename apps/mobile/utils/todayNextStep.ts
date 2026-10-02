@@ -39,10 +39,11 @@ export function planItemCopy(item: PlanItemLike, topicNameById: Map<string, stri
       }
     case 'mock_section':
       return {
-        title: 'Timed mock section',
-        detail: 'A dress rehearsal for the real exam',
+        // Opens the exam's full prestart, so it is a whole mock, not a section.
+        title: 'Timed mock',
+        detail: 'A full, timed dress rehearsal for the real exam',
         route: `/practice/exam/${item.refId}`,
-        actionLabel: 'Start mock section',
+        actionLabel: 'Start mock',
       }
     case 'diagnostic':
       return {

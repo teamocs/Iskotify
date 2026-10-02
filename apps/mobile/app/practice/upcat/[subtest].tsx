@@ -63,7 +63,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   const isMistakes = variant === 'mistakes'
   const subtestParam = isMistakes ? MISTAKES_SLUG : params.subtest
   const mode = isMistakes ? 'quick' : params.mode
-  const homeHref = isMistakes ? '/practice' : '/practice/upcat'
+  const homeHref = isMistakes ? '/practice' : '/practice/exam'
   const db = useDb()
   const { theme: t } = useTheme()
   // Redesign M3: the question navigator is a side panel on expanded widths and
@@ -575,7 +575,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
               onPress={() => router.replace(isMistakes ? '/practice/mistakes' : `/practice/upcat/${subtestParam}?mode=${mode}`)}
             />
             <Button
-              label={isMistakes ? 'Back to Practice' : 'Back to exams'}
+              label={isMistakes ? 'Back to Practice' : 'Back to mock exams'}
               variant="ghost"
               fullWidth
               onPress={() => router.replace(homeHref)}

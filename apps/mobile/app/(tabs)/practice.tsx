@@ -21,7 +21,10 @@ import { syncOnLaunch } from '../../services/sync'
 import { orderBlueprintsForUser } from '../../utils/examBuilder'
 import { runKeyFor } from '../../utils/examRunPersistence'
 import { pickNextPractice, nextPracticeCopy, type NextPracticeInput } from '../../utils/nextPracticeAction'
-import { quickStartTiles, upcatInFocus, upcatSubtestHref, type QuickStartTile } from '../../utils/practiceQuickStart'
+import { quickStartTiles, upcatInFocus, upcatSubtestHref, practiceFocusExam, UPCAT_SLUG, type QuickStartTile } from '../../utils/practiceQuickStart'
+import { isSchoolFocusSlug } from '../../utils/focusSlug'
+import { examSlugLabel } from '../../utils/diagnosticTarget'
+import { getUpcatSubtestAccuracy, hasTakenDiagnostic, hasReviewContent, type SubtestAccuracyRow } from '../../services/practiceSignals'
 import { SUBTESTS } from '../../utils/upcatExam'
 import { countOpenMistakes } from '../../services/questionHistory'
 import { useTheme } from '../../theme/ThemeContext'
@@ -59,7 +62,11 @@ type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 
 
 type InProgressRun = { slug: string; title: string; answered: number; total: number; updatedAt: number }
 
-const CACHE_KEYS = ['practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list', 'practice:mistakesCount'] as const
+// Prefixes (invalidate() matches by prefix): the per-exam signals end in the exam slug.
+const CACHE_KEYS = [
+  'practice:sessionReadiness', 'practice:dueCounts', 'practice:blueprints:list', 'practice:mistakesCount',
+  'practice:subtestAccuracy', 'practice:diagnosticTaken:', 'practice:hasReview:',
+] as const
 
 function minutes(n: number): string {
   return n < 60 ? `${n} min` : `${Math.round((n / 60) * 10) / 10} h`
@@ -181,6 +188,51 @@ export default function PracticeScreen() {
   }, [db, reloadKey, blueprintsTry])
 
   const focusSlugs = useMemo(() => focusListings.map(f => f.slug), [focusListings])
+
+  // The exam the next step practises for (same rule as the quick-start Drill).
+  // null = nothing in focus (UPCAT steps). A school-level focus studies the
+  // general entrance subjects, so its signals are read for that content.
+  const focusExamSlug = useMemo(
+    () => (blueprints.status === 'loading' || !focusLoaded ? undefined
+      : practiceFocusExam(focusSlugs, blueprints.status === 'ready' ? blueprints.data.map(b => b.slug) : [])),
+    [blueprints, focusSlugs, focusLoaded],
+  )
+  const contentSlug = focusExamSlug == null ? UPCAT_SLUG : isSchoolFocusSlug(focusExamSlug) ? 'general-cet' : focusExamSlug
+
+  // Recent UPCAT accuracy per subtest: a weak one becomes the next step for a UPCAT student.
+  const [subtestAccuracy, setSubtestAccuracy] = useState<SubtestAccuracyRow[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    cachedQuery('practice:subtestAccuracy', 30_000, () => getUpcatSubtestAccuracy(db))
+      .then(rows => { if (!cancelled) setSubtestAccuracy(rows) })
+      .catch(e => {
+        console.warn('[practice/subtestAccuracy] load failed:', e)
+        if (!cancelled) setSubtestAccuracy([])
+      })
+    return () => { cancelled = true }
+  }, [db, reloadKey])
+
+  // Whether the focus exam's diagnostic was taken (so it is not offered again),
+  // and whether that exam has topic reviews. undefined while loading.
+  const [examSignals, setExamSignals] = useState<{ slug: string; taken: boolean; hasReview: boolean } | undefined>(undefined)
+  useEffect(() => {
+    if (focusExamSlug === undefined) return
+    let cancelled = false
+    const slug = contentSlug
+    Promise.all([
+      cachedQuery(`practice:diagnosticTaken:${slug}`, 30_000, () => hasTakenDiagnostic(db, slug)).catch(e => {
+        console.warn('[practice/diagnosticTaken] load failed:', e)
+        return false
+      }),
+      cachedQuery(`practice:hasReview:${slug}`, 30_000, () => hasReviewContent(db, slug)).catch(e => {
+        console.warn('[practice/hasReview] load failed:', e)
+        return false
+      }),
+    ]).then(([taken, hasReview]) => {
+      if (!cancelled) setExamSignals({ slug, taken, hasReview })
+    })
+    return () => { cancelled = true }
+  }, [db, focusExamSlug, contentSlug, reloadKey])
   const orderedBlueprints = useMemo(
     () => (blueprints.status === 'ready' ? orderBlueprintsForUser(blueprints.data, focusSlugs) : []),
     [blueprints, focusSlugs],
@@ -240,6 +292,13 @@ export default function PracticeScreen() {
 
   const nextCopy = useMemo(() => {
     if (dueCounts === null || resume === undefined || blueprints.status === 'loading') return null
+    // Until the focus exam and its signals are known, no step (never a flash of a UPCAT step).
+    if (focusExamSlug === undefined || subtestAccuracy === null || examSignals?.slug !== contentSlug) return null
+    const runnable = blueprints.status === 'ready' ? blueprints.data : []
+    const label = focusExamSlug == null ? 'UPCAT'
+      : runnable.find(b => b.slug === focusExamSlug)?.acronym
+        ?? focusListings.find(f => f.slug === focusExamSlug)?.title
+        ?? examSlugLabel(focusExamSlug)
     return nextPracticeCopy(pickNextPractice({
       resume,
       dueCount: dueCounts.total,
@@ -247,8 +306,16 @@ export default function PracticeScreen() {
       focusMock: focusBlueprint
         ? { slug: focusBlueprint.slug, title: focusBlueprint.acronym, items: focusBlueprint.items, minutes: focusBlueprint.minutes }
         : null,
+      subtestAccuracy,
+      hasTakenDiagnostic: examSignals.taken,
+      focusExam: focusExamSlug == null ? null : {
+        slug: focusExamSlug,
+        label,
+        runnable: runnable.some(b => b.slug === contentSlug),
+        hasReview: examSignals.hasReview,
+      },
     }))
-  }, [dueCounts, resume, blueprints.status, weakTopic, focusBlueprint])
+  }, [dueCounts, resume, blueprints, weakTopic, focusBlueprint, focusExamSlug, contentSlug, subtestAccuracy, examSignals, focusListings])
 
   const quickTiles = useMemo(() => quickStartTiles({
     focusSlugs,

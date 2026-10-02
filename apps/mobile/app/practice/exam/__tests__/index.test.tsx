@@ -58,8 +58,8 @@ describe('Mock exams list (redesign M2)', () => {
   it('lists each mock with size, length and best score as a neutral number', async () => {
     render(<ExamPicker />)
     await act(async () => {})
-    const row = screen.getByRole('button', { name: 'UPCAT, 180 items, 2.5 h, best 72%' })
-    expect(screen.getByRole('button', { name: 'ACET, 100 items, 45 min, not taken yet' })).toBeTruthy()
+    const row = screen.getByRole('button', { name: 'UPCAT, Full mock ready, 180 items, 2.5 h, best 72%' })
+    expect(screen.getByRole('button', { name: 'ACET, Full mock ready, 100 items, 45 min, not taken yet' })).toBeTruthy()
     fireEvent.press(row)
     expect(mockPush).toHaveBeenCalledWith('/practice/exam/upcat')
     // No coloured verdict badges.
@@ -76,7 +76,8 @@ describe('Mock exams list (redesign M2)', () => {
     await act(async () => {})
     expect(screen.getByRole('button', { name: /^UPCAT/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^ACET/ })).toBeNull()
-    expect(screen.getByText('Questions coming soon')).toBeTruthy()
+    expect(screen.getByText('Coming soon')).toBeTruthy()
+    expect(screen.getByText('Full mock ready · 180 items · 2.5 h')).toBeTruthy()
   })
 
   it('a category whose runnable count is zero (e.g. only figure-less visual questions) is not ready', async () => {
@@ -101,8 +102,9 @@ describe('Mock exams list (redesign M2)', () => {
     mockCounts.mockResolvedValue(new Map([['Mathematics', 60], ['Verbal', 500], ['Spatial', 0]]))
     render(<ExamPicker />)
     await act(async () => {})
-    // 60 (pool smaller than 180) + 50 + 0 (nothing runnable in Spatial)
-    expect(screen.getByRole('button', { name: 'UPCAT, 110 items, 2.5 h, best 72%' })).toBeTruthy()
+    // 60 (pool smaller than 180) + 50 + 0 (nothing runnable in Spatial): Math and Verbal run, Spatial does not.
+    expect(screen.getByRole('button', { name: 'UPCAT, Partial — 2 of 3 sections, 110 items, 2.5 h, best 72%' })).toBeTruthy()
+    expect(screen.getByText('Partial — 2 of 3 sections · 110 items · 2.5 h')).toBeTruthy()
   })
 
   it('sizes a mock from its sections, not a drifted total_items (DOST-SEI: 170 vs 210)', async () => {
@@ -111,7 +113,7 @@ describe('Mock exams list (redesign M2)', () => {
       : ACET))
     render(<ExamPicker />)
     await act(async () => {})
-    expect(screen.getByRole('button', { name: 'UPCAT, 210 items, 2.5 h, best 72%' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'UPCAT, Full mock ready, 210 items, 2.5 h, best 72%' })).toBeTruthy()
   })
 
   it('times a section-locked exam by its section clocks, not the declared total', async () => {
@@ -120,7 +122,7 @@ describe('Mock exams list (redesign M2)', () => {
       : UPCAT))
     render(<ExamPicker />)
     await act(async () => {})
-    expect(screen.getByRole('button', { name: 'ACET, 100 items, 45 min, not taken yet' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ACET, Full mock ready, 100 items, 45 min, not taken yet' })).toBeTruthy()
   })
 
   it('shows an empty state when none are published', async () => {

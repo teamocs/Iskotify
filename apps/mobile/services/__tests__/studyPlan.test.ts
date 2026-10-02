@@ -1,7 +1,10 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import * as schema from '../../db/schema'
-import { studyPlanItems, topics, flashcards, userProgress, flashcardSrs, listings, focusListings } from '../../db/schema'
+import {
+  studyPlanItems, topics, flashcards, userProgress, flashcardSrs, listings, focusListings,
+  examBlueprints, examBlueprintSections, upcatQuestions,
+} from '../../db/schema'
 import { CREATE_SQL, MIGRATIONS } from '../../db/client'
 import type { DrizzleClient } from '../../db/client'
 import {
@@ -55,9 +58,46 @@ describe('gatherPlanInputs', () => {
       { listingSlug: 'school:abc', priority: 4, addedAt: NOW },
     ])
 
+    await seedRunnableBlueprint('near-exam')
+    await seedRunnableBlueprint('far-exam')
+
     const input = await gatherPlanInputs(db, TODAY)
     expect(input.earliestExamDate).toBe(NOW + 5 * DAY_MS)
     expect(input.mockSectionRefId).toBe('near-exam')
+  })
+
+  async function seedRunnableBlueprint(slug: string, withQuestions = true) {
+    await db.insert(examBlueprints).values({ slug, name: slug, acronym: slug.toUpperCase(), status: 'published', totalItems: 10, totalTimeMinutes: 30 })
+    await db.insert(examBlueprintSections).values({ id: `${slug}:1`, blueprintSlug: slug, name: 'Math', skillCategory: `${slug}-math`, itemCount: 10, displayOrder: 1 })
+    if (withQuestions) {
+      await db.insert(upcatQuestions).values({
+        questionId: `${slug}-q1`, subtest: 'Mathematics', skillCategory: `${slug}-math`, questionText: '1+1?',
+        options: JSON.stringify(['1', '2', '3', '4']), correctIndex: 1, explanation: '',
+      })
+    }
+  }
+
+  it('plans a mock only for a focused exam whose mock can actually run', async () => {
+    await db.insert(listings).values([
+      { id: 'l1', slug: 'no-mock', title: 'No mock', type: 'exam', status: 'published', examDate: NOW + 3 * DAY_MS },
+      { id: 'l2', slug: 'empty-mock', title: 'Empty mock', type: 'exam', status: 'published', examDate: NOW + 4 * DAY_MS },
+      { id: 'l3', slug: 'ready-mock', title: 'Ready mock', type: 'exam', status: 'published', examDate: NOW + 10 * DAY_MS },
+    ])
+    await db.insert(focusListings).values([
+      { listingSlug: 'no-mock', priority: 1, addedAt: NOW },
+      { listingSlug: 'empty-mock', priority: 2, addedAt: NOW },
+      { listingSlug: 'ready-mock', priority: 3, addedAt: NOW },
+    ])
+    await seedRunnableBlueprint('empty-mock', false) // published, but no question can run
+
+    let input = await gatherPlanInputs(db, TODAY)
+    // Pacing still follows the nearest exam; the mock item never points at a dead end.
+    expect(input.earliestExamDate).toBe(NOW + 3 * DAY_MS)
+    expect(input.mockSectionRefId).toBeNull()
+
+    await seedRunnableBlueprint('ready-mock')
+    input = await gatherPlanInputs(db, TODAY)
+    expect(input.mockSectionRefId).toBe('ready-mock')
   })
 
   it('surfaces due SRS count and weak topics (<60%), sorted weakest-first', async () => {

@@ -25,6 +25,7 @@ import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { pickNextStep } from '../../utils/todayNextStep'
+import { reviewContentSlugs } from '../../services/practiceSignals'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
 import { admissionsUpdates as admissionsUpdatesTable } from '../../db/schema'
@@ -55,6 +56,26 @@ export default function TodayScreen() {
     () => new Map(topicRows.map(r => [r.topic.id, r.topic.name])),
     [topicRows],
   )
+  // Exams with flashcard topics to review: practice exists even without a mock.
+  // From the DB (hasReviewContent), the same source the listing, school and
+  // diagnostic pages use. null until known.
+  const reviewCandidates = useMemo(
+    () => [...new Set([...focusedListings.map(l => l.slug), ...catalog.examListings.map(l => l.slug)])].sort().join('|'),
+    [focusedListings, catalog.examListings],
+  )
+  const [reviewSlugs, setReviewSlugs] = useState<ReadonlySet<string> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    // A new set of exams: availability is unknown again until it loads (never the old set's answer).
+    setReviewSlugs(null)
+    reviewContentSlugs(db, reviewCandidates ? reviewCandidates.split('|') : [])
+      .then(set => { if (!cancelled) setReviewSlugs(set) })
+      .catch(e => {
+        console.warn('[today/reviewSlugs] load failed:', e)
+        if (!cancelled) setReviewSlugs(new Set())
+      })
+    return () => { cancelled = true }
+  }, [db, reviewCandidates])
 
   // ── Admissions feed (for "Coming up") ───────────────────────────────────────
   const [admissionItems, setAdmissionItems] = useState<FeedItem[]>([])
@@ -188,6 +209,8 @@ export default function TodayScreen() {
               focusedListings={focusedListings}
               examListings={catalog.examListings}
               blueprintSlugs={catalog.blueprintSlugs}
+              reviewSlugs={reviewSlugs ?? undefined}
+              availabilityKnown={catalog.loaded && reviewSlugs !== null}
               blueprintInfo={catalog.blueprintInfo}
               listingMockBest={catalog.listingMockBest}
               listingAccuracy={listingAccuracy}

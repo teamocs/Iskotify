@@ -6,6 +6,7 @@ import { ChevronLeftOutlined, FileQuestionOutlined } from '@lineiconshq/free-ico
 import { useDb } from '../../../hooks/useDb'
 import { getExamBlueprint, getRunnableCountsByCategory, listPublishedBlueprintSlugs, type ExamBlueprint } from '../../../services/examBlueprints'
 import { plannedItemCount, examMinutes } from '../../../utils/examBuilder'
+import { mockCoverage, type MockCoverage } from '../../../utils/mockCoverage'
 import { getListingMockBest, getListingAccuracy } from '../../../services/homeAggregates'
 import { Screen } from '../../../components/ui/Screen'
 import { ListRow } from '../../../components/ui/ListRow'
@@ -17,7 +18,7 @@ import { focusRing, type WebPressableState } from '../../../components/ui/a11y'
 import { useTheme } from '../../../theme/ThemeContext'
 import { radius, spacing, textStyle } from '../../../theme/tokens'
 
-type Row = { bp: ExamBlueprint; best: number | null; ready: boolean; items: number }
+type Row = { bp: ExamBlueprint; best: number | null; ready: boolean; items: number; coverage: MockCoverage }
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; rows: Row[] }
 
 function length(minutes: number): string {
@@ -55,7 +56,17 @@ export default function ExamPicker() {
         const counts = await getRunnableCountsByCategory(db, cats)
         const best = new Map(mockBestRows.map(r => [r.listingSlug, r.bestPct]))
         const acc = new Map(accuracyRows.filter(r => r.total > 0).map(r => [r.listingSlug, Math.round((r.ok / r.total) * 100)]))
-        if (!cancelled) setState({ status: 'ready', rows: loaded.map(bp => { const items = plannedItemCount(bp.sections, counts); return { bp, best: best.get(bp.slug) ?? acc.get(bp.slug) ?? null, ready: items > 0, items } }) })
+        if (!cancelled) {
+          setState({
+            status: 'ready',
+            rows: loaded.map(bp => {
+              const items = plannedItemCount(bp.sections, counts)
+              // Honest availability: "Full mock ready" / "Partial — N of M sections" (or "fewer items per section") / "Coming soon".
+              const coverage = mockCoverage(bp.sections, counts)
+              return { bp, best: best.get(bp.slug) ?? acc.get(bp.slug) ?? null, ready: items > 0, items, coverage }
+            }),
+          })
+        }
       } catch (e) {
         console.warn('[practice/exam] load failed:', e)
         if (!cancelled) setState({ status: 'error' })
@@ -105,13 +116,13 @@ export default function ExamPicker() {
           />
         ) : (
           <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' }}>
-            {state.rows.map(({ bp, best, ready, items }, i) => (
+            {state.rows.map(({ bp, best, ready, items, coverage }, i) => (
               <View key={bp.slug} style={i === 0 ? undefined : { borderTopWidth: 1, borderTopColor: t.divider }}>
                 {ready ? (
                 <ListRow
                   title={bp.name}
-                  subtitle={`${items} items · ${length(examMinutes(bp))}`}
-                  accessibilityLabel={`${bp.name}, ${items} items, ${length(examMinutes(bp))}, ${best == null ? 'not taken yet' : `best ${best}%`}`}
+                  subtitle={`${coverage.label} · ${items} items · ${length(examMinutes(bp))}`}
+                  accessibilityLabel={`${bp.name}, ${coverage.label}, ${items} items, ${length(examMinutes(bp))}, ${best == null ? 'not taken yet' : `best ${best}%`}`}
                   trailing={<StatNumber value={best == null ? '–' : `${best}%`} label={best == null ? 'New' : 'Best'} />}
                   onPress={() => router.push(`/practice/exam/${bp.slug}`)}
                 />
@@ -119,8 +130,8 @@ export default function ExamPicker() {
                   // Published, but nothing runnable yet: shown honestly, not tappable.
                   <ListRow
                     title={bp.name}
-                    subtitle="Questions coming soon"
-                    accessibilityLabel={`${bp.name}, questions coming soon`}
+                    subtitle={coverage.label}
+                    accessibilityLabel={`${bp.name}, ${coverage.label.toLowerCase()}`}
                   />
                 )}
               </View>

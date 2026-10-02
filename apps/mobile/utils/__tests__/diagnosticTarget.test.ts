@@ -8,7 +8,6 @@ import {
   normalizeExamParam,
   firstParam,
   examSlugLabel,
-  hasReviewTopics,
   diagnosticRunKey,
   diagnosticRunSlug,
   BLUEPRINT_DIAGNOSTIC_MAX_QUESTIONS,
@@ -78,6 +77,13 @@ describe('resolveDiagnosticTarget', () => {
   it('a ?subject= (a UPCAT subtest) without ?exam= stays on the UPCAT diagnostic', () => {
     expect(resolveDiagnosticTarget({ subjectParam: 'Mathematics', focusSlugs: ['acet'], runnableSlugs: runnable }))
       .toEqual({ kind: 'upcat' })
+  })
+
+  it('an explicit ?exam=school:<id> resolves to the general entrance exam (its content slug)', () => {
+    expect(resolveDiagnosticTarget({ examParam: 'school:abc', focusSlugs: [], runnableSlugs: [...runnable, 'general-cet'] }))
+      .toEqual({ kind: 'blueprint', slug: 'general-cet' })
+    expect(resolveDiagnosticTarget({ examParam: 'school:abc', focusSlugs: [], runnableSlugs: runnable }))
+      .toEqual({ kind: 'unavailable', slug: 'general-cet' })
   })
 
   it('an empty ?exam= is ignored', () => {
@@ -254,15 +260,5 @@ describe('normalizeExamParam / firstParam', () => {
     expect(examSlugLabel('dcat-dlsu')).toBe('DCAT-DLSU')
     expect(examSlugLabel(undefined as unknown as string)).toBe('')
     expect(examSlugLabel(['x'] as unknown as string)).toBe('')
-  })
-})
-
-describe('hasReviewTopics', () => {
-  const topicRows = [{ topic: { id: 't1' } }, { topic: { id: 't2' } }]
-  it('is true only when a loaded topic is tagged to the exam (what review/[slug] lists)', () => {
-    expect(hasReviewTopics('acet', topicRows, { acet: ['t2'] })).toBe(true)
-    expect(hasReviewTopics('acet', topicRows, { acet: ['gone'] })).toBe(false)
-    expect(hasReviewTopics('acet', topicRows, { upcat: ['t1'] })).toBe(false)
-    expect(hasReviewTopics('acet', [], { acet: ['t1'] })).toBe(false)
   })
 })

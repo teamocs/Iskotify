@@ -29,10 +29,10 @@ jest.mock('../../../../hooks/useDb', () => {
   return { useDb: () => db }
 })
 
-// listPublishedBlueprintSlugs is overridden per-test via the hoisted mock.
+// Runnable blueprint slugs, overridden per-test via the hoisted mock.
 const mockListPublishedBlueprintSlugs = jest.fn().mockResolvedValue([])
 jest.mock('../../../../services/examBlueprints', () => ({
-  listPublishedBlueprintSlugs: (...args: any[]) => mockListPublishedBlueprintSlugs(...args),
+  listRunnableBlueprints: (...args: any[]) => mockListPublishedBlueprintSlugs(...args).then((slugs: string[]) => slugs.map(slug => ({ slug }))),
 }))
 
 describe('PracticeStartScreen (chooser)', () => {
@@ -58,7 +58,7 @@ describe('PracticeStartScreen (chooser)', () => {
     expect(screen.getByRole('header', { name: 'UPCAT' })).toBeTruthy()
   })
 
-  it('shows "Take a mock exam" when the slug is a published blueprint', async () => {
+  it('shows "Take a mock exam" when the slug has a runnable blueprint', async () => {
     mockListPublishedBlueprintSlugs.mockResolvedValue(['upcat'])
     render(<PracticeStartScreen />)
     await act(async () => {})

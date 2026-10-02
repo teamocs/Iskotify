@@ -104,6 +104,13 @@ jest.mock('../../../hooks/useDb', () => ({
   useDb: jest.fn(),
 }))
 
+// "Mock exam available" follows the RUNNABLE blueprints (a published mock with
+// no questions yet is not available). Default: none runnable.
+jest.mock('../../../services/examBlueprints', () => ({
+  listRunnableBlueprints: jest.fn().mockResolvedValue([]),
+  listPublishedBlueprintSlugs: jest.fn().mockResolvedValue([]),
+}))
+
 jest.mock('../../../hooks/useFocusListings', () => ({
   useFocusListings: () => ({
     focusListings: [],
@@ -784,6 +791,37 @@ describe('ListsScreen', () => {
     const todayStart = Math.floor((Date.now() + MANILA) / 86_400_000) * 86_400_000 - MANILA
     return todayStart + days * 86_400_000 + 12 * 3_600_000
   }
+
+  it('says "Mock exam available" only for an exam whose mock can run now', async () => {
+    const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listRunnableBlueprints.mockResolvedValueOnce([{ slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 10, totalTimeMinutes: 10, items: 10, minutes: 10 }])
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [
+        { id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP', targetCourses: '[]' },
+        { id: 'e2', slug: 'acet', title: 'ACET', type: 'exam', examDate: null, region: 'NCR', provider: 'ADMU', targetCourses: '[]' },
+      ],
+      [],
+    ))
+    render(<ListsScreen />)
+    expect(await screen.findByText('Mock exam available')).toBeTruthy()
+    // ACET's blueprint may be published, but it has no runnable questions: one badge only.
+    expect(screen.getAllByText('Mock exam available')).toHaveLength(1)
+  })
+
+  it('a published mock with no runnable questions is not "available"', async () => {
+    const { listPublishedBlueprintSlugs, listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listPublishedBlueprintSlugs.mockResolvedValueOnce(['upcat'])
+    listRunnableBlueprints.mockResolvedValueOnce([])
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP', targetCourses: '[]' }],
+      [],
+    ))
+    render(<ListsScreen />)
+    await waitFor(() => expect(screen.getByText('UPCAT')).toBeTruthy())
+    expect(screen.queryByText('Mock exam available')).toBeNull()
+  })
 
   it('an upcoming exam card says how soon it is, with no emoji', async () => {
     const { useDb } = require('../../../hooks/useDb')

@@ -159,11 +159,20 @@ describe('AnalyticsDashboard (Progress)', () => {
       expect(screen.queryByRole('button', { name: /Science, 0%/ })).toBeNull()
     })
 
-    it('opens the diagnostic for that subject', () => {
+    it('opens the diagnostic for a UPCAT subtest subject', () => {
+      const { router } = require('expo-router')
+      render(<AnalyticsDashboard />)
+      fireEvent.press(screen.getByRole('button', { name: 'Science, 30%, needs work' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?subject=Science')
+      expect(screen.getByRole('button', { name: 'Science, 30%, needs work' }).props.accessibilityHint).toBe('Opens a diagnostic for this subject')
+    })
+
+    it('opens any other subject on its own page (the diagnostic would ignore it)', () => {
       const { router } = require('expo-router')
       render(<AnalyticsDashboard />)
       fireEvent.press(screen.getByRole('button', { name: 'Math, 80%, strong' }))
-      expect(router.push).toHaveBeenCalledWith('/practice/diagnostic?subject=Math')
+      expect(router.push).toHaveBeenCalledWith('/subjects/s-math')
+      expect(screen.getByRole('button', { name: 'Math, 80%, strong' }).props.accessibilityHint).toBe('Opens this subject\'s topics to practise')
     })
 
     it('has its own loading, empty and error states', () => {

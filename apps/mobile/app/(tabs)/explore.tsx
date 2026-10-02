@@ -34,7 +34,7 @@ import {
 import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
 import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
 import { syncOnLaunch } from '../../services/sync'
-import { listPublishedBlueprintSlugs } from '../../services/examBlueprints'
+import { listRunnableBlueprints } from '../../services/examBlueprints'
 import { getSettings } from '../../services/settings'
 import { getListingMockBest, getListingAccuracy } from '../../services/homeAggregates'
 import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
@@ -237,7 +237,7 @@ export default function ExploreScreen() {
   const loadListings = useCallback(async () => {
     const isCurrent = beginListingsLoad()
     try {
-      const [rows, settings, ccRows, bpSlugs, mockBestRows, accuracyRows] = await Promise.all([
+      const [rows, settings, ccRows, runnable, mockBestRows, accuracyRows] = await Promise.all([
         db.select({
           id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
           type: listingsTable.type, examDate: listingsTable.examDate, deadline: listingsTable.deadline, region: listingsTable.region,
@@ -248,7 +248,8 @@ export default function ExploreScreen() {
         }).from(listingsTable),
         getSettings(db),
         db.select({ courseId: careerCourses.courseId, cluster: careerCourses.cluster }).from(careerCourses),
-        listPublishedBlueprintSlugs(db),
+        // Runnable, not just published: a mock with no questions yet is not "available".
+        listRunnableBlueprints(db),
         getListingMockBest(db),
         getListingAccuracy(db),
       ])
@@ -272,7 +273,7 @@ export default function ExploreScreen() {
         if (cl) uClusters.add(cl)
       }
       setUserClusters(uClusters)
-      setBlueprintSlugs(new Set(bpSlugs))
+      setBlueprintSlugs(new Set(runnable.map(b => b.slug)))
       // Income and GWA only count while the student has consented to their use.
       setProfile(studentProfileFromSettings(settings))
       setListStatus('ready')

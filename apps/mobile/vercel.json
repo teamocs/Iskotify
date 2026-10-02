@@ -19,7 +19,6 @@
     { "source": "/practice/review/:slug", "destination": "/practice/review/[slug].html" },
     { "source": "/practice/start/:slug", "destination": "/practice/start/[slug].html" },
     { "source": "/practice/exam/:slug", "destination": "/practice/exam/[slug].html" },
-    { "source": "/practice/listing/:slug", "destination": "/practice/listing/[slug].html" },
     { "source": "/practice/upcat/:subtest", "destination": "/practice/upcat/[subtest].html" },
     { "source": "/schools/course/:code", "destination": "/schools/course/[code].html" },
     { "source": "/schools/:slug", "destination": "/schools/[slug].html" },
