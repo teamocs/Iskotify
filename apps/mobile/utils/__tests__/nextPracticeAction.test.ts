@@ -121,6 +121,21 @@ describe('pickNextPractice', () => {
     })
   })
 
+  describe('a school-level focus routes by its content slug (general-cet)', () => {
+    const school = { slug: 'school:abc', label: 'Ateneo de Naga', runnable: true, hasReview: true }
+
+    it("offers the general-cet diagnostic, never a school:<id> one", () => {
+      const next = pickNextPractice({ ...none, focusExam: school })
+      expect(next).toEqual({ kind: 'diagnostic', exam: 'general-cet' })
+      expect(nextPracticeCopy(next).href).toBe('/practice/diagnostic?exam=general-cet')
+    })
+
+    it("keeps the school's chooser (it shows the school name) when the diagnostic is done", () => {
+      const next = pickNextPractice({ ...none, focusExam: school, hasTakenDiagnostic: true })
+      expect(next).toEqual({ kind: 'practise', slug: 'school:abc', label: 'Ateneo de Naga', ready: true })
+    })
+  })
+
   describe('UPCAT primary focus (or no focus) keeps the UPCAT steps', () => {
     const upcat = { slug: 'upcat', label: 'UPCAT', runnable: false, hasReview: false }
     it('drills a weak UPCAT subtest', () => {

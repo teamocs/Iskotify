@@ -166,6 +166,7 @@ export function FocusExamsFold({
             }
             const { pct, label: scoreLabel } = scoreFor(slot.slug)
             const missing = missingLabel(practiceAvailability(slot.slug, blueprintSlugs, reviewSlugs))
+            const waiting = routeFor(slot.slug) === null
             return (
               <ListRow
                 key={slot.slug}
@@ -177,7 +178,8 @@ export function FocusExamsFold({
                   </Text>
                 }
                 onPress={() => onRowPress(slot)}
-                disabled={routeFor(slot.slug) === null}
+                disabled={waiting}
+                accessibilityHint={waiting ? 'Checking availability' : undefined}
                 accessibilityLabel={`${slot.title}, ${pct != null ? `best score ${pct}%` : 'no score yet'}${missing ? `, ${missing.toLowerCase()}` : ''}`}
               />
             )

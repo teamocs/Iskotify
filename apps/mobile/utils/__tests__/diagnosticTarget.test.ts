@@ -79,6 +79,13 @@ describe('resolveDiagnosticTarget', () => {
       .toEqual({ kind: 'upcat' })
   })
 
+  it('an explicit ?exam=school:<id> resolves to the general entrance exam (its content slug)', () => {
+    expect(resolveDiagnosticTarget({ examParam: 'school:abc', focusSlugs: [], runnableSlugs: [...runnable, 'general-cet'] }))
+      .toEqual({ kind: 'blueprint', slug: 'general-cet' })
+    expect(resolveDiagnosticTarget({ examParam: 'school:abc', focusSlugs: [], runnableSlugs: runnable }))
+      .toEqual({ kind: 'unavailable', slug: 'general-cet' })
+  })
+
   it('an empty ?exam= is ignored', () => {
     expect(resolveDiagnosticTarget({ examParam: '', focusSlugs: ['acet'], runnableSlugs: runnable }))
       .toEqual({ kind: 'blueprint', slug: 'acet' })

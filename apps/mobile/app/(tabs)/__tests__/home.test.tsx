@@ -479,6 +479,45 @@ describe('Today', () => {
       expect(router.push).not.toHaveBeenCalled()
     })
 
+    it('says the row is checking availability while its route waits on it', () => {
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'acet', title: 'ACET 2026' }] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, loaded: false })
+      render(<HomeScreen />)
+      expect(screen.getByRole('button', { name: 'ACET 2026, no score yet' }).props.accessibilityHint).toBe('Checking availability')
+    })
+
+    it('has no checking hint once the route is known', async () => {
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'acet', title: 'ACET 2026' }] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat', 'acet'] })
+      render(<HomeScreen />)
+      await act(async () => {})
+      expect(screen.getByRole('button', { name: 'ACET 2026, no score yet' }).props.accessibilityHint).toBeUndefined()
+    })
+
+    it('forgets the old review availability when the exams change, until the new set loads', async () => {
+      const { router } = require('expo-router')
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [{ ...focusUpcat, slug: 'random-exam', title: 'Random Exam' }] })
+      mockUseHomeCatalog.mockReturnValue({ ...emptyCatalog, blueprintSlugs: ['upcat'] })
+      render(<HomeScreen />)
+      await waitFor(() => expect(screen.getByText('No score yet · Practice coming soon')).toBeTruthy(), { timeout: 10_000 })
+      // A new exam joins focus; its review content is still loading.
+      mockReviewContentSlugs.mockReturnValue(new Promise(() => {}))
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [
+          { ...focusUpcat, slug: 'random-exam', title: 'Random Exam' },
+          { ...focusUpcat, slug: 'other-exam', title: 'Other Exam', priority: 2 },
+        ],
+      })
+      screen.rerender(<HomeScreen />)
+      await act(async () => {})
+      expect(screen.queryByText(/coming soon/)).toBeNull()
+      const row = screen.getByRole('button', { name: 'Other Exam, no score yet' })
+      expect(aria(row, 'aria-disabled')).toBe(true)
+      fireEvent.press(row)
+      expect(router.push).not.toHaveBeenCalled()
+    })
+
     it('a UPCAT row needs no availability: it opens the diagnostic even while loading', () => {
       const { router } = require('expo-router')
       mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [focusUpcat] })

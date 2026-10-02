@@ -953,6 +953,15 @@ describe('DiagnosticExam', () => {
       expect(mockPush).toHaveBeenCalledWith('/practice/review/dcat-dlsu')
     })
 
+    it('a school focus (?exam=school:<id>) means the general entrance exam: never school:* links', async () => {
+      mockSearchParams = { exam: 'school:abc' }
+      render(<DiagnosticExam />)
+      expect(await screen.findByText("A diagnostic for GENERAL-CET isn't available yet", {}, { timeout: 10_000 })).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'See exam details' }))
+      expect(mockPush).toHaveBeenCalledWith('/listings/general-cet')
+      expect(mockPush.mock.calls.flat().join(' ')).not.toMatch(/school/)
+    })
+
     it('keys the saved run by exam and stores the exam slug', async () => {
       setupAcet()
       mockSearchParams = { exam: 'acet' }

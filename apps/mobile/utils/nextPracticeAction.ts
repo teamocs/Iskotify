@@ -16,7 +16,7 @@
  */
 
 import { WEAK_THRESHOLD } from './weakness'
-import { isSchoolFocusSlug } from './focusSlug'
+import { isSchoolFocusSlug, focusContentSlug } from './focusSlug'
 import { UPCAT_SLUG } from './practiceQuickStart'
 
 export interface NextPracticeInput {
@@ -34,7 +34,8 @@ export interface NextPracticeInput {
   /**
    * The practice focus exam (practiceQuickStart.practiceFocusExam). Absent,
    * null or UPCAT: the UPCAT steps apply. `runnable` = it has a runnable
-   * blueprint; `hasReview` = it has topic review content.
+   * blueprint; `hasReview` = it has topic review content (both for its
+   * content slug: a school focus studies 'general-cet').
    */
   focusExam?: { slug: string; label: string; runnable: boolean; hasReview: boolean } | null
 }
@@ -63,7 +64,8 @@ export function pickNextPractice(input: NextPracticeInput): NextPractice {
   if (weakTopic) return { kind: 'topic', topicId: weakTopic.id, topicName: weakTopic.name }
   if (otherExam) {
     if (focusMock) return { kind: 'mock', ...focusMock }
-    if (otherExam.runnable && !hasTakenDiagnostic) return { kind: 'diagnostic', exam: otherExam.slug }
+    // A school focus's diagnostic is its content exam's (general-cet): there is no school:<id> diagnostic.
+    if (otherExam.runnable && !hasTakenDiagnostic) return { kind: 'diagnostic', exam: focusContentSlug(otherExam.slug) }
     return { kind: 'practise', slug: otherExam.slug, label: otherExam.label, ready: otherExam.runnable || otherExam.hasReview }
   }
   if (lowest && lowest.pct < WEAK_THRESHOLD * 100) return { kind: 'subtest', subtest: lowest.subtest }

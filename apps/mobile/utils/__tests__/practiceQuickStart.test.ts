@@ -55,10 +55,18 @@ describe('quickStartTiles', () => {
     it('targets the focus exam when it is not UPCAT and has a runnable blueprint', () => {
       expect(tile({ focusSlugs: ['acet', 'upcat'] }, 'diagnostic').href).toBe('/practice/diagnostic?exam=acet')
     })
-    it('is the plain (UPCAT) diagnostic when UPCAT leads or nothing in focus is runnable', () => {
+    it('is the plain (UPCAT) diagnostic when UPCAT leads or nothing is in focus', () => {
       expect(tile({ focusSlugs: ['upcat', 'acet'] }, 'diagnostic').href).toBe('/practice/diagnostic')
-      expect(tile({ focusSlugs: ['dcat-dlsu'] }, 'diagnostic').href).toBe('/practice/diagnostic')
+      expect(tile({ focusSlugs: ['dcat-dlsu', 'upcat'] }, 'diagnostic').href).toBe('/practice/diagnostic')
       expect(tile({}, 'diagnostic').href).toBe('/practice/diagnostic')
+    })
+    it("never the UPCAT diagnostic for a non-UPCAT exam with no runnable blueprint: that exam's chooser", () => {
+      expect(tile({ focusSlugs: ['dcat-dlsu'] }, 'diagnostic').href).toBe('/practice/start/dcat-dlsu')
+    })
+    it('a school focus uses the general entrance diagnostic when it can run, else the school chooser', () => {
+      const withCet = [...BPS, { slug: 'general-cet', acronym: 'CET' }]
+      expect(tile({ focusSlugs: ['school:abc'], blueprints: withCet }, 'diagnostic').href).toBe('/practice/diagnostic?exam=general-cet')
+      expect(tile({ focusSlugs: ['school:abc'] }, 'diagnostic').href).toBe('/practice/start/school%3Aabc')
     })
   })
 

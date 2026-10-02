@@ -2,7 +2,7 @@
 // when UPCAT is in focus (Mistakes is UPCAT-only), each resolved from the
 // student's focus exams. Pure: no React, no DB.
 
-import { isSchoolFocusSlug } from './focusSlug'
+import { isSchoolFocusSlug, focusContentSlug } from './focusSlug'
 import { STUDY_SPRINT_MINUTES } from './examBuilder'
 
 export type QuickStartKey = 'diagnostic' | 'sprint' | 'drill' | 'mistakes'
@@ -93,11 +93,23 @@ export function quickStartTiles(input: QuickStartInput): QuickStartTile[] {
   const primary = primaryFocusExam(focusSlugs, blueprints.map(b => b.slug))
   const primaryLabel = primary ? (blueprints.find(b => b.slug === primary)?.acronym ?? primary.toUpperCase()) : null
 
+  // Diagnostic follows the practice focus exam: UPCAT (or nothing in focus) ->
+  // the UPCAT diagnostic; another exam -> its own diagnostic when it can run
+  // (a school focus: general-cet's), else its chooser, never the UPCAT one.
+  const runnableSlugs = blueprints.map(b => b.slug)
+  const focusExam = practiceFocusExam(focusSlugs, runnableSlugs)
+  let diagnosticHref = '/practice/diagnostic'
+  if (focusExam && focusExam !== UPCAT_SLUG) {
+    const content = focusContentSlug(focusExam)
+    diagnosticHref = runnableSlugs.includes(content)
+      ? `/practice/diagnostic?exam=${encodeURIComponent(content)}`
+      : `/practice/start/${encodeURIComponent(focusExam)}`
+  }
   const diagnostic: QuickStartTile = {
     key: 'diagnostic',
     title: 'Diagnostic',
     subtitle: 'See where you stand',
-    href: primary && primary !== UPCAT_SLUG ? `/practice/diagnostic?exam=${encodeURIComponent(primary)}` : '/practice/diagnostic',
+    href: diagnosticHref,
     muted: false,
     disabled: false,
   }
@@ -116,7 +128,7 @@ export function quickStartTiles(input: QuickStartInput): QuickStartTile[] {
   // primary focus exam, else the first focus exam. That exam is UPCAT -> the
   // UPCAT subtest picker; otherwise the weakest practised topic, else that
   // exam by subject.
-  const drillExam = practiceFocusExam(focusSlugs, blueprints.map(b => b.slug))
+  const drillExam = focusExam
   let drill: QuickStartTile
   if (drillExam === UPCAT_SLUG) {
     drill = { key: 'drill', title: 'Drill', subtitle: 'Pick a UPCAT subtest', href: null, muted: false, disabled: false }
@@ -124,7 +136,7 @@ export function quickStartTiles(input: QuickStartInput): QuickStartTile[] {
     drill = { key: 'drill', title: 'Drill', subtitle: weakTopic.name, href: `/practice/${encodeURIComponent(weakTopic.id)}`, muted: false, disabled: false }
   } else if (drillExam) {
     // A school-level focus has no content of its own: it studies the general entrance subjects (as app/practice/start does).
-    const slug = isSchoolFocusSlug(drillExam) ? 'general-cet' : drillExam
+    const slug = focusContentSlug(drillExam)
     drill = { key: 'drill', title: 'Drill', subtitle: 'By subject', href: `/practice/review/${encodeURIComponent(slug)}`, muted: false, disabled: false }
   } else {
     drill = { key: 'drill', title: 'Drill', subtitle: 'Choose an exam first', href: '/(tabs)/explore', muted: false, disabled: false }

@@ -66,6 +66,8 @@ export default function TodayScreen() {
   const [reviewSlugs, setReviewSlugs] = useState<ReadonlySet<string> | null>(null)
   useEffect(() => {
     let cancelled = false
+    // A new set of exams: availability is unknown again until it loads (never the old set's answer).
+    setReviewSlugs(null)
     reviewContentSlugs(db, reviewCandidates ? reviewCandidates.split('|') : [])
       .then(set => { if (!cancelled) setReviewSlugs(set) })
       .catch(e => {

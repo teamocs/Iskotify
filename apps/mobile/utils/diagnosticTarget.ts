@@ -9,6 +9,7 @@ import type { AttemptQuestionMeta } from './attemptRows'
 import { buildBlueprintExam } from './examBuilder'
 import { groupSectionResults, questionSubtest } from './examSubmit'
 import { runKeyFor } from './examRunPersistence'
+import { focusContentSlug } from './focusSlug'
 import type { ExamQuestion, RawUpcatPassage, RawUpcatQuestion } from './upcatExam'
 
 export type DiagnosticTarget =
@@ -29,7 +30,7 @@ export interface ResolveDiagnosticTargetInput {
 
 /**
  * resolveDiagnosticTarget — an explicit `?exam=` wins (and is honest when it
- * has no runnable blueprint); otherwise a UPCAT subject scope keeps the UPCAT
+ * has no runnable blueprint; a school focus means its content exam, general-cet); otherwise a UPCAT subject scope keeps the UPCAT
  * diagnostic; otherwise the primary focus exam that has a runnable blueprint;
  * otherwise UPCAT (the original behaviour).
  */
@@ -37,8 +38,10 @@ export function resolveDiagnosticTarget(input: ResolveDiagnosticTargetInput): Di
   const { examParam, subjectParam, focusSlugs, runnableSlugs } = input
   const fromSlug = (slug: string): DiagnosticTarget => (slug === 'upcat' ? { kind: 'upcat' } : { kind: 'blueprint', slug })
   if (examParam) {
-    if (examParam === 'upcat') return { kind: 'upcat' }
-    return runnableSlugs.includes(examParam) ? fromSlug(examParam) : { kind: 'unavailable', slug: examParam }
+    // A school focus ("school:<id>") has no exam of its own: it studies the general entrance exam.
+    const exam = focusContentSlug(examParam)
+    if (exam === 'upcat') return { kind: 'upcat' }
+    return runnableSlugs.includes(exam) ? fromSlug(exam) : { kind: 'unavailable', slug: exam }
   }
   if (subjectParam) return { kind: 'upcat' }
   const primary = focusSlugs.find(s => runnableSlugs.includes(s))
