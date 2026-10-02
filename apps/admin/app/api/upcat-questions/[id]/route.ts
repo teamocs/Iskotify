@@ -8,7 +8,8 @@ export const runtime = 'nodejs'
 // DB CHECK: correct_index BETWEEN 0 AND 3; options text[] NOT NULL.
 const QUESTION_STATUSES = new Set(['published', 'draft'])
 const MAX_CORRECT_INDEX = 3
-const MIN_OPTIONS = 4
+// 2–4 options: e.g. TRUE / FALSE / Cannot be certain (USTET syllogisms).
+const MIN_OPTIONS = 2
 
 async function requireAdmin() {
   const auth = await createAuthClient()
@@ -77,7 +78,7 @@ export async function PATCH(
     patch.question_text = body.question_text
   }
 
-  // options: array of >= 4 non-empty strings
+  // options: array of >= 2 non-empty strings
   if (body.options !== undefined) {
     const options = body.options
     if (
@@ -149,8 +150,24 @@ export async function PATCH(
       )
     }
   }
-  // Note: an options-only patch can never orphan correct_index — options must
-  // have >= 4 entries and the DB CHECK caps correct_index at 0..3.
+  // An options-only patch can orphan the saved answer now that 2–3 options are
+  // allowed (e.g. answer D, options cut to three): check it against the row.
+  if (patch.options !== undefined && patch.correct_index === undefined) {
+    const { data: current, error: fetchError } = await supabase
+      .from('upcat_questions')
+      .select('correct_index')
+      .eq('question_id', id)
+      .single()
+    if (fetchError || !current) {
+      return NextResponse.json({ error: 'Question not found' }, { status: 404 })
+    }
+    if (Number(current.correct_index) >= (patch.options as string[]).length) {
+      return NextResponse.json(
+        { error: 'The saved correct answer is no longer one of the options; choose the correct answer too.' },
+        { status: 400 },
+      )
+    }
+  }
 
   patch.updated_at = new Date().toISOString()
 

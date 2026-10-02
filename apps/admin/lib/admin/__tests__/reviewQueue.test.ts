@@ -83,11 +83,24 @@ describe('validateQuestionDraft', () => {
     expect(validateQuestionDraft({ ...ok, question_text: '   ' }).question_text).toMatch(/question/i)
   })
 
-  it('flags each empty option by index', () => {
-    const errors = validateQuestionDraft({ ...ok, options: ['1', ' ', '3', ''] })
+  it('flags a blank option that has a filled one after it (no gaps)', () => {
+    const errors = validateQuestionDraft({ ...ok, options: ['1', ' ', '3', ''], correct_index: 0 })
     expect(errors.option_1).toBeTruthy()
-    expect(errors.option_3).toBeTruthy()
+    expect(errors.option_3).toBeUndefined()
     expect(errors.option_0).toBeUndefined()
+  })
+
+  it('needs at least options A and B', () => {
+    const errors = validateQuestionDraft({ ...ok, options: ['1', '', '', ''], correct_index: 0 })
+    expect(errors.option_1).toBeTruthy()
+  })
+
+  it('accepts a 3-choice question (TRUE / FALSE / Cannot be certain) with option D left blank', () => {
+    expect(validateQuestionDraft({ ...ok, options: ['TRUE', 'FALSE', 'Cannot be certain', ''], correct_index: 2 })).toEqual({})
+  })
+
+  it('requires the correct answer to be a filled option', () => {
+    expect(validateQuestionDraft({ ...ok, options: ['TRUE', 'FALSE', 'Maybe', ''], correct_index: 3 }).correct_index).toBeTruthy()
   })
 
   it('requires a correct answer within the first four options', () => {
@@ -103,6 +116,13 @@ describe('questionPatch', () => {
     expect(questionPatch(initial, { ...initial, correct_index: 2 })).toEqual({ correct_index: 2 })
     expect(questionPatch(initial, { ...initial, options: ['a', 'b', 'c', 'e'] })).toEqual({ options: ['a', 'b', 'c', 'e'] })
     expect(questionPatch(initial, { ...initial, question_text: 'New?' })).toEqual({ question_text: 'New?' })
+  })
+
+  it('drops blank trailing options so a 3-choice question saves as 3 options', () => {
+    const three = { question_text: 'Q?', options: ['T', 'F', 'C', ''], correct_index: 0 }
+    expect(questionPatch(three, { ...three, options: ['T', 'F', 'Cannot be certain', ''] }))
+      .toEqual({ options: ['T', 'F', 'Cannot be certain'] })
+    expect(questionPatch(three, { ...three, options: ['T', 'F', 'C', '  '] })).toEqual({})
   })
 
   it('is empty (and not dirty) when nothing changed', () => {

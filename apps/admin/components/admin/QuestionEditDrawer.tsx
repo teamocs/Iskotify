@@ -10,7 +10,7 @@ import { apiRequest } from '@/lib/apiRequest'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import {
   MIN_OPTIONS, isDraftDirty, questionPatch, validateQuestionDraft,
-  type QuestionDraft, type QuestionErrors,
+  type QuestionDraft, type QuestionErrors, MIN_FILLED_OPTIONS,
 } from '@/lib/admin/reviewQueue'
 
 export interface EditableQuestion extends QuestionDraft {
@@ -108,7 +108,7 @@ export function QuestionEditDrawer({ question, onClose, onSaved }: {
         </Field>
 
         {draft.options.map((opt, i) => (
-          <Field key={i} label={`Option ${letter(i)}`} required error={errors[`option_${i}`]}>
+          <Field key={i} label={i < MIN_FILLED_OPTIONS ? `Option ${letter(i)}` : `Option ${letter(i)} (optional)`} required={i < MIN_FILLED_OPTIONS} error={errors[`option_${i}`]}>
             {p => (
               <input
                 {...p}
