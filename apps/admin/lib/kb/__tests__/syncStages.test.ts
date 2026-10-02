@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stageOf, splitStages, poolOf, type StageFile } from '../syncStages'
+import { stageOf, splitStages, poolOf, draftReadiness, type StageFile } from '../syncStages'
 
 const f = (p: Partial<StageFile>): StageFile => ({
   drive_file_id: 'f', name: 'UPCAT-Math.csv', status: 'imported', rows_imported: 10,
@@ -44,5 +44,16 @@ describe('poolOf', () => {
     expect(poolOf('UPCAT-Science-600.csv', undefined)).toBe('Science')
     expect(poolOf('UPCAT-Science-600.csv', 'Mental Ability')).toBe('Mental Ability')
     expect(poolOf('random.xlsx', undefined)).toBeNull()
+  })
+})
+
+describe('draftReadiness', () => {
+  it('splits a file’s drafts into ready to publish and held for a missing figure', () => {
+    expect(draftReadiness({ rows_drafted: 600, rows_missing_media: 152 })).toEqual({ ready: 448, heldMissingFigure: 152 })
+    expect(draftReadiness({ rows_drafted: 300, rows_missing_media: 0 })).toEqual({ ready: 300, heldMissingFigure: 0 })
+  })
+
+  it('never reports more held than drafted (a missing figure on an already-live question)', () => {
+    expect(draftReadiness({ rows_drafted: 5, rows_missing_media: 9 })).toEqual({ ready: 0, heldMissingFigure: 5 })
   })
 })

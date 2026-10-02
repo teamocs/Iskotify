@@ -89,14 +89,29 @@ describe('convertRecords', () => {
     expect(rows[1]).toMatchObject({ option_d: '', correct_answer: 'A', skill_category: 'Verbal Reasoning' })
   })
 
-  it('rejects rows with no question, fewer than 3 options, or an answer pointing at a blank option', () => {
+  it('rejects rows with no question, fewer than 2 options, a gap between options, or an answer pointing at a blank option', () => {
     const { rows, rejected } = convert('UPCAT-Math-500-Questions.csv', 'abcd-letter', [
       { ID: 'M1', Topic: 't', Subtopic: '', Difficulty: '', Question: '', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'A', Solution: '' },
-      { ID: 'M2', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: 'b', C: '', D: '', Answer: 'A', Solution: '' },
+      { ID: 'M2', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: '', C: '', D: '', Answer: 'A', Solution: '' },
       { ID: 'M3', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: 'b', C: 'c', D: '', Answer: 'D', Solution: '' },
       { ID: 'M4', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: 'b', C: 'c', D: 'd', Answer: 'E', Solution: '' },
+      { ID: 'M5', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'a', B: '', C: 'c', D: 'd', Answer: 'A', Solution: '' },
     ])
     expect(rows).toEqual([])
-    expect(rejected.map(r => r.localId)).toEqual(['M1', 'M2', 'M3', 'M4'])
+    expect(rejected).toEqual([
+      { localId: 'M1', reason: 'missing question text' },
+      { localId: 'M2', reason: 'fewer than 2 options' },
+      { localId: 'M3', reason: 'correct answer points at a blank option' },
+      { localId: 'M4', reason: 'unreadable correct answer' },
+      { localId: 'M5', reason: 'a blank option between choices' },
+    ])
+  })
+
+  it('keeps 2-option (True/False) rows', () => {
+    const { rows, rejected } = convert('UPCAT-Math-500-Questions.csv', 'abcd-letter', [
+      { ID: 'T1', Topic: 't', Subtopic: '', Difficulty: '', Question: 'Q', A: 'True', B: 'False', C: '', D: '', Answer: 'B', Solution: '' },
+    ])
+    expect(rejected).toEqual([])
+    expect(rows[0]).toMatchObject({ option_a: 'True', option_b: 'False', option_c: '', option_d: '', correct_answer: 'B' })
   })
 })

@@ -48,6 +48,7 @@ const SUBTEST_CATEGORY: Record<string, string> = {
   'Science': 'Science',
   'Language Proficiency': 'English/Language',
   'Reading Comprehension': 'Reading Comprehension',
+  'Mechanical-Technical': 'Mechanical-Technical',
 }
 
 export async function importUpcatCore(

@@ -15,7 +15,7 @@ export const KB_FIELDS = [
   { key: 'question', description: 'the question text (the stem)', required: true },
   { key: 'option_a', description: 'answer choice A / 1', required: true },
   { key: 'option_b', description: 'answer choice B / 2', required: true },
-  { key: 'option_c', description: 'answer choice C / 3', required: true },
+  { key: 'option_c', description: 'answer choice C / 3 (blank for two-choice True/False items)' },
   { key: 'option_d', description: 'answer choice D / 4' },
   { key: 'answer', description: 'the correct answer (a letter, a number, or the answer text)', required: true },
   { key: 'explanation', description: 'solution or explanation of the answer' },

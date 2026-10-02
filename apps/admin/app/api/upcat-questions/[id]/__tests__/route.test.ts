@@ -224,10 +224,29 @@ describe('PATCH /api/upcat-questions/[id]', () => {
     expect(lastUpdateArg).not.toHaveProperty('injected_col')
   })
 
-  it('returns 400 when options has fewer than 4 entries', async () => {
+  it('returns 400 when options has fewer than 2 entries', async () => {
     adminUser()
     const { PATCH } = await import('../route')
-    const res = await PATCH(patchReq('M001', { options: ['a', 'b', 'c'], correct_index: 0 }), ctx('M001'))
+    const res = await PATCH(patchReq('M001', { options: ['a'], correct_index: 0 }), ctx('M001'))
+    expect(res.status).toBe(400)
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it('accepts a 3-choice question with its answer among the three', async () => {
+    adminUser()
+    mockUpdate.mockResolvedValueOnce({ error: null })
+    const { PATCH } = await import('../route')
+    const res = await PATCH(patchReq('M001', { options: ['TRUE', 'FALSE', 'Cannot be certain'], correct_index: 2 }), ctx('M001'))
+    expect(res.status).toBe(200)
+    expect(lastUpdateArg).toHaveProperty('options', ['TRUE', 'FALSE', 'Cannot be certain'])
+  })
+
+  it('rejects an options-only patch that would leave the saved answer pointing past the options', async () => {
+    adminUser()
+    // EXISTING_QUESTION's answer is index 3 (D); three options would orphan it.
+    mockQuestionSingle.mockResolvedValueOnce({ data: EXISTING_QUESTION, error: null })
+    const { PATCH } = await import('../route')
+    const res = await PATCH(patchReq('M001', { options: ['a', 'b', 'c'] }), ctx('M001'))
     expect(res.status).toBe(400)
     expect(mockUpdate).not.toHaveBeenCalled()
   })
@@ -285,11 +304,11 @@ describe('PATCH /api/upcat-questions/[id]', () => {
     expect(lastUpdateArg).toHaveProperty('correct_index', 1)
   })
 
-  it('accepts an options-only patch (4+ entries always cover the 0-3 index range)', async () => {
+  it('accepts an options-only patch that still covers the saved answer', async () => {
     adminUser()
-    // The DB CHECK caps correct_index at 0..3 and options must have >= 4
-    // entries, so a valid options-only replacement can never orphan the
-    // existing correct_index — no extra row fetch is needed.
+    // Options may now have 2–3 entries, so an options-only patch is checked
+    // against the saved correct_index (EXISTING_QUESTION's is 3).
+    mockQuestionSingle.mockResolvedValueOnce({ data: EXISTING_QUESTION, error: null })
     mockUpdate.mockResolvedValueOnce({ error: null })
     const { PATCH } = await import('../route')
     const res = await PATCH(patchReq('M001', { options: ['a', 'b', 'c', 'd'] }), ctx('M001'))

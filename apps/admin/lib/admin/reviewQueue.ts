@@ -77,18 +77,34 @@ export interface QuestionDraft {
 
 export type QuestionErrors = Partial<Record<'question_text' | 'correct_index' | `option_${number}`, string>>
 
-/** The route's rules: non-empty text, >= 4 non-empty options, correct_index 0..3 inside options. */
+/**
+ * The drawer shows this many option fields; questions may use 2–4 of them
+ * (e.g. TRUE / FALSE / Cannot be certain). Blank trailing options are dropped.
+ */
 export const MIN_OPTIONS = 4
+/** The route's rules: non-empty text, >= 2 options with no gaps, correct_index 0..3 inside them. */
+export const MIN_FILLED_OPTIONS = 2
 const MAX_CORRECT_INDEX = 3
+
+/** The options as saved: blank trailing options removed. */
+export function filledOptions(options: readonly string[]): string[] {
+  let end = options.length
+  while (end > 0 && !options[end - 1]!.trim()) end--
+  return options.slice(0, end)
+}
 
 export function validateQuestionDraft(draft: QuestionDraft): QuestionErrors {
   const errors: QuestionErrors = {}
   if (!draft.question_text.trim()) errors.question_text = 'Enter the question text.'
+  const filled = filledOptions(draft.options)
   draft.options.forEach((opt, i) => {
-    if (!opt.trim()) errors[`option_${i}`] = `Option ${String.fromCharCode(65 + i)} can’t be empty.`
+    // A blank inside the filled range is a gap; the first two are always required.
+    if (!opt.trim() && (i < filled.length || i < MIN_FILLED_OPTIONS)) {
+      errors[`option_${i}`] = `Option ${String.fromCharCode(65 + i)} can’t be empty.`
+    }
   })
   const ci = draft.correct_index
-  if (!Number.isInteger(ci) || ci < 0 || ci >= draft.options.length) {
+  if (!Number.isInteger(ci) || ci < 0 || ci >= filled.length) {
     errors.correct_index = 'Choose the correct answer.'
   } else if (ci > MAX_CORRECT_INDEX) {
     errors.correct_index = 'The correct answer must be one of the first four options.'
@@ -102,7 +118,8 @@ const sameOptions = (a: readonly string[], b: readonly string[]) => a.length ===
 export function questionPatch(initial: QuestionDraft, draft: QuestionDraft): Partial<QuestionDraft> {
   const patch: Partial<QuestionDraft> = {}
   if (draft.question_text !== initial.question_text) patch.question_text = draft.question_text
-  if (!sameOptions(draft.options, initial.options)) patch.options = draft.options
+  const options = filledOptions(draft.options)
+  if (!sameOptions(options, filledOptions(initial.options))) patch.options = options
   if (draft.correct_index !== initial.correct_index) patch.correct_index = draft.correct_index
   return patch
 }

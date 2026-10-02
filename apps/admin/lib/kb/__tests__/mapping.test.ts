@@ -96,6 +96,11 @@ describe('parseMappingInput', () => {
     expect(parseMappingInput(ok, headers)).toMatchObject({ subtest: 'Science', mainSubject: 'Science', source: 'admin' })
   })
 
+  it('accepts a two-choice (True/False) file: only choices A and B are required', () => {
+    const { option_c: _c, option_d: _d, ...twoChoice } = ok.columns
+    expect(parseMappingInput({ ...ok, columns: twoChoice }, headers)).toMatchObject({ columns: twoChoice })
+  })
+
   it('explains what is wrong', () => {
     expect(parseMappingInput({ ...ok, subtest: 'History' }, headers)).toMatch(/pool/i)
     expect(parseMappingInput({ ...ok, columns: { ...ok.columns, answer: 'Nope' } }, headers)).toMatch(/Nope/)

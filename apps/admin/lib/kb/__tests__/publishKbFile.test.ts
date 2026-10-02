@@ -8,25 +8,26 @@ const q = (id: string, p: Record<string, unknown> = {}) => ({
 })
 
 describe('publishKbFile', () => {
-  it('publishes eligible drafts and skips missing-figure, 3-option and duplicate questions', async () => {
+  it('publishes eligible drafts and skips missing-figure, unanswerable and duplicate questions', async () => {
     const { db, rows, rpcCalls } = fakeDb({
-      kb_drive_files: [{ drive_file_id: 'f1', status: 'imported', question_ids: ['k:1', 'k:2', 'k:3', 'k:4', 'k:5', 'k:6'] }],
+      kb_drive_files: [{ drive_file_id: 'f1', status: 'imported', question_ids: ['k:1', 'k:2', 'k:3', 'k:4', 'k:5', 'k:6', 'k:7'] }],
       upcat_questions: [
         q('k:1'),
         q('k:2', { has_visual: true, image_url: null }),
         q('k:3', { has_visual: true, image_url: 'https://cdn/x.png' }),
-        q('k:4', { options: ['True', 'False', 'Uncertain'] }),
+        q('k:4', { options: ['only one'] }),
         q('k:5', { question_text: 'Same as live', options: ['w', 'x', 'y', 'z'] }),
         q('k:6', { status: 'published' }),
+        q('k:7', { options: ['True', 'False', 'Cannot be certain'], correct_index: 3 }),
         q('OLD-1', { question_text: 'same as LIVE', options: ['W', 'x', 'y', 'z'], status: 'published' }),
       ],
     })
 
     const res = await publishKbFile(db as any, 'f1')
 
-    expect(res).toEqual({ published: 2, alreadyPublished: 1, skippedMissingMedia: 1, skippedFewOptions: 1, skippedDuplicate: 1 })
+    expect(res).toEqual({ published: 2, alreadyPublished: 1, skippedMissingMedia: 1, skippedFewOptions: 2, skippedDuplicate: 1 })
     const status = Object.fromEntries(rows('upcat_questions').map(r => [r.question_id, r.status]))
-    expect(status).toMatchObject({ 'k:1': 'published', 'k:2': 'draft', 'k:3': 'published', 'k:4': 'draft', 'k:5': 'draft', 'k:6': 'published' })
+    expect(status).toMatchObject({ 'k:1': 'published', 'k:2': 'draft', 'k:3': 'published', 'k:4': 'draft', 'k:5': 'draft', 'k:6': 'published', 'k:7': 'draft' })
     expect(rpcCalls).toEqual(['project_question_bank_to_flashcards'])
     expect(rows('kb_drive_files')[0]!.published_at).toEqual(expect.any(String))
   })
@@ -41,6 +42,19 @@ describe('publishKbFile', () => {
       drive_file_id: 'f1', file_name: 'UPCAT-Math.csv', published: 1, held_missing_media: 1,
       held_few_options: 0, held_duplicate: 0, already_published: 0, published_by: 'admin-uuid',
     })])
+  })
+
+  it('publishes 2- and 3-option questions (the app renders any number of choices)', async () => {
+    const { db, rows } = fakeDb({
+      kb_drive_files: [{ drive_file_id: 'f1', status: 'imported', question_ids: ['s:1', 's:2'] }],
+      upcat_questions: [
+        q('s:1', { options: ['TRUE', 'FALSE', 'Cannot be certain'], correct_index: 2 }),
+        q('s:2', { options: ['True', 'False'], correct_index: 1 }),
+      ],
+    })
+    const res = await publishKbFile(db as any, 'f1')
+    expect(res).toMatchObject({ published: 2, skippedFewOptions: 0 })
+    expect(rows('upcat_questions').map(r => r.status)).toEqual(['published', 'published'])
   })
 
   it('throws for an unknown file', async () => {

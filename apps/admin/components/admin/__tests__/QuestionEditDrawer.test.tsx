@@ -48,8 +48,10 @@ describe('QuestionEditDrawer', () => {
     expect(checked[0]).toContain('value="2"')
   })
 
-  it('marks required fields', () => {
+  it('marks required fields: the text and options A and B; C and D are optional (2–4 choices)', () => {
     const html = render()
-    expect((html.match(/required=""/g) ?? []).length).toBeGreaterThanOrEqual(5)
+    expect((html.match(/required=""/g) ?? []).length).toBe(3)
+    expect(html).toContain('Option C (optional)')
+    expect(html).toContain('Option D (optional)')
   })
 })

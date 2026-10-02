@@ -39,3 +39,13 @@ export function poolOf(name: string, mappedSubtest: string | undefined): string 
   const rule = resolveFileRule(name)
   return rule?.kind === 'import' ? rule.subtest : null
 }
+
+/**
+ * A Preview file at a glance, from its ledger counts: drafts Publish will make
+ * live, and drafts it will hold because their figure isn't in Drive. Duplicates
+ * of live questions and unanswerable items are only known at Preview/Publish.
+ */
+export function draftReadiness(f: { rows_drafted: number; rows_missing_media: number }): { ready: number; heldMissingFigure: number } {
+  const heldMissingFigure = Math.min(f.rows_missing_media, f.rows_drafted)
+  return { ready: f.rows_drafted - heldMissingFigure, heldMissingFigure }
+}

@@ -74,6 +74,30 @@ describe('syncDriveFolder — mapping, Excel and review state', () => {
     expect(res.imported).toHaveLength(1)
   })
 
+  it('maps a file held for a spent AI budget on the next run, then reuses that AI mapping without asking again', async () => {
+    const { db, rows } = fakeDb()
+    const ask = aiReturns({ columns: GK_COLUMNS, choices: { subtest: 'General Information' } })
+    const v1 = gateway([entry({ id: 'n1', name: 'Trivia batch.xlsx', mimeType: XLSX_MIME })], {}, { n1: GK_XLSX })
+
+    const first = await syncDriveFolder(db as any, v1, mediaStore(), { rootId: 'root', ask, maxAiCalls: 0 })
+    expect(first.needsMapping).toEqual([expect.objectContaining({ message: expect.stringMatching(/next sync/) })])
+    expect(ask).not.toHaveBeenCalled()
+
+    // Next nightly run, file unchanged: retried, mapped by AI, mapping saved.
+    const second = await syncDriveFolder(db as any, v1, mediaStore(), { rootId: 'root', ask })
+    expect(second.imported).toHaveLength(1)
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(rows('kb_file_mappings')).toEqual([expect.objectContaining({ drive_file_id: 'n1', source: 'ai', subtest: 'General Information' })])
+
+    // The sheet is edited later: re-imported through the saved mapping, no new AI call.
+    const v2 = gateway([entry({ id: 'n1', name: 'Trivia batch.xlsx', mimeType: XLSX_MIME, md5Checksum: 'md5-n1-v2' })], {}, { n1: GK_XLSX })
+    const third = await syncDriveFolder(db as any, v2, mediaStore(), { rootId: 'root', ask })
+    expect(third.imported).toHaveLength(1)
+    expect(third.aiMapped).toBe(0)
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(rows('kb_drive_files')[0]).toMatchObject({ status: 'imported', mapping_source: 'ai' })
+  })
+
   it('gives new and changed files the AI budget before files already stuck in needs_mapping', async () => {
     // A stuck file listed first must not use up the run's AI calls every night.
     const { db } = fakeDb({ kb_drive_files: [{ drive_file_id: 'stuck', md5_checksum: 'md5-stuck', status: 'needs_mapping' }] })
