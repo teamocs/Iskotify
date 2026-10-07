@@ -2,11 +2,15 @@ import { createServerClient } from '@iskotify/utils'
 import { Topbar } from '@/components/admin/Topbar'
 import { InboxView } from '@/components/admin/InboxView'
 import { getInboxCounts, type InboxDb } from '@/lib/admin/inboxCounts'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
 // The admin Home is a work inbox: what is waiting, and where to do it.
 export default async function AdminHomePage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   let db: InboxDb | null = null
   try {
     db = createServerClient() as unknown as InboxDb

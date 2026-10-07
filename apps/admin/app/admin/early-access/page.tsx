@@ -10,6 +10,8 @@ import { Card } from '@/components/ui/Card'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
 import { DEFAULT_UPDATE_EMAIL_TEMPLATE } from '@/lib/updateRollout'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +84,8 @@ function LinkStatus({ url, setText, unsetText }: { url: string; setText: ReactNo
 }
 
 export default async function EarlyAccessPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { rows, error, apkUrl, updateApkUrl, updateEmailTemplate } = await getData()
 
   return (

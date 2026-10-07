@@ -3,6 +3,8 @@ import { Topbar } from '@/components/admin/Topbar'
 import { PostHogDashboardForm } from '@/components/admin/PostHogDashboardForm'
 import { PageBody } from '@/components/ui/Page'
 import { Card } from '@/components/ui/Card'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,8 @@ async function getDashboardUrl(): Promise<string> {
 }
 
 export default async function AnalyticsPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const dashboardUrl = await getDashboardUrl()
 
   return (

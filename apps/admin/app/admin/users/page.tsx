@@ -3,6 +3,8 @@ import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { UsersTable, type UserRow } from '@/components/admin/UsersTable'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 // Always reflect the live auth user list (it is cleared / changes over time).
 export const dynamic = 'force-dynamic'
@@ -58,6 +60,8 @@ async function getData(): Promise<{ rows: UserRow[]; error: string }> {
 }
 
 export default async function UsersPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { rows, error } = await getData()
 
   return (

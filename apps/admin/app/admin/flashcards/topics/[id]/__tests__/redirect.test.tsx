@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('@/lib/admin/requireAdmin', () => ({ isAdminSession: async () => true }))
+
 const mockSingle = vi.fn()
 
 vi.mock('@iskotify/utils', () => ({

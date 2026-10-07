@@ -8,6 +8,7 @@ import { SubjectCardsView } from '@/components/admin/SubjectCardsView'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { NAV_GROUPS } from '@/lib/nav/adminNav'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 // The section name comes from the sidebar so the two never disagree.
 const SECTION_LABEL = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === '/admin/flashcards')?.label ?? 'Knowledge base'
@@ -21,6 +22,8 @@ export default async function SubjectDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ topic?: string }>
 }) {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { id } = await params
   const { topic: defaultOpenTopicId } = await searchParams
   const db = createServerClient()

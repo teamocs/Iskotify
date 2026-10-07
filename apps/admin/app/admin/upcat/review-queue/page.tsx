@@ -18,6 +18,8 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ReviewQueueTable, type ReviewItem } from '@/components/admin/ReviewQueueTable'
 import { flagWeakOptions } from '@/lib/heuristics/flagWeakOptions'
 import type { DismissalRow } from '@/lib/admin/reviewQueue'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +43,8 @@ const INTRO =
   'them by hand or dismiss a flag that is fine as written.'
 
 export default async function ReviewQueuePage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const db = createServerClient()
 
   const [{ data: rows, error }, dismissalsRes] = await Promise.all([
