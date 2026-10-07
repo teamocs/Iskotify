@@ -16,6 +16,7 @@ export function describeContentSync(content: ContentSyncSummary | { error: strin
     attention ? `${attention} need attention` : '',
     content.sourceErrors.length ? `${plural(content.sourceErrors.length, 'folder')} unreadable` : '',
     content.remaining ? `${content.remaining} left for the next run` : '',
+    content.foldersDeferred ? `${plural(content.foldersDeferred, 'folder')} left for the next run` : '',
   ].filter(Boolean)
   return { text: parts.join(' · '), problems: attention + content.sourceErrors.length }
 }

@@ -1,6 +1,8 @@
 // Announcements from the weekly admissions report Docs (Drive sync) → the
 // admissions_updates table (supabase/migrations/023) the app's News feed reads.
 
+import type { SourceLink } from './sources'
+
 /** The report sections that become announcements. No Change / Unable to Verify never do. */
 export type ReportSection = 'urgent' | 'new' | 'info' | 'social'
 export type UpdateSeverity = 'urgent' | 'important' | 'info'
@@ -17,7 +19,8 @@ export interface AdmissionsUpdateRow {
   action_required: string | null
   event_date: string | null
   event_type: string | null
-  sources: string[]
+  /** {label, url} links (see sources.ts) — the shape the app reads. */
+  sources: SourceLink[]
   /** false for Social Media Findings (published unverified); true otherwise. */
   verified: boolean
 }
@@ -28,6 +31,12 @@ export interface AnnouncementCandidate {
   section: ReportSection
   /** The verbatim excerpt of the document the finding came from (checked to be there). */
   quote: string
+  /**
+   * Set when the model's title or summary is mostly not in the report around
+   * the quote: the row starts unticked in the preview and is published only if
+   * an admin ticks it (confirmIds on publish).
+   */
+  warning: string | null
   update: AdmissionsUpdateRow
 }
 

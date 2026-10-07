@@ -8,7 +8,7 @@ vi.mock('../driveClient', () => ({ createDriveGateway: () => ({}), createMediaSt
 const EMPTY = { imported: [], skipped: [], needsMapping: [], errors: [], unchanged: 0, remaining: 0, aiMapped: 0 }
 
 function dbWithSources(rows: unknown[]) {
-  return { from: () => ({ select: () => ({ eq: async () => ({ data: rows, error: null }) }) }) } as never
+  return { from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: rows, error: null }) }) }) }) } as never
 }
 
 describe('driveResync', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { fakeDb } from '@/lib/kb/__tests__/fakeDb'
 import { entry, gateway } from '@/lib/kb/__tests__/syncFixtures'
 import { syncContentSources, type ContentSource } from '../syncContent'
+import { FileTooLargeError } from '@/lib/kb/fileTooLarge'
 
 const SHEET = 'application/vnd.google-apps.spreadsheet'
 const DOC = 'application/vnd.google-apps.document'
@@ -141,19 +142,53 @@ describe('syncContentSources — announcements', () => {
     expect(rows('admissions_updates')).toHaveLength(0)
   })
 
-  it('holds the file with a clear message when the AI output is malformed, and retries it next run', async () => {
+  it('holds the file with a clear message when the AI output is malformed, and retries it after 6 hours (not on every Sync now)', async () => {
     const { db, rows } = fakeDb()
     const drive = routedGateway({ [REPORTS.folderId]: [docEntry()] }, { 'doc-1': REPORT })
+    const t0 = Date.parse('2026-06-15T01:00:00Z')
     const bad = vi.fn(async () => 'Here you go: {items: oops')
-    const s = await syncContentSources(db as never, drive, [REPORTS], { ask: bad })
+    const s = await syncContentSources(db as never, drive, [REPORTS], { ask: bad, now: () => t0 })
     expect(s.files[0]).toMatchObject({ status: 'held', message: expect.stringMatching(/wasn.t valid JSON/) })
     expect(rows('announcement_import_batches')).toHaveLength(0)
-    expect(rows('drive_content_files')[0]).toMatchObject({ status: 'held' })
+    expect(rows('drive_content_files')[0]).toMatchObject({ status: 'held', synced_at: new Date(t0).toISOString() })
 
     const good = vi.fn(async () => JSON.stringify(AI_JSON))
-    const again = await syncContentSources(db as never, drive, [REPORTS], { ask: good })
+    const soon = await syncContentSources(db as never, drive, [REPORTS], { ask: good, now: () => t0 + 60 * 60 * 1000 })
+    expect(good).not.toHaveBeenCalled()
+    expect(soon.unchanged).toBe(1)
+
+    const later = await syncContentSources(db as never, drive, [REPORTS], { ask: good, now: () => t0 + 7 * 60 * 60 * 1000 })
     expect(good).toHaveBeenCalledTimes(1)
-    expect(again.files[0]).toMatchObject({ status: 'previewed' })
+    expect(later.files[0]).toMatchObject({ status: 'previewed' })
+  })
+
+  it('retries a held file at once when the file itself changes', async () => {
+    const { db } = fakeDb()
+    const t0 = Date.parse('2026-06-15T01:00:00Z')
+    await syncContentSources(db as never, routedGateway({ [REPORTS.folderId]: [docEntry()] }, { 'doc-1': REPORT }), [REPORTS], { ask: async () => 'nope', now: () => t0 })
+    const good = vi.fn(async () => JSON.stringify(AI_JSON))
+    const edited = routedGateway({ [REPORTS.folderId]: [docEntry({ modifiedTime: '2026-06-15T02:00:00Z' })] }, { 'doc-1': REPORT })
+    await syncContentSources(db as never, edited, [REPORTS], { ask: good, now: () => t0 + 60_000 })
+    expect(good).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads a report with a 1 MB cap, and skips one that is larger', async () => {
+    const { db } = fakeDb()
+    const drive = routedGateway({ [REPORTS.folderId]: [docEntry()] }, { 'doc-1': REPORT })
+    await syncContentSources(db as never, drive, [REPORTS], { ask: async () => JSON.stringify(AI_JSON) })
+    expect(drive.downloadText).toHaveBeenCalledWith(expect.objectContaining({ id: 'doc-1' }), { maxBytes: 1024 * 1024 })
+
+    const big = routedGateway({ [REPORTS.folderId]: [docEntry({ id: 'doc-2' })] }, {})
+    big.downloadText = vi.fn(async () => { throw new FileTooLargeError(1024 * 1024) })
+    const ask = vi.fn(async () => JSON.stringify(AI_JSON))
+    const s = await syncContentSources(fakeDb().db as never, big, [REPORTS], { ask })
+    expect(s.files[0]).toMatchObject({ status: 'skipped', message: expect.stringMatching(/larger than 1 MB/) })
+    expect(ask).not.toHaveBeenCalled()
+
+    const txt = routedGateway({ [REPORTS.folderId]: [docEntry({ id: 'doc-3', name: 'r.txt', mimeType: 'text/plain', size: 2 * 1024 * 1024 })] }, {})
+    const s3 = await syncContentSources(fakeDb().db as never, txt, [REPORTS], { ask })
+    expect(s3.files[0]).toMatchObject({ status: 'skipped' })
+    expect(txt.downloadText).not.toHaveBeenCalled()
   })
 
   it('gives the same row ids when a changed Doc is read again', async () => {
@@ -186,7 +221,7 @@ describe('syncContentSources — announcements', () => {
     const s = await syncContentSources(db as never, routedGateway({ [REPORTS.folderId]: docs }, { 'doc-1': REPORT, 'doc-2': REPORT }), [REPORTS], { ask, maxAiCalls: 1 })
     expect(ask).toHaveBeenCalledTimes(1)
     expect(s.files.map(f => f.status)).toEqual(['previewed', 'held'])
-    expect(s.files[1]!.message).toMatch(/next sync/)
+    expect(s.files[1]!.message).toMatch(/later sync/)
   })
 
   it('skips files that are not Docs (e.g. a Word file)', async () => {
@@ -220,7 +255,8 @@ describe('syncContentSources — run control', () => {
     const { db, rows } = fakeDb()
     const drive = routedGateway({ [LISTINGS.folderId]: [sheetEntry(), sheetEntry({ id: 'sheet-2' })] }, { 'sheet-1': LISTINGS_CSV, 'sheet-2': LISTINGS_CSV })
     let t = 0
-    const s = await syncContentSources(db as never, drive, [LISTINGS], { deadline: 1, now: () => t++ })
+    // t=0 lists the folder, t=1 is the run's start time, t=2 starts sheet-1, t=3 is past the deadline.
+    const s = await syncContentSources(db as never, drive, [LISTINGS], { deadline: 3, now: () => t++ })
     expect(s.files).toHaveLength(1)
     expect(s.remaining).toBe(1)
     expect(rows('drive_content_files')).toHaveLength(1)
@@ -236,6 +272,27 @@ describe('syncContentSources — run control', () => {
     expect(s.remaining).toBe(1)
     expect(s.files.map(f => f.contentType)).toEqual(['listings'])
     expect(rows('drive_content_files').map(r => r.content_type)).toEqual(['listings'])
+  })
+
+  it('passes the deadline into each folder listing, and lists no more folders once it has passed', async () => {
+    const { db } = fakeDb()
+    const drive = routedGateway({ [LISTINGS.folderId]: [sheetEntry()], [REPORTS.folderId]: [docEntry()] }, { 'sheet-1': LISTINGS_CSV })
+    // The first listing starts at t=0; by the second folder (t=5) the deadline has passed.
+    const clock = [0, 5]
+    const s = await syncContentSources(db as never, drive, [LISTINGS, REPORTS], { deadline: 1, now: () => clock.shift() ?? 5 })
+    expect(drive.listTree).toHaveBeenCalledTimes(1)
+    expect(drive.listTree).toHaveBeenCalledWith(LISTINGS.folderId, { deadline: 1 })
+    expect(s.foldersDeferred).toBe(1)
+  })
+
+  it('reads at most 200 files per folder (the most recently modified), and says so', async () => {
+    const { db, rows } = fakeDb()
+    const many = Array.from({ length: 205 }, (_, i) =>
+      entry({ id: `p${i}`, name: `f${i}.pdf`, mimeType: 'application/pdf', path: '', modifiedTime: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString() }))
+    const s = await syncContentSources(db as never, routedGateway({ [LISTINGS.folderId]: many }, {}), [LISTINGS], {})
+    expect(rows('drive_content_files')).toHaveLength(200)
+    expect(rows('drive_content_files').some(r => r.drive_file_id === 'p0')).toBe(false) // the oldest are left out
+    expect(s.sourceErrors).toEqual([expect.objectContaining({ folderId: LISTINGS.folderId, message: expect.stringMatching(/205 files.*200/) })])
   })
 
   it('records an error outcome when a download fails, and retries it next run', async () => {

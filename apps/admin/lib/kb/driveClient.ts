@@ -5,8 +5,27 @@
 // client_email (Viewer) and set KB_DRIVE_FOLDER_ID to that folder's id.
 
 import { google } from 'googleapis'
+import type { Readable } from 'stream'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DriveEntry, DriveGateway, MediaStore } from './syncDriveFolder'
+import { FileTooLargeError } from './fileTooLarge'
+
+/** Reads a download stream as UTF-8, destroying it as soon as it passes maxBytes. */
+async function readCapped(stream: Readable, maxBytes: number): Promise<string> {
+  const chunks: Buffer[] = []
+  let total = 0
+  try {
+    for await (const chunk of stream) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string)
+      total += buf.length
+      if (total > maxBytes) throw new FileTooLargeError(maxBytes)
+      chunks.push(buf)
+    }
+  } finally {
+    if (!stream.destroyed && !stream.readableEnded) stream.destroy()
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
@@ -33,7 +52,7 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
   const drive = google.drive({ version: 'v3', auth })
 
   return {
-    async listTree(rootId) {
+    async listTree(rootId, opts = {}) {
       const out: DriveEntry[] = []
       const queue = [{ id: rootId, path: '', depth: 0 }]
       while (queue.length > 0) {
@@ -41,6 +60,9 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
         if (!DRIVE_ID.test(id)) throw new Error(`Invalid Drive folder id: ${id}`)
         let pageToken: string | undefined
         do {
+          if (opts.deadline !== undefined && Date.now() >= opts.deadline) {
+            throw new Error('Listing this folder ran out of time for this run; it is read again on the next sync.')
+          }
           const res = await drive.files.list({
             q: `'${id}' in parents and trashed = false`,
             fields: 'nextPageToken, files(id, name, mimeType, md5Checksum, modifiedTime, size)',
@@ -72,22 +94,26 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
       return out
     },
 
-    async downloadText(entry) {
-      if (entry.mimeType === SHEET_MIME) {
-        // Exports the first sheet of a native Google Sheet.
-        const res = await drive.files.export({ fileId: entry.id, mimeType: 'text/csv' }, { responseType: 'text' })
+    async downloadText(entry, opts = {}) {
+      const { maxBytes } = opts
+      // Native Google files report no size, so a capped read streams and stops
+      // at the cap instead of buffering the whole export.
+      if (maxBytes !== undefined && (entry.size ?? 0) > maxBytes) throw new FileTooLargeError(maxBytes)
+      const exportAs = entry.mimeType === SHEET_MIME
+        ? 'text/csv' // the first sheet of a native Google Sheet
+        : entry.mimeType === DOC_MIME
+          ? 'text/plain' // a native Google Doc (e.g. a weekly admissions report)
+          : null
+      if (maxBytes === undefined) {
+        const res = exportAs
+          ? await drive.files.export({ fileId: entry.id, mimeType: exportAs }, { responseType: 'text' })
+          : await drive.files.get({ fileId: entry.id, alt: 'media', supportsAllDrives: true }, { responseType: 'text' })
         return String(res.data)
       }
-      if (entry.mimeType === DOC_MIME) {
-        // A native Google Doc (e.g. a weekly admissions report) as plain text.
-        const res = await drive.files.export({ fileId: entry.id, mimeType: 'text/plain' }, { responseType: 'text' })
-        return String(res.data)
-      }
-      const res = await drive.files.get(
-        { fileId: entry.id, alt: 'media', supportsAllDrives: true },
-        { responseType: 'text' },
-      )
-      return String(res.data)
+      const res = exportAs
+        ? await drive.files.export({ fileId: entry.id, mimeType: exportAs }, { responseType: 'stream' })
+        : await drive.files.get({ fileId: entry.id, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' })
+      return readCapped(res.data as unknown as Readable, maxBytes)
     },
 
     async downloadBytes(entry) {

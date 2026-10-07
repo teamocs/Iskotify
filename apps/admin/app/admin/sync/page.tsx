@@ -1,4 +1,6 @@
+import { notFound } from 'next/navigation'
 import { createServerClient } from '@iskotify/utils'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -23,6 +25,8 @@ const FILE_COLUMNS =
 // Drive sources below get their own previews. Nothing goes live without an
 // admin's Publish. The pasted-link listings import is /admin/listings/import.
 export default async function DriveSyncPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const db = createServerClient()
   const [files, mappings, runs, events, sources, listingPreviews, listingHistory, annPreviews, annHistory, contentFiles] = await Promise.all([
     db.from('kb_drive_files').select(FILE_COLUMNS).order('name'),

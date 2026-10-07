@@ -87,6 +87,12 @@ describe('UpdateDrawer form', () => {
     expect(html).not.toMatch(/aria-label="(Title|Body|Severity)"/)
   })
 
+  it('edits {label, url} sources as one URL per line (and still reads old plain-URL rows)', () => {
+    const html = renderToStaticMarkup(<UpdateDrawer update={u({ sources: [{ label: 'up.edu.ph', url: 'https://up.edu.ph/a' }, 'https://up.edu.ph/b'] })} onClose={vi.fn()} onRequestDelete={vi.fn()} />)
+    expect(html).toContain('https://up.edu.ph/a\nhttps://up.edu.ph/b')
+    expect(html).not.toContain('[object Object]')
+  })
+
   it('offers Delete only when editing', () => {
     expect(renderToStaticMarkup(<UpdateDrawer update={null} onClose={vi.fn()} onRequestDelete={vi.fn()} />)).not.toContain('>Delete<')
     expect(renderToStaticMarkup(<UpdateDrawer update={u()} onClose={vi.fn()} onRequestDelete={vi.fn()} />)).toContain('Delete')

@@ -129,10 +129,11 @@ describe('DriveListingsCard', () => {
 })
 
 const annRow = (id: string, p: Partial<AnnouncementRow> = {}, u: Partial<AnnouncementRow['update']> = {}): AnnouncementRow => ({
-  id, action: 'new', changes: [], section: 'urgent', quote: 'q',
+  id, action: 'new', changes: [], section: 'urgent', quote: 'q', warning: null,
   update: {
     id, report_date: '2026-06-14', severity: 'urgent', school_slug: null, school_name: 'PUP — PUPCET', title: `Title ${id}`,
-    body: `Body ${id}`, action_required: null, event_date: '2026-06-20', event_type: 'deadline', sources: ['https://www.pup.edu.ph/iapply'], verified: true, ...u,
+    body: `Body ${id}`, action_required: null, event_date: '2026-06-20', event_type: 'deadline',
+    sources: [{ label: 'pup.edu.ph', url: 'https://www.pup.edu.ph/iapply' }], verified: true, ...u,
   },
   ...p,
 })
@@ -171,6 +172,18 @@ describe('DriveAnnouncementsCard', () => {
     expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3)
     expect(html).toContain('No change')
     expect(html).toContain('>Publish 3 announcements<')
+  })
+
+  it('shows a flagged row’s warning and leaves it unticked (publishing it needs the admin’s tick)', () => {
+    const flagged = annRow('e', { warning: 'The title is mostly not in the quoted text — check it before publishing.' })
+    const html = render({ previews: [annBatch({ rows: [annRow('a'), flagged] })] })
+    expect(html).toContain('The title is mostly not in the quoted text')
+    expect(html).toContain('Check before publishing')
+    const boxes = [...html.matchAll(/<input type="checkbox"[^>]*>/g)].map(m => m[0])
+    expect(boxes).toHaveLength(2)
+    expect(boxes[0]).toContain('checked')
+    expect(boxes[1]).not.toContain('checked')
+    expect(html).toContain('>Publish 1 announcement<')
   })
 
   it('lists what the AI read but the validator left out, and why', () => {

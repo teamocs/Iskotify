@@ -37,6 +37,9 @@ export interface DriveSourceRow {
 // query, so nothing else may get through (driveClient re-checks it).
 const FOLDER_ID = /^[A-Za-z0-9_-]{10,100}$/
 
+/** Enabled drive_sources read per run (oldest first), so one run's listing stays bounded. */
+export const MAX_ENABLED_SOURCES = 20
+
 export const isDriveContentType = (v: unknown): v is DriveContentType =>
   typeof v === 'string' && (DRIVE_CONTENT_TYPES as readonly string[]).includes(v)
 
@@ -87,12 +90,20 @@ export async function loadSyncSources(
       .from('drive_sources')
       .select('id, content_type, folder_id, label')
       .eq('enabled', true)
+      .order('created_at')
     if (error) throw new Error(error.message)
     rows = (data ?? []) as typeof rows
   } catch (err) {
     const warning = `drive_sources could not be read (${err instanceof Error ? err.message : String(err)}); syncing KB_DRIVE_FOLDER_ID only`
     console.warn('[drive-sync]', warning)
     return { sources, warning }
+  }
+
+  let warning: string | undefined
+  if (rows.length > MAX_ENABLED_SOURCES) {
+    warning = `${rows.length} enabled Drive sources; only the first ${MAX_ENABLED_SOURCES} are read each run`
+    console.warn('[drive-sync]', warning)
+    rows = rows.slice(0, MAX_ENABLED_SOURCES)
   }
 
   for (const r of rows) {
@@ -103,5 +114,5 @@ export async function loadSyncSources(
     if (dup >= 0) sources[dup] = source
     else sources.push(source)
   }
-  return { sources }
+  return warning ? { sources, warning } : { sources }
 }

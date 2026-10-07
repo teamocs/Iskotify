@@ -192,6 +192,22 @@ describe('POST /api/admin/updates', () => {
     expect(mockInsert).toHaveBeenCalledOnce()
   })
 
+  it('stores sources as {label, url} links, http(s) only (the shape the app shows)', async () => {
+    adminUser()
+    mockInsert.mockResolvedValueOnce({ error: null })
+    const { POST } = await import('../route')
+    const req = new NextRequest('http://localhost/api/admin/updates', {
+      method: 'POST',
+      body: JSON.stringify({ ...validBody, sources: ['https://www.ateneo.edu/acet', 'javascript:alert(1)', { url: 'https://x.example.com', label: 'X' }] }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    await POST(req)
+    expect(mockInsert.mock.calls[0]![0].sources).toEqual([
+      { label: 'ateneo.edu', url: 'https://www.ateneo.edu/acet' },
+      { label: 'X', url: 'https://x.example.com' },
+    ])
+  })
+
   it('returns 500 when DB insert fails', async () => {
     adminUser()
     mockInsert.mockResolvedValueOnce({ error: { message: 'DB fail' } })
@@ -262,6 +278,19 @@ describe('PATCH /api/admin/updates', () => {
     expect(val).toBe('u1')
     expect(updateData.title).toBe('Updated title')
     expect(updateData.verified).toBe(true)
+  })
+
+  it('stores edited sources as {label, url} links, http(s) only', async () => {
+    adminUser()
+    mockUpdate.mockResolvedValueOnce({ error: null })
+    const { PATCH } = await import('../route')
+    const req = new NextRequest('http://localhost/api/admin/updates', {
+      method: 'PATCH',
+      body: JSON.stringify({ id: 'u1', sources: ['https://upcat.up.edu.ph/results', 'data:text/html,x'] }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    await PATCH(req)
+    expect(mockUpdate.mock.calls[0]![0].sources).toEqual([{ label: 'upcat.up.edu.ph', url: 'https://upcat.up.edu.ph/results' }])
   })
 
   it('returns 500 when DB update fails', async () => {

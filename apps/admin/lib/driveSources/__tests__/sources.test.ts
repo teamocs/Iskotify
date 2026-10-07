@@ -32,9 +32,10 @@ describe('parseDriveFolderInput', () => {
 })
 
 function dbWith(result: { data?: unknown; error?: unknown } | Error) {
-  const eq = vi.fn(() => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)))
+  const order = vi.fn(() => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)))
+  const eq = vi.fn(() => ({ order }))
   const select = vi.fn(() => ({ eq }))
-  return { db: { from: vi.fn(() => ({ select })) } as never, select, eq }
+  return { db: { from: vi.fn(() => ({ select })) } as never, select, eq, order }
 }
 
 describe('loadSyncSources', () => {
@@ -58,6 +59,16 @@ describe('loadSyncSources', () => {
     const out = await loadSyncSources(db, 'env-questions-folder-0000')
     expect(out.sources).toHaveLength(1)
     expect(out.sources[0]).toMatchObject({ id: 's1', contentType: 'questions' })
+  })
+
+  it('reads at most 20 enabled folders per run, oldest first, and says so', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => ({ id: `s${i}`, content_type: 'listings', folder_id: `listings-folder-${String(i).padStart(6, '0')}`, label: null }))
+    const { db, order } = dbWith({ data: rows, error: null })
+    const out = await loadSyncSources(db, 'env-questions-folder-0000')
+    expect(order).toHaveBeenCalledWith('created_at')
+    expect(out.sources).toHaveLength(21) // the env folder + 20
+    expect(out.sources[20]).toMatchObject({ id: 's19' })
+    expect(out.warning).toMatch(/25 enabled.*20/)
   })
 
   it('drops rows whose folder id or content type is invalid', async () => {

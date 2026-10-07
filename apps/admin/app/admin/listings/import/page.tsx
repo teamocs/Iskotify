@@ -1,4 +1,6 @@
+import { notFound } from 'next/navigation'
 import { createServerClient } from '@iskotify/utils'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { ListingSheetImport } from '@/components/admin/ListingSheetImport'
@@ -20,6 +22,8 @@ async function getData() {
 }
 
 export default async function ListingImportPage() {
+  // The layout's check doesn't stop this page's own service-role read.
+  if (!(await isAdminSession())) notFound()
   const { preview, history, lastUrl } = await getData()
 
   return (

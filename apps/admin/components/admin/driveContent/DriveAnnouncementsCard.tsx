@@ -12,6 +12,7 @@ import { apiRequest } from '@/lib/apiRequest'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { fmtDateTime } from '../questionSync/types'
 import type { AnnouncementBatch, AnnouncementBatchSummary, AnnouncementRow, UpdateSeverity } from '@/lib/announcements/types'
+import { toSourceLinks } from '@/lib/announcements/sources'
 import { HeldFiles } from './HeldFiles'
 import { jsonInit, plural, type ContentFileRow } from './types'
 
@@ -43,6 +44,8 @@ function Row({ row, included, onToggle, disabled }: { row: AnnouncementRow; incl
   const u = row.update
   const sev = SEVERITY[u.severity]
   const reviewable = row.action !== 'unchanged'
+  // http(s)-only {label, url} links, whatever shape the stored row has.
+  const sources = toSourceLinks(u.sources)
   return (
     <li className={['flex gap-3 px-4 py-3', reviewable && !included ? 'opacity-60' : ''].filter(Boolean).join(' ')}>
       <div className="pt-0.5">
@@ -64,6 +67,7 @@ function Row({ row, included, onToggle, disabled }: { row: AnnouncementRow; incl
           {row.action === 'update' && <Badge tone="info">{`Changed: ${row.changes.join(', ')}`}</Badge>}
           {row.action === 'unchanged' && <Badge tone="neutral">No change</Badge>}
           {!u.verified && <Badge tone="warning">Unverified</Badge>}
+          {row.warning && reviewable && <Badge tone="danger">Needs a check</Badge>}
         </span>
         <p className="font-medium text-ink">{u.title}</p>
         <p className="text-xs text-ink-muted">
@@ -71,11 +75,16 @@ function Row({ row, included, onToggle, disabled }: { row: AnnouncementRow; incl
         </p>
         <p className="text-ui text-ink">{u.body}</p>
         {u.action_required && <p className="text-xs text-ink"><span className="font-medium">Action: </span>{u.action_required}</p>}
-        {u.sources.length > 0 && (
+        {sources.length > 0 && (
           <p className="flex flex-wrap gap-x-3 text-xs">
-            {u.sources.map(s => (
-              <a key={s} href={s} target="_blank" rel="noopener noreferrer" className="text-maroon underline underline-offset-2 hover:no-underline break-all">{s}</a>
+            {sources.map(s => (
+              <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer" className="text-maroon underline underline-offset-2 hover:no-underline break-all">{s.url}</a>
             ))}
+          </p>
+        )}
+        {row.warning && reviewable && (
+          <p role="note" className="rounded-sm bg-warning-soft px-2 py-1 text-xs text-warning-strong">
+            <span className="font-medium">Check before publishing: </span>{row.warning} Tick it to publish it anyway.
           </p>
         )}
         <details className="text-xs text-ink-muted">
@@ -90,18 +99,23 @@ function Row({ row, included, onToggle, disabled }: { row: AnnouncementRow; incl
 function Preview({ batch, busy, onPublish, onDiscard }: {
   batch: AnnouncementBatch
   busy: boolean
-  onPublish: (excludeIds: string[]) => void
+  onPublish: (ids: { excludeIds: string[]; confirmIds: string[] }) => void
   onDiscard: () => void
 }) {
-  const [excluded, setExcluded] = useState<Set<string>>(() => new Set())
-  const toggle = (id: string) => setExcluded(prev => {
+  const reviewable = batch.rows.filter(r => r.action !== 'unchanged')
+  // Flagged rows (title/summary not backed by the report) start unticked.
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(reviewable.filter(r => !r.warning).map(r => r.id)))
+  const toggle = (id: string) => setTicked(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id)
     else next.add(id)
     return next
   })
-  const reviewable = batch.rows.filter(r => r.action !== 'unchanged')
-  const count = reviewable.filter(r => !excluded.has(r.id)).length
+  const count = reviewable.filter(r => ticked.has(r.id)).length
+  const publish = () => onPublish({
+    excludeIds: reviewable.filter(r => !ticked.has(r.id)).map(r => r.id),
+    confirmIds: reviewable.filter(r => r.warning && ticked.has(r.id)).map(r => r.id),
+  })
 
   return (
     <li>
@@ -121,13 +135,13 @@ function Preview({ batch, busy, onPublish, onDiscard }: {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="danger" icon="trash" disabled={busy} onClick={onDiscard}>Discard</Button>
-          <Button size="sm" variant="primary" icon="check" loading={busy} disabled={busy || count === 0} onClick={() => onPublish([...excluded])}>
+          <Button size="sm" variant="primary" icon="check" loading={busy} disabled={busy || count === 0} onClick={publish}>
             {`Publish ${plural(count, 'announcement')}`}
           </Button>
         </div>
       </div>
       <ul aria-label={`Announcements in ${batch.file_name}`} className="divide-y divide-subtle border-t border-subtle">
-        {batch.rows.map(r => <Row key={r.id} row={r} included={!excluded.has(r.id)} onToggle={() => toggle(r.id)} disabled={busy} />)}
+        {batch.rows.map(r => <Row key={r.id} row={r} included={ticked.has(r.id)} onToggle={() => toggle(r.id)} disabled={busy} />)}
       </ul>
       {batch.skipped.length > 0 && (
         <details className="border-t border-subtle px-4 py-3">
@@ -152,12 +166,13 @@ export function DriveAnnouncementsCard({ previews, history, files }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState<AnnouncementBatch | null>(null)
 
-  async function publish(b: AnnouncementBatch, excludeIds: string[]) {
+  async function publish(b: AnnouncementBatch, ids: { excludeIds: string[]; confirmIds: string[] }) {
     setBusy(b.id)
-    const r = await apiRequest<{ published: number }>(`/api/admin/announcements/import/${encodeURIComponent(b.id)}/publish`, jsonInit('POST', { excludeIds }))
+    const r = await apiRequest<{ published: number; skippedStale: string[] }>(`/api/admin/announcements/import/${encodeURIComponent(b.id)}/publish`, jsonInit('POST', ids))
     setBusy(null)
     if (!r.ok) return notifyError(r.error)
-    notifySuccess(`Published ${plural(r.data.published, 'announcement')} to the app’s News`)
+    const stale = r.data.skippedStale?.length ?? 0
+    notifySuccess(`Published ${plural(r.data.published, 'announcement')} to the app’s News${stale ? ` · ${stale} skipped (edited in Admissions updates since this preview)` : ''}`)
     router.refresh()
   }
 
@@ -182,7 +197,7 @@ export function DriveAnnouncementsCard({ previews, history, files }: Props) {
       {previews.length > 0 ? (
         <ul aria-label="Announcement previews" className="divide-y divide-subtle">
           {previews.map(b => (
-            <Preview key={b.id} batch={b} busy={busy === b.id} onPublish={ids => publish(b, ids)} onDiscard={() => setDiscarding(b)} />
+            <Preview key={b.id} batch={b} busy={busy === b.id} onPublish={(ids) => publish(b, ids)} onDiscard={() => setDiscarding(b)} />
           ))}
         </ul>
       ) : (

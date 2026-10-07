@@ -20,6 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Listing } from '@iskotify/utils'
 import type { DriveEntry, DriveGateway } from '../kb/syncDriveFolder'
 import { tableFromCsv, tableFromXlsx, type Table } from '../kb/table'
+import { FileTooLargeError } from '../kb/fileTooLarge'
 import { geminiAsk, type AskModel } from '../ai/mapColumns'
 import { planImport, looksLikeListingHeader } from '../listings/planImport'
 import { EXISTING_LISTING_COLUMNS } from '../listings/types'
@@ -60,7 +61,10 @@ export interface ContentSyncSummary {
   /** Files left for the next run (deadline reached). */
   remaining: number
   aiCalls: number
+  /** Unreadable folders, and folders with more files than one run reads. */
   sourceErrors: SourceError[]
+  /** Folders not listed this run because the deadline had passed. */
+  foldersDeferred: number
 }
 
 export interface ContentSyncOptions {
@@ -84,6 +88,13 @@ const MAX_AI_CALLS = 6
 // The route stops starting files 15 s before its 60 s limit; a report's model
 // call can take ~30 s, so one only starts with at least this long to go.
 const AI_HEADROOM_MS = 20_000
+// A weekly report is text: anything bigger is not one report (and is never
+// fully buffered — the export stream stops at the cap).
+export const REPORT_MAX_BYTES = 1024 * 1024
+/** Per folder per run; the most recently modified files go first. */
+export const MAX_FILES_PER_SOURCE = 200
+/** A held file that hasn't changed is retried at most this often (it usually costs a model call). */
+export const HELD_RETRY_MS = 6 * 60 * 60 * 1000
 // A weekly report's findings can run long; the column-mapping default (1024) can't hold them.
 const askForReports = geminiAsk({ maxOutputTokens: 8192 })
 
@@ -93,6 +104,7 @@ interface LedgerRow {
   md5_checksum: string | null
   drive_modified_at: string | null
   status: ContentStatus
+  synced_at: string | null
 }
 
 const isXlsx = (e: DriveEntry) => e.mimeType === XLSX_MIME || /\.xlsx$/i.test(e.name)
@@ -111,12 +123,19 @@ function sameContent(e: DriveEntry, led: LedgerRow): boolean {
   return !!e.modifiedTime && !!led.drive_modified_at && Date.parse(led.drive_modified_at) === Date.parse(e.modifiedTime)
 }
 
-function needsWork(e: DriveEntry, led: LedgerRow | undefined): boolean {
+function needsWork(e: DriveEntry, led: LedgerRow | undefined, nowMs: number): boolean {
   if (!led) return true
-  // Retried every run: a transient AI or Drive failure may be gone.
-  if (led.status === 'error' || led.status === 'held') return true
-  return !sameContent(e, led)
+  // A changed file is always read again.
+  if (!sameContent(e, led)) return true
+  // Retried every run: a transient Drive or database failure may be gone.
+  if (led.status === 'error') return true
+  // Held (unreadable AI answer, no usable rows, AI budget spent …): retried,
+  // but not on every Sync now — each try can cost a model call.
+  if (led.status === 'held') return !led.synced_at || nowMs - Date.parse(led.synced_at) >= HELD_RETRY_MS
+  return false
 }
+
+const newestFirst = (a: DriveEntry, b: DriveEntry) => (Date.parse(b.modifiedTime ?? '') || 0) - (Date.parse(a.modifiedTime ?? '') || 0)
 
 const errMessage = (err: unknown) => (err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : String(err))
 
@@ -129,7 +148,7 @@ export async function syncContentSources(
   const now = opts.now ?? Date.now
   const maxBytes = opts.maxFileBytes ?? MAX_FILE_BYTES
   const baseAsk = opts.ask ?? askForReports
-  const summary: ContentSyncSummary = { files: [], unchanged: 0, remaining: 0, aiCalls: 0, sourceErrors: [] }
+  const summary: ContentSyncSummary = { files: [], unchanged: 0, remaining: 0, aiCalls: 0, sourceErrors: [], foldersDeferred: 0 }
 
   let aiLeft = opts.maxAiCalls ?? MAX_AI_CALLS
   // Every model call in the run goes through here, so the budget covers both
@@ -143,7 +162,7 @@ export async function syncContentSources(
 
   const { data: ledgerData, error: ledgerErr } = await db
     .from('drive_content_files')
-    .select('content_type, drive_file_id, md5_checksum, drive_modified_at, status')
+    .select('content_type, drive_file_id, md5_checksum, drive_modified_at, status, synced_at')
   if (ledgerErr) throw new Error(`drive_content_files read failed: ${ledgerErr.message}`)
   const ledger = new Map(((ledgerData ?? []) as LedgerRow[]).map(r => [keyOf(r.content_type, r.drive_file_id), r]))
 
@@ -151,15 +170,27 @@ export async function syncContentSources(
   const candidates: { source: ContentSource; e: DriveEntry }[] = []
   const seen = new Set<string>()
   for (const source of sources) {
-    let entries: DriveEntry[]
-    try {
-      entries = await drive.listTree(source.folderId)
-    } catch (err) {
-      summary.sourceErrors.push({ sourceId: source.id, contentType: source.contentType, folderId: source.folderId, label: source.label, message: errMessage(err) })
+    const sourceError = (message: string) =>
+      summary.sourceErrors.push({ sourceId: source.id, contentType: source.contentType, folderId: source.folderId, label: source.label, message })
+    // Listing a big tree takes time too: no new folder after the deadline, and
+    // the listing itself stops at it.
+    if (opts.deadline !== undefined && now() >= opts.deadline) {
+      summary.foldersDeferred++
       continue
     }
-    for (const e of entries) {
-      if (e.mimeType === FOLDER_MIME || e.mimeType.startsWith('image/')) continue
+    let entries: DriveEntry[]
+    try {
+      entries = await drive.listTree(source.folderId, opts.deadline !== undefined ? { deadline: opts.deadline } : {})
+    } catch (err) {
+      sourceError(errMessage(err))
+      continue
+    }
+    let files = entries.filter(e => e.mimeType !== FOLDER_MIME && !e.mimeType.startsWith('image/'))
+    if (files.length > MAX_FILES_PER_SOURCE) {
+      sourceError(`Folder has ${files.length} files; only the ${MAX_FILES_PER_SOURCE} most recently modified are read. Move older files out of it.`)
+      files = [...files].sort(newestFirst).slice(0, MAX_FILES_PER_SOURCE)
+    }
+    for (const e of files) {
       const k = keyOf(source.contentType, e.id)
       if (seen.has(k)) continue
       seen.add(k)
@@ -173,9 +204,10 @@ export async function syncContentSources(
     const led = ledger.get(keyOf(source.contentType, e.id))
     return !!led && led.status === 'held' && sameContent(e, led)
   }
+  const startedAt = now()
   const todo = candidates
     .filter(c => {
-      if (needsWork(c.e, ledger.get(keyOf(c.source.contentType, c.e.id)))) return true
+      if (needsWork(c.e, ledger.get(keyOf(c.source.contentType, c.e.id)), startedAt)) return true
       summary.unchanged++
       return false
     })
@@ -219,7 +251,7 @@ export async function syncContentSources(
         status,
         message,
         batch_id: batchId,
-        synced_at: new Date().toISOString(),
+        synced_at: new Date(now()).toISOString(),
       }, { onConflict: 'content_type,drive_file_id' })
       if (error) throw new Error(`drive_content_files write failed: ${error.message}`)
     }
@@ -236,7 +268,10 @@ export async function syncContentSources(
       }
     } catch (err) {
       outcome.message = errMessage(err)
-      try { await record('error', outcome.message) } catch { /* keep the original error */ }
+      // Too big is a property of the file, not a failure to retry every run.
+      const status: ContentStatus = err instanceof FileTooLargeError ? 'skipped' : 'error'
+      try { await record(status, outcome.message) } catch { /* keep the original error */ }
+      outcome.status = status
     }
     summary.files.push(outcome)
   }
@@ -271,11 +306,8 @@ async function listingsFile(
   if (isXlsx(e)) {
     table = await tableFromXlsx(await drive.downloadBytes(e), hint)
   } else {
-    const text = await drive.downloadText(e)
-    if (Buffer.byteLength(text, 'utf8') > ctx.maxBytes) {
-      return { status: 'skipped', message: `File is larger than ${Math.round(ctx.maxBytes / 1024 / 1024)} MB — split it into smaller files.` }
-    }
-    table = tableFromCsv(text, hint)
+    // Capped: a native Sheet's export has no size in the listing.
+    table = tableFromCsv(await drive.downloadText(e, { maxBytes: ctx.maxBytes }), hint)
   }
   if (table.records.length === 0) return { status: 'held', message: 'The sheet has no data rows under its header.' }
 
@@ -339,10 +371,14 @@ async function announcementsFile(
   if (!isDocLike(e)) {
     return { status: 'skipped', message: 'Announcements are read from Google Docs — save the report as a Google Doc (File → Save as Google Docs).' }
   }
-  if (ctx.aiLeft() <= 0) {
-    return { status: 'held', message: 'This run’s AI budget is spent; the report will be read on the next sync.' }
+  if ((e.size ?? 0) > REPORT_MAX_BYTES) {
+    return { status: 'skipped', message: `File is larger than ${REPORT_MAX_BYTES / 1024 / 1024} MB — one weekly report per Doc.` }
   }
-  const text = await drive.downloadText(e)
+  if (ctx.aiLeft() <= 0) {
+    return { status: 'held', message: 'This run’s AI budget is spent; the report will be read on a later sync.' }
+  }
+  // A native Doc's export size is unknown until read: the stream stops at the cap (FileTooLargeError → skipped).
+  const text = await drive.downloadText(e, { maxBytes: REPORT_MAX_BYTES })
   const result = await extractAnnouncements({ text, fileName: e.name, modifiedTime: e.modifiedTime }, ctx.ask)
   if (!result.ok) return { status: 'held', message: result.message }
 
