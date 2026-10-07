@@ -944,7 +944,7 @@ describe('DiagnosticExam', () => {
       expect(mockSaveRun).not.toHaveBeenCalled()
       expect(screen.queryByRole('button', { name: /UPCAT/ })).toBeNull()
       // Nothing to review either: the exam's page, which says practice is coming soon.
-      fireEvent.press(screen.getByRole('button', { name: 'See exam details' }))
+      fireEvent.press(await screen.findByRole('button', { name: 'See exam details' }, { timeout: 10_000 }))
       expect(mockPush).toHaveBeenCalledWith('/listings/dcat-dlsu')
     })
 
@@ -952,9 +952,11 @@ describe('DiagnosticExam', () => {
       mockSearchParams = { exam: 'dcat-dlsu' }
       mockReviewSlugs = ['dcat-dlsu']
       render(<DiagnosticExam />)
-      expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet")).toBeTruthy()
+      expect(await screen.findByText("A diagnostic for DCAT-DLSU isn't available yet", {}, { timeout: 10_000 })).toBeTruthy()
+      // The review check is async: wait for its button before asserting the other is absent.
+      const review = await screen.findByRole('button', { name: 'Review DCAT-DLSU topics' }, { timeout: 10_000 })
       expect(screen.queryByRole('button', { name: 'See exam details' })).toBeNull()
-      fireEvent.press(screen.getByRole('button', { name: 'Review DCAT-DLSU topics' }))
+      fireEvent.press(review)
       expect(mockPush).toHaveBeenCalledWith('/practice/review/dcat-dlsu')
     })
 
@@ -962,7 +964,7 @@ describe('DiagnosticExam', () => {
       mockSearchParams = { exam: 'school:abc' }
       render(<DiagnosticExam />)
       expect(await screen.findByText("A diagnostic for GENERAL-CET isn't available yet", {}, { timeout: 10_000 })).toBeTruthy()
-      fireEvent.press(screen.getByRole('button', { name: 'See exam details' }))
+      fireEvent.press(await screen.findByRole('button', { name: 'See exam details' }, { timeout: 10_000 }))
       expect(mockPush).toHaveBeenCalledWith('/listings/general-cet')
       expect(mockPush.mock.calls.flat().join(' ')).not.toMatch(/school/)
     })
