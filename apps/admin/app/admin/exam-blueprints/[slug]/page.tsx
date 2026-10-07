@@ -1,5 +1,7 @@
 import { createServerClient } from '@iskotify/utils'
 import { BlueprintEditor } from '@/components/admin/BlueprintEditor'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +51,8 @@ interface Props {
 }
 
 export default async function BlueprintEditorPage({ params }: Props) {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { slug } = await params
   const isNew = slug === 'new'
   const db = createServerClient()

@@ -6,6 +6,8 @@ import { GenerateExplanationsButton } from '@/components/admin/GenerateExplanati
 import { RegenerateDistractorsPanel } from '@/components/admin/RegenerateDistractorsPanel'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +19,8 @@ type Topic = {
 }
 
 export default async function FlashcardsPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const db = createServerClient()
 
   // Independent reads: run them together.

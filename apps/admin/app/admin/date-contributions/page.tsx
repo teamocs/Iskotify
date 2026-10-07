@@ -3,6 +3,8 @@ import { Topbar } from '@/components/admin/Topbar'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { DateContributionsTable, type Contribution } from '@/components/admin/DateContributionsTable'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +38,8 @@ async function getData(): Promise<{ rows: Contribution[]; titles: Record<string,
 }
 
 export default async function DateContributionsPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { rows, titles, error } = await getData()
   const pending = rows.filter((r) => r.status === 'pending').length
 

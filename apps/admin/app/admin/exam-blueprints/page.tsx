@@ -6,6 +6,8 @@ import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { buttonClass } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +18,8 @@ async function getBlueprints(): Promise<{ rows: BlueprintRow[]; error: string | 
 }
 
 export default async function ExamBlueprintsPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { rows, error } = await getBlueprints()
 
   return (

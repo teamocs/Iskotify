@@ -1,5 +1,7 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/admin/requireAdmin', () => ({ isAdminSession: async () => true }))
 import { renderToStaticMarkup } from 'react-dom/server'
 
 // --- mocks ---

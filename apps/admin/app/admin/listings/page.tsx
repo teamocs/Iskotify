@@ -5,6 +5,8 @@ import { ListingsView } from '@/components/admin/ListingsView'
 import { buttonClass } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import type { Listing } from '@iskotify/utils'
+import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,8 @@ async function getData() {
 }
 
 export default async function ListingsPage() {
+  // The layout's check doesn't stop this page's own service-role reads.
+  if (!(await isAdminSession())) notFound()
   const { listings, lastImportTime } = await getData()
 
   const total = listings.length
