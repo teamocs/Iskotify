@@ -21,7 +21,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/flashcards/drafts', label: 'Drafts', icon: 'file-pen' },
       { href: '/admin/upcat/review-queue', label: 'Review queue', icon: 'scan' },
       { href: '/admin/exam-blueprints', label: 'Exam blueprints', icon: 'blueprint' },
-      { href: '/admin/sync', label: 'Question sync', icon: 'folder' },
+      { href: '/admin/sync', label: 'Drive sync', icon: 'folder' },
     ],
   },
   {

@@ -20,6 +20,7 @@ function makeChain(result: { data?: unknown; error?: unknown }) {
   const chain: Record<string, unknown> = {
     select: vi.fn(() => chain),
     eq: vi.fn(() => chain),
+    is: vi.fn(() => chain),
     in: vi.fn(() => chain),
     order: vi.fn(() => chain),
     limit: vi.fn(() => chain),
@@ -145,6 +146,13 @@ describe('POST /api/admin/listings/import', () => {
     expect(tableResults.listing_import_batches!.eq).toHaveBeenCalledWith('status', 'preview')
   })
 
+  it('leaves the Drive sync’s per-file previews alone, and tags its own batch as a pasted link', async () => {
+    const { POST } = await loadRoute()
+    await POST(req({ url: 'https://docs.google.com/spreadsheets/d/sheet-123/edit' }))
+    expect(tableResults.listing_import_batches!.is).toHaveBeenCalledWith('drive_file_id', null)
+    expect(tableResults.listing_import_batches!.insert).toHaveBeenCalledWith(expect.objectContaining({ source: 'sheet_link' }))
+  })
+
   it('returns 500 when reading existing listings fails', async () => {
     tableResults.listings = makeChain({ data: null, error: { message: 'db down' } })
     const { POST } = await loadRoute()
@@ -194,6 +202,18 @@ describe('GET /api/admin/listings/import', () => {
     expect(body.preview).toMatchObject({ id: 'p1' })
     expect(body.history).toHaveLength(1)
     expect(body.lastUrl).toBe('https://docs.google.com/spreadsheets/d/p1/edit')
+  })
+
+  it('shows only the pasted-link preview here (Drive previews live on the Sync page)', async () => {
+    const chains: ReturnType<typeof makeChain>[] = []
+    mockFrom.mockImplementation(() => {
+      const c = makeChain({ data: null, error: null })
+      chains.push(c)
+      return c
+    })
+    const { GET } = await loadRoute()
+    await GET()
+    expect(chains[0]!.is).toHaveBeenCalledWith('drive_file_id', null)
   })
 
   it('falls back to the most recent history sheet_url when there is no preview', async () => {

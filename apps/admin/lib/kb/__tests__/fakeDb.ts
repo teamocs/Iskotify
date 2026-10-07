@@ -5,12 +5,18 @@
 type Row = Record<string, any>
 type Filter = (r: Row) => boolean
 
-const KEYS: Record<string, string> = {
+const KEYS: Record<string, string | string[]> = {
   upcat_questions: 'question_id',
   upcat_passages: 'set_id',
   kb_drive_files: 'drive_file_id',
   kb_file_mappings: 'drive_file_id',
+  drive_content_files: ['content_type', 'drive_file_id'],
+  admissions_updates: 'id',
+  listings: 'slug',
 }
+
+const sameKey = (key: string | string[], a: Row, b: Row) =>
+  (Array.isArray(key) ? key : [key]).every(k => a[k] === b[k])
 
 export function fakeDb(seed: Record<string, Row[]> = {}) {
   const tables = new Map<string, Row[]>(Object.entries(seed).map(([k, v]) => [k, v.map(r => ({ ...r }))]))
@@ -46,7 +52,7 @@ export function fakeDb(seed: Record<string, Row[]> = {}) {
           const arr = Array.isArray(values) ? values : [values]
           const key = KEYS[name]
           for (const v of arr) {
-            const i = key ? t(name).findIndex(r => r[key] === v[key]) : -1
+            const i = key ? t(name).findIndex(r => sameKey(key, r, v)) : -1
             if (i >= 0) t(name)[i] = { ...t(name)[i], ...v }
             else t(name).push({ ...v })
           }

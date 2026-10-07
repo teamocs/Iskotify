@@ -112,6 +112,16 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/[\s-]+/g, '_')
 }
 
+/**
+ * Whether a sheet row is the listings header: a title column plus at least one
+ * other known column. Lets the sheet readers skip a title banner (merged
+ * across one or more cells) above the real header.
+ */
+export function looksLikeListingHeader(cells: string[]): boolean {
+  const fields = new Set(cells.map(c => ALIASES[normalizeHeader(c)]).filter(Boolean))
+  return fields.has('title') && fields.size >= 2
+}
+
 /** Converts a title into a URL-safe slug: lowercase, ascii, hyphen-separated. */
 export function slugify(input: string): string {
   return input

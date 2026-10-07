@@ -105,6 +105,28 @@ describe('readSheet', () => {
     )
   })
 
+  it('skips a merged title banner above the header row (API path)', async () => {
+    mockSpreadsheetsGet.mockResolvedValue({
+      data: { properties: { title: 'Scholarships 2026' }, sheets: [{ properties: { sheetId: 0, title: 'Sheet1' } }] },
+    })
+    mockValuesGet.mockResolvedValue({
+      data: { values: [['DOST Scholarships 2026', '2026'], ['title', 'type'], ['DOST', 'scholarship']] },
+    })
+    const { readSheet } = await load()
+    const result = await readSheet({ sheetId: 'sheet-id-123' })
+    expect(result.headers).toEqual(['title', 'type'])
+    expect(result.records).toEqual([{ title: 'DOST', type: 'scholarship' }])
+  })
+
+  it('skips a merged title banner above the header row (CSV fallback)', async () => {
+    mockSpreadsheetsGet.mockRejectedValue(Object.assign(new Error('forbidden'), { code: 403 }))
+    mockFetch.mockResolvedValue({ ok: true, text: async () => 'Scholarships banner,,\ntitle,type,provider\nDOST,scholarship,DOST\n' })
+    const { readSheet } = await load()
+    const result = await readSheet({ sheetId: 'sheet-id-123' })
+    expect(result.headers).toEqual(['title', 'type', 'provider'])
+    expect(result.records).toEqual([{ title: 'DOST', type: 'scholarship', provider: 'DOST' }])
+  })
+
   it('caps rows at 5000', async () => {
     mockSpreadsheetsGet.mockResolvedValue({
       data: { properties: { title: 'Big' }, sheets: [{ properties: { sheetId: 0, title: 'Sheet1' } }] },

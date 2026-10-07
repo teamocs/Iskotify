@@ -214,6 +214,8 @@ describe('POST /api/admin/listings/import/[id]/publish', () => {
     )
     expect(mockRevalidateTag).toHaveBeenCalledWith('listings')
     expect(mockRevalidatePath).toHaveBeenCalledWith('/admin/listings')
+    // A Drive-sync preview is published from /admin/sync too.
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/admin/sync')
   })
 
   it('returns 500 when an upsert fails', async () => {

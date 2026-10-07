@@ -10,6 +10,7 @@ import type { DriveEntry, DriveGateway, MediaStore } from './syncDriveFolder'
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
+const DOC_MIME = 'application/vnd.google-apps.document'
 // Drive ids are URL-safe base64; validated because they are interpolated into
 // the files.list query string.
 const DRIVE_ID = /^[A-Za-z0-9_-]{10,}$/
@@ -63,7 +64,7 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
               size: f.size ? Number(f.size) : null,
               path,
             })
-            if (out.length > MAX_ENTRIES) throw new Error(`Drive folder has more than ${MAX_ENTRIES} files — narrow KB_DRIVE_FOLDER_ID`)
+            if (out.length > MAX_ENTRIES) throw new Error(`Drive folder has more than ${MAX_ENTRIES} files — point the source at a narrower folder`)
           }
           pageToken = res.data.nextPageToken ?? undefined
         } while (pageToken)
@@ -75,6 +76,11 @@ export function createDriveGateway(credentialsJson = process.env.GOOGLE_SERVICE_
       if (entry.mimeType === SHEET_MIME) {
         // Exports the first sheet of a native Google Sheet.
         const res = await drive.files.export({ fileId: entry.id, mimeType: 'text/csv' }, { responseType: 'text' })
+        return String(res.data)
+      }
+      if (entry.mimeType === DOC_MIME) {
+        // A native Google Doc (e.g. a weekly admissions report) as plain text.
+        const res = await drive.files.export({ fileId: entry.id, mimeType: 'text/plain' }, { responseType: 'text' })
         return String(res.data)
       }
       const res = await drive.files.get(

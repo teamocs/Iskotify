@@ -1,5 +1,7 @@
 import { google } from 'googleapis'
 import Papa from 'papaparse'
+import { tableFromRows } from '../kb/table'
+import { looksLikeListingHeader } from './planImport'
 
 export interface SheetData {
   title: string
@@ -27,13 +29,17 @@ function getServiceAccount(): ServiceAccount | null {
   }
 }
 
-function rowsToRecords(values: string[][]): { headers: string[]; records: Record<string, string>[] } {
-  const [headerRow, ...rows] = values
-  const headers = (headerRow ?? []).map(h => String(h ?? ''))
-  const records = rows.slice(0, ROW_CAP).map(row =>
-    Object.fromEntries(headers.map((h, i) => [h, String(row[i] ?? '')])),
-  )
-  return { headers, records }
+// Leading rows scanned for the header (a title banner can sit above it).
+const HEADER_SCAN_ROWS = 10
+
+/**
+ * Header + records from raw sheet rows. The header is the first leading row
+ * that looks like a listings header (so a merged title banner above it is
+ * skipped), else the first full-width row; blank rows are dropped.
+ */
+function rowsToRecords(values: readonly (readonly unknown[])[]): { headers: string[]; records: Record<string, string>[] } {
+  const { headers, records } = tableFromRows(values.slice(0, ROW_CAP + HEADER_SCAN_ROWS + 1), { isHeader: looksLikeListingHeader })
+  return { headers, records: records.slice(0, ROW_CAP) }
 }
 
 async function readViaApi(sheetId: string, gid: string | undefined, credentials: Record<string, unknown>): Promise<SheetData> {
@@ -62,9 +68,8 @@ async function readViaCsv(sheetId: string, gid: string | undefined): Promise<She
   const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) })
   if (!res.ok) throw new Error(`CSV export request failed with status ${res.status}`)
   const text = await res.text()
-  const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true })
-  const headers = parsed.meta.fields ?? []
-  const records = (parsed.data ?? []).slice(0, ROW_CAP)
+  const parsed = Papa.parse<string[]>(text.replace(/^﻿/, ''), { skipEmptyLines: 'greedy' })
+  const { headers, records } = rowsToRecords(parsed.data ?? [])
   return { title: sheetId, tab: String(gid ?? 0), headers, records }
 }
 

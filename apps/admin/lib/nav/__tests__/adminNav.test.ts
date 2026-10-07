@@ -9,7 +9,7 @@ describe('NAV_GROUPS', () => {
   it('puts the right destinations in each group', () => {
     const labels = Object.fromEntries(NAV_GROUPS.map(g => [g.label, g.items.map(i => i.label)]))
     expect(labels).toEqual({
-      Content: ['Knowledge base', 'Import questions', 'Drafts', 'Review queue', 'Exam blueprints', 'Question sync'],
+      Content: ['Knowledge base', 'Import questions', 'Drafts', 'Review queue', 'Exam blueprints', 'Drive sync'],
       Listings: ['All listings', 'Import from Sheets', 'Course tags', 'Admissions updates'],
       Inbox: ['Reported questions', 'Bug reports', 'Feedback', 'Date corrections'],
       Audience: ['Users', 'Early access', 'Analytics'],

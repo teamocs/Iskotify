@@ -5,27 +5,15 @@ import { parseSheetLink } from '@/lib/listings/sheetLink'
 import { readSheet } from '@/lib/listings/readSheet'
 import { planImport } from '@/lib/listings/planImport'
 import { errorMessage } from '@/lib/errorMessage'
-import type { ImportBatch, ImportBatchSummary } from '@/lib/listings/types'
+import { EXISTING_LISTING_COLUMNS, HISTORY_COLUMNS, lastSheetUrl, type ImportBatch, type ImportBatchSummary } from '@/lib/listings/types'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-// listing_import_batches.rows/invalid/missing are heavy jsonb — history only
-// ever needs the summary columns (the counts, not every row).
-const HISTORY_COLUMNS = [
-  'id', 'sheet_id', 'sheet_url', 'sheet_title', 'tab', 'status', 'mapped_by_ai', 'column_map',
-  'new_count', 'update_count', 'unchanged_count', 'invalid_count', 'closed_count',
-  'created_by', 'created_at', 'published_by', 'published_at', 'discarded_at',
-].join(', ')
-
-const EXISTING_LISTING_COLUMNS = [
-  'slug', 'status', 'type', 'title', 'provider', 'description', 'requirements', 'coverage',
-  'deadline', 'exam_date', 'results_date', 'events', 'target_courses', 'target_year_levels',
-  'tags', 'region', 'grant_amount', 'external_url', 'image_url',
-].join(', ')
-
 // Pastes a Google Sheets link, reads it, and stores the result as a `preview`
-// batch. Only one preview may be live at a time — an existing one is discarded.
+// batch. Only one pasted-link preview may be live at a time — an existing one
+// is discarded. The Drive sync's per-file previews (drive_file_id set) are its
+// own and are left alone.
 export async function POST(req: NextRequest) {
   const gate = await requireAdmin()
   if ('error' in gate && gate.error) return gate.error
@@ -61,6 +49,7 @@ export async function POST(req: NextRequest) {
       .from('listing_import_batches')
       .update({ status: 'discarded', discarded_at: new Date().toISOString() })
       .eq('status', 'preview')
+      .is('drive_file_id', null)
     if (discardError) throw discardError
 
     const { data: inserted, error: insertError } = await db
@@ -71,6 +60,7 @@ export async function POST(req: NextRequest) {
         sheet_title: sheet.title,
         tab: sheet.tab,
         status: 'preview',
+        source: 'sheet_link',
         rows: plan.rows,
         invalid: plan.invalid,
         missing: plan.missing,
@@ -102,7 +92,7 @@ export async function GET() {
   const db = createServerClient()
   try {
     const [previewRes, historyRes] = await Promise.all([
-      db.from('listing_import_batches').select('*').eq('status', 'preview').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      db.from('listing_import_batches').select('*').eq('status', 'preview').is('drive_file_id', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       db.from('listing_import_batches').select(HISTORY_COLUMNS).in('status', ['published', 'discarded']).order('created_at', { ascending: false }).limit(50),
     ])
     if (previewRes.error) throw previewRes.error
@@ -110,11 +100,7 @@ export async function GET() {
 
     const preview = (previewRes.data ?? null) as ImportBatch | null
     const history = (historyRes.data ?? []) as unknown as ImportBatchSummary[]
-    const defaultSheetId = process.env.GOOGLE_SHEETS_ID
-    const lastUrl =
-      preview?.sheet_url ??
-      history[0]?.sheet_url ??
-      (defaultSheetId ? `https://docs.google.com/spreadsheets/d/${defaultSheetId}/edit` : null)
+    const lastUrl = lastSheetUrl(preview, history)
 
     return NextResponse.json({ preview, history, lastUrl })
   } catch (err) {
