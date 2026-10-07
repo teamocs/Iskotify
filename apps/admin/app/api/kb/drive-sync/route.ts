@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { createServerClient } from '@iskotify/utils'
 import { requireAdmin } from '@/lib/admin/requireAdmin'
-import { syncDriveFolder } from '@/lib/kb/syncDriveFolder'
 import { createDriveGateway, createMediaStore } from '@/lib/kb/driveClient'
+import type { DriveGateway } from '@/lib/kb/syncDriveFolder'
 import { logSyncRun, type SyncTrigger } from '@/lib/kb/syncRuns'
+import { loadSyncSources } from '@/lib/driveSources/sources'
+import { syncQuestionSources } from '@/lib/driveSources/questions'
+import { syncContentSources, type ContentSource, type ContentSyncSummary } from '@/lib/driveContent/syncContent'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -40,19 +43,37 @@ async function run(req: NextRequest, allowSession: boolean) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const rootId = process.env.KB_DRIVE_FOLDER_ID
-  if (!rootId) {
-    return NextResponse.json({ error: 'KB_DRIVE_FOLDER_ID is not configured' }, { status: 500 })
+  // Every enabled Drive source (drive_sources, migration 068), with
+  // KB_DRIVE_FOLDER_ID as the implicit questions folder.
+  const { sources } = await loadSyncSources(db, process.env.KB_DRIVE_FOLDER_ID)
+  if (sources.length === 0) {
+    return NextResponse.json({ error: 'KB_DRIVE_FOLDER_ID is not configured and no Drive source is enabled' }, { status: 500 })
   }
+  const questionSources = sources.filter(s => s.contentType === 'questions')
+  const contentSources: ContentSource[] = sources.flatMap(s =>
+    s.contentType === 'questions' ? [] : [{ ...s, contentType: s.contentType }])
 
   try {
-    const summary = await logSyncRun(db, trigger, () =>
-      syncDriveFolder(db, createDriveGateway(), createMediaStore(db), {
-        rootId,
-        deadline: Date.now() + TIME_BUDGET_MS,
-      }),
-    )
-    return NextResponse.json(summary)
+    const deadline = Date.now() + TIME_BUDGET_MS
+    let drive: DriveGateway | null = null
+    // Questions first, through the existing pipeline; listings and
+    // announcements get whatever time is left (the rest resumes next run).
+    // The gateway is made inside the logged run, so a missing service account
+    // shows in History as a failed run.
+    const summary = await logSyncRun(db, trigger, () => {
+      drive = createDriveGateway()
+      return syncQuestionSources(db, drive, createMediaStore(db), questionSources, { deadline })
+    })
+    if (contentSources.length === 0 || !drive) return NextResponse.json(summary)
+
+    let content: ContentSyncSummary | { error: string }
+    try {
+      content = await syncContentSources(db, drive, contentSources, { deadline })
+    } catch (err) {
+      console.error('[kb/drive-sync] content sync failed:', err)
+      content = { error: err instanceof Error ? err.message : 'Listings/announcements sync failed' }
+    }
+    return NextResponse.json({ ...summary, content })
   } catch (err) {
     console.error('[kb/drive-sync] failed:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Drive sync failed' }, { status: 500 })

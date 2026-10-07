@@ -16,7 +16,10 @@ vi.mock('@iskotify/utils', () => ({
   }),
 }))
 
+vi.mock('@/lib/admin/requireAdmin', () => ({ isAdminSession: async () => true }))
+
 vi.mock('next/navigation', () => ({
+  notFound: () => { throw new Error('NEXT_NOT_FOUND') },
   useSearchParams: () => new URLSearchParams(''),
   usePathname: () => '/admin/updates',
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),

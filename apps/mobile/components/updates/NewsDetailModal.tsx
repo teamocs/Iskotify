@@ -10,23 +10,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
 import type { FeedItem } from '../../utils/admissionsFeed'
-
-interface Source {
-  label?: string
-  url: string
-}
+import { isHttpUrl, newsSources } from '../../utils/newsSources'
 
 interface Props {
   item: FeedItem
   onClose: () => void
 }
 
+/** Opens a source link — http(s) only, checked again right before opening. */
+function openSource(url: string) {
+  if (isHttpUrl(url)) void Linking.openURL(url).catch(() => {})
+}
+
 export function NewsDetailModal({ item, onClose }: Props) {
   const { theme: t, typo } = useTheme()
 
-  const sources: Source[] = Array.isArray(item.sources)
-    ? (item.sources as Source[]).filter((s) => typeof s.url === 'string' && s.url.length > 0)
-    : []
+  // {label, url} links (admin console) or plain URL strings (older rows).
+  const sources = newsSources(item.sources)
 
   return (
     <Modal
@@ -96,12 +96,12 @@ export function NewsDetailModal({ item, onClose }: Props) {
               {sources.map((src, i) => (
                 <TouchableOpacity
                   key={i}
-                  onPress={() => Linking.openURL(src.url)}
+                  onPress={() => openSource(src.url)}
                   style={[styles.sourceLink, { borderColor: t.divider }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.sourceLinkText, { color: t.accent, fontSize: typo.xs }]}>
-                    {src.label != null && src.label.length > 0 ? src.label : src.url}
+                    {src.label}
                   </Text>
                 </TouchableOpacity>
               ))}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@iskotify/utils'
 import { createAuthClient } from '@/lib/supabase'
+import { toSourceLinks } from '@/lib/announcements/sources'
 
 export const runtime = 'nodejs'
 
@@ -53,7 +54,8 @@ export async function POST(req: NextRequest) {
     action_required: body.action_required ?? null,
     event_date: body.event_date ?? null,
     event_type: body.event_type ?? null,
-    sources: Array.isArray(body.sources) ? body.sources : [],
+    // {label, url} links, http(s) only — what the app's News detail shows.
+    sources: toSourceLinks(body.sources),
     verified: !!body.verified,
   }
   const { error } = await supabase.from('admissions_updates').insert(row)
@@ -83,6 +85,7 @@ export async function PATCH(req: NextRequest) {
   for (const key of allowed) {
     if (key in rest) update[key] = rest[key]
   }
+  if ('sources' in rest) update.sources = toSourceLinks(rest.sources)
   const { error } = await supabase.from('admissions_updates').update(update).eq('id', id)
   if (error) {
     console.error('[admin/updates PATCH] supabase error:', error)

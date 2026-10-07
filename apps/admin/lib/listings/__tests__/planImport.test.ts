@@ -1,6 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Listing } from '@iskotify/utils'
-import { planImport, slugify } from '../planImport'
+import { planImport, slugify, looksLikeListingHeader } from '../planImport'
+
+describe('looksLikeListingHeader', () => {
+  it('recognises a listings header row by its known column names', () => {
+    expect(looksLikeListingHeader(['Title', 'Type', 'Deadline'])).toBe(true)
+    expect(looksLikeListingHeader(['name', 'Provider', 'Application Deadline', 'Link'])).toBe(true)
+  })
+
+  it('does not take a banner or a data row for a header', () => {
+    expect(looksLikeListingHeader(['DOST Scholarships 2026', '', ''])).toBe(false)
+    expect(looksLikeListingHeader(['DOST-SEI', 'scholarship', '2026-05-01'])).toBe(false)
+    expect(looksLikeListingHeader(['Deadline', 'Region'])).toBe(false) // no title column
+  })
+})
 
 function baseExisting(overrides: Partial<Listing> = {}): Listing {
   return {

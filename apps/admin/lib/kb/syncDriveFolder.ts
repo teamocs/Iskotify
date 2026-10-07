@@ -38,8 +38,10 @@ export interface DriveEntry {
 }
 
 export interface DriveGateway {
-  listTree(rootId: string): Promise<DriveEntry[]>
-  downloadText(entry: DriveEntry): Promise<string>
+  /** With a deadline, stops (throws) instead of starting another page past it. */
+  listTree(rootId: string, opts?: { deadline?: number }): Promise<DriveEntry[]>
+  /** With maxBytes, stops reading past the cap and throws FileTooLargeError (./fileTooLarge). */
+  downloadText(entry: DriveEntry, opts?: { maxBytes?: number }): Promise<string>
   downloadBytes(entry: DriveEntry): Promise<Buffer>
 }
 

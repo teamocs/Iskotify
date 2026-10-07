@@ -80,3 +80,30 @@ describe('table size guards', () => {
     expect(() => tableFromRows(rows)).toThrow(/rows/i)
   })
 })
+
+describe('tableFromRows with a header hint', () => {
+  it('prefers the first row the hint recognises over a wide banner row', () => {
+    // A merged two-cell banner ("title | year") is as wide as a short header,
+    // so the width rule alone would take it.
+    const t = tableFromRows(
+      [
+        ['DOST Scholarships', '2026'],
+        ['Title', 'Type'],
+        ['DOST-SEI', 'scholarship'],
+      ],
+      { isHeader: cells => cells.includes('Title') },
+    )
+    expect(t.headers).toEqual(['Title', 'Type'])
+    expect(t.records).toEqual([{ Title: 'DOST-SEI', Type: 'scholarship' }])
+  })
+
+  it('falls back to the width rule when no scanned row matches the hint', () => {
+    const t = tableFromRows([['Banner', null], ['a', 'b'], ['1', '2']], { isHeader: () => false })
+    expect(t.headers).toEqual(['a', 'b'])
+  })
+
+  it('passes the hint through the CSV reader', () => {
+    const t = tableFromCsv('DOST Scholarships,2026\nTitle,Type\nDOST-SEI,scholarship\n', { isHeader: cells => cells.includes('Title') })
+    expect(t.headers).toEqual(['Title', 'Type'])
+  })
+})

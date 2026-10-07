@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Icon } from '@/components/ui/Icon'
 import { ConfirmDialog } from './ConfirmDialog'
+import { sourceUrls } from '@/lib/announcements/sources'
 
 interface Props {
   updates: AdmissionsUpdate[]
@@ -85,7 +86,7 @@ function toForm(update: AdmissionsUpdate | null): UpdateForm {
     action_required: update.action_required ?? '',
     event_date: update.event_date ?? '',
     event_type: update.event_type ?? '',
-    sources_raw: Array.isArray(update.sources) ? update.sources.join('\n') : '',
+    sources_raw: sourceUrls(update.sources).join('\n'),
     verified: update.verified,
   }
 }

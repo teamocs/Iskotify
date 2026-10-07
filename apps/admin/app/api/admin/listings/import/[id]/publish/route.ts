@@ -108,6 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     revalidateTag('listings')
     revalidatePath('/admin/listings')
+    revalidatePath('/admin/sync')
 
     return NextResponse.json({
       new: newRows.length,

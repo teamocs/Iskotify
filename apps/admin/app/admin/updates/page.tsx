@@ -1,8 +1,11 @@
+import { notFound } from 'next/navigation'
 import { createServerClient } from '@iskotify/utils'
+import { isAdminSession } from '@/lib/admin/requireAdmin'
 import { Topbar } from '@/components/admin/Topbar'
 import { UpdatesView } from '@/components/admin/UpdatesView'
 import { PageBody } from '@/components/ui/Page'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import type { SourceLink } from '@/lib/announcements/sources'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +20,8 @@ export interface AdmissionsUpdate {
   action_required: string | null
   event_date: string | null
   event_type: string | null
-  sources: string[]
+  /** {label, url} links; older rows may hold plain URL strings. */
+  sources: (string | SourceLink)[]
   verified: boolean
   updated_at: string
 }
@@ -34,6 +38,8 @@ async function getData(): Promise<{ updates: AdmissionsUpdate[]; error: string |
 }
 
 export default async function UpdatesPage() {
+  // The layout's check doesn't stop this page's own service-role read.
+  if (!(await isAdminSession())) notFound()
   const { updates, error } = await getData()
 
   return (

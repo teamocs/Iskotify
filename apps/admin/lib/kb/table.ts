@@ -11,6 +11,13 @@ export interface Table {
   records: Record<string, string>[]
 }
 
+export interface TableOptions {
+  /** Recognises a header row by its cells (e.g. known column names). The first
+   *  of the leading rows it accepts is the header; without a match, the width
+   *  rule in tableFromRows decides. */
+  isHeader?: (cells: string[]) => boolean
+}
+
 /** More than any one question file should hold; also bounds memory per sync. */
 export const MAX_TABLE_ROWS = 20_000
 // An .xlsx is a zip: cap what it may inflate to, read from its directory
@@ -29,15 +36,20 @@ function cellText(v: unknown): string {
 
 const filled = (row: string[]) => row.filter(Boolean).length
 
-export function tableFromRows(raw: readonly (readonly unknown[])[]): Table {
+export function tableFromRows(raw: readonly (readonly unknown[])[], opts: TableOptions = {}): Table {
   const rows = raw.map(r => r.map(cellText))
   if (rows.length === 0) return { headers: [], records: [] }
 
   // The header row is the first of the leading rows that is (nearly) as wide as
   // the widest of them — a title row fills one cell, the header fills them all.
+  // A caller that knows its columns can recognise the header outright, which
+  // also catches a banner merged across a few cells.
   const scan = rows.slice(0, HEADER_SCAN_ROWS)
   const widest = Math.max(...scan.map(filled))
-  const headerAt = Math.max(0, scan.findIndex(r => filled(r) >= Math.max(1, Math.ceil(widest * 0.6))))
+  const hinted = opts.isHeader ? scan.findIndex(r => opts.isHeader!(r)) : -1
+  const headerAt = hinted >= 0
+    ? hinted
+    : Math.max(0, scan.findIndex(r => filled(r) >= Math.max(1, Math.ceil(widest * 0.6))))
   const headerRow = rows[headerAt]!
   const body = rows.slice(headerAt + 1)
 
@@ -63,12 +75,12 @@ export function tableFromRows(raw: readonly (readonly unknown[])[]): Table {
   return { headers, records }
 }
 
-export function tableFromCsv(text: string): Table {
+export function tableFromCsv(text: string, opts?: TableOptions): Table {
   const parsed = Papa.parse<string[]>(text.replace(/^﻿/, ''), { skipEmptyLines: 'greedy' })
-  return tableFromRows(parsed.data)
+  return tableFromRows(parsed.data, opts)
 }
 
-export async function tableFromXlsx(bytes: Buffer): Promise<Table> {
+export async function tableFromXlsx(bytes: Buffer, opts?: TableOptions): Promise<Table> {
   let unzipped = 0
   // The filter sees each entry's declared size and returning false skips
   // inflating it, so this reads only the zip directory.
@@ -79,5 +91,5 @@ export async function tableFromXlsx(bytes: Buffer): Promise<Table> {
       return false
     },
   })
-  return tableFromRows(await readSheet(bytes))
+  return tableFromRows(await readSheet(bytes), opts)
 }

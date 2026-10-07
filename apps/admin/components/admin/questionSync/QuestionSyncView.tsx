@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { notifyError, notifySuccess } from '@/lib/toast'
 import { splitStages, poolOf, draftReadiness } from '@/lib/kb/syncStages'
+import { describeContentSync } from '@/lib/driveContent/describe'
 import { PreviewDrawer } from './PreviewDrawer'
 import { MappingDialog } from './MappingDialog'
 import { fmtDateTime, type KbFileRow, type PublishEventRow, type SyncRunRow } from './types'
@@ -87,9 +88,12 @@ export function QuestionSyncView({ files, runs, events }: { files: KbFileRow[]; 
           s.errors.length ? `${s.errors.length} failed` : '',
           s.remaining ? `${s.remaining} left for the next run` : '',
         ].filter(Boolean).join(' · ')
-        setStatus(`Sync finished: ${parts}`)
+        // Listings and announcements folders (Drive sources), when there are any.
+        const content = describeContentSync(s.content)
+        setStatus(`Sync finished: ${parts}${content.text ? ` · ${content.text}` : ''}`)
         if (s.errors.length) notifyError(`Drive sync finished with ${plural(s.errors.length, 'failed file')}`)
-        else notifySuccess(s.imported.length ? `Drive sync complete — ${plural(s.imported.length, 'file')} ready to preview` : 'Drive sync complete — nothing new')
+        else if (content.problems) notifyError(`Drive sync finished — ${content.text}`)
+        else notifySuccess(s.imported.length ? `Drive sync complete — ${plural(s.imported.length, 'file')} ready to preview` : content.text ? `Drive sync complete — ${content.text}` : 'Drive sync complete — nothing new')
         router.refresh()
       } catch (err) {
         notifyError(err instanceof Error ? err : 'Drive sync failed')

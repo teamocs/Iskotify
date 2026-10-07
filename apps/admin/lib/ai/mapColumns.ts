@@ -63,7 +63,8 @@ export function validateColumnMap(raw: unknown, spec: ColumnMapSpec): ColumnMap 
   return { columns, choices }
 }
 
-function extractJson(raw: string): string {
+/** The JSON object in a model reply: a ```json fence, else the outermost {…}. */
+export function extractJson(raw: string): string {
   const trimmed = raw.trim()
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   if (fenced?.[1]) return fenced[1].trim()
@@ -91,18 +92,23 @@ ${choices ? `\nAlso choose:\n${choices}\n` : ''}
 Output ONLY JSON: {"columns": {"<field>": "<header>"}, "choices": {"<choice>": "<value>"}}`
 }
 
-/** Gemini in JSON mode; null when no API key is configured. */
-export const askGemini: AskModel = async (prompt) => {
-  const key = process.env.GEMINI_API_KEY
-  if (!key) return null
-  const model = new GoogleGenerativeAI(key).getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 1024, temperature: 0 },
-  })
-  await waitForRateAllow('gemini:global', { max: 14, windowSec: 60 })
-  const res = await model.generateContent(prompt)
-  return res.response.text()
+/** Gemini in JSON mode at temperature 0; the model returns null when no API key is configured. */
+export function geminiAsk({ maxOutputTokens }: { maxOutputTokens: number }): AskModel {
+  return async (prompt) => {
+    const key = process.env.GEMINI_API_KEY
+    if (!key) return null
+    const model = new GoogleGenerativeAI(key).getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens, temperature: 0 },
+    })
+    await waitForRateAllow('gemini:global', { max: 14, windowSec: 60 })
+    const res = await model.generateContent(prompt)
+    return res.response.text()
+  }
 }
+
+/** Gemini in JSON mode; null when no API key is configured. */
+export const askGemini: AskModel = geminiAsk({ maxOutputTokens: 1024 })
 
 export async function suggestColumnMap(spec: ColumnMapSpec, ask: AskModel = askGemini): Promise<ColumnMap | null> {
   try {
