@@ -1,4 +1,6 @@
-import { Platform, ScrollView, View, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native'
+import { Platform, View, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native'
+import Animated, { useAnimatedRef } from 'react-native-reanimated'
+import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
 import { layout, spacing } from '../../theme/tokens'
@@ -20,7 +22,7 @@ interface Props extends ScrollViewProps {
 
 /**
  * Page scroll container: themed background, safe-area-aware bottom inset that
- * clears the flat tab bar (no overlap), and consistent horizontal padding.
+ * clears the floating tab capsule (no overlap), and consistent horizontal padding.
  *
  * On web (md/lg), content is centered at a max-width so every screen that uses
  * ScreenScroll gets comfortable reading widths for free.
@@ -39,7 +41,10 @@ export function ScreenScroll({
   // On desktop web (lg), tab bar is hidden (SidebarNav takes over) so we don't
   // add the tab bar clearance padding. On native/sm the floating bar is present.
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
-  const paddingBottom = insets.bottom + (tabBarInset && !isDesktopWeb ? layout.tabBarClearance : spacing.xl)
+  const paddingBottom = insets.bottom + (tabBarInset && !isDesktopWeb ? layout.capsuleClearance : spacing.xl)
+  const onScroll = useTabBarScrollHandler()
+  const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  useScrollToTopOnReselect(scrollRef as never)
 
   // Web-only: wrap children in a max-width centering view for md/lg viewports.
   // sm (and native) renders unchanged — no wrapper, no max-width.
@@ -57,11 +62,15 @@ export function ScreenScroll({
   ) : children
 
   return (
-    <ScrollView
+    <Animated.ScrollView
+      ref={scrollRef}
       style={{ flex: 1, backgroundColor: t.bg }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
+      // Feeds the floating tab bar (minimize on scroll); a no-op off the tabs.
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       contentContainerStyle={[
         { paddingHorizontal: padded ? pagePadding(bp) : 0, paddingBottom },
         needsMaxWidth ? null : contentContainerStyle,
@@ -69,6 +78,6 @@ export function ScreenScroll({
       {...rest}
     >
       {innerContent}
-    </ScrollView>
+    </Animated.ScrollView>
   )
 }

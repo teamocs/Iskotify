@@ -29,6 +29,8 @@ import {
   type SearchListing, type SearchSchool,
 } from '../../components/search/searchModel'
 import { addRecent, loadRecentSearches, saveRecentSearches } from '../../components/search/recentSearches'
+import { subscribeSearchSubmit, useSearchQuery } from '../../components/search/searchQuery'
+import { useTabBarScroll } from '../../components/navigation/TabBarScrollContext'
 import { getSettings } from '../../services/settings'
 import { syncOnLaunch } from '../../services/sync'
 
@@ -67,7 +69,9 @@ export default function SearchScreen() {
   const [listings, setListings] = useState<SearchListing[]>([])
   const [schools, setSchools] = useState<SearchSchool[]>([])
   const [userRegion, setUserRegion] = useState('')
-  const [query, setQuery] = useState('')
+  // Shared with the floating bar, which hosts the field on phones and tablets.
+  const [query, setQuery] = useSearchQuery()
+  const barHostsField = useTabBarScroll()?.barHostsSearch ?? false
   const [recent, setRecent] = useState<string[]>([])
   const recentRef = useRef<string[]>([])
   const deferredQuery = useDeferredValue(query)
@@ -128,6 +132,9 @@ export default function SearchScreen() {
     applyRecent(next)
     void saveRecentSearches(next)
   }, [applyRecent])
+  // The bar's search key records a recent, like the screen's own field.
+  useEffect(() => subscribeSearchSubmit(remember), [remember])
+
   const clearRecent = useCallback(() => {
     applyRecent([])
     void saveRecentSearches([])
@@ -264,19 +271,22 @@ export default function SearchScreen() {
   return (
     <Screen
       tabBarInset
+      headerScrolls
       width="wide"
       header={<TabHeader title="Search" subtitle="Schools, scholarships and entrance exams" />}
     >
-      <View style={{ paddingBottom: spacing.lg }}>
-        <SearchField
-          testID="search-input"
-          value={query}
-          onChangeText={setQuery}
-          onSubmit={() => remember(query)}
-          placeholder="School, scholarship or exam, e.g. UPCAT"
-          accessibilityLabel="Search schools, scholarships and exams"
-        />
-      </View>
+      {barHostsField ? null : (
+        <View style={{ paddingBottom: spacing.lg }}>
+          <SearchField
+            testID="search-input"
+            value={query}
+            onChangeText={setQuery}
+            onSubmit={() => remember(query)}
+            placeholder="School, scholarship or exam, e.g. UPCAT"
+            accessibilityLabel="Search schools, scholarships and exams"
+          />
+        </View>
+      )}
       <Text
         testID="search-status"
         accessibilityLiveRegion="polite"

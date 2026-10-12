@@ -169,7 +169,7 @@ export default function ExploreScreen() {
   const syncSettled = useSyncSettled()
 
   // Desktop web swaps the bottom tab bar for the sidebar: no clearance there.
-  const listBottom = insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.tabBarClearance)
+  const listBottom = insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.capsuleClearance)
 
   // ── Listings state (Schools & exams + Scholarships) ──────────────────────
   const [all, setAll] = useState<ListingRow[]>([])

@@ -1,8 +1,8 @@
 /**
  * SidebarNav — persistent navigation for expanded web (≥ 1024).
  *
- * Same four destinations as the bottom TabBar (Today / Practice / Explore /
- * Progress), as links inside a navigation landmark; the current one carries
+ * Same four destinations as the floating tab bar (Today / Practice / Explore /
+ * Progress) plus Search, as links inside a navigation landmark; the current one carries
  * aria-current="page". Profile (avatar + name) and Settings sit at the bottom.
  *
  * Hover: react-native-web exposes `hovered` in the Pressable style function.
@@ -18,7 +18,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
 import { weight, radius, spacing, textStyle } from '../../theme/tokens'
-import { TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
+import { SEARCH_DESTINATION, TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
 import { Avatar } from '../ui/Avatar'
 import { useProfileName } from '../../hooks/useProfileName'
 import { focusRing, type WebPressableState } from '../ui/a11y'
@@ -125,6 +125,12 @@ export function SidebarNav() {
             />
           )
         })}
+        <SidebarLink
+          label={SEARCH_DESTINATION.label}
+          active={current === 'search'}
+          onPress={() => router.push(SEARCH_DESTINATION.href as never)}
+          leading={<Lineicons icon={SEARCH_DESTINATION.icon} size={20} color={current === 'search' ? t.accentText : t.textSecondary} />}
+        />
       </View>
 
       <View style={{ flex: 1 }} />

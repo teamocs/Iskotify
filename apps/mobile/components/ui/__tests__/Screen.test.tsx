@@ -87,3 +87,35 @@ describe('TwoColumn', () => {
     expect(screen.getByText('Side')).toBeTruthy()
   })
 })
+
+// iOS redesign P2c: tab screens clear the floating capsule, and a large-title
+// header can scroll with the content.
+describe('Screen with the floating tab bar', () => {
+  const scrollStyle = () => {
+    const { ScrollView } = require('react-native')
+    return StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle)
+  }
+
+  it('reserves capsuleClearance + the safe area under tab screens', () => {
+    mockWidth.value = 390
+    render(<Screen tabBarInset><Text>Hi</Text></Screen>)
+    // useSafeInsets reports a 0 bottom inset under this mock.
+    expect(scrollStyle().paddingBottom).toBe(104)
+  })
+
+  it('off the tabs, only the safe area and the page gap', () => {
+    mockWidth.value = 390
+    render(<Screen><Text>Hi</Text></Screen>)
+    expect(scrollStyle().paddingBottom).toBe(20)
+  })
+
+  it('headerScrolls puts the header inside the scroll view; otherwise it stays fixed above it', () => {
+    mockWidth.value = 390
+    const r = render(<Screen header={<Text>Head</Text>} headerScrolls><Text>Body</Text></Screen>)
+    const { ScrollView } = require('react-native')
+    expect(r.UNSAFE_getByType(ScrollView).findAll((n: any) => n.props.children === 'Head')).not.toHaveLength(0)
+    r.unmount()
+    const r2 = render(<Screen header={<Text>Head</Text>}><Text>Body</Text></Screen>)
+    expect(r2.UNSAFE_getByType(ScrollView).findAll((n: any) => n.props.children === 'Head')).toHaveLength(0)
+  })
+})

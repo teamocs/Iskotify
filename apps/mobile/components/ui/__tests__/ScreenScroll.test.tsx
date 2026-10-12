@@ -43,4 +43,29 @@ describe('ScreenScroll', () => {
     expect(cc.gap).toBe(12)
     expect(cc.paddingHorizontal).toBe(16)
   })
+
+  // iOS redesign P2c: the last row clears the floating capsule
+  // (62 tall + 26 above the safe area + a 16 gap = layout.capsuleClearance).
+  it('clears the floating capsule on phones: capsuleClearance + the safe area', () => {
+    ;(Platform as { OS: string }).OS = 'android'
+    mockWidth.value = 390
+    const { UNSAFE_getByType } = render(<ScreenScroll><Text>A</Text></ScreenScroll>)
+    const { ScrollView } = require('react-native')
+    const { layout } = require('../../../theme/tokens')
+    expect(layout.capsuleClearance).toBe(104)
+    expect(StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(layout.capsuleClearance)
+  })
+
+  it('needs no capsule clearance beside the desktop sidebar, or off the tabs', () => {
+    ;(Platform as { OS: string }).OS = 'web'
+    mockWidth.value = 1280
+    const { ScrollView } = require('react-native')
+    const r = render(<ScreenScroll><Text>A</Text></ScreenScroll>)
+    expect(StyleSheet.flatten(r.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(20)
+    r.unmount()
+    ;(Platform as { OS: string }).OS = 'android'
+    mockWidth.value = 390
+    const r2 = render(<ScreenScroll tabBarInset={false}><Text>A</Text></ScreenScroll>)
+    expect(StyleSheet.flatten(r2.UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(20)
+  })
 })

@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
-import { View, Text, ScrollView, RefreshControl, Pressable } from 'react-native'
+import { View, Text, ScrollView, RefreshControl, Pressable, Platform } from 'react-native'
+import Animated, { useAnimatedRef } from 'react-native-reanimated'
+import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
@@ -78,6 +80,11 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const insets = useSafeInsets()
+  // The floating bar shows everywhere but beside the desktop sidebar.
+  const bottomBar = !(Platform.OS === 'web' && bp === 'expanded')
+  const onScroll = useTabBarScrollHandler()
+  const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  useScrollToTopOnReselect(scrollRef as never)
   const { focusListings } = useFocusListings()
   const [activeSlug, setActiveSlug] = useState<string | 'overall'>(initialFilter)
   const analytics = useAnalytics(activeSlug)
@@ -359,11 +366,14 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
 
   if (!scrollable) return <View>{body}</View>
 
-  const bottomBar = !(bp === 'expanded')
   return (
-    <ScrollView
+    <Animated.ScrollView
+      ref={scrollRef}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: insets.bottom + (bottomBar ? layout.tabBarClearance : spacing.xxl) }}
+      // Feeds the floating tab bar (minimize on scroll).
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      contentContainerStyle={{ paddingBottom: insets.bottom + (bottomBar ? layout.capsuleClearance : spacing.xxl) }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -375,6 +385,6 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
       }
     >
       {body}
-    </ScrollView>
+    </Animated.ScrollView>
   )
 }

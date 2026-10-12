@@ -1,112 +1,49 @@
 /**
- * M1 navigation: exactly four destinations — Today / Practice / Explore /
- * Progress. Legacy routes (listings, updates, analytics) and Profile stay
- * registered in the navigator for deep links but never appear in the bar.
+ * The bottom navigation (iOS redesign P2c): the floating glass capsule with
+ * exactly four destinations (Today / Practice / Explore / Progress) and a
+ * separate search circle. `TabBar` stays a re-export for one release.
+ * Detailed behaviour lives in navigation/__tests__/FloatingTabBar.test.tsx.
  */
 import React from 'react'
-import { lightTheme } from '../../theme/tokens'
-import { StyleSheet } from 'react-native'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen } from '@testing-library/react-native'
 import { TabBar } from '../TabBar'
+import { FloatingTabBar } from '../navigation/FloatingTabBar'
 import { activeDestination, TAB_DESTINATIONS } from '../navigation/destinations'
-import { aria } from '../../test-utils/aria'
 
-const ROUTE_NAMES = ['index', 'practice', 'explore', 'progress', 'listings', 'updates', 'analytics', 'profile']
+jest.mock('../../hooks/useSafeInsets', () => ({ useSafeInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }))
+
+const ROUTE_NAMES = ['index', 'practice', 'explore', 'progress', 'search']
 
 function makeProps(activeName: string) {
   const routes = ROUTE_NAMES.map(name => ({ key: `${name}-key`, name }))
-  const navigation = {
-    emit: jest.fn(() => ({ defaultPrevented: false })),
-    navigate: jest.fn(),
-  }
   return {
     state: { index: ROUTE_NAMES.indexOf(activeName), routes },
-    navigation,
+    navigation: { emit: jest.fn(() => ({ defaultPrevented: false })), navigate: jest.fn() },
     descriptors: {},
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
   } as any
 }
 
-/** Nearest host View above a node (`.parent` is the composite wrapper). */
-function hostViewAbove(node: any) {
-  let n = node.parent
-  while (n && n.type !== 'View') n = n.parent
-  return n
-}
+describe('TabBar (re-export)', () => {
+  it('is the floating tab bar', () => {
+    expect(TabBar).toBe(FloatingTabBar)
+  })
 
-describe('TabBar', () => {
-  it('shows exactly the four destinations, in order', () => {
+  it('shows exactly the four destinations, in order, and never legacy or Profile routes', () => {
     render(<TabBar {...makeProps('index')} />)
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs.map(t => t.props.accessibilityLabel)).toEqual(['Today', 'Practice', 'Explore', 'Progress'])
-  })
-
-  it('does not render legacy or profile routes', () => {
-    render(<TabBar {...makeProps('index')} />)
-    for (const old of ['Home', 'Exams', 'Lists', 'Updates', 'Profile']) {
-      expect(screen.queryByText(old)).toBeNull()
-    }
-  })
-
-  it('groups the tabs in a tablist and exposes the selected tab', () => {
-    render(<TabBar {...makeProps('explore')} />)
-    // A container View is not itself focusable, so assert the role prop directly.
-    expect(screen.getByTestId('tab-bar-tablist').props.accessibilityRole).toBe('tablist')
-    expect(aria(screen.getByRole('tab', { name: 'Explore' }), 'aria-selected')).toBe(true)
-    expect(aria(screen.getByRole('tab', { name: 'Today' }), 'aria-selected')).toBe(false)
-  })
-
-  it('tab labels respect the 12pt floor', () => {
-    render(<TabBar {...makeProps('index')} />)
-    for (const label of ['Today', 'Practice', 'Explore', 'Progress']) {
-      expect(StyleSheet.flatten(screen.getByText(label).props.style).fontSize).toBeGreaterThanOrEqual(12)
-    }
-  })
-
-  it('each tab is at least 44pt tall', () => {
-    render(<TabBar {...makeProps('index')} />)
-    for (const tab of screen.getAllByRole('tab')) {
-      const style = tab.props.style
-      const flat = StyleSheet.flatten(typeof style === 'function' ? style({ pressed: false }) : style)
-      expect(flat.minHeight).toBeGreaterThanOrEqual(44)
-    }
-  })
-
-  it('draws a keyboard focus ring with the focusRing token', () => {
-    render(<TabBar {...makeProps('index')} />)
-    const p = screen.UNSAFE_root.findAll((n: any) => typeof n.type !== 'string' && typeof n.props.style === 'function' && n.props.accessibilityLabel === 'Practice')[0]!
-    const ring = StyleSheet.flatten(p.props.style({ pressed: false, focused: true }))
-    expect(ring.outlineColor).toBe(lightTheme.focusRing)
-    expect(ring.outlineWidth).toBeGreaterThanOrEqual(2)
-    expect(ring.outlineOffset).toBeGreaterThanOrEqual(2)
-    expect(StyleSheet.flatten(p.props.style({ pressed: false, focused: false })).outlineWidth ?? 0).toBe(0)
-  })
-
-  it('tab labels can grow to 200% and the bar grows with them (minHeight, not height)', () => {
-    render(<TabBar {...makeProps('index')} />)
-    expect(screen.getByText('Today').props.maxFontSizeMultiplier).toBe(2)
-    const bar = StyleSheet.flatten(hostViewAbove(screen.getByTestId('tab-bar-tablist')).props.style)
-    expect(bar.height).toBeUndefined()
-    expect(bar.minHeight).toBeGreaterThanOrEqual(64)
-  })
-
-  it('navigates to an unfocused tab and emits tabPress', () => {
-    const props = makeProps('index')
-    render(<TabBar {...props} />)
-    fireEvent.press(screen.getByRole('tab', { name: 'Progress' }))
-    expect(props.navigation.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'tabPress', target: 'progress-key' }))
-    expect(props.navigation.navigate).toHaveBeenCalledWith('progress')
-  })
-
-  it('highlights Explore while a legacy Lists/Updates route is (briefly) focused', () => {
-    render(<TabBar {...makeProps('updates')} />)
-    expect(aria(screen.getByRole('tab', { name: 'Explore' }), 'aria-selected')).toBe(true)
+    expect(screen.getAllByRole('tab').map(t => t.props.accessibilityLabel)).toEqual(['Today', 'Practice', 'Explore', 'Progress'])
+    for (const old of ['Home', 'Exams', 'Lists', 'Updates', 'Profile']) expect(screen.queryByText(old)).toBeNull()
   })
 })
 
 describe('destinations', () => {
   it('defines Today, Practice, Explore, Progress', () => {
     expect(TAB_DESTINATIONS.map(d => d.label)).toEqual(['Today', 'Practice', 'Explore', 'Progress'])
+  })
+
+  it('gives Explore and Search different icons', () => {
+    const { SEARCH_DESTINATION } = require('../navigation/destinations')
+    expect(TAB_DESTINATIONS.find(d => d.name === 'explore')!.icon).not.toBe(SEARCH_DESTINATION.icon)
   })
 
   it.each([
@@ -120,6 +57,7 @@ describe('destinations', () => {
     ['/progress', 'progress'],
     ['/analytics', 'progress'],
     ['/(tabs)/progress', 'progress'],
+    ['/search', 'search'],
     ['/profile', null],
     ['/settings', null],
   ])('maps %s → %s', (path, expected) => {

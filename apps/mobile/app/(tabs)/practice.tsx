@@ -552,6 +552,7 @@ export default function PracticeScreen() {
     <>
       <Screen
         tabBarInset
+        headerScrolls
         width={bp === 'expanded' ? 'wide' : 'reading'}
         refreshControl={refreshCtl}
         header={(
