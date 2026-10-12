@@ -90,6 +90,11 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
   let alertSpy: jest.SpyInstance
 
   beforeEach(() => {
+    // Fake timers make every waitFor/findBy deadline count fake time, which
+    // RNTL advances itself while polling. On real timers the 1s deadline was
+    // wall-clock, so a CPU-starved CI runner could time out while the (fully
+    // mocked, promise-only) load was still in flight.
+    jest.useFakeTimers()
     mockBp = 'compact'
     mockRouterBack.mockClear()
     mockRouterReplace.mockClear()
@@ -101,6 +106,7 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
   afterEach(() => {
     randomSpy.mockRestore()
     alertSpy.mockRestore()
+    jest.useRealTimers()
   })
 
   describe('prestart', () => {
@@ -129,7 +135,9 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
       expect(warn).toHaveBeenCalledWith('[exam/[slug]] load failed:', expect.any(Error))
       warn.mockRestore()
       fireEvent.press(screen.getByRole('button', { name: 'Try again' }))
-      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      // The retry goes back through the loading state before the prestart.
+      expect(screen.getByLabelText('Loading mock exam')).toBeTruthy()
+      expect(await screen.findByText('Full Mock')).toBeTruthy()
       expect(mockGetExamBlueprint).toHaveBeenCalledTimes(2)
     })
 
