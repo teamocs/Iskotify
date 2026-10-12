@@ -271,7 +271,7 @@ Order: **Today** → **Practice** → **Explore + Search** → **Progress + Prof
 - `SegmentedFilter` for filters with 5 or fewer options.
 - An inspector pane at `xl` and above that reuses the Drawer content (modal Drawer below `xl`).
 - All DESIGN.md DataTable and Dialog contracts unchanged. Existing tests are the contract; add a `SegmentedFilter` test.
-- Landing: 17 files move to iOS roles and card/capsule radii, with a glass nav.
+- **Landing (owner, 2026-10-12): content is approved and must not change.** Only the header nav (`components/landing/Nav.tsx`) is redesigned, Apple-inspired: a 52px frosted strip, centred links, a small maroon capsule CTA, and on phones a two-line menu button opening a full-screen frosted menu. Links, labels, anchors and the CTA target stay identical. The other landing files are untouched, including their fonts and radii: keep Outfit/Lexend on landing until the owner says otherwise.
 
 ## P6: Brand asset swap — CANCELLED (owner, 2026-10-12)
 

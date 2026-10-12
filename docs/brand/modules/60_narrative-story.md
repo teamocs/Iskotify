@@ -30,6 +30,6 @@ Status: done (2026-10-12)
 3. Brand closer: "This time, she didn't miss it."
 
 **Implications:**
-- Landing hero and store listing: lead "Free review…", second line reveals deadlines.
+- Store listing: lead "Free review…", second line reveals deadlines. (Landing page excluded: its approved content stays as is.)
 - Onboarding: start with exam picker (the door), then reveal deadlines tracked for her ("the surprise") as an early wow moment.
 - Testimonials/campaigns: collect "I didn't miss it" stories.

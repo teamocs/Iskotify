@@ -53,4 +53,4 @@ Never: scares her, says she's "behind", shows verdicts or fake percentiles, hype
 4. Copy guard test: no "behind", "only … left", emoji in user-facing strings.
 5. Reminder notifications: no private details on the lock screen (shared phones).
 6. Onboarding: exam picker first, then reveal tracked deadlines as the early "wow".
-7. Landing/store: lead with "Free review…", second line reveals deadlines; footer credit to Review Masters Bicol.
+7. Store listing: lead with "Free review…", second line reveals deadlines. **The landing page is excluded: its content is approved and stays as is (owner, 2026-10-12); only its header nav is redesigned.**
