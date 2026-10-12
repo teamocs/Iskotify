@@ -1,16 +1,21 @@
 import { createContext, useContext } from 'react'
-import { lightTheme, typography, type Theme, type Typography } from './tokens'
+import {
+  lightTheme, typography, motion, glass,
+  type Theme, type Typography, type Motion, type Glass,
+} from './tokens'
 
 // Iskotify has one palette (the light theme), so the context is a constant.
 // It stays a context — rather than a direct import — so screens keep reading
 // colours through useTheme(), which the design-token guard tests rely on.
 
 interface ThemeContextValue {
-  theme: Theme
-  typo:  Typography
+  theme:  Theme
+  typo:   Typography
+  motion: Motion
+  glass:  Glass
 }
 
-const VALUE: ThemeContextValue = { theme: lightTheme, typo: typography }
+const VALUE: ThemeContextValue = { theme: lightTheme, typo: typography, motion, glass }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 

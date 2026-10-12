@@ -1,4 +1,26 @@
-import { lightTheme, textStyles, textStyle, typography, fonts } from '../tokens'
+import {
+  lightTheme, textStyles, textStyle, typography, fonts,
+  iosTextStyles, iosTextStyle, iosTypeScale, legacyTextRoleMap, systemFont, systemFontFor,
+  radius, motion, glass, layout,
+} from '../tokens'
+
+// WCAG relative-luminance helpers (hex or rgba() composited over a ground).
+const hex = (h: string) => [0, 2, 4].map(i => parseInt(h.replace('#', '').slice(i, i + 2), 16))
+const rgba = (s: string, over: number[]) => {
+  const m = s.match(/rgba?\(([^)]+)\)/)
+  if (!m) return hex(s)
+  const [r, g, b, a = '1'] = m[1]!.split(',').map(x => x.trim())
+  const al = Number(a)
+  return [r, g, b].map((c, i) => Math.round(Number(c) * al + over[i]! * (1 - al)))
+}
+const lum = (rgb: number[]) => {
+  const [r, g, b] = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) })
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
+}
+const ratio = (a: number[], b: number[]) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
+  return (x! + 0.05) / (y! + 0.05)
+}
 
 // September 2026 accessibility audit follow-up: the ScoreDisclaimerModal's
 // acknowledge button was white text directly on `t.warning` — a WCAG failure. `warningStrong`/`successStrong`/`dangerStrong`
@@ -26,22 +48,6 @@ describe('theme tokens', () => {
   // to tap on a plain field, so it must clear 3:1 against every surface a field
   // sits on (page ground, card surface, raised sheet, tinted surface2).
   describe('inputBorder (form-control boundary)', () => {
-    const hex = (h: string) => [0, 2, 4].map(i => parseInt(h.replace('#', '').slice(i, i + 2), 16))
-    const rgba = (s: string, over: number[]) => {
-      const m = s.match(/rgba?\(([^)]+)\)/)
-      if (!m) return hex(s)
-      const [r, g, b, a = '1'] = m[1]!.split(',').map(x => x.trim())
-      const al = Number(a)
-      return [r, g, b].map((c, i) => Math.round(Number(c) * al + over[i]! * (1 - al)))
-    }
-    const lum = (rgb: number[]) => {
-      const [r, g, b] = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) })
-      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
-    }
-    const ratio = (a: number[], b: number[]) => {
-      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
-      return (x! + 0.05) / (y! + 0.05)
-    }
 
     it('clears 3:1 on bg, surface, surfaceRaised and surface2', () => {
       const th = lightTheme
@@ -100,8 +106,178 @@ describe('type scale tokens', () => {
     expect(textStyle('label', '#123456')).toEqual({ ...textStyles.label, color: '#123456' })
   })
 
+  // Outfit/Lexend stay loaded until P1b; the system-font test for the new
+  // roles is in 'iOS text roles' below.
   it('exposes the loaded font families by role', () => {
     expect(fonts.heading).toBe('Outfit_700Bold')
     expect(fonts.body).toBe('Lexend_400Regular')
+  })
+})
+
+// ── iOS-language redesign, P1a (additive: nothing below changes a screen) ────
+describe('iOS text roles', () => {
+  const roles = Object.keys(iosTextStyles) as (keyof typeof iosTextStyles)[]
+
+  it('defines the Apple text styles plus the tabular numeric roles', () => {
+    expect(roles).toEqual([
+      'largeTitle', 'title1', 'title2', 'title3', 'headline', 'body',
+      'callout', 'subheadline', 'footnote', 'caption', 'numeric', 'numericLg',
+    ])
+  })
+
+  it.each([
+    ['largeTitle', 34, 41, '700'],
+    ['title1', 28, 34, '700'],
+    ['title2', 22, 28, '700'],
+    ['title3', 20, 25, '600'],
+    ['headline', 17, 22, '600'],
+    ['body', 17, 22, '400'],
+    ['callout', 16, 21, '400'],
+    ['subheadline', 15, 20, '400'],
+    ['footnote', 13, 18, '400'],
+    ['caption', 12, 16, '400'],
+    ['numeric', 22, 28, '700'],
+    ['numericLg', 34, 41, '700'],
+  ] as const)('%s is %ipt on a %ipt line at weight %s', (role, size, line, weight) => {
+    const s = iosTextStyles[role]
+    expect(s.fontSize).toBe(size)
+    expect(s.lineHeight).toBe(line)
+    expect(s.fontWeight).toBe(weight)
+  })
+
+  it.each(roles)('%s respects the 12pt floor, a line height at least its size and the -0.04em tracking floor', (role) => {
+    const s = iosTextStyles[role] as { fontSize: number; lineHeight: number; letterSpacing?: number }
+    expect(s.fontSize).toBeGreaterThanOrEqual(12)
+    expect(s.lineHeight).toBeGreaterThanOrEqual(s.fontSize)
+    expect((s.letterSpacing ?? 0) / s.fontSize).toBeGreaterThanOrEqual(-0.04)
+  })
+
+  it('draws every size from the iOS type scale', () => {
+    expect([...iosTypeScale]).toEqual([12, 13, 15, 16, 17, 20, 22, 28, 34])
+    for (const role of roles) expect(iosTypeScale).toContain(iosTextStyles[role].fontSize)
+  })
+
+  it('numeric roles use tabular figures', () => {
+    expect(iosTextStyles.numeric.fontVariant).toEqual(['tabular-nums'])
+    expect(iosTextStyles.numericLg.fontVariant).toEqual(['tabular-nums'])
+  })
+
+  it('uses the system font: undefined on native (SF / Roboto), the system stack on web', () => {
+    expect(systemFontFor('ios')).toBeUndefined()
+    expect(systemFontFor('android')).toBeUndefined()
+    expect(systemFontFor('web')).toMatch(/^-apple-system, BlinkMacSystemFont/)
+    expect(systemFontFor('web')).toMatch(/system-ui, sans-serif$/)
+    // jest-expo renders as iOS.
+    expect(systemFont).toBeUndefined()
+    for (const role of roles) expect(iosTextStyles[role].fontFamily).toBe(systemFont)
+  })
+
+  it('iosTextStyle() returns the role and merges a colour when given', () => {
+    expect(iosTextStyle('body')).toEqual(iosTextStyles.body)
+    expect(iosTextStyle('footnote', '#123456')).toEqual({ ...iosTextStyles.footnote, color: '#123456' })
+  })
+
+  it('maps every legacy role onto an iOS role for the P1b cut-over', () => {
+    expect(legacyTextRoleMap).toEqual({
+      display: 'largeTitle', title: 'title1', headline: 'title3', titleSm: 'headline',
+      body: 'body', bodySm: 'footnote', label: 'footnote', button: 'headline',
+      caption: 'caption', numeric: 'numeric', numericLg: 'numericLg',
+    })
+    for (const legacy of Object.keys(textStyles) as (keyof typeof legacyTextRoleMap)[]) {
+      expect(iosTextStyles).toHaveProperty(legacyTextRoleMap[legacy])
+    }
+  })
+
+  it('leaves the legacy roles untouched (no visual change in P1a)', () => {
+    expect(textStyles.body).toEqual({ fontFamily: 'Lexend_400Regular', fontSize: 16, lineHeight: 24 })
+    expect(textStyles.headline.fontSize).toBe(20)
+  })
+})
+
+describe('radius tokens', () => {
+  it('adds the iOS shape scale', () => {
+    expect({
+      chip: radius.chip, field: radius.field, button: radius.button, group: radius.group,
+      card: radius.card, sheet: radius.sheet, capsule: radius.capsule,
+    }).toEqual({ chip: 8, field: 12, button: 14, group: 18, card: 22, sheet: 28, capsule: 999 })
+  })
+
+  it('keeps the old keys as aliases with their old values', () => {
+    expect({ sm: radius.sm, md: radius.md, lg: radius.lg, xl: radius.xl, xxl: radius.xxl, pill: radius.pill })
+      .toEqual({ sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, pill: 999 })
+  })
+})
+
+describe('motion tokens', () => {
+  it('defines the three springs', () => {
+    expect(motion.spring.snappy).toEqual({ damping: 30, stiffness: 400 })
+    expect(motion.spring.smooth).toEqual({ damping: 26, stiffness: 260 })
+    expect(motion.spring.bouncy).toEqual({ damping: 14, stiffness: 220 })
+  })
+
+  it('defines the web curves, durations and press scale', () => {
+    expect(motion.curve.snappy).toEqual({ easing: 'cubic-bezier(.2,.9,.25,1)', duration: 280 })
+    expect(motion.curve.smooth).toEqual({ easing: 'cubic-bezier(.32,.72,0,1)', duration: 480 })
+    expect(motion.duration).toEqual({ fade: 200, reduced: 160 })
+    expect(motion.pressScale).toBe(0.97)
+  })
+})
+
+describe('glass tokens', () => {
+  it('carries the web recipe and the opaque fallback', () => {
+    expect(glass.fill).toBe('rgba(255,255,255,0.42)')
+    expect(glass.backdropFilter).toBe('blur(24px) saturate(200%) brightness(1.04)')
+    expect(typeof glass.webShadow).toBe('string')
+    expect(glass.opaque).toBe('#fdf4f4')
+    expect(glass.opaque).toBe(lightTheme.bg)
+  })
+
+  it('uses only light system materials', () => {
+    expect(glass.iosMaterial).toBe('systemChromeMaterialLight')
+    expect(glass.androidTint).toBe('light')
+    expect(glass.androidBlurMethod).toBe('dimezisBlurViewSdk31Plus')
+  })
+
+  // A label on glass reads against the glass fill composited over whatever
+  // scrolls behind it. Checked over the three grounds the chrome floats on.
+  describe('glass-label contrast', () => {
+    const bg = hex(lightTheme.bg)
+    const grounds = {
+      bg,
+      surface: rgba(lightTheme.surface, bg),
+      accent: hex(lightTheme.accent),
+    }
+    const onGlass = (ground: number[]) => rgba(glass.fill, ground)
+
+    it.each(Object.keys(grounds) as (keyof typeof grounds)[])('textPrimary clears 4.5:1 on glass over %s', (g) => {
+      expect(ratio(hex(lightTheme.textPrimary), onGlass(grounds[g]))).toBeGreaterThanOrEqual(4.5)
+    })
+
+    it.each(['bg', 'surface'] as const)('accentText clears 4.5:1 on glass over %s', (g) => {
+      expect(ratio(hex(lightTheme.accentText), onGlass(grounds[g]))).toBeGreaterThanOrEqual(4.5)
+    })
+
+    // Measured ~2:1, and hexes never change, so the contract is: a label on
+    // glass that can float over solid maroon uses textPrimary.
+    it('accentText fails on glass over solid accent, so labels there use textPrimary', () => {
+      expect(ratio(hex(lightTheme.accentText), onGlass(grounds.accent))).toBeLessThan(4.5)
+      expect(glass.labelOverAccent).toBe('textPrimary')
+    })
+  })
+})
+
+describe('layout tokens', () => {
+  it('adds the floating capsule, header button and row metrics', () => {
+    expect(layout.tabCapsule).toEqual({ height: 62, inset: 16, bottom: 26 })
+    expect(layout.searchCircle).toBe(62)
+    expect(layout.headerButton).toEqual({ visual: 40, hit: 44 })
+    expect(layout.rowMinHeight).toBe(44)
+    expect(layout.iconTile).toBe(30)
+    expect(layout.capsuleClearance).toBe(104)
+  })
+
+  it('keeps the current tab bar metrics (no visual change in P1a)', () => {
+    expect(layout.tabBarHeight).toBe(64)
+    expect(layout.tabBarClearance).toBe(80)
   })
 })
