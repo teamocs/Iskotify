@@ -6,7 +6,8 @@
  */
 import React from 'react'
 import { StyleSheet, Text } from 'react-native'
-import { render, screen } from '@testing-library/react-native'
+import { Modal } from 'react-native'
+import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import { motion, radius } from '../../../theme/tokens'
 
 const mockCaps = { liquidGlass: false, blurTier: 'blur', reduceTransparency: false, reduceMotion: false }
@@ -98,5 +99,63 @@ describe('<Sheet> motion', () => {
     render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
     expect(mockWithSpring).not.toHaveBeenCalled()
     expect(mockWithTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: motion.duration.reduced }))
+  })
+})
+
+describe('<Sheet> exit', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  const panel = () => screen.queryByTestId('sheet-panel', { includeHiddenElements: true })
+
+  it('stays mounted while it animates out, then unmounts', () => {
+    const { rerender } = render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    rerender(<Sheet visible={false} title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    expect(panel()).toBeTruthy()
+    expect(mockWithTiming).toHaveBeenLastCalledWith(0, expect.objectContaining({ duration: 220 }))
+    act(() => { jest.advanceTimersByTime(219) })
+    expect(panel()).toBeTruthy()
+    act(() => { jest.advanceTimersByTime(1) })
+    expect(panel()).toBeNull()
+  })
+
+  it('ignores the panel and scrim while closing, and keeps it modal until unmount', () => {
+    const { rerender } = render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    rerender(<Sheet visible={false} title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    expect(panel()!.props.pointerEvents).toBe('none')
+    expect(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true }).props.pointerEvents).toBe('none')
+    expect(panel()!.props.accessibilityViewIsModal).toBe(true)
+  })
+
+  it('calls onClose once when the scrim and Escape both fire around the exit', () => {
+    const onClose = jest.fn()
+    const { rerender } = render(<Sheet visible title="Filters" onClose={onClose}><Text>Body</Text></Sheet>)
+    fireEvent.press(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    rerender(<Sheet visible={false} title="Filters" onClose={onClose}><Text>Body</Text></Sheet>)
+    act(() => { screen.UNSAFE_getByType(Modal).props.onRequestClose() })
+    fireEvent.press(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('under Reduce Motion it fades out in 160ms', () => {
+    mockCaps.reduceMotion = true
+    const { rerender } = render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    rerender(<Sheet visible={false} title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    expect(mockWithTiming).toHaveBeenLastCalledWith(0, expect.objectContaining({ duration: motion.duration.reduced }))
+    act(() => { jest.advanceTimersByTime(motion.duration.reduced - 1) })
+    expect(panel()).toBeTruthy()
+    act(() => { jest.advanceTimersByTime(1) })
+    expect(panel()).toBeNull()
+  })
+
+  it('reopening during the exit cancels it and stays open', () => {
+    const { rerender } = render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    rerender(<Sheet visible={false} title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    act(() => { jest.advanceTimersByTime(100) })
+    rerender(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    act(() => { jest.advanceTimersByTime(500) })
+    expect(panel()).toBeTruthy()
+    expect(panel()!.props.pointerEvents).not.toBe('none')
   })
 })

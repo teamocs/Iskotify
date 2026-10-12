@@ -1,4 +1,4 @@
-import { Children, createContext, isValidElement, useContext, type ReactNode } from 'react'
+import { Children, Fragment, createContext, isValidElement, useContext, type ReactElement, type ReactNode } from 'react'
 import { StyleSheet, Switch, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
@@ -16,6 +16,15 @@ type IconData = Parameters<typeof Lineicons>[0]['icon']
 // A lone row (a ListRow in a Card, say) draws none.
 interface RowPosition { grouped: boolean; last: boolean }
 const RowPositionContext = createContext<RowPosition>({ grouped: false, last: true })
+
+/** The group's rows, with Fragments (and nested ones) opened up and holes dropped. */
+function flattenRows(children: ReactNode): ReactElement[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (!isValidElement(child)) return []
+    if (child.type === Fragment) return flattenRows((child.props as { children?: ReactNode }).children)
+    return [child]
+  })
+}
 
 // ── IconTile ────────────────────────────────────────────────────────────────
 
@@ -84,7 +93,7 @@ export interface InsetGroupProps {
 export function InsetGroup({ children, header, footer, inset = true, style, testID }: InsetGroupProps) {
   const { theme: t } = useTheme()
   const gutter = pagePadding(useBreakpoint())
-  const rows = Children.toArray(children).filter(isValidElement)
+  const rows = flattenRows(children)
 
   return (
     <View testID={testID} style={[{ marginHorizontal: inset ? gutter : 0, gap: spacing.sm - 2 }, style]}>
@@ -103,7 +112,7 @@ export function InsetGroup({ children, header, footer, inset = true, style, test
         }}
       >
         {rows.map((row, i) => (
-          <RowPositionContext.Provider key={row.key ?? i} value={{ grouped: true, last: i === rows.length - 1 }}>
+          <RowPositionContext.Provider key={`${i}:${row.key ?? ''}`} value={{ grouped: true, last: i === rows.length - 1 }}>
             {row}
           </RowPositionContext.Provider>
         ))}
@@ -133,7 +142,7 @@ export interface InsetRowProps {
   value?: string
   /** Any other trailing node (Badge, StatNumber). */
   trailing?: ReactNode
-  /** A trailing Switch: give both. The row becomes one named switch. */
+  /** A trailing Switch: give both. The whole row becomes one switch and toggles on tap. */
   switchValue?: boolean
   onSwitchChange?: (value: boolean) => void
   onPress?: () => void
@@ -171,11 +180,7 @@ export function InsetRow({
   const lead = icon ? <IconTile icon={icon} tone={iconTone} solid={iconSolid} /> : leading
 
   const texts = (
-    <View
-      style={{ flex: 1, minWidth: 0, gap: 2, paddingVertical: spacing.sm }}
-      // A switch row speaks through its switch; don't read the title twice.
-      {...(isSwitch ? decorative : null)}
-    >
+    <View style={{ flex: 1, minWidth: 0, gap: 2, paddingVertical: spacing.sm }}>
       <Text role="body" numberOfLines={numberOfLines}>{title}</Text>
       {subtitle ? (
         <Text role="subheadline" color={t.textSecondary} numberOfLines={numberOfLines}>{subtitle}</Text>
@@ -205,19 +210,20 @@ export function InsetRow({
         ) : null}
         {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
         {isSwitch ? (
-          <Switch
-            value={switchValue}
-            onValueChange={onSwitchChange}
-            disabled={disabled}
-            thumbColor={t.surface}
-            trackColor={{ false: t.inputBorder, true: t.accent }}
-            ios_backgroundColor={t.inputBorder}
-            accessibilityRole="switch"
-            accessibilityLabel={accessibilityLabel ?? title}
-            accessibilityHint={accessibilityHint ?? subtitle}
-            aria-checked={switchValue}
-            aria-disabled={!!disabled}
-          />
+          // The row is the switch for assistive tech and touch; this one only
+          // shows the state, so it is hidden, unfocusable and lets taps through.
+          <View {...decorative} pointerEvents="none">
+            <Switch
+              value={switchValue}
+              disabled={disabled}
+              accessible={false}
+              focusable={false}
+              {...({ tabIndex: -1 } as object)}
+              thumbColor={t.surface}
+              trackColor={{ false: t.inputBorder, true: t.accent }}
+              ios_backgroundColor={t.inputBorder}
+            />
+          </View>
         ) : null}
         {showChevron ? (
           <View testID="list-row-chevron" style={{ transform: [{ scaleX: -1 }] }} {...decorative}>
@@ -245,9 +251,38 @@ export function InsetRow({
     paddingLeft: spacing.lg,
   }
 
+  if (isSwitch) {
+    // iOS-style: the whole row toggles (a far larger target than the switch
+    // alone on Android). One accessibility element: a switch named by the
+    // title, the subtitle as its hint, its state on aria-checked.
+    return (
+      <PressableScale
+        onPress={() => onSwitchChange!(!switchValue)}
+        disabled={disabled}
+        testID={testID}
+        accessibilityRole="switch"
+        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityHint={accessibilityHint ?? subtitle}
+        aria-checked={!!switchValue}
+        aria-disabled={!!disabled}
+        style={({ pressed, hovered, focused }) => {
+          const fill = disabled ? null : pressed ? t.surface2 : hovered ? t.surfaceSubtle : null
+          return [
+            rowStyle,
+            fill ? { backgroundColor: fill } : null,
+            disabled ? { opacity: 0.5 } : null,
+            focusRing(t.focusRing, focused),
+          ]
+        }}
+      >
+        {content}
+      </PressableScale>
+    )
+  }
+
   if (!pressable) {
     return (
-      <View style={rowStyle} testID={testID ?? 'inset-row'} accessibilityLabel={isSwitch ? undefined : accessibilityLabel}>
+      <View style={rowStyle} testID={testID} accessibilityLabel={accessibilityLabel}>
         {content}
       </View>
     )
@@ -257,7 +292,7 @@ export function InsetRow({
     <PressableScale
       onPress={onPress}
       disabled={disabled}
-      testID={testID ?? 'inset-row'}
+      testID={testID}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
       accessibilityHint={accessibilityHint}

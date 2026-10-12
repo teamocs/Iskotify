@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Platform, Pressable, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
+import { I18nManager, Platform, Pressable, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { useTheme } from '../../theme/ThemeContext'
 import { motion, radius, spacing, weight } from '../../theme/tokens'
@@ -37,9 +37,15 @@ const TRACK_MIN = 44
  * index (shared values, no re-render per layout); under Reduce Motion it
  * jumps. A haptic tick marks each change.
  *
- * Accessibility: a tablist of tabs with aria-selected. On the web only the
- * selected tab is in the Tab order, and Left/Right arrows move the choice
- * (wrapping), as in the WAI-ARIA tabs pattern.
+ * Accessibility: a radiogroup of radios with aria-checked (it switches a
+ * value, there is no tab panel, so not a tablist). On the web only the
+ * selected radio is in the Tab order; Left/Right move the choice (wrapping),
+ * Home/End jump to the ends and Space selects, as in the WAI-ARIA radio group
+ * pattern.
+ *
+ * RTL: the app ships left-to-right only and the thumb has not been checked in
+ * a mirrored layout. As a guard, under I18nManager.isRTL it anchors to the
+ * start edge and travels the other way, matching the reversed row.
  */
 export function SegmentedControl<T extends string>({
   segments, value, onChange, accessibilityLabel, style, testID,
@@ -52,6 +58,7 @@ export function SegmentedControl<T extends string>({
   const index = useSharedValue(selected)
   const refs = useRef<(View | null)[]>([])
   const web = Platform.OS === 'web'
+  const direction = I18nManager.isRTL ? -1 : 1
 
   useEffect(() => {
     index.value = reduceMotion ? selected : withSpring(selected, motion.spring.snappy)
@@ -62,7 +69,7 @@ export function SegmentedControl<T extends string>({
     return {
       width: segment,
       opacity: width.value > 0 ? 1 : 0,
-      transform: [{ translateX: index.value * segment }],
+      transform: [{ translateX: direction * index.value * segment }],
     }
   })
 
@@ -73,11 +80,19 @@ export function SegmentedControl<T extends string>({
     onChange(next.value)
   }
 
-  const onKeyDown = (i: number) => (e: { key?: string; preventDefault?: () => void }) => {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-    if (!step) return
-    e.preventDefault?.()
-    const to = (i + step + count) % count
+  const onKeyDown = (i: number) => (e: { key?: string; repeat?: boolean; preventDefault?: () => void }) => {
+    let to: number
+    switch (e.key) {
+      case 'ArrowRight': to = (i + 1) % count; break
+      case 'ArrowLeft':  to = (i - 1 + count) % count; break
+      case 'Home':       to = 0; break
+      case 'End':        to = count - 1; break
+      case ' ':
+      case 'Spacebar':   to = i; break
+      default: return
+    }
+    e.preventDefault?.() // keep the page from scrolling
+    if (e.repeat && to === i) return
     choose(to)
     ;(refs.current[to] as unknown as { focus?: () => void } | null)?.focus?.()
   }
@@ -85,7 +100,7 @@ export function SegmentedControl<T extends string>({
   return (
     <View
       testID={testID}
-      accessibilityRole="tablist"
+      accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
       onLayout={(e: LayoutChangeEvent) => { width.value = e.nativeEvent.layout.width }}
       style={[
@@ -103,7 +118,7 @@ export function SegmentedControl<T extends string>({
         pointerEvents="none"
         style={[
           {
-            position: 'absolute', top: PAD, bottom: PAD, left: PAD,
+            position: 'absolute', top: PAD, bottom: PAD, start: PAD,
             borderRadius: radius.capsule,
             backgroundColor: t.surface,
             boxShadow: t.shadowSm,
@@ -119,9 +134,9 @@ export function SegmentedControl<T extends string>({
             key={seg.value}
             ref={(node) => { refs.current[i] = node }}
             onPress={() => choose(i)}
-            accessibilityRole="tab"
+            accessibilityRole="radio"
             accessibilityLabel={seg.accessibilityLabel ?? seg.label}
-            aria-selected={on}
+            aria-checked={on}
             {...webProps}
             style={(state) => {
               const { focused } = state as WebPressableState

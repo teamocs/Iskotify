@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   AccessibilityInfo, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, findNodeHandle,
   useWindowDimensions,
 } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
@@ -22,6 +22,9 @@ const NativeKeyboardAvoidingView: React.ComponentType<{ behavior: 'padding'; sty
   Platform.OS === 'web' ? null : require('react-native-keyboard-controller').KeyboardAvoidingView
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
+
+/** The exit: a quick ease-out (Reduce Motion: the 160ms crossfade). */
+export const SHEET_EXIT_MS = 220
 
 /** How far a centred dialog rises as it appears (a bottom sheet travels the whole screen). */
 const DIALOG_RISE = spacing.xxl
@@ -59,8 +62,10 @@ interface Props {
  *   backdrop (zIndex keeps it on top) and initial focus lands on Close.
  * - Shape: the 28pt sheet radius (top corners on phones, all four for the
  *   centred dialog from medium widths up), the title row on a glass header.
- * - Motion: slides up on spring.smooth while the backdrop fades in; under
- *   Reduce Motion the panel and backdrop only crossfade (160ms).
+ * - Motion: slides up on spring.smooth while the backdrop fades in, and
+ *   slides back out (220ms ease-out) before it unmounts; under Reduce Motion
+ *   the panel and backdrop only crossfade (160ms) both ways. While closing it
+ *   ignores touches and close requests, so onClose fires once.
  */
 export function Sheet({ visible, title, onClose, children, footer, closeLabel = 'Close' }: Props) {
   const { theme: t } = useTheme()
@@ -73,6 +78,10 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
   const mode = sheetPresentation(bp)
   const bottom = mode === 'bottom'
   const progress = useSharedValue(0)
+  // Stays true through the exit animation, so the Modal outlives `visible`.
+  const [mounted, setMounted] = useState(visible)
+  const closing = !visible && mounted
+  const requestClose = () => { if (visible) onClose() }
 
   useEffect(() => {
     if (!visible || Platform.OS === 'web') return
@@ -84,15 +93,26 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
   }, [visible])
 
   useEffect(() => {
-    if (!visible) {
-      progress.value = 0
+    if (visible) {
+      setMounted(true)
+      // Assigning a new animation cancels an in-flight exit; it carries on
+      // from wherever the exit had reached.
+      progress.value = reduceMotion
+        ? withTiming(1, { duration: motion.duration.reduced })
+        : withSpring(1, motion.spring.smooth)
       return
     }
-    progress.value = 0
-    progress.value = reduceMotion
-      ? withTiming(1, { duration: motion.duration.reduced })
-      : withSpring(1, motion.spring.smooth)
-  }, [visible, reduceMotion, progress])
+    const duration = reduceMotion ? motion.duration.reduced : SHEET_EXIT_MS
+    progress.value = withTiming(0, { duration, easing: Easing.out(Easing.cubic) })
+    // The cleanup runs when `visible` flips back (reopened mid-exit) and on
+    // unmount, so a stale timer never hides an open sheet.
+    const id = setTimeout(() => setMounted(false), duration)
+    return () => clearTimeout(id)
+    // `progress` is a stable shared value. Listing it would re-run this on
+    // every render where a mock (or a remount) hands back a new object, and
+    // each re-run restarts the unmount timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, reduceMotion])
 
   const travel = bottom ? windowHeight : DIALOG_RISE
   const panelMotion = useAnimatedStyle(() => {
@@ -110,10 +130,10 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
 
   return (
     <Modal
-      visible={visible}
+      visible={visible || mounted}
       transparent
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={requestClose}
       statusBarTranslucent
       aria-labelledby={titleId}
     >
@@ -128,6 +148,7 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
       >
         <Animated.View
           testID="sheet-panel"
+          pointerEvents={closing ? 'none' : 'auto'}
           accessibilityViewIsModal
           accessibilityLabel={title}
           style={[
@@ -179,7 +200,7 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
                 {title}
               </Text>
               <Pressable
-                onPress={onClose}
+                onPress={requestClose}
                 accessibilityRole="button"
                 accessibilityLabel={closeLabel}
                 style={(state) => {
@@ -210,7 +231,8 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
         </Animated.View>
         <AnimatedPressable
           testID="sheet-backdrop"
-          onPress={onClose}
+          onPress={requestClose}
+          pointerEvents={closing ? 'none' : 'auto'}
           accessible={false}
           focusable={false}
           tabIndex={-1}

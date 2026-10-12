@@ -81,17 +81,17 @@ describe('SegmentedControl on react-native-web (DOM markup)', () => {
     />,
   )
 
-  it('emits a named role="tablist"', () => {
-    expect(tagWithRole(html(), 'tablist')).toContain('aria-label="Time range"')
+  it('emits a named role="radiogroup"', () => {
+    expect(tagWithRole(html(), 'radiogroup')).toContain('aria-label="Time range"')
   })
 
-  it('each segment is role="tab" with aria-selected, and only the selected one is tabbable', () => {
-    const tabs = html().match(/<[a-z]+[^>]*role="tab"[^>]*>/g) ?? []
-    expect(tabs).toHaveLength(2)
-    expect(tabs[0]).toContain('aria-selected="false"')
-    expect(tabs[0]).toContain('tabindex="-1"')
-    expect(tabs[1]).toContain('aria-selected="true"')
-    expect(tabs[1]).toContain('tabindex="0"')
+  it('each segment is role="radio" with aria-checked, and only the selected one is tabbable', () => {
+    const radios = html().match(/<[a-z]+[^>]*role="radio"[^>]*>/g) ?? []
+    expect(radios).toHaveLength(2)
+    expect(radios[0]).toContain('aria-checked="false"')
+    expect(radios[0]).toContain('tabindex="-1"')
+    expect(radios[1]).toContain('aria-checked="true"')
+    expect(radios[1]).toContain('tabindex="0"')
   })
 })
 

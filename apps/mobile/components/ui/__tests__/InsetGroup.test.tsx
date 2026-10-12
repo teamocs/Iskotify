@@ -64,7 +64,12 @@ describe('InsetGroup', () => {
 
 describe('InsetRow', () => {
   it('uses minHeight 44, never a fixed height, so it grows with Dynamic Type', () => {
-    render(<InsetGroup><InsetRow title="Static" /><InsetRow title="Tap me" onPress={() => {}} /></InsetGroup>)
+    render(
+      <InsetGroup>
+        <InsetRow title="Static" testID="inset-row" />
+        <InsetRow title="Tap me" onPress={() => {}} testID="inset-row" />
+      </InsetGroup>,
+    )
     for (const row of screen.getAllByTestId('inset-row', { includeHiddenElements: true })) {
       const s = flat(row)
       expect(s.minHeight).toBe(layout.rowMinHeight)
@@ -93,8 +98,8 @@ describe('InsetRow', () => {
   it('insets the separator to the text, past the icon tile', () => {
     render(
       <InsetGroup>
-        <InsetRow title="Search" icon={Search1Outlined} />
-        <InsetRow title="Last" />
+        <InsetRow title="Search" icon={Search1Outlined} testID="inset-row" />
+        <InsetRow title="Last" testID="inset-row" />
       </InsetGroup>,
     )
     const [first] = screen.getAllByTestId('inset-row', { includeHiddenElements: true })
@@ -106,6 +111,28 @@ describe('InsetRow', () => {
     // …and the icon tile sits outside it.
     expect(within(body).queryByTestId('icon-tile', { includeHiddenElements: true })).toBeNull()
     expect(within(first!).getByTestId('icon-tile', { includeHiddenElements: true })).toBeTruthy()
+  })
+
+  it('counts rows inside Fragments, so separators and the last row stay right', () => {
+    render(
+      <InsetGroup>
+        <>
+          <InsetRow title="One" />
+          <InsetRow title="Two" />
+        </>
+        {false}
+        <>
+          <InsetRow title="Three" testID="last" />
+        </>
+      </InsetGroup>,
+    )
+    expect(separators()).toHaveLength(2)
+    expect(within(screen.getByTestId('last')).queryByTestId('inset-row-separator', { includeHiddenElements: true })).toBeNull()
+  })
+
+  it('sets no testID unless the caller passes one', () => {
+    render(<InsetRow title="Plain" onPress={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Plain' }).props.testID).toBeUndefined()
   })
 
   it('shows no separator outside a group (a lone row)', () => {
@@ -166,24 +193,35 @@ describe('InsetRow', () => {
 })
 
 describe('InsetRow switch', () => {
-  it('is one switch named by the title, with its state and the subtitle as hint', () => {
-    const onChange = jest.fn()
+  it('is one accessible switch, named by the title, with its state and the subtitle as hint', () => {
     render(
       <InsetRow
         title="Daily reminder"
         subtitle="A nudge at 7 pm"
         switchValue
-        onSwitchChange={onChange}
+        onSwitchChange={() => {}}
       />,
     )
+    const switches = screen.getAllByRole('switch')
+    expect(switches).toHaveLength(1)
     const sw = screen.getByRole('switch', { name: 'Daily reminder' })
     expect(aria(sw, 'aria-checked')).toBe(true)
     expect(sw.props.accessibilityHint).toBe('A nudge at 7 pm')
-    // The title is not read twice: the visible text is hidden from AT.
-    expect(screen.queryByText('Daily reminder')).toBeNull()
+    // No second control: the native Switch inside is decorative and not focusable.
     expect(screen.queryByRole('button')).toBeNull()
-    fireEvent(screen.UNSAFE_getByType(Switch), 'valueChange', false)
-    expect(onChange).toHaveBeenCalledWith(false)
+    const inner = screen.UNSAFE_getByType(Switch)
+    expect(inner.props.focusable).toBe(false)
+    expect(inner.props.accessible).toBe(false)
+  })
+
+  it('toggles when the whole row is tapped', () => {
+    const onChange = jest.fn()
+    const { rerender } = render(<InsetRow title="Sounds" switchValue={false} onSwitchChange={onChange} />)
+    fireEvent.press(screen.getByRole('switch', { name: 'Sounds' }))
+    expect(onChange).toHaveBeenLastCalledWith(true)
+    rerender(<InsetRow title="Sounds" switchValue onSwitchChange={onChange} />)
+    fireEvent.press(screen.getByRole('switch', { name: 'Sounds' }))
+    expect(onChange).toHaveBeenLastCalledWith(false)
   })
 
   it('prefers an explicit hint, and reports off', () => {
@@ -191,6 +229,16 @@ describe('InsetRow switch', () => {
     const sw = screen.getByRole('switch', { name: 'Sounds' })
     expect(aria(sw, 'aria-checked')).toBe(false)
     expect(sw.props.accessibilityHint).toBe('Plays a tone on a correct answer')
+  })
+
+  it('a disabled switch row is dimmed, announced disabled and not toggleable', () => {
+    const onChange = jest.fn()
+    render(<InsetRow title="Weekly summary" subtitle="Sunday nudge" switchValue={false} onSwitchChange={onChange} disabled />)
+    const sw = screen.getByRole('switch', { name: 'Weekly summary' })
+    expect(aria(sw, 'aria-disabled')).toBe(true)
+    expect(StyleSheet.flatten(sw.props.style).opacity).toBe(0.5)
+    fireEvent.press(sw)
+    expect(onChange).not.toHaveBeenCalled()
   })
 })
 

@@ -32,6 +32,7 @@ import { radius, spacing, textStyle } from '../../theme/tokens'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
 import { SectionHeader } from '../../components/ui/SectionHeader'
+import { InsetGroup } from '../../components/ui/InsetGroup'
 import { ListRow } from '../../components/ui/ListRow'
 import { StatNumber } from '../../components/ui/StatNumber'
 import { Badge } from '../../components/ui/Badge'
@@ -72,17 +73,9 @@ function minutes(n: number): string {
   return n < 60 ? `${n} min` : `${Math.round((n / 60) * 10) / 10} h`
 }
 
-/** A bordered group for ListRows (hairline dividers, no nested cards). */
+/** ListRows on one inset-group panel (hairline separators inset to the text). */
 function RowGroup({ children }: { children: React.ReactNode }) {
-  const { theme: t } = useTheme()
-  const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean)
-  return (
-    <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' }}>
-      {items.map((child, i) => (
-        <View key={i} style={i === 0 ? undefined : { borderTopWidth: 1, borderTopColor: t.divider }}>{child}</View>
-      ))}
-    </View>
-  )
+  return <InsetGroup inset={false}>{children}</InsetGroup>
 }
 
 function RowIcon({ icon }: { icon: Parameters<typeof Lineicons>[0]['icon'] }) {

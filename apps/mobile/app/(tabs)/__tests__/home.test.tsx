@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react-native'
+import { waitForSheetExit } from '../../../test-utils/sheet'
 import HomeScreen from '../index'
 import { aria } from '../../../test-utils/aria'
 
@@ -242,10 +243,12 @@ describe('Today', () => {
       expect(mockToggle).toHaveBeenCalled()
     })
 
-    it('closes from the Sheet close button', () => {
+    it('closes from the Sheet close button', async () => {
       render(<HomeScreen />)
       fireEvent.press(screen.getByRole('button', { name: 'Study reminders' }))
       fireEvent.press(screen.getByRole('button', { name: 'Close' }))
+      // The sheet animates out before it unmounts (iOS redesign P3).
+      await waitForSheetExit()
       expect(screen.queryByText('Daily practice reminder')).toBeNull()
     })
   })
@@ -545,6 +548,8 @@ describe('Today', () => {
       expect(screen.getByText('Practice coming soon')).toBeTruthy()
       fireEvent.press(screen.getByRole('button', { name: 'Add USTET to Focus, practice coming soon' }))
       expect(mockAddListing).toHaveBeenCalledWith('ustet')
+      // The sheet animates out before it unmounts (iOS redesign P3).
+      await waitForSheetExit()
       expect(screen.queryByRole('button', { name: /Add USTET to Focus/ })).toBeNull()
     })
 
