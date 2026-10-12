@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import { Alert } from 'react-native'
-import ProfileScreen from '../profile'
+import ProfileScreen from '../index'
 
 jest.mock('expo-router', () => ({
   router: { replace: jest.fn(), push: jest.fn() },
@@ -580,7 +580,7 @@ describe('ProfileScreen — Delete account', () => {
   })
 
   it('uses danger styling for the row icon (token, not a hex)', async () => {
-    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'profile.tsx'), 'utf8')
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.tsx'), 'utf8')
     expect(src).toMatch(/title="Delete account"[\s\S]{0,400}t\.danger/)
   })
 

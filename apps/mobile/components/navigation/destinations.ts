@@ -13,8 +13,10 @@ import {
  *   Explore  — schools & exams, scholarships, courses, destinations, news & dates
  *   Progress — readiness and analytics
  * Profile is reached from the avatar in every tab header (and the web sidebar).
+ * Search is a fifth tab route, but not one of the four: the bar draws it as
+ * its own search control (SEARCH_DESTINATION), never as a fifth tab item.
  */
-export type TabName = 'index' | 'practice' | 'explore' | 'progress'
+export type TabName = 'index' | 'practice' | 'explore' | 'progress' | 'search'
 
 export interface Destination {
   name: TabName
@@ -31,6 +33,11 @@ export const TAB_DESTINATIONS: readonly Destination[] = [
   { name: 'progress', label: 'Progress', icon: TrendUp1Outlined, href: '/progress' },
 ]
 
+/** Federated search (schools, scholarships, listings): the bar's search control. */
+export const SEARCH_DESTINATION: Destination = {
+  name: 'search', label: 'Search', icon: Search1Outlined, href: '/search',
+}
+
 /**
  * Legacy tab routes that still exist (as redirects) for deep links and
  * notifications, mapped to the destination that now owns their content.
@@ -44,6 +51,7 @@ export const LEGACY_ROUTE_OWNER: Record<string, TabName> = {
 /** Which destination a route name belongs to (null for Profile and non-tabs). */
 export function destinationForRoute(routeName: string): TabName | null {
   if (TAB_DESTINATIONS.some(d => d.name === routeName)) return routeName as TabName
+  if (routeName === SEARCH_DESTINATION.name) return 'search'
   return LEGACY_ROUTE_OWNER[routeName] ?? null
 }
 

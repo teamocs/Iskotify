@@ -64,7 +64,7 @@ function parseStrArray(s: string | null | undefined): string[] {
  * useHomeCatalog — the "everything else" catalog Home's new sections need beyond
  * useHomeStats/usePracticeData: full exam + scholarship listing rows, published
  * blueprint metadata, the student profile/clusters used for scholarship ranking
- * (derived exactly like app/(tabs)/listings.tsx), and per-listing mock-exam bests.
+ * (derived exactly like app/(tabs)/explore.tsx), and per-listing mock-exam bests.
  *
  * Cache keys are 'home:'-prefixed so useFocusListings.addListing's invalidate('home:')
  * and Home's pull-to-refresh both refresh this data too.

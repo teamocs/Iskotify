@@ -57,7 +57,7 @@ export function parseIntent(query: string): SearchIntent {
 }
 
 /** Content tokens = query tokens minus stopwords and pure intent words. */
-function contentTokens(query: string): string[] {
+export function contentTokens(query: string): string[] {
   return tokenize(query).filter(tk => !STOP.has(tk) && !INTENT_WORDS.has(tk))
 }
 

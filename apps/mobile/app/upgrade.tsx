@@ -153,7 +153,7 @@ export default function UpgradeScreen() {
 
   const checkAgain = () => once(() => confirm(() => pollPremium({ signal: signal() })))
 
-  if (!enabled) return <Redirect href="/(tabs)/profile" />
+  if (!enabled) return <Redirect href="/profile" />
 
   const busy = phase === 'working' || phase === 'confirming'
   const owned = isPremium || phase === 'success'
@@ -172,7 +172,7 @@ export default function UpgradeScreen() {
     : `${price ?? '₱500'}, one-time payment`
 
   return (
-    <Screen header={<DetailTopBar bare fallbackHref="/(tabs)/profile" />}>
+    <Screen header={<DetailTopBar bare fallbackHref="/profile" />}>
       <PageTitle title="Iskotify Full Access" lead="Pay once and keep it. No ads." />
 
       <View style={{ gap: spacing.xxl }}>

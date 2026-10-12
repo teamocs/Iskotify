@@ -355,9 +355,11 @@ Each lives at a route: `/`, `/practice`, `/explore`, `/progress`.
 
 **Sidebar** (expanded web ≥ 1024): persistent left sidebar with four destination links (aria-current="page" on the active one), Profile at the bottom (avatar + name, pressable to open profile detail), Settings link.
 
-**Profile access**: avatar in every tab header opens profile detail view. On web sidebar, Profile is a destination link at the bottom.
+**Profile access**: avatar in every tab header opens profile detail view (`app/profile/index.tsx`, a root route, not a tab: a formSheet with detents 0.5 / 1 on native, a push on web). On web sidebar, Profile is a destination link at the bottom.
 
-**Legacy route redirects** (deep links, notifications): `listings` → Explore, `updates` → Explore, `analytics` → Progress.
+**Search** (`app/(tabs)/search.tsx`, `/search`): federated search over the on-device catalog (schools, scholarships, entrance exams). It is a tab route but not one of the four destinations: `SEARCH_DESTINATION` is drawn as the bar's own search control. Results name a deadline and official site only when the catalog holds one.
+
+**Legacy route redirects** (deep links, notifications; root-level routes, same URLs): `/listings` → Explore, `/updates` → Explore, `/analytics` → Progress.
 
 ### Accessibility rules — mobile-specific
 

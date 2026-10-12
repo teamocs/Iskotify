@@ -8,7 +8,7 @@ export interface ConfirmOptions {
 
 /**
  * Cross-platform confirm dialog. Native uses `Alert.alert` (same convention
- * as app/(tabs)/profile.tsx's sign-out/reset confirmations). Web falls back
+ * as app/profile/index.tsx's sign-out/reset confirmations). Web falls back
  * to `window.confirm` because react-native-web's `Alert.alert` is a no-op —
  * see app/(tabs)/__tests__/profile.test.tsx's "WEB sign-out & reset" suite
  * for the established precedent this mirrors.

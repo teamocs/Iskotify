@@ -115,7 +115,7 @@ describe('M3 screens use tokens, textStyle roles, aria state, real icons and res
 // subtitle into a narrow column. Every tab's web refresh control collapses to
 // a 44pt icon on compact widths so the heading keeps the width.
 describe('tab headers leave the heading the width on phones', () => {
-  const TABS = ['app/(tabs)/index.tsx', 'app/(tabs)/practice.tsx', 'app/(tabs)/explore.tsx', 'app/(tabs)/profile.tsx']
+  const TABS = ['app/(tabs)/index.tsx', 'app/(tabs)/practice.tsx', 'app/(tabs)/explore.tsx', 'app/profile/index.tsx']
   for (const rel of TABS) {
     it(`${rel}: the web refresh control is icon-only on compact`, () => {
       const uses = read(rel).match(/<WebRefreshButton\b[\s\S]*?\/>/g) ?? []

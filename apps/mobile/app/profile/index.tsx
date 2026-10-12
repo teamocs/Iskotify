@@ -645,7 +645,9 @@ export default function ProfileScreen() {
 
   return (
     <Screen
-      tabBarInset
+      // Not a tab any more: no bar to clear. The native sheet has its own top
+      // edge (grabber), so only the web push keeps the top safe area.
+      edges={Platform.OS === 'web' ? ['top'] : []}
       width={bp === 'expanded' ? 'wide' : 'reading'}
       refreshControl={
         <RefreshControl
