@@ -67,6 +67,15 @@ const COMPONENTS = [
   'components/navigation/SceneBlurTarget.tsx',
   'components/TabHeader.tsx',
   'components/search/searchModel.ts',
+  // iOS redesign P3: core primitives.
+  'components/ui/InsetGroup.tsx',
+  'components/ui/SegmentedControl.tsx',
+  'components/ui/SearchField.tsx',
+  'components/ui/sheetRoute.ts',
+  'components/ui/Sheet.tsx',
+  'components/ui/ListRow.tsx',
+  'components/ui/Button.tsx',
+  'components/ui/Pressable.tsx',
 ]
 
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g

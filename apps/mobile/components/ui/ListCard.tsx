@@ -62,7 +62,7 @@ export function ListCard({
         {trailing ?? (showChevron ? <Text style={{ fontSize: 20, color: t.textTertiary }}>›</Text> : null)}
       </View>
       {progress != null ? (
-        <View style={{ height: 3, backgroundColor: t.surface2, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl, overflow: 'hidden' }}>
+        <View style={{ height: 3, backgroundColor: t.surface2, borderBottomLeftRadius: radius.xl, borderBottomRightRadius: radius.xl, borderCurve: 'continuous', overflow: 'hidden' }}>
           <View style={{ height: 3, width: `${Math.max(0, Math.min(1, progress)) * 100}%`, backgroundColor: progressColor ?? t.accent }} />
         </View>
       ) : null}

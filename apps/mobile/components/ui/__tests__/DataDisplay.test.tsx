@@ -3,7 +3,7 @@
  * ProgressBar, StatNumber, Avatar — render + accessibility contract.
  */
 import React from 'react'
-import { lightTheme } from '../../../theme/tokens'
+import { lightTheme, radius } from '../../../theme/tokens'
 import { Text, StyleSheet } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { Card } from '../Card'
@@ -33,8 +33,15 @@ describe('Card', () => {
   it('declares elevation once: an elevated card has a shadow and no border', () => {
     render(<Card elevated testID="c"><Text>x</Text></Card>)
     const style = StyleSheet.flatten(screen.getByTestId('c').props.style)
-    expect(style.boxShadow).toBeTruthy()
+    expect(style.boxShadow).toBe(lightTheme.shadowSm)
     expect(style.borderWidth ?? 0).toBe(0)
+  })
+
+  it('has the 22pt card radius with continuous corners', () => {
+    render(<Card testID="c"><Text>x</Text></Card>)
+    const style = StyleSheet.flatten(screen.getByTestId('c').props.style)
+    expect(style.borderRadius).toBe(radius.card)
+    expect(style.borderCurve).toBe('continuous')
   })
 })
 
@@ -82,6 +89,15 @@ describe('Chip / FilterChip', () => {
     render(<Chip label="STEM" />)
     expect(screen.getByText('STEM')).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('Chip has the 8pt chip radius with continuous corners', () => {
+    render(<Chip label="STEM" />)
+    let n = screen.getByText('STEM').parent
+    while (n && !(typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.borderRadius !== undefined)) n = n.parent
+    const style = StyleSheet.flatten(n!.props.style)
+    expect(style.borderRadius).toBe(radius.chip)
+    expect(style.borderCurve).toBe('continuous')
   })
 
   it('single-select FilterChip is a radio exposing checked', () => {

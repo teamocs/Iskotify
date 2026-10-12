@@ -125,7 +125,7 @@ export function GridSkeleton({ label, count = 6, testID = 'explore-skeleton' }: 
               backgroundColor: t.surface,
             }}
           >
-            <Skeleton width={40} height={40} radius={radius.sm} />
+            <Skeleton width={40} height={40} radius={radius.chip} />
             <View style={{ flex: 1, gap: spacing.sm }}>
               <Skeleton width="80%" height={16} />
               <Skeleton width="55%" height={12} />

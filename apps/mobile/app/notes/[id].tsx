@@ -103,7 +103,7 @@ function CheckBox({ checked, label, onPress }: { checked: boolean; label: string
       style={(state) => {
         const { focused } = state as WebPressableState
         return [
-          { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm },
+          { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.field },
           focusRing(t.focusRing, focused),
         ]
       }}

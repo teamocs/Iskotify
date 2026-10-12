@@ -5,6 +5,18 @@ import { Button } from '../Button'
 import { AppButton } from '../AppButton'
 import { PillButton } from '../PillButton'
 import { aria } from '../../../test-utils/aria'
+import { iosTextStyles, lightTheme, radius } from '../../../theme/tokens'
+type ReactTestInstance = typeof screen.UNSAFE_root
+
+/** The composite pressable (its style is still the unresolved function). */
+function pressableNamed(name: string) {
+  const [match] = screen.UNSAFE_root.findAll(
+    (n: ReactTestInstance) =>
+      typeof n.type !== 'string' && typeof n.props.style === 'function' && n.props.accessibilityLabel === name,
+  )
+  if (!match) throw new Error(`no pressable named ${name}`)
+  return match
+}
 
 const flat = (el: { props: { style: unknown } }) => {
   const style = el.props.style
@@ -60,6 +72,42 @@ describe('Button', () => {
     expect(typeof style.backgroundColor).toBe('string')
   })
 
+  it('has the 14pt button radius with continuous corners (iOS redesign P3)', () => {
+    render(<Button label="Continue" onPress={() => {}} />)
+    const s = flat(screen.getByRole('button'))
+    expect(s.borderRadius).toBe(radius.button)
+    expect(s.borderCurve).toBe('continuous')
+  })
+
+  it('sets the label in the headline role (subheadline semibold at sm)', () => {
+    const { rerender } = render(<Button label="Continue" onPress={() => {}} />)
+    const label = StyleSheet.flatten(screen.getByText('Continue').props.style)
+    expect(label.fontSize).toBe(iosTextStyles.headline.fontSize)
+    expect(label.fontWeight).toBe(iosTextStyles.headline.fontWeight)
+    rerender(<Button label="Continue" size="sm" onPress={() => {}} />)
+    const sm = StyleSheet.flatten(screen.getByText('Continue').props.style)
+    expect(sm.fontSize).toBe(iosTextStyles.subheadline.fontSize)
+    expect(sm.fontWeight).toBe('600')
+  })
+
+  it('primary fills with accent, and accentPressed while pressed', () => {
+    render(<Button label="Start" onPress={() => {}} />)
+    const p = pressableNamed('Start')
+    const style = (state: object) => StyleSheet.flatten(p.props.style(state))
+    expect(style({ pressed: false }).backgroundColor).toBe(lightTheme.accent)
+    expect(style({ pressed: true }).backgroundColor).toBe(lightTheme.accentPressed)
+  })
+
+  it('settles with a press scale (PressableScale)', () => {
+    render(<Button label="Start" onPress={() => {}} />)
+    expect(flat(screen.getByRole('button')).transform).toEqual([{ scale: 1 }])
+  })
+
+  it('keeps a disabled button dimmed', () => {
+    render(<Button label="Submit" disabled onPress={() => {}} />)
+    expect(flat(screen.getByRole('button')).opacity).toBe(0.5)
+  })
+
   it('fullWidth stretches to the container', () => {
     render(<Button label="Continue" fullWidth onPress={() => {}} />)
     expect(flat(screen.getByRole('button')).alignSelf).toBe('stretch')
@@ -74,10 +122,10 @@ describe('AppButton / PillButton (thin wrappers over Button)', () => {
     expect(onPress).toHaveBeenCalled()
   })
 
-  it('PillButton stays pill-shaped and keeps its leading slot', () => {
+  it('PillButton stays pill-shaped (the capsule radius) and keeps its leading slot', () => {
     render(<PillButton label="Next" leading={<Text testID="lead">›</Text>} onPress={() => {}} />)
     const btn = screen.getByRole('button', { name: 'Next' })
-    expect(flat(btn).borderRadius).toBe(999)
+    expect(flat(btn).borderRadius).toBe(radius.capsule)
     expect(screen.getByTestId('lead', { includeHiddenElements: true })).toBeTruthy()
   })
 })

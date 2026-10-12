@@ -10,6 +10,7 @@ import { StyleSheet, TextInput } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { TextField } from '../TextField'
 import { aria } from '../../../test-utils/aria'
+import { radius } from '../../../theme/tokens'
 
 const { useTheme } = require('../../../theme/ThemeContext')
 
@@ -25,6 +26,12 @@ function frame() {
 }
 
 describe('TextField', () => {
+  it('draws the 12pt field radius with continuous corners (iOS redesign P3)', () => {
+    render(<TextField label="Email address" value="" onChangeText={() => {}} />)
+    expect(frame().borderRadius).toBe(radius.field)
+    expect(frame().borderCurve).toBe('continuous')
+  })
+
   it('shows the label and uses it as the accessible name', () => {
     render(<TextField label="Email address" value="" onChangeText={() => {}} />)
     expect(screen.getByText('Email address')).toBeTruthy()

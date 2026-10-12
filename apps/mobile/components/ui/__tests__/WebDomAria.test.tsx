@@ -15,10 +15,25 @@ jest.mock('react-native', () => jest.requireActual('react-native-web'))
 // The icon library pulls in react-native-svg's native bindings; the check glyph
 // is decorative and irrelevant to the ARIA contract under test.
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
+// Reanimated's own mock needs the native TurboModule registry, which
+// react-native-web lacks. The ARIA contract doesn't depend on motion, so a
+// still stand-in (plain views, values settle at once) is enough.
+jest.mock('react-native-reanimated', () => {
+  const RNW = jest.requireActual('react-native-web')
+  return {
+    __esModule: true,
+    default: { View: RNW.View, createAnimatedComponent: (c: unknown) => c },
+    useSharedValue: (value: unknown) => ({ value }),
+    useAnimatedStyle: (fn: () => unknown) => fn(),
+    withSpring: (to: unknown) => to,
+    withTiming: (to: unknown) => to,
+  }
+})
 
 import { Pressable, Platform } from 'react-native'
 import { FilterChip } from '../Chip'
 import { Skeleton } from '../Skeleton'
+import { SegmentedControl } from '../SegmentedControl'
 
 /** Pull the opening tag of the element carrying `role="<role>"`. */
 function tagWithRole(html: string, role: string): string {
@@ -53,6 +68,30 @@ describe('FilterChip on react-native-web (DOM markup)', () => {
     const legacy = { accessibilityState: { checked: true } } as Record<string, unknown>
     const html = renderToStaticMarkup(<Pressable accessibilityRole="checkbox" {...legacy} onPress={() => {}} />)
     expect(tagWithRole(html, 'checkbox')).not.toContain('aria-checked')
+  })
+})
+
+describe('SegmentedControl on react-native-web (DOM markup)', () => {
+  const html = () => renderToStaticMarkup(
+    <SegmentedControl
+      accessibilityLabel="Time range"
+      segments={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]}
+      value="month"
+      onChange={() => {}}
+    />,
+  )
+
+  it('emits a named role="radiogroup"', () => {
+    expect(tagWithRole(html(), 'radiogroup')).toContain('aria-label="Time range"')
+  })
+
+  it('each segment is role="radio" with aria-checked, and only the selected one is tabbable', () => {
+    const radios = html().match(/<[a-z]+[^>]*role="radio"[^>]*>/g) ?? []
+    expect(radios).toHaveLength(2)
+    expect(radios[0]).toContain('aria-checked="false"')
+    expect(radios[0]).toContain('tabindex="-1"')
+    expect(radios[1]).toContain('aria-checked="true"')
+    expect(radios[1]).toContain('tabindex="0"')
   })
 })
 

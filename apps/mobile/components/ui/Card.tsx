@@ -18,7 +18,7 @@ interface Props extends ViewProps {
   style?: StyleProp<ViewStyle>
 }
 
-/** Consistent surface card: token radius/border/elevation, continuous corners. */
+/** Consistent surface card: the 22pt card radius with continuous corners, a hairline or shadowSm. */
 export function Card({
   children, elevated = false, padded = true, style, onPress, accessibilityLabel, accessibilityHint, ...rest
 }: Props) {
@@ -27,7 +27,7 @@ export function Card({
     backgroundColor: t.surface,
     borderWidth: elevated ? 0 : 1,
     borderColor: t.border,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     borderCurve: 'continuous',
     padding: padded ? spacing.lg : 0,
     ...(elevated ? { boxShadow: t.shadowSm } : null),

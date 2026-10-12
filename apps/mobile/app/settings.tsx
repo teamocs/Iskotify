@@ -71,7 +71,7 @@ function IconTile({ icon, tone = 'neutral' }: { icon: Icon; tone?: 'neutral' | '
   const bg = tone === 'accent' ? t.accentSurface : tone === 'danger' ? t.dangerSurface : t.surface2
   const fg = tone === 'accent' ? t.accentText : tone === 'danger' ? t.dangerStrong : t.textSecondary
   return (
-    <View style={{ width: 36, height: 36, borderRadius: radius.sm, borderCurve: 'continuous', backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: 36, height: 36, borderRadius: radius.chip, borderCurve: 'continuous', backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
       <Lineicons icon={icon} size={18} color={fg} />
     </View>
   )

@@ -219,8 +219,12 @@ describe('radius tokens', () => {
   })
 
   it('keeps the old keys as aliases with their old values', () => {
-    expect({ sm: radius.sm, md: radius.md, lg: radius.lg, xl: radius.xl, xxl: radius.xxl, pill: radius.pill })
-      .toEqual({ sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, pill: 999 })
+    expect({ md: radius.md, lg: radius.lg, xl: radius.xl, xxl: radius.xxl, pill: radius.pill })
+      .toEqual({ md: 14, lg: 18, xl: 22, xxl: 28, pill: 999 })
+  })
+
+  it('has split sm into chip and field (P1c): no sm key remains', () => {
+    expect('sm' in radius).toBe(false)
   })
 })
 

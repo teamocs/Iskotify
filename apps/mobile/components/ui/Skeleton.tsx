@@ -24,7 +24,7 @@ interface Props {
  * Placeholder block while content loads. A slow opacity pulse — or perfectly
  * still when the OS asks for reduced motion.
  */
-export function Skeleton({ width = '100%', height = 16, radius = radii.sm, accessible = false, label = 'Loading' }: Props) {
+export function Skeleton({ width = '100%', height = 16, radius = radii.chip, accessible = false, label = 'Loading' }: Props) {
   const { theme: t } = useTheme()
   const reduced = useReducedMotion()
   const opacity = useRef(new Animated.Value(1)).current

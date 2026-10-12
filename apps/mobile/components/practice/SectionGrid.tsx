@@ -57,7 +57,7 @@ export function SectionGrid({ sections, onJump, stacked = false }: Props) {
                 gap: spacing.xs,
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm,
-                borderRadius: radius.sm,
+                borderRadius: radius.field,
                 borderCurve: 'continuous',
                 borderWidth: 1,
                 borderColor: sec.active ? t.accentBorder : t.border,

@@ -104,7 +104,7 @@ export function SidebarNav() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingTop: spacing.xl, paddingBottom: spacing.xl }}>
         <Image
           source={require('../../assets/images/icon.png')}
-          style={{ width: 32, height: 32, borderRadius: radius.sm }}
+          style={{ width: 32, height: 32, borderRadius: radius.chip }}
           resizeMode="contain"
           accessibilityIgnoresInvertColors
           accessible={false}

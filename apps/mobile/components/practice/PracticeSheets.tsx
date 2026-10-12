@@ -117,7 +117,7 @@ function TopicCheckRow({ label, sub, checked, onToggle }: { label: string; sub: 
         return [
           {
             minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-            paddingHorizontal: spacing.sm, borderRadius: radius.sm,
+            paddingHorizontal: spacing.sm, borderRadius: radius.field,
             backgroundColor: pressed ? t.surface2 : checked ? t.accentSurface : 'transparent',
           },
           focusRing(t.focusRing, focused),

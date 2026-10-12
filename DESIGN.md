@@ -317,16 +317,19 @@ Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack o
 | `xxl` | 24 | Large sections, between folds |
 | `xxxl` | 32 | Full-height spacing, layout gaps |
 
-**Radii** (pair with `borderCurve: 'continuous'` except pills):
+**Radii** (pair with `borderCurve: 'continuous'` except pills/capsules; `components/ui/__tests__/continuousCorners.test.ts` guards the primitives). The iOS shape scale (P1c/P3):
 
 | Token | Value | Usage |
 |---|---|---|
-| `sm` | 10 | Small elements |
-| `md` | 14 | Chips, badges |
-| `lg` | 18 | Buttons, cards |
-| `xl` | 22 | Sheets, dialogs |
-| `xxl` | 28 | Large surfaces |
-| `pill` | 999 | Fully rounded (buttons, pills, badges) |
+| `chip` | 8 | Static chips, icon tiles, small badges and squares |
+| `field` | 12 | Text fields, search, banners, small panels |
+| `button` | 14 | Buttons |
+| `group` | 18 | Inset grouped lists (`InsetGroup`) |
+| `card` | 22 | Cards |
+| `sheet` | 28 | Sheets and dialogs (in-place and routed) |
+| `capsule` | 999 | Pills, segmented control, filter chips, round buttons |
+
+`sm` (10) was split into `chip`/`field` and removed. The legacy `md`/`lg`/`xl`/`xxl`/`pill` keys remain as aliases (14/18/22/28/999) until the P4 screen migrations finish.
 
 ### Responsive layout
 
@@ -373,18 +376,21 @@ Example responsive screen:
 
 | Component | Purpose | Accessibility |
 |---|---|---|
-| `Button` | Maroon fill (primary, ONE per screen), outlined (secondary), text-only (ghost), danger tint. Sizes sm/md/lg all ≥ 44pt. | `accessibilityRole="button"`, `accessibilityLabel`, `aria-disabled` |
-| `PillButton` | Inline, rounded, compact action (wraps `Button` with `shape="pill"`). | Same as Button |
+| `Button` | Maroon fill (primary, ONE per screen), outlined (secondary), text-only (ghost), danger tint. Sizes sm/md/lg all ≥ 44pt. 14pt continuous corners, headline label, settles to 0.97 on press (`PressableScale`); primary turns `accentPressed` while pressed. | `accessibilityRole="button"`, `accessibilityLabel`, `aria-disabled` |
+| `PillButton` | Inline, rounded, compact action (wraps `Button` with `shape="pill"`, the capsule radius). | Same as Button |
 | `Card` | Bordered surface with optional elevation. Optionally pressable. | `accessibilityRole="button"` if `onPress`, optional `accessibilityLabel` |
 | `Badge` | Small pill tag for status/tone. Tone names theme keys: `accent`, `neutral`, `success`, `warning`, `danger`. Label required. | Decorative or status label |
 | `Chip` | Static tag (non-interactive); `FilterChip` is an interactive toggle with radio/checkbox semantics. | `FilterChip` uses `aria-checked` / `aria-selected` (not `accessibilityState`) |
 | `Avatar` | Initials in maroon circle (6.19:1). Pressable version ≥ 44pt. Fallback to user icon. | Decorative circle via `decorative` helper; optional pressable label |
 | `ProgressBar` | Linear progress (0–1). | `accessibilityRole="progressbar"`, `accessibilityValue` |
 | `ProgressRing` | Circular progress (score rings, countdown circles). | Same as ProgressBar |
-| `ListRow` | Compact list item with optional leading icon, two text lines, optional trailing. | Pressable with `accessibilityRole="button"` if interactive |
+| `InsetGroup` / `InsetRow` | iOS inset grouped list: rows on one 18pt surface panel, a footnote header (a heading) and footer. A row is ≥ 44pt (`minHeight`), takes a 30pt `IconTile`, title/subtitle, and a value, custom node, Switch or chevron; hairline separators inset to the text, none under the last row. | Pressable rows are `button` (or `link`) named "title, subtitle", value as `accessibilityValue`; a switch row is one switch (the whole row toggles) named by the title with the subtitle as hint |
+| `ListRow` | Compact list item with optional leading icon, two text lines, optional trailing. Now an `InsetRow` (same props). | Pressable with `accessibilityRole="button"` if interactive |
+| `SegmentedControl` | Capsule track with a sliding white thumb (spring.snappy; jumps under Reduce Motion), haptic tick on change. ≥ 44pt. | `radiogroup` / `radio` with `aria-checked` (no tab panel); roving tabindex, Left/Right, Home/End and Space on web |
+| `SearchField` | Search input: 12pt field radius, `inputBorder` edge, 44pt "Clear search" button, optional visible label. | Named by its label or `accessibilityLabel` |
 | `ListCard` | Broader list card, tappable. Used in lists and grids. | `accessibilityRole="button"`, `accessibilityLabel` |
 | `SectionHeader` | Section title with optional trailing action. | `role="heading"` via `<Text accessibilityRole="header">` |
-| `Sheet` | Modal panel with backdrop. Swipeable on native; focus-trapped on web. | `role="dialog"`, `aria-modal="true"`, `aria-label` |
+| `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 220ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
 | `EmptyState` / `ErrorState` / `LoadingState` | Feedback states when lists are empty, errors occur, or data is loading. | Clear messaging; `LoadingState` avoids announcing a loading spinner repeatedly |
 | `InfoBanner` | Top-of-screen alert/notification. | `role="alert"` if notifying of an error or state change |
 

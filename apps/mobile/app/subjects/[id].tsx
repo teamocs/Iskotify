@@ -186,7 +186,7 @@ export default function SubjectDetailsScreen() {
     return (
       <Screen header={header} width="wide">
         <View accessible accessibilityLabel="Loading topics" aria-busy style={{ gap: spacing.sm, paddingTop: spacing.md }}>
-          <Skeleton height={32} width="40%" radius={radius.sm} />
+          <Skeleton height={32} width="40%" radius={radius.chip} />
           {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
         </View>
       </Screen>

@@ -1,7 +1,8 @@
-import { Pressable, Text, ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Text, ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle, type Theme } from '../../theme/tokens'
-import { decorative, focusRing, type WebPressableState } from './a11y'
+import { iosTextStyle, radius, spacing, weight, type Theme } from '../../theme/tokens'
+import { decorative, focusRing } from './a11y'
+import { PressableScale } from './Pressable'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -16,7 +17,7 @@ export interface ButtonProps {
    */
   variant?: ButtonVariant
   size?: ButtonSize
-  /** `rounded` (default) or `pill` for compact inline actions. */
+  /** `rounded` (default, the 14pt button radius) or `pill` (capsule) for compact inline actions. */
   shape?: 'rounded' | 'pill'
   fullWidth?: boolean
   disabled?: boolean
@@ -41,7 +42,12 @@ const VARIANTS: Record<ButtonVariant, Colors> = {
   danger:    { bg: 'dangerSurface', bgPressed: 'dangerSurface', fg: 'dangerStrong', border: 'dangerBorder' },
 }
 
-/** The app's one button. AppButton and PillButton are thin wrappers over it. */
+/**
+ * The app's one button. AppButton and PillButton are thin wrappers over it.
+ * The label is in the headline role (subheadline semibold at `sm`), corners
+ * are the 14pt continuous button radius (or a capsule), and a press settles
+ * to 0.97 (PressableScale; it only dims under Reduce Motion).
+ */
 export function Button({
   label, onPress, variant = 'primary', size = 'md', shape = 'rounded', fullWidth, disabled, loading,
   icon, accessibilityLabel, accessibilityHint, style, testID,
@@ -53,7 +59,7 @@ export function Button({
   const transparent = 'transparent'
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={inactive}
       testID={testID}
@@ -64,8 +70,7 @@ export function Button({
       // to the DOM, and RN 0.81 folds them into native accessibility state.
       aria-disabled={inactive}
       aria-busy={!!loading}
-      style={(state) => {
-        const { pressed, focused } = state as WebPressableState
+      style={({ pressed, focused }) => {
         return [
         {
           minHeight: HEIGHT[size],
@@ -75,7 +80,7 @@ export function Button({
           justifyContent: 'center',
           gap: spacing.sm,
           paddingHorizontal: PAD_X[size],
-          borderRadius: shape === 'pill' ? radius.pill : radius.lg,
+          borderRadius: shape === 'pill' ? radius.capsule : radius.button,
           borderCurve: shape === 'pill' ? undefined : 'continuous',
           backgroundColor: pressed && !inactive && c.bgPressed ? t[c.bgPressed] : c.bg ? t[c.bg] : transparent,
           borderWidth: c.border ? 1 : 0,
@@ -91,12 +96,12 @@ export function Button({
         ? <ActivityIndicator color={fg} size="small" />
         : icon ? <View {...decorative}>{icon}</View> : null}
       <Text
-        style={textStyle(size === 'sm' ? 'label' : 'button', fg)}
+        style={size === 'sm' ? [iosTextStyle('subheadline', fg), weight('600')] : iosTextStyle('headline', fg)}
         maxFontSizeMultiplier={2}
         numberOfLines={2}
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   )
 }
