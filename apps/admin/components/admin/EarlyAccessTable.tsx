@@ -32,7 +32,7 @@ export function EarlyAccessTable({ rows }: { rows: EarlyAccessRegistration[] }) 
 
   const filters: FilterDef<EarlyAccessRegistration>[] = [
     {
-      id: 'status', label: 'Status', allLabel: 'Any status',
+      id: 'status', label: 'Status', allLabel: 'Any status', segmented: true,
       options: Object.entries(STATUS).map(([value, s]) => ({ value, label: s.label })),
       predicate: (r, v) => r.status === v,
     },

@@ -16,6 +16,11 @@ export interface OverlayProps {
   footer?: OverlayFooter
   initialFocusRef?: RefObject<HTMLElement | null>
   /**
+   * Where focus goes back to on close. Defaults to whatever was focused on
+   * open, which is <body> in Safari after a click (it does not focus buttons).
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>
+  /**
    * Makes the panel a real <form>: Enter in a field submits, and a footer
    * button with type="submit" is the submit. The default is prevented for you.
    * The form is `noValidate` so each Field shows its own inline error instead
@@ -121,7 +126,7 @@ export function Dialog({ open, onClose, title, description, footer, initialFocus
   if (!open) return null
 
   return portal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="admin-type fixed inset-0 z-50 flex items-center justify-center p-4">
       <div aria-hidden="true" onClick={requestClose} className="absolute inset-0 bg-scrim" />
       <div
         ref={panelRef}
@@ -130,7 +135,7 @@ export function Dialog({ open, onClose, title, description, footer, initialFocus
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`relative w-full ${SIZES[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-lg bg-surface shadow-overlay focus:outline-none`}
+        className={`relative w-full ${SIZES[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-card bg-surface shadow-overlay focus:outline-none`}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
           <div className="min-w-0 flex-1">

@@ -15,6 +15,7 @@ import { Button, IconButton } from './Button'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Icon } from './Icon'
+import { MAX_SEGMENT_OPTIONS, SegmentedFilter } from './SegmentedFilter'
 import { THead, Table, TableRegion, tdClass, thClass, type Pin } from './Table'
 
 export interface Column<T> {
@@ -46,6 +47,12 @@ export interface FilterDef<T> {
   allLabel?: string
   /** Client-side match. Server-driven tables (`server`) leave it out: the caller's route filters. */
   predicate?: (row: T, value: string) => boolean
+  /**
+   * Render as a segmented control (a radio group) instead of a select chip.
+   * Honoured only up to MAX_SEGMENT_OPTIONS options; a longer list stays a
+   * native <select>. Same URL param, same pills, same counts.
+   */
+  segmented?: boolean
 }
 
 interface DataTableProps<T> {
@@ -438,16 +445,23 @@ export function DataTable<T>({
               />
             </div>
           )}
-          {filters.map(f => (
-            <FilterChip
-              key={f.id}
-              id={`${uid}-f-${f.id}`}
-              filter={f}
-              value={state.filters[f.id] ?? ''}
-              counts={counts[f.id] ?? null}
-              onChange={v => commit({ ...state, filters: { ...state.filters, [f.id]: v }, page: 1 })}
-            />
-          ))}
+          {filters.map(f => {
+            const value = state.filters[f.id] ?? ''
+            const onChange = (v: string) => commit({ ...state, filters: { ...state.filters, [f.id]: v }, page: 1 })
+            const c = counts[f.id] ?? null
+            return f.segmented && f.options.length <= MAX_SEGMENT_OPTIONS ? (
+              <SegmentedFilter
+                key={f.id}
+                label={f.label}
+                allLabel={f.allLabel ?? 'All'}
+                options={f.options.map(o => ({ ...o, count: c ? (c[o.value] ?? 0) : undefined }))}
+                value={value}
+                onChange={onChange}
+              />
+            ) : (
+              <FilterChip key={f.id} id={`${uid}-f-${f.id}`} filter={f} value={value} counts={c} onChange={onChange} />
+            )
+          })}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {columnChooser && <ColumnChooser columns={columns} hidden={hidden} onChange={setHidden} />}
             <DensityToggle density={density} onChange={setDensity} />

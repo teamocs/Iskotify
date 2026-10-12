@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-2">
+      <div className="admin-type min-h-screen flex items-center justify-center bg-surface-2">
         <div className="text-center">
           <p className="text-4xl font-heading font-bold text-ink mb-2">403</p>
           <p className="text-ink-muted">Your account does not have admin access.</p>

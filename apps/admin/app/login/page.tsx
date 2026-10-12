@@ -36,7 +36,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-2">
+    <div className="admin-type min-h-screen flex items-center justify-center bg-surface-2">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Image src="/logo.svg" alt="Iskotify" width={40} height={40} className="mx-auto mb-3" />

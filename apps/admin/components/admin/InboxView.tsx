@@ -4,51 +4,57 @@ import { Card } from '@/components/ui/Card'
 import { Icon } from '@/components/ui/Icon'
 import { buttonClass } from '@/components/ui/Button'
 import { ShortcutList } from './ShortcutsDialog'
-import { QUEUES, describeSync, summarize, type CountResult, type InboxCounts, type QueueDef } from '@/lib/admin/inboxCounts'
+import { NeedsAttention } from './NeedsAttention'
+import { QUEUES, describeSync, summarize, type InboxCounts, type QueueDef } from '@/lib/admin/inboxCounts'
 
-function QueueRow({ queue, count }: { queue: QueueDef; count: CountResult }) {
-  const busy = count.ok && count.count > 0
-  return (
-    <li>
-      <Link
-        href={queue.href}
-        className="group grid grid-cols-[3.5rem_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
-      >
-        <span className={`font-heading text-xl font-semibold tabular-nums ${busy ? 'text-ink' : 'text-ink-subtle'}`}>
-          {count.ok ? count.count : '—'}
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-medium text-ink group-hover:underline underline-offset-2">{queue.label}</span>
-          <span className="block text-xs text-ink-muted">{queue.description}</span>
-        </span>
-        <span className="flex items-center gap-2">
-          {!count.ok ? <Badge tone="neutral">Unavailable</Badge> : busy ? <Badge tone="warning">To do</Badge> : <Badge tone="success">Clear</Badge>}
-          <Icon name="chevron-right" className="text-ink-subtle" />
-        </span>
-      </Link>
-    </li>
-  )
+/** One group's open work, from the same counts as the table (nothing derived beyond a sum). */
+function groupSummary(counts: InboxCounts, group: QueueDef['group']) {
+  let total = 0, busy = 0, loaded = 0
+  const queues = QUEUES.filter(q => q.group === group)
+  for (const q of queues) {
+    const c = counts[q.id]
+    if (!c.ok) continue
+    loaded++
+    total += c.count
+    if (c.count > 0) busy++
+  }
+  return { total, busy, loaded, size: queues.length }
 }
 
-function QueueGroup({ title, counts }: { title: QueueDef['group']; counts: InboxCounts }) {
+function GroupTile({ group, counts }: { group: QueueDef['group']; counts: InboxCounts }) {
+  const { total, busy, loaded, size } = groupSummary(counts, group)
+  const id = `tile-${group.toLowerCase()}`
+  // Only a fully loaded group gets an exact number, and only then may zero look
+  // "all clear". A partial sum is a floor ("5+"), never presented as the total.
+  const complete = loaded === size
+  const headline = loaded === 0 ? '—' : complete ? String(total) : `${total}+`
+  const tone = complete && total === 0 ? 'text-ink-subtle' : 'text-ink'
   return (
-    <Card title={title} flush>
-      <ul className="divide-y divide-subtle">
-        {QUEUES.filter(q => q.group === title).map(q => <QueueRow key={q.id} queue={q} count={counts[q.id]} />)}
-      </ul>
-    </Card>
+    <section aria-labelledby={id} className="rounded-group border border-subtle bg-surface px-4 py-3">
+      <h2 id={id} className="text-footnote font-medium text-ink-muted">{group}</h2>
+      <p className={`${tone} mt-1 text-large-title font-bold tabular-nums tracking-tight`}>{headline}</p>
+      <p className="text-footnote text-ink-muted">
+        {loaded === 0
+          ? 'Counts unavailable'
+          : complete
+            ? <>{total === 1 ? 'item' : 'items'} waiting · {busy} of {size} {size === 1 ? 'queue' : 'queues'} busy</>
+            : <>at least {total} waiting · Some counts unavailable</>}
+      </p>
+    </section>
   )
 }
 
 /**
- * The admin Home: a work inbox. Every queue that can hold work, its count,
- * and a link to where that work is done. Queue order never changes, so a
- * daily user learns where to look; weight and the badge carry "needs work".
+ * The admin Home: a work inbox. Stat tiles per queue group, then every queue
+ * that can hold work with its count and a link to where that work is done.
+ * Queue order never changes, so a daily user learns where to look; weight and
+ * the badge carry "needs work".
  */
 export function InboxView({ counts, now }: { counts: InboxCounts; now: number }) {
   const { total, busyQueues, unavailable } = summarize(counts)
   const sync = describeSync(counts.lastSync, now)
   const syncMessage = counts.lastSync.ok ? counts.lastSync.message : null
+  const rows = QUEUES.map(queue => ({ queue, count: counts[queue.id] }))
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -66,21 +72,25 @@ export function InboxView({ counts, now }: { counts: InboxCounts; now: number })
             {unavailable > 0 && <> {unavailable} {unavailable === 1 ? 'count' : 'counts'} couldn’t load; open the queue to check it.</>}
           </p>
 
-          <QueueGroup title="Content" counts={counts} />
-          <QueueGroup title="Inbox" counts={counts} />
-
-          <Card title="Listings import" flush>
-            <Link href="/admin/listings/import" className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-ink group-hover:underline underline-offset-2">Last Google Sheets import</span>
-                <span className="block text-xs text-ink-muted">
-                  {sync.when ?? 'No run recorded'}
-                  {syncMessage && <> · {syncMessage}</>}
-                </span>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <GroupTile group="Content" counts={counts} />
+            <GroupTile group="Inbox" counts={counts} />
+            <Link
+              href="/admin/listings/import"
+              className="group flex flex-col rounded-group border border-subtle bg-surface px-4 py-3 transition-colors hover:bg-surface-hover"
+            >
+              <span className="text-footnote font-medium text-ink-muted">Listings import</span>
+              <span className="mt-2"><Badge tone={sync.tone}>{sync.label}</Badge></span>
+              <span className="mt-auto pt-2 text-footnote text-ink-muted">
+                <span className="font-medium text-ink group-hover:underline underline-offset-2">Last Google Sheets import</span>{' '}
+                {sync.when ?? 'No run recorded'}
+                {syncMessage && <> · {syncMessage}</>}
               </span>
-              <Badge tone={sync.tone}>{sync.label}</Badge>
-              <Icon name="chevron-right" className="text-ink-subtle" />
             </Link>
+          </div>
+
+          <Card title="Needs attention" flush>
+            <NeedsAttention rows={rows} />
           </Card>
         </div>
 

@@ -40,12 +40,12 @@ const DateCell = ({ value }: { value: string | null }) =>
 
 const FILTERS: FilterDef<AdmissionsUpdate>[] = [
   {
-    id: 'severity', label: 'Severity', allLabel: 'Any severity',
+    id: 'severity', label: 'Severity', allLabel: 'Any severity', segmented: true,
     options: [{ value: 'urgent', label: 'Urgent' }, { value: 'important', label: 'Important' }, { value: 'info', label: 'Info' }],
     predicate: (u, v) => u.severity === v,
   },
   {
-    id: 'verified', label: 'Verified', allLabel: 'All',
+    id: 'verified', label: 'Verified', allLabel: 'All', segmented: true,
     options: [{ value: 'yes', label: 'Verified' }, { value: 'no', label: 'Not verified' }],
     predicate: (u, v) => (v === 'yes' ? u.verified : !u.verified),
   },

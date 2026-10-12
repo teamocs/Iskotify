@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { WeakOptionFlag } from '@/lib/heuristics/flagWeakOptions'
 import {
@@ -14,6 +14,7 @@ import { DataTable, type Column, type FilterDef } from '@/components/ui/DataTabl
 import { Badge } from '@/components/ui/Badge'
 import { Button, IconButton } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
+import { DiscardChangesDialog } from '@/components/ui/Drawer'
 import { QuestionEditDrawer } from './QuestionEditDrawer'
 
 export interface ReviewItem {
@@ -51,7 +52,28 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
   const [dismissed, setDismissed] = useState<string[]>(() => dismissalKeysFrom(dismissals))
   const [showDismissed, setShowDismissed] = useState(false)
   const [lastDismissed, setLastDismissed] = useState<ReviewItem | null>(null)
-  const [editing, setEditing] = useState<ReviewItem | null>(null)
+  // The editor follows the question by id, so after router.refresh() it always
+  // sees the fresh row (and closes if the row has left the queue).
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = editingId ? items.find(i => i.question_id === editingId) ?? null : null
+  // At xl the editor is a non-modal inspector and the table stays clickable:
+  // switching rows while the draft is dirty asks first, like any other close.
+  const [pendingSwitch, setPendingSwitch] = useState<{ id: string; opener: HTMLElement } | null>(null)
+  const dirtyRef = useRef(false)
+  const editingIdRef = useRef<string | null>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => { editingIdRef.current = editing ? editing.question_id : null })
+  const onDirtyChange = useCallback((d: boolean) => { dirtyRef.current = d }, [])
+
+  const openEditor = useCallback((item: ReviewItem, opener: HTMLElement) => {
+    const current = editingIdRef.current
+    if (current && current !== item.question_id && dirtyRef.current) {
+      setPendingSwitch({ id: item.question_id, opener })
+      return
+    }
+    openerRef.current = opener
+    setEditingId(item.question_id)
+  }, [])
 
   // Follow the server after router.refresh() (someone else may have dismissed or
   // restored), adjusted while rendering rather than in an effect.
@@ -122,7 +144,7 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
       cell: r => (
         <button
           type="button"
-          onClick={() => setEditing(r)}
+          onClick={e => openEditor(r, e.currentTarget)}
           className="whitespace-nowrap font-mono text-xs font-medium text-ink underline-offset-2 hover:underline"
         >
           {r.question_id}
@@ -196,7 +218,7 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
         const isDismissed = dismissedIds.has(r.question_id)
         return (
           <span className="inline-flex items-center gap-1">
-            <IconButton icon="pencil" label={`Edit question ${r.question_id}`} onClick={() => setEditing(r)} />
+            <IconButton icon="pencil" label={`Edit question ${r.question_id}`} onClick={e => openEditor(r, e.currentTarget)} />
             {isDismissed ? (
               <Button size="sm" variant="ghost" aria-label={`Restore flag on ${r.question_id}`} onClick={() => restore(r)}>
                 Restore
@@ -210,11 +232,13 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
         )
       },
     },
-  ], [dismissedIds, dismiss, restore])
+  ], [dismissedIds, dismiss, restore, openEditor])
 
+  // At xl the editor docks as an inspector beside the table (a non-modal pane);
+  // below xl it is the modal Drawer. The table keeps the remaining width.
   return (
-    <>
-      <div className={TABLE_FRAME}>
+    <div className="xl:flex xl:items-start xl:gap-4">
+      <div className={`${TABLE_FRAME} min-w-0 xl:flex-1`}>
         <div role="status" aria-live="polite">
           {lastDismissed && (
             <div className="flex flex-wrap items-center gap-2 border-b border-subtle bg-surface-3 px-4 py-2 text-ui text-ink">
@@ -254,10 +278,24 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
       {editing && (
         <QuestionEditDrawer
           key={editing.question_id}
+          inspector
           question={editing}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditingId(null)}
+          onDirtyChange={onDirtyChange}
+          returnFocusRef={openerRef}
         />
       )}
-    </>
+      <DiscardChangesDialog
+        open={pendingSwitch !== null}
+        onKeep={() => setPendingSwitch(null)}
+        onDiscard={() => {
+          if (!pendingSwitch) return
+          dirtyRef.current = false
+          openerRef.current = pendingSwitch.opener
+          setEditingId(pendingSwitch.id)
+          setPendingSwitch(null)
+        }}
+      />
+    </div>
   )
 }

@@ -84,31 +84,34 @@ export function AdminShell({ userEmail, defaultCollapsed = false, badges, childr
 
   return (
     <AdminDrawerContext.Provider value={ctx}>
-      <div className="flex h-screen overflow-hidden bg-surface-2">
-        <Sidebar userEmail={userEmail} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} lastBadges={lastBadges} />
-        <MobileSidebar
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          userEmail={userEmail}
-          badges={badges}
-          lastBadges={lastBadges}
-        />
-        <PageTransition>
-          {children}
-        </PageTransition>
+      {/* admin-type (globals.css): the console draws in the system font; the landing keeps Outfit/Lexend. */}
+      <div className="admin-type contents">
+        <div className="flex h-screen overflow-hidden bg-surface-2">
+          <Sidebar userEmail={userEmail} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} badges={badges} lastBadges={lastBadges} />
+          <MobileSidebar
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            userEmail={userEmail}
+            badges={badges}
+            lastBadges={lastBadges}
+          />
+          <PageTransition>
+            {children}
+          </PageTransition>
+        </div>
+        <KeyboardShortcuts onShowHelp={openShortcuts} />
+        <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        {/*
+         * A single Toaster for the whole admin console. `position="bottom-right"`
+         * keeps it clear of the sidebar and topbar; `richColors` stays off because
+         * we style success/error/warning/info from our own tokens instead
+         * (`richColors` would fight `unstyled`+`classNames` with its own inline
+         * colours). `closeButton` gives keyboard/mouse users an explicit dismiss
+         * affordance. Sonner renders its own aria-live region internally — left
+         * untouched here so screen readers still announce each toast.
+         */}
+        <Toaster position="bottom-right" closeButton richColors={false} toastOptions={TOAST_OPTIONS} />
       </div>
-      <KeyboardShortcuts onShowHelp={openShortcuts} />
-      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      {/*
-       * A single Toaster for the whole admin console. `position="bottom-right"`
-       * keeps it clear of the sidebar and topbar; `richColors` stays off because
-       * we style success/error/warning/info from our own tokens instead
-       * (`richColors` would fight `unstyled`+`classNames` with its own inline
-       * colours). `closeButton` gives keyboard/mouse users an explicit dismiss
-       * affordance. Sonner renders its own aria-live region internally — left
-       * untouched here so screen readers still announce each toast.
-       */}
-      <Toaster position="bottom-right" closeButton richColors={false} toastOptions={TOAST_OPTIONS} />
     </AdminDrawerContext.Provider>
   )
 }

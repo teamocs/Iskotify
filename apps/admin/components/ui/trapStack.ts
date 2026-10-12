@@ -18,6 +18,11 @@ export function isTopTrap(id: symbol): boolean {
   return stack.length > 0 && stack[stack.length - 1] === id
 }
 
+/** Whether any modal trap is open (a non-modal inspector yields the keyboard to it). */
+export function hasOpenTrap(): boolean {
+  return stack.length > 0
+}
+
 /** Test helper. */
 export function resetTrapStack(): void {
   stack.length = 0

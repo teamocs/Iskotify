@@ -15,7 +15,7 @@ export function isTabbable(el: Pick<Element, 'getAttribute' | 'closest'>): boole
   return el.getAttribute('tabindex') !== '-1' && !el.closest('[hidden]')
 }
 
-function tabbablesIn(container: ParentNode): HTMLElement[] {
+export function tabbablesIn(container: ParentNode): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isTabbable)
 }
 
@@ -38,6 +38,8 @@ interface Options {
   onEscape: () => void
   /** Element to focus on open; defaults to the first focusable, then the container. */
   initialFocusRef?: RefObject<HTMLElement | null>
+  /** Element to restore focus to on close; defaults to what was focused on open. */
+  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
 /**
@@ -46,7 +48,7 @@ interface Options {
  * opened it on close. Without the trap, Tab walks onto the page behind the
  * overlay, which is still in the DOM.
  */
-export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }: Options) {
+export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef, returnFocusRef }: Options) {
   const restoreTo = useRef<HTMLElement | null>(null)
   const onEscapeRef = useRef(onEscape)
   useEffect(() => { onEscapeRef.current = onEscape })
@@ -73,8 +75,11 @@ export function useFocusTrap({ active, containerRef, onEscape, initialFocusRef }
     return () => {
       window.removeEventListener('keydown', handleKey)
       popTrap(trapId)
-      restoreTo.current?.focus?.()
+      // Read at close on purpose: the opener can change while open (a row switch).
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const explicit = returnFocusRef?.current
+      ;(explicit?.isConnected ? explicit : restoreTo.current)?.focus?.()
       restoreTo.current = null
     }
-  }, [active, containerRef, initialFocusRef, trapId])
+  }, [active, containerRef, initialFocusRef, returnFocusRef, trapId])
 }
