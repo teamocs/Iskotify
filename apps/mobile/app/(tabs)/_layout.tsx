@@ -11,23 +11,21 @@ import { SidebarNav } from '../../components/web/SidebarNav'
 import { useTheme } from '../../theme/ThemeContext'
 
 /**
- * Four destinations: Today (index) · Practice · Explore · Progress.
+ * Four destinations: Today (index) · Practice · Explore · Progress, plus
+ * Search (federated search; reached from the bar's search control).
  *
- * Still registered but never drawn in the bar:
- *   - profile   — opened from the avatar in every tab header / the sidebar;
- *   - listings, updates, analytics — legacy routes that redirect into
- *     Explore / Progress so old deep links and notifications keep working.
+ * Not tabs any more (root-level routes, same URLs):
+ *   - /profile   — a sheet from the avatar in every tab header / the sidebar;
+ *   - /listings, /updates, /analytics — legacy redirects into Explore /
+ *     Progress so old deep links and notifications keep working.
  */
 // A flat array (not a fragment) so the navigator sees each Tabs.Screen directly.
 const TAB_SCREENS = [
-  <Tabs.Screen key="index"     name="index"     options={{ title: 'Today' }} />,
-  <Tabs.Screen key="practice"  name="practice"  options={{ title: 'Practice' }} />,
-  <Tabs.Screen key="explore"   name="explore"   options={{ title: 'Explore' }} />,
-  <Tabs.Screen key="progress"  name="progress"  options={{ title: 'Progress' }} />,
-  <Tabs.Screen key="profile"   name="profile"   options={{ title: 'Profile' }} />,
-  <Tabs.Screen key="listings"  name="listings"  options={{ title: 'Explore' }} />,
-  <Tabs.Screen key="updates"   name="updates"   options={{ title: 'Explore' }} />,
-  <Tabs.Screen key="analytics" name="analytics" options={{ title: 'Progress' }} />,
+  <Tabs.Screen key="index"    name="index"    options={{ title: 'Today' }} />,
+  <Tabs.Screen key="practice" name="practice" options={{ title: 'Practice' }} />,
+  <Tabs.Screen key="explore"  name="explore"  options={{ title: 'Explore' }} />,
+  <Tabs.Screen key="progress" name="progress" options={{ title: 'Progress' }} />,
+  <Tabs.Screen key="search"   name="search"   options={{ title: 'Search' }} />,
 ]
 
 export default function TabLayout() {

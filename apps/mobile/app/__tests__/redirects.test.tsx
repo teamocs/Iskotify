@@ -19,8 +19,8 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams.value,
 }))
 
-import ListingsRedirect from '../listings'
-import { exploreHrefForLegacyTab } from '../../../components/navigation/destinations'
+import ListingsRedirect from '../listings/index'
+import { exploreHrefForLegacyTab } from '../../components/navigation/destinations'
 import UpdatesRedirect from '../updates'
 import AnalyticsRedirect from '../analytics'
 

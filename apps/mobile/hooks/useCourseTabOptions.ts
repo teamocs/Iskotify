@@ -3,7 +3,7 @@
  *
  * Shared data-loading hook for the course picker.
  * Used by both app/schools/course/index.tsx (standalone deep-link screen)
- * and the Courses tab in app/(tabs)/listings.tsx.
+ * and the Courses tab in app/(tabs)/explore.tsx.
  *
  * Wraps reads in cachedQuery('lists:courses-meta', 300_000) per the data layer pattern.
  */

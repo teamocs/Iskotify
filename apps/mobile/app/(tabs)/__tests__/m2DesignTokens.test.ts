@@ -9,7 +9,7 @@ import path from 'path'
 const FILES = [
   'app/(tabs)/index.tsx',
   'app/(tabs)/progress.tsx',
-  'app/(tabs)/profile.tsx',
+  'app/profile/index.tsx',
   'app/profile/scholarship-info.tsx',
   'components/home/TodayHeader.tsx',
   'components/home/NextStepCard.tsx',

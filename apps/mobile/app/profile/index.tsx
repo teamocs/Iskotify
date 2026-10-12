@@ -36,6 +36,7 @@ import { scholarshipProfileIncomplete, studentProfileFromSettings, type IncomeBr
 import { supabase } from '../../services/supabase'
 import { clearWebData } from '../../services/webReset'
 import { resetAnalytics } from '../../lib/analytics'
+import { clearRecentSearches } from '../../components/search/recentSearches'
 import { userSettings, listings } from '../../db/schema'
 import { TargetCoursesCard } from '../../components/TargetCoursesCard'
 import { DeleteAccountSheet } from '../../components/DeleteAccountSheet'
@@ -221,6 +222,20 @@ function FocusListItem({
  * then data and account actions on the right (desktop), stacked on phones.
  * Analytics lives in Progress only — this screen links there.
  */
+// Profile is a sheet over the tabs on native (a push on web). Going to a tab
+// closes it first, so a second set of tabs is never stacked under the sheet.
+function closeTo(href: '/(tabs)/explore' | '/(tabs)/progress') {
+  if (router.canDismiss?.()) router.dismiss()
+  router.navigate(href)
+}
+
+// After sign-out / reset / delete: clear the whole stack (the sheet and the
+// tabs under it), then land on the signed-out screen.
+function leaveSignedOut(href: Parameters<typeof router.replace>[0]) {
+  if (router.canDismiss?.()) router.dismissAll()
+  router.replace(href)
+}
+
 export default function ProfileScreen() {
   const db = useDb()
   // P3: the Full Access row exists only with the paywall flag on.
@@ -392,7 +407,9 @@ export default function ProfileScreen() {
         resetAnalytics()
         // RevenueCat forgets the account and this device starts free (never throws).
         await signOutPremium(db)
-        router.replace(postSignOutRoute)
+        // The next person on this device never sees what was searched.
+        await clearRecentSearches()
+        leaveSignedOut(postSignOutRoute)
       },
     )
   }
@@ -414,6 +431,8 @@ export default function ProfileScreen() {
       async () => {
         resetAnalytics()
         await signOutPremium(db)
+        // Before the web wipe: it hard-reloads the page.
+        await clearRecentSearches()
         if (Platform.OS === 'web') {
           try {
             await clearWebData()
@@ -428,7 +447,7 @@ export default function ProfileScreen() {
         } catch (err) {
           console.warn('[profile] reset failed:', err)
         }
-        router.replace(postSignOutRoute)
+        leaveSignedOut(postSignOutRoute)
       },
     )
   }
@@ -532,7 +551,7 @@ export default function ProfileScreen() {
           title="My Focus List"
           subtitle={focusListingsData.length > 1 ? 'Long-press an exam to drag it, or use the up and down buttons.' : undefined}
           actionLabel="Add more"
-          onAction={() => router.push('/(tabs)/explore')}
+          onAction={() => closeTo('/(tabs)/explore')}
         />
         <Card padded={false} style={{ paddingHorizontal: spacing.sm }}>
           {focusListingsData.length === 0 ? (
@@ -569,7 +588,7 @@ export default function ProfileScreen() {
           title="Progress and analytics"
           subtitle="Readiness, accuracy, pace and mistakes"
           leading={rowIcon(TrendUp1Outlined, t.accentText)}
-          onPress={() => router.push('/(tabs)/progress')}
+          onPress={() => closeTo('/(tabs)/progress')}
         />
         <View style={divided(1)}>
           <ListRow
@@ -645,7 +664,9 @@ export default function ProfileScreen() {
 
   return (
     <Screen
-      tabBarInset
+      // Not a tab any more: no bar to clear. The native sheet has its own top
+      // edge (grabber), so only the web push keeps the top safe area.
+      edges={Platform.OS === 'web' ? ['top'] : []}
       width={bp === 'expanded' ? 'wide' : 'reading'}
       refreshControl={
         <RefreshControl
@@ -657,22 +678,33 @@ export default function ProfileScreen() {
         />
       }
     >
-      {/* Profile opens from the avatar (not a tab), so it carries its own Back. */}
+      {/* Profile opens from the avatar (not a tab). Web: a page with Back.
+          Native: a sheet with a Done button (VoiceOver can't reach the grabber). */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingTop: spacing.md, paddingBottom: spacing.lg }}>
-        <View style={{ marginLeft: -spacing.sm }}>
-          <IconButton
-            icon={ArrowLeftOutlined}
-            label="Back"
-            tone="primary"
-            onPress={() => (router.canGoBack?.() ? router.back() : router.replace('/'))}
-          />
-        </View>
+        {Platform.OS === 'web' ? (
+          <View style={{ marginLeft: -spacing.sm }}>
+            <IconButton
+              icon={ArrowLeftOutlined}
+              label="Back"
+              tone="primary"
+              onPress={() => (router.canGoBack?.() ? router.back() : router.replace('/'))}
+            />
+          </View>
+        ) : null}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>Profile</Text>
           <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Your account, focus list and data</Text>
         </View>
         <WebRefreshButton onRefresh={webRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />
         <IconButton icon={Gear1Outlined} label="Settings" onPress={() => router.push('/settings')} />
+        {Platform.OS === 'web' ? null : (
+          <Button
+            label="Done"
+            variant="ghost"
+            size="sm"
+            onPress={() => (router.canDismiss?.() ? router.dismiss() : router.replace('/'))}
+          />
+        )}
       </View>
 
       <TwoColumn primary={primary} secondary={secondary} />
@@ -682,7 +714,8 @@ export default function ProfileScreen() {
         onClose={() => setDeleteOpen(false)}
         onDeleted={() => {
           setDeleteOpen(false)
-          router.replace(postSignOutRoute)
+          void clearRecentSearches()
+          leaveSignedOut(postSignOutRoute)
         }}
       />
     </Screen>

@@ -1,11 +1,19 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import { Alert } from 'react-native'
-import ProfileScreen from '../profile'
+import ProfileScreen from '../index'
 
 jest.mock('expo-router', () => ({
-  router: { replace: jest.fn(), push: jest.fn() },
+  router: {
+    replace: jest.fn(), push: jest.fn(), navigate: jest.fn(),
+    dismiss: jest.fn(), dismissAll: jest.fn(), canDismiss: jest.fn(() => true),
+  },
   useFocusEffect: jest.fn((cb: any) => { cb(); return () => {} }),
+}))
+
+const mockClearRecents = jest.fn(async () => undefined)
+jest.mock('../../../components/search/recentSearches', () => ({
+  clearRecentSearches: () => mockClearRecents(),
 }))
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -126,22 +134,31 @@ describe('ProfileScreen — empty DB', () => {
 
   // Redesign M1: Profile is no longer a tab — it opens from the header avatar,
   // so it needs its own way back.
-  it('has a Back button that returns to the previous screen when there is one', () => {
+  // Web: Profile is a pushed page with a Back button.
+  it('has a Back button that returns to the previous screen when there is one (web)', () => {
+    const { Platform } = require('react-native')
+    const os = Platform.OS
+    Platform.OS = 'web'
     const { router } = require('expo-router')
     router.canGoBack = jest.fn(() => true)
     router.back = jest.fn()
     render(<ProfileScreen />)
     fireEvent.press(screen.getByRole('button', { name: 'Back' }))
     expect(router.back).toHaveBeenCalled()
+    Platform.OS = os
   })
 
   it('Back falls back to Today when Profile was opened directly (deep link / web URL)', () => {
+    const { Platform } = require('react-native')
+    const os = Platform.OS
+    Platform.OS = 'web'
     const { router } = require('expo-router')
     router.canGoBack = jest.fn(() => false)
     router.replace.mockClear()
     render(<ProfileScreen />)
     fireEvent.press(screen.getByRole('button', { name: 'Back' }))
     expect(router.replace).toHaveBeenCalledWith('/')
+    Platform.OS = os
   })
 
   it('shows default name Student when no data', async () => {
@@ -162,7 +179,8 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.queryByText('Analytics')).toBeNull()
     expect(screen.queryByRole('button', { name: /Expand analytics/ })).toBeNull()
     fireEvent.press(screen.getByRole('button', { name: /^Progress and analytics/ }))
-    expect(router.push).toHaveBeenCalledWith('/(tabs)/progress')
+    // Switches tab (closing the sheet), never pushes a second tab stack.
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/progress')
   })
 
   it('has a labelled Settings button (moved here from Today)', () => {
@@ -580,7 +598,7 @@ describe('ProfileScreen — Delete account', () => {
   })
 
   it('uses danger styling for the row icon (token, not a hex)', async () => {
-    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'profile.tsx'), 'utf8')
+    const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.tsx'), 'utf8')
     expect(src).toMatch(/title="Delete account"[\s\S]{0,400}t\.danger/)
   })
 
@@ -654,5 +672,113 @@ describe('ProfileScreen — Iskotify Full Access (P3)', () => {
     fireEvent.press(getByText('Reset App Data'))
     await waitFor(() => expect(mockSignOutPremium).toHaveBeenCalledTimes(2))
     alertSpy.mockRestore()
+  })
+})
+
+// iOS redesign P2a review: Profile is a sheet over the tabs on native. Jumping
+// to a tab dismisses the sheet (never stacks a second set of tabs), leaving
+// after sign-out clears the whole stack, VoiceOver gets a Done button, and
+// every wipe forgets this device's recent searches.
+describe('ProfileScreen — sheet navigation and wipes', () => {
+  const signedInRow = {
+    fullName: 'Maria Santos', school: 'UPLB', gradeLevel: 11,
+    googleId: 'google-uid-123', email: 'maria@gmail.com', selectedListingSlug: '',
+  }
+  const confirmAll = () => jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+    buttons?.find((x: any) => x.style === 'destructive')?.onPress?.()
+  })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    const { router } = require('expo-router')
+    router.canDismiss.mockReturnValue(true)
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb(signedInRow))
+    mockDeleteAccount.mockResolvedValue({ ok: true })
+  })
+
+  it('native: a labelled Done button closes the sheet', () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Done' }))
+    expect(router.dismiss).toHaveBeenCalled()
+  })
+
+  it('Add more dismisses the sheet and switches to Explore (no second tab stack)', async () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Add more'))
+    expect(router.dismiss).toHaveBeenCalled()
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/explore')
+    expect(router.push).not.toHaveBeenCalledWith('/(tabs)/explore')
+  })
+
+  it('Progress and analytics dismisses the sheet and switches to Progress', async () => {
+    const { router } = require('expo-router')
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Progress and analytics'))
+    expect(router.dismiss).toHaveBeenCalled()
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/progress')
+  })
+
+  it('opened directly (nothing to dismiss), it just navigates', async () => {
+    const { router } = require('expo-router')
+    router.canDismiss.mockReturnValue(false)
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Add more'))
+    expect(router.dismiss).not.toHaveBeenCalled()
+    expect(router.navigate).toHaveBeenCalledWith('/(tabs)/explore')
+  })
+
+  it('Sign Out clears recent searches and leaves through a cleared stack', async () => {
+    const { router } = require('expo-router')
+    const spy = confirmAll()
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Sign Out'))
+    await waitFor(() => expect(router.replace).toHaveBeenCalled())
+    expect(mockClearRecents).toHaveBeenCalled()
+    expect(router.dismissAll).toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('Reset App Data clears recent searches and leaves through a cleared stack', async () => {
+    const { router } = require('expo-router')
+    const spy = confirmAll()
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Reset App Data'))
+    await waitFor(() => expect(router.replace).toHaveBeenCalled())
+    expect(mockClearRecents).toHaveBeenCalled()
+    expect(router.dismissAll).toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('Delete account clears recent searches', async () => {
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByRole('button', { name: /^Delete account/ }))
+    await screen.findByText('Delete your account?')
+    fireEvent.changeText(screen.getByLabelText('Type DELETE to confirm'), 'DELETE')
+    fireEvent.press(screen.getByRole('button', { name: 'Delete my account' }))
+    await waitFor(() => expect(require('expo-router').router.replace).toHaveBeenCalledWith('/landing'))
+    expect(mockClearRecents).toHaveBeenCalled()
+  })
+})
+
+describe('ProfileScreen — WEB wipes', () => {
+  const { Platform } = require('react-native')
+  let os: string
+  beforeAll(() => { os = Platform.OS; Platform.OS = 'web' })
+  afterAll(() => { Platform.OS = os })
+  beforeEach(() => {
+    jest.clearAllMocks()
+    require('../../../hooks/useDb').useDb.mockReturnValue(makeDb())
+    ;(global as any).window = { confirm: jest.fn(() => true) }
+  })
+  afterEach(() => { delete (global as any).window })
+
+  it('Clear data & sign out forgets recent searches too', async () => {
+    const { clearWebData } = require('../../../services/webReset')
+    render(<ProfileScreen />)
+    fireEvent.press(await screen.findByText('Clear data & sign out'))
+    await waitFor(() => expect(clearWebData).toHaveBeenCalled())
+    expect(mockClearRecents).toHaveBeenCalled()
   })
 })

@@ -4,6 +4,7 @@
 // so it is easy to unit-test.
 
 import { canonicalizeRegion } from './region'
+import { fold } from './fold'
 import { matchScholarship, type MatchInput, type MatchStatus, type StudentProfile } from './scholarshipMatch'
 
 export interface SearchableListing {
@@ -41,11 +42,11 @@ const INTENT_WORDS = new Set([
 ])
 
 export function tokenize(s: string): string[] {
-  return (s ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
+  return fold(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
 }
 
 export function parseIntent(query: string): SearchIntent {
-  const q = ` ${query.toLowerCase()} `
+  const q = ` ${fold(query)} `
   const has = (...words: string[]) => words.some(w => q.includes(w))
   return {
     wantsExam: has('exam', 'entrance', 'admission', 'cet', ' test'),
@@ -57,7 +58,7 @@ export function parseIntent(query: string): SearchIntent {
 }
 
 /** Content tokens = query tokens minus stopwords and pure intent words. */
-function contentTokens(query: string): string[] {
+export function contentTokens(query: string): string[] {
   return tokenize(query).filter(tk => !STOP.has(tk) && !INTENT_WORDS.has(tk))
 }
 
@@ -68,10 +69,11 @@ export function scoreListing(
   userRegion: string | null | undefined,
 ): number {
   let score = 0
-  const title = (l.title ?? '').toLowerCase()
-  const provider = (l.provider ?? '').toLowerCase()
-  const region = (l.region ?? '').toLowerCase()
-  const province = (l.province ?? '').toLowerCase()
+  // Folded like the query tokens: "Cañete" and "canete" are the same word.
+  const title = fold(l.title)
+  const provider = fold(l.provider)
+  const region = fold(l.region)
+  const province = fold(l.province)
   const uReg = canonicalizeRegion(userRegion ?? '').toLowerCase()
   const lReg = canonicalizeRegion(l.region ?? '').toLowerCase()
 
