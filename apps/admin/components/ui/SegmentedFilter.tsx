@@ -63,7 +63,7 @@ export function SegmentedFilter({ label, options, allLabel, value, onChange, par
     router.replace(s ? `${pathname}?${s}` : (pathname ?? ''), { scroll: false })
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+  function onKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     const at = segments.findIndex(s => s.value === current)
     let to: number | null = null
     if (e.key in NEXT) to = (at + NEXT[e.key]! + segments.length) % segments.length
@@ -81,7 +81,6 @@ export function SegmentedFilter({ label, options, allLabel, value, onChange, par
       <div
         role="radiogroup"
         aria-labelledby={labelId}
-        onKeyDown={onKeyDown}
         className="inline-flex h-8 items-center gap-0.5 rounded-chip bg-neutral-soft p-0.5"
       >
         {segments.map((s, i) => {
@@ -95,6 +94,7 @@ export function SegmentedFilter({ label, options, allLabel, value, onChange, par
               aria-checked={on}
               tabIndex={on ? 0 : -1}
               onClick={() => choose(s.value)}
+              onKeyDown={onKeyDown}
               className={[
                 'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[6px] px-2.5 transition-colors duration-200 ease-snappy',
                 on ? 'bg-surface font-semibold text-ink shadow-sm' : 'font-medium text-ink-muted hover:text-ink',

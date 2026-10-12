@@ -31,7 +31,6 @@ import { Hero } from '@/components/landing/Hero'
 
 const ROOT = path.resolve(__dirname, '../..')
 const read = (rel: string) => readFileSync(path.join(ROOT, rel), 'utf8')
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const preset = require('@iskotify/ui/tailwind-preset') as { theme: { extend: { fontFamily: Record<string, string[]> } } }
 
 const SYSTEM_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif'

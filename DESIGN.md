@@ -83,14 +83,39 @@ to drop `success` and `warning` below 4.5:1. Measured worst case across white an
 
 ### Type and shape
 
-Admin (and the landing page), unchanged for now: `font-heading` Outfit · `font-body` Lexend — both self-hosted via `next/font` in
-[`apps/admin/app/layout.tsx`](apps/admin/app/layout.tsx), which sets the
-`--font-heading` / `--font-body` variables the preset reads. Do **not** add a
-`<link>` to fonts.googleapis.com; it re-introduces a render-blocking request.
-The mobile app no longer uses these fonts; it draws in the system font (see the
-mobile type section).
+**Fonts.** The landing page keeps `font-heading` Outfit · `font-body` Lexend, both
+self-hosted via `next/font` in [`apps/admin/app/layout.tsx`](apps/admin/app/layout.tsx),
+which sets the `--font-heading` / `--font-body` variables the preset reads. The
+**admin console draws in the system font** (2026-10, P5): the `.admin-type` scope in
+`globals.css` re-points both variables to
+`-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif`.
+It is applied by `AdminShell`, the admin login, the admin 403, and the `Dialog` /
+`Drawer` portals (they mount on `<body>`, outside the shell). Do not remap the
+preset's families globally, and do not add `.admin-type` to a landing file
+(`app/__tests__/fonts.test.tsx` guards both). Do **not** add a `<link>` to
+fonts.googleapis.com; it re-introduces a render-blocking request. The mobile app
+draws in the system font too (see the mobile type section).
 
-Radii `sm 10 · md 16 · lg 22 · pill 980` · shadows `sm` and `card`.
+**iOS text styles** (additive; the stock `text-xs…` scale stays): `text-large-title`
+34/41 · `title-1` 28/34 · `title-2` 22/28 · `title-3` 20/25 · `headline` 17/22 semibold ·
+`body` 17/22 · `callout` 16/21 · `subhead` 15/20 · `footnote` 13/18 · `caption` 12/16.
+The admin console keeps `text-ui` 13/20 for table and nav density.
+
+**Radii.** Legacy `sm 10 · md 16 · lg 22 · pill 980`, plus role radii `chip 8` (nav
+rows, segmented track, small controls) · `field 12` · `button 14` · `group 18` (cards,
+table frames, inspector) · `card 22` (dialogs) · `sheet 28` · `capsule 9999` (CTA
+capsules). Shadows `sm` and `card`.
+
+**Motion.** `ease-snappy` `cubic-bezier(.2,.9,.25,1)` for small state changes,
+`ease-smooth` `cubic-bezier(.32,.72,0,1)` for things that travel; `duration-200`
+(micro), `duration-280` (standard), `duration-480` (full-screen entrances).
+
+**Glass.** `glass` (a preset plugin utility, the only home of its rgba values):
+white at 72% with `blur(20px) saturate(180%)` and an inset bottom hairline. It falls
+back to solid white under `@supports not (backdrop-filter)` and under
+`prefers-reduced-transparency: reduce` (repeated in `globals.css`). Used for the admin
+Topbar and the landing header and its phone menu. A `glass` element is the containing
+block of its fixed descendants, so never put a fixed overlay inside one.
 
 ### Global floor (`apps/admin/app/globals.css`)
 
@@ -99,6 +124,7 @@ Radii `sm 10 · md 16 · lg 22 · pill 980` · shadows `sm` and `card`.
 - `.sr-only` + `focus:not-sr-only` back the skip link in the root layout.
 - `prefers-reduced-motion` cuts animation to ~0 but keeps transitions at 120ms,
   so state changes stay perceptible rather than snapping invisibly.
+- `prefers-reduced-transparency` turns every `glass` layer solid.
 
 ---
 
@@ -136,26 +162,32 @@ alpha tokens they are computed after compositing over white.
 
 | Primitive | Contract |
 |---|---|
-| `Topbar` (`components/admin`) | Holds the page's **only** `h1`. Page actions go on the right. A page never repeats its title as an `h1` or `h2` in the body. |
+| `Topbar` (`components/admin`) | A translucent sticky toolbar (`glass`, `sticky top-0`) holding the page's **only** `h1` (`text-title-3` bold, 20px). Page actions go on the right, at most one of them maroon. When the page has a search box (`[data-shortcut-search]`), a Search control appears that hands focus to it and shows its real shortcut, `/`. There is no command palette, so there is no Ctrl K hint. A page never repeats its title as an `h1` or `h2` in the body. |
 | `PageBody` | The scrolling area under the Topbar. Standard gutter. `intro` takes one orienting sentence, not a heading. `width` is `full`, `wide` or `narrow`. |
 | `Card` | A bordered region. Given a `title` it becomes a labelled `<section>` with an `h2` (or an `h3`). Use `flush` for full-bleed tables. Never nest cards. |
 | `Button` / `IconButton` / `buttonClass` | Variants `primary`, `secondary`, `ghost` and `danger`. `loading` announces the busy state and keeps the label. `IconButton` requires a `label`, which becomes its accessible name and tooltip. |
 | `Badge` | The text carries the status and the tone only reinforces it. Tones: `neutral`, `success`, `warning`, `danger`, `info`, `brand`. |
 | `Field` + `controlClass` | Render-prop. Ties label↔control with `htmlFor`/`id`, and hint and error with `aria-describedby`. An error sets `aria-invalid` and `role="alert"` and sits **next to its field**. `required` sets the attribute and adds an `aria-hidden` `*`. |
 | `Dialog` / `Drawer` | Modal contract: labelled, `aria-modal`, focus moved in, trapped and restored, Escape and the scrim close it. `onSubmit` turns the panel into a real `<form noValidate>`, so Enter submits and a `type="submit"` footer button is the submit; the default action is prevented. `dirty` makes every close path (Escape, scrim, ✕, and the guarded `close` passed to a `footer={close => …}` function) ask **"Discard unsaved changes?"** first, with Keep editing focused. It also arms the browser's leave-page prompt. |
+| `Drawer inspector` | At `xl` (1280px) and above, a Drawer given `inspector` docks as a **non-modal** pane (`<aside data-inspector>`, labelled by its title, `rounded-group`) rendered in place, so the caller lays it out beside the list (the review queue's question editor). No scrim, scroll lock or Tab trap: the list stays usable. Focus moves in on open, Escape closes while focus is inside (a modal on top, such as the discard prompt, owns Escape), and focus returns on close if it was still in the pane. The `dirty` guard is unchanged. Below `xl`, and in server markup, it is the ordinary modal Drawer with the full trap contract. |
+| `SegmentedFilter` | A macOS-style segmented control for a filter with **five or fewer** options: a visibly labelled WAI-ARIA radio group with one tab stop, where the arrow keys move and select (wrapping) and Home/End jump. It is either controlled (`value`/`onChange`) or syncs a URL search `param` itself (dropping `page`). In a `DataTable`, a filter opts in with `segmented: true`; above five options it stays the `<select>` chip. |
 | `DiscardChangesDialog`, `closeOrConfirm` | The same guard for full-page forms (for example Cancel on the new-flashcard page). |
 | `ConfirmDialog` (`components/admin`) | Destructive yes/no, built on `Dialog` as an `alertdialog`. Cancel is focused first. |
 | `DataTable` | The console's one table. Search (`q`), sort (`sort=-col`), filters, page and hidden columns (`hide=a,b`) live in the **URL**, so a view survives a refresh and can be shared; `paramPrefix` namespaces two tables on one page. Headers are human labels, the header is sticky, and sortable headers are buttons with `aria-sort`. "No data" and "no matches" are different states. `loading` shows skeleton rows. `selection` (controlled ids, `rowLabel`, `actions`) adds labelled row checkboxes, a select-all for the current page, and a bulk bar that appears only while something is selected. `columnChooser` adds a Columns disclosure; one column always stays visible. Rows are plain `<tr>`: the primary action is a real button or link in the first data cell. Toolbar: search, filters as chips (native `<select>`, with per-option counts on client tables), removable active-filter pills with **Clear all**, Columns, and a Comfortable/Compact density toggle persisted console-wide in `localStorage`. The select-all is indeterminate on a partial page; the bulk bar floats (sticky to the bottom of the view) with "N selected", the actions and **Clear selection**; `announcement` is an always-present live region. Footer: "26–50 of 312", rows per page (`size=`, client tables only; server tables keep their fixed page) and first/previous/next/last. `error` + `onRetry` replace the rows with an `ErrorBanner` and keep the toolbar. `numeric` right-aligns a column in tabular figures; `truncate` clamps to one line with the full text as its title; `hideOnMobile` drops a column below 768px. The first data column (and the checkbox) is pinned while the table scrolls sideways inside its focusable region. Rows are memoised: selecting a row re-renders that row only, provided the caller memoises `columns`. Wrap a table in `TABLE_FRAME` (no overflow clipping, so the bulk bar can stick). |
 | `Table` primitives / `RowActions` | `TableRegion`, `Table`, `THead`, `Th`, `Td`, `Tr` (in `Table.tsx`) are what `DataTable` is built from; tables that cannot be a `DataTable` (the question-bank editor grid, the guide's column references, a topic's cards) use them directly. `RowActions` is the row's overflow menu (WAI-ARIA menu button: arrows, Home/End, Escape returns focus). The one frequent action stays inline (Resolve, Approve, Dismiss, Publish); secondary and destructive ones go in the menu, danger last. Give an item a `name` ("Delete Scholar A") when the row must be named. |
 | `EmptyState` / `ErrorBanner` | An empty state says what belongs here and how it gets here. A failed query renders `ErrorBanner` (`role="alert"`), **never** an empty list. |
 | `Icon` / `Kbd` | One inline icon set: 24-unit grid, 1.75 stroke, `currentColor`, decorative by default. No emoji or Unicode glyphs as icons. The one exception is the ✓ glyph that marks a correct answer next to its colour, backed by screen-reader text. |
-| Sidebar (`components/admin/{Sidebar,SidebarContent,MobileSidebar,RailTooltip}`) | Grouped `<nav aria-label="Admin">`, current page `aria-current="page"`. Collapses to a 56px icon rail with **Ctrl/Cmd+B** or the Collapse row (visible key hint); the state persists in the `admin_sidebar` cookie that the layout reads, so the first paint is right. In the rail, items keep sr-only labels and show a fixed-position tooltip on hover **and** focus (Escape dismisses). **No native `title` tooltips anywhere in the sidebar.** The nav scrolls in `.sidebar-scroll` (globals.css): thin, transparent thumb until hover/focus, edge fade when there is more. Below `md` the same content is a focus-trapped drawer. Queue counts stream in from `lib/admin/navBadges` (head counts only). |
+| Sidebar (`components/admin/{Sidebar,SidebarContent,MobileSidebar,RailTooltip}`) | Grouped `<nav aria-label="Admin">`, current page `aria-current="page"`. Rows are 32px with `rounded-chip` hover and active fills; counts are tabular pills, and the Review queue's (`badgeTone: 'brand'` in `lib/nav/adminNav`) is the maroon pill. Collapses to a 56px icon rail with **Ctrl/Cmd+B** or the Collapse row (visible key hint); the state persists in the `admin_sidebar` cookie that the layout reads, so the first paint is right. In the rail, items keep sr-only labels and show a fixed-position tooltip on hover **and** focus (Escape dismisses). **No native `title` tooltips anywhere in the sidebar.** The nav scrolls in `.sidebar-scroll` (globals.css): thin, transparent thumb until hover/focus, edge fade when there is more. Below `md` the same content is a focus-trapped drawer. Queue counts stream in from `lib/admin/navBadges` (head counts only). |
 | `useFocusTrap` + `trapStack` | Overlays can stack (a Drawer with a discard prompt on top). Only the topmost trap reacts to Escape and Tab. |
 
 ### Page rules
 
 - Every route under `app/admin` renders `Topbar` (the `h1`), then `PageBody`, then
   `Card` sections or a `DataTable`.
+- Home (`InboxView`) leads with stat tiles per queue group, which are sums of the
+  real counts (a dash when none loaded, never an invented zero). Below them is a
+  "Needs attention" table of every queue in fixed order, which a `SegmentedFilter`
+  (`?queues=Content|Inbox`) narrows.
 - `app/admin/error.tsx` is the route error boundary. It names the failure, offers
   **Try again** (`reset`) and **Back to Home**, and shows the error digest as a
   reference.
@@ -172,6 +204,16 @@ alpha tokens they are computed after compositing over white.
 with a reason, and an entry that no longer matches anything fails as well. The
 landing page (`components/landing`) and the email template (`lib/email`) are out
 of scope.
+
+**Landing header** (`components/landing/Nav.tsx`, the only landing file the iOS
+redesign touches; the rest of the landing content is frozen): a 52px `glass` strip.
+The logo and wordmark sit left, the four section links are centred (14px, ink at 88%,
+44px targets), and a 32px maroon `rounded-capsule` "Start studying" sits right.
+Below `md`, a two-line menu button (`aria-expanded`/`aria-controls`) opens a
+full-screen frosted menu. It has 28px semibold links that fade and rise in a stagger
+(`motion-safe` only) and the CTA at the bottom. Escape closes it, focus moves in and
+returns, Tab stays inside, page scroll locks, and a link click closes it
+(`components/__tests__/Nav.test.tsx`).
 
 ---
 

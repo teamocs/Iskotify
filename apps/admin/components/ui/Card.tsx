@@ -20,7 +20,7 @@ interface CardProps {
  */
 export function Card({ title, description, actions, headingLevel = 2, id, className, flush = false, children }: CardProps) {
   const headingId = useId()
-  const frame = ['bg-surface border border-subtle rounded-md overflow-hidden', className].filter(Boolean).join(' ')
+  const frame = ['bg-surface border border-subtle rounded-group overflow-hidden', className].filter(Boolean).join(' ')
   const body = flush ? children : <div className="p-4">{children}</div>
 
   if (!title) return <div id={id} className={frame}>{body}</div>
@@ -30,7 +30,7 @@ export function Card({ title, description, actions, headingLevel = 2, id, classN
     <section id={id} aria-labelledby={headingId} className={frame}>
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3 border-b border-subtle">
         <div className="min-w-0">
-          <H id={headingId} className="font-heading font-semibold text-[15px] leading-6 text-ink">{title}</H>
+          <H id={headingId} className="font-heading text-subhead font-semibold text-ink">{title}</H>
           {description && <p className="text-xs text-ink-muted mt-0.5">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

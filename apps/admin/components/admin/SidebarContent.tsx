@@ -31,7 +31,7 @@ interface Props {
 }
 
 const NO_BADGES: NavBadges = {}
-const ITEM = 'relative flex h-8 items-center rounded-sm text-ui transition-colors duration-150'
+const ITEM = 'relative flex h-8 items-center rounded-chip text-ui transition-colors duration-150'
 
 // Server snapshot is "not Mac", so hydration matches; Mac users see ⌘ right after.
 const subscribeNoop = () => () => {}
@@ -66,7 +66,12 @@ function NavLink({ item, active, count, collapsed, onClick }: {
       {badge && (collapsed ? (
         <span aria-hidden="true" className="absolute right-1.5 top-1 h-2 w-2 rounded-full bg-maroon ring-2 ring-sidebar" />
       ) : (
-        <span aria-hidden="true" className="rounded-pill bg-neutral-soft px-1.5 text-xs font-medium tabular-nums leading-5 text-sidebar-ink-muted">
+        <span
+          aria-hidden="true"
+          className={`${
+            item.badgeTone === 'brand' ? 'bg-maroon text-ink-inverse' : 'bg-neutral-soft text-sidebar-ink-muted'
+          } rounded-pill px-1.5 text-xs font-medium tabular-nums leading-5`}
+        >
           {badge}
         </span>
       ))}

@@ -23,10 +23,12 @@ const letter = (i: number) => String.fromCharCode(65 + i)
  * Edit a Question Bank item's text, options and correct answer in place.
  * Saves only the changed fields through PATCH /api/upcat-questions/[id].
  */
-export function QuestionEditDrawer({ question, onClose, onSaved }: {
+export function QuestionEditDrawer({ question, onClose, onSaved, inspector = false }: {
   question: EditableQuestion
   onClose: () => void
   onSaved?: () => void
+  /** Dock as a non-modal inspector beside the list at xl and above (modal Drawer below). */
+  inspector?: boolean
 }) {
   const router = useRouter()
   const uid = useId()
@@ -77,6 +79,7 @@ export function QuestionEditDrawer({ question, onClose, onSaved }: {
   return (
     <Drawer
       open
+      inspector={inspector}
       width="lg"
       onClose={onClose}
       title={`Edit question ${question.question_id}`}

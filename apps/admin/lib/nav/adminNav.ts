@@ -6,7 +6,11 @@ import type { IconName } from '@/components/ui/Icon'
  * database table. The 19 raw reference tables live behind /admin/data.
  */
 
-export interface NavItem { href: string; label: string; icon: IconName }
+export interface NavItem {
+  href: string; label: string; icon: IconName
+  /** 'brand' paints the count as the maroon pill: the one queue that blocks content going live. */
+  badgeTone?: 'brand'
+}
 export interface NavGroup { id: 'content' | 'listings' | 'inbox' | 'audience' | 'system'; label: string; items: NavItem[] }
 
 export const HOME_ITEM: NavItem = { href: '/admin', label: 'Home', icon: 'home' }
@@ -19,7 +23,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/flashcards', label: 'Knowledge base', icon: 'book' },
       { href: '/admin/upcat/import', label: 'Import questions', icon: 'upload' },
       { href: '/admin/flashcards/drafts', label: 'Drafts', icon: 'file-pen' },
-      { href: '/admin/upcat/review-queue', label: 'Review queue', icon: 'scan' },
+      { href: '/admin/upcat/review-queue', label: 'Review queue', icon: 'scan', badgeTone: 'brand' },
       { href: '/admin/exam-blueprints', label: 'Exam blueprints', icon: 'blueprint' },
       { href: '/admin/sync', label: 'Drive sync', icon: 'folder' },
     ],

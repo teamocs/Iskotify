@@ -17,7 +17,7 @@ import type { Density } from '@/lib/table/density'
 
 /** The bordered frame a table sits in. No overflow clipping, so the bulk bar
  *  can stick to the bottom of the view and menus can open outside it. */
-export const TABLE_FRAME = 'rounded-md border border-subtle bg-surface'
+export const TABLE_FRAME = 'rounded-group border border-subtle bg-surface'
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 

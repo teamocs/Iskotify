@@ -130,7 +130,7 @@ export function Dialog({ open, onClose, title, description, footer, initialFocus
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`relative w-full ${SIZES[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-lg bg-surface shadow-overlay focus:outline-none`}
+        className={`relative w-full ${SIZES[size]} max-h-[calc(100vh-2rem)] flex flex-col rounded-card bg-surface shadow-overlay focus:outline-none`}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
           <div className="min-w-0 flex-1">

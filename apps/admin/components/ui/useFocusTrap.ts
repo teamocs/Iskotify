@@ -15,7 +15,7 @@ export function isTabbable(el: Pick<Element, 'getAttribute' | 'closest'>): boole
   return el.getAttribute('tabindex') !== '-1' && !el.closest('[hidden]')
 }
 
-function tabbablesIn(container: ParentNode): HTMLElement[] {
+export function tabbablesIn(container: ParentNode): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isTabbable)
 }
 

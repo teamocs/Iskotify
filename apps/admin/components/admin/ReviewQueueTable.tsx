@@ -212,9 +212,11 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
     },
   ], [dismissedIds, dismiss, restore])
 
+  // At xl the editor docks as an inspector beside the table (a non-modal pane);
+  // below xl it is the modal Drawer. The table keeps the remaining width.
   return (
-    <>
-      <div className={TABLE_FRAME}>
+    <div className="xl:flex xl:items-start xl:gap-4">
+      <div className={`${TABLE_FRAME} min-w-0 xl:flex-1`}>
         <div role="status" aria-live="polite">
           {lastDismissed && (
             <div className="flex flex-wrap items-center gap-2 border-b border-subtle bg-surface-3 px-4 py-2 text-ui text-ink">
@@ -254,10 +256,11 @@ export function ReviewQueueTable({ items, dismissals }: { items: ReviewItem[]; d
       {editing && (
         <QuestionEditDrawer
           key={editing.question_id}
+          inspector
           question={editing}
           onClose={() => setEditing(null)}
         />
       )}
-    </>
+    </div>
   )
 }
