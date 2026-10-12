@@ -1,5 +1,5 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { View } from 'react-native'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessibilityInfo, Platform, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -10,7 +10,7 @@ import {
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
+import { spacing, textStyle } from '../../theme/tokens'
 import { listings as listingsTable, tertiarySchools, universityProfiles } from '../../db/schema'
 import { Screen } from '../../components/ui/Screen'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -69,11 +69,12 @@ export default function SearchScreen() {
   const [userRegion, setUserRegion] = useState('')
   const [query, setQuery] = useState('')
   const [recent, setRecent] = useState<string[]>([])
+  const recentRef = useRef<string[]>([])
   const deferredQuery = useDeferredValue(query)
 
   useEffect(() => {
     let alive = true
-    void loadRecentSearches().then(r => { if (alive) setRecent(r) })
+    void loadRecentSearches().then(r => { if (alive) { recentRef.current = r; setRecent(r) } })
     return () => { alive = false }
   }, [])
 
@@ -115,17 +116,22 @@ export default function SearchScreen() {
   )
   const upcoming = useMemo(() => upcomingListings(listings), [listings])
 
+  // Compute the next list outside the state updater (updaters must stay pure:
+  // StrictMode runs them twice), then set it, then persist it.
+  const applyRecent = useCallback((next: string[]) => {
+    recentRef.current = next
+    setRecent(next)
+  }, [])
   const remember = useCallback((q: string) => {
-    setRecent(prev => {
-      const next = addRecent(prev, q)
-      void saveRecentSearches(next)
-      return next
-    })
-  }, [])
+    const next = addRecent(recentRef.current, q)
+    if (next.join('\n') === recentRef.current.join('\n')) return
+    applyRecent(next)
+    void saveRecentSearches(next)
+  }, [applyRecent])
   const clearRecent = useCallback(() => {
-    setRecent([])
+    applyRecent([])
     void saveRecentSearches([])
-  }, [])
+  }, [applyRecent])
 
   const retry = useCallback(() => {
     setStatus('loading')
@@ -159,6 +165,15 @@ export default function SearchScreen() {
   const catalogEmpty = status === 'ready' && listings.length === 0 && schools.length === 0
   const firstSync = catalogEmpty && sync.isSyncing
   const offline = catalogEmpty && !sync.isSyncing && sync.lastError != null
+
+  // Screen readers hear the outcome of each search: a polite live region
+  // (Android, web) and an announcement on iOS, which has no live regions.
+  const total = resultCount(results)
+  const searching = status === 'ready' && !offline && !firstSync && deferredQuery.trim().length >= 2
+  const statusText = searching ? (total ? `${total} result${total === 1 ? '' : 's'}` : 'No matches') : ''
+  useEffect(() => {
+    if (statusText && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(statusText)
+  }, [statusText])
 
   let body: React.ReactNode
   if (status === 'error') {
@@ -262,6 +277,15 @@ export default function SearchScreen() {
           accessibilityLabel="Search schools, scholarships and exams"
         />
       </View>
+      <Text
+        testID="search-status"
+        accessibilityLiveRegion="polite"
+        aria-live="polite"
+        style={[textStyle('caption', t.textSecondary), statusText ? { paddingBottom: spacing.sm } : null]}
+        maxFontSizeMultiplier={2}
+      >
+        {statusText}
+      </Text>
       {body}
     </Screen>
   )

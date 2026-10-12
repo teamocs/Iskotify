@@ -2,6 +2,7 @@ import { contentTokens, parseIntent, scoreListing } from '../../utils/listingSea
 import { parseSchoolSearchIntent } from '../../utils/schoolSearchIntent'
 import { passesFreeTuitionFilter } from '../../utils/freeTuitionFilter'
 import { fmtShortDate } from '../explore/exploreModel'
+import { fold } from '../../utils/fold'
 
 // ---------------------------------------------------------------------------
 // Federated search over the local catalog: schools, scholarships and entrance
@@ -63,7 +64,7 @@ function matchListings(listings: SearchListing[], query: string, userRegion: str
   // verified bonuses alone never make a match.
   const hasWord = (l: SearchListing) => {
     if (tks.length === 0) return true
-    const hay = [l.title, l.provider, l.region, l.province].filter(Boolean).join(' ').toLowerCase()
+    const hay = fold([l.title, l.provider, l.region, l.province].filter(Boolean).join(' '))
     return tks.some(tk => hay.includes(tk))
   }
   const scored = listings
@@ -79,7 +80,7 @@ function matchSchools(schools: SearchSchool[], query: string): SearchSchool[] {
   // A query with no school words at all ("scholarship") names no school.
   if (!nameQ && !intent.region && !intent.freeTuitionOnly) return []
   const out = schools.filter(s => {
-    if (nameQ && !(s.name.toLowerCase().includes(nameQ) || (s.acronym ?? '').toLowerCase().includes(nameQ))) return false
+    if (nameQ && !(fold(s.name).includes(nameQ) || fold(s.acronym).includes(nameQ))) return false
     if (intent.region && s.region !== intent.region) return false
     if (intent.freeTuitionOnly && !passesFreeTuitionFilter(s, s.freeTuition)) return false
     return true
@@ -87,8 +88,8 @@ function matchSchools(schools: SearchSchool[], query: string): SearchSchool[] {
   // Name-starts and acronym hits first, then shorter names.
   const rank = (s: SearchSchool) => {
     if (!nameQ) return 1
-    if ((s.acronym ?? '').toLowerCase() === nameQ) return 0
-    return s.name.toLowerCase().startsWith(nameQ) ? 0 : 1
+    if (fold(s.acronym) === nameQ) return 0
+    return fold(s.name).startsWith(nameQ) ? 0 : 1
   }
   return out.sort((a, b) => rank(a) - rank(b) || a.name.length - b.name.length)
 }

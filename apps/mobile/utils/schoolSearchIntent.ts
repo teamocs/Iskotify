@@ -9,6 +9,7 @@
 // __tests__/schoolSearchIntent.test.ts).
 
 import { findRegionMatch } from './region'
+import { fold } from './fold'
 
 export interface SchoolSearchIntent {
   /** Canonical region detected in the query, or null when none is mentioned. */
@@ -36,14 +37,14 @@ const FILLER = new Set([
 ])
 
 function tokenize(s: string): string[] {
-  return (s ?? '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
+  return fold(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
 }
 
 export function parseSchoolSearchIntent(query: string): SchoolSearchIntent {
   const raw = (query ?? '').trim()
   if (!raw) return { region: null, freeTuitionOnly: false, nameQuery: '' }
 
-  const lower = raw.toLowerCase()
+  const lower = fold(raw)
   const freeTuitionOnly = /\bfree\b/.test(lower) || /\blibre\b/.test(lower)
 
   const match = findRegionMatch(raw)

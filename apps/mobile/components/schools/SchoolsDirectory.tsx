@@ -18,6 +18,7 @@ import { useSyncSettled } from '../explore/useSyncSettled'
 import { normalizeSchoolType, type SchoolTypeBucket } from '../../utils/schoolType'
 import { passesFreeTuitionFilter } from '../../utils/freeTuitionFilter'
 import { parseSchoolSearchIntent } from '../../utils/schoolSearchIntent'
+import { fold } from '../../utils/fold'
 
 // ---------------------------------------------------------------------------
 // Shared tertiary-schools directory: data load + region/type/free-tuition
@@ -187,8 +188,8 @@ export function SchoolsDirectory({
     const effFree = freeTuitionOnly || intent.freeTuitionOnly
     return schools.filter(s => {
       if (nameQ && !(
-        s.name.toLowerCase().includes(nameQ) ||
-        (s.acronym ?? '').toLowerCase().includes(nameQ)
+        fold(s.name).includes(nameQ) ||
+        fold(s.acronym).includes(nameQ)
       )) return false
       if (effRegion && s.region !== effRegion) return false
       if (selType && normalizeSchoolType(s.type) !== selType) return false

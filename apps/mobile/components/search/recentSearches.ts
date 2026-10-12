@@ -23,6 +23,18 @@ export async function loadRecentSearches(): Promise<string[]> {
   }
 }
 
+/**
+ * Forget every recent search on this device. Called by sign-out, Reset app
+ * data and Delete account, so the next person never sees what was searched.
+ */
+export async function clearRecentSearches(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(KEY)
+  } catch {
+    // storage unavailable: nothing was persisted either
+  }
+}
+
 export async function saveRecentSearches(list: readonly string[]): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX_RECENT)))

@@ -136,6 +136,35 @@ describe('Search screen states', () => {
     expect(mockSyncOnLaunch).toHaveBeenCalled()
   })
 
+  it('announces the result count politely (live region; VoiceOver announcement on iOS)', async () => {
+    const { AccessibilityInfo, Platform } = require('react-native')
+    const os = Platform.OS
+    Platform.OS = 'ios'
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {})
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    fireEvent.changeText(screen.getByTestId('search-input'), 'dost')
+    await waitFor(() => expect(screen.getByTestId('search-status').props.children).toBe('1 result'))
+    expect(screen.getByTestId('search-status').props.accessibilityLiveRegion).toBe('polite')
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('1 result'))
+    fireEvent.changeText(screen.getByTestId('search-input'), 'zzqx')
+    await waitFor(() => expect(screen.getByTestId('search-status').props.children).toBe('No matches'))
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('No matches'))
+    announce.mockRestore()
+    Platform.OS = os
+  })
+
+  it('saves a recent outside the state updater, once per search', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default
+    AsyncStorage.setItem.mockClear()
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    fireEvent.changeText(screen.getByTestId('search-input'), 'upcat')
+    fireEvent(screen.getByTestId('search-input'), 'submitEditing')
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(AsyncStorage.setItem.mock.calls[0][1])).toEqual(['upcat'])
+  })
+
   it('a failed sync with a catalog already on the device still searches it', async () => {
     mockSync.value = { isSyncing: false, firstSyncDone: true, lastError: 'Network request failed' }
     render(<SearchScreen />)
