@@ -38,7 +38,7 @@ export function ExploreGrid<T>({
   const cols = exploreColumns(useBreakpoint())
   const onScroll = useTabBarScrollHandler()
   const listRef = useAnimatedRef<Animated.FlatList<T>>()
-  useScrollToTopOnReselect(listRef as never)
+  useScrollToTopOnReselect(listRef)
 
   const renderCell = useCallback(({ item }: ListRenderItemInfo<T>) => (
     <View style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: spacing.sm }}>

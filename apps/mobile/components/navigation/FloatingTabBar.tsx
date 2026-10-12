@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, TextInput, Platform, type LayoutChangeEvent, type ViewStyle } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -51,6 +51,25 @@ export function barMode(focused: TabName | null, minimized: boolean): BarMode {
 }
 
 /** Target widths for the capsule and the search control in a row of `rowWidth`. */
+/** Gap between the bar and the top of the open keyboard. */
+export const KEYBOARD_GAP = spacing.sm
+
+/**
+ * KeyboardStickyView's `opened` offset. It translates the bar by
+ * `-keyboardHeight + opened`, and react-native-keyboard-controller 1.20
+ * reports the keyboard height from the bottom of the window: under SDK 55's
+ * Android edge-to-edge (detected by KeyboardProvider through
+ * react-native-is-edge-to-edge, which then forces statusBarTranslucent and
+ * navigationBarTranslucent itself, so the provider needs no props) that
+ * height includes the navigation-bar area the keyboard covers, as it does
+ * on iOS with the home indicator. The bar rests `26 + insets.bottom` above
+ * the window bottom, so cancelling that rest offset (less the gap) lands it
+ * KEYBOARD_GAP above the keyboard whatever the nav-bar inset is.
+ */
+export function keyboardOpenedOffset(insetBottom: number): number {
+  return layout.tabCapsule.bottom + insetBottom - KEYBOARD_GAP
+}
+
 export function barWidths(mode: BarMode, rowWidth: number): { capsule: number; search: number } {
   const full = Math.max(CIRCLE, rowWidth - CIRCLE - GAP)
   return {
@@ -68,15 +87,25 @@ function insetRing(color: string, focused: boolean | undefined): ViewStyle | nul
 const destByName = (name: TabName): Destination =>
   name === 'search' ? SEARCH_DESTINATION : (TAB_DESTINATIONS.find(d => d.name === name) ?? TAB_DESTINATIONS[0]!)
 
-function TabItem({ dest, isFocused, onPress, onLayout }: {
-  dest: Destination; isFocused: boolean; onPress: () => void; onLayout: (e: LayoutChangeEvent) => void
+/**
+ * The lens under tab `index` in a capsule `capsuleWidth` wide: the four tabs
+ * share the width inside the padding equally (flex: 1), so the geometry is
+ * arithmetic, worked out on the UI thread with no layout round-trip.
+ */
+export function lensFrame(index: number, capsuleWidth: number): { x: number; width: number } {
+  'worklet'
+  const width = Math.max(0, (capsuleWidth - PAD * 2) / TAB_DESTINATIONS.length)
+  return { x: PAD + index * width, width }
+}
+
+function TabItem({ dest, isFocused, onPress }: {
+  dest: Destination; isFocused: boolean; onPress: () => void
 }) {
   const { theme: t } = useTheme()
   const color = isFocused ? t.accentText : t.textPrimary
   return (
     <Pressable
       onPress={onPress}
-      onLayout={onLayout}
       accessibilityRole="tab"
       aria-selected={isFocused}
       accessibilityLabel={dest.label}
@@ -272,32 +301,31 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
 
   // ── Selection lens ───────────────────────────────────────────────────────
-  const itemLayouts = useRef(new Map<TabName, { x: number; width: number }>())
-  const [layoutVersion, setLayoutVersion] = useState(0)
-  const lensX = useSharedValue(0)
-  const lensW = useSharedValue(0)
+  // The tablist is laid out at the expanded capsule width (and clipped while
+  // the capsule morphs), so the labels never squash; the lens is placed from
+  // that width on the UI thread, springing a tab index rather than measuring.
+  const fullCapsule = rowWidth ? barWidths('tabs', rowWidth).capsule : 0
+  const tabsW = useSharedValue(0)
+  const lensIndex = useSharedValue(0)
   const lensPlaced = useRef(false)
+  const focusedIndex = TAB_DESTINATIONS.findIndex(d => d.name === focusedDest)
 
-  const onItemLayout = useCallback((name: TabName) => (e: LayoutChangeEvent) => {
-    const { x, width } = e.nativeEvent.layout
-    itemLayouts.current.set(name, { x, width })
-    setLayoutVersion(v => v + 1)
-  }, [])
+  useEffect(() => { tabsW.value = fullCapsule }, [fullCapsule, tabsW])
 
   useEffect(() => {
-    const target = focusedDest ? itemLayouts.current.get(focusedDest) : undefined
-    if (!target) return
+    if (focusedIndex < 0) return
     if (!lensPlaced.current || reduceMotion) {
-      lensX.value = target.x
-      lensW.value = target.width
+      lensIndex.value = focusedIndex
       lensPlaced.current = true
       return
     }
-    lensX.value = withSpring(target.x, motion.spring.bouncy)
-    lensW.value = withSpring(target.width, motion.spring.bouncy)
-  }, [focusedDest, layoutVersion, reduceMotion, lensX, lensW])
+    lensIndex.value = withSpring(focusedIndex, motion.spring.bouncy)
+  }, [focusedIndex, reduceMotion, lensIndex])
 
-  const lensStyle = useAnimatedStyle(() => ({ width: lensW.value, transform: [{ translateX: lensX.value }] }))
+  const lensStyle = useAnimatedStyle(() => {
+    const f = lensFrame(lensIndex.value, tabsW.value)
+    return { width: f.width, transform: [{ translateX: f.x }] }
+  })
 
   const blurTarget = scroll?.blurTargetFor(focusedRoute?.key)
   const active = focusedDest && focusedDest !== 'search' ? destByName(focusedDest) : destByName(prevTab)
@@ -308,7 +336,10 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     <View
       testID="tab-bar-tablist"
       accessibilityRole="tablist"
-      style={{ flex: 1, flexDirection: 'row', alignItems: 'stretch', padding: PAD }}
+      style={[
+        { flexDirection: 'row', alignItems: 'stretch', padding: PAD },
+        fullCapsule ? { width: fullCapsule } : { flex: 1 },
+      ]}
     >
       {showLens ? (
         <Animated.View
@@ -330,7 +361,6 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
             dest={dest}
             isFocused={focusedDest === dest.name}
             onPress={() => go(dest.name)}
-            onLayout={onItemLayout(dest.name)}
           />
         )
       })}
@@ -338,7 +368,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   ) : mode === 'minimized' ? (
     <RoundButton
       testID="tab-bar-expand"
-      label="Show tab bar"
+      label={`Show tab bar, ${active.label} selected`}
       icon={active.icon}
       color={t.accentText}
       onPress={() => setMinimized?.(false)}
@@ -410,7 +440,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
       testID="floating-tab-bar"
       pointerEvents="box-none"
       style={shell}
-      offset={{ closed: 0, opened: bottom - spacing.sm }}
+      offset={{ closed: 0, opened: keyboardOpenedOffset(insets.bottom) }}
     >
       {row}
     </KeyboardStickyView>

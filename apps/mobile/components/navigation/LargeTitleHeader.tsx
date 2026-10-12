@@ -36,6 +36,17 @@ interface BandInfo { title: string; collapseAt: number }
 interface BandHostValue {
   scrollY: SharedValue<number>
   register: (info: BandInfo | null) => void
+  contentTop: number
+}
+
+/**
+ * Scroll offset at which a title whose bottom edge is `titleBottom` (in
+ * scroll-content coordinates) has gone under the band. The scroll view
+ * starts below the safe area (the SafeAreaView pads it), plus `contentTop`,
+ * so only the band's own 44pt row counts, less that spacer.
+ */
+export function collapseOffset(titleBottom: number, contentTop = 0): number {
+  return Math.max(1, titleBottom - (layout.rowMinHeight - contentTop))
 }
 
 const BandHostContext = createContext<BandHostValue | null>(null)
@@ -44,26 +55,58 @@ const BandHostContext = createContext<BandHostValue | null>(null)
  * Hosts the collapsed-title band for one screen: provide the screen's own
  * scrollY, render the content as children; the band draws after them.
  */
-export function LargeTitleBandHost({ scrollY, children }: { scrollY: SharedValue<number>; children: ReactNode }) {
+interface BandHostProps {
+  scrollY: SharedValue<number>
+  /** The top safe-area inset the host's SafeAreaView pads by. The band is
+   *  absolute at the host's top edge, so it pads by the same amount: its
+   *  glass runs under the status bar and its title sits below it. */
+  topInset?: number
+  /** Distance from the safe-area top to the scroll view's top (the web's
+   *  12pt spacer), so collapseAt is measured in the scroll view's terms. */
+  contentTop?: number
+  children: ReactNode
+}
+
+/**
+ * Hosts the collapsed-title band for one screen: provide the screen's own
+ * scrollY, render the content as children; the band draws after them.
+ */
+export function LargeTitleBandHost({ scrollY, topInset = 0, contentTop = 0, children }: BandHostProps) {
   const [info, setInfo] = useState<BandInfo | null>(null)
   const register = useCallback((next: BandInfo | null) => {
     setInfo(prev => (prev?.title === next?.title && prev?.collapseAt === next?.collapseAt ? prev : next))
   }, [])
-  const value = useMemo(() => ({ scrollY, register }), [scrollY, register])
+  const value = useMemo(() => ({ scrollY, register, contentTop }), [scrollY, register, contentTop])
   return (
     <BandHostContext.Provider value={value}>
       {children}
-      {info ? <CollapsedTitleBand title={info.title} collapseAt={info.collapseAt} scrollY={scrollY} /> : null}
+      {info ? <CollapsedTitleBand title={info.title} collapseAt={info.collapseAt} scrollY={scrollY} topInset={topInset} /> : null}
     </BandHostContext.Provider>
   )
 }
 
-/** The pinned band: glass, the inline title, and the soft edge below it. */
-export function CollapsedTitleBand({ title, collapseAt, scrollY }: BandInfo & { scrollY: SharedValue<number> }) {
+/**
+ * The host's scrollY, for a screen whose own scroll view (not Screen's)
+ * carries the large title, e.g. Progress's AnalyticsDashboard.
+ */
+export function useBandScrollY(): SharedValue<number> | undefined {
+  return useContext(BandHostContext)?.scrollY
+}
+
+/**
+ * The pinned band: glass, the inline title, and the soft edge below it.
+ *
+ * Android draws this band in the opaque tier on purpose: it lives inside the
+ * scene's BlurTargetView, and a Dimezis BlurView must sit outside the target
+ * it blurs (a blur inside its own target would sample itself).
+ */
+export function CollapsedTitleBand({ title, collapseAt, scrollY, topInset = 0 }: BandInfo & { scrollY: SharedValue<number>; topInset?: number }) {
   const { theme: t } = useTheme()
   const { reduceMotion } = usePlatformCapabilities()
-  const [collapsed, setCollapsed] = useState(() => isTitleCollapsed(scrollY.value, collapseAt))
-  const fade = useSharedValue(collapsed ? 1 : 0)
+  // Starts expanded; the UI-thread reaction below flips it (no shared-value
+  // read during render).
+  const [collapsed, setCollapsed] = useState(false)
+  const fade = useSharedValue(0)
 
   // Mirror the threshold to React only when it flips (accessibility needs it).
   useAnimatedReaction(
@@ -94,9 +137,15 @@ export function CollapsedTitleBand({ title, collapseAt, scrollY }: BandInfo & { 
       importantForAccessibility={collapsed ? 'auto' : 'no-hide-descendants'}
       aria-hidden={!collapsed}
     >
-      <Glass variant="header" style={{ minHeight: layout.rowMinHeight, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg }}>
+      <Glass
+        testID="large-title-glass"
+        variant="header"
+        style={{ minHeight: layout.rowMinHeight + topInset, paddingTop: topInset, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg }}
+      >
         <Text
           testID="large-title-inline"
+          // Once revealed it names the screen, like the large title did.
+          accessibilityRole={collapsed ? 'header' : undefined}
           numberOfLines={1}
           maxFontSizeMultiplier={1.3}
           style={iosTextStyle('headline', t.textPrimary)}
@@ -130,11 +179,12 @@ export function LargeTitleHeader({ title, subtitle, actions, children, testID = 
   const { theme: t } = useTheme()
   const host = useContext(BandHostContext)
   const register = host?.register
+  const contentTop = host?.contentTop ?? 0
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { y, height } = e.nativeEvent.layout
-    register?.({ title, collapseAt: Math.max(1, y + height - layout.rowMinHeight) })
-  }, [register, title])
+    register?.({ title, collapseAt: collapseOffset(y + height, contentTop) })
+  }, [register, title, contentTop])
 
   useEffect(() => () => register?.(null), [register])
 

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { View, Text, ScrollView, RefreshControl, Pressable, Platform } from 'react-native'
 import Animated, { useAnimatedRef } from 'react-native-reanimated'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
+import { useBandScrollY } from '../navigation/LargeTitleHeader'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
@@ -69,6 +70,9 @@ interface Props {
   initialFilter?: string | 'overall'
   /** When true (default), wraps in its own ScrollView with pull-to-refresh. */
   scrollable?: boolean
+  /** A large-title header scrolled with the content (Progress), so it
+   *  collapses into the screen band like Today does. */
+  header?: React.ReactNode
 }
 
 /**
@@ -76,15 +80,17 @@ interface Props {
  * tabular StatNumbers, then the charts and readiness side by side on
  * expanded widths; secondary detail sits behind disclosures.
  */
-export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = true }: Props) {
+export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = true, header }: Props) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const insets = useSafeInsets()
   // The floating bar shows everywhere but beside the desktop sidebar.
   const bottomBar = !(Platform.OS === 'web' && bp === 'expanded')
-  const onScroll = useTabBarScrollHandler()
+  // The band host's scrollY (Progress's Screen) drives the collapsed title.
+  const bandY = useBandScrollY()
+  const onScroll = useTabBarScrollHandler({ localY: bandY })
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
-  useScrollToTopOnReselect(scrollRef as never)
+  useScrollToTopOnReselect(scrollRef)
   const { focusListings } = useFocusListings()
   const [activeSlug, setActiveSlug] = useState<string | 'overall'>(initialFilter)
   const analytics = useAnalytics(activeSlug)
@@ -359,6 +365,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
 
   const body = (
     <>
+      {header}
       {filters}
       {content}
     </>

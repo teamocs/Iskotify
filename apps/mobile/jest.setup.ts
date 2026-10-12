@@ -24,6 +24,8 @@ jest.mock('react-native-keyboard-controller', () => {
     KeyboardAwareScrollView: RN.ScrollView,
     // The floating tab bar rides above the keyboard (iOS redesign P2c).
     KeyboardStickyView: RN.View,
+    // Keyboard closed in tests: height 0 (negative when open), progress 0.
+    useReanimatedKeyboardAnimation: () => ({ height: { value: 0 }, progress: { value: 0 } }),
   }
 })
 

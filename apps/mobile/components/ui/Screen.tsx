@@ -52,9 +52,9 @@ export function Screen({
   const bp = useBreakpoint()
   const insets = useSafeInsets()
   const scrollY = useSharedValue(0)
-  const onScroll = useTabBarScrollHandler(scrollY)
+  const onScroll = useTabBarScrollHandler({ localY: scrollY })
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
-  useScrollToTopOnReselect(scrollRef as never)
+  useScrollToTopOnReselect(scrollRef)
 
   const gutter = padded ? pagePadding(bp) : 0
   // Desktop web swaps the bottom bar for the sidebar, so no clearance there.
@@ -71,7 +71,11 @@ export function Screen({
 
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: t.bg }} testID={testID}>
-      <LargeTitleBandHost scrollY={scrollY}>
+      <LargeTitleBandHost
+        scrollY={scrollY}
+        topInset={edges.includes('top') ? insets.top : 0}
+        contentTop={Platform.OS === 'web' ? spacing.md : 0}
+      >
         {Platform.OS === 'web' ? <View style={{ height: spacing.md }} /> : null}
         {header && !inScroll ? <View style={column}>{header}</View> : null}
         {scroll ? (

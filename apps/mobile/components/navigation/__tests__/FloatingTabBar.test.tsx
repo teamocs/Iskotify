@@ -9,8 +9,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import * as Reanimated from 'react-native-reanimated'
 import { lightTheme, motion } from '../../../theme/tokens'
 import { aria } from '../../../test-utils/aria'
-import { FloatingTabBar, barMode, barWidths, CAPSULE_MAX_WIDTH } from '../FloatingTabBar'
-import { TabBarScrollProvider, useTabBarScroll, nextMinimized, MINIMIZE_AFTER, EXPAND_NEAR_TOP } from '../TabBarScrollContext'
+import { FloatingTabBar, barMode, barWidths, keyboardOpenedOffset, lensFrame, CAPSULE_MAX_WIDTH } from '../FloatingTabBar'
+import {
+  TabBarScrollProvider, useTabBarScroll, nextMinimized, scrollFlip, MINIMIZE_AFTER, EXPAND_NEAR_TOP, type ScrollSample,
+} from '../TabBarScrollContext'
 import { __resetSearchQueryForTests, setSearchQuery } from '../../search/searchQuery'
 
 jest.mock('../../../hooks/useSafeInsets', () => ({ useSafeInsets: () => ({ top: 0, bottom: 20, left: 0, right: 0 }) }))
@@ -54,13 +56,16 @@ function renderBar(props: ReturnType<typeof makeProps>) {
   return { ...r, ctx, rerenderWith: (p: ReturnType<typeof makeProps>) => r.rerender(ui(p)) }
 }
 
-const layoutEvent = (x: number, width: number) => ({ nativeEvent: { layout: { x, y: 0, width, height: 54 } } })
-
 beforeEach(() => {
   mockSelection.mockClear()
   mockCaps.reduceMotion = false
   __resetSearchQueryForTests()
   jest.restoreAllMocks()
+  // Like the real hook: one shared value per component for its lifetime (the
+  // library mock returns a fresh object each render, which would hide
+  // re-render bugs such as a context value that never changes).
+  jest.spyOn(Reanimated, 'useSharedValue').mockImplementation(((init: unknown) =>
+    React.useRef({ value: init }).current) as never)
 })
 
 describe('FloatingTabBar: structure and roles', () => {
@@ -157,6 +162,10 @@ describe('FloatingTabBar: presses', () => {
 })
 
 describe('FloatingTabBar: minimize on scroll', () => {
+  const sample = (over: Partial<ScrollSample>): ScrollSample => ({
+    y: 400, dy: 8, contentHeight: 2000, viewportHeight: 800, focused: true, ...over,
+  })
+
   it('scroll rule: down past 140 minimizes; up, or near the top, expands', () => {
     expect(nextMinimized(false, MINIMIZE_AFTER + 10, 8)).toBe(true)
     expect(nextMinimized(false, MINIMIZE_AFTER - 10, 8)).toBe(false)
@@ -165,11 +174,24 @@ describe('FloatingTabBar: minimize on scroll', () => {
     expect(nextMinimized(true, 400, 1)).toBe(true) // jitter keeps the state
   })
 
-  it('minimized: one real button, "Show tab bar", with the active icon; tapping it expands', () => {
+  it('a screen that is not focused never moves the bar (no stale flip)', () => {
+    expect(scrollFlip(false, sample({ focused: false }))).toBe(false)
+    expect(scrollFlip(true, sample({ dy: -20, focused: false }))).toBe(true)
+    expect(scrollFlip(false, sample({}))).toBe(true)
+  })
+
+  it('the rubber-band back from overscrolling the bottom is not "scrolling up"', () => {
+    // maxY = 2000 - 800 = 1200; y 1230 is past the end, bouncing back.
+    expect(scrollFlip(true, sample({ y: 1230, dy: -10 }))).toBe(true)
+    // A real scroll up inside the content still expands.
+    expect(scrollFlip(true, sample({ y: 1100, dy: -10 }))).toBe(false)
+  })
+
+  it('minimized: one real button naming the selected tab; tapping it expands', () => {
     const { ctx } = renderBar(makeProps('practice'))
     act(() => ctx.current!.setMinimized(true))
     expect(screen.queryAllByRole('tab')).toHaveLength(0)
-    const pill = screen.getByRole('button', { name: 'Show tab bar' })
+    const pill = screen.getByRole('button', { name: 'Show tab bar, Practice selected' })
     fireEvent.press(pill)
     expect(screen.getAllByRole('tab')).toHaveLength(4)
     expect(barMode('practice', true)).toBe('minimized')
@@ -206,29 +228,49 @@ describe('FloatingTabBar: search morph', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Clear search' }))
     expect(screen.getByTestId('tab-bar-search-field').props.value).toBe('')
   })
+
+  it('rides the keyboard with an 8pt gap whatever the nav-bar inset', () => {
+    // Rest offset 26 + inset is cancelled, less the gap, for 3-button (48)
+    // and gesture (24) navigation alike.
+    expect(keyboardOpenedOffset(48)).toBe(26 + 48 - 8)
+    expect(keyboardOpenedOffset(24)).toBe(26 + 24 - 8)
+    expect(keyboardOpenedOffset(0)).toBe(18)
+  })
 })
 
-describe('FloatingTabBar: motion', () => {
-  function layoutTabs() {
-    const tabs = screen.getAllByRole('tab')
-    tabs.forEach((tab, i) => fireEvent(tab, 'layout', layoutEvent(4 + i * 80, 80)))
-    fireEvent(screen.getByTestId('tab-bar-row'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 62 } } })
-  }
+describe('FloatingTabBar: lens and motion', () => {
+  const layoutRow = (width = 400) =>
+    fireEvent(screen.getByTestId('tab-bar-row'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width, height: 62 } } })
 
-  it('springs the lens (bouncy) and the morph (smooth)', () => {
+  it('places the lens arithmetically from the capsule width (no per-tab layout)', () => {
+    // capsule 400 - 62 - 12 = 326; inner 326 - 8 = 318; each tab 79.5.
+    expect(lensFrame(0, 326)).toEqual({ x: 4, width: 79.5 })
+    expect(lensFrame(2, 326)).toEqual({ x: 4 + 2 * 79.5, width: 79.5 })
+    expect(lensFrame(1, 0).width).toBe(0)
+  })
+
+  it('lays the tablist out at the expanded width (clipped while the capsule morphs)', () => {
+    const { ctx } = renderBar(makeProps('index'))
+    layoutRow()
+    act(() => ctx.current!.setMinimized(true))
+    act(() => ctx.current!.setMinimized(false))
+    expect(StyleSheet.flatten(screen.getByTestId('tab-bar-tablist').props.style).width).toBe(326)
+  })
+
+  it('springs the lens index (bouncy) and the morph (smooth)', () => {
     const spring = jest.spyOn(Reanimated, 'withSpring')
     const { ctx, rerenderWith } = renderBar(makeProps('index'))
-    layoutTabs()
+    layoutRow()
     rerenderWith(makeProps('explore'))
-    expect(spring).toHaveBeenCalledWith(4 + 2 * 80, motion.spring.bouncy)
+    expect(spring).toHaveBeenCalledWith(2, motion.spring.bouncy)
     spring.mockClear()
     act(() => ctx.current!.setMinimized(true))
     // The capsule shrinks to the 62pt pill; the search circle stays 62.
     expect(spring).toHaveBeenCalledWith(62, motion.spring.smooth)
-    expect(spring).not.toHaveBeenCalledWith(400 - 62 - 12, motion.spring.smooth)
+    expect(spring).not.toHaveBeenCalledWith(326, motion.spring.smooth)
     spring.mockClear()
     act(() => ctx.current!.setMinimized(false))
-    expect(spring).toHaveBeenCalledWith(400 - 62 - 12, motion.spring.smooth)
+    expect(spring).toHaveBeenCalledWith(326, motion.spring.smooth)
   })
 
   it('Reduce Motion: the lens jumps and the morph is a 160ms crossfade', () => {
@@ -236,7 +278,7 @@ describe('FloatingTabBar: motion', () => {
     const spring = jest.spyOn(Reanimated, 'withSpring')
     const timing = jest.spyOn(Reanimated, 'withTiming')
     const { ctx, rerenderWith } = renderBar(makeProps('index'))
-    layoutTabs()
+    layoutRow()
     rerenderWith(makeProps('explore'))
     act(() => ctx.current!.setMinimized(true))
     expect(spring).not.toHaveBeenCalled()
@@ -245,11 +287,14 @@ describe('FloatingTabBar: motion', () => {
 })
 
 describe('FloatingTabBar: Android glass', () => {
-  it("hands the focused scene's BlurTargetView ref to the bar's glass", () => {
+  it("re-renders with the focused scene's BlurTargetView ref when the scene registers after the bar", () => {
     const target = { current: null }
-    const { ctx } = renderBar(makeProps('practice'))
-    act(() => ctx.current!.registerBlurTarget('practice-key', target))
-    const glass = screen.UNSAFE_root.findAll((n: any) => n.props.testID === 'tab-bar-capsule' && 'blurTarget' in n.props)[0]!
-    expect(glass.props.blurTarget).toBe(target)
+    const { ctx } = renderBar(makeProps('search'))
+    const glassNow = () => screen.UNSAFE_root.findAll((n: any) => n.props.testID === 'tab-bar-capsule' && 'blurTarget' in n.props)[0]!
+    expect(glassNow().props.blurTarget).toBeUndefined()
+    act(() => ctx.current!.registerBlurTarget('search-key', target))
+    expect(glassNow().props.blurTarget).toBe(target)
+    act(() => ctx.current!.registerBlurTarget('search-key', null))
+    expect(glassNow().props.blurTarget).toBeUndefined()
   })
 })

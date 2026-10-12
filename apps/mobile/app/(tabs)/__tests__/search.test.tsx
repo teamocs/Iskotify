@@ -173,6 +173,8 @@ describe('Search screen states', () => {
     render(<TabBarScrollProvider barHostsSearch><SearchScreen /></TabBarScrollProvider>)
     await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
     expect(screen.queryByTestId('search-input')).toBeNull()
+    // Native: the list grows by the keyboard height so results stay reachable.
+    expect(screen.getByTestId('search-keyboard-spacer')).toBeTruthy()
     act(() => setSearchQuery('dost'))
     await waitFor(() => expect(screen.getByTestId('search-results')).toBeTruthy())
   })

@@ -6,12 +6,25 @@
 import React from 'react'
 import { StyleSheet, Text } from 'react-native'
 import { fireEvent, render, screen } from '@testing-library/react-native'
-import { CollapsedTitleBand, LargeTitleBandHost, LargeTitleHeader, isTitleCollapsed, SOFT_EDGE } from '../LargeTitleHeader'
+import * as Reanimated from 'react-native-reanimated'
+import {
+  CollapsedTitleBand, LargeTitleBandHost, LargeTitleHeader, isTitleCollapsed, collapseOffset, useBandScrollY, SOFT_EDGE,
+} from '../LargeTitleHeader'
 
 const mockCaps = { liquidGlass: false, blurTier: 'opaque', reduceTransparency: false, reduceMotion: false }
 jest.mock('../../../hooks/usePlatformCapabilities', () => ({ usePlatformCapabilities: () => mockCaps }))
 
 const sv = (value: number) => ({ value }) as any
+
+// The library mock's useAnimatedReaction never runs; run it once after
+// render, as the UI thread would on the first frame. (The band itself no
+// longer reads scrollY.value during render.)
+beforeEach(() => {
+  jest.restoreAllMocks()
+  jest.spyOn(Reanimated, 'useAnimatedReaction').mockImplementation(((prepare: () => unknown, react: (a: unknown, b: unknown) => void) => {
+    React.useEffect(() => { react(prepare(), null) })
+  }) as never)
+})
 
 describe('LargeTitleHeader', () => {
   it('draws a 34/41 bold title as the heading', () => {
@@ -76,5 +89,39 @@ describe('CollapsedTitleBand', () => {
     expect(StyleSheet.flatten(inline.props.style)).toMatchObject({ fontSize: 17, fontWeight: '600' })
     expect(inline.props.maxFontSizeMultiplier).toBe(1.3)
     expect(SOFT_EDGE).toBe(24)
+  })
+
+  it('once revealed, the inline title is the heading', () => {
+    render(<CollapsedTitleBand title="Practice" collapseAt={60} scrollY={sv(200)} />)
+    expect(screen.getByRole('header', { name: 'Practice' })).toBeTruthy()
+  })
+
+  it('pads by the top safe-area inset, so the title sits below the status bar', () => {
+    render(<CollapsedTitleBand title="Practice" collapseAt={60} scrollY={sv(200)} topInset={47} />)
+    const glass = StyleSheet.flatten(screen.getByTestId('large-title-glass').props.style)
+    expect(glass.paddingTop).toBe(47)
+    expect(glass.minHeight).toBe(44 + 47)
+  })
+
+  it('the host passes its inset to the band, and collapseAt is in scroll-view terms', () => {
+    render(
+      <LargeTitleBandHost scrollY={sv(200)} topInset={47}>
+        <LargeTitleHeader title="Search" />
+      </LargeTitleBandHost>,
+    )
+    fireEvent(screen.getByTestId('large-title-header'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 80 } } })
+    expect(StyleSheet.flatten(screen.getByTestId('large-title-glass').props.style).paddingTop).toBe(47)
+    // The scroll view starts below the inset: only the 44pt row counts.
+    expect(collapseOffset(80)).toBe(36)
+    // Web: a 12pt spacer sits between the safe area and the scroll view.
+    expect(collapseOffset(80, 12)).toBe(48)
+  })
+
+  it('exposes the host scrollY for screens that own their scroll view (Progress)', () => {
+    const y = sv(0)
+    let seen: unknown
+    const Probe = () => { seen = useBandScrollY(); return null }
+    render(<LargeTitleBandHost scrollY={y}><Probe /></LargeTitleBandHost>)
+    expect(seen).toBe(y)
   })
 })

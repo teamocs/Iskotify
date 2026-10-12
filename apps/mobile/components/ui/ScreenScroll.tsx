@@ -32,6 +32,7 @@ export function ScreenScroll({
   tabBarInset = true,
   padded = true,
   contentContainerStyle,
+  onScroll: callerOnScroll,
   ...rest
 }: Props) {
   const { theme: t } = useTheme()
@@ -42,9 +43,10 @@ export function ScreenScroll({
   // add the tab bar clearance padding. On native/sm the floating bar is present.
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
   const paddingBottom = insets.bottom + (tabBarInset && !isDesktopWeb ? layout.capsuleClearance : spacing.xl)
-  const onScroll = useTabBarScrollHandler()
+  // Feeds the bar and still calls a caller's own onScroll.
+  const onScroll = useTabBarScrollHandler({ onScroll: callerOnScroll ?? undefined })
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
-  useScrollToTopOnReselect(scrollRef as never)
+  useScrollToTopOnReselect(scrollRef)
 
   // Web-only: wrap children in a max-width centering view for md/lg viewports.
   // sm (and native) renders unchanged — no wrapper, no max-width.

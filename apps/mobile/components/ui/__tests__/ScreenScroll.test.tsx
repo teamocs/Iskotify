@@ -56,6 +56,21 @@ describe('ScreenScroll', () => {
     expect(StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(layout.capsuleClearance)
   })
 
+  it("composes a caller's onScroll with the bar feed instead of replacing it", () => {
+    ;(Platform as { OS: string }).OS = 'android'
+    mockWidth.value = 390
+    const Reanimated = require('react-native-reanimated')
+    const handler = jest.spyOn(Reanimated, 'useAnimatedScrollHandler')
+    const callerOnScroll = jest.fn()
+    const { UNSAFE_getByType } = render(<ScreenScroll onScroll={callerOnScroll}><Text>A</Text></ScreenScroll>)
+    const { ScrollView } = require('react-native')
+    // The scroll view gets the composed worklet handler, never the bare caller fn…
+    expect(UNSAFE_getByType(ScrollView).props.onScroll).not.toBe(callerOnScroll)
+    // …and the caller's function is in that handler's dependencies (it calls it).
+    expect(handler.mock.calls.at(-1)?.[1]).toContain(callerOnScroll)
+    handler.mockRestore()
+  })
+
   it('needs no capsule clearance beside the desktop sidebar, or off the tabs', () => {
     ;(Platform as { OS: string }).OS = 'web'
     mockWidth.value = 1280

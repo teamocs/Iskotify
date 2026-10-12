@@ -1,6 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Platform, Text, View } from 'react-native'
 import { router } from 'expo-router'
+import Animated, { useAnimatedStyle } from 'react-native-reanimated'
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
@@ -297,6 +299,17 @@ export default function SearchScreen() {
         {statusText}
       </Text>
       {body}
+      {/* While typing in the bar's field, the keyboard covers the bottom of
+          the page: grow the end of the list by its height so the last
+          results can still scroll above it. */}
+      {barHostsField && Platform.OS !== 'web' ? <KeyboardSpacer /> : null}
     </Screen>
   )
+}
+
+/** Keyboard-height spacer (UI thread): 0 when the keyboard is closed. */
+function KeyboardSpacer() {
+  const { height } = useReanimatedKeyboardAnimation()
+  const style = useAnimatedStyle(() => ({ height: Math.max(0, -height.value) }))
+  return <Animated.View testID="search-keyboard-spacer" style={style} />
 }

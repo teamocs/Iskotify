@@ -622,6 +622,10 @@ export default function ExploreScreen() {
     <Screen
       scroll={false}
       width="wide"
+      // TODO(P2c follow-up): scroll this large title with the section lists and
+      // collapse it into the band (as Today, Practice, Search and Progress do).
+      // Deferred: the header sits above five different section lists and the
+      // chip row; until then it stays fixed.
       header={(
         <TabHeader
           title="Explore"
