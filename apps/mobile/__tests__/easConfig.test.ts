@@ -14,4 +14,12 @@ describe('EAS build profiles', () => {
     expect(eas.build.development.android.buildType).toBe('apk')
     expect(eas.build.preview.android.buildType).toBe('apk')
   })
+
+  // Expo SDK 55 requires Xcode 26. Pin the exact image (the `sdk-55` alias
+  // target) so an alias move never changes the iOS toolchain under a release.
+  it('pins every profile to the Xcode 26 iOS build image', () => {
+    for (const name of Object.keys(eas.build)) {
+      expect(eas.build[name].ios?.image).toBe('macos-sequoia-15.6-xcode-26.2')
+    }
+  })
 })

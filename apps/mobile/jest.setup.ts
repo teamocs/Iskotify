@@ -7,6 +7,10 @@ process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACE
 // run under jest-expo. Replace with passthrough React Native components.
 import 'react-native-gesture-handler/jestSetup'
 
+// Worklets 0.7 (Expo SDK 55) throws at import when its native part is
+// missing; Reanimated imports it, so tests use the library's own JS mock.
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'))
+
 jest.mock('react-native-keyboard-controller', () => {
   const RN = require('react-native')
   return {
