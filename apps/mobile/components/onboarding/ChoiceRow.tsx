@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 interface Props {
@@ -72,7 +72,7 @@ export function ChoiceRow({ label, description, selected, onPress, mode, disable
     >
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text
-          style={[textStyle('body', t.textPrimary), { fontFamily: selected ? fonts.bodySemi : fonts.bodyMedium }]}
+          style={[textStyle('body', t.textPrimary), weight(selected ? '600' : '500')]}
           maxFontSizeMultiplier={2}
         >
           {label}

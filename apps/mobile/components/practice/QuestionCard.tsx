@@ -4,7 +4,7 @@ import { Flag1Outlined, CheckOutlined } from '@lineiconshq/free-icons'
 import { ExamPassage } from './ExamPassage'
 import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle, textStyles } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle, textStyles } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 export interface QuestionCardProps {
@@ -33,7 +33,7 @@ export interface QuestionCardProps {
 
 // The stem reads at the headline size (20) with a reading line-height rather
 // than the headline's tight 26, and in the semibold face so long stems stay calm.
-const STEM = { ...textStyles.headline, fontFamily: fonts.headingSemi, lineHeight: 30, letterSpacing: 0 }
+const STEM = { ...textStyles.headline, ...weight('600'), lineHeight: 30, letterSpacing: 0 }
 
 /**
  * Shared question presentation for every practice engine (blueprint mock,

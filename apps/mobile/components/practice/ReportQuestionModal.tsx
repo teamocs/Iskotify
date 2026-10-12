@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, weight } from '../../theme/tokens'
 
 const PRESET_REASONS = [
   'Wrong answer',
@@ -122,9 +122,8 @@ function makeStyles(
     handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginVertical: spacing.sm },
     title: {
       fontSize: typo.lg,
-      fontWeight: '700',
       color: t.textPrimary,
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
       marginBottom: spacing.md,
     },
     reasonRow: {
@@ -143,8 +142,8 @@ function makeStyles(
     reasonRowOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
     radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: t.border },
     radioOn: { borderColor: t.accent, backgroundColor: t.accent },
-    reasonTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular' },
-    reasonTxtOn: { fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
+    reasonTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, ...weight('400') },
+    reasonTxtOn: { ...weight('600'), },
     detailsInput: {
       minHeight: 64,
       borderWidth: 1,
@@ -156,7 +155,7 @@ function makeStyles(
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       fontSize: typo.sm,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       textAlignVertical: 'top',
       marginTop: spacing.xs,
     },
@@ -171,7 +170,7 @@ function makeStyles(
       alignItems: 'center',
       justifyContent: 'center',
     },
-    cancelTxt: { fontSize: typo.sm, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    cancelTxt: { fontSize: typo.sm, color: t.textSecondary, ...weight('600') },
     submitBtn: {
       flex: 1,
       minHeight: 44,
@@ -182,6 +181,6 @@ function makeStyles(
       justifyContent: 'center',
     },
     submitDisabled: { opacity: 0.4 },
-    submitTxt: { fontSize: typo.md, fontWeight: '700', color: t.textInverse, fontFamily: 'Outfit_700Bold' },
+    submitTxt: { fontSize: typo.md, color: t.textInverse, ...weight('700') },
   })
 }

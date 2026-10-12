@@ -45,7 +45,8 @@ export default function Root({ children }: PropsWithChildren) {
  * Rules:
  *  1. color-scheme: light — the app has one (light) palette, so native form
  *     controls and scroll bars always match it.
- *  2. Font-smoothing antialiased — prevents blurry sub-pixel rendering on
+ *  2. The platform UI font (system stack, matching theme/tokens systemFont)
+ *     and antialiased font-smoothing, which prevents blurry sub-pixel rendering on
  *     macOS/Linux.
  *  3. overscroll-behavior-y: none — prevents the iOS/Android-style pull-to-
  *     refresh bounce on desktop browsers (the app manages its own scroll UX).
@@ -60,6 +61,7 @@ const WEB_STYLES = `
   }
 
   body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior-y: none;

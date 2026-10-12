@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
@@ -68,14 +68,14 @@ export function OptionList({ options, selectedIndex, onSelect, disabled = false 
               }}
             >
               <Text
-                style={[textStyle('label', selected ? t.textInverse : t.textSecondary), { fontFamily: fonts.heading }]}
+                style={[textStyle('label', selected ? t.textInverse : t.textSecondary), weight('700')]}
                 maxFontSizeMultiplier={1.3}
               >
                 {LETTERS[oi] ?? String(oi + 1)}
               </Text>
             </View>
             <Text
-              style={[textStyle('body', t.textPrimary), { flex: 1 }, selected ? { fontFamily: fonts.bodyMedium } : null]}
+              style={[textStyle('body', t.textPrimary), { flex: 1 }, selected ? weight('500') : null]}
               maxFontSizeMultiplier={1.6}
             >
               {o}

@@ -51,7 +51,7 @@ import { Skeleton } from '../../components/ui/Skeleton'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
 import { usePremium } from '../../hooks/usePremium'
@@ -494,7 +494,7 @@ export default function ProfileScreen() {
                 borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2,
               }}
             >
-              <Text style={[textStyle('caption', t.successStrong), { fontFamily: fonts.bodySemi }]} maxFontSizeMultiplier={1.6}>
+              <Text style={[textStyle('caption', t.successStrong), weight('600')]} maxFontSizeMultiplier={1.6}>
                 Signed in
               </Text>
             </View>

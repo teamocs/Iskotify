@@ -5,7 +5,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bulb2Outlined } from '@lineiconshq/free-icons'
 import { decorative } from '../ui/a11y'
-import { spacing, radius } from '../../theme/tokens'
+import { spacing, radius, weight } from '../../theme/tokens'
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const
 
@@ -143,7 +143,7 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     cardBad: { borderColor: t.danger },
     // Question stem stays the dominant element, matching QuestionCard's scale.
     qText: {
-      fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold',
+      fontSize: typo.md, color: t.textPrimary, ...weight('600'),
       lineHeight: Math.round(typo.md * 1.35), marginBottom: spacing.md,
     },
     optsWrap: { gap: spacing.xs, marginBottom: spacing.sm },
@@ -157,10 +157,10 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
     optLetter: { width: 22, height: 22, borderRadius: 7, backgroundColor: t.surface, alignItems: 'center', justifyContent: 'center' },
     optLetterCorrect: { backgroundColor: t.success },
     optLetterWrong: { backgroundColor: t.danger },
-    optLetterTxt: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
-    optTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: Math.round(typo.sm * 1.5) },
-    optTxtCorrect: { color: t.success, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
-    optTxtWrong: { color: t.danger, fontWeight: '700', fontFamily: 'Lexend_600SemiBold' },
+    optLetterTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('700') },
+    optTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, ...weight('400'), lineHeight: Math.round(typo.sm * 1.5) },
+    optTxtCorrect: { color: t.success, ...weight('600') },
+    optTxtWrong: { color: t.danger, ...weight('600') },
     optMark: { fontSize: typo.sm, fontWeight: '700' },
     // Correct-answer rationale — the flagship "why" content, bumped well past the
     // old typo.xs(12px) blob for actual readability.
@@ -169,20 +169,20 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       padding: spacing.md, marginTop: spacing.xs,
     },
     explainLabel: {
-      fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase',
-      letterSpacing: 0.6, marginBottom: 4, fontFamily: 'Lexend_600SemiBold',
+      fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase',
+      letterSpacing: 0.6, marginBottom: 4, ...weight('600'),
     },
-    explainTxt: { fontSize: typo.base, color: t.textPrimary, fontFamily: 'Lexend_400Regular', lineHeight: Math.round(typo.base * 1.5) },
+    explainTxt: { fontSize: typo.base, color: t.textPrimary, ...weight('400'), lineHeight: Math.round(typo.base * 1.5) },
     // Per-option "why it's wrong" rows — subordinate to the correct-answer block,
     // still well above the old 12px floor.
     wrongBlock: {
       backgroundColor: t.surfaceSubtle, borderRadius: radius.md, borderCurve: 'continuous',
       padding: spacing.md, marginTop: spacing.sm, gap: 4,
     },
-    wrongTxt: { fontSize: typo.sm, color: t.textSecondary, fontFamily: 'Lexend_400Regular', lineHeight: Math.round(typo.sm * 1.5) },
-    wrongLetter: { fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' },
+    wrongTxt: { fontSize: typo.sm, color: t.textSecondary, ...weight('400'), lineHeight: Math.round(typo.sm * 1.5) },
+    wrongLetter: { color: t.textPrimary, ...weight('600') },
     aiCaption: {
-      fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular',
+      fontSize: typo.xs, color: t.textSecondary, ...weight('400'),
       lineHeight: Math.round(typo.xs * 1.5), marginTop: spacing.sm,
     },
     tipChip: {
@@ -190,6 +190,6 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme'], typo: ReturnType<ty
       borderColor: t.warningBorder, borderRadius: radius.md, borderCurve: 'continuous', paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm, marginTop: spacing.sm, gap: spacing.sm,
     },
-    tipTxt: { fontSize: typo.sm, color: t.warningStrong, fontWeight: '600', fontFamily: 'Lexend_600SemiBold', lineHeight: Math.round(typo.sm * 1.4) },
+    tipTxt: { fontSize: typo.sm, color: t.warningStrong, ...weight('600'), lineHeight: Math.round(typo.sm * 1.4) },
   })
 }

@@ -5,20 +5,9 @@ import { Stack, router, type Href } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as Updates from 'expo-updates'
 import { SQLiteProvider } from 'expo-sqlite'
-import { useFonts } from 'expo-font'
-import {
-  Outfit_400Regular,
-  Outfit_600SemiBold,
-  Outfit_700Bold,
-} from '@expo-google-fonts/outfit'
-import {
-  Lexend_400Regular,
-  Lexend_500Medium,
-  Lexend_600SemiBold,
-} from '@expo-google-fonts/lexend'
 import { DrizzleProvider } from '../db'
 import { ThemeProvider } from '../theme/ThemeContext'
-import { lightTheme, radius } from '../theme/tokens'
+import { lightTheme, radius, weight } from '../theme/tokens'
 import { useDb } from '../hooks/useDb'
 import { RouteFade } from '../components/web/RouteFade'
 import { syncOnLaunch } from '../services/sync'
@@ -59,16 +48,10 @@ function KeyboardProviderCompat({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Outfit_400Regular,
-    Outfit_600SemiBold,
-    Outfit_700Bold,
-    Lexend_400Regular,
-    Lexend_500Medium,
-    Lexend_600SemiBold,
-  })
   const [appReady, setAppReady] = useState(false)
-  const fontsReady = fontsLoaded || !!fontError
+  // The app draws in the platform UI font, so nothing is loaded before first
+  // paint. Kept as a gate so the splash conditions below read the same.
+  const fontsReady = true
   // The splash sits outside ThemeProvider; it uses the one (light) palette's ground.
   const splashBg = lightTheme.bg
 

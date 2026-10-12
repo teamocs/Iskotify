@@ -18,7 +18,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GoogleOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { useGoogleOneTap } from '../../hooks/useGoogleOneTap'
 import {
   signInWithEmail,
@@ -211,7 +211,7 @@ export default function SignInScreen() {
           <StatusPanel tone="success" title="Check your email">
             <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
               We sent a confirmation link to{' '}
-              <Text style={{ fontFamily: fonts.bodySemi, color: t.textPrimary }}>{email}</Text>.
+              <Text style={{ ...weight('600'), color: t.textPrimary }}>{email}</Text>.
               Open that link to activate your account, then come back here to sign in.
             </Text>
           </StatusPanel>
@@ -270,7 +270,7 @@ export default function SignInScreen() {
                 }}
               >
                 <Text
-                  style={[textStyle('label', active ? t.textPrimary : t.textSecondary), { fontFamily: active ? fonts.bodySemi : fonts.bodyMedium }]}
+                  style={[textStyle('label', active ? t.textPrimary : t.textSecondary), weight(active ? '600' : '500')]}
                   maxFontSizeMultiplier={1.6}
                 >
                   {label}

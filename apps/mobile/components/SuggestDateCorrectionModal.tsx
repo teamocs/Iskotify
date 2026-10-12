@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, type Theme, type Typography } from '../theme/tokens'
+import { spacing, radius, type Theme, type Typography, weight } from '../theme/tokens'
 import { submitDateContribution, type ContribField } from '../services/dateContributions'
 
 interface Props {
@@ -274,7 +274,7 @@ function makeStyles(t: Theme, typo: Typography) {
     headerTitle: {
       flex: 1,
       fontSize: typo.md,
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
       color: t.textPrimary,
     },
     closeBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
@@ -283,15 +283,14 @@ function makeStyles(t: Theme, typo: Typography) {
     intro: {
       fontSize: typo.sm,
       color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       lineHeight: typo.sm * 1.6,
       marginBottom: spacing.sm,
     },
     label: {
       fontSize: typo.sm,
-      fontWeight: '600',
       color: t.textPrimary,
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       marginTop: spacing.md,
       marginBottom: spacing.sm,
     },
@@ -307,8 +306,8 @@ function makeStyles(t: Theme, typo: Typography) {
       justifyContent: 'center',
     },
     fieldChipOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    fieldChipTxt: { fontSize: typo.xs, color: t.textSecondary, fontFamily: 'Lexend_400Regular' },
-    fieldChipTxtOn: { color: t.accentText, fontFamily: 'Lexend_600SemiBold' },
+    fieldChipTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('400') },
+    fieldChipTxtOn: { color: t.accentText, ...weight('600') },
     input: {
       backgroundColor: t.surfaceSubtle,
       borderWidth: 1,
@@ -319,16 +318,16 @@ function makeStyles(t: Theme, typo: Typography) {
       paddingVertical: spacing.md,
       fontSize: typo.sm,
       color: t.textPrimary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       minHeight: 48,
     },
     inputError: { borderColor: t.danger },
     multiline: { minHeight: 88, textAlignVertical: 'top' },
-    hint: { fontSize: typo.xs, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: spacing.xs },
+    hint: { fontSize: typo.xs, color: t.textTertiary, ...weight('400'), marginTop: spacing.xs },
     errorTxt: {
       fontSize: typo.xs,
       color: t.danger,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       marginTop: spacing.md,
       lineHeight: typo.xs * 1.5,
     },
@@ -342,7 +341,7 @@ function makeStyles(t: Theme, typo: Typography) {
       minHeight: 48,
       marginTop: spacing.lg,
     },
-    submitTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
+    submitTxt: { ...weight('700'), fontSize: typo.base, color: t.textInverse },
     signInBtn: {
       backgroundColor: t.accentStrong,
       borderRadius: radius.md,
@@ -353,6 +352,6 @@ function makeStyles(t: Theme, typo: Typography) {
       minHeight: 48,
       marginTop: spacing.md,
     },
-    signInTxt: { fontFamily: 'Outfit_700Bold', fontSize: typo.base, color: t.textInverse },
+    signInTxt: { ...weight('700'), fontSize: typo.base, color: t.textInverse },
   })
 }

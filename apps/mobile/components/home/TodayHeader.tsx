@@ -3,7 +3,7 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Bell1Outlined, Bell1Solid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Avatar } from '../ui/Avatar'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
@@ -56,7 +56,7 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
   const firstName = fullName.trim().split(/\s+/)[0] || 'Student'
   const greeting = timeGreeting()
   const date = (compact ? DATE_SHORT : DATE_LONG).format(new Date())
-  // A single word can't wrap. Past ~12 letters the 26pt title role would
+  // A single word can't wrap. Past ~12 letters the 28pt title role would
   // overflow a 320pt phone at large font scale and split mid-word, so a very
   // long first name steps down to the headline role instead.
   const nameRole = compact && firstName.length > LONG_NAME_CHARS ? 'headline' : 'title'
@@ -110,17 +110,17 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
         >
           {compact ? (
             <>
-              <Text style={[textStyle('headline', t.textSecondary), { fontFamily: fonts.headingReg }]} maxFontSizeMultiplier={1.4}>
+              <Text style={[textStyle('headline', t.textSecondary), weight('400')]} maxFontSizeMultiplier={1.4}>
                 {`${greeting},`}
               </Text>
-              <Text style={[textStyle(nameRole, t.textPrimary), { fontFamily: fonts.heading }]} maxFontSizeMultiplier={1.4}>
+              <Text style={[textStyle(nameRole, t.textPrimary), weight('700')]} maxFontSizeMultiplier={1.4}>
                 {firstName}
               </Text>
             </>
           ) : (
-            <Text style={[textStyle('title', t.textPrimary), { fontFamily: fonts.headingReg }]} maxFontSizeMultiplier={1.4}>
+            <Text style={[textStyle('title', t.textPrimary), weight('400')]} maxFontSizeMultiplier={1.4}>
               {`${greeting}, `}
-              <Text style={{ fontFamily: fonts.heading }}>{firstName}</Text>
+              <Text style={weight('700')}>{firstName}</Text>
             </Text>
           )}
         </View>

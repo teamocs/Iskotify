@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, Platform, type TextInputProps } from 
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { EyeOutlined, EyeSolid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
@@ -139,7 +139,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             <View {...decorative}>
               <Lineicons icon={shown ? EyeSolid : EyeOutlined} size={18} color={t.textSecondary} />
             </View>
-            <Text style={[textStyle('label', t.textSecondary), { fontFamily: fonts.bodyMedium }]} maxFontSizeMultiplier={1.6}>
+            <Text style={[textStyle('label', t.textSecondary), weight('500')]} maxFontSizeMultiplier={1.6}>
               {shown ? 'Hide' : 'Show'}
             </Text>
           </Pressable>

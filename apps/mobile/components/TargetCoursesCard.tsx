@@ -5,6 +5,7 @@ import {
 import { eq } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
 import { useTheme } from '../theme/ThemeContext'
+import { weight } from '../theme/tokens'
 import { userSettings, courseTaxonomyMap, careerCourses } from '../db/schema'
 import { allCourseOptions, type CourseOption } from '../utils/targetExams'
 import { supabase } from '../services/supabase'
@@ -135,25 +136,25 @@ export function TargetCoursesCard() {
   const s = useMemo(() => StyleSheet.create({
     card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    secTitle: { fontSize: typo.md, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_600SemiBold' },
-    addLink: { fontFamily: 'Lexend_500Medium', fontSize: 12, color: t.accentText },
-    empty: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, marginTop: 4 },
+    secTitle: { fontSize: typo.md, color: t.textPrimary, ...weight('600') },
+    addLink: { ...weight('500'), fontSize: 12, color: t.accentText },
+    empty: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary, marginTop: 4 },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 6 },
-    chipText: { fontFamily: 'Lexend_500Medium', fontSize: typo.sm, color: t.accentText },
-    chipX: { fontFamily: 'Outfit_700Bold', fontSize: typo.sm, color: t.accentText },
+    chipText: { ...weight('500'), fontSize: typo.sm, color: t.accentText },
+    chipX: { ...weight('700'), fontSize: typo.sm, color: t.accentText },
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '78%', paddingTop: 12, paddingHorizontal: 16, paddingBottom: 24 },
     handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, flex: 1 },
-    closeTxt: { fontFamily: 'Lexend_400Regular', fontSize: 18, color: t.textSecondary, padding: 4 },
-    input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary, marginBottom: 10 },
-    countHint: { fontFamily: 'Lexend_400Regular', fontSize: typo.xs, color: t.textTertiary, marginBottom: 8 },
+    sheetTitle: { ...weight('700'), fontSize: typo.lg, color: t.textPrimary, flex: 1 },
+    closeTxt: { ...weight('400'), fontSize: 18, color: t.textSecondary, padding: 4 },
+    input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, ...weight('400'), fontSize: typo.md, color: t.textPrimary, marginBottom: 10 },
+    countHint: { ...weight('400'), fontSize: typo.xs, color: t.textTertiary, marginBottom: 8 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, marginBottom: 8, borderWidth: 1 },
-    rowLabel: { flex: 1, fontFamily: 'Outfit_600SemiBold', fontSize: typo.base, color: t.textPrimary },
+    rowLabel: { flex: 1, ...weight('600'), fontSize: typo.base, color: t.textPrimary },
     rowMark: { fontSize: 18 },
-    emptyResults: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 30 },
+    emptyResults: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 30 },
   }), [t, typo])
 
   const atMax = selected.length >= MAX_COURSES

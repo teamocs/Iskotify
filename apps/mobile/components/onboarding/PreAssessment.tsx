@@ -1,7 +1,7 @@
 import { View, Text, Pressable, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { useBreakpoint, pagePadding } from '../../hooks/useBreakpoint'
 import { QuestionFigure } from '../practice/QuestionFigure'
 import { Button } from '../ui/Button'
@@ -61,7 +61,7 @@ export function QuestionView({ q, index, total, onAnswer }: {
             <View
               {...decorative}
               style={{
-                width: 32, height: 32, borderRadius: radius.sm, flexShrink: 0,
+                width: 32, minHeight: 32, borderRadius: radius.sm, flexShrink: 0,
                 backgroundColor: t.accentSurface, alignItems: 'center', justifyContent: 'center',
               }}
             >
@@ -115,7 +115,7 @@ export function ResultsView({ correct, total, bySubject, focusTitles, onStart }:
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
                   <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { flex: 1 }]}>{sub}</Text>
-                  <Text style={[textStyle('label', t.textSecondary), { fontFamily: fonts.bodySemi, fontVariant: ['tabular-nums'] }]}>
+                  <Text style={[textStyle('label', t.textSecondary), { ...weight('600'), fontVariant: ['tabular-nums'] }]}>
                     {`${c} of ${n}`}
                   </Text>
                 </View>

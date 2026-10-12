@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { Sheet } from '../ui/Sheet'
 import { Button } from '../ui/Button'
 import { ListRow } from '../ui/ListRow'
@@ -215,7 +215,7 @@ export function NewDeckSheet({ visible, subjects, topicRows, onClose, onCreate }
         <View style={{ gap: spacing.md }}>
           {groups.map(g => (
             <View key={g.subjectId} style={{ gap: spacing.xs }}>
-              <Text accessibilityRole="header" style={[textStyle('label', t.textSecondary), { fontFamily: fonts.bodySemi }]}>
+              <Text accessibilityRole="header" style={[textStyle('label', t.textSecondary), weight('600')]}>
                 {g.subjectName}
               </Text>
               {g.rows.map(row => (

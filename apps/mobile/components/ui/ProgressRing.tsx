@@ -1,6 +1,7 @@
 import { View, Text } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 
 interface Props {
   /** 0-1. Values outside the range are clamped. */
@@ -50,7 +51,7 @@ export function ProgressRing({ progress, size = 40, strokeWidth = 4, label, colo
         />
       </Svg>
       {label ? (
-        <Text style={{ fontSize: typo.xs, fontWeight: '700', color: t.textPrimary, fontFamily: 'Lexend_600SemiBold' }} maxFontSizeMultiplier={1.2}>
+        <Text style={{ fontSize: typo.xs, color: t.textPrimary, ...weight('600') }} maxFontSizeMultiplier={1.2}>
           {label}
         </Text>
       ) : null}

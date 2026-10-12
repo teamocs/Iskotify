@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View, Text, Modal, Pressable } from 'react-native'
 import { useTheme } from '../theme/ThemeContext'
+import { weight } from '../theme/tokens'
 
 interface Props {
   visible: boolean
@@ -28,13 +29,13 @@ export function SessionPausedOverlay({ visible, timeRemainingSecs, onResume, onE
     },
     icon: { fontSize: 64, marginBottom: 20 },
     title: {
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
       fontSize: typo.h2,
       color: t.textPrimary,
       marginBottom: 8,
     },
     sub: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.md,
       color: t.textSecondary,
       marginBottom: 36,
@@ -50,7 +51,7 @@ export function SessionPausedOverlay({ visible, timeRemainingSecs, onResume, onE
       marginBottom: 12,
     },
     resumeBtnTxt: {
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
       fontSize: typo.md,
       color: t.textInverse,
     },
@@ -60,7 +61,7 @@ export function SessionPausedOverlay({ visible, timeRemainingSecs, onResume, onE
       alignItems: 'center',
     },
     endBtnTxt: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.sm,
       color: t.textSecondary,
     },

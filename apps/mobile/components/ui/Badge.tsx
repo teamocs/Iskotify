@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle, type Theme } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle, type Theme } from '../../theme/tokens'
 
 type Tone = 'accent' | 'neutral' | 'success' | 'warning' | 'danger'
 
@@ -34,7 +34,7 @@ export function Badge({ label, tone = 'accent' }: { label: string; tone?: Tone }
         paddingVertical: 2,
       }}
     >
-      <Text style={[textStyle('caption', t[c.fg]), { fontFamily: fonts.bodySemi }]} maxFontSizeMultiplier={1.4}>{label}</Text>
+      <Text style={[textStyle('caption', t[c.fg]), weight('600')]} maxFontSizeMultiplier={1.4}>{label}</Text>
     </View>
   )
 }

@@ -17,7 +17,7 @@ import { usePathname, router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Gear1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { TAB_DESTINATIONS, activeDestination } from '../navigation/destinations'
 import { Avatar } from '../ui/Avatar'
 import { useProfileName } from '../../hooks/useProfileName'
@@ -64,7 +64,7 @@ function SidebarLink({ label, sublabel, active, onPress, leading }: ItemProps) {
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
-          style={[textStyle('body', color), { fontFamily: active ? fonts.heading : fonts.bodyMedium }]}
+          style={[textStyle('body', color), weight(active ? '700' : '500')]}
           numberOfLines={1}
         >
           {label}

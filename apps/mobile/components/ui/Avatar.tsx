@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius } from '../../theme/tokens'
+import { weight, radius } from '../../theme/tokens'
 import { decorative } from './a11y'
 
 /** "Juan Dela Cruz" → "JC" (first + last word), "maria" → "M". */
@@ -46,7 +46,7 @@ export function Avatar({ name, size = 36, onPress, accessibilityLabel, accessibi
     >
       {initials ? (
         <Text
-          style={{ fontFamily: fonts.heading, fontSize: Math.max(12, Math.round(size * 0.38)), color: t.accentText }}
+          style={{ ...weight('700'), fontSize: Math.max(12, Math.round(size * 0.38)), color: t.accentText }}
           maxFontSizeMultiplier={1}
         >
           {initials}

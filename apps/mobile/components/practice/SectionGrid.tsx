@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { fonts, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 export interface SectionGridSection {
@@ -78,7 +78,7 @@ export function SectionGrid({ sections, onJump, stacked = false }: Props) {
             maxFontSizeMultiplier={1.5}
             style={[
               textStyle('label', sec.active ? t.accentText : t.textSecondary),
-              { fontFamily: sec.active ? fonts.bodySemi : fonts.bodyMedium, flexShrink: 1 },
+              { ...weight(sec.active ? '600' : '500'), flexShrink: 1 },
             ]}
           >
             {sec.name}
