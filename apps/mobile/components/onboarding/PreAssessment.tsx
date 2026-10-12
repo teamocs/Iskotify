@@ -61,7 +61,7 @@ export function QuestionView({ q, index, total, onAnswer }: {
             <View
               {...decorative}
               style={{
-                width: 32, minHeight: 32, borderRadius: radius.sm, flexShrink: 0,
+                width: 32, minHeight: 32, borderRadius: radius.chip, flexShrink: 0,
                 backgroundColor: t.accentSurface, alignItems: 'center', justifyContent: 'center',
               }}
             >

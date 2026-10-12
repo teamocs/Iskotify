@@ -36,11 +36,11 @@ export function WeeklyChart({ data }: { data: WeeklyBar[] }) {
             <View
               style={{
                 width: '100%', maxWidth: 40, height: BAR_HEIGHT, justifyContent: 'flex-end',
-                backgroundColor: t.surfaceSubtle, borderRadius: radius.sm, overflow: 'hidden',
+                backgroundColor: t.surfaceSubtle, borderRadius: radius.chip, overflow: 'hidden',
               }}
             >
               {h > 0 ? (
-                <View style={{ height: h, backgroundColor: isToday ? t.accentText : t.accentBorder, borderRadius: radius.sm }} />
+                <View style={{ height: h, backgroundColor: isToday ? t.accentText : t.accentBorder, borderRadius: radius.chip }} />
               ) : null}
             </View>
             <Text

@@ -264,9 +264,9 @@ export const spacing = {
 
 // Corner radii (use with { borderCurve: 'continuous' } except pill/capsule).
 // The iOS shape scale (chip … capsule) is the target; the old keys stay as
-// aliases until the final P4 PR (sm splits into chip/field in P1c).
+// aliases until the final P4 PR. `sm` (10) was split into chip 8 / field 12
+// in P1c and is gone.
 export const radius = {
-  sm:   10,
   md:   14,
   lg:   18,
   xl:   22,

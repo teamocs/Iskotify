@@ -1,9 +1,4 @@
-import { View, Text, Pressable } from 'react-native'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
-import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
-import { decorative, focusRing, type WebPressableState } from './a11y'
+import { InsetRow } from './InsetGroup'
 
 interface Props {
   title: string
@@ -23,74 +18,26 @@ interface Props {
 }
 
 /**
- * A flat list row (no card): leading → title/subtitle → trailing → chevron.
- * Use inside a Card or a plain list; group rows rather than stacking cards.
+ * A list row: leading → title/subtitle → trailing → chevron. Kept for its
+ * existing call sites; it is an InsetRow (iOS redesign P3), so it is at least
+ * 44pt tall, grows with Dynamic Type, and draws separators when it sits in an
+ * InsetGroup (none on its own, e.g. inside a Card). New code uses InsetRow.
  */
 export function ListRow({
   title, subtitle, leading, trailing, onPress, showChevron, accessibilityLabel, accessibilityHint, disabled, testID,
 }: Props) {
-  const { theme: t } = useTheme()
-  const pressable = !!onPress
-  const chevron = showChevron ?? pressable
-
-  const content = (
-    <>
-      {leading ? (
-        <View {...decorative} style={{ flexShrink: 0 }}>
-          {leading}
-        </View>
-      ) : null}
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={2}>{title}</Text>
-        {subtitle ? (
-          <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={2} maxFontSizeMultiplier={2}>{subtitle}</Text>
-        ) : null}
-      </View>
-      {trailing ? <View style={{ flexShrink: 0 }}>{trailing}</View> : null}
-      {chevron ? (
-        <View testID="list-row-chevron" style={{ transform: [{ scaleX: -1 }] }} {...decorative}>
-          <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textTertiary} />
-        </View>
-      ) : null}
-    </>
-  )
-
-  const rowStyle = {
-    minHeight: 56,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-  }
-
-  if (!pressable) {
-    return <View style={rowStyle} testID={testID} accessibilityLabel={accessibilityLabel}>{content}</View>
-  }
-
   return (
-    <Pressable
+    <InsetRow
+      title={title}
+      subtitle={subtitle}
+      leading={leading}
+      trailing={trailing}
       onPress={onPress}
+      chevron={showChevron}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       disabled={disabled}
       testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
-      accessibilityHint={accessibilityHint}
-      aria-disabled={!!disabled}
-      style={(state) => {
-        const { pressed, hovered, focused } = state as WebPressableState
-        // Web hover (react-native-web reports `hovered`) is a lighter tint than
-        // press, so pointer users see the row is live before they click.
-        const fill = disabled ? null : pressed ? t.surface2 : hovered ? t.surfaceSubtle : null
-        return [
-          rowStyle,
-          fill ? { backgroundColor: fill } : null,
-          disabled ? { opacity: 0.5 } : null,
-          focusRing(t.focusRing, focused),
-        ]
-      }}
-    >
-      {content}
-    </Pressable>
+    />
   )
 }

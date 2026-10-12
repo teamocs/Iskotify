@@ -273,7 +273,7 @@ export default function ScholarshipInfoScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
                   <View
                     style={{
-                      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.sm,
+                      backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder, borderRadius: radius.chip,
                       paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
                     }}
                   >

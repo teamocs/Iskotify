@@ -17,7 +17,8 @@ export function Chip({ label, leading }: { label: string; leading?: React.ReactN
         gap: spacing.xs,
         minHeight: 28,
         paddingHorizontal: spacing.md,
-        borderRadius: radius.pill,
+        borderRadius: radius.chip,
+        borderCurve: 'continuous',
         backgroundColor: t.surface2,
       }}
     >

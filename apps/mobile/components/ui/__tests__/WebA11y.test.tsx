@@ -24,6 +24,9 @@ import { EmptyState } from '../EmptyState'
 import { ErrorState } from '../ErrorState'
 import { Sheet } from '../Sheet'
 import { StatNumber } from '../StatNumber'
+import { InsetGroup, InsetRow } from '../InsetGroup'
+import { SegmentedControl } from '../SegmentedControl'
+import { SearchField } from '../SearchField'
 import { focusRing, setInputModality } from '../a11y'
 
 // The mock serves the real palette (__mocks__/themeContextMock.js).
@@ -97,6 +100,21 @@ describe('decorative nodes are aria-hidden on web too', () => {
     expectNativeHiddenAlsoAriaHidden()
   })
 
+  it('InsetRow icon tile, chevron and separator', () => {
+    render(
+      <InsetGroup>
+        <InsetRow title="Row" leading={<Text>L</Text>} onPress={() => {}} />
+        <InsetRow title="Last" />
+      </InsetGroup>,
+    )
+    expectNativeHiddenAlsoAriaHidden()
+  })
+
+  it('SearchField icons', () => {
+    render(<SearchField value="x" onChangeText={() => {}} placeholder="p" accessibilityLabel="Search" />)
+    expectNativeHiddenAlsoAriaHidden()
+  })
+
   it('Sheet backdrop and grabber', () => {
     render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
     expect(screen.getByTestId('sheet-backdrop', { includeHiddenElements: true }).props['aria-hidden']).toBe(true)
@@ -161,6 +179,28 @@ describe('keyboard focus ring (web)', () => {
     expectFocusRing(pressableNamed('Open'))
   })
 
+  it('InsetRow', () => {
+    render(<InsetRow title="Row" onPress={() => {}} />)
+    expectFocusRing(pressableNamed('Row'))
+  })
+
+  it('SegmentedControl segments', () => {
+    render(
+      <SegmentedControl
+        accessibilityLabel="Range"
+        segments={[{ value: 'a', label: 'Week' }, { value: 'b', label: 'Month' }]}
+        value="a"
+        onChange={() => {}}
+      />,
+    )
+    expectFocusRing(pressableNamed('Week'))
+  })
+
+  it('Sheet close button', () => {
+    render(<Sheet visible title="Filters" onClose={() => {}}><Text>Body</Text></Sheet>)
+    expectFocusRing(pressableNamed('Close'))
+  })
+
   it('is not drawn after pointer input (mouse clicks focus too)', () => {
     setInputModality('pointer')
     render(<Button label="Go" onPress={() => {}} />)
@@ -209,6 +249,13 @@ describe('text can grow to 200%', () => {
     render(<ListRow title="Title" subtitle="Sub" />)
     expect(multiplier('Title')).toBe(2)
     expect(multiplier('Sub')).toBe(2)
+  })
+
+  it('InsetRow title, subtitle and value', () => {
+    render(<InsetRow title="Title" subtitle="Sub" value="On" />)
+    expect(multiplier('Title')).toBe(2)
+    expect(multiplier('Sub')).toBe(2)
+    expect(multiplier('On')).toBe(2)
   })
 
   it('Chip and FilterChip labels', () => {

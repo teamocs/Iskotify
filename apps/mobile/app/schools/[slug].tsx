@@ -443,7 +443,7 @@ export default function SchoolProfileScreen() {
         <View
           style={{
             flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', marginTop: spacing.lg,
-            padding: spacing.md, borderRadius: radius.sm, backgroundColor: t.warningSurface,
+            padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
           }}
         >
           <View {...decorative} style={{ marginTop: 2 }}>

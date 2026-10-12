@@ -387,7 +387,7 @@ export default function ListingDetailScreen() {
           <View
             style={{
               flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
-              padding: spacing.md, borderRadius: radius.sm, backgroundColor: t.warningSurface,
+              padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
             }}
           >
             <View {...decorative} style={{ marginTop: 2 }}>

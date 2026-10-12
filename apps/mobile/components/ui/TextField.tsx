@@ -91,7 +91,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           // Keep the text from shifting when the border thickens.
           paddingHorizontal: focused || error ? spacing.md - 1 : spacing.md,
           borderColor,
-          borderRadius: radius.md,
+          borderRadius: radius.field,
           borderCurve: 'continuous',
           backgroundColor: t.surface,
         }}
@@ -129,7 +129,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
                 {
                   minWidth: 44, minHeight: 44, marginRight: -spacing.xs,
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs,
-                  paddingHorizontal: spacing.sm, borderRadius: radius.sm,
+                  paddingHorizontal: spacing.sm, borderRadius: radius.chip, borderCurve: 'continuous',
                   backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
                 },
                 focusRing(t.focusRing, kbd),

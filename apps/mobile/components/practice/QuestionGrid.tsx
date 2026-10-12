@@ -55,7 +55,7 @@ export const QuestionGrid = memo(function QuestionGrid({
               return [
                 {
                   width: CELL, height: CELL, minWidth: CELL, minHeight: CELL,
-                  borderRadius: radius.sm, borderCurve: 'continuous',
+                  borderRadius: radius.chip, borderCurve: 'continuous',
                   alignItems: 'center', justifyContent: 'center',
                   borderWidth: current ? 2 : 1,
                   borderColor: current ? t.focusRing : answered ? t.accentBorder : t.border,

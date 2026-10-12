@@ -64,7 +64,7 @@ export const ListingCard = memo(function ListingCard({
       <View
         {...decorative}
         style={{
-          width: 40, height: 40, borderRadius: radius.sm, borderCurve: 'continuous',
+          width: 40, height: 40, borderRadius: radius.chip, borderCurve: 'continuous',
           backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}
       >

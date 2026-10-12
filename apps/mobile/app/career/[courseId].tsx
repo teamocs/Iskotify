@@ -190,7 +190,7 @@ function DestinationCard({ dest, fmtSalary, styles: s, highlightCountryCode }: D
 /** A warning-tinted note: strong text on its own tint, with a drawn icon. */
 function Callout({ children, t }: { children: string; t: Theme }) {
   return (
-    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', padding: spacing.md, borderRadius: radius.sm, backgroundColor: t.warningSurface }}>
+    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface }}>
       <View {...decorative} style={{ marginTop: 2 }}>
         <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
       </View>
@@ -343,7 +343,7 @@ export default function CourseCareerDetailScreen() {
           <Card padded={false} style={{ overflow: 'hidden' }}>
             <ListRow
               leading={(
-                <View style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 40, height: 40, borderRadius: radius.chip, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
                   <Lineicons icon={Buildings1Outlined} size={20} color={t.textSecondary} />
                 </View>
               )}

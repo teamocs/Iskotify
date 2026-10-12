@@ -73,7 +73,7 @@ function SectionRail({ current }: { current: Section }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <Image
             source={require('../../assets/images/icon.png')}
-            style={{ width: 32, height: 32, borderRadius: radius.sm }}
+            style={{ width: 32, height: 32, borderRadius: radius.chip }}
             accessibilityIgnoresInvertColors
             accessible={false}
           />

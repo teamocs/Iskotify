@@ -107,7 +107,7 @@ export default function ReportBugScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <Image
               source={{ uri: image.uri }}
-              style={{ width: 56, height: 56, borderRadius: radius.sm, backgroundColor: t.surface2 }}
+              style={{ width: 56, height: 56, borderRadius: radius.field, backgroundColor: t.surface2 }}
               accessibilityIgnoresInvertColors
               accessibilityLabel="Attached screenshot"
             />

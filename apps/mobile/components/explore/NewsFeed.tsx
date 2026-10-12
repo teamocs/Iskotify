@@ -66,7 +66,7 @@ function DateTile({ iso }: { iso: string }) {
   return (
     <View
       style={{
-        width: 44, minHeight: 48, borderRadius: radius.sm, borderCurve: 'continuous',
+        width: 44, minHeight: 48, borderRadius: radius.field, borderCurve: 'continuous',
         borderWidth: 1, borderColor: t.border, backgroundColor: t.surface,
         alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xs,
       }}
@@ -322,7 +322,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
           <ListRow
             key="tracker"
             leading={(
-              <View style={{ width: 40, height: 40, borderRadius: radius.sm, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 40, height: 40, borderRadius: radius.chip, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
                 <Lineicons icon={ClipboardOutlined} size={20} color={t.textSecondary} />
               </View>
             )}
