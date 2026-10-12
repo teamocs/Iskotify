@@ -15,7 +15,7 @@ jest.mock('../../../hooks/useBreakpoint', () => ({
 import { Sheet } from '../Sheet'
 import { ListRow } from '../ListRow'
 import { InfoBanner } from '../InfoBanner'
-import { fonts } from '../../../theme/tokens'
+import { systemFont, textStyles } from '../../../theme/tokens'
 import { aria } from '../../../test-utils/aria'
 
 const { useTheme } = require('../../../theme/ThemeContext')
@@ -99,9 +99,11 @@ describe('InfoBanner', () => {
     render(<InfoBanner message="Add an exam" actionLabel="Explore" onAction={() => {}} />)
     const msg = StyleSheet.flatten(screen.getByText('Add an exam').props.style)
     const act = StyleSheet.flatten(screen.getByText('Explore').props.style)
-    expect(Object.values(fonts)).toContain(msg.fontFamily)
-    expect(Object.values(fonts)).toContain(act.fontFamily)
-    expect(act.fontWeight).toBeUndefined()
+    // The system font (P1b): weight comes from the role, not a per-weight family.
+    expect(msg.fontFamily).toBe(systemFont)
+    expect(act.fontFamily).toBe(systemFont)
+    expect(msg.fontWeight).toBe(textStyles.bodySm.fontWeight)
+    expect(act.fontWeight).toBe(textStyles.label.fontWeight)
   })
 
   it('renders no icon wrapper when there is no icon, and a decorative sized one when there is', () => {

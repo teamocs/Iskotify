@@ -2,6 +2,7 @@ import React from 'react'
 import { Text } from 'react-native'
 import { render, screen, within } from '@testing-library/react-native'
 import { TodayHeader } from '../TodayHeader'
+import { textStyles } from '../../../theme/tokens'
 
 // Owner report (2026-09-26): on phones the greeting was squeezed into a narrow
 // column beside the refresh, reminders and avatar controls, so "Good
@@ -106,7 +107,7 @@ describe('TodayHeader', () => {
   })
 
   it('steps a very long first name down a size on a phone so it wraps at word boundaries, never mid-word', () => {
-    // 320pt phone at 2x font scale (capped 1.4): a 14-letter name in the 26pt
+    // 320pt phone at 2x font scale (capped 1.4): a 14-letter name in the 28pt
     // title role is wider than the column and would split mid-word.
     renderHeader({ fullName: 'Christophersonn Reyes' })
     const name = within(screen.getByTestId('today-header-greeting')).getByText('Christophersonn')
@@ -118,7 +119,7 @@ describe('TodayHeader', () => {
     renderHeader()
     const name = within(screen.getByTestId('today-header-greeting')).getByText('Maximiliana')
     const flat = [name.props.style].flat(3).reduce((a: any, s: any) => ({ ...a, ...s }), {})
-    expect(flat.fontSize).toBe(26)
+    expect(flat.fontSize).toBe(textStyles.title.fontSize)
   })
 
   it('falls back to "Student" when there is no name yet', () => {

@@ -13,6 +13,7 @@
 import { useState, useMemo } from 'react'
 import { StyleSheet, View, Text, Pressable } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 import { localDayIndex } from '../../utils/localDay'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -35,20 +36,20 @@ export function CalendarStrip({
     container: { paddingVertical: 6 },
     navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
     navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    arrowTxt: { fontSize: typo.xl, color: t.textSecondary, fontFamily: 'Outfit_700Bold', lineHeight: 26 },
-    monthLbl: { fontSize: typo.sm, fontWeight: '600', color: t.textPrimary, fontFamily: 'Outfit_700Bold', minWidth: 90, textAlign: 'center' },
+    arrowTxt: { fontSize: typo.xl, color: t.textSecondary, ...weight('700'), lineHeight: 26 },
+    monthLbl: { fontSize: typo.sm, color: t.textPrimary, ...weight('700'), minWidth: 90, textAlign: 'center' },
     pill: { marginLeft: 'auto', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
-    pillTxt: { fontSize: typo.xs, fontWeight: '600', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    pillTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('600') },
     pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
     pillExamTxt: { color: t.accentText },
     row: { flexDirection: 'row', justifyContent: 'space-between' },
     dayCol: { alignItems: 'center', gap: 3, flex: 1 },
-    letter: { fontSize: typo.xs, fontWeight: '600', color: t.textTertiary, fontFamily: 'Lexend_600SemiBold' },
+    letter: { fontSize: typo.xs, color: t.textTertiary, ...weight('600') },
     letterToday: { color: t.accentText },
-    circle: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    circle: { width: 28, minHeight: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     circleToday: { backgroundColor: t.textPrimary },
     circleExam: { borderWidth: 1.5, borderColor: t.accentText },
-    num: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Outfit_700Bold' },
+    num: { fontSize: typo.xs, color: t.textSecondary, ...weight('700') },
     numToday: { color: t.bg },
     dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
     dotActive: { backgroundColor: '#60a5fa' },

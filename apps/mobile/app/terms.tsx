@@ -9,7 +9,7 @@ import {
 } from '@iskotify/utils/terms-of-service'
 import { InfoPage, InfoSection, Prose } from '../components/info/InfoPage'
 import { useTheme } from '../theme/ThemeContext'
-import { fonts, spacing } from '../theme/tokens'
+import { weight, spacing } from '../theme/tokens'
 
 // The terms text lives in packages/utils/src/termsOfService.ts, shared with the
 // public web page (apps/admin/app/terms/page.tsx), so the two always match.
@@ -49,7 +49,7 @@ function Bullets({ items }: { items: { label?: string; text: string }[] }) {
       {items.map(item => (
         <Prose key={item.label ?? item.text} selectable>
           {item.label ? (
-            <Text style={{ fontFamily: fonts.bodySemi, color: t.textPrimary }}>{`${item.label} `}</Text>
+            <Text style={{ ...weight('600'), color: t.textPrimary }}>{`${item.label} `}</Text>
           ) : null}
           <Linked text={item.text} />
         </Prose>

@@ -1,5 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 
 interface LoadingStateProps {
   label?: string
@@ -31,7 +32,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontFamily: 'Lexend_400Regular',
+    ...weight('400'),
     textAlign: 'center',
   },
 })

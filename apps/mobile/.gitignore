@@ -11,3 +11,6 @@ expo-env.d.ts
 # Generated native directories (created by expo prebuild / EAS Build — do not commit)
 android/
 ios/
+
+# Local web export previews (expo export --output-dir dist-preview)
+dist-preview/

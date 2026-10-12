@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,11 +88,10 @@ export function AiImpactCard({ impact }: Props) {
     },
     headerLabel: {
       fontSize: typo.sm,
-      fontWeight: '700',
       color: t.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: 0.8,
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
     },
     scorePill: {
       borderRadius: 20,
@@ -103,8 +103,7 @@ export function AiImpactCard({ impact }: Props) {
     },
     scoreTxt: {
       fontSize: typo.xs,
-      fontWeight: '700',
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       color: accentColor,
     },
     riskRow: {
@@ -122,7 +121,7 @@ export function AiImpactCard({ impact }: Props) {
     riskTxt: {
       fontSize: typo.xs,
       color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
     },
     divider: {
       height: 1,
@@ -139,25 +138,23 @@ export function AiImpactCard({ impact }: Props) {
     },
     colHeader: {
       fontSize: typo.xs,
-      fontWeight: '700',
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       color: t.textSecondary,
       marginBottom: 6,
     },
     listItem: {
       fontSize: typo.xs,
       color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       lineHeight: 16,
       marginBottom: 3,
     },
     sectionTitle: {
       fontSize: typo.xs,
-      fontWeight: '700',
       color: t.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       marginBottom: 8,
     },
     chipRow: {
@@ -177,26 +174,26 @@ export function AiImpactCard({ impact }: Props) {
     chipTxt: {
       fontSize: typo.xs,
       color: accentColor,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
     },
     outlookTxt: {
       fontSize: typo.sm,
       color: t.textPrimary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       lineHeight: 19,
       marginBottom: 12,
     },
     summaryTxt: {
       fontSize: typo.sm,
       color: t.textSecondary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       lineHeight: 19,
       marginBottom: 10,
     },
     citationTxt: {
       fontSize: typo.xs,
       color: t.textTertiary,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontStyle: 'italic',
     },
   }), [t, typo, accentColor])

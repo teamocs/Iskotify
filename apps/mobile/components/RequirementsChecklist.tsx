@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useDb } from '../hooks/useDb'
 import { useTheme } from '../theme/ThemeContext'
+import { weight } from '../theme/tokens'
 import {
   getAcquiredRequirementIndices,
   toggleRequirement,
@@ -85,11 +86,11 @@ export function RequirementsChecklist({ listingSlug, requirements, onAcquiredCou
     checkmark: {
       color: t.textInverse,
       fontSize: 14,
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
     },
     rowText: {
       flex: 1,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.sm,
       color: t.textPrimary,
     },

@@ -62,7 +62,8 @@ const COMPONENTS = [
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g
 const RGBA_LITERAL = /rgba?\(\s*\d/g
 const FONT_SIZE = /fontSize\s*:/g
-const FONT_NAME = /['"](Outfit|Lexend)_\d{3}\w*['"]/g
+// Any literal family (the system font comes from theme/tokens; see __tests__/noBrandFonts.test.ts).
+const FONT_NAME = /fontFamily\s*:\s*['"`]/g
 const UPPERCASE = /textTransform\s*:\s*['"]uppercase['"]|\.toUpperCase\(\)/g
 const EMOJI = /\p{Extended_Pictographic}/gu
 const ICON_GLYPHS = /[›‹▲▼✕✓✗＋↪⚠⠿↻★☆←→☁•]/g

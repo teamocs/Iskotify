@@ -1,5 +1,5 @@
 import {
-  lightTheme, textStyles, textStyle, typography, fonts,
+  lightTheme, textStyles, textStyle, weight,
   iosTextStyles, iosTextStyle, iosTypeScale, legacyTextRoleMap, systemFont, systemFontFor,
   radius, motion, glass, layout,
 } from '../tokens'
@@ -80,12 +80,10 @@ describe('type scale tokens', () => {
     const s = textStyles[role]
     expect(s.fontSize).toBeGreaterThanOrEqual(12)
     expect(s.lineHeight).toBeGreaterThanOrEqual(s.fontSize)
-    expect(typeof s.fontFamily).toBe('string')
   })
 
-  it('only draws sizes from the typography scale', () => {
-    const scale = Object.values(typography) as number[]
-    for (const role of roles) expect(scale).toContain(textStyles[role].fontSize)
+  it('only draws sizes from the iOS type scale', () => {
+    for (const role of roles) expect(iosTypeScale).toContain(textStyles[role].fontSize)
   })
 
   it('numeric roles use tabular figures so timers and scores do not jitter', () => {
@@ -106,11 +104,21 @@ describe('type scale tokens', () => {
     expect(textStyle('label', '#123456')).toEqual({ ...textStyles.label, color: '#123456' })
   })
 
-  // Outfit/Lexend stay loaded until P1b; the system-font test for the new
-  // roles is in 'iOS text roles' below.
-  it('exposes the loaded font families by role', () => {
-    expect(fonts.heading).toBe('Outfit_700Bold')
-    expect(fonts.body).toBe('Lexend_400Regular')
+  // P1b: Outfit/Lexend are retired; every role is the platform UI font.
+  it('uses the system font on native (fontFamily undefined) and the system stack on web', () => {
+    // jest-expo renders as iOS.
+    for (const role of roles) expect(textStyles[role].fontFamily).toBeUndefined()
+    expect(systemFontFor('web')).toMatch(/^-apple-system, BlinkMacSystemFont/)
+    expect(systemFontFor('web')).not.toMatch(/Outfit|Lexend/)
+  })
+
+  it.each(roles)('%s carries an explicit fontWeight', (role) => {
+    expect(textStyles[role].fontWeight).toMatch(/^[1-9]00$/)
+  })
+
+  it('weight() gives the system font at a weight (temporary, replaces fonts.*)', () => {
+    expect(weight('600')).toEqual({ fontFamily: systemFont, fontWeight: '600' })
+    expect(weight('700').fontFamily).toBeUndefined()
   })
 })
 
@@ -188,9 +196,17 @@ describe('iOS text roles', () => {
     }
   })
 
-  it('leaves the legacy roles untouched (no visual change in P1a)', () => {
-    expect(textStyles.body).toEqual({ fontFamily: 'Lexend_400Regular', fontSize: 16, lineHeight: 24 })
-    expect(textStyles.headline.fontSize).toBe(20)
+  it('aliases each legacy role to its iOS role (P1b)', () => {
+    for (const legacy of Object.keys(legacyTextRoleMap) as (keyof typeof legacyTextRoleMap)[]) {
+      const { fontWeight: _w, ...ios } = iosTextStyles[legacyTextRoleMap[legacy]] as Record<string, unknown>
+      const { fontWeight: _lw, ...legacyStyle } = textStyles[legacy] as Record<string, unknown>
+      expect(legacyStyle).toEqual(ios)
+    }
+    expect(textStyles.body).toEqual(iosTextStyles.body)
+    expect(textStyles.bodySm).toEqual(iosTextStyles.footnote)
+    expect(textStyles.label).toEqual({ ...iosTextStyles.footnote, fontWeight: '600' })
+    expect(textStyles.numeric).toEqual({ ...iosTextStyles.title2, fontVariant: ['tabular-nums'] })
+    expect(textStyles.numericLg).toEqual({ ...iosTextStyles.largeTitle, fontVariant: ['tabular-nums'] })
   })
 })
 

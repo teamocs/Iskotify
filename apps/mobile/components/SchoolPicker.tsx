@@ -6,6 +6,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSchoolSearch, MIN_QUERY_LENGTH } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
+import { weight } from '../theme/tokens'
 import type { SchoolResult } from '../hooks/useSchoolSearch'
 
 interface SchoolPickerProps {
@@ -28,12 +29,12 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 13,
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.md,
       color: t.textPrimary,
     },
     trigger: { justifyContent: 'center' },
-    triggerText: { fontFamily: 'Lexend_400Regular', fontSize: typo.md, color: t.textPrimary },
+    triggerText: { ...weight('400'), fontSize: typo.md, color: t.textPrimary },
     triggerTextPlaceholder: { color: t.textTertiary },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     modalDismissOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -49,13 +50,13 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
     // Bottom sheet handle
     handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    sheetTitle: { fontFamily: 'Outfit_700Bold', fontSize: typo.lg, color: t.textPrimary, flex: 1 },
-    closeText: { fontFamily: 'Lexend_400Regular', fontSize: 18, color: t.textSecondary, padding: 4 },
+    sheetTitle: { ...weight('700'), fontSize: typo.lg, color: t.textPrimary, flex: 1 },
+    closeText: { ...weight('400'), fontSize: 18, color: t.textSecondary, padding: 4 },
     searchInput: { marginBottom: 10 },
     contentArea: { flex: 1, minHeight: 200 },
     loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
     hintText: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.sm,
       color: t.textTertiary,
       textAlign: 'center',
@@ -63,7 +64,7 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       paddingHorizontal: 8,
     },
     sourceHeader: {
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       fontSize: 10,
       color: t.textTertiary,
       textTransform: 'uppercase',
@@ -80,9 +81,9 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       gap: 8,
     },
     listTextWrap: { flex: 1 },
-    listName: { fontFamily: 'Outfit_600SemiBold', fontSize: typo.md, color: t.textPrimary },
+    listName: { ...weight('600'), fontSize: typo.md, color: t.textPrimary },
     listSubtitle: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.sm,
       color: t.textSecondary,
       marginTop: 2,
@@ -97,7 +98,7 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       backgroundColor: t.successSurface,
     },
     sourceBadgeDbTxt: {
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       fontSize: 9,
       color: t.successStrong,
     },
@@ -105,19 +106,19 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       backgroundColor: t.accentSurface,
     },
     sourceBadgePlacesTxt: {
-      fontFamily: 'Lexend_600SemiBold',
+      ...weight('600'),
       fontSize: 9,
       color: t.accentText,
     },
     errorText: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.sm,
       color: t.accentText,
       textAlign: 'center',
       paddingHorizontal: 16,
     },
     errorDetail: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: 11,
       color: t.textTertiary,
       textAlign: 'center',
@@ -131,9 +132,9 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
       borderTopColor: t.surfaceSubtle,
       marginTop: 8,
     },
-    fallbackLabel: { fontFamily: 'Lexend_400Regular', fontSize: typo.sm, color: t.textTertiary },
+    fallbackLabel: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary },
     fallbackLink: {
-      fontFamily: 'Lexend_500Medium',
+      ...weight('500'),
       fontSize: typo.md,
       color: t.accentText,
       marginTop: 2,

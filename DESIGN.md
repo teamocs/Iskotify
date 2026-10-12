@@ -83,10 +83,12 @@ to drop `success` and `warning` below 4.5:1. Measured worst case across white an
 
 ### Type and shape
 
-`font-heading` Outfit · `font-body` Lexend — both self-hosted via `next/font` in
+Admin (and the landing page), unchanged for now: `font-heading` Outfit · `font-body` Lexend — both self-hosted via `next/font` in
 [`apps/admin/app/layout.tsx`](apps/admin/app/layout.tsx), which sets the
 `--font-heading` / `--font-body` variables the preset reads. Do **not** add a
 `<link>` to fonts.googleapis.com; it re-introduces a render-blocking request.
+The mobile app no longer uses these fonts; it draws in the system font (see the
+mobile type section).
 
 Radii `sm 10 · md 16 · lg 22 · pill 980` · shadows `sm` and `card`.
 
@@ -252,7 +254,7 @@ Use via `textStyle(role)` or `textStyle(role, color)` to get a TextStyle with op
 </Text>
 ```
 
-Font families: `Outfit` (headings, numbers); `Lexend` (body, labels) — loaded via `expo-font` in `app/_layout.tsx`.
+Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack on web), set by the theme roles (`textStyle` / `iosTextStyle` / `<Text role>`) via `systemFont` in `theme/tokens.ts`. Outfit and Lexend are no longer loaded on mobile (iOS redesign P1b); nothing loads before first paint. Weight bumps on top of a role use `weight()`; never set a literal `fontFamily` (guarded by `__tests__/noBrandFonts.test.ts`). Admin and the landing page keep Outfit/Lexend for now.
 
 #### Spacing and radius
 

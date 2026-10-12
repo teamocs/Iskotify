@@ -88,7 +88,7 @@ export function MonthSheet({ visible, onClose, onDayPress, importantDays, remind
     cell: { flex: 1, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
     cellNum: { color: t.textPrimary, fontSize: typo.sm, fontWeight: '600' },
     cellNumMuted: { color: t.textTertiary },
-    todayCircle: { backgroundColor: t.textPrimary, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    todayCircle: { backgroundColor: t.textPrimary, width: 28, minHeight: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     todayNum: { color: t.bg },
     dotsRow: { flexDirection: 'row', gap: 2, position: 'absolute', bottom: 4 },
     dot: { width: 4, height: 4, borderRadius: 2 },

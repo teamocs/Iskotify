@@ -1,6 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 
 const ITEM_SPAN = 36 // cell 30px + gap 6px
 
@@ -31,10 +32,10 @@ export function QuestionNavigator({ total, currentIdx, answeredIdxs, onJump }: P
     // opening a large gap between the number row and the content below it.
     scroll: { flexGrow: 0 },
     row: { paddingHorizontal: 12, paddingVertical: 8, gap: 6, flexDirection: 'row' },
-    cell: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2 },
+    cell: { width: 30, minHeight: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2 },
     cellAnswered: { backgroundColor: t.accentSurface, borderColor: t.accent },
     cellCurrent: { borderColor: t.accentText, borderWidth: 2 },
-    num: { fontSize: typo.xs, fontWeight: '700', color: t.textSecondary, fontFamily: 'Lexend_600SemiBold' },
+    num: { fontSize: typo.xs, color: t.textSecondary, ...weight('600') },
     numAnswered: { color: t.accentText },
   }), [t, typo])
 

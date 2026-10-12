@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined, StopwatchOutlined, DashboardSquare1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle, fonts } from '../../theme/tokens'
+import { radius, spacing, textStyle, weight } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 import { ProgressBar } from '../ui/ProgressBar'
 
@@ -39,7 +39,7 @@ function TimerChip({ label, secs, emphasis }: { label: string; secs: number; emp
         <Lineicons icon={StopwatchOutlined} size={16} color={fg} />
       </View>
       <Text
-        style={[textStyle(emphasis ? 'titleSm' : 'label', fg), { fontFamily: fonts.heading, fontVariant: ['tabular-nums'] }]}
+        style={[textStyle(emphasis ? 'titleSm' : 'label', fg), { ...weight('700'), fontVariant: ['tabular-nums'] }]}
         maxFontSizeMultiplier={1.3}
       >
         {fmtClock(secs)}

@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing } from '../../theme/tokens'
+import { radius, spacing, weight } from '../../theme/tokens'
 
 interface Props {
   /** Leading glyph/emoji or icon element (rendered inside a rounded-square box). */
@@ -50,11 +50,11 @@ export function ListCard({
           </View>
         ) : null}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: typo.base, fontWeight: '700', color: titleColor ?? t.textPrimary, fontFamily: 'Outfit_700Bold' }} numberOfLines={1}>
+          <Text style={{ fontSize: typo.base, color: titleColor ?? t.textPrimary, ...weight('700') }} numberOfLines={1}>
             {title}
           </Text>
           {subtitle ? (
-            <Text style={{ fontSize: typo.sm, color: t.textTertiary, fontFamily: 'Lexend_400Regular', marginTop: 1 }} numberOfLines={1}>
+            <Text style={{ fontSize: typo.sm, color: t.textTertiary, ...weight('400'), marginTop: 1 }} numberOfLines={1}>
               {subtitle}
             </Text>
           ) : null}

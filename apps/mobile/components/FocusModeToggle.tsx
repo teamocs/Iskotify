@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View, Text, Switch } from 'react-native'
 import { useTheme } from '../theme/ThemeContext'
+import { weight } from '../theme/tokens'
 
 interface Props {
   enabled: boolean
@@ -33,13 +34,13 @@ export function FocusModeToggle({ enabled, onToggle }: Props) {
     iconTxt: { fontSize: 18 },
     body: { flex: 1 },
     label: {
-      fontFamily: 'Outfit_700Bold',
+      ...weight('700'),
       fontSize: typo.md,
       color: t.textPrimary,
       marginBottom: 2,
     },
     desc: {
-      fontFamily: 'Lexend_400Regular',
+      ...weight('400'),
       fontSize: typo.xs,
       color: t.textTertiary,
       lineHeight: 15,

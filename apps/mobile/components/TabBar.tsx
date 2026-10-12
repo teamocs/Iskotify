@@ -4,7 +4,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 // react-doctor-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../theme/ThemeContext'
-import { fonts, layout, radius, spacing, textStyle } from '../theme/tokens'
+import { weight, layout, radius, spacing, textStyle } from '../theme/tokens'
 import { useSafeInsets } from '../hooks/useSafeInsets'
 import { focusRing, type WebPressableState } from './ui/a11y'
 import { TAB_DESTINATIONS, destinationForRoute, type Destination } from './navigation/destinations'
@@ -47,7 +47,7 @@ function NavItem({ dest, isFocused, onPress }: { dest: Destination; isFocused: b
         <Lineicons icon={dest.icon} size={22} color={color} />
       </View>
       <Text
-        style={[textStyle('label', color), { fontFamily: isFocused ? fonts.heading : fonts.bodyMedium }]}
+        style={[textStyle('label', color), weight(isFocused ? '700' : '500')]}
         numberOfLines={1}
         maxFontSizeMultiplier={2}
       >

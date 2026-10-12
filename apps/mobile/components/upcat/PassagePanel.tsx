@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, Modal } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
+import { weight } from '../../theme/tokens'
 
 /**
  * Passage display for reading-comprehension questions.
@@ -22,20 +23,20 @@ export function PassagePanel({ passage }: { passage: string }) {
     wrap: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 16, borderCurve: 'continuous', marginHorizontal: 14, marginBottom: 10, overflow: 'hidden' },
     header: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, paddingRight: 8, paddingVertical: 6, gap: 8 },
     toggle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40 },
-    title: { fontSize: typo.xs, fontWeight: '700', color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: 'Lexend_600SemiBold' },
+    title: { fontSize: typo.xs, color: t.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8, ...weight('600') },
     chev: { color: t.textSecondary, fontSize: 15 },
     readBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderCurve: 'continuous', backgroundColor: t.accentSurface, borderWidth: 1, borderColor: 'rgba(128,0,0,0.22)' },
-    readTxt: { fontSize: typo.xs, color: t.accentText, fontFamily: 'Lexend_600SemiBold', fontWeight: '600' },
+    readTxt: { fontSize: typo.xs, color: t.accentText, ...weight('600'), },
     body: { paddingHorizontal: 14, paddingBottom: 12, maxHeight: 200 },
-    text: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 22, fontFamily: 'Lexend_400Regular' },
+    text: { fontSize: typo.sm, color: t.textSecondary, lineHeight: 22, ...weight('400') },
     // Full-screen reader
     fsRoot: { flex: 1, backgroundColor: t.bg },
     fsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: t.divider, gap: 8 },
-    fsTitle: { fontSize: typo.md, fontWeight: '700', color: t.textPrimary, fontFamily: 'Outfit_700Bold' },
+    fsTitle: { fontSize: typo.md, color: t.textPrimary, ...weight('700') },
     fsClose: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
     fsCloseTxt: { fontSize: 22, color: t.textSecondary },
     fsBody: { paddingHorizontal: 22, paddingTop: 18 },
-    fsText: { fontSize: typo.base, color: t.textPrimary, lineHeight: 29, fontFamily: 'Lexend_400Regular' },
+    fsText: { fontSize: typo.base, color: t.textPrimary, lineHeight: 29, ...weight('400') },
   }), [t, typo])
 
   return (

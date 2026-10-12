@@ -95,7 +95,7 @@ function makeStyles(t: Theme) {
     heroTitle:   textStyle('title', t.textPrimary),
     heroSub:     { ...textStyle('body', t.textSecondary), marginTop: spacing.xs },
     rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-    rankBadge:   { minWidth: 36, height: 36, paddingHorizontal: spacing.xs, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface2, flexShrink: 0 },
+    rankBadge:   { minWidth: 36, minHeight: 36, paddingHorizontal: spacing.xs, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface2, flexShrink: 0 },
     rankNum:     textStyle('label', t.textPrimary),
     schoolName:  { ...textStyle('titleSm', t.textPrimary), flex: 1 },
     metaRow:     { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.lg, rowGap: spacing.xs },

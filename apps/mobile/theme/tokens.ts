@@ -89,56 +89,9 @@ export const typography = {
   display: 48,
 } as const
 
-// Font families (loaded in app/_layout.tsx). Outfit for headings, numbers and
-// button labels; Lexend for reading text and small labels.
-export const fonts = {
-  heading:     'Outfit_700Bold',
-  headingSemi: 'Outfit_600SemiBold',
-  headingReg:  'Outfit_400Regular',
-  body:        'Lexend_400Regular',
-  bodyMedium:  'Lexend_500Medium',
-  bodySemi:    'Lexend_600SemiBold',
-} as const
-
-type TextRole = {
-  fontFamily: string
-  fontSize: number
-  lineHeight: number
-  letterSpacing?: number
-  fontVariant?: TextStyle['fontVariant']
-}
-
-/**
- * Type roles (direction C: big tabular numbers for timers/scores/countdowns,
- * everything else quieter). Sizes come only from `typography`; nothing below
- * 12; tracking never tighter than -0.04em. Use via `textStyle(role, color)`
- * instead of hand-picking a fontSize per screen.
- */
-export const textStyles = {
-  display:   { fontFamily: fonts.heading,     fontSize: typography.display, lineHeight: 54, letterSpacing: -1 },
-  title:     { fontFamily: fonts.heading,     fontSize: typography.h3,      lineHeight: 32, letterSpacing: -0.5 },
-  headline:  { fontFamily: fonts.heading,     fontSize: typography.lg,      lineHeight: 26, letterSpacing: -0.2 },
-  titleSm:   { fontFamily: fonts.headingSemi, fontSize: typography.md,      lineHeight: 22 },
-  body:      { fontFamily: fonts.body,        fontSize: typography.base,    lineHeight: 24 },
-  bodySm:    { fontFamily: fonts.body,        fontSize: typography.sm,      lineHeight: 19 },
-  label:     { fontFamily: fonts.bodySemi,    fontSize: typography.sm,      lineHeight: 18 },
-  button:    { fontFamily: fonts.heading,     fontSize: typography.base,    lineHeight: 20, letterSpacing: 0.1 },
-  caption:   { fontFamily: fonts.body,        fontSize: typography.xs,      lineHeight: 16 },
-  numeric:   { fontFamily: fonts.heading,     fontSize: typography.xl,      lineHeight: 28, fontVariant: ['tabular-nums'] },
-  numericLg: { fontFamily: fonts.heading,     fontSize: typography.h1,      lineHeight: 42, letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
-} as const satisfies Record<string, TextRole>
-
-export type TextStyleRole = keyof typeof textStyles
-
-/** A type role as a TextStyle, optionally with a colour (pass a theme token). */
-export function textStyle(role: TextStyleRole, color?: string): TextStyle {
-  const base = textStyles[role] as TextStyle
-  return color ? { ...base, color } : { ...base }
-}
-
-// ── iOS-language redesign (P1a, additive) ────────────────────────────────────
-// Nothing below is used by an existing screen yet; P1b moves the legacy roles
-// above onto these (see legacyTextRoleMap) and removes Outfit/Lexend.
+// ── Type: the platform UI font (iOS redesign P1a/P1b) ─────────────────────────
+// Every word is drawn in the system font. The brand fonts were retired in P1b;
+// the legacy roles below are aliases of these iOS roles.
 
 /** The platform UI font for a given OS: undefined on native (SF Pro on iOS,
  *  Roboto on Android, which also gets Dynamic Type for free), the system
@@ -192,8 +145,12 @@ export function iosTextStyle(role: IosTextRole, color?: string): TextStyle {
   return color ? { ...base, color } : { ...base }
 }
 
-/** Where each legacy role lands in the P1b cut-over (`label` also takes
- *  fontWeight 600). Kept here so P1b is a token edit, not 467 call sites. */
+type LegacyTextRole =
+  | 'display' | 'title' | 'headline' | 'titleSm' | 'body' | 'bodySm'
+  | 'label' | 'button' | 'caption' | 'numeric' | 'numericLg'
+
+/** Where each legacy role lands (`label` also takes fontWeight 600). The
+ *  cut-over is a token edit, so the `textStyle()` call sites are unchanged. */
 export const legacyTextRoleMap = {
   display:   'largeTitle',
   title:     'title1',
@@ -206,7 +163,43 @@ export const legacyTextRoleMap = {
   caption:   'caption',
   numeric:   'numeric',
   numericLg: 'numericLg',
-} as const satisfies Record<TextStyleRole, IosTextRole>
+} as const satisfies Record<LegacyTextRole, IosTextRole>
+
+/**
+ * Legacy type roles, now aliases of the iOS roles (see legacyTextRoleMap).
+ * Kept so existing `textStyle(role, color)` call sites work unchanged; new
+ * code uses `<Text role>` or `iosTextStyle()`.
+ */
+export const textStyles = {
+  display:   iosTextStyles[legacyTextRoleMap.display],
+  title:     iosTextStyles[legacyTextRoleMap.title],
+  headline:  iosTextStyles[legacyTextRoleMap.headline],
+  titleSm:   iosTextStyles[legacyTextRoleMap.titleSm],
+  body:      iosTextStyles[legacyTextRoleMap.body],
+  bodySm:    iosTextStyles[legacyTextRoleMap.bodySm],
+  label:     { ...iosTextStyles[legacyTextRoleMap.label], fontWeight: '600' },
+  button:    iosTextStyles[legacyTextRoleMap.button],
+  caption:   iosTextStyles[legacyTextRoleMap.caption],
+  numeric:   iosTextStyles[legacyTextRoleMap.numeric],
+  numericLg: iosTextStyles[legacyTextRoleMap.numericLg],
+} as const satisfies Record<LegacyTextRole, IosTextRoleStyle>
+
+export type TextStyleRole = keyof typeof textStyles
+
+/** A type role as a TextStyle, optionally with a colour (pass a theme token). */
+export function textStyle(role: TextStyleRole, color?: string): TextStyle {
+  const base = textStyles[role] as TextStyle
+  return color ? { ...base, color } : { ...base }
+}
+
+/**
+ * The system font at a given weight. Temporary (P1b): it replaces the retired
+ * per-weight brand font names (regular, medium, semibold, bold) at the sites
+ * that set a weight on top of a role.
+ */
+export function weight<W extends '400' | '500' | '600' | '700'>(w: W): { fontFamily: string | undefined; fontWeight: W } {
+  return { fontFamily: systemFont, fontWeight: w }
+}
 
 /**
  * Motion. Native springs feed Reanimated `withSpring`; the curves are their
