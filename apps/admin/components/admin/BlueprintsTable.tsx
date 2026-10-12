@@ -24,7 +24,7 @@ const status = (s: string) => STATUS[s] ?? { label: s, tone: 'neutral' as const 
 
 const FILTERS: FilterDef<BlueprintRow>[] = [
   {
-    id: 'status', label: 'Status', allLabel: 'Any status',
+    id: 'status', label: 'Status', allLabel: 'Any status', segmented: true,
     options: [{ value: 'published', label: 'Published' }, { value: 'draft', label: 'Draft' }],
     predicate: (b, v) => b.status === v,
   },

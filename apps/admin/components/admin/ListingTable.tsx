@@ -28,12 +28,12 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-PH', { mon
 
 const FILTERS: FilterDef<Listing>[] = [
   {
-    id: 'type', label: 'Type', allLabel: 'All types',
+    id: 'type', label: 'Type', allLabel: 'All types', segmented: true,
     options: [{ value: 'scholarship', label: 'Scholarship' }, { value: 'exam', label: 'Exam' }],
     predicate: (l, v) => l.type === v,
   },
   {
-    id: 'status', label: 'Status', allLabel: 'Any status',
+    id: 'status', label: 'Status', allLabel: 'Any status', segmented: true,
     options: [{ value: 'active', label: 'Active' }, { value: 'upcoming', label: 'Upcoming' }, { value: 'closed', label: 'Closed' }],
     predicate: (l, v) => l.status === v,
   },
