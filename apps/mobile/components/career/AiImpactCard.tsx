@@ -1,7 +1,11 @@
 import { useMemo } from 'react'
-import { StyleSheet, View, Text } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight } from '../../theme/tokens'
+import { radius, spacing, weight } from '../../theme/tokens'
+import { Badge } from '../ui/Badge'
+import { Chip } from '../ui/Chip'
+import { Text } from '../ui/Text'
+import { decorative, heading } from '../ui/a11y'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,248 +55,112 @@ function safeParseArray(raw: string): string[] {
   }
 }
 
-/** Returns true when value looks like a 3- or 6-digit CSS hex colour (#RGB / #RRGGBB). */
-function isValidHex(value: string | null | undefined): value is string {
-  if (!value) return false
-  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(value.trim())
+/** A list line with a drawn dot, not a glyph. */
+function Item({ children }: { children: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
+      <View {...decorative} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: t.textSecondary, marginTop: 7 }} />
+      <Text role="footnote" color={t.textSecondary} style={{ flex: 1 }}>{children}</Text>
+    </View>
+  )
+}
+
+function SectionTitle({ children }: { children: string }) {
+  const { theme: t } = useTheme()
+  return <Text role="footnote" color={t.textSecondary} {...heading(3)} style={weight('600')}>{children}</Text>
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * How AI is expected to change a course's careers, from the catalog: the
+ * AI-safe score, the automation-risk range, what AI takes over and what stays
+ * human, new jobs, skills to build, the 2030 outlook and the cited source.
+ * Theme tones only (the catalog's own colour code is not used for text: it
+ * is not contrast-checked).
+ */
 export function AiImpactCard({ impact }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
-  const aiTakesOver   = useMemo(() => safeParseArray(impact.whatAiTakesOver),  [impact.whatAiTakesOver])
-  const staysHuman    = useMemo(() => safeParseArray(impact.whatStaysHuman),   [impact.whatStaysHuman])
-  const newJobs       = useMemo(() => safeParseArray(impact.newJobsEmerging),  [impact.newJobsEmerging])
-  const skillsRaw     = useMemo(() => safeParseArray(impact.skillsToDevelop),  [impact.skillsToDevelop])
-
-  const accentColor = isValidHex(impact.colorCode) ? impact.colorCode : t.accent
-
-  const s = useMemo(() => StyleSheet.create({
-    card: {
-      backgroundColor: t.surface,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: t.border,
-      padding: 16,
-      marginBottom: 14,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 4,
-    },
-    headerLabel: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      ...weight('600'),
-    },
-    scorePill: {
-      borderRadius: 20,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      backgroundColor: accentColor + '22',
-      borderWidth: 1,
-      borderColor: accentColor + '55',
-    },
-    scoreTxt: {
-      fontSize: typo.xs,
-      ...weight('600'),
-      color: accentColor,
-    },
-    riskRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 12,
-    },
-    riskDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: accentColor,
-    },
-    riskTxt: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      ...weight('400'),
-    },
-    divider: {
-      height: 1,
-      backgroundColor: t.divider,
-      marginVertical: 10,
-    },
-    twoColRow: {
-      flexDirection: 'row',
-      gap: 10,
-      marginBottom: 10,
-    },
-    col: {
-      flex: 1,
-    },
-    colHeader: {
-      fontSize: typo.xs,
-      ...weight('600'),
-      color: t.textSecondary,
-      marginBottom: 6,
-    },
-    listItem: {
-      fontSize: typo.xs,
-      color: t.textSecondary,
-      ...weight('400'),
-      lineHeight: 16,
-      marginBottom: 3,
-    },
-    sectionTitle: {
-      fontSize: typo.xs,
-      color: t.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      ...weight('600'),
-      marginBottom: 8,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      marginBottom: 12,
-    },
-    chip: {
-      borderRadius: 8,
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      backgroundColor: accentColor + '15',
-      borderWidth: 1,
-      borderColor: accentColor + '40',
-    },
-    chipTxt: {
-      fontSize: typo.xs,
-      color: accentColor,
-      ...weight('400'),
-    },
-    outlookTxt: {
-      fontSize: typo.sm,
-      color: t.textPrimary,
-      ...weight('400'),
-      lineHeight: 19,
-      marginBottom: 12,
-    },
-    summaryTxt: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      ...weight('400'),
-      lineHeight: 19,
-      marginBottom: 10,
-    },
-    citationTxt: {
-      fontSize: typo.xs,
-      color: t.textTertiary,
-      ...weight('400'),
-      fontStyle: 'italic',
-    },
-  }), [t, typo, accentColor])
+  const aiTakesOver = useMemo(() => safeParseArray(impact.whatAiTakesOver), [impact.whatAiTakesOver])
+  const staysHuman  = useMemo(() => safeParseArray(impact.whatStaysHuman),  [impact.whatStaysHuman])
+  const newJobs     = useMemo(() => safeParseArray(impact.newJobsEmerging), [impact.newJobsEmerging])
+  const skills      = useMemo(() => safeParseArray(impact.skillsToDevelop), [impact.skillsToDevelop])
 
   const hasScore = impact.aiSafetyScore != null
   const hasRisk  = impact.automationRiskLow != null && impact.automationRiskHigh != null
 
   return (
-    <View style={s.card}>
-
-      {/* Header row: "AI Impact" + score pill */}
-      <View style={s.headerRow}>
-        <Text style={s.headerLabel}>AI Impact</Text>
+    <View
+      testID="ai-impact-card"
+      style={{ backgroundColor: t.surface, borderRadius: radius.card, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.md }}
+    >
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+        <Text role="headline" {...heading(2)}>AI impact</Text>
         {hasScore ? (
-          <View style={s.scorePill}>
-            <Text style={s.scoreTxt}>
-              {impact.aiSafetyScore}/5
-              {impact.aiSafetyLabel ? ` · ${impact.aiSafetyLabel}` : ''}
-            </Text>
-          </View>
+          <Badge
+            label={`AI-safe ${impact.aiSafetyScore}/5${impact.aiSafetyLabel ? ` · ${impact.aiSafetyLabel}` : ''}`}
+            tone="accent"
+          />
         ) : null}
       </View>
 
-      {/* Automation risk range */}
       {hasRisk ? (
-        <View style={s.riskRow}>
-          <View style={s.riskDot} />
-          <Text style={s.riskTxt}>
-            Automation risk {impact.automationRiskLow}–{impact.automationRiskHigh}%
-          </Text>
-        </View>
+        <Text role="footnote" color={t.textSecondary}>
+          Automation risk {impact.automationRiskLow}–{impact.automationRiskHigh}%
+        </Text>
       ) : null}
 
-      <View style={s.divider} />
-
-      {/* Two-column: AI takes over | Stays human */}
       {(aiTakesOver.length > 0 || staysHuman.length > 0) ? (
-        <View style={s.twoColRow}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.divider }}>
           {aiTakesOver.length > 0 ? (
-            <View style={s.col}>
-              <Text style={s.colHeader}>🤖 AI takes over</Text>
-              {aiTakesOver.map((item, i) => (
-                <Text key={i} style={s.listItem}>• {item}</Text>
-              ))}
+            <View style={{ flexBasis: 200, flexGrow: 1, minWidth: 0, gap: spacing.xs }}>
+              <SectionTitle>AI takes over</SectionTitle>
+              {aiTakesOver.map((item, i) => <Item key={i}>{item}</Item>)}
             </View>
           ) : null}
           {staysHuman.length > 0 ? (
-            <View style={s.col}>
-              <Text style={s.colHeader}>🧠 Stays human</Text>
-              {staysHuman.map((item, i) => (
-                <Text key={i} style={s.listItem}>• {item}</Text>
-              ))}
+            <View style={{ flexBasis: 200, flexGrow: 1, minWidth: 0, gap: spacing.xs }}>
+              <SectionTitle>Stays human</SectionTitle>
+              {staysHuman.map((item, i) => <Item key={i}>{item}</Item>)}
             </View>
           ) : null}
         </View>
       ) : null}
 
-      {/* New jobs emerging */}
       {newJobs.length > 0 ? (
-        <>
-          <Text style={s.sectionTitle}>🚀 New jobs emerging</Text>
-          {newJobs.map((item, i) => (
-            <Text key={i} style={s.listItem}>• {item}</Text>
-          ))}
-        </>
+        <View style={{ gap: spacing.xs }}>
+          <SectionTitle>New jobs emerging</SectionTitle>
+          {newJobs.map((item, i) => <Item key={i}>{item}</Item>)}
+        </View>
       ) : null}
 
-      {/* Skills to build */}
-      {skillsRaw.length > 0 ? (
-        <>
-          <Text style={s.sectionTitle}>Skills to build</Text>
-          <View style={s.chipRow}>
-            {skillsRaw.map((skill, i) => (
-              <View key={i} style={s.chip}>
-                <Text style={s.chipTxt}>{skill}</Text>
-              </View>
-            ))}
+      {skills.length > 0 ? (
+        <View style={{ gap: spacing.sm }}>
+          <SectionTitle>Skills to build</SectionTitle>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            {skills.map((skill, i) => <Chip key={i} label={skill} />)}
           </View>
-        </>
+        </View>
       ) : null}
 
-      {/* 2030 outlook */}
       {impact.careerOutlook2030 ? (
-        <>
-          <Text style={s.sectionTitle}>2030 Outlook</Text>
-          <Text style={s.outlookTxt}>{impact.careerOutlook2030}</Text>
-        </>
+        <View style={{ gap: spacing.xs }}>
+          <SectionTitle>2030 outlook</SectionTitle>
+          <Text role="subheadline">{impact.careerOutlook2030}</Text>
+        </View>
       ) : null}
 
-      {/* Kuya Baw summary */}
       {impact.kuyaBawSummary ? (
-        <Text style={s.summaryTxt}>{impact.kuyaBawSummary}</Text>
+        <Text role="subheadline" color={t.textSecondary}>{impact.kuyaBawSummary}</Text>
       ) : null}
 
-      {/* Citation */}
       {impact.keySource ? (
-        <Text style={s.citationTxt}>Source: {impact.keySource}</Text>
+        <Text role="caption" color={t.textSecondary} style={{ fontStyle: 'italic' }}>Source: {impact.keySource}</Text>
       ) : null}
-
     </View>
   )
 }

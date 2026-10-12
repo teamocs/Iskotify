@@ -217,10 +217,20 @@ describe('UpdatesScreen', () => {
     await waitFor(() => {
       // Title appears in both Upcoming dates and Admissions news
       expect(screen.getAllByText('ACET Exam Day').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText('Ateneo · Exam')).toBeTruthy()
+      // The exact date leads the facts (the trust rule), then school and kind.
+      expect(screen.getByText(/ · Ateneo · Exam$/)).toBeTruthy()
       expect(screen.getByText('In 5 days')).toBeTruthy()
       expect(screen.getByRole('header', { name: 'Upcoming dates' })).toBeTruthy()
     })
+    // No source in the row: the feed item has none, so none is named.
+    expect(screen.queryByText(/Source:/)).toBeNull()
+  })
+
+  it('an upcoming date names its source host when the feed item has one', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb([{ ...EVENT_ROW, sources: '[{"label":"ateneo.edu","url":"https://www.ateneo.edu/acet"}]' }]))
+    render(<UpdatesScreen />)
+    expect(await screen.findByText(/ · Ateneo · Exam · Source: ateneo\.edu$/)).toBeTruthy()
   })
 
   it('hides Upcoming Events section when no future events', async () => {

@@ -1,11 +1,12 @@
 import { useCallback, type ReactElement } from 'react'
-import { View, type ListRenderItemInfo, type StyleProp, type ViewStyle, type FlatListProps } from 'react-native'
+import { StyleSheet, View, type ListRenderItemInfo, type StyleProp, type ViewStyle, type FlatListProps } from 'react-native'
 import Animated, { useAnimatedRef } from 'react-native-reanimated'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing } from '../../theme/tokens'
+import { radius, spacing, type Theme } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Skeleton } from '../ui/Skeleton'
+import { decorative } from '../ui/a11y'
 import { exploreColumns } from './exploreModel'
 
 // Half the gutter sits on each side of a cell; the list pulls back by the
@@ -26,10 +27,58 @@ interface Props<T> {
 }
 
 /**
- * Explore's responsive listing grid: one column on phones, two on tablets,
- * three on desktop (exploreColumns). A virtualised FlatList throughout — the
- * schools directory alone is ~727 rows — with stable keys from the caller.
- * Changing the column count remounts the list (FlatList requires it).
+ * The cell around one row. One column (phones): the rows sit on one inset
+ * grouped panel — the first rounds the top corners, the last the bottom, a
+ * hairline (inset to the text) between them — the iOS grouped list, built
+ * per cell so the list can stay virtualised. Several columns (tablet,
+ * desktop): each row is its own rounded tile.
+ */
+function cellStyle(t: Theme, cols: number, index: number, count: number): ViewStyle {
+  const panel: ViewStyle = { backgroundColor: t.surface, borderCurve: 'continuous', overflow: 'hidden' }
+  if (cols > 1) return { ...panel, flex: 1, borderRadius: radius.group }
+  return {
+    ...panel,
+    borderTopLeftRadius: index === 0 ? radius.group : 0,
+    borderTopRightRadius: index === 0 ? radius.group : 0,
+    borderBottomLeftRadius: index === count - 1 ? radius.group : 0,
+    borderBottomRightRadius: index === count - 1 ? radius.group : 0,
+  }
+}
+
+function GroupedCell({ cols, index, count, children }: { cols: number; index: number; count: number; children: ReactElement }) {
+  const { theme: t } = useTheme()
+  const single = cols === 1
+  return (
+    <View
+      style={{
+        width: `${100 / cols}%`,
+        paddingHorizontal: HALF_GAP,
+        paddingBottom: single ? (index === count - 1 ? spacing.sm : 0) : spacing.sm,
+      }}
+    >
+      <View testID="explore-cell" style={cellStyle(t, cols, index, count)}>
+        {children}
+        {single && index < count - 1 ? (
+          <View
+            testID="explore-cell-separator"
+            {...decorative}
+            style={{
+              position: 'absolute', bottom: 0, right: 0, left: spacing.lg + 44 + spacing.md,
+              height: StyleSheet.hairlineWidth, backgroundColor: t.divider,
+            }}
+          />
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * Explore's responsive listing grid: one grouped column on phones, two
+ * columns of tiles on tablets, three on desktop (exploreColumns). A
+ * virtualised FlatList throughout — the schools directory alone is ~727 rows
+ * — with stable keys from the caller. Changing the column count remounts the
+ * list (FlatList requires it).
  */
 export function ExploreGrid<T>({
   data, keyExtractor, renderItem, ListHeaderComponent, ListEmptyComponent, ListFooterComponent,
@@ -39,12 +88,11 @@ export function ExploreGrid<T>({
   const onScroll = useTabBarScrollHandler()
   const listRef = useAnimatedRef<Animated.FlatList<T>>()
   useScrollToTopOnReselect(listRef)
+  const count = data.length
 
-  const renderCell = useCallback(({ item }: ListRenderItemInfo<T>) => (
-    <View style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: spacing.sm }}>
-      {renderItem(item)}
-    </View>
-  ), [cols, renderItem])
+  const renderCell = useCallback(({ item, index }: ListRenderItemInfo<T>) => (
+    <GroupedCell cols={cols} index={index} count={count}>{renderItem(item)}</GroupedCell>
+  ), [cols, count, renderItem])
 
   return (
     <Animated.FlatList
@@ -78,35 +126,36 @@ export function ExploreGrid<T>({
 }
 
 /**
- * The same column rhythm for a SHORT pinned group inside a list header (the
- * handful of entrance exams, a student's target courses). Not virtualised:
- * use it only for bounded groups; long lists go through ExploreGrid.
+ * The same grouped rhythm for a SHORT pinned group inside a list header (the
+ * handful of entrance exams, a student's target courses, search results).
+ * Not virtualised: use it only for bounded groups; long lists go through
+ * ExploreGrid.
  */
-export function StaticGrid<T>({ items, keyExtractor, renderItem }: {
+export function StaticGrid<T>({ items, keyExtractor, renderItem, testID }: {
   items: readonly T[]
   keyExtractor: (item: T) => string
   renderItem: (item: T) => ReactElement
+  testID?: string
 }) {
   const cols = exploreColumns(useBreakpoint())
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -HALF_GAP }}>
-      {items.map(item => (
-        <View key={keyExtractor(item)} style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: spacing.sm }}>
-          {renderItem(item)}
-        </View>
+    <View testID={testID} style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -HALF_GAP }}>
+      {items.map((item, i) => (
+        <GroupedCell key={keyExtractor(item)} cols={cols} index={i} count={items.length}>{renderItem(item)}</GroupedCell>
       ))}
     </View>
   )
 }
 
 /**
- * Placeholder cards in the grid's shape while a section loads. Announced once,
+ * Placeholder rows in the grid's shape while a section loads. Announced once,
  * as busy, with a label naming what is loading; the blocks themselves are silent.
  */
 export function GridSkeleton({ label, count = 6, testID = 'explore-skeleton' }: { label: string; count?: number; testID?: string }) {
   const { theme: t } = useTheme()
   const cols = exploreColumns(useBreakpoint())
-  const cells = Array.from({ length: Math.max(count, cols) }, (_, i) => i)
+  const n = Math.max(count, cols)
+  const cells = Array.from({ length: n }, (_, i) => i)
 
   return (
     <View
@@ -117,15 +166,14 @@ export function GridSkeleton({ label, count = 6, testID = 'explore-skeleton' }: 
       style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -HALF_GAP }}
     >
       {cells.map(i => (
-        <View key={i} style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: spacing.sm }}>
+        <View key={i} style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: cols === 1 ? 0 : spacing.sm }}>
           <View
-            style={{
-              flexDirection: 'row', gap: spacing.md, padding: spacing.lg, minHeight: 88,
-              borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border,
-              backgroundColor: t.surface,
-            }}
+            style={[
+              cellStyle(t, cols, i, n),
+              { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 72 },
+            ]}
           >
-            <Skeleton width={40} height={40} radius={radius.chip} />
+            <Skeleton width={44} height={44} radius={radius.field} />
             <View style={{ flex: 1, gap: spacing.sm }}>
               <Skeleton width="80%" height={16} />
               <Skeleton width="55%" height={12} />

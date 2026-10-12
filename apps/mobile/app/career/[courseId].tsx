@@ -22,14 +22,15 @@ import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Chip } from '../../components/ui/Chip'
-import { ListRow } from '../../components/ui/ListRow'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { decorative } from '../../components/ui/a11y'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { LinkRow } from '../../components/explore/LinkRow'
-import { spacing, radius, textStyle, type Theme } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle, weight, type Theme } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
 // Types (local — avoid re-exporting db row shapes)
@@ -194,7 +195,7 @@ function Callout({ children, t }: { children: string; t: Theme }) {
       <View {...decorative} style={{ marginTop: 2 }}>
         <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
       </View>
-      <Text style={[textStyle('bodySm', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>{children}</Text>
+      <Text style={[iosTextStyle('footnote', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>{children}</Text>
     </View>
   )
 }
@@ -318,8 +319,7 @@ export default function CourseCareerDetailScreen() {
 
         {/* ── Hero ── */}
         <View style={{ gap: spacing.sm }}>
-          <Text accessibilityRole="header" style={s.heroName} maxFontSizeMultiplier={1.4}>{course.name}</Text>
-          {course.cluster ? <Text style={s.heroCluster} maxFontSizeMultiplier={1.6}>{course.cluster}</Text> : null}
+          <LargeTitleHeader testID="career-title" eyebrow={course.cluster ?? undefined} title={course.name ?? 'Course'} />
           <View style={s.badgeRow}>
             {course.demand ? <Badge label={`${course.demand} demand`} tone="success" /> : null}
             {course.boardExam ? <Badge label={`Board exam${course.boardExamName ? `: ${course.boardExamName}` : ''}`} tone="accent" /> : null}
@@ -340,18 +340,15 @@ export default function CourseCareerDetailScreen() {
         {aiImpact ? <AiImpactCard impact={aiImpact} /> : null}
 
         {topSchoolsTab ? (
-          <Card padded={false} style={{ overflow: 'hidden' }}>
-            <ListRow
-              leading={(
-                <View style={{ width: 40, height: 40, borderRadius: radius.chip, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                  <Lineicons icon={Buildings1Outlined} size={20} color={t.textSecondary} />
-                </View>
-              )}
+          <InsetGroup inset={false}>
+            <InsetRow
+              icon={Buildings1Outlined}
+              iconTone="neutral"
               title="Top schools for this course"
               subtitle="Ranked by PRC board-exam pass rate"
               onPress={() => router.push(`/schools/course/${topSchoolsTab}` as never)}
             />
-          </Card>
+          </InsetGroup>
         ) : null}
 
         {/* ── Destinations ── */}
@@ -415,19 +412,17 @@ function makeStyles(t: Theme) {
   return {
     ...StyleSheet.create({
       root:            { flex: 1, backgroundColor: t.bg },
-      heroName:        textStyle('title', t.textPrimary),
-      heroCluster:     textStyle('bodySm', t.textSecondary),
       badgeRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-      summaryTxt:      textStyle('body', t.textSecondary),
-      tipTxt:          textStyle('bodySm', t.textPrimary),
+      summaryTxt:      iosTextStyle('body', t.textSecondary),
+      tipTxt:          iosTextStyle('footnote', t.textPrimary),
       destCountryRow:  { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-      destCountry:     textStyle('titleSm', t.textPrimary),
-      destSalary:      { ...textStyle('label', t.textPrimary), fontVariant: ['tabular-nums'] },
+      destCountry:     iosTextStyle('headline', t.textPrimary),
+      destSalary:      { ...{ ...iosTextStyle('footnote', t.textPrimary), ...weight('600') }, fontVariant: ['tabular-nums'] },
       destMetaRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-      destMetaTxt:     textStyle('bodySm', t.textSecondary),
-      progName:        textStyle('titleSm', t.textPrimary),
-      progBody:        textStyle('bodySm', t.textSecondary),
-      emptySection:    textStyle('bodySm', t.textSecondary),
+      destMetaTxt:     iosTextStyle('footnote', t.textSecondary),
+      progName:        iosTextStyle('headline', t.textPrimary),
+      progBody:        iosTextStyle('footnote', t.textSecondary),
+      emptySection:    iosTextStyle('footnote', t.textSecondary),
     }),
     theme: t,
   }

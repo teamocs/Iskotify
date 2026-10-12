@@ -17,8 +17,8 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState } from '../components/ui/ErrorState'
 import { DetailTopBar } from '../components/explore/DetailTopBar'
 import { LinkRow } from '../components/explore/LinkRow'
-import { daysUntilDate, fmtLongDate } from '../components/explore/exploreModel'
-import { radius, spacing, textStyle } from '../theme/tokens'
+import { daysUntilDate, fmtLongDate, relativeDay } from '../components/explore/exploreModel'
+import { radius, spacing, iosTextStyle } from '../theme/tokens'
 
 interface WatchedExam {
   slug: string
@@ -40,30 +40,29 @@ function WatchCard({ w, onRemove }: { w: WatchedExam; onRemove: (slug: string) =
   return (
     <Card style={{ gap: spacing.md }}>
       <View style={{ gap: spacing.xs }}>
-        <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{name}</Text>
+        <Text style={iosTextStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{name}</Text>
         <Badge label={pending ? 'Waiting for results' : w.resultsDate ? 'Results may be out' : 'No results date yet'} tone={pending ? 'neutral' : w.resultsDate ? 'success' : 'neutral'} />
       </View>
 
       {pending ? (
         <View
           accessible
-          accessibilityLabel={`${days} days to go, results expected ${fmtLongDate(w.resultsDate!)}`}
+          accessibilityLabel={`Results ${relativeDay(w.resultsDate)!.toLowerCase()}, expected ${fmtLongDate(w.resultsDate!)}`}
           style={{ gap: 2 }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
-            <Text style={textStyle('numericLg', t.textPrimary)} maxFontSizeMultiplier={1.3}>{String(days)}</Text>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>days to go</Text>
-          </View>
-          <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+          <Text style={[iosTextStyle('title2', t.textPrimary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={1.3}>
+            {relativeDay(w.resultsDate)}
+          </Text>
+          <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
             Expected {fmtLongDate(w.resultsDate!)}
           </Text>
         </View>
       ) : w.resultsDate ? (
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>
           Expected {fmtLongDate(w.resultsDate)}. Check the official site for your result.
         </Text>
       ) : (
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>
           We'll show a countdown once the school announces a results date.
         </Text>
       )}

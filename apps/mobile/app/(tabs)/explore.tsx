@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { View, Text, RefreshControl, Platform } from 'react-native'
+import { View, RefreshControl, Platform } from 'react-native'
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   GraduationCap1Outlined, CertificateBadge1Outlined, Book1Outlined, Aeroplane1Outlined,
-  SearchMinusOutlined, Globe1Outlined,
+  SearchMinusOutlined, Globe1Outlined, Funnel1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -14,22 +14,27 @@ import { useCourseTabOptions } from '../../hooks/useCourseTabOptions'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { listings as listingsTable, careerCourses, careerCountries as countriesTable, careerDestinations as destinationsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, layout, radius, textStyle } from '../../theme/tokens'
+import { spacing, layout, radius } from '../../theme/tokens'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { Screen } from '../../components/ui/Screen'
-import { FilterChip } from '../../components/ui/Chip'
+import { Text } from '../../components/ui/Text'
 import { decorative } from '../../components/ui/a11y'
 import { TabHeader } from '../../components/TabHeader'
+import { GlassIconButton } from '../../components/navigation/GlassIconButton'
 import { NewsFeed } from '../../components/explore/NewsFeed'
 import { ListingCard } from '../../components/explore/ListingCard'
+import { DateTile } from '../../components/explore/DateTile'
+import { FeaturedCard } from '../../components/explore/FeaturedCard'
+import { SectionRail } from '../../components/explore/SectionRail'
 import { SearchField } from '../../components/explore/SearchField'
 import { ExploreGrid, GridSkeleton, StaticGrid } from '../../components/explore/ExploreGrid'
 import {
-  dateUrgency, matchBadge, fmtShortDate, truncateQuery, SECTION_SEARCH, type BadgeSpec,
+  dateUrgency, matchBadge, fmtShortDate, truncateQuery, officialSourceLine, pickFeatured, SECTION_SEARCH,
+  type BadgeSpec,
 } from '../../components/explore/exploreModel'
 import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
 import { usesSystemTabBar } from '../../components/navigation/systemTabBar'
@@ -67,6 +72,7 @@ interface ListingRow extends SearchableListing {
   deadline: number | null
   region: string
   provider: string
+  externalUrl: string | null
   province: string | null
   city: string | null
   scope: string | null
@@ -198,6 +204,10 @@ export default function ExploreScreen() {
   const [tab, setTab] = useState<Tab>(() => parseExploreSection(tabParam) ?? 'universities')
   const [query, setQuery] = useState('')
 
+  // School filters live on a sheet; the header's Filters button opens it.
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filterCount, setFilterCount] = useState(0)
+
   const [refreshing, setRefreshing] = useState(false)
 
   // The section showing, readable from effects keyed on the URL alone.
@@ -246,7 +256,8 @@ export default function ExploreScreen() {
         db.select({
           id: listingsTable.id, slug: listingsTable.slug, title: listingsTable.title,
           type: listingsTable.type, examDate: listingsTable.examDate, deadline: listingsTable.deadline, region: listingsTable.region,
-          provider: listingsTable.provider, province: listingsTable.province, city: listingsTable.city, scope: listingsTable.scope,
+          provider: listingsTable.provider, externalUrl: listingsTable.externalUrl,
+          province: listingsTable.province, city: listingsTable.city, scope: listingsTable.scope,
           isVerified: listingsTable.isVerified, incomeCeiling: listingsTable.incomeCeiling,
           gwaRequirement: listingsTable.gwaRequirement, serviceObligationYears: listingsTable.serviceObligationYears,
           scholarshipMeta: listingsTable.scholarshipMeta, targetCourses: listingsTable.targetCourses,
@@ -373,6 +384,17 @@ export default function ExploreScreen() {
     return map
   }, [scholarships, profile])
 
+  // The featured cards: the next open deadline the catalog holds (none → no card).
+  // Keyed on the day, so a deadline that passes at midnight drops out.
+  const today = new Date().toDateString()
+  const featuredScholarship = useMemo(
+    () => pickFeatured(scholarships, 'scholarship', Date.now(), l => matchStatusMap.get(l.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- today re-picks once a day
+    [scholarships, matchStatusMap, today],
+  )
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- today re-picks once a day
+  const featuredExam = useMemo(() => pickFeatured(exams, 'exam'), [exams, today])
+
   const keywordResults = useMemo(
     () => searchListings(scholarships, query, userRegion) as ListingRow[],
     [scholarships, query, userRegion],
@@ -421,7 +443,7 @@ export default function ExploreScreen() {
     return q ? destCountries.filter(c => c.name.toLowerCase().includes(q)) : destCountries
   }, [destCountries, query])
 
-  // ── Card renderers (stable while their inputs are) ────────────────────────
+  // ── Row renderers (stable while their inputs are) ─────────────────────────
 
   const renderExam = useCallback((l: ListingRow) => {
     const hasMock = blueprintSlugs.has(l.slug)
@@ -440,9 +462,11 @@ export default function ExploreScreen() {
     const when = l.examDate ? `Exam ${fmtShortDate(l.examDate)}` : 'Exam date TBA'
     return (
       <ListingCard
-        icon={GraduationCap1Outlined}
+        icon={l.examDate ? undefined : GraduationCap1Outlined}
+        leading={l.examDate ? <DateTile date={l.examDate} /> : undefined}
         title={l.title}
         meta={[when, l.region].filter(Boolean).join(' · ')}
+        source={officialSourceLine(l.externalUrl)}
         badges={badges}
         onPress={() => openListing(l.slug)}
         accessibilityHint="Opens the exam: dates, requirements and mock practice"
@@ -459,9 +483,11 @@ export default function ExploreScreen() {
     const when = l.deadline ? `Apply by ${fmtShortDate(l.deadline)}` : null
     return (
       <ListingCard
-        icon={CertificateBadge1Outlined}
+        icon={l.deadline ? undefined : CertificateBadge1Outlined}
+        leading={l.deadline ? <DateTile date={l.deadline} /> : undefined}
         title={l.title}
         meta={[l.provider, when, l.region].filter(Boolean).join(' · ')}
+        source={officialSourceLine(l.externalUrl)}
         badges={badges}
         onPress={() => openListing(l.slug)}
         accessibilityHint="Opens the scholarship: deadline, eligibility and how to apply"
@@ -497,6 +523,19 @@ export default function ExploreScreen() {
     <GridSkeleton label="Loading entrance exams" count={3} />
   ) : exams.length > 0 ? (
     <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+      {featuredExam?.deadline ? (
+        <View style={{ marginBottom: spacing.sm }}>
+          <FeaturedCard
+            eyebrow="Next application deadline"
+            title={featuredExam.title}
+            deadline={featuredExam.deadline}
+            provider={featuredExam.provider}
+            externalUrl={featuredExam.externalUrl}
+            onPress={() => openListing(featuredExam.slug)}
+            accessibilityHint="Opens the exam: dates, requirements and mock practice"
+          />
+        </View>
+      ) : null}
       <SectionHeader title="Entrance exams" subtitle="Each has dates, requirements and practice. Add your targets to Focus." />
       <StaticGrid items={exams} keyExtractor={listingKey} renderItem={renderExam} />
       <View style={{ marginTop: spacing.md }}>
@@ -516,6 +555,9 @@ export default function ExploreScreen() {
         bottomInset={listBottom}
         defaultRegion={userRegion ? canonicalizeRegion(userRegion) : null}
         listHeader={examsHeader}
+        filtersOpen={filtersOpen}
+        onCloseFilters={() => setFiltersOpen(false)}
+        onFilterCountChange={setFilterCount}
       />
     )
   } else if (tab === 'scholarships') {
@@ -527,8 +569,20 @@ export default function ExploreScreen() {
     } else {
       const q = query.trim()
       const eligible = scholarshipData.reduce((n, l) => (matchStatusMap.get(l.id) === 'eligible' ? n + 1 : n), 0)
+      const featured = !q && featuredScholarship?.deadline ? featuredScholarship : null
       const header = (
         <View style={{ gap: spacing.md, marginBottom: spacing.sm }}>
+          {featured ? (
+            <FeaturedCard
+              eyebrow={matchStatusMap.get(featured.id) === 'eligible' ? 'Next deadline you qualify for' : 'Next scholarship deadline'}
+              title={featured.title}
+              deadline={featured.deadline!}
+              provider={featured.provider}
+              externalUrl={featured.externalUrl}
+              onPress={() => openListing(featured.slug)}
+              accessibilityHint="Opens the scholarship: deadline, eligibility and how to apply"
+            />
+          ) : null}
           {!q && profileIncomplete ? <ProfileNudge /> : null}
           {q && scholarshipData.length > 0 ? (
             <SectionHeader
@@ -623,30 +677,40 @@ export default function ExploreScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // TODO(P2c follow-up): scroll this large title with the section lists and
-  // collapse it into the band (as Today, Practice, Search and Progress do).
-  // Deferred: the header sits above five different section lists and the
-  // chip row; until then it stays fixed.
+  // The large title stays fixed above the section rail and the five section
+  // lists (it does not collapse into the band here): each section owns its
+  // own list, and the rail must stay pinned while any of them scrolls.
   const header = (
     <TabHeader
       title="Explore"
-      subtitle="Schools, exams, scholarships, courses and dates"
-      actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />}
+      eyebrow="Schools, scholarships, exams"
+      actions={(
+        <>
+          <WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />
+          {tab === 'universities' ? (
+            <GlassIconButton
+              testID="explore-filters"
+              icon={Funnel1Outlined}
+              accessibilityLabel={filterCount > 0 ? `Filters, ${filterCount} on` : 'Filters'}
+              accessibilityHint="Filter schools by type, region and free tuition"
+              onPress={() => setFiltersOpen(true)}
+            />
+          ) : null}
+        </>
+      )}
     />
   )
 
   const controls = (
     <>
-      {/* Section switcher — wraps rather than scrolls sideways, so every
-          section stays visible and the edge-swipe gesture never fights it. */}
-      <View
-        accessibilityRole="tablist"
-        testID="explore-sections"
-        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingBottom: spacing.md }}
-      >
-        {TAB_LABELS.map(({ key, label }) => (
-          <FilterChip key={key} label={label} role="tab" selected={tab === key} onPress={() => onChangeTab(key)} />
-        ))}
+      <View style={{ paddingBottom: spacing.sm }}>
+        <SectionRail
+          testID="explore-sections"
+          sections={TAB_LABELS}
+          value={tab}
+          onChange={onChangeTab}
+          accessibilityLabel="Explore sections"
+        />
       </View>
 
       {search ? (
@@ -666,12 +730,12 @@ export default function ExploreScreen() {
 
   // iOS native tabs minimize the bar for (and inset) only the scroll view in
   // the screen's first-descendant chain. So on iOS the section list comes
-  // first in the tree and column-reverse lays the fixed header, chips and
+  // first in the tree and column-reverse lays the fixed header, rail and
   // field out above it: the same picture, with the list leading the chain.
   // Android and web keep the original order.
   //
   // TODO(P2b device check): VoiceOver order here. UIKit is expected to read
-  // the header, chips and field before the list (top to bottom on screen),
+  // the header, rail and field before the list (top to bottom on screen),
   // but the tree order is list first. RN 0.83's experimental_accessibilityOrder
   // (nativeIDs: header, chips, field, body) would pin it, but it is not in
   // 0.83's public TypeScript types and is gated off by the
@@ -710,13 +774,13 @@ function ProfileNudge() {
     <View
       style={{
         flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md,
-        padding: spacing.lg, borderRadius: radius.md, borderCurve: 'continuous', borderWidth: 1, borderColor: t.border, backgroundColor: t.surface2,
+        padding: spacing.lg, borderRadius: radius.group, borderCurve: 'continuous', backgroundColor: t.surface,
       }}
     >
       <View {...decorative}>
         <Lineicons icon={CertificateBadge1Outlined} size={22} color={t.textSecondary} />
       </View>
-      <Text style={[textStyle('bodySm', t.textPrimary), { flex: 1, minWidth: 200 }]} maxFontSizeMultiplier={1.6}>
+      <Text role="footnote" style={{ flex: 1, minWidth: 200 }}>
         Add your GWA, family income and province to see which scholarships you qualify for.
       </Text>
       <Button

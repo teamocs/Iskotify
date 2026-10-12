@@ -1,13 +1,16 @@
-import { useState, useCallback, useMemo } from 'react'
-import {
-  View, Text, TextInput, FlatList, Modal, TouchableOpacity,
-  ActivityIndicator, StyleSheet,
-} from 'react-native'
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller'
+import { useState, useCallback } from 'react'
+import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import { useSchoolSearch, MIN_QUERY_LENGTH } from '../hooks/useSchoolSearch'
 import { useTheme } from '../theme/ThemeContext'
-import { weight } from '../theme/tokens'
+import { layout, radius, spacing, weight } from '../theme/tokens'
 import type { SchoolResult } from '../hooks/useSchoolSearch'
+import { Sheet } from './ui/Sheet'
+import { Badge } from './ui/Badge'
+import { Button } from './ui/Button'
+import { PressableScale } from './ui/Pressable'
+import { SearchField } from './ui/SearchField'
+import { Text } from './ui/Text'
+import { focusRing } from './ui/a11y'
 
 interface SchoolPickerProps {
   value: string
@@ -16,141 +19,26 @@ interface SchoolPickerProps {
   onSelectMeta?: (meta: { region?: string; province?: string }) => void
 }
 
+/**
+ * The student's school: a field-shaped trigger that opens a search on the P3
+ * in-place Sheet (it has a text input, so not a routed formSheet). Results
+ * are grouped rows; "Use …" keeps a school the directory does not know yet.
+ */
 export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProps) {
-  const [modalVisible, setModalVisible] = useState(false)
+  const [open, setOpen] = useState(false)
   const { query, setQuery, results, loading, error, errorMessage, retry, contributeSchool } = useSchoolSearch()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
-  const s = useMemo(() => StyleSheet.create({
-    input: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      ...weight('400'),
-      fontSize: typo.md,
-      color: t.textPrimary,
-    },
-    trigger: { justifyContent: 'center' },
-    triggerText: { ...weight('400'), fontSize: typo.md, color: t.textPrimary },
-    triggerTextPlaceholder: { color: t.textTertiary },
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-    modalDismissOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-    sheet: {
-      backgroundColor: t.bg,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      height: '82%',
-      paddingTop: 12,
-      paddingHorizontal: 16,
-      paddingBottom: 32,
-    },
-    // Bottom sheet handle
-    handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-    sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    sheetTitle: { ...weight('700'), fontSize: typo.lg, color: t.textPrimary, flex: 1 },
-    closeText: { ...weight('400'), fontSize: 18, color: t.textSecondary, padding: 4 },
-    searchInput: { marginBottom: 10 },
-    contentArea: { flex: 1, minHeight: 200 },
-    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-    hintText: {
-      ...weight('400'),
-      fontSize: typo.sm,
-      color: t.textTertiary,
-      textAlign: 'center',
-      paddingTop: 40,
-      paddingHorizontal: 8,
-    },
-    sourceHeader: {
-      ...weight('600'),
-      fontSize: 10,
-      color: t.textTertiary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      marginBottom: 4,
-      marginTop: 2,
-    },
-    listRow: {
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: t.surfaceSubtle,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    listTextWrap: { flex: 1 },
-    listName: { ...weight('600'), fontSize: typo.md, color: t.textPrimary },
-    listSubtitle: {
-      ...weight('400'),
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      marginTop: 2,
-    },
-    sourceBadge: {
-      borderRadius: 6,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      flexShrink: 0,
-    },
-    sourceBadgeDb: {
-      backgroundColor: t.successSurface,
-    },
-    sourceBadgeDbTxt: {
-      ...weight('600'),
-      fontSize: 9,
-      color: t.successStrong,
-    },
-    sourceBadgePlaces: {
-      backgroundColor: t.accentSurface,
-    },
-    sourceBadgePlacesTxt: {
-      ...weight('600'),
-      fontSize: 9,
-      color: t.accentText,
-    },
-    errorText: {
-      ...weight('400'),
-      fontSize: typo.sm,
-      color: t.accentText,
-      textAlign: 'center',
-      paddingHorizontal: 16,
-    },
-    errorDetail: {
-      ...weight('400'),
-      fontSize: 11,
-      color: t.textTertiary,
-      textAlign: 'center',
-      paddingHorizontal: 16,
-      marginTop: 6,
-    },
-    retryBtn: { marginTop: 12, alignItems: 'center' },
-    fallbackRow: {
-      paddingVertical: 14,
-      borderTopWidth: 1,
-      borderTopColor: t.surfaceSubtle,
-      marginTop: 8,
-    },
-    fallbackLabel: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary },
-    fallbackLink: {
-      ...weight('500'),
-      fontSize: typo.md,
-      color: t.accentText,
-      marginTop: 2,
-    },
-  }), [t, typo])
-
-  const closeModal = useCallback(() => {
+  const close = useCallback(() => {
     setQuery('')
-    setModalVisible(false)
+    setOpen(false)
   }, [setQuery])
 
   const selectResult = useCallback((r: SchoolResult) => {
     onChange(r.name)
     onSelectMeta?.({ region: r.region, province: r.province })
     setQuery('')
-    setModalVisible(false)
+    setOpen(false)
     // Backfill user-selected Places results into the schools directory so
     // future users searching the same school find it in the DB layer.
     if (r.source === 'places') void contributeSchool(r)
@@ -162,136 +50,125 @@ export function SchoolPicker({ value, onChange, onSelectMeta }: SchoolPickerProp
     onChange(name)
     onSelectMeta?.({}) // unknown region for free-typed schools
     setQuery('')
-    setModalVisible(false)
+    setOpen(false)
     void contributeSchool({ name, subtitle: '', source: 'manual' })
   }, [onChange, onSelectMeta, query, setQuery, contributeSchool])
 
-  const renderItem = useCallback(({ item }: { item: SchoolResult }) => (
-    <TouchableOpacity onPress={() => selectResult(item)} style={s.listRow}>
-      <View style={s.listTextWrap}>
-        <Text style={s.listName}>{item.name}</Text>
-        {item.subtitle ? <Text style={s.listSubtitle}>{item.subtitle}</Text> : null}
-      </View>
-      {item.source === 'database' && (
-        <View style={[s.sourceBadge, s.sourceBadgeDb]}>
-          <Text style={s.sourceBadgeDbTxt}>DB</Text>
-        </View>
-      )}
-      {item.source === 'places' && (
-        <View style={[s.sourceBadge, s.sourceBadgePlaces]}>
-          <Text style={s.sourceBadgePlacesTxt}>Maps</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  ), [selectResult, s])
-
   function renderBody() {
     if (query.trim().length < MIN_QUERY_LENGTH) {
-      return <Text style={s.hintText}>Type at least {MIN_QUERY_LENGTH} characters to search</Text>
+      return (
+        <Text role="footnote" color={t.textSecondary} style={{ textAlign: 'center', paddingVertical: spacing.xl }}>
+          Type at least {MIN_QUERY_LENGTH} characters to search
+        </Text>
+      )
     }
     if (loading) {
       return (
-        <View style={s.loadingContainer}>
+        <View style={{ alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md }}>
           <ActivityIndicator testID="school-search-loading" color={t.accentText} />
-          <Text style={[s.hintText, { paddingTop: 12 }]}>Searching...</Text>
+          <Text role="footnote" color={t.textSecondary}>Searching...</Text>
         </View>
       )
     }
     if (error) {
       return (
-        <View style={{ alignItems: 'center', paddingTop: 24 }}>
-          <Text style={s.errorText}>Could not search schools.</Text>
-          {errorMessage && (
-            <Text style={s.errorDetail}>{errorMessage}</Text>
-          )}
-          <TouchableOpacity onPress={retry} style={s.retryBtn}>
-            <Text style={[s.errorText, { color: t.accentText }]}>Retry</Text>
-          </TouchableOpacity>
+        <View style={{ alignItems: 'center', paddingTop: spacing.xl, gap: spacing.sm }}>
+          <Text role="footnote" color={t.accentText} style={{ textAlign: 'center' }}>Could not search schools.</Text>
+          {errorMessage ? (
+            <Text role="caption" color={t.textSecondary} style={{ textAlign: 'center' }}>{errorMessage}</Text>
+          ) : null}
+          <Button label="Retry" variant="ghost" size="sm" onPress={retry} />
         </View>
       )
     }
-
     if (results.length === 0) {
-      return <Text style={s.hintText}>No schools found.</Text>
+      return (
+        <Text role="footnote" color={t.textSecondary} style={{ textAlign: 'center', paddingVertical: spacing.xl }}>
+          No schools found.
+        </Text>
+      )
     }
-
+    // A short, bounded result list inside the sheet's own scroll view.
     return (
-      <FlatList
-        data={results}
-        keyExtractor={(r: SchoolResult, i) => `${r.source}-${r.name}-${i}`}
-        keyboardShouldPersistTaps="handled"
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
-      />
+      <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
+        {results.map((item, i) => (
+          <PressableScale
+            key={`${item.source}-${item.name}-${i}`}
+            onPress={() => selectResult(item)}
+            accessibilityRole="button"
+            accessibilityLabel={item.subtitle ? `${item.name}, ${item.subtitle}` : item.name}
+            style={({ pressed, focused }) => [
+              {
+                minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+                paddingLeft: spacing.lg, backgroundColor: pressed ? t.surface2 : 'transparent',
+              },
+              focusRing(t.focusRing, focused),
+            ]}
+          >
+            <View style={{ flex: 1, minWidth: 0, paddingVertical: spacing.sm, paddingRight: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text role="headline">{item.name}</Text>
+                {item.subtitle ? <Text role="footnote" color={t.textSecondary}>{item.subtitle}</Text> : null}
+              </View>
+              {item.source === 'database' ? <Badge label="DB" tone="success" /> : null}
+              {item.source === 'places' ? <Badge label="Maps" tone="accent" /> : null}
+              {i < results.length - 1 ? (
+                <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: t.divider }} />
+              ) : null}
+            </View>
+          </PressableScale>
+        ))}
+      </View>
     )
   }
 
   return (
     <>
-      <TouchableOpacity
+      <PressableScale
         testID="school-picker-trigger"
-        onPress={() => { setQuery(''); setModalVisible(true) }}
-        style={[s.input, s.trigger]}
+        onPress={() => { setQuery(''); setOpen(true) }}
+        accessibilityRole="button"
+        accessibilityLabel={value ? `School: ${value}` : 'Choose your school'}
+        style={({ focused }) => [
+          {
+            minHeight: 48, justifyContent: 'center',
+            backgroundColor: t.surface, borderWidth: 1, borderColor: t.inputBorder,
+            borderRadius: radius.field, borderCurve: 'continuous',
+            paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+          },
+          focusRing(t.focusRing, focused),
+        ]}
       >
-        <Text style={[s.triggerText, !value && s.triggerTextPlaceholder]} numberOfLines={1}>
+        <Text role="body" color={value ? t.textPrimary : t.textTertiary} numberOfLines={1}>
           {value || 'Search your school...'}
         </Text>
-      </TouchableOpacity>
+      </PressableScale>
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={closeModal}
-      >
-        <View style={s.modalBackdrop}>
-          <TouchableOpacity
-            style={s.modalDismissOverlay}
-            activeOpacity={1}
-            accessibilityLabel="Close school picker"
-            accessibilityRole="button"
-            onPress={closeModal}
+      <Sheet visible={open} title="School / University" onClose={close}>
+        <View style={{ gap: spacing.md }}>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search schools..."
+            accessibilityLabel="Search schools"
           />
-          <KeyboardAvoidingView
-            behavior="padding"
-            style={{ width: '100%' }}
-          >
-          <View style={s.sheet}>
-            {/* iOS-style drag handle */}
-            <View style={s.handle} />
-
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>School / University</Text>
-              <TouchableOpacity onPress={closeModal} accessibilityLabel="Close">
-                <Text style={s.closeText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TextInput
-              style={[s.input, s.searchInput]}
-              placeholder="Search schools..."
-              placeholderTextColor={t.textTertiary}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-              returnKeyType="search"
-              autoFocus
-            />
-
-            <View style={s.contentArea}>
-              {renderBody()}
-            </View>
-
-            {query.length >= 1 && (
-              <TouchableOpacity onPress={selectTyped} style={s.fallbackRow}>
-                <Text style={s.fallbackLabel}>Can't find your school?</Text>
-                <Text style={s.fallbackLink}>Use "{query}" ›</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          </KeyboardAvoidingView>
+          {renderBody()}
+          {query.length >= 1 ? (
+            <PressableScale
+              onPress={selectTyped}
+              accessibilityRole="button"
+              accessibilityLabel={`Use "${query}" as your school`}
+              style={({ focused }) => [
+                { minHeight: layout.rowMinHeight, paddingVertical: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: t.divider },
+                focusRing(t.focusRing, focused),
+              ]}
+            >
+              <Text role="footnote" color={t.textSecondary}>Can&apos;t find your school?</Text>
+              <Text role="body" color={t.accentText} style={weight('600')}>Use &quot;{query}&quot;</Text>
+            </PressableScale>
+          ) : null}
         </View>
-      </Modal>
+      </Sheet>
     </>
   )
 }

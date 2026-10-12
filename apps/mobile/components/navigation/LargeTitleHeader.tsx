@@ -6,7 +6,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme } from '../../theme/ThemeContext'
-import { iosTextStyle, layout, motion, spacing, textStyle } from '../../theme/tokens'
+import { iosTextStyle, layout, motion, spacing, textStyle, weight } from '../../theme/tokens'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { Glass } from '../ui/Glass'
 
@@ -162,6 +162,8 @@ interface Props {
   /** The screen title: the large title and the collapsed inline title. */
   title: string
   subtitle?: string
+  /** A short line above the title, e.g. "Schools, scholarships, exams". */
+  eyebrow?: string
   /** Controls beside the title (refresh, avatar…). */
   actions?: ReactNode
   /** Replaces the large title text with a custom heading (Today's greeting);
@@ -175,7 +177,7 @@ interface Props {
  * (Screen with `headerScrolls`, or as the first child of a scrolling Screen).
  * Without a band host it is a plain header.
  */
-export function LargeTitleHeader({ title, subtitle, actions, children, testID = 'large-title-header' }: Props) {
+export function LargeTitleHeader({ title, subtitle, eyebrow, actions, children, testID = 'large-title-header' }: Props) {
   const { theme: t } = useTheme()
   const host = useContext(BandHostContext)
   const register = host?.register
@@ -193,6 +195,15 @@ export function LargeTitleHeader({ title, subtitle, actions, children, testID = 
       {children ?? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <View style={{ flex: 1, minWidth: 0 }}>
+            {eyebrow ? (
+              <Text
+                testID="large-title-eyebrow"
+                style={[iosTextStyle('footnote', t.textSecondary), weight('600')]}
+                maxFontSizeMultiplier={1.4}
+              >
+                {eyebrow}
+              </Text>
+            ) : null}
             <Text
               accessibilityRole="header"
               aria-level={1}

@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react'
-import { View, Text } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useEffect, type ReactNode } from 'react'
+import { View, Platform, Share } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
-  Bookmark1Outlined, CheckCircle1Outlined, GraduationCap1Outlined, FileQuestionOutlined, Shield2CheckOutlined,
+  Bookmark1Outlined, CheckCircle1Outlined, ChevronLeftOutlined, FileQuestionOutlined, GraduationCap1Outlined,
+  Share1Outlined, Shield2CheckOutlined, XmarkOutlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
-import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
+import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { tertiarySchools as schoolsTable, universityProfiles as profilesTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -17,23 +17,33 @@ import { examAcronymToListingSlug, isRealExamAcronym } from '../../utils/targetE
 import { listRunnableBlueprints } from '../../services/examBlueprints'
 import { hasReviewContent } from '../../services/practiceSignals'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Chip } from '../../components/ui/Chip'
-import { SectionHeader } from '../../components/ui/SectionHeader'
+import { Glass } from '../../components/ui/Glass'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { decorative } from '../../components/ui/a11y'
-import { DetailTopBar } from '../../components/explore/DetailTopBar'
-import { Disclosure } from '../../components/explore/Disclosure'
+import { Text } from '../../components/ui/Text'
+import { decorative, heading } from '../../components/ui/a11y'
+import { GlassIconButton } from '../../components/navigation/GlassIconButton'
+import { goBackOr } from '../../components/explore/DetailTopBar'
 import { LinkRow } from '../../components/explore/LinkRow'
-import type { BadgeSpec } from '../../components/explore/exploreModel'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { LogoTile } from '../../components/explore/LogoTile'
+import { RequirementsChecklist } from '../../components/RequirementsChecklist'
+import { confidenceBadge, splitListField } from '../../components/schools/schoolModel'
+import { pagePadding, useBreakpoint } from '../../hooks/useBreakpoint'
+import { radius, spacing, weight } from '../../theme/tokens'
 
 // ---------------------------------------------------------------------------
-// Types
+// A school's profile, presented as a routed sheet on native (half height,
+// drags to full; components/schools/schoolSheet) and a push on web:
+// a maroon hero band with glass close and share buttons, the logo tile, the
+// name, fact chips, then Overview / Courses / Admissions. The one primary
+// action, "Add to my focus", sits in the bottom bar. Only what the catalog
+// holds is shown; a missing fact reads "Not yet available".
 // ---------------------------------------------------------------------------
 
 interface SchoolDetail {
@@ -83,74 +93,55 @@ interface ProfileDetail {
 }
 
 type Status = 'loading' | 'ready' | 'missing' | 'error'
+type Segment = 'overview' | 'courses' | 'admissions'
+
+const SEGMENTS = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'courses', label: 'Courses' },
+  { value: 'admissions', label: 'Admissions' },
+] as const
+
+const FALLBACK = '/explore?section=universities'
+/** The general entrance exam a school-level focus practises with (see app/practice/start/[slug].tsx). */
+const GENERAL_EXAM_SLUG = 'general-cet'
+/** What a fact the catalog does not hold reads as. */
+const NOT_YET = 'Not yet available'
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Small pieces
 // ---------------------------------------------------------------------------
 
-function safeParseArray(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    // Some source rows (courses_offered AND scholarships_offered) store MANY
-    // items as ONE separator-joined string (e.g. ["BS Nursing, BS Biology"]).
-    // Split on comma / semicolon / newline / pipe, trim, drop empties and
-    // de-dupe (case-insensitive) so every item gets its own chip.
-    // '/' is intentionally NOT a separator ("UniFAST / RA 10931" is one name).
-    const seen = new Set<string>()
-    const out: string[] = []
-    for (const entry of parsed.map(String)) {
-      for (const part of entry.split(/[,;\n|]+/)) {
-        const item = part.trim()
-        if (!item) continue
-        const key = item.toLowerCase()
-        if (seen.has(key)) continue
-        seen.add(key)
-        out.push(item)
-      }
-    }
-    return out
-  } catch {
-    return []
-  }
-}
-
-function confidenceBadge(level: string | null): BadgeSpec {
-  switch ((level ?? '').toUpperCase()) {
-    case 'HIGH': return { label: 'High confidence', tone: 'success' }
-    case 'MEDIUM': return { label: 'Medium confidence', tone: 'warning' }
-    case 'LOW':
-    case 'VERY LOW': return { label: 'Low confidence', tone: 'neutral' }
-    default: return { label: 'Unverified', tone: 'neutral' }
-  }
-}
-
-function FactRow({ label, value }: { label: string; value: string }) {
+/** One key-fact tile of the 2×2 grid: a label over its value, or "Not yet available". */
+function FactTile({ label, value }: { label: string; value: string | null | undefined }) {
   const { theme: t } = useTheme()
+  const has = !!(value && value.trim())
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: spacing.xs }}>
-      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{label}</Text>
-      <Text style={[textStyle('label', t.textPrimary), { textAlign: 'right', flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{value}</Text>
+    <View
+      accessible
+      accessibilityLabel={`${label}: ${has ? value : NOT_YET}`}
+      style={{
+        flexBasis: '47%', flexGrow: 1, minWidth: 0, minHeight: 76,
+        padding: spacing.md, gap: 2,
+        backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous',
+      }}
+    >
+      <Text role="footnote" color={t.textSecondary}>{label}</Text>
+      <Text role={has ? 'headline' : 'subheadline'} color={has ? t.textPrimary : t.textTertiary}>
+        {has ? value : NOT_YET}
+      </Text>
     </View>
   )
 }
 
-/** Exam difficulty as five dots, spoken as words. */
-function Difficulty({ count }: { count: number }) {
+/** Exam difficulty as five drawn dots, spoken as words. */
+function DifficultyDots({ count }: { count: number }) {
   const { theme: t } = useTheme()
   const n = Math.max(0, Math.min(5, Math.round(count)))
   return (
-    <View
-      accessible
-      accessibilityLabel={`Difficulty: ${n} of 5`}
-      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs }}
-    >
-      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>Difficulty</Text>
-      <View {...decorative} style={{ flexDirection: 'row', gap: spacing.xs }}>
-        {[0, 1, 2, 3, 4].map(i => (
-          <View key={i} style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: i < n ? t.accent : t.divider }} />
-        ))}
-      </View>
+    <View {...decorative} style={{ flexDirection: 'row', gap: spacing.xs }}>
+      {[0, 1, 2, 3, 4].map(i => (
+        <View key={i} style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: i < n ? t.accent : t.divider }} />
+      ))}
     </View>
   )
 }
@@ -163,13 +154,60 @@ function ChipList({ items }: { items: string[] }) {
   )
 }
 
+/** A titled block in a panel: a footnote heading (h3) over its content. */
+function Block({ title, children, testID }: { title: string; children: ReactNode; testID?: string }) {
+  const { theme: t } = useTheme()
+  return (
+    <View testID={testID} style={{ gap: spacing.sm }}>
+      <Text role="footnote" color={t.textSecondary} {...heading(3)} style={[weight('600'), { paddingHorizontal: spacing.lg }]}>
+        {title}
+      </Text>
+      {children}
+    </View>
+  )
+}
+
 function SchoolSkeleton() {
   return (
     <View testID="school-skeleton" accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
       <Skeleton width="85%" height={28} />
       <Skeleton width="45%" height={14} />
-      <Skeleton height={200} radius={radius.xl} />
-      <Skeleton height={48} radius={radius.lg} />
+      <Skeleton height={44} radius={radius.capsule} />
+      <Skeleton height={160} radius={radius.group} />
+    </View>
+  )
+}
+
+/**
+ * The maroon hero band with its glass circle buttons. Native: Close
+ * dismisses the sheet. Web (a push): Back, with the parent route after a
+ * deep link. Share appears once there is a school to share.
+ */
+function HeroBand({ onShare }: { onShare?: () => void }) {
+  const { theme: t } = useTheme()
+  const insets = useSafeInsets()
+  const web = Platform.OS === 'web'
+  const close = () => {
+    if (!web && router.canDismiss?.()) router.dismiss()
+    else goBackOr(FALLBACK)
+  }
+  return (
+    <View
+      testID="school-hero"
+      style={{
+        backgroundColor: t.accent,
+        minHeight: 132 + (web ? insets.top : 0),
+        paddingTop: (web ? insets.top : 0) + spacing.md,
+        paddingHorizontal: spacing.lg,
+        flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+      }}
+    >
+      <GlassIconButton
+        icon={web ? ChevronLeftOutlined : XmarkOutlined}
+        accessibilityLabel={web ? 'Go back' : 'Close'}
+        onPress={close}
+      />
+      {onShare ? <GlassIconButton icon={Share1Outlined} accessibilityLabel="Share" accessibilityHint="Shares this school's name and official site" onPress={onShare} /> : null}
     </View>
   )
 }
@@ -178,21 +216,19 @@ function SchoolSkeleton() {
 // Screen
 // ---------------------------------------------------------------------------
 
-const FALLBACK = '/explore?section=universities'
-/** The general entrance exam a school-level focus practises with (see app/practice/start/[slug].tsx). */
-const GENERAL_EXAM_SLUG = 'general-cet'
-
 export default function SchoolProfileScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>()
   const db = useDb()
   const { theme: t } = useTheme()
-  const twoUp = columnCount(useBreakpoint()) === 2
+  const gutter = pagePadding(useBreakpoint())
+  const insets = useSafeInsets()
   const { isInFocus, getPriority, addListing, removeListing } = useFocusListings()
 
   const [school, setSchool] = useState<SchoolDetail | null>(null)
   const [profile, setProfile] = useState<ProfileDetail | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [attempt, setAttempt] = useState(0)
+  const [segment, setSegment] = useState<Segment>('overview')
 
   useEffect(() => {
     let alive = true
@@ -230,11 +266,17 @@ export default function SchoolProfileScreen() {
     return () => { alive = false }
   }, [db, needsGeneral])
 
+  // The native sheet has its own top edge (the grabber); the web push keeps
+  // the top safe area inside the hero band.
+  const root = (children: ReactNode) => (
+    <View style={{ flex: 1, backgroundColor: t.bg }}>{children}</View>
+  )
+
   if (status !== 'ready' || !school) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-        <DetailTopBar fallbackHref={FALLBACK} />
-        <ScreenScroll tabBarInset={false}>
+    return root(
+      <ScreenScroll tabBarInset={false} padded={false}>
+        <HeroBand />
+        <View style={{ paddingHorizontal: gutter }}>
           {status === 'loading' ? <SchoolSkeleton /> : status === 'error' ? (
             <ErrorState title="Couldn't load this school" onRetry={() => setAttempt(a => a + 1)} />
           ) : (
@@ -243,32 +285,37 @@ export default function SchoolProfileScreen() {
               title="We couldn't find this school"
               body="It may have been merged or renamed since your last sync."
               actionLabel="Back to Explore"
-              onAction={() => router.replace('/explore')}
+              onAction={() => {
+                // Inside the native sheet: close it, never replace the sheet route with the tabs.
+                if (Platform.OS !== 'web' && router.canDismiss?.()) router.dismiss()
+                else router.replace('/explore')
+              }}
             />
           )}
-        </ScreenScroll>
-      </SafeAreaView>
+        </View>
+      </ScreenScroll>,
     )
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
 
-  const conf = confidenceBadge(profile?.dataConfidence ?? null)
+  const conf = confidenceBadge(profile?.dataConfidence) ?? { label: 'Unverified', tone: 'neutral' as const }
   const lowConfidence = conf.label !== 'High confidence'
   const place = [school.city, school.province, school.region].filter(Boolean).join(', ')
 
-  const knownFor = [...safeParseArray(profile?.knownForCourses ?? '[]'), ...safeParseArray(profile?.notablePrograms ?? '[]')]
-  const prcTopCourses = safeParseArray(profile?.prcTopCourses ?? '[]')
-  const coursesOffered = safeParseArray(profile?.coursesOffered ?? '[]')
-  const scholarships = safeParseArray(profile?.scholarshipsOffered ?? '[]')
-  const prcStrongBoards = safeParseArray(profile?.prcStrongBoards ?? '[]')
-  const requirements = safeParseArray(profile?.requirements ?? '[]')
-  const qualifications = safeParseArray(profile?.qualifications ?? '[]')
+  const knownFor = [...splitListField(profile?.knownForCourses), ...splitListField(profile?.notablePrograms)]
+  const prcTopCourses = splitListField(profile?.prcTopCourses)
+  const coursesOffered = splitListField(profile?.coursesOffered)
+  const scholarships = splitListField(profile?.scholarshipsOffered)
+  const prcStrongBoards = splitListField(profile?.prcStrongBoards)
+  const requirements = splitListField(profile?.requirements)
+  const qualifications = splitListField(profile?.qualifications)
 
   const examName = [profile?.entranceExamName, profile?.entranceExamAcronym ? `(${profile.entranceExamAcronym})` : null]
     .filter(Boolean).join(' ')
   const applyWindow = [profile?.applicationOpen, profile?.applicationClose].filter(Boolean).join(' – ')
   const hasEntranceExam = !!(examName || profile?.examMonth || profile?.examDifficulty)
+  const tuition = profile?.freeTuition ? 'Free (RA 10931)' : profile?.tuitionFeeRange ?? null
 
   // Focusable when the exam maps to a content-backed listing (UPCAT, ACET, …);
   // otherwise schools with a real exam get general entrance practice and the
@@ -279,209 +326,226 @@ export default function SchoolProfileScreen() {
   const inFocus = focusSlug ? isInFocus(focusSlug) : false
   const focusPriority = focusSlug ? getPriority(focusSlug) : null
 
-  const hasLinks = !!(profile?.websiteUrl || profile?.applicationPortalUrl || profile?.facebookUrl)
+  const share = () => {
+    const site = profile?.websiteUrl ? `\nOfficial site: ${profile.websiteUrl}` : ''
+    Share.share({ message: `${school.name}${site}` }).catch(() => { /* dismissed or unsupported */ })
+  }
 
-  // ── Blocks ──────────────────────────────────────────────────────────────────
+  // ── Panels ──────────────────────────────────────────────────────────────────
 
-  const hero = (
-    <View style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-        {/* The type text can itself be "SUC"/"LUC" — don't repeat the flag badge. */}
-        {school.type && !((school.isSuc && /^suc$/i.test(school.type.trim())) || (school.isLuc && /^luc$/i.test(school.type.trim())))
-          ? <Badge label={school.type} tone="neutral" /> : null}
-        {school.isSuc ? <Badge label="SUC" tone="accent" /> : null}
-        {school.isLuc ? <Badge label="LUC" tone="accent" /> : null}
-        {profile?.freeTuition ? <Badge label="Free tuition" tone="success" /> : null}
-        <Badge label={conf.label} tone={conf.tone} />
-      </View>
-      <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>{school.name}</Text>
-      {school.acronym || place ? (
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-          {[school.acronym, place].filter(Boolean).join(' · ')}
-        </Text>
-      ) : null}
-      {profile?.yearEstablished ? (
-        <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>Established {profile.yearEstablished}</Text>
-      ) : null}
-    </View>
-  )
-
-  // Dates and money first: when to apply, what the exam is, what it costs.
-  const keyFacts = (
-    <Card testID="school-key-facts" style={{ gap: spacing.md }}>
-      <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>Entrance exam</Text>
-      {hasEntranceExam ? (
-        <View>
-          {examName ? <FactRow label="Exam" value={examName} /> : null}
-          {applyWindow ? <FactRow label="Application window" value={applyWindow} /> : null}
-          {profile?.examMonth ? <FactRow label="Exam month" value={profile.examMonth} /> : null}
-          {profile?.testingCenterType ? <FactRow label="Testing center" value={profile.testingCenterType} /> : null}
-          {profile?.estimatedSlots ? <FactRow label="Estimated slots" value={profile.estimatedSlots} /> : null}
-          {profile?.estimatedPassingRate ? <FactRow label="Estimated pass rate" value={profile.estimatedPassingRate} /> : null}
-          {profile?.examDifficulty != null ? <Difficulty count={profile.examDifficulty} /> : null}
-        </View>
-      ) : (
-        <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
-          No entrance exam on record. Check admissions on the official site.
-        </Text>
-      )}
-
-      {profile?.tuitionFeeRange || profile?.freeTuition || profile?.academicCalendar ? (
-        <>
-          <View style={{ height: 1, backgroundColor: t.divider }} />
-          <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>Tuition</Text>
-          <View>
-            {profile?.freeTuition ? <FactRow label="Free tuition" value="Yes (RA 10931)" /> : null}
-            {profile?.tuitionFeeRange ? <FactRow label="Fee range" value={profile.tuitionFeeRange} /> : null}
-            {profile?.academicCalendar ? <FactRow label="Academic calendar" value={profile.academicCalendar} /> : null}
-          </View>
-        </>
-      ) : null}
-    </Card>
-  )
-
-  const actions = focusSlug ? (
-    <View style={{ gap: spacing.sm }}>
-      {examSlug ? (
-        <Button
-          label="View exam and practise"
-          size="lg"
-          fullWidth={!twoUp}
-          icon={<Lineicons icon={GraduationCap1Outlined} size={18} color={t.textInverse} />}
-          onPress={() => router.push(`/listings/${examSlug}`)}
-        />
-      ) : generalPractice === 'mock' || generalPractice === 'review' ? (
-        <Button
-          label={generalPractice === 'mock' ? 'Practise with the general entrance mock' : 'Practise general entrance topics'}
-          size="lg"
-          fullWidth={!twoUp}
-          onPress={() => router.push(`/practice/start/${focusSlug}`)}
-        />
-      ) : generalPractice === 'none' ? (
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Practice coming soon</Text>
-      ) : null}
-      <Button
-        label={inFocus ? `In Focus #${focusPriority}` : 'Add to Focus'}
-        accessibilityLabel={inFocus ? `In Focus #${focusPriority}. Remove from Focus` : 'Add to Focus'}
-        variant="secondary"
-        icon={<Lineicons icon={inFocus ? CheckCircle1Outlined : Bookmark1Outlined} size={16} color={t.accentText} />}
-        onPress={() => (inFocus ? removeListing(focusSlug) : addListing(focusSlug))}
+  const practiceGroup = examSlug ? (
+    <InsetGroup inset={false}>
+      <InsetRow
+        icon={GraduationCap1Outlined}
+        title="View exam and practise"
+        onPress={() => router.push(`/listings/${examSlug}`)}
       />
-      {showGenericPractice ? (
-        <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-          This school&apos;s exam isn&apos;t modelled on its own yet. General practice covers the core subjects: English, Math, Science and Reading.
-        </Text>
-      ) : null}
-    </View>
+    </InsetGroup>
+  ) : generalPractice === 'mock' || generalPractice === 'review' ? (
+    <InsetGroup
+      inset={false}
+      footer="This school's exam isn't modelled on its own yet. General practice covers the core subjects: English, Math, Science and Reading."
+    >
+      <InsetRow
+        icon={GraduationCap1Outlined}
+        title={generalPractice === 'mock' ? 'Practise with the general entrance mock' : 'Practise general entrance topics'}
+        onPress={() => router.push(`/practice/start/${focusSlug}`)}
+      />
+    </InsetGroup>
+  ) : generalPractice === 'none' ? (
+    <Text role="footnote" color={t.textSecondary} style={{ paddingHorizontal: spacing.lg }}>Practice coming soon</Text>
   ) : null
 
-  const paperwork = (requirements.length > 0 || qualifications.length > 0) ? (
-    <View style={{ gap: spacing.lg }}>
-      {requirements.length > 0 ? (
-        <View>
-          <SectionHeader title="Application requirements" subtitle="Documents to prepare" />
-          <ChipList items={requirements} />
-        </View>
-      ) : null}
-      {qualifications.length > 0 ? (
-        <View>
-          <SectionHeader title="Qualifications" subtitle="Who can apply" />
-          <ChipList items={qualifications} />
-        </View>
-      ) : null}
-    </View>
+  const links = profile?.websiteUrl || profile?.facebookUrl ? (
+    <Block title="Links">
+      <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
+        {profile?.websiteUrl ? <LinkRow grouped label="Official website" url={profile.websiteUrl} /> : null}
+        {profile?.facebookUrl ? <LinkRow grouped label="Facebook page" url={profile.facebookUrl} /> : null}
+      </View>
+    </Block>
   ) : null
 
-  const secondary = (
-    <View>
-      {(profile?.accreditation || profile?.chedCoeCod) ? (
-        <View style={{ paddingBottom: spacing.md }}>
-          <SectionHeader title="Accreditation" />
-          {profile?.accreditation ? <FactRow label="Accreditation" value={profile.accreditation} /> : null}
-          {profile?.chedCoeCod ? <FactRow label="CHED COE/COD" value={profile.chedCoeCod} /> : null}
-        </View>
+  const about = [
+    profile?.yearEstablished ? { title: 'Established', value: profile.yearEstablished } : null,
+    profile?.accreditation ? { title: 'Accreditation', value: profile.accreditation } : null,
+    profile?.chedCoeCod ? { title: 'CHED COE/COD', value: profile.chedCoeCod } : null,
+    profile?.academicCalendar ? { title: 'Academic calendar', value: profile.academicCalendar } : null,
+    profile?.tuitionFeeRange && profile?.freeTuition ? { title: 'Fee range', value: profile.tuitionFeeRange } : null,
+  ].filter((r): r is { title: string; value: string } => r !== null)
+
+  const overview = (
+    <View style={{ gap: spacing.xl }}>
+      {/* Dates and money first: the exam, when to apply, when it is, what it costs. */}
+      <View testID="school-key-facts" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        <FactTile label="Entrance exam" value={examName || null} />
+        <FactTile label="Applications" value={applyWindow || null} />
+        <FactTile label="Exam month" value={profile?.examMonth} />
+        <FactTile label="Tuition" value={tuition} />
+      </View>
+      {practiceGroup}
+      {about.length > 0 ? (
+        <InsetGroup inset={false} header="About">
+          {about.map(r => <InsetRow key={r.title} title={r.title} value={r.value} />)}
+        </InsetGroup>
       ) : null}
       {knownFor.length > 0 ? (
-        <Disclosure title="Known for" preview={knownFor.slice(0, 3).join(', ')} defaultExpanded>
-          <ChipList items={knownFor} />
-        </Disclosure>
-      ) : null}
-      {coursesOffered.length > 0 ? (
-        <Disclosure title="Courses offered" preview={`${coursesOffered.length} programmes`}>
-          <ChipList items={coursesOffered} />
-        </Disclosure>
-      ) : null}
-      {scholarships.length > 0 ? (
-        <Disclosure title="Scholarships offered" preview={scholarships.slice(0, 2).join(', ')}>
-          <ChipList items={scholarships} />
-        </Disclosure>
-      ) : null}
-      {prcStrongBoards.length > 0 ? (
-        <Disclosure title="PRC strong boards" preview={prcStrongBoards.slice(0, 3).join(', ')}>
-          <ChipList items={prcStrongBoards} />
-        </Disclosure>
-      ) : null}
-      {prcTopCourses.length > 0 ? (
-        <Disclosure title="PRC top courses" preview={prcTopCourses.slice(0, 3).join(', ')}>
-          <ChipList items={prcTopCourses} />
-        </Disclosure>
+        <Block title="Known for"><ChipList items={knownFor} /></Block>
       ) : null}
       {profile?.notes ? (
-        <Disclosure title="Notes" preview={profile.notes.slice(0, 60)}>
-          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{profile.notes}</Text>
-        </Disclosure>
+        <Block title="Notes">
+          <Text role="body" color={t.textSecondary} style={{ paddingHorizontal: spacing.lg }}>{profile.notes}</Text>
+        </Block>
       ) : null}
-      {hasLinks ? (
-        <View style={{ borderTopWidth: 1, borderTopColor: t.divider, paddingTop: spacing.md }}>
-          <SectionHeader title="Links" />
-          {profile?.websiteUrl ? <LinkRow label="Official website" url={profile.websiteUrl} /> : null}
-          {profile?.applicationPortalUrl ? <LinkRow label="Application portal" url={profile.applicationPortalUrl} /> : null}
-          {profile?.facebookUrl ? <LinkRow label="Facebook page" url={profile.facebookUrl} /> : null}
+      {links}
+    </View>
+  )
+
+  const courseBlocks = [
+    { title: `Courses offered (${coursesOffered.length})`, items: coursesOffered },
+    { title: 'PRC strong boards', items: prcStrongBoards },
+    { title: 'PRC top courses', items: prcTopCourses },
+    { title: 'Scholarships offered', items: scholarships },
+  ].filter(b => b.items.length > 0)
+
+  const courses = (
+    <View style={{ gap: spacing.xl }}>
+      {courseBlocks.length > 0 ? courseBlocks.map(b => (
+        <Block key={b.title} title={b.title}><ChipList items={b.items} /></Block>
+      )) : (
+        <Text role="body" color={t.textSecondary} style={{ paddingHorizontal: spacing.lg }}>
+          Course details for this school are not yet available.
+        </Text>
+      )}
+    </View>
+  )
+
+  const examRows = [
+    examName ? { title: 'Exam', value: examName } : null,
+    applyWindow ? { title: 'Application window', value: applyWindow } : null,
+    profile?.examMonth ? { title: 'Exam month', value: profile.examMonth } : null,
+    profile?.testingCenterType ? { title: 'Testing center', value: profile.testingCenterType } : null,
+    profile?.estimatedSlots ? { title: 'Estimated slots', value: profile.estimatedSlots } : null,
+    profile?.estimatedPassingRate ? { title: 'Estimated pass rate', value: profile.estimatedPassingRate } : null,
+  ].filter((r): r is { title: string; value: string } => r !== null)
+
+  const admissions = (
+    <View style={{ gap: spacing.xl }}>
+      {hasEntranceExam ? (
+        <InsetGroup inset={false} header="Entrance exam">
+          {examRows.map(r => <InsetRow key={r.title} title={r.title} value={r.value} />)}
+          {profile?.examDifficulty != null ? (
+            <InsetRow
+              title="Difficulty"
+              accessibilityLabel={`Difficulty: ${Math.max(0, Math.min(5, Math.round(profile.examDifficulty)))} of 5`}
+              trailing={<DifficultyDots count={profile.examDifficulty} />}
+            />
+          ) : null}
+        </InsetGroup>
+      ) : (
+        <InsetGroup inset={false} header="Entrance exam" footer="Check admissions on the official site.">
+          <InsetRow title="No entrance exam on record" />
+        </InsetGroup>
+      )}
+      {requirements.length > 0 ? (
+        <Block title="Application requirements" testID="school-requirements">
+          <RequirementsChecklist listingSlug={schoolFocusSlug(slug)} requirements={requirements} />
+        </Block>
+      ) : (
+        <InsetGroup inset={false} header="Application requirements">
+          <InsetRow title={NOT_YET} />
+        </InsetGroup>
+      )}
+      {qualifications.length > 0 ? (
+        <InsetGroup inset={false} header="Who can apply">
+          {qualifications.map(q => <InsetRow key={q} title={q} />)}
+        </InsetGroup>
+      ) : null}
+      {profile?.applicationPortalUrl ? (
+        <Block title="Apply">
+          <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
+            <LinkRow grouped label="Application portal" url={profile.applicationPortalUrl} />
+          </View>
+        </Block>
+      ) : null}
+    </View>
+  )
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return root(
+    <>
+      <ScreenScroll tabBarInset={false} padded={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+        <HeroBand onShare={share} />
+        <View style={{ paddingHorizontal: gutter, gap: spacing.lg }}>
+          <View style={{ marginTop: -36, gap: spacing.sm }}>
+            <LogoTile name={school.name} acronym={school.acronym} size={72} />
+            <Text role="title1" accessibilityRole="header" aria-level={1}>{school.name}</Text>
+            {school.acronym || place ? (
+              <Text role="subheadline" color={t.textSecondary}>{[school.acronym, place].filter(Boolean).join(' · ')}</Text>
+            ) : null}
+            <View testID="school-fact-chips" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+              {/* The type text can itself be "SUC"/"LUC" — don't repeat the flag badge. */}
+              {school.type && !((school.isSuc && /^suc$/i.test(school.type.trim())) || (school.isLuc && /^luc$/i.test(school.type.trim())))
+                ? <Badge label={school.type} tone="neutral" /> : null}
+              {school.isSuc ? <Badge label="SUC" tone="accent" /> : null}
+              {school.isLuc ? <Badge label="LUC" tone="accent" /> : null}
+              {profile?.freeTuition ? <Badge label="Free tuition" tone="success" /> : null}
+              <Badge label={conf.label} tone={conf.tone} />
+            </View>
+          </View>
+
+          <SegmentedControl
+            testID="school-segments"
+            segments={SEGMENTS}
+            value={segment}
+            onChange={setSegment}
+            accessibilityLabel="School details"
+          />
+
+          {segment === 'overview' ? overview : segment === 'courses' ? courses : admissions}
+
+          {lowConfidence ? (
+            <View
+              style={{
+                flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+                padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
+              }}
+            >
+              <View {...decorative} style={{ marginTop: 2 }}>
+                <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
+              </View>
+              <Text role="footnote" color={t.warningStrong} style={{ flex: 1 }}>
+                Some details may be unconfirmed. Check the official site before you decide.
+              </Text>
+            </View>
+          ) : null}
         </View>
-      ) : null}
-      {lowConfidence ? (
-        <View
+      </ScreenScroll>
+
+      {/* The screen's one primary action. */}
+      {focusSlug ? (
+        <Glass
+          variant="header"
+          testID="school-bottom-bar"
           style={{
-            flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', marginTop: spacing.lg,
-            padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
+            paddingHorizontal: gutter, paddingTop: spacing.md,
+            paddingBottom: insets.bottom + spacing.md,
+            borderTopWidth: 1, borderTopColor: t.divider,
           }}
         >
-          <View {...decorative} style={{ marginTop: 2 }}>
-            <Lineicons icon={Shield2CheckOutlined} size={16} color={t.warningStrong} />
-          </View>
-          <Text style={[textStyle('bodySm', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>
-            Some details may be unconfirmed. Check the official site before you decide.
-          </Text>
-        </View>
+          <Button
+            testID="primary-action"
+            label={inFocus ? `In my focus #${focusPriority}` : 'Add to my focus'}
+            accessibilityLabel={inFocus ? `In my focus #${focusPriority}. Remove from my focus` : 'Add to my focus'}
+            accessibilityHint={inFocus ? undefined : 'Pins it to Today with a countdown'}
+            shape="pill"
+            size="lg"
+            fullWidth
+            icon={<Lineicons icon={inFocus ? CheckCircle1Outlined : Bookmark1Outlined} size={18} color={t.textInverse} />}
+            onPress={() => (inFocus ? removeListing(focusSlug) : addListing(focusSlug))}
+          />
+        </Glass>
       ) : null}
-    </View>
-  )
-
-  const main = (
-    <View style={{ gap: spacing.xl }}>
-      {hero}
-      {keyFacts}
-      {actions}
-      {paperwork}
-    </View>
-  )
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
-      <DetailTopBar fallbackHref={FALLBACK} />
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.sm }}>
-        {twoUp ? (
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xxl }}>
-            <View style={{ flex: 3, minWidth: 0 }}>{main}</View>
-            <View style={{ flex: 2, minWidth: 0 }}>{secondary}</View>
-          </View>
-        ) : (
-          <View style={{ gap: spacing.xl }}>
-            {main}
-            {secondary}
-          </View>
-        )}
-      </ScreenScroll>
-    </SafeAreaView>
+    </>,
   )
 }

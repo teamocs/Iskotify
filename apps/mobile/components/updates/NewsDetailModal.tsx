@@ -1,16 +1,14 @@
-import {
-  Modal,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Linking,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Linking, StyleSheet } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ArrowAngularTopRightOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
+import { layout, radius, spacing, weight } from '../../theme/tokens'
 import type { FeedItem } from '../../utils/admissionsFeed'
 import { isHttpUrl, newsSources } from '../../utils/newsSources'
+import { Sheet } from '../ui/Sheet'
+import { PressableScale } from '../ui/Pressable'
+import { Text } from '../ui/Text'
+import { decorative, focusRing, heading } from '../ui/a11y'
 
 interface Props {
   item: FeedItem
@@ -22,164 +20,68 @@ function openSource(url: string) {
   if (isHttpUrl(url)) void Linking.openURL(url).catch(() => {})
 }
 
+/**
+ * One admissions announcement on the P3 Sheet: the school and report date,
+ * the body, any action the student has to take, and its sources as links
+ * (http(s) only). The sheet's own Close button dismisses it.
+ */
 export function NewsDetailModal({ item, onClose }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
 
   // {label, url} links (admin console) or plain URL strings (older rows).
   const sources = newsSources(item.sources)
+  const meta = [item.schoolName, item.reportDate].filter(s => s != null && s.length > 0).join(' · ')
 
   return (
-    <Modal
-      visible
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: t.bg }]}
-        edges={['top', 'bottom']}
-      >
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: t.divider }]}>
-          <Text
-            style={[styles.headerTitle, { color: t.textPrimary, fontSize: typo.base }]}
-            numberOfLines={2}
+    <Sheet visible title={item.title} onClose={onClose} closeLabel="Done">
+      <View style={{ gap: spacing.lg, paddingBottom: spacing.md }}>
+        {meta ? <Text role="footnote" color={t.textSecondary}>{meta}</Text> : null}
+
+        <Text role="body">{item.body}</Text>
+
+        {item.actionRequired != null && item.actionRequired.length > 0 ? (
+          <View
+            style={{
+              gap: spacing.xs, padding: spacing.md,
+              borderRadius: radius.field, borderCurve: 'continuous',
+              backgroundColor: t.accentSurface,
+            }}
           >
-            {item.title}
-          </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
-            <Text style={[styles.closeText, { color: t.accent, fontSize: typo.base }]}>Done</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Meta row */}
-          <View style={styles.metaRow}>
-            {item.schoolName != null && item.schoolName.length > 0 ? (
-              <Text style={[styles.meta, { color: t.textSecondary, fontSize: typo.xs }]}>
-                {item.schoolName}
-              </Text>
-            ) : null}
-            {item.reportDate.length > 0 ? (
-              <Text style={[styles.meta, { color: t.textTertiary, fontSize: typo.xs }]}>
-                {item.reportDate}
-              </Text>
-            ) : null}
+            <Text role="footnote" color={t.accentText} style={weight('600')}>Action required</Text>
+            <Text role="subheadline">{item.actionRequired}</Text>
           </View>
+        ) : null}
 
-          {/* Body */}
-          <Text style={[styles.body, { color: t.textPrimary, fontSize: typo.sm }]}>
-            {item.body}
-          </Text>
-
-          {/* Action Required */}
-          {item.actionRequired != null && item.actionRequired.length > 0 ? (
-            <View style={[styles.actionBox, { backgroundColor: t.surface2, borderColor: t.accent }]}>
-              <Text style={[styles.actionLabel, { color: t.accent, fontSize: typo.xs }]}>
-                ACTION REQUIRED
-              </Text>
-              <Text style={[styles.actionText, { color: t.textPrimary, fontSize: typo.sm }]}>
-                {item.actionRequired}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Sources */}
-          {sources.length > 0 ? (
-            <View style={styles.sourcesSection}>
-              <Text style={[styles.sourcesLabel, { color: t.textSecondary, fontSize: typo.xs }]}>
-                SOURCES
-              </Text>
+        {sources.length > 0 ? (
+          <View style={{ gap: spacing.sm }}>
+            <Text role="footnote" color={t.textSecondary} {...heading(3)} style={weight('600')}>Sources</Text>
+            <View style={{ backgroundColor: t.surface2, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
               {sources.map((src, i) => (
-                <TouchableOpacity
-                  key={i}
+                <PressableScale
+                  key={`${i}-${src.url}`}
                   onPress={() => openSource(src.url)}
-                  style={[styles.sourceLink, { borderColor: t.divider }]}
-                  activeOpacity={0.7}
+                  accessibilityRole="link"
+                  accessibilityLabel={`${src.label}, opens in your browser`}
+                  style={({ pressed, focused }) => [
+                    {
+                      minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+                      paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+                      backgroundColor: pressed ? t.surface2 : 'transparent',
+                      borderTopWidth: i > 0 ? StyleSheet.hairlineWidth : 0, borderTopColor: t.divider,
+                    },
+                    focusRing(t.focusRing, focused),
+                  ]}
                 >
-                  <Text style={[styles.sourceLinkText, { color: t.accent, fontSize: typo.xs }]}>
-                    {src.label}
-                  </Text>
-                </TouchableOpacity>
+                  <Text role="body" color={t.accentText} style={[{ flex: 1, textDecorationLine: 'underline' }]}>{src.label}</Text>
+                  <View {...decorative}>
+                    <Lineicons icon={ArrowAngularTopRightOutlined} size={14} color={t.accentText} />
+                  </View>
+                </PressableScale>
               ))}
             </View>
-          ) : null}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+          </View>
+        ) : null}
+      </View>
+    </Sheet>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  headerTitle: {
-    flex: 1,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  closeBtn: {
-    paddingTop: 2,
-  },
-  closeText: {
-    fontWeight: '600',
-  },
-  content: {
-    padding: 20,
-    gap: 16,
-    paddingBottom: 40,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  meta: {
-    fontWeight: '500',
-  },
-  body: {
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  actionBox: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    gap: 6,
-  },
-  actionLabel: {
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  actionText: {
-    fontWeight: '400',
-    lineHeight: 20,
-  },
-  sourcesSection: {
-    gap: 8,
-  },
-  sourcesLabel: {
-    fontWeight: '600',
-    letterSpacing: 0.8,
-  },
-  sourceLink: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sourceLinkText: {
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-  },
-})

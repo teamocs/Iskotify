@@ -11,6 +11,7 @@ import { lightTheme, radius, weight } from '../theme/tokens'
 import { useDb } from '../hooks/useDb'
 import { RouteFade } from '../components/web/RouteFade'
 import { profileScreenOptions } from '../components/navigation/profileSheet'
+import { schoolSheetOptions } from '../components/schools/schoolSheet'
 import { syncOnLaunch } from '../services/sync'
 import { pullUserData } from '../services/sync'
 import { installPushFlushListeners } from '../services/pushFlushListeners'
@@ -326,6 +327,8 @@ function AppInit({ onReady, ready }: { onReady: () => void; ready: boolean }) {
       <Stack.Screen name="notes" options={{ animation: 'slide_from_left' }} />
       {/* Profile: a half-height sheet on native, a push on web. */}
       <Stack.Screen name="profile/index" options={profileScreenOptions()} />
+      {/* A school's profile: the same half-height sheet on native, a push on web. */}
+      <Stack.Screen name="schools/[slug]" options={schoolSheetOptions()} />
     </Stack>
   )
 
