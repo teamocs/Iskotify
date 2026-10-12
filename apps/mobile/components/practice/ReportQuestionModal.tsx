@@ -1,7 +1,11 @@
-import { useState, useMemo } from 'react'
-import { Modal, View, Text, Pressable, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
+import { useState } from 'react'
+import { View, Pressable, TextInput } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, weight } from '../../theme/tokens'
+import { iosTextStyle, radius, spacing, weight } from '../../theme/tokens'
+import { Sheet } from '../ui/Sheet'
+import { Button } from '../ui/Button'
+import { Text } from '../ui/Text'
+import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 const PRESET_REASONS = [
   'Wrong answer',
@@ -18,12 +22,13 @@ interface Props {
 }
 
 /**
- * Bottom-sheet style report dialog shared by all practice runners.
- * Submits `preset` or `preset — details` when optional details are typed.
- * State resets every time the sheet is reopened.
+ * The report dialog shared by all practice runners, on the P3 Sheet (bottom
+ * sheet on phones, centred dialog from medium up, keyboard-aware). Submits
+ * `preset` or `preset — details` when optional details are typed. State
+ * resets every time the sheet is reopened.
  */
 export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [selected, setSelected] = useState<string | null>(null)
   const [details, setDetails] = useState('')
 
@@ -37,150 +42,78 @@ export function ReportQuestionModal({ visible, onClose, onSubmit }: Props) {
     }
   }
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
   function handleSubmit() {
     if (!selected) return
     const extra = details.trim()
     onSubmit(extra ? `${selected} — ${extra}` : selected)
   }
 
-  return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Pressable style={s.overlay} onPress={onClose}>
-        <Pressable style={s.sheet} onPress={() => {}}>
-          <View style={s.handle} />
-          <Text style={s.title} maxFontSizeMultiplier={1.4}>Report this question</Text>
-
-          <View accessibilityRole="radiogroup" accessibilityLabel="Reason">
-            {PRESET_REASONS.map(reason => {
-              const on = selected === reason
-              return (
-                <Pressable
-                  key={reason}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  style={[s.reasonRow, on && s.reasonRowOn]}
-                  onPress={() => setSelected(reason)}
-                >
-                  <View style={[s.radio, on && s.radioOn]} />
-                  <Text style={[s.reasonTxt, on && s.reasonTxtOn]} maxFontSizeMultiplier={1.4}>
-                    {reason}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-
-          <TextInput
-            style={s.detailsInput}
-            placeholder="Add details (optional)"
-            placeholderTextColor={t.textTertiary}
-            value={details}
-            onChangeText={setDetails}
-            multiline
-            maxLength={300}
-            maxFontSizeMultiplier={1.4}
-          />
-
-          <View style={s.btnRow}>
-            <Pressable accessibilityRole="button" style={s.cancelBtn} onPress={onClose}>
-              <Text style={s.cancelTxt} maxFontSizeMultiplier={1.4}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              aria-disabled={!selected}
-              style={[s.submitBtn, !selected && s.submitDisabled]}
-              disabled={!selected}
-              onPress={handleSubmit}
-            >
-              <Text style={s.submitTxt} maxFontSizeMultiplier={1.4}>Submit</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+  const footer = (
+    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+      <Button label="Cancel" variant="secondary" onPress={onClose} />
+      <Button label="Submit" disabled={!selected} onPress={handleSubmit} style={{ flexGrow: 1 }} />
+    </View>
   )
-}
 
-function makeStyles(
-  t: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['theme'],
-  typo: ReturnType<typeof import('../../theme/ThemeContext').useTheme>['typo'],
-) {
-  return StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: t.backdrop, justifyContent: 'flex-end' },
-    sheet: {
-      backgroundColor: t.bg,
-      borderTopLeftRadius: radius.xl,
-      borderTopRightRadius: radius.xl,
-      borderCurve: 'continuous',
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.xl,
-    },
-    handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginVertical: spacing.sm },
-    title: {
-      fontSize: typo.lg,
-      color: t.textPrimary,
-      ...weight('700'),
-      marginBottom: spacing.md,
-    },
-    reasonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      minHeight: 44,
-      paddingHorizontal: spacing.md,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      borderWidth: 1.5,
-      borderColor: t.border,
-      backgroundColor: t.surface,
-      marginBottom: spacing.xs,
-    },
-    reasonRowOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: t.border },
-    radioOn: { borderColor: t.accent, backgroundColor: t.accent },
-    reasonTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, ...weight('400') },
-    reasonTxtOn: weight('600'),
-    detailsInput: {
-      minHeight: 64,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      backgroundColor: t.surface,
-      color: t.textPrimary,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      fontSize: typo.sm,
-      ...weight('400'),
-      textAlignVertical: 'top',
-      marginTop: spacing.xs,
-    },
-    btnRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-    cancelBtn: {
-      minHeight: 44,
-      paddingHorizontal: spacing.lg,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      borderWidth: 1,
-      borderColor: t.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cancelTxt: { fontSize: typo.sm, color: t.textSecondary, ...weight('600') },
-    submitBtn: {
-      flex: 1,
-      minHeight: 44,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      backgroundColor: t.accent,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    submitDisabled: { opacity: 0.4 },
-    submitTxt: { fontSize: typo.md, color: t.textInverse, ...weight('700') },
-  })
+  return (
+    <Sheet visible={visible} title="Report this question" onClose={onClose} footer={footer}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Reason" style={{ gap: spacing.xs }}>
+        {PRESET_REASONS.map(reason => {
+          const on = selected === reason
+          return (
+            <Pressable
+              key={reason}
+              accessibilityRole="radio"
+              aria-checked={on}
+              onPress={() => setSelected(reason)}
+              style={(state) => {
+                const { pressed, focused } = state as WebPressableState
+                return [
+                  {
+                    minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+                    borderRadius: radius.button, borderCurve: 'continuous',
+                    borderWidth: 2, borderColor: on ? t.accent : 'transparent',
+                    backgroundColor: on ? t.accentSurface : pressed ? t.surface2 : t.surface,
+                  },
+                  focusRing(t.focusRing, focused),
+                ]
+              }}
+            >
+              <View
+                {...decorative}
+                style={{
+                  width: 18, height: 18, borderRadius: radius.capsule, borderWidth: 2,
+                  borderColor: on ? t.accent : t.inputBorder, alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                {on ? <View style={{ width: 8, height: 8, borderRadius: radius.capsule, backgroundColor: t.accent }} /> : null}
+              </View>
+              <Text role="body" style={[{ flex: 1 }, on ? weight('600') : null]} maxFontSizeMultiplier={1.6}>
+                {reason}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      <TextInput
+        style={{
+          ...iosTextStyle('body', t.textPrimary),
+          minHeight: 72, marginTop: spacing.md,
+          borderWidth: 1, borderColor: t.inputBorder, borderRadius: radius.field, borderCurve: 'continuous',
+          backgroundColor: t.surface, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+          textAlignVertical: 'top',
+        }}
+        placeholder="Add details (optional)"
+        placeholderTextColor={t.textTertiary}
+        accessibilityLabel="Add details (optional)"
+        value={details}
+        onChangeText={setDetails}
+        multiline
+        maxLength={300}
+        maxFontSizeMultiplier={1.6}
+      />
+    </Sheet>
+  )
 }

@@ -18,7 +18,15 @@
 // "had to work it out" for the vast majority of genuine MCQ reviews.
 export const FAST_THRESHOLD_MS = 10_000
 
-export type Grade = 'again' | 'good' | 'easy'
+/**
+ * 'again' | 'good' | 'easy' are derived from an MCQ (deriveGrade). 'hard' is
+ * only ever given explicitly, by the self-graded card stack
+ * (components/practice/FlashcardStack) — deriveGrade never returns it.
+ */
+export type Grade = 'again' | 'hard' | 'good' | 'easy'
+
+/** The self-graded buttons, in the order the stack shows them. */
+export const GRADES: readonly Grade[] = ['again', 'hard', 'good', 'easy']
 
 // ── SM-2 constants (clamped, day-granularity "lite" variant) ────────────────
 export const DEFAULT_EASE_FACTOR = 2.5
@@ -26,9 +34,14 @@ export const MIN_EASE_FACTOR = 1.3
 export const MAX_EASE_FACTOR = 3.0
 export const EASE_DELTA_EASY = 0.15
 export const EASE_DELTA_AGAIN = -0.2
+export const EASE_DELTA_HARD = -0.15
 export const FIRST_INTERVAL_DAYS = 1
 export const SECOND_INTERVAL_DAYS = 3
 export const LAPSE_INTERVAL_DAYS = 1
+/** 'hard' on a card's second rep (instead of SECOND_INTERVAL_DAYS). */
+export const HARD_SECOND_INTERVAL_DAYS = 2
+/** 'hard' on a later rep: the interval grows by this, not by easeFactor. */
+export const HARD_INTERVAL_MULTIPLIER = 1.2
 export const MAX_INTERVAL_DAYS = 180
 
 const DAY_MS = 86_400_000
@@ -86,6 +99,10 @@ export function isDue(dueAt: number, now: number): boolean {
  * LAPSE_INTERVAL_DAYS, nudges ease down (harder future growth), and always
  * increments `lapses` — including on a brand-new card's first miss, which we
  * treat as "failed to learn" rather than skipping the counter.
+ *
+ * `hard` (self-graded only) is a pass on a shorter ladder: 1st rep → 1 day,
+ * 2nd → HARD_SECOND_INTERVAL_DAYS, 3rd+ → interval × HARD_INTERVAL_MULTIPLIER
+ * (min 1, capped), and ease drops by EASE_DELTA_HARD (floored at MIN).
  */
 export function scheduleNext(state: SrsCardState, grade: Grade, now: number): SrsCardState {
   if (grade === 'again') {
@@ -101,15 +118,18 @@ export function scheduleNext(state: SrsCardState, grade: Grade, now: number): Sr
     }
   }
 
+  const hard = grade === 'hard'
   let intervalDays: number
   if (state.repetitions === 0) intervalDays = FIRST_INTERVAL_DAYS
-  else if (state.repetitions === 1) intervalDays = SECOND_INTERVAL_DAYS
-  else intervalDays = Math.round(state.intervalDays * state.easeFactor)
+  else if (state.repetitions === 1) intervalDays = hard ? HARD_SECOND_INTERVAL_DAYS : SECOND_INTERVAL_DAYS
+  else intervalDays = Math.round(state.intervalDays * (hard ? HARD_INTERVAL_MULTIPLIER : state.easeFactor))
   intervalDays = Math.min(MAX_INTERVAL_DAYS, Math.max(1, intervalDays))
 
   const easeFactor = grade === 'easy'
     ? Math.min(MAX_EASE_FACTOR, state.easeFactor + EASE_DELTA_EASY)
-    : state.easeFactor
+    : hard
+      ? Math.max(MIN_EASE_FACTOR, state.easeFactor + EASE_DELTA_HARD)
+      : state.easeFactor
 
   return {
     intervalDays,
@@ -135,4 +155,32 @@ export function applyReview(
 ): SrsCardState {
   const grade = deriveGrade(correct, elapsedMs)
   return scheduleNext(existing ?? newSrsState(), grade, now)
+}
+
+/**
+ * scheduleReview — one review with an explicit (self-graded) grade. `existing`
+ * is null for a card with no flashcard_srs row yet (never reviewed).
+ */
+export function scheduleReview(existing: SrsCardState | null, grade: Grade, now: number): SrsCardState {
+  return scheduleNext(existing ?? newSrsState(), grade, now)
+}
+
+/**
+ * previewIntervals — the interval (days) each grade would schedule for this
+ * card right now. Runs scheduleNext itself, so a button's promised interval
+ * can never disagree with what grading writes.
+ */
+export function previewIntervals(state: SrsCardState | null, now: number): Record<Grade, number> {
+  const base = state ?? newSrsState()
+  return {
+    again: scheduleNext(base, 'again', now).intervalDays,
+    hard: scheduleNext(base, 'hard', now).intervalDays,
+    good: scheduleNext(base, 'good', now).intervalDays,
+    easy: scheduleNext(base, 'easy', now).intervalDays,
+  }
+}
+
+/** "1 day", "3 days". */
+export function formatIntervalDays(days: number): string {
+  return days === 1 ? '1 day' : `${days} days`
 }

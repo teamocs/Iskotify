@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { View, Text, Pressable, Modal, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle } from '../../theme/tokens'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ExpandArrow1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
@@ -134,8 +134,8 @@ function makeStyles(t: ReturnType<typeof useTheme>['theme']) {
       padding: spacing.md,
       gap: 4,
     },
-    placeholderCaption: { ...textStyle('bodySm', t.textSecondary), textAlign: 'center' },
-    placeholderNote: { ...textStyle('caption', t.textTertiary), textAlign: 'center' },
+    placeholderCaption: { ...iosTextStyle('footnote', t.textSecondary), textAlign: 'center' },
+    placeholderNote: { ...iosTextStyle('caption', t.textTertiary), textAlign: 'center' },
     zoomBadge: {
       position: 'absolute', right: spacing.sm, bottom: spacing.sm, width: 32, height: 32,
       borderRadius: radius.pill, backgroundColor: t.scrim, alignItems: 'center', justifyContent: 'center',

@@ -4,7 +4,7 @@ import { Flag1Outlined, CheckOutlined } from '@lineiconshq/free-icons'
 import { ExamPassage } from './ExamPassage'
 import { QuestionFigure } from './QuestionFigure'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle, textStyles } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 export interface QuestionCardProps {
@@ -31,15 +31,12 @@ export interface QuestionCardProps {
   imageHeight?: number | null
 }
 
-// The stem reads at the headline size (20) with a reading line-height rather
-// than the headline's tight 26, and in the semibold face so long stems stay calm.
-const STEM = { ...textStyles.headline, ...weight('600'), lineHeight: 30, letterSpacing: 0 }
-
 /**
  * Shared question presentation for every practice engine (blueprint mock,
  * UPCAT subtest, diagnostic, flashcard quiz). No card chrome: the question sits
- * straight on the page as the largest text on screen, the passage (if any)
- * above it and the figure below it, with a quiet report control at the end.
+ * straight on the page in title3 (iOS redesign P4), the passage (if any) in a
+ * tinted card above it and the figure below it, with a quiet report control at
+ * the end when the runner has no flag button in its top bar.
  * The caller supplies the horizontal gutter.
  */
 export function QuestionCard({
@@ -54,14 +51,14 @@ export function QuestionCard({
       {questionLabel || subjectTag ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
           {questionLabel ? (
-            <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.5}>{questionLabel}</Text>
+            <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.5}>{questionLabel}</Text>
           ) : null}
           {subjectTag ? (
-            <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.4}>{subjectTag}</Text>
+            <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }} maxFontSizeMultiplier={1.4}>{subjectTag}</Text>
           ) : null}
         </View>
       ) : null}
-      <Text style={[STEM, { color: t.textPrimary }]} maxFontSizeMultiplier={1.6}>{questionText}</Text>
+      <Text style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={1.6}>{questionText}</Text>
       <View style={{ marginTop: spacing.md }}>
         <QuestionFigure imageUrl={imageUrl} imageAlt={imageAlt} imageWidth={imageWidth} imageHeight={imageHeight} />
       </View>
@@ -72,7 +69,7 @@ export function QuestionCard({
               <View {...decorative}>
                 <Lineicons icon={CheckOutlined} size={14} color={t.success} />
               </View>
-              <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>Reported</Text>
+              <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>Reported</Text>
             </View>
           ) : (
             <Pressable
@@ -94,7 +91,7 @@ export function QuestionCard({
               <View {...decorative}>
                 <Lineicons icon={Flag1Outlined} size={14} color={t.textSecondary} />
               </View>
-              <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>Report</Text>
+              <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.4}>Report</Text>
             </Pressable>
           )}
         </View>

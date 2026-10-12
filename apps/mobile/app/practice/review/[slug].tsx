@@ -21,7 +21,7 @@ import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { useTheme } from '../../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Book1Outlined } from '@lineiconshq/free-icons'
-import { spacing, textStyle } from '../../../theme/tokens'
+import { spacing, iosTextStyle } from '../../../theme/tokens'
 
 // Maps a topic strength to a design-system Badge tone (mirrors practice.tsx).
 const STRENGTH_TONE: Record<Strength, 'accent' | 'neutral' | 'success' | 'warning' | 'danger'> = {
@@ -126,12 +126,12 @@ export default function PracticeReviewScreen() {
 
   const hero = nextTopic ? (
     <Card elevated testID="review-next-step" style={{ padding: spacing.xl, gap: spacing.md }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textSecondary)} maxFontSizeMultiplier={2}>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textSecondary)} maxFontSizeMultiplier={2}>
         {nextTopic.accuracy != null ? 'Start with your weakest topic' : 'Start here'}
       </Text>
       <View style={{ gap: spacing.xs }}>
-        <Text style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{nextTopic.topic.name}</Text>
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={1.6}>{nextTopic.topic.name}</Text>
+        <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
           {nextTopic.accuracy != null
             ? `${nextTopic.accuracy}% so far · ${nextTopic.cardCount} cards`
             : `${nextTopic.cardCount} cards · not practised yet`}
@@ -149,7 +149,7 @@ export default function PracticeReviewScreen() {
 
   const topicsList = (
     <View style={{ gap: spacing.sm }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>All topics</Text>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>All topics</Text>
       <Card padded={false} style={{ overflow: 'hidden' }}>
         <SubjectAccordion
           groups={subjectGroups}

@@ -19,6 +19,8 @@ export interface GlassIconButtonProps {
   /** Android API 31+: the BlurTargetView behind the button (see <Glass>). */
   blurTarget?: RefObject<View | null>
   testID?: string
+  /** Inert and dimmed (e.g. Previous on the first question); exposed as aria-disabled. */
+  disabled?: boolean
 }
 
 const { visual: VISUAL, hit: HIT } = layout.headerButton
@@ -27,12 +29,16 @@ const { visual: VISUAL, hit: HIT } = layout.headerButton
  * A round glass header button: a 40pt glass disc inside a 44pt target, the
  * icon in textPrimary (it can float over maroon content; see glass tokens).
  */
-export function GlassIconButton({ icon, accessibilityLabel, onPress, accessibilityHint, accessibilityValue, blurTarget, testID }: GlassIconButtonProps) {
+export function GlassIconButton({
+  icon, accessibilityLabel, onPress, accessibilityHint, accessibilityValue, blurTarget, testID, disabled = false,
+}: GlassIconButtonProps) {
   const { theme: t } = useTheme()
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
+      disabled={disabled}
+      aria-disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
@@ -43,7 +49,7 @@ export function GlassIconButton({ icon, accessibilityLabel, onPress, accessibili
           {
             minWidth: HIT, minHeight: HIT, borderRadius: HIT / 2,
             alignItems: 'center', justifyContent: 'center',
-            opacity: pressed ? 0.7 : 1,
+            opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
           },
           focusRing(t.focusRing, focused),
         ]

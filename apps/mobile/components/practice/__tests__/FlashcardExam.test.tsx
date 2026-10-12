@@ -9,7 +9,7 @@ import type { QuizQuestion } from '../../../utils/mcDistractors'
  *  directly — drives that flow through to an actual submit() call, the same
  *  way a student who taps through the confirmation would. */
 async function reviewAndConfirmSubmit() {
-  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(screen.getByText('Review'))
   fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
   const alertSpy = Alert.alert as jest.Mock
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
@@ -45,13 +45,6 @@ jest.mock('../../../hooks/useRecordSrs', () => ({
   useRecordSrs: jest.fn(),
 }))
 
-// QuestionNavigator uses ScrollView + useTheme; render it shallowly
-jest.mock('../../upcat/QuestionNavigator', () => ({
-  QuestionNavigator: ({ total, currentIdx }: { total: number; currentIdx: number }) => {
-    const { Text } = require('react-native')
-    return <Text testID="qnav">{`Q${currentIdx + 1}/${total}`}</Text>
-  },
-}))
 
 // Redesign M3: the runner's frame changes with the window size class.
 let mockBp: 'compact' | 'medium' | 'expanded' = 'compact'
@@ -189,7 +182,7 @@ describe('FlashcardExam', () => {
 
     // Results screen: score 3/3 = 100%
     expect(screen.getByText('100%')).toBeTruthy()
-    expect(screen.getByText('3/3 correct')).toBeTruthy()
+    expect(screen.getByText('3 of 3')).toBeTruthy()
     expect(mockRecordSession).toHaveBeenCalledWith(
       expect.objectContaining({ score: 3, total: 3, listingSlug: 'test-listing' }),
     )
@@ -356,7 +349,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Next'))
     fireEvent.press(screen.getByText('Blue'))
 
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
     fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
     const alertSpy = Alert.alert as jest.Mock
     const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
@@ -441,8 +434,8 @@ describe('FlashcardExam', () => {
       reason: 'Wrong answer',
     })
 
-    // The reported state replaces the report button for this question
-    expect(screen.getByText('Reported')).toBeTruthy()
+    // P4: the top bar's flag turns into an inert "Reported" for this question
+    expect(screen.getByRole('button', { name: 'Reported' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Report this question' })).toBeNull()
   })
 
@@ -465,7 +458,7 @@ describe('FlashcardExam', () => {
     fireEvent.press(screen.getByText('Blue'))
 
     expect(screen.queryByText('Submit')).toBeNull()
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
 
     expect(mockRecordAttempts).not.toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
@@ -484,7 +477,8 @@ describe('FlashcardExam', () => {
     const tree = JSON.stringify(screen.toJSON()).toLowerCase()
     expect(tree).not.toContain('great work')
     expect(tree).not.toContain('keep practicing')
-    expect(screen.getByText('Review mistakes')).toBeTruthy()
+    // P4: one primary "Review N answers" (the wrong and skipped ones), a tinted retake.
+    expect(screen.getByText('Review 1 answer')).toBeTruthy()
     expect(screen.getByText('Retake exam')).toBeTruthy()
   })
 
@@ -556,7 +550,9 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
     expect(within(col).getAllByRole('radio')).toHaveLength(4)
     const footer = screen.getByTestId('runner-footer')
     expect(flat(footer).maxWidth).toBeLessThanOrEqual(720)
-    expect(within(footer).getByRole('button', { name: 'Next question' })).toBeTruthy()
+    // P4: the primary reads Skip ("Skip this question") until the question is answered.
+    expect(within(footer).getByRole('button', { name: 'Skip this question' })).toBeTruthy()
+    expect(within(footer).getByRole('button', { name: 'Previous question' })).toBeTruthy()
   })
 
   it('shows the empty case as a page with one way back (no glyph arrow)', () => {
@@ -577,7 +573,7 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
     const alertSpy = Alert.alert as jest.Mock
     const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
     await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
-    expect(await screen.findByRole('header', { name: 'Tapos na! Quiz complete.' })).toBeTruthy()
+    expect(await screen.findByRole('header', { name: 'Quiz complete.' })).toBeTruthy()
     expect(screen.getByTestId('screen-scroll')).toBeTruthy()
     expect(screen.queryByText(/←/)).toBeNull()
     fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
@@ -606,7 +602,7 @@ describe('FlashcardExam focus-mode frame (redesign M3)', () => {
     expect(aria(screen.getByRole('radio', { name: /Red/ }), 'aria-checked')).toBe(false)
 
     await act(async () => { resolveAttempts() })
-    expect(await screen.findByText('3/3 correct')).toBeTruthy()
+    expect(await screen.findByText('3 of 3')).toBeTruthy()
   })
 })
 
@@ -629,7 +625,7 @@ describe('FlashcardExam — logic audit A6', () => {
     render(<FlashcardExam {...DEFAULT_PROPS} />)
     fireEvent.press(screen.getByText('Skip'))
     fireEvent.press(screen.getByText('Skip'))
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
     expect(await screen.findByText(/answer at least one question/i)).toBeTruthy()
     const btn = screen.getByRole('button', { name: /submit exam/i })
     expect(aria(btn, 'aria-disabled')).toBe(true)

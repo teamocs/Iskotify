@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CheckOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Sheet } from '../ui/Sheet'
 import { Button } from '../ui/Button'
 import { ListRow } from '../ui/ListRow'
@@ -21,7 +21,7 @@ type TopicLite = { topic: { id: string; name: string; subjectId: string }; cardC
 function useFieldStyle() {
   const { theme: t } = useTheme()
   return {
-    ...textStyle('body', t.textPrimary),
+    ...iosTextStyle('body', t.textPrimary),
     minHeight: 48,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -71,11 +71,11 @@ export function PracticeSearchSheet({ visible, entries, onClose, onOpen }: Searc
       />
       <View style={{ marginTop: spacing.md, marginHorizontal: -spacing.lg }} accessibilityLiveRegion="polite">
         {q === '' ? (
-          <Text style={[textStyle('bodySm', t.textSecondary), { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }]}>
+          <Text style={[iosTextStyle('footnote', t.textSecondary), { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }]}>
             Type to search your subjects, topics, and mock exams.
           </Text>
         ) : results.length === 0 ? (
-          <Text style={[textStyle('bodySm', t.textSecondary), { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }]}>
+          <Text style={[iosTextStyle('footnote', t.textSecondary), { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }]}>
             No matches for “{query.trim()}”
           </Text>
         ) : (
@@ -136,8 +136,8 @@ function TopicCheckRow({ label, sub, checked, onToggle }: { label: string; sub: 
         {checked ? <Lineicons icon={CheckOutlined} size={14} color={t.textInverse} /> : null}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={textStyle('body', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>{label}</Text>
-        <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.8}>{sub}</Text>
+        <Text style={iosTextStyle('body', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>{label}</Text>
+        <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.8}>{sub}</Text>
       </View>
     </Pressable>
   )
@@ -195,7 +195,7 @@ export function NewDeckSheet({ visible, subjects, topicRows, onClose, onCreate }
     <Sheet visible={visible} title={step === 1 ? 'New deck' : `Pick topics · ${selected.size} chosen`} onClose={close} footer={footer}>
       {step === 1 ? (
         <View style={{ gap: spacing.sm }}>
-          <Text nativeID="deck-name-label" style={textStyle('label', t.textSecondary)}>Deck name</Text>
+          <Text nativeID="deck-name-label" style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }}>Deck name</Text>
           <TextInput
             style={field}
             value={name}
@@ -210,12 +210,12 @@ export function NewDeckSheet({ visible, subjects, topicRows, onClose, onCreate }
           />
         </View>
       ) : groups.length === 0 ? (
-        <Text style={textStyle('body', t.textSecondary)}>No topics on this device yet. Add an exam from Explore to download its topics.</Text>
+        <Text style={iosTextStyle('body', t.textSecondary)}>No topics on this device yet. Add an exam from Explore to download its topics.</Text>
       ) : (
         <View style={{ gap: spacing.md }}>
           {groups.map(g => (
             <View key={g.subjectId} style={{ gap: spacing.xs }}>
-              <Text accessibilityRole="header" style={[textStyle('label', t.textSecondary), weight('600')]}>
+              <Text accessibilityRole="header" style={[{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }, weight('600')]}>
                 {g.subjectName}
               </Text>
               {g.rows.map(row => (

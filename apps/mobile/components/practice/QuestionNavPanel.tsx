@@ -1,6 +1,6 @@
 import { View, Text, ScrollView } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { QuestionGrid } from './QuestionGrid'
 import { SectionGrid, type SectionGridSection } from './SectionGrid'
 
@@ -37,10 +37,10 @@ export function QuestionNavPanel({
     >
       <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }} showsVerticalScrollIndicator={false}>
         <View style={{ gap: 2 }}>
-          <Text accessibilityRole="header" style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.5}>
+          <Text accessibilityRole="header" style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.5}>
             Questions
           </Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.5}>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.5}>
             {answered} of {total} answered
           </Text>
         </View>

@@ -159,6 +159,8 @@ export interface InsetRowProps {
   disabled?: boolean
   /** A destructive action (Sign out, Delete): the title in the danger ink. */
   destructive?: boolean
+  /** A node under the title/subtitle, inside the text column (e.g. a thin ProgressBar). */
+  below?: ReactNode
   /** Lines the title and subtitle may wrap to (default 2). */
   numberOfLines?: number
   testID?: string
@@ -174,7 +176,7 @@ export interface InsetRowProps {
 export function InsetRow({
   title, subtitle, icon, iconTone, iconSolid, leading, value, trailing, switchValue, onSwitchChange,
   onPress, chevron, accessibilityRole = 'button', accessibilityLabel, accessibilityHint, disabled,
-  destructive, numberOfLines = 2, testID,
+  destructive, numberOfLines = 2, below, testID,
 }: InsetRowProps) {
   const { theme: t } = useTheme()
   const { grouped, last } = useContext(RowPositionContext)
@@ -189,6 +191,7 @@ export function InsetRow({
       {subtitle ? (
         <Text role="subheadline" color={t.textSecondary} numberOfLines={numberOfLines}>{subtitle}</Text>
       ) : null}
+      {below ? <View style={{ paddingTop: spacing.xs }}>{below}</View> : null}
     </View>
   )
 

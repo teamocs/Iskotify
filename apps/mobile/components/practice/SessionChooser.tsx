@@ -2,7 +2,7 @@ import { View, Text } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Book1Outlined, CalendarDaysOutlined, StopwatchOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Screen } from '../ui/Screen'
 import { TwoColumn } from '../ui/TwoColumn'
@@ -77,10 +77,10 @@ export function SessionChooser({
               </View>
             ) : null}
             <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
-              <Text {...heading(2)} style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+              <Text {...heading(2)} style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={1.6}>
                 {recommended.title}
               </Text>
-              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{recommended.subtitle}</Text>
+              <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{recommended.subtitle}</Text>
             </View>
           </View>
           <Button
@@ -97,7 +97,7 @@ export function SessionChooser({
       {options.length > 0 || note ? (
         <View style={{ gap: spacing.sm }}>
           {recommended ? (
-            <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{optionsTitle}</Text>
+            <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>{optionsTitle}</Text>
           ) : null}
           {options.length > 0 ? (
             <Card padded={false} style={{ overflow: 'hidden' }}>
@@ -121,8 +121,8 @@ export function SessionChooser({
                 borderWidth: 1, borderColor: t.border, borderStyle: 'dashed',
               }}
             >
-              <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{note.title}</Text>
-              <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{note.body}</Text>
+              <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>{note.title}</Text>
+              <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>{note.body}</Text>
             </View>
           ) : null}
         </View>
@@ -147,7 +147,7 @@ export function ChooserAside({ title, children }: { title: string; children: Rea
   const { theme: t } = useTheme()
   return (
     <Card style={{ gap: spacing.md }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{title}</Text>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>{title}</Text>
       {children}
     </Card>
   )
@@ -200,7 +200,7 @@ export function FlashcardModeChooser({ title, noun, context, total, dueCount, fa
             <StatNumber value={total} label="Cards" />
             <StatNumber value={dueCount} label="Due now" />
           </View>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
             Every answer comes with an explanation. Cards you miss come back sooner.
           </Text>
         </ChooserAside>

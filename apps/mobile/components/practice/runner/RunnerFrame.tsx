@@ -5,6 +5,7 @@ import { useTheme } from '../../../theme/ThemeContext'
 import { spacing } from '../../../theme/tokens'
 import { useBreakpoint, pagePadding, contentMaxWidth } from '../../../hooks/useBreakpoint'
 import { WebTopSpacer } from '../../ui/WebTopSpacer'
+import { Glass } from '../../ui/Glass'
 
 /** The reading column: the question never runs wider than a readable measure. */
 export const RUNNER_READING = contentMaxWidth('reading')
@@ -22,6 +23,8 @@ interface Props {
   navPanel?: React.ReactNode
   /** The question pane, so the screen can reset its scroll when the question changes. */
   scrollRef?: Ref<ScrollView>
+  /** testID of the reading column (default runner-reading-column). */
+  columnTestID?: string
   /** Overlays: review sheet, report modal. */
   children?: React.ReactNode
 }
@@ -30,7 +33,8 @@ interface Props {
  * The focus-mode frame every question runner shares (mock exam, UPCAT
  * subtest, diagnostic, flashcard quiz) — the same layout as
  * app/practice/exam/[slug].tsx:
- * - one slim header;
+ * - a translucent glass top bar (RunnerTopBar) and a glass bottom bar, so a
+ *   question reads as a full-screen modal;
  * - the question in a centred reading column capped at 720;
  * - expanded (>= 1024): options follow the question inside that column, and
  *   the question navigator sits beside it as a side panel;
@@ -40,7 +44,9 @@ interface Props {
  *   review sheet opened from the header;
  * - footer actions inside the same column, never stretched across a wide window.
  */
-export function RunnerFrame({ header, question, options, actions, navPanel, scrollRef, children }: Props) {
+export function RunnerFrame({
+  header, question, options, actions, navPanel, scrollRef, columnTestID = 'runner-reading-column', children,
+}: Props) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   const expanded = bp === 'expanded'
@@ -65,7 +71,7 @@ export function RunnerFrame({ header, question, options, actions, navPanel, scro
             contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing.lg }}
             showsVerticalScrollIndicator={false}
           >
-            <View testID="runner-reading-column" style={column}>
+            <View testID={columnTestID} style={column}>
               {question}
               {expanded ? <View style={{ marginTop: spacing.xl }}>{options}</View> : null}
             </View>
@@ -81,14 +87,15 @@ export function RunnerFrame({ header, question, options, actions, navPanel, scro
             </ScrollView>
           )}
 
-          <View style={{ borderTopWidth: 1, borderTopColor: t.divider, backgroundColor: t.bg }}>
+          {/* The bottom glass bar: Previous · Questions · the one primary action. */}
+          <Glass variant="header" testID="runner-bottom-bar" style={{ borderTopWidth: 1, borderTopColor: t.divider }}>
             <View
               testID="runner-footer"
-              style={[column, { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md }]}
+              style={[column, { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm }]}
             >
               {actions}
             </View>
-          </View>
+          </Glass>
         </View>
 
         {expanded && navPanel ? navPanel : null}

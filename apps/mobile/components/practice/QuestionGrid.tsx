@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Flag1Outlined, Locked1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
 interface Props {
@@ -54,7 +54,7 @@ export const QuestionGrid = memo(function QuestionGrid({
               const { pressed, focused } = state as WebPressableState
               return [
                 {
-                  width: CELL, height: CELL, minWidth: CELL, minHeight: CELL,
+                  minWidth: CELL, minHeight: CELL, paddingHorizontal: spacing.xs,
                   borderRadius: radius.chip, borderCurve: 'continuous',
                   alignItems: 'center', justifyContent: 'center',
                   borderWidth: current ? 2 : 1,
@@ -67,7 +67,7 @@ export const QuestionGrid = memo(function QuestionGrid({
             }}
           >
             <Text
-              style={[textStyle('label', answered ? t.accentText : t.textSecondary), answered ? weight('600') : null]}
+              style={[{ ...iosTextStyle('footnote', answered ? t.accentText : t.textSecondary), ...weight('600') }, answered ? weight('600') : null]}
               maxFontSizeMultiplier={1.3}
             >
               {i + 1}

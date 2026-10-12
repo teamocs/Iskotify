@@ -34,12 +34,6 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
 
-jest.mock('../../../../components/upcat/QuestionNavigator', () => ({
-  QuestionNavigator: ({ total, currentIdx }: { total: number; currentIdx: number }) => {
-    const { Text } = require('react-native')
-    return <Text testID="qnav">{`Q${currentIdx + 1}/${total}`}</Text>
-  },
-}))
 
 jest.mock('../../../../services/questionReports', () => ({
   submitQuestionReport: jest.fn().mockResolvedValue(undefined),
@@ -136,7 +130,7 @@ const Q3: RawUpcatQuestion = {
  *  directly — drives that flow through to an actual submit() call, the same
  *  way a student who taps through the confirmation would. */
 async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
-  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(screen.getByText('Review'))
   fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
   const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -279,12 +273,13 @@ describe('BlueprintExam', () => {
     render(<BlueprintExam />)
     await waitFor(() => expect(screen.getByText(/Study Sprint/)).toBeTruthy())
     fireEvent.press(screen.getByText(/Study Sprint/))
-    await waitFor(() => expect(screen.getByText('Next')).toBeTruthy())
-    const optionLabel = screen.queryByText('4') ? '4' : '2'
-    fireEvent.press(screen.getByText(optionLabel))
-    // Walk to the last question, answering nothing else.
-    for (let i = 0; i < 5 && screen.queryByText('Next'); i++) {
-      if (screen.queryByText('Skip')) fireEvent.press(screen.getByText('Skip')); else break
+    await waitFor(() => expect(screen.getByLabelText('Answer choices')).toBeTruthy())
+    const optionLabel = screen.queryByRole('radio', { name: '4' }) ? '4' : '2'
+    fireEvent.press(screen.getByRole('radio', { name: optionLabel }))
+    // Walk to the last question, answering nothing else (P4: the primary reads
+    // Next once answered, Skip before, Review on the last question).
+    for (let i = 0; i < 5 && !screen.queryByText('Review'); i++) {
+      fireEvent.press(screen.queryByText('Skip') ?? screen.getByText('Next'))
     }
     await reviewAndConfirmSubmit(alertSpy)
     expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ kind: 'sprint' }))
@@ -310,7 +305,7 @@ describe('BlueprintExam', () => {
 
     // Reached results despite the telemetry insert rejecting — not stranded
     // behind the double-submit guard.
-    expect(screen.getByText('Per-section')).toBeTruthy()
+    expect(screen.getByText('By skill')).toBeTruthy()
     expect(warnSpy).toHaveBeenCalledWith('[exam/[slug]] recordAttempts failed:', expect.any(Error))
 
     warnSpy.mockRestore()
@@ -372,7 +367,7 @@ describe('BlueprintExam', () => {
 
       // There is no button labelled "Submit" left bare on the last question.
       expect(screen.queryByText('Submit')).toBeNull()
-      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(screen.getByText('Review'))
 
       expect(mockRecordAttempts).not.toHaveBeenCalled()
       expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
@@ -388,7 +383,7 @@ describe('BlueprintExam', () => {
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
       fireEvent.press(screen.getByText('2'))
 
-      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(screen.getByText('Review'))
       fireEvent.press(await screen.findByRole('button', { name: /back to exam/i }))
 
       expect(mockRecordAttempts).not.toHaveBeenCalled()
@@ -421,9 +416,9 @@ describe('BlueprintExam', () => {
       expect(tree).not.toMatch(/\d+th\)/) // the old "est. ~62th" ordinal bug
     })
 
-    it('makes "Review mistakes" the primary action and "Retake exam" secondary', async () => {
+    it('makes "Review N answers" the primary action and "Retake exam" tinted', async () => {
       await reachResults()
-      expect(screen.getByText('Review mistakes')).toBeTruthy()
+      expect(screen.getByText(/^Review (\d+ answers?|answers)$/)).toBeTruthy()
       expect(screen.getByText('Retake exam')).toBeTruthy()
       // Truthful label: it lands on the Mock exams list.
       expect(screen.getByText('Back to mock exams')).toBeTruthy()
@@ -545,7 +540,7 @@ describe('BlueprintExam', () => {
 
       // Q1's answer (index 0, unaffected by the compaction) must still be
       // intact after navigating back to it.
-      fireEvent.press(screen.getByText('Back'))
+      fireEvent.press(screen.getByRole('button', { name: 'Previous question' }))
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
       expect(screen.getByRole('radio', { name: '2', checked: true })).toBeTruthy()
     })
@@ -577,7 +572,7 @@ describe('BlueprintExam', () => {
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
       fireEvent.press(screen.getByText('2'))
 
-      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(screen.getByText('Review'))
       fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
       const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
       const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -591,13 +586,13 @@ describe('BlueprintExam', () => {
 
       // Attempt a state change while submit() is still in flight — inputs
       // should be disabled, so this must be a no-op either way.
-      fireEvent.press(screen.getByText('1')) // would flip the Q1 answer if not disabled
+      fireEvent.press(screen.getByRole('radio', { name: '1' })) // would flip the Q1 answer if not disabled
 
       expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
 
       // Let submit() finish.
       await act(async () => { resolveAttempts() })
-      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
 
       // No save was re-triggered by the (blocked) tap, or by reaching results.
       expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)

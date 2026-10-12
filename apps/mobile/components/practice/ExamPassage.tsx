@@ -4,7 +4,7 @@ import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronDownOutlined, ChevronUpOutlined, ExpandArrow1Outlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle, weight } from '../../theme/tokens'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
@@ -32,12 +32,14 @@ export function ExamPassage({ passage }: { passage: string }) {
   return (
     <View
       style={{
-        backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-        borderRadius: radius.lg, borderCurve: 'continuous', marginBottom: spacing.lg, overflow: 'hidden',
+        // iOS redesign P4: the passage is a ground-tinted 18pt card, set apart
+        // from the white answer rows without a border.
+        backgroundColor: t.surface2,
+        borderRadius: radius.group, borderCurve: 'continuous', marginBottom: spacing.lg, overflow: 'hidden',
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.lg, paddingRight: spacing.xs, gap: spacing.xs }}>
-        <Text accessibilityRole="header" style={[textStyle('label', t.textSecondary), { flex: 1 }]} maxFontSizeMultiplier={1.5}>
+        <Text accessibilityRole="header" style={[{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }, { flex: 1 }]} maxFontSizeMultiplier={1.5}>
           Passage
         </Text>
         <Pressable
@@ -50,7 +52,7 @@ export function ExamPassage({ passage }: { passage: string }) {
           <View {...decorative}>
             <Lineicons icon={expanded ? ChevronUpOutlined : ChevronDownOutlined} size={16} color={t.textSecondary} />
           </View>
-          <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.4}>{expanded ? 'Hide' : 'Show'}</Text>
+          <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.4}>{expanded ? 'Hide' : 'Show'}</Text>
         </Pressable>
         <Pressable
           onPress={() => setReader(true)}
@@ -61,7 +63,7 @@ export function ExamPassage({ passage }: { passage: string }) {
           <View {...decorative}>
             <Lineicons icon={ExpandArrow1Outlined} size={16} color={t.accentText} />
           </View>
-          <Text style={textStyle('label', t.accentText)} maxFontSizeMultiplier={1.4}>Read full</Text>
+          <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }} maxFontSizeMultiplier={1.4}>Read full</Text>
         </Pressable>
       </View>
 
@@ -72,7 +74,7 @@ export function ExamPassage({ passage }: { passage: string }) {
           nestedScrollEnabled
           showsVerticalScrollIndicator
         >
-          <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={1.8}>{passage}</Text>
+          <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={1.8}>{passage}</Text>
         </ScrollView>
       ) : null}
 
@@ -90,7 +92,7 @@ export function ExamPassage({ passage }: { passage: string }) {
               borderBottomWidth: 1, borderBottomColor: t.divider,
             }}
           >
-            <Text accessibilityRole="header" style={[textStyle('headline', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={1.4}>
+            <Text accessibilityRole="header" style={[iosTextStyle('title3', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={1.4}>
               Passage
             </Text>
             <Pressable
@@ -114,7 +116,7 @@ export function ExamPassage({ passage }: { passage: string }) {
               paddingHorizontal: spacing.xxl, paddingTop: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl,
             }}
           >
-            <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>{passage}</Text>
+            <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>{passage}</Text>
           </ScrollView>
         </View>
       </Modal>

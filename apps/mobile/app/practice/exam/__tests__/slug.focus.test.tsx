@@ -4,6 +4,8 @@ import { Alert } from 'react-native'
 import BlueprintExam from '../[slug]'
 import type { ExamBlueprint } from '../../../../services/examBlueprints'
 import type { RawUpcatQuestion } from '../../../../utils/upcatExam'
+import { primaryActions } from '../../../../test-utils/primaryActions'
+import { aria } from '../../../../test-utils/aria'
 
 // Redesign M2 — the runner's focus-mode layout. The exam-safety behaviour
 // (leave guard, auto-save/resume, review-before-submit, neutral results) is
@@ -208,20 +210,20 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
   })
 
   describe('results', () => {
-    it('opens with a calm Taglish close and shows the per-subtest breakdown', async () => {
+    it('opens with a calm English close and shows the by-skill breakdown', async () => {
       await startExam()
       fireEvent.press(screen.getByText('4'))
       fireEvent.press(screen.getByText('Next'))
       await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
       fireEvent.press(screen.getByText('2'))
-      fireEvent.press(screen.getByText('Review & submit'))
+      fireEvent.press(screen.getByText('Review'))
       fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
       const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
       await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
 
-      expect(await screen.findByRole('header', { name: 'Tapos na! Mock complete.' })).toBeTruthy()
+      expect(await screen.findByRole('header', { name: 'Mock complete.' })).toBeTruthy()
       expect(screen.getByRole('progressbar', { name: 'Math score' })).toBeTruthy()
-      expect(screen.getByText('2/2 correct · 100%')).toBeTruthy()
+      expect(screen.getByText('2 of 2 correct')).toBeTruthy()
     })
 
     // Review finding (HIGH): react-native-web 0.21 ignores the nested
@@ -234,7 +236,7 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
       fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
       const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
       await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
-      await screen.findByRole('header', { name: 'Tapos na! Mock complete.' })
+      await screen.findByRole('header', { name: 'Mock complete.' })
 
       const header = () => screen.UNSAFE_getAllByProps({ accessibilityLabel: 'Math, 1 to review' })
         .find(n => typeof n.type !== 'string')!
@@ -244,6 +246,98 @@ describe('BlueprintExam focus mode (redesign M2)', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Math, 1 to review' }))
       expect(header().props['aria-expanded']).toBe(true)
       expect(screen.getByRole('button', { name: 'Math, 1 to review', expanded: true })).toBeTruthy()
+    })
+  })
+
+  // ── iOS redesign P4: the question screen and results in the iOS language ──
+  describe('iOS redesign P4', () => {
+    async function submitFromSheet() {
+      fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
+      const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
+      await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
+      await screen.findByRole('header', { name: 'Mock complete.' })
+    }
+
+    it('has exactly one primary action on the prestart, the question screen and the results', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      expect(primaryActions()).toEqual(['Full Mock'])
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      expect(primaryActions()).toEqual(['Skip'])
+      fireEvent.press(screen.getByRole('radio', { name: '4' }))
+      expect(primaryActions()).toEqual(['Next'])
+      fireEvent.press(screen.getByText('Next'))
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      // The last question: Review opens the sheet, it never submits.
+      expect(primaryActions()).toEqual(['Review'])
+      fireEvent.press(screen.getByText('Review'))
+      await submitFromSheet()
+      act(() => { jest.advanceTimersByTime(500) }) // let the review sheet finish its exit
+      expect(primaryActions()).toEqual(['Review 1 answer'])
+    })
+
+    it('shows the time in a timer capsule: role timer, tabular figures', async () => {
+      await startExam()
+      const timer = screen.getByRole('timer')
+      expect(timer.props.accessibilityLabel).toMatch(/^Time left: \d+:\d{2}$/)
+      const digits = within(timer).getByText(/^\d+:\d{2}$/)
+      expect(Object.assign({}, ...[digits.props.style].flat(Infinity).filter(Boolean)).fontVariant).toEqual(['tabular-nums'])
+    })
+
+    it('puts close, the centred subtest and "Question N of M" (tabular), and a flag on the glass top bar', async () => {
+      await startExam()
+      const bar = screen.getByTestId('runner-top-bar')
+      expect(within(bar).getByRole('button', { name: 'Leave exam' })).toBeTruthy()
+      expect(within(bar).getByText('TM')).toBeTruthy()
+      const pos = within(bar).getByText('Question 1 of 2')
+      expect(Object.assign({}, ...[pos.props.style].flat(Infinity).filter(Boolean)).fontVariant).toEqual(['tabular-nums'])
+      fireEvent.press(within(bar).getByRole('button', { name: 'Report this question' }))
+      expect(await screen.findByText('Wrong answer')).toBeTruthy()
+    })
+
+    it('has Previous (icon) · Questions · the primary on the glass bottom bar', async () => {
+      await startExam()
+      const bar = screen.getByTestId('runner-bottom-bar')
+      const prev = within(bar).getByRole('button', { name: 'Previous question' })
+      expect(aria(prev, 'aria-disabled')).toBe(true) // the first question
+      fireEvent.press(within(bar).getByRole('button', { name: 'All questions' }))
+      expect(await screen.findByText('Review your answers')).toBeTruthy()
+    })
+
+    it('choices are radios: checked state, the question in title3, the pick announced', async () => {
+      await startExam()
+      const stem = screen.getByText('2+2?')
+      expect(Object.assign({}, ...[stem.props.style].flat(Infinity).filter(Boolean)).fontSize).toBe(20)
+      expect(screen.getAllByRole('radio')).toHaveLength(4)
+      expect(screen.queryAllByRole('radio', { checked: true })).toHaveLength(0)
+      fireEvent.press(screen.getByRole('radio', { name: '4' }))
+      expect(screen.getByRole('radio', { name: '4', checked: true })).toBeTruthy()
+      expect(screen.getAllByRole('radio', { checked: false })).toHaveLength(3)
+    })
+
+    it('results: neutral ring, "N of M", the Correct/Wrong/Skipped strip, kind wrong-answer copy, no verdicts', async () => {
+      await startExam()
+      fireEvent.press(screen.getByRole('radio', { name: '1' })) // wrong on 2+2
+      fireEvent.press(screen.getByRole('button', { name: 'All questions' }))
+      await submitFromSheet()
+      const ring = screen.getByLabelText('Score: 0%, 0 of 1 correct')
+      expect(ring.props.role).toBe('img')
+      expect(screen.getByText('0 of 1')).toBeTruthy() // the unreached question is not counted
+      expect(screen.getByLabelText('Correct: 0')).toBeTruthy()
+      expect(screen.getByLabelText('Wrong: 1')).toBeTruthy()
+      expect(screen.getByLabelText('Skipped: 0')).toBeTruthy()
+      // The card is the same neutral white at 0% as at any score.
+      const card = screen.getByTestId('results-score-card')
+      expect(Object.assign({}, ...[card.props.style].flat(Infinity).filter(Boolean)).backgroundColor).toBe('#ffffff')
+      const tree = JSON.stringify(screen.toJSON()).toLowerCase()
+      for (const banned of ['below cut-off', 'percentile', 'passed', 'failed', 'top tier', 'foundational', 'tapos na', 'hakbang']) {
+        expect(tree).not.toContain(banned)
+      }
+      // Kind wrong-answer copy in the review.
+      fireEvent.press(screen.getByText('Review 1 answer'))
+      expect(screen.getByText('Not quite. The answer is D. Here’s why…')).toBeTruthy()
+      expect(screen.getAllByText('Your answer').length).toBeGreaterThan(0)
     })
   })
 })

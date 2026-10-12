@@ -12,12 +12,20 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
-// Shallow-render FlashcardExam so the test asserts on WHICH questions (by id,
-// in order) and which deckId sentinel it was launched with.
-jest.mock('../../../../components/practice/FlashcardExam', () => ({
-  FlashcardExam: ({ questions, title, deckId }: any) => {
+// iOS redesign P4: the due queue is a self-graded card stack. Shallow-render
+// it (keeping the real toStackCards) so the test asserts on WHICH cards (by
+// id, in order, with their answers) and which deckId sentinel it got.
+jest.mock('../../../../components/practice/FlashcardStack', () => ({
+  ...jest.requireActual('../../../../components/practice/FlashcardStack'),
+  FlashcardStack: ({ cards, title, deckId }: any) => {
     const { Text } = require('react-native')
-    return <Text testID="exam">{`${title}|${deckId}|${questions.map((q: any) => q.id).join(',')}`}</Text>
+    return <Text testID="stack">{`${title}|${deckId}|${cards.map((c: any) => `${c.id}:${c.answer}:${c.explanation}`).join(',')}`}</Text>
+  },
+}))
+jest.mock('../../../../components/practice/FlashcardExam', () => ({
+  FlashcardExam: () => {
+    const { Text } = require('react-native')
+    return <Text testID="exam">mcq</Text>
   },
 }))
 
@@ -64,10 +72,10 @@ describe('DueReviewScreen (Task H)', () => {
     await act(async () => {})
     expect(screen.getByText('All caught up')).toBeTruthy()
     expect(screen.getByText('No cards are due for review right now. Come back tomorrow, or practise a topic.')).toBeTruthy()
-    expect(screen.queryByTestId('exam')).toBeNull()
+    expect(screen.queryByTestId('stack')).toBeNull()
   })
 
-  it('launches straight into the exam (no chooser step) with cards ordered most-overdue first, tagged with the __due__ sentinel', async () => {
+  it('launches straight into the card stack (no chooser step) with cards ordered most-overdue first, tagged with the __due__ sentinel', async () => {
     mockGetDueFlashcards.mockResolvedValue([
       { flashcardId: 'c2', topicId: 't1', dueAt: 100 },
       { flashcardId: 'c1', topicId: 't2', dueAt: 200 },
@@ -76,8 +84,9 @@ describe('DueReviewScreen (Task H)', () => {
     render(<DueReviewScreen />)
     await act(async () => {})
 
-    const exam = screen.getByTestId('exam')
-    expect(exam.props.children).toBe('Due today|__due__|c2,c1')
+    const stack = screen.getByTestId('stack')
+    expect(stack.props.children).toBe('Due today|__due__|c2:Answer c2:Explanation c2,c1:Answer c1:Explanation c1')
+    expect(screen.queryByTestId('exam')).toBeNull()
   })
 
   it('the empty state offers one way back, a named button (no glyph)', async () => {

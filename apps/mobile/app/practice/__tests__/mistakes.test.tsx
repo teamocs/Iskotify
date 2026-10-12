@@ -104,7 +104,7 @@ const row = (questionId: string, questionText: string, over: Record<string, unkn
 })
 
 async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
-  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(screen.getByText('Review'))
   fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
   const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -182,7 +182,7 @@ describe('Mistakes mode (/practice/mistakes)', () => {
     expect(await screen.findByText('You fixed 1 of 2 mistakes.')).toBeTruthy()
 
     // Results: the primary opens the review; the secondary starts a NEW run, so it says so.
-    expect(screen.getByRole('button', { name: 'Review mistakes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Review (\d+ answers?|answers)$/ })).toBeTruthy()
     expect(screen.queryByText('Review mistakes again')).toBeNull()
     fireEvent.press(screen.getByRole('button', { name: 'Retry mistakes' }))
     expect(mockReplace).toHaveBeenCalledWith('/practice/mistakes')

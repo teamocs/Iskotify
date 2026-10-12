@@ -4,7 +4,7 @@ import { iosTextStyle, radius, spacing, weight, type Theme } from '../../theme/t
 import { decorative, focusRing } from './a11y'
 import { PressableScale } from './Pressable'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+export type ButtonVariant = 'primary' | 'secondary' | 'tinted' | 'ghost' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps {
@@ -12,7 +12,7 @@ export interface ButtonProps {
   onPress: () => void
   /**
    * `primary` is the maroon fill — direction C allows ONE per screen, for the
-   * next step. `secondary` is outlined, `ghost` is text-only, `danger` is a
+   * next step. `secondary` is outlined, `tinted` an accentSurface fill, `ghost` is text-only, `danger` is a
    * tinted destructive action.
    */
   variant?: ButtonVariant
@@ -38,6 +38,7 @@ type Colors = { bg: keyof Theme | null; bgPressed: keyof Theme | null; fg: keyof
 const VARIANTS: Record<ButtonVariant, Colors> = {
   primary:   { bg: 'accent',        bgPressed: 'accentPressed', fg: 'textInverse',  border: null },
   secondary: { bg: 'surface',       bgPressed: 'surface2',      fg: 'accentText',   border: 'accentBorder' },
+  tinted:    { bg: 'accentSurface', bgPressed: 'surface2',      fg: 'accentText',   border: null },
   ghost:     { bg: null,            bgPressed: 'surface2',      fg: 'accentText',   border: null },
   danger:    { bg: 'dangerSurface', bgPressed: 'dangerSurface', fg: 'dangerStrong', border: 'dangerBorder' },
 }

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { Alert } from 'react-native'
 import PracticeScreen from '../practice'
 import { aria } from '../../../test-utils/aria'
+import { primaryActions } from '../../../test-utils/primaryActions'
 
 // Redesign M2 (direction C, "One Next Step"): Practice leads with ONE next
 // practice action, then Mock exams, Subjects, Your decks and Tools as flat
@@ -632,6 +633,89 @@ describe('PracticeScreen (redesign M2)', () => {
       for (const gone of ['Subject readiness', 'My Focus', 'AI Study Feedback', 'Recommended']) {
         expect(screen.queryByText(gone)).toBeNull()
       }
+      expect(primaryActions()).toEqual(['Take the diagnostic'])
+    })
+  })
+
+  // iOS redesign P4: exam chips, the full mock hero (the one primary action),
+  // the 2×2 ways to practise and subjects with a thin mastery bar.
+  describe('iOS redesign P4', () => {
+    it('leads with a maroon full-mock hero whose white Begin is the ONE primary action', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([ACET, UPCAT])
+      await renderSettled()
+      const hero = screen.getByTestId('practice-mock-hero')
+      const flat = (n: any) => Object.assign({}, ...[n.props.style].flat(Infinity).filter(Boolean))
+      expect(flat(hero).backgroundColor).toBe('#800000')
+      expect(flat(hero).borderRadius).toBe(22)
+      expect(within(hero).getByText('UP College Admission Test')).toBeTruthy()
+      expect(within(hero).getByText(/180 items · 2\.5 h/)).toBeTruthy()
+      // The next step is tinted while the hero shows: exactly one primary on screen.
+      expect(primaryActions()).toEqual(['Begin the UPCAT full mock'])
+      fireEvent.press(within(hero).getByRole('button', { name: 'Begin the UPCAT full mock' }))
+      expect(router.push).toHaveBeenCalledWith('/practice/exam/upcat')
+    })
+
+    it('switches the hero with the exam chips (a radiogroup, selected = maroon fill)', async () => {
+      mockFocusListings.push({ slug: 'upcat', priority: 1, addedAt: 0, title: 'UPCAT', type: 'exam' })
+      mockListPublishedBlueprints.mockResolvedValue([ACET, UPCAT])
+      await renderSettled()
+      const chips = screen.getByTestId('practice-exam-chips')
+      const radios = within(chips).getAllByRole('radio')
+      expect(radios.map(r => r.props.accessibilityLabel)).toEqual(['UPCAT', 'ACET'])
+      expect(aria(radios[0], 'aria-checked')).toBe(true)
+      fireEvent.press(radios[1]!)
+      const hero = screen.getByTestId('practice-mock-hero')
+      expect(within(hero).getByText('Ateneo College Entrance Test')).toBeTruthy()
+      expect(aria(within(chips).getAllByRole('radio')[1], 'aria-checked')).toBe(true)
+      expect(primaryActions()).toEqual(['Begin the ACET full mock'])
+    })
+
+    it('says Resume, with the real answered count, when the hero mock has a saved run', async () => {
+      mockListPublishedBlueprints.mockResolvedValue([UPCAT])
+      mockLoadRun.mockImplementation(async (key: string) => (key === 'exam:upcat'
+        ? { questionIds: ['a', 'b', 'c'], answers: { 0: 1, 1: 2 }, updatedAt: 5 }
+        : null))
+      await renderSettled()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Resume the UPCAT full mock' })).toBeTruthy())
+      expect(within(screen.getByTestId('practice-mock-hero')).getByText(/2 of 3 answered/)).toBeTruthy()
+      expect(primaryActions()).toEqual(['Resume the UPCAT full mock'])
+    })
+
+    it('without a runnable mock there is no hero, and the next step is the primary', async () => {
+      await renderSettled()
+      expect(screen.queryByTestId('practice-mock-hero')).toBeNull()
+      expect(screen.queryByTestId('practice-exam-chips')).toBeNull()
+      expect(primaryActions()).toEqual(['Take the diagnostic'])
+    })
+
+    it('ways to practise are white 18pt tiles, never maroon', async () => {
+      await renderSettled()
+      const flat = (n: any) => Object.assign({}, ...[n.props.style].flat(Infinity).filter(Boolean))
+      for (const tile of within(screen.getByTestId('practice-quick-start')).getAllByRole('button')) {
+        expect(flat(tile).borderRadius).toBe(18)
+        expect(flat(tile).backgroundColor).toBe('#ffffff')
+        expect(flat(tile).minHeight).toBeGreaterThanOrEqual(44)
+      }
+    })
+
+    it('subjects show a thin 4pt mastery bar and a tabular percent, New when unpractised', async () => {
+      mockUsePracticeData.mockReturnValue({
+        ...emptyPracticeData,
+        subjects: [{ id: 's1', name: 'Algebra' }, { id: 's2', name: 'Science' }],
+        topicRows: [
+          { topic: { id: 't1', name: 'Linear Equations', subjectId: 's1' }, cardCount: 12, accuracy: 70, strength: 'Strong' },
+          { topic: { id: 't2', name: 'Cells', subjectId: 's2' }, cardCount: 4, accuracy: null, strength: 'New' },
+        ],
+      })
+      mockGetSubjectPct.mockResolvedValue([{ subject: 'Algebra', pct: 70 }])
+      await renderSettled()
+      const section = screen.getByTestId('practice-subjects')
+      const bar = await within(section).findByRole('progressbar', { name: 'Algebra readiness' }, { includeHiddenElements: true } as never)
+      expect(Object.assign({}, ...[bar.props.style].flat(Infinity).filter(Boolean)).height).toBe(4)
+      const pct = within(section).getByText('70%')
+      expect(Object.assign({}, ...[pct.props.style].flat(Infinity).filter(Boolean)).fontVariant).toEqual(['tabular-nums'])
+      expect(within(section).getByText('New')).toBeTruthy()
     })
   })
 })

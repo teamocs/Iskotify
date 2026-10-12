@@ -25,14 +25,6 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
 }))
 
-// QuestionNavigator uses a horizontal ScrollView with layout math not worth
-// exercising here — render it shallowly, same as FlashcardExam.test.tsx.
-jest.mock('../../../../components/upcat/QuestionNavigator', () => ({
-  QuestionNavigator: ({ total, currentIdx }: { total: number; currentIdx: number }) => {
-    const { Text } = require('react-native')
-    return <Text testID="qnav">{`Q${currentIdx + 1}/${total}`}</Text>
-  },
-}))
 
 // Redesign M3: the runner's frame changes with the window size class.
 let mockBp: 'compact' | 'medium' | 'expanded' = 'compact'
@@ -130,7 +122,7 @@ jest.mock('../../../../hooks/useDb', () => {
 /** Fix 2: the last question opens a review sheet instead of submitting
  *  directly — drives that flow through to an actual submit() call. */
 async function reviewAndConfirmSubmit(alertSpy: jest.SpyInstance) {
-  fireEvent.press(screen.getByText('Review & submit'))
+  fireEvent.press(screen.getByText('Review'))
   fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
   const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
   const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -282,7 +274,7 @@ describe('UpcatExam', () => {
 
     // Reached results despite the telemetry insert rejecting — not stranded
     // behind the double-submit guard.
-    expect(screen.getByText('Per-subtest')).toBeTruthy()
+    expect(screen.getByText('By skill')).toBeTruthy()
     expect(warnSpy).toHaveBeenCalledWith('[practice/upcat/[subtest]] recordAttempts failed:', expect.any(Error))
 
     warnSpy.mockRestore()
@@ -336,7 +328,7 @@ describe('UpcatExam', () => {
     fireEvent.press(screen.getByText('2'))
 
     expect(screen.queryByText('Submit')).toBeNull()
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
 
     expect(mockRecordAttempts).not.toHaveBeenCalled()
     expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
@@ -357,7 +349,8 @@ describe('UpcatExam', () => {
     const tree = JSON.stringify(screen.toJSON()).toLowerCase()
     expect(tree).not.toContain('great work')
     expect(tree).not.toContain('keep practicing')
-    expect(screen.getByText('Review mistakes')).toBeTruthy()
+    // P4: one primary "Review N answers" and a tinted retake.
+    expect(screen.getByText('Review 1 answer')).toBeTruthy()
     expect(screen.getByText('Retake exam')).toBeTruthy()
   })
 
@@ -462,7 +455,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('5+5?')).toBeTruthy())
     expect(screen.getByRole('radio', { name: '12', checked: true })).toBeTruthy()
 
-    fireEvent.press(screen.getByText('Back'))
+    fireEvent.press(screen.getByRole('button', { name: 'Previous question' }))
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     expect(screen.getByRole('radio', { name: '2', checked: true })).toBeTruthy()
   })
@@ -485,7 +478,7 @@ describe('UpcatExam', () => {
     await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
     fireEvent.press(screen.getByText('2'))
 
-    fireEvent.press(screen.getByText('Review & submit'))
+    fireEvent.press(screen.getByText('Review'))
     fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
     const call = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]!
     const buttons = call[2] as { text: string; onPress?: () => void }[]
@@ -496,11 +489,11 @@ describe('UpcatExam', () => {
     const saveCallsAtSubmitStart = mockSaveRun.mock.calls.length
     expect(mockClearRun).toHaveBeenCalledWith('upcat:Mathematics:full')
 
-    fireEvent.press(screen.getByText('1')) // would flip the answer if not disabled
+    fireEvent.press(screen.getByRole('radio', { name: '1' })) // would flip the answer if not disabled
     expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
 
     await act(async () => { resolveAttempts() })
-    await waitFor(() => expect(screen.getByText('Per-subtest')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
     expect(mockSaveRun.mock.calls.length).toBe(saveCallsAtSubmitStart)
   })
 
@@ -638,14 +631,15 @@ describe('UpcatExam', () => {
       expect(within(col).getByRole('radio', { name: '4' })).toBeTruthy()
     })
 
-    it('keeps Back / Skip / Next inside the capped column, not stretched across the window', async () => {
+    it('keeps Previous / Skip-or-Next inside the capped column, not stretched across the window', async () => {
       mockBp = 'expanded'
       await start()
       const footer = screen.getByTestId('runner-footer')
       expect(flat(footer).maxWidth).toBeLessThanOrEqual(720)
-      expect(within(footer).getByRole('button', { name: 'Next' })).toBeTruthy()
+      // iOS redesign P4: Previous (glass circle) · the one primary (Skip until answered, then Next).
       expect(within(footer).getByRole('button', { name: 'Skip' })).toBeTruthy()
-      expect(within(footer).getByRole('button', { name: 'Back' })).toBeTruthy()
+      expect(within(footer).getByRole('button', { name: 'Previous question' })).toBeTruthy()
+      expect(within(footer).queryByRole('button', { name: 'All questions' })).toBeNull() // the side panel is on screen
     })
 
     it('shows results on a titled page with a neutral score', async () => {
@@ -654,7 +648,7 @@ describe('UpcatExam', () => {
       fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
       const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]![2] as { text: string; onPress?: () => void }[]
       await act(async () => { buttons.find(b => b.text === 'Submit')!.onPress!() })
-      expect(await screen.findByRole('header', { name: 'Tapos na! Practice complete.' })).toBeTruthy()
+      expect(await screen.findByRole('header', { name: 'Practice complete.' })).toBeTruthy()
       expect(screen.getByTestId('screen-scroll')).toBeTruthy()
       // Lands on the real Mock exams list, not the /practice/upcat redirect to a prestart.
       fireEvent.press(screen.getByRole('button', { name: 'Back to mock exams' }))

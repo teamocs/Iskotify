@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Layers1Outlined, Trash3Outlined, ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Badge } from '../ui/Badge'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
 
@@ -44,8 +44,8 @@ export function DeckRow({ name, subtitle, dueCount, onOpen, onDelete }: Props) {
           <Lineicons icon={Layers1Outlined} size={18} color={t.accentText} />
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={2}>{name}</Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>{subtitle}</Text>
+          <Text style={iosTextStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={2}>{name}</Text>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={2}>{subtitle}</Text>
         </View>
         {dueCount > 0 ? <Badge label={`${dueCount} due`} tone="warning" /> : null}
         <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>

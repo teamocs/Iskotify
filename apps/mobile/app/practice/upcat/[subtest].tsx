@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { View, Text, ScrollView } from 'react-native'
+import { View, ScrollView } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../../../hooks/useDb'
@@ -27,11 +27,10 @@ import { submitQuestionReport } from '../../../services/questionReports'
 import { Screen } from '../../../components/ui/Screen'
 import { PageTitle } from '../../../components/ui/PageTitle'
 import { Button } from '../../../components/ui/Button'
-import { SectionHeader } from '../../../components/ui/SectionHeader'
-import { ProgressBar } from '../../../components/ui/ProgressBar'
+import { ResultsBreakdown } from '../../../components/practice/ResultsBreakdown'
+import { resultCounts, reviewAnswersLabel } from '../../../components/practice/resultsCopy'
 import { DetailTopBar } from '../../../components/explore/DetailTopBar'
-import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../../theme/tokens'
+import { spacing } from '../../../theme/tokens'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import { usePreventLeave } from '../../../hooks/usePreventLeave'
 import { useBeforeUnloadWarning } from '../../../hooks/useBeforeUnloadWarning'
@@ -65,7 +64,6 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
   const mode = isMistakes ? 'quick' : params.mode
   const homeHref = isMistakes ? '/practice' : '/practice/exam'
   const db = useDb()
-  const { theme: t } = useTheme()
   // Redesign M3: the question navigator is a side panel on expanded widths and
   // a sheet (opened from the header) everywhere else.
   const expanded = useBreakpoint() === 'expanded'
@@ -501,6 +499,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
     const scored = questions.map((q, i) => ({ subtest: q.subtest, correct: answers[i] === q.correctIndex }))
     const res = scoreExam(scored)
     const pct = res.overall.total ? Math.round((res.overall.correct / res.overall.total) * 100) : 0
+    const counts = resultCounts(questions, answers)
     const label = subtestParam === 'all' ? 'the full mock' : (subtestParam ?? 'this subtest')
     // Mistakes mode counts only the missed questions (not their passage-set companions).
     const missed = questions.filter(q => mistakeIds.has(q.questionId))
@@ -510,41 +509,28 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
         <View style={{ gap: spacing.xxl, paddingTop: spacing.lg }}>
           {/* Peak-end moment: warm, short, then the facts. Never a verdict. */}
           <PageTitle
-            title="Tapos na! Practice complete."
+            title="Practice complete."
             lead={isMistakes
               ? `You fixed ${fixed} of ${missed.length} mistake${missed.length === 1 ? '' : 's'}.`
               : `Here is how ${label} went. Every session shows you what to practise next.`}
           />
 
-          {/* Fix 3: one neutral card regardless of score — no pass/fail colouring. */}
-          <View style={{ gap: spacing.sm }}>
-            <ResultsScoreCard pct={pct} correct={res.overall.correct} total={res.overall.total} />
-            {scoreDelta ? (
-              <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg }}>
-                <Text style={[textStyle('bodySm', t.textPrimary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>{scoreDelta}</Text>
-              </View>
-            ) : null}
-          </View>
+          {/* Fix 3 + P4: one neutral ring regardless of score — no pass/fail colouring.
+              The estimate delta is the only headline, and only when it exists. */}
+          <ResultsScoreCard
+            pct={pct}
+            correct={res.overall.correct}
+            total={res.overall.total}
+            wrong={counts.wrong}
+            skipped={counts.skipped}
+            headline={scoreDelta}
+          />
 
-          <View>
-            <SectionHeader title="Per-subtest" subtitle="Your raw score in each subtest" />
-            <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', paddingHorizontal: spacing.lg }}>
-              {Object.entries(res.bySubtest).map(([st, b], i) => {
-                const stPct = b.total ? Math.round((b.correct / b.total) * 100) : 0
-                return (
-                  <View key={st} style={{ paddingVertical: spacing.md, gap: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider }}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md }}>
-                      <Text style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>{st}</Text>
-                      <Text style={[textStyle('bodySm', t.textSecondary), { fontVariant: ['tabular-nums'] }]} maxFontSizeMultiplier={2}>
-                        {b.correct}/{b.total} correct · {stPct}%
-                      </Text>
-                    </View>
-                    <ProgressBar value={stPct / 100} label={`${st} score`} />
-                  </View>
-                )
-              })}
-            </View>
-          </View>
+          <ResultsBreakdown
+            rows={Object.entries(res.bySubtest).map(([st, b]) => ({
+              name: st, correct: b.correct, total: b.total, pct: b.total ? Math.round((b.correct / b.total) * 100) : 0,
+            }))}
+          />
 
           <RunnerReview
             items={questions.map(q => ({
@@ -565,12 +551,12 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
             expandAll={reviewMistakesTapped}
           />
 
-          {/* Fix 3: "Review mistakes" is the primary action, "Retake" is secondary. */}
+          {/* Fix 3 + P4: one primary "Review N answers", a tinted drill, the way back quiet. */}
           <View style={{ gap: spacing.sm }}>
-            <Button label="Review mistakes" onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
+            <Button label={reviewAnswersLabel(counts.wrong + counts.skipped)} onPress={() => setReviewMistakesTapped(true)} fullWidth size="lg" />
             <Button
               label={isMistakes ? 'Retry mistakes' : 'Retake exam'}
-              variant="secondary"
+              variant="tinted"
               fullWidth
               onPress={() => router.replace(isMistakes ? '/practice/mistakes' : `/practice/upcat/${subtestParam}?mode=${mode}`)}
             />
@@ -606,15 +592,14 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
           answered={answeredIdxs.size}
           remaining={remaining}
           onLeave={() => router.back()}
-          onOpenOverview={expanded ? undefined : () => setReviewOpen(true)}
+          onFlag={() => setReportIdx(idx)}
+          flagged={!!reported[idx]}
         />
       }
       question={
         <QuestionCard
           questionText={q.questionText}
           passageText={q.passageText}
-          reported={reported[idx]}
-          onReport={() => setReportIdx(idx)}
           imageUrl={q.imageUrl}
           imageAlt={q.imageAlt}
           imageWidth={q.imageWidth}
@@ -637,6 +622,7 @@ export default function UpcatExam({ variant }: { variant?: 'mistakes' } = {}) {
           answered={sel !== undefined}
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
+          onQuestions={expanded ? undefined : () => setReviewOpen(true)}
           onSkip={() => setIdx(i => i + 1)}
           onNext={() => setIdx(i => i + 1)}
           onReview={() => setReviewOpen(true)}

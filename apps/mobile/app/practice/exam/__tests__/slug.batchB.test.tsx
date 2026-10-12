@@ -99,7 +99,7 @@ describe('BlueprintExam: Batch B', () => {
       expect(screen.queryByText('Skip')).toBeNull()
       expect(screen.queryByText('Next')).toBeNull()
       expect(screen.getByText('Finish section')).toBeTruthy()
-      expect(screen.queryByText('Review & submit')).toBeNull()
+      expect(screen.queryByText('Review')).toBeNull()
     })
 
     it('Finish section asks for confirmation, then locks the section and opens the next', async () => {
@@ -112,7 +112,7 @@ describe('BlueprintExam: Batch B', () => {
       await confirmLast()
       await waitFor(() => expect(screen.getByText('B2?')).toBeTruthy())
       // Math is locked: Back at the first question of Science is disabled.
-      fireEvent.press(screen.getByText('Back'))
+      fireEvent.press(screen.getByRole('button', { name: 'Previous question' }))
       expect(screen.getByText('B2?')).toBeTruthy()
     })
 
@@ -193,7 +193,7 @@ describe('BlueprintExam: Batch B', () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
       fireEvent.press(screen.getByText('Submit what I answered'))
-      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
       const rows = mockRecordAttempts.mock.calls[0]![0] as any[]
       // reached = answered (idx 0) + visited up to the saved position (idx 1); B2/B1 never seen.
       expect(rows.map(r => r.questionId)).toEqual(['A2', 'A1'])
@@ -221,8 +221,8 @@ describe('BlueprintExam: Batch B', () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Resume where you left off')).toBeTruthy())
       fireEvent.press(screen.getByText('Resume where you left off'))
-      await waitFor(() => expect(screen.getByText('Review & submit')).toBeTruthy())
-      fireEvent.press(screen.getByText('Review & submit'))
+      await waitFor(() => expect(screen.getByText('Review')).toBeTruthy())
+      fireEvent.press(screen.getByText('Review'))
       fireEvent.press(await screen.findByRole('button', { name: /submit exam/i }))
       await confirmLast()
       expect(mockRecordAttempts.mock.calls[0]![0][0].sessionKey).toBe(424242)
@@ -265,10 +265,10 @@ describe('BlueprintExam: Batch B', () => {
       await waitFor(() => expect(screen.getByText('A1?')).toBeTruthy())
       fireEvent.press(screen.getByText('Finish section'))
       await act(async () => { jest.advanceTimersByTime(16 * 60_000) }) // whole exam runs out: auto-submit
-      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
       mockSaveRun.mockClear()
       await confirmLast()
-      expect(screen.getByText('Per-section')).toBeTruthy()
+      expect(screen.getByText('By skill')).toBeTruthy()
       expect(mockSaveRun).not.toHaveBeenCalled()
     })
   })
@@ -287,7 +287,7 @@ describe('BlueprintExam: Batch B', () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
       fireEvent.press(screen.getByText('Submit what I answered'))
-      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
       expect(mockRecordAttempts.mock.calls[0]![0]).toHaveLength(1)
       expect(mockRecordSession).toHaveBeenCalledTimes(1)
       expect(mockRecordSession).toHaveBeenCalledWith(expect.objectContaining({ score: 1, total: 1 }))
@@ -299,9 +299,9 @@ describe('BlueprintExam: Batch B', () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Submit what I answered')).toBeTruthy())
       fireEvent.press(screen.getByText('Submit what I answered'))
-      await waitFor(() => expect(screen.getByText('Per-section')).toBeTruthy())
-      expect(screen.getAllByText('1/1 correct · 100%').length).toBe(1)
-      expect(screen.getByText('1/1 correct')).toBeTruthy()
+      await waitFor(() => expect(screen.getByText('By skill')).toBeTruthy())
+      expect(screen.getAllByText('1 of 1 correct').length).toBe(1)
+      expect(screen.getByText('1 of 1')).toBeTruthy()
       expect(screen.queryByLabelText('Science score')).toBeNull() // nothing reached: no breakdown row
       expect(screen.getByLabelText('Math score')).toBeTruthy()
       expect(screen.getByText(/Questions you never reached are not counted/)).toBeTruthy()

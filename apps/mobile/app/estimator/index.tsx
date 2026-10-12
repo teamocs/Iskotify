@@ -3,7 +3,7 @@ import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Calculator1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle, weight } from '../../theme/tokens'
 import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
 import { useAdmissionEstimate } from '../../hooks/useAdmissionEstimate'
 import { MIN_ANSWERS, type SubtestKey } from '../../utils/subtestReadiness'
@@ -41,7 +41,7 @@ type Theme = ReturnType<typeof useTheme>['theme']
 function CardHeading({ children }: { children: string }) {
   const { theme: t } = useTheme()
   return (
-    <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+    <Text {...heading(2)} style={[iosTextStyle('headline', t.textPrimary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
       {children}
     </Text>
   )
@@ -57,10 +57,10 @@ function RangeBar({ point, low, high, t }: { point: number; low: number; high: n
 
   return (
     <View style={{ gap: spacing.xs }}>
-      <Text style={textStyle('numericLg', t.textPrimary)} maxFontSizeMultiplier={1.5}>
+      <Text style={iosTextStyle('numericLg', t.textPrimary)} maxFontSizeMultiplier={1.5}>
         {point.toFixed(2)}
       </Text>
-      <Text style={[textStyle('bodySm', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
+      <Text style={[iosTextStyle('footnote', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
         Range {low.toFixed(2)}–{high.toFixed(2)} · lower is better
       </Text>
 
@@ -87,8 +87,8 @@ function RangeBar({ point, low, high, t }: { point: number; low: number; high: n
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>1.00 (best)</Text>
-        <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>5.00 (worst)</Text>
+        <Text style={[iosTextStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>1.00 (best)</Text>
+        <Text style={[iosTextStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>5.00 (worst)</Text>
       </View>
     </View>
   )
@@ -143,7 +143,7 @@ export default function EstimatorScreen() {
           <ScoreDisclaimerNotice />
           <Card>
             <CardHeading>Practice to unlock your estimate</CardHeading>
-            <Text style={[textStyle('body', t.textSecondary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
+            <Text style={[iosTextStyle('body', t.textSecondary), { marginBottom: spacing.sm }]} maxFontSizeMultiplier={2}>
               Your Estimated Admission Score unlocks once you&apos;ve answered at least {MIN_ANSWERS} questions
               in each UPCAT subtest.
             </Text>
@@ -158,7 +158,7 @@ export default function EstimatorScreen() {
                     borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
                   }}
                 >
-                  <Text style={[textStyle('body', t.textPrimary), TABULAR, { flex: 1, minWidth: 160 }]} maxFontSizeMultiplier={2}>
+                  <Text style={[iosTextStyle('body', t.textPrimary), TABULAR, { flex: 1, minWidth: 160 }]} maxFontSizeMultiplier={2}>
                     {row.label}: {r.answered} of {MIN_ANSWERS} questions
                   </Text>
                   <Button
@@ -184,7 +184,7 @@ export default function EstimatorScreen() {
         <Card testID="estimate-summary" style={{ gap: spacing.md }}>
           <CardHeading>Your estimate</CardHeading>
           <RangeBar point={result.point} low={result.low} high={result.high} t={t} />
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
             Computed on this device, based on historical cutoffs — not your official UPG.
           </Text>
           <Button label="Edit grades" variant="secondary" onPress={editGrades} fullWidth />
@@ -202,8 +202,8 @@ export default function EstimatorScreen() {
                 minHeight: 44, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
               }}
             >
-              <Text style={[textStyle('body', t.textSecondary), { flex: 1 }]} maxFontSizeMultiplier={2}>{row.label}</Text>
-              <Text style={[textStyle('titleSm', t.textPrimary), TABULAR]} maxFontSizeMultiplier={1.6}>
+              <Text style={[iosTextStyle('body', t.textSecondary), { flex: 1 }]} maxFontSizeMultiplier={2}>{row.label}</Text>
+              <Text style={[iosTextStyle('headline', t.textPrimary), TABULAR]} maxFontSizeMultiplier={1.6}>
                 {readiness[row.key].percent}%
               </Text>
             </View>
@@ -214,16 +214,16 @@ export default function EstimatorScreen() {
       const adjustments = (result.eeas.palugit > 0 || result.eeas.pabigat > 0) ? (
         <Card style={{ gap: spacing.xs }}>
           <CardHeading>Adjustments to your estimate</CardHeading>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
             A lower score is better, so a bonus subtracts and a distance adjustment adds.
           </Text>
           {result.eeas.palugit > 0 ? (
-            <Text style={[textStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
+            <Text style={[iosTextStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
               Palugit (public-school / Indigenous Peoples bonus): −{result.eeas.palugit.toFixed(2)}
             </Text>
           ) : null}
           {result.eeas.pabigat > 0 ? (
-            <Text style={[textStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
+            <Text style={[iosTextStyle('body', t.textPrimary), TABULAR]} maxFontSizeMultiplier={2}>
               Pabigat (distant target-campus adjustment): +{result.eeas.pabigat.toFixed(2)}
             </Text>
           ) : null}
@@ -233,12 +233,12 @@ export default function EstimatorScreen() {
       const outlook = (
         <Card>
           <CardHeading>Per-campus outlook</CardHeading>
-          <Text style={[textStyle('bodySm', t.textSecondary), { marginBottom: spacing.xs }]} maxFontSizeMultiplier={2}>
+          <Text style={[iosTextStyle('footnote', t.textSecondary), { marginBottom: spacing.xs }]} maxFontSizeMultiplier={2}>
             How your estimate compares with each campus&apos;s historical cutoff.
           </Text>
           {groupedCampuses.map(({ group, rows }) => (
             <View key={group} style={{ marginTop: spacing.md }}>
-              <Text {...heading(3)} style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={2}>
+              <Text {...heading(3)} style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={2}>
                 {group}
               </Text>
               {rows.map((row, idx) => (
@@ -251,10 +251,10 @@ export default function EstimatorScreen() {
                     borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.divider,
                   }}
                 >
-                  <Text style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
+                  <Text style={iosTextStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>
                     {row.campus}{row.program ? ` – ${row.program}` : ''}
                   </Text>
-                  <Text style={[textStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
+                  <Text style={[iosTextStyle('caption', t.textSecondary), TABULAR]} maxFontSizeMultiplier={2}>
                     Cutoff: {row.cutoff.toFixed(2)}{row.year != null ? ` (${row.year})` : ''}{row.isEstimate ? ' · estimate' : ''}
                   </Text>
                 </View>
@@ -316,7 +316,7 @@ export default function EstimatorScreen() {
           negation the compliance guard allows for "guarantee". */}
       <Text
         testID="estimator-footnote"
-        style={[textStyle('caption', t.textSecondary), { marginTop: spacing.xl }]}
+        style={[iosTextStyle('caption', t.textSecondary), { marginTop: spacing.xl }]}
         maxFontSizeMultiplier={2}
       >
         Iskotify isn’t affiliated with or endorsed by the University of the Philippines. Cutoffs are historical and change every year. This estimate is not a guarantee of admission.

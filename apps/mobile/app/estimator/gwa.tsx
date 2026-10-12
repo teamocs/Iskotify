@@ -4,7 +4,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined, PlusOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, radius, textStyle } from '../../theme/tokens'
+import { spacing, radius, iosTextStyle, weight } from '../../theme/tokens'
 import { useBreakpoint, columnCount } from '../../hooks/useBreakpoint'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
@@ -47,15 +47,15 @@ export default function GwaCalculatorScreen() {
 
   const summary = (
     <Card testID="gwa-summary" style={{ gap: spacing.sm }}>
-      <Text {...heading(2)} style={textStyle('titleSm', t.textSecondary)} maxFontSizeMultiplier={2}>Your GWA</Text>
+      <Text {...heading(2)} style={iosTextStyle('headline', t.textSecondary)} maxFontSizeMultiplier={2}>Your GWA</Text>
       <Text
-        style={textStyle('numericLg', t.textPrimary)}
+        style={iosTextStyle('numericLg', t.textPrimary)}
         maxFontSizeMultiplier={1.5}
         accessibilityLiveRegion="polite"
       >
         {gwa != null ? gwa.toFixed(4) : '—'}
       </Text>
-      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+      <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
         {units > 0 ? `${units} total units` : 'Add grades and units to see it'}
       </Text>
       {honor != null ? (
@@ -65,15 +65,15 @@ export default function GwaCalculatorScreen() {
           paddingHorizontal: spacing.md, minHeight: 32,
         }}>
           <View {...decorative}><Lineicons icon={GraduationCap1Outlined} size={16} color={t.textPrimary} /></View>
-          <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>{honor}</Text>
+          <Text style={{ ...iosTextStyle('footnote', t.textPrimary), ...weight('600') }} maxFontSizeMultiplier={2}>{honor}</Text>
         </View>
       ) : null}
       {gwa != null && honor == null && disqualified ? (
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
           A grade below 3.00 makes you ineligible for Latin honors.
         </Text>
       ) : null}
-      <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
+      <Text style={[iosTextStyle('caption', t.textSecondary), { marginTop: spacing.xs }]} maxFontSizeMultiplier={2}>
         Latin honors (cumulative): Summa Cum Laude ≤ 1.20 · Magna Cum Laude ≤ 1.45 · Cum Laude ≤ 1.75,
         with no grade below 3.00. This is an unofficial estimate.
       </Text>
@@ -89,7 +89,7 @@ export default function GwaCalculatorScreen() {
         const canRemove = rows.length > 1
         return (
           <View key={row.id} style={{ gap: spacing.xs }}>
-            <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+            <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>
               Subject {n}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>

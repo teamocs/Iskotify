@@ -164,8 +164,12 @@ describe('ReviewCard', () => {
         explanation="exp"
       />,
     )
-    expect(screen.getByText('✓')).toBeTruthy()
-    expect(screen.getByText('✗')).toBeTruthy()
+    // iOS redesign P4: state in words (plus a drawn check / cross), never colour alone.
+    expect(screen.getByText('Correct')).toBeTruthy()
+    expect(screen.getByText('Your answer')).toBeTruthy()
+    expect(screen.getAllByTestId('animated-check', { includeHiddenElements: true })).toHaveLength(1)
+    // Kind wrong-answer copy.
+    expect(screen.getByText('Not quite. The answer is A. Here’s why…')).toBeTruthy()
   })
 
   it('renders no marks at all when unanswered (selectedIndex undefined) besides the correct check', () => {
@@ -179,8 +183,9 @@ describe('ReviewCard', () => {
         explanation="exp"
       />,
     )
-    expect(screen.getByText('✓')).toBeTruthy()
-    expect(screen.queryByText('✗')).toBeNull()
+    expect(screen.getByText('Correct')).toBeTruthy()
+    expect(screen.queryByText('Your answer')).toBeNull()
+    expect(screen.getByText('Skipped. The answer is A.')).toBeTruthy()
   })
 
   // Finding 3 (Important, reviewed): cardOk/cardBad/optRowCorrect/optRowWrong/
@@ -196,11 +201,11 @@ describe('ReviewCard', () => {
     expect(src).not.toMatch(/rgba\(74,\s*222,\s*128/)   // old hardcoded dark-mode success
     expect(src).not.toMatch(/rgba\(248,\s*113,\s*113/)  // old hardcoded dark-mode danger
     expect(src).not.toMatch(/rgba\(251,\s*191,\s*36/)   // old hardcoded dark-mode warning
-    expect(src).toMatch(/cardOk:\s*\{\s*borderColor:\s*t\.success\s*\}/)
-    expect(src).toMatch(/cardBad:\s*\{\s*borderColor:\s*t\.danger\s*\}/)
-    expect(src).toMatch(/optRowCorrect:.*borderColor:\s*t\.success/)
-    expect(src).toMatch(/optRowWrong:.*borderColor:\s*t\.danger/)
-    expect(src).toMatch(/tipChip:[\s\S]*?borderColor:\s*t\.warning/)
+    // The card stays neutral; the choice rows carry the state on the status tokens.
+    expect(src).not.toMatch(/rgba\(/)
+    expect(src).toContain('borderColor: isCorrect ? t.successBorder : isWrongPick ? t.dangerBorder')
+    expect(src).toContain('backgroundColor: isCorrect ? t.successSurface : isWrongPick ? t.dangerSurface')
+    expect(src).toContain('borderColor: t.warningBorder')
   })
 
   it('renders the question figure below the stem when imageUrl is given', () => {

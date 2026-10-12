@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronDownOutlined, ChevronUpOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from '../../ui/a11y'
 import { SectionHeader } from '../../ui/SectionHeader'
 import { ReviewCard, type ReviewCardProps } from '../ReviewCard'
@@ -68,8 +68,8 @@ export function RunnerReview({ items, answers, expandAll = false }: Props) {
                 }}
               >
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{sec.sectionName}</Text>
-                  <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{reviewLine}</Text>
+                  <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>{sec.sectionName}</Text>
+                  <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={1.6}>{reviewLine}</Text>
                 </View>
                 <View {...decorative}>
                   <Lineicons icon={isOpen ? ChevronUpOutlined : ChevronDownOutlined} size={18} color={t.textSecondary} />

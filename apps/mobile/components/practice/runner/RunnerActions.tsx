@@ -1,4 +1,12 @@
+import { View } from 'react-native'
+import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
+import { useTheme } from '../../../theme/ThemeContext'
+import { radius, spacing } from '../../../theme/tokens'
 import { Button } from '../../ui/Button'
+import { PressableScale } from '../../ui/Pressable'
+import { Text } from '../../ui/Text'
+import { focusRing } from '../../ui/a11y'
+import { GlassIconButton } from '../../navigation/GlassIconButton'
 
 interface Labels {
   back?: string
@@ -10,56 +18,79 @@ interface Labels {
 interface Props {
   isLast: boolean
   canGoBack: boolean
-  /** The current question has an answer (Next stays disabled until it does). */
+  /** The current question has an answer: the primary reads Next (else Skip). */
   answered: boolean
   /** submit() is in flight — every control goes inert. */
   submitting?: boolean
   onBack: () => void
-  onSkip: () => void
+  /** Moving on from an unanswered question. Defaults to onNext. */
+  onSkip?: () => void
   onNext: () => void
   /** Opens the review sheet. The last question never submits directly. */
   onReview: () => void
+  /** Opens the question overview. Omit when the side panel is already on screen. */
+  onQuestions?: () => void
+  /** Section-locked exams: the last question of a section finishes it instead. */
+  lastInSection?: boolean
+  onFinishSection?: () => void
   /** Spoken names, when a runner wants fuller ones than the visible words. */
   labels?: Labels
 }
 
 /**
- * The runner footer: Back · Skip · Next, or Back · Review & submit on the
- * last question. Sized by content except the one primary action, which takes
- * the rest of the (capped) reading column.
+ * The runner's bottom bar content (iOS redesign P4): Previous (a glass icon
+ * circle) · Questions (gray) · the one primary action. The primary is Next
+ * once the question is answered and Skip before; on the last question it is
+ * Review, which opens the review sheet and never submits. A section-locked
+ * exam's last question in a section reads Finish section.
  */
 export function RunnerActions({
-  isLast, canGoBack, answered, submitting = false, onBack, onSkip, onNext, onReview, labels,
+  isLast, canGoBack, answered, submitting = false, onBack, onSkip, onNext, onReview, onQuestions,
+  lastInSection = false, onFinishSection, labels,
 }: Props) {
+  const { theme: t } = useTheme()
+
+  let primary: { label: string; a11y?: string; onPress: () => void }
+  if (isLast) primary = { label: 'Review', a11y: labels?.review, onPress: onReview }
+  else if (lastInSection && onFinishSection) primary = { label: 'Finish section', onPress: onFinishSection }
+  else if (answered) primary = { label: 'Next', a11y: labels?.next, onPress: onNext }
+  else primary = { label: 'Skip', a11y: labels?.skip, onPress: onSkip ?? onNext }
+
   return (
-    <>
-      <Button
-        label="Back"
-        variant="secondary"
-        accessibilityLabel={labels?.back}
-        disabled={!canGoBack || submitting}
+    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+      <GlassIconButton
+        icon={ChevronLeftOutlined}
+        accessibilityLabel={labels?.back ?? 'Previous question'}
         onPress={onBack}
+        disabled={!canGoBack || submitting}
       />
-      {isLast ? (
-        <Button
-          label="Review & submit"
-          accessibilityLabel={labels?.review}
+      {onQuestions ? (
+        <PressableScale
+          onPress={onQuestions}
           disabled={submitting}
-          onPress={onReview}
-          style={{ flexGrow: 1 }}
-        />
-      ) : (
-        <>
-          <Button label="Skip" variant="ghost" accessibilityLabel={labels?.skip} disabled={submitting} onPress={onSkip} />
-          <Button
-            label="Next"
-            accessibilityLabel={labels?.next}
-            disabled={!answered || submitting}
-            onPress={onNext}
-            style={{ flexGrow: 1 }}
-          />
-        </>
-      )}
-    </>
+          accessibilityRole="button"
+          accessibilityLabel="All questions"
+          aria-disabled={submitting}
+          style={({ pressed, focused }) => [
+            {
+              minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.capsule,
+              alignItems: 'center', justifyContent: 'center',
+              backgroundColor: pressed ? t.border : t.surface2,
+            },
+            focusRing(t.focusRing, focused),
+          ]}
+        >
+          <Text role="headline" chrome>Questions</Text>
+        </PressableScale>
+      ) : null}
+      <Button
+        label={primary.label}
+        accessibilityLabel={primary.a11y}
+        disabled={submitting}
+        onPress={primary.onPress}
+        shape="pill"
+        style={{ flexGrow: 1 }}
+      />
+    </View>
   )
 }
