@@ -1,18 +1,17 @@
-import { useCallback } from 'react'
 import { Platform, View } from 'react-native'
 import { Tabs } from 'expo-router'
 import { FloatingTabBar } from '../../components/navigation/FloatingTabBar'
 import { TabBarScrollProvider } from '../../components/navigation/TabBarScrollContext'
 import { SceneBlurTarget } from '../../components/navigation/SceneBlurTarget'
+import { useTabShell } from '../../components/navigation/useTabShell'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
-import { SyncErrorBanner } from '../../components/SyncErrorBanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useDb } from '../../hooks/useDb'
-import { syncOnLaunch } from '../../services/sync'
 import { SidebarNav } from '../../components/web/SidebarNav'
-import { useTheme } from '../../theme/ThemeContext'
 
 /**
+ * Android and web: the floating bar. iOS has its own layout with the system
+ * tab bar (_layout.ios.tsx); what both share lives in useTabShell.
+ *
  * Four destinations: Today (index) · Practice · Explore · Progress, plus
  * Search (federated search; reached from the bar's search control).
  *
@@ -32,15 +31,8 @@ const TAB_SCREENS = [
 
 export default function TabLayout() {
   const bp = useBreakpoint()
-  const db = useDb()
-  const { theme: t } = useTheme()
+  const { syncBanner, backgroundColor } = useTabShell()
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
-
-  // Retry handler for the sync-error banner. syncOnLaunch marks start/done on
-  // the syncStatus store itself, so the banner hides while the retry runs.
-  const handleRetry = useCallback(() => {
-    void syncOnLaunch(db)
-  }, [db])
 
   // ONE navigator for every width. Crossing the 1024 breakpoint (a desktop
   // browser being resized) only swaps the chrome — bottom bar vs sidebar — and
@@ -56,14 +48,14 @@ export default function TabLayout() {
   return (
     <TabBarScrollProvider barHostsSearch={!isDesktopWeb}>
     <EdgeSwipeNavigator enabled={!isDesktopWeb}>
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.bg }}>
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor }}>
         {isDesktopWeb ? <SidebarNav /> : null}
         <View style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
           {/* Desktop: the 1040 cap keeps screens that render their own FlatList
               (and headers outside a scroll view) from stretching edge to edge on
               wide monitors; <Screen> narrows reading screens further to 720. */}
           <View style={{ flex: 1, width: '100%', maxWidth: isDesktopWeb ? 1040 : undefined }}>
-            <SyncErrorBanner onRetry={handleRetry} />
+            {syncBanner}
             <Tabs
               tabBar={isDesktopWeb ? () => null : (props) => <FloatingTabBar {...props} />}
               screenOptions={{ headerShown: false, animation: isDesktopWeb ? 'none' : 'shift' }}

@@ -140,6 +140,16 @@ describe('UpdatesScreen', () => {
     expect(screen.getByTestId('updates-calendar-strip')).toBeTruthy()
   })
 
+  // iOS redesign P2b: native tabs track the first scroll view in the tree;
+  // the feed's root scroll view is it (the calendar strip scrolls inside it).
+  it('its root scroll view is the first descendant (iOS native tabs minimize on it)', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb())
+    const { firstScrollDescendant } = require('../../../test-utils/firstScrollDescendant')
+    const r = render(<UpdatesScreen />)
+    expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('news-scroll')
+  })
+
   it("reloads the feed when Explore's header refresh bumps refreshKey", async () => {
     const { useDb } = require('../../../hooks/useDb')
     const db = makeDb()

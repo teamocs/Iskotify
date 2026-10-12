@@ -3,6 +3,7 @@ import { FlatList } from 'react-native'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 import ListsScreen from '../explore'
 import { aria } from '../../../test-utils/aria'
+import { firstScrollDescendant } from '../../../test-utils/firstScrollDescendant'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -72,9 +73,10 @@ const mockNewsMounts = { n: 0 }
 // The News & dates section is covered by newsFeed.test.tsx; stub it here.
 jest.mock('../../../components/explore/NewsFeed', () => ({
   NewsFeed: () => {
-    const { Text } = require('react-native')
+    const { ScrollView, Text } = require('react-native')
     require('react').useEffect(() => { mockNewsMounts.n += 1 }, [])
-    return <Text>NEWS_FEED_STUB</Text>
+    // Like the real feed (a ScreenScroll at its root, testID news-scroll).
+    return <ScrollView testID="news-scroll"><Text>NEWS_FEED_STUB</Text></ScrollView>
   },
 }))
 
@@ -186,6 +188,70 @@ describe('ListsScreen', () => {
   })
 
   // ── Redesign M1: Lists + Updates fold into Explore ─────────────────────────
+
+  // iOS redesign P2b: native tabs minimize the bar for the scroll view in the
+  // screen's first-descendant chain only, so on iOS the section list comes
+  // first in the tree and the fixed header, chips and field are laid out
+  // above it (column-reverse). Android and web keep the original order.
+  describe('the section list is the first descendant on iOS', () => {
+    const { Platform } = require('react-native')
+    const realOS = Platform.OS
+    afterEach(() => { Platform.OS = realOS })
+
+    // Every section: the vertical list (never a horizontal chip rail, which
+    // react-native-screens would also accept) is the first scroll view.
+    it.each([
+      ['the default section (Schools & exams)', null, 'explore-grid'],
+      ['Schools & exams', 'Schools & exams', 'explore-grid'],
+      ['Scholarships', 'Scholarships', 'explore-grid'],
+      ['Courses', 'Courses', 'explore-grid'],
+      ['Destinations', 'Destinations', 'explore-grid'],
+      ['News & dates', 'News & dates', 'news-scroll'],
+    ])('iOS: %s resolves to its vertical list', async (_name, chip, listId) => {
+      Platform.OS = 'ios'
+      const r = render(<ListsScreen />)
+      if (chip) fireEvent.press(screen.getAllByText(chip)[0])
+      await waitFor(() => expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe(listId))
+      const first = firstScrollDescendant(r.UNSAFE_root)
+      expect(first?.props.horizontal).toBeFalsy()
+    })
+
+    it('iOS: the scholarships list leads the tree; the header still shows above it', async () => {
+      Platform.OS = 'ios'
+      const r = render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await waitFor(() => expect(gridColumns()).toBeDefined())
+      expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('explore-grid')
+      expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy()
+      expect(screen.getByTestId('explore-sections')).toBeTruthy()
+    })
+
+    it('Schools filter rails: inside the list header on iOS, fixed above the list on Android', async () => {
+      const inGrid = () => {
+        const grid = screen.UNSAFE_getAllByType(FlatList).find(l => l.props.testID === 'explore-grid')
+        return (grid?.findAll((n: { props: { accessibilityLabel?: string } }) => n.props.accessibilityLabel === 'Free tuition') ?? []).length > 0
+      }
+      Platform.OS = 'ios'
+      const r = render(<ListsScreen />)
+      await waitFor(() => expect(screen.getAllByLabelText('Free tuition').length).toBeGreaterThan(0))
+      expect(inGrid()).toBe(true)
+      r.unmount()
+
+      Platform.OS = 'android'
+      render(<ListsScreen />)
+      await waitFor(() => expect(screen.getAllByLabelText('Free tuition').length).toBeGreaterThan(0))
+      expect(inGrid()).toBe(false)
+    })
+
+    it('Android: the header stays ahead of the list (unchanged)', async () => {
+      Platform.OS = 'android'
+      const r = render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await waitFor(() => expect(gridColumns()).toBeDefined())
+      expect(firstScrollDescendant(r.UNSAFE_root)).toBeNull()
+      expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy()
+    })
+  })
 
   it('renders the Explore title (the old Lists tab is now Explore)', () => {
     render(<ListsScreen />)

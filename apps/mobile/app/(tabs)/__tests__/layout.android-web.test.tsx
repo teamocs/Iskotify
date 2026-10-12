@@ -1,4 +1,7 @@
 /**
+ * The Android / web tab layout (app/(tabs)/_layout.tsx, the floating bar).
+ * iOS has its own layout with native tabs: see layout.ios.test.tsx.
+ *
  * Regression: resizing a desktop browser across the 1024 breakpoint used to
  * swap between two different trees, each with its own <Tabs>. The navigator
  * remounted, every tab screen remounted without its useFocusEffect load ever
@@ -55,7 +58,9 @@ jest.mock('../../../components/EdgeSwipeNavigator', () => ({
   },
 }))
 
-import TabLayout from '../_layout'
+// The Android / web layout by its full name: jest-expo resolves the bare
+// '../_layout' to _layout.ios.tsx (iOS is its default platform).
+const TabLayout: React.ComponentType = require('../_layout.tsx').default
 
 const originalOS = Platform.OS
 beforeEach(() => {

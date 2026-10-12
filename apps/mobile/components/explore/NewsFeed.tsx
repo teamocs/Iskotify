@@ -342,7 +342,7 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenScroll tabBarInset padded={false} contentContainerStyle={{ paddingTop: spacing.xs }}>
+      <ScreenScroll testID="news-scroll" tabBarInset padded={false} contentContainerStyle={{ paddingTop: spacing.xs }}>
         <View
           testID="news-columns"
           style={twoUp

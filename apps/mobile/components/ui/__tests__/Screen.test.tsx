@@ -3,8 +3,10 @@
  * useWindowDimensions is driven per test to simulate phone / tablet / desktop.
  */
 import React from 'react'
-import { Text, StyleSheet } from 'react-native'
+import { Platform, Text, StyleSheet } from 'react-native'
 import { render, screen } from '@testing-library/react-native'
+import { spacing } from '../../../theme/tokens'
+import { firstScrollDescendant } from '../../../test-utils/firstScrollDescendant'
 
 const mockWidth = { value: 390 }
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
@@ -96,11 +98,22 @@ describe('Screen with the floating tab bar', () => {
     return StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle)
   }
 
-  it('reserves capsuleClearance + the safe area under tab screens', () => {
+  const realOS = Platform.OS
+  afterEach(() => { Platform.OS = realOS })
+
+  it('reserves capsuleClearance + the safe area under tab screens (Android, web)', () => {
+    Platform.OS = 'android'
     mockWidth.value = 390
     render(<Screen tabBarInset><Text>Hi</Text></Screen>)
     // useSafeInsets reports a 0 bottom inset under this mock.
     expect(scrollStyle().paddingBottom).toBe(104)
+  })
+
+  it('iOS: native tabs inset the scroll view for their own bar, so only the page gap', () => {
+    Platform.OS = 'ios'
+    mockWidth.value = 390
+    render(<Screen tabBarInset><Text>Hi</Text></Screen>)
+    expect(scrollStyle().paddingBottom).toBe(spacing.xl)
   })
 
   it('off the tabs, only the safe area and the page gap', () => {
@@ -117,5 +130,34 @@ describe('Screen with the floating tab bar', () => {
     r.unmount()
     const r2 = render(<Screen header={<Text>Head</Text>}><Text>Body</Text></Screen>)
     expect(r2.UNSAFE_getByType(ScrollView).findAll((n: any) => n.props.children === 'Head')).toHaveLength(0)
+  })
+})
+
+// iOS redesign P2b: native tabs minimize the bar for (and inset) only the
+// scroll view in each tab screen's first-descendant chain.
+describe('Screen: the scroll view is the first descendant on iOS', () => {
+  const realOS = Platform.OS
+  beforeEach(() => { Platform.OS = 'ios'; mockWidth.value = 390 })
+  afterEach(() => { Platform.OS = realOS })
+
+  it('without a header (Today)', () => {
+    const r = render(<Screen tabBarInset><Text>Body</Text></Screen>)
+    expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('screen-scroll')
+  })
+
+  it('with a header that scrolls (Practice, Search)', () => {
+    const r = render(<Screen tabBarInset headerScrolls header={<Text>Head</Text>}><Text>Body</Text></Screen>)
+    expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('screen-scroll')
+  })
+
+  it("with the body's own scroll view (Progress)", () => {
+    const { ScrollView } = require('react-native')
+    const r = render(<Screen scroll={false}><ScrollView testID="own-scroll"><Text>Body</Text></ScrollView></Screen>)
+    expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('own-scroll')
+  })
+
+  it('a fixed header ahead of the scroll view breaks the chain (what Explore avoids)', () => {
+    const r = render(<Screen header={<Text>Head</Text>}><Text>Body</Text></Screen>)
+    expect(firstScrollDescendant(r.UNSAFE_root)).toBeNull()
   })
 })

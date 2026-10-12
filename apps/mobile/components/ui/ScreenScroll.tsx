@@ -1,6 +1,7 @@
 import { Platform, View, type ScrollViewProps, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, { useAnimatedRef } from 'react-native-reanimated'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
+import { usesSystemTabBar } from '../navigation/systemTabBar'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
 import { layout, spacing } from '../../theme/tokens'
@@ -42,7 +43,11 @@ export function ScreenScroll({
   // On desktop web (lg), tab bar is hidden (SidebarNav takes over) so we don't
   // add the tab bar clearance padding. On native/sm the floating bar is present.
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
-  const paddingBottom = insets.bottom + (tabBarInset && !isDesktopWeb ? layout.capsuleClearance : spacing.xl)
+  // iOS: native tabs inset the tab's first scroll view for the system bar and
+  // the home indicator, so a tab screen adds only the page gap.
+  const paddingBottom = tabBarInset && usesSystemTabBar()
+    ? spacing.xl
+    : insets.bottom + (tabBarInset && !isDesktopWeb ? layout.capsuleClearance : spacing.xl)
   // Feeds the bar and still calls a caller's own onScroll.
   const onScroll = useTabBarScrollHandler({ onScroll: callerOnScroll ?? undefined })
   const scrollRef = useAnimatedRef<Animated.ScrollView>()

@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Platform, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, Stack } from 'expo-router'
+import type { SearchBarCommands } from 'react-native-screens'
 import Animated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
 import { eq } from 'drizzle-orm'
@@ -9,32 +10,32 @@ import {
   Buildings1Outlined, CertificateBadge1Outlined, GraduationCap1Outlined, Search1Outlined, SearchMinusOutlined,
   Globe1Outlined,
 } from '@lineiconshq/free-icons'
-import { useDb } from '../../hooks/useDb'
-import { useSyncStatus } from '../../hooks/useSyncStatus'
-import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
-import { listings as listingsTable, tertiarySchools, universityProfiles } from '../../db/schema'
-import { Screen } from '../../components/ui/Screen'
-import { SectionHeader } from '../../components/ui/SectionHeader'
-import { EmptyState } from '../../components/ui/EmptyState'
-import { ErrorState } from '../../components/ui/ErrorState'
-import { ListRow } from '../../components/ui/ListRow'
-import { decorative } from '../../components/ui/a11y'
-import { TabHeader } from '../../components/TabHeader'
-import { SearchField } from '../../components/explore/SearchField'
-import { ListingCard } from '../../components/explore/ListingCard'
-import { GridSkeleton, StaticGrid } from '../../components/explore/ExploreGrid'
-import { dateUrgency, truncateQuery, type BadgeSpec } from '../../components/explore/exploreModel'
-import { useSyncSettled } from '../../components/explore/useSyncSettled'
+import { useDb } from '../../../hooks/useDb'
+import { useSyncStatus } from '../../../hooks/useSyncStatus'
+import { useTheme } from '../../../theme/ThemeContext'
+import { spacing, textStyle } from '../../../theme/tokens'
+import { listings as listingsTable, tertiarySchools, universityProfiles } from '../../../db/schema'
+import { Screen } from '../../../components/ui/Screen'
+import { SectionHeader } from '../../../components/ui/SectionHeader'
+import { EmptyState } from '../../../components/ui/EmptyState'
+import { ErrorState } from '../../../components/ui/ErrorState'
+import { ListRow } from '../../../components/ui/ListRow'
+import { decorative } from '../../../components/ui/a11y'
+import { TabHeader } from '../../../components/TabHeader'
+import { SearchField } from '../../../components/explore/SearchField'
+import { ListingCard } from '../../../components/explore/ListingCard'
+import { GridSkeleton, StaticGrid } from '../../../components/explore/ExploreGrid'
+import { dateUrgency, truncateQuery, type BadgeSpec } from '../../../components/explore/exploreModel'
+import { useSyncSettled } from '../../../components/explore/useSyncSettled'
 import {
   EMPTY_RESULTS, listingMeta, resultCount, schoolMeta, searchCatalog, upcomingListings,
   type SearchListing, type SearchSchool,
-} from '../../components/search/searchModel'
-import { addRecent, loadRecentSearches, saveRecentSearches } from '../../components/search/recentSearches'
-import { subscribeSearchSubmit, useSearchQuery } from '../../components/search/searchQuery'
-import { useTabBarScroll } from '../../components/navigation/TabBarScrollContext'
-import { getSettings } from '../../services/settings'
-import { syncOnLaunch } from '../../services/sync'
+} from '../../../components/search/searchModel'
+import { addRecent, loadRecentSearches, saveRecentSearches } from '../../../components/search/recentSearches'
+import { subscribeSearchSubmit, useSearchQuery } from '../../../components/search/searchQuery'
+import { useTabBarScroll } from '../../../components/navigation/TabBarScrollContext'
+import { getSettings } from '../../../services/settings'
+import { syncOnLaunch } from '../../../services/sync'
 
 type LoadStatus = 'loading' | 'ready' | 'error'
 
@@ -71,9 +72,13 @@ export default function SearchScreen() {
   const [listings, setListings] = useState<SearchListing[]>([])
   const [schools, setSchools] = useState<SearchSchool[]>([])
   const [userRegion, setUserRegion] = useState('')
-  // Shared with the floating bar, which hosts the field on phones and tablets.
+  // Shared with the floating bar, which hosts the field on Android phones and
+  // tablets and compact web, and with the native field on iOS.
   const [query, setQuery] = useSearchQuery()
   const barHostsField = useTabBarScroll()?.barHostsSearch ?? false
+  // iOS: the system search tab; the field is the native one in this tab's
+  // stack header (search/_layout.ios.tsx), not one drawn on the page.
+  const nativeField = Platform.OS === 'ios'
   const [recent, setRecent] = useState<string[]>([])
   const recentRef = useRef<string[]>([])
   const deferredQuery = useDeferredValue(query)
@@ -277,14 +282,16 @@ export default function SearchScreen() {
       width="wide"
       header={<TabHeader title="Search" subtitle="Schools, scholarships and entrance exams" />}
     >
-      {barHostsField ? null : (
+      {nativeField ? (
+        <NativeSearchField query={query} onChangeQuery={setQuery} onSubmit={remember} />
+      ) : barHostsField ? null : (
         <View style={{ paddingBottom: spacing.lg }}>
           <SearchField
             testID="search-input"
             value={query}
             onChangeText={setQuery}
             onSubmit={() => remember(query)}
-            placeholder="School, scholarship or exam, e.g. UPCAT"
+            placeholder={PLACEHOLDER}
             accessibilityLabel="Search schools, scholarships and exams"
           />
         </View>
@@ -302,8 +309,52 @@ export default function SearchScreen() {
       {/* While typing in the bar's field, the keyboard covers the bottom of
           the page: grow the end of the list by its height so the last
           results can still scroll above it. */}
-      {barHostsField && Platform.OS !== 'web' ? <KeyboardSpacer /> : null}
+      {(barHostsField || nativeField) && Platform.OS !== 'web' ? <KeyboardSpacer /> : null}
     </Screen>
+  )
+}
+
+const PLACEHOLDER = 'School, scholarship or exam, e.g. UPCAT'
+
+/**
+ * iOS: the native search field of this tab's stack header (Stack.SearchBar
+ * sets headerSearchBarOptions). On iOS 26 the search tab moves it into the
+ * glass bar; on iOS 18 it sits under the navigation bar. Typing drives the
+ * shared query; a query set on the page (a recent search, Clear) is written
+ * back into the field. Draws nothing itself.
+ */
+function NativeSearchField({ query, onChangeQuery, onSubmit }: {
+  query: string
+  onChangeQuery: (q: string) => void
+  onSubmit: (q: string) => void
+}) {
+  const { theme: t } = useTheme()
+  const ref = useRef<SearchBarCommands>(null)
+  // The field's own text, so typing is not echoed back into it.
+  const fieldText = useRef(query)
+
+  useEffect(() => {
+    if (query === fieldText.current) return
+    fieldText.current = query
+    ref.current?.setText(query)
+  }, [query])
+
+  const onChangeText = useCallback((e: { nativeEvent: { text: string } }) => {
+    fieldText.current = e.nativeEvent.text
+    onChangeQuery(e.nativeEvent.text)
+  }, [onChangeQuery])
+
+  return (
+    <Stack.SearchBar
+      ref={ref}
+      placeholder={PLACEHOLDER}
+      autoCapitalize="none"
+      hideWhenScrolling={false}
+      tintColor={t.accent}
+      onChangeText={onChangeText}
+      onSearchButtonPress={e => onSubmit(e.nativeEvent.text)}
+      onCancelButtonPress={() => { fieldText.current = ''; onChangeQuery('') }}
+    />
   )
 }
 

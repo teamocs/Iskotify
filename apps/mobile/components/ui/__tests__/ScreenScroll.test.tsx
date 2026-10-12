@@ -56,6 +56,17 @@ describe('ScreenScroll', () => {
     expect(StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(layout.capsuleClearance)
   })
 
+  // iOS redesign P2b: native tabs inset the tab's first scroll view for the
+  // system bar and the home indicator, so only the page gap is added.
+  it('iOS tab screens add only the page gap (the system bar insets the scroll view)', () => {
+    ;(Platform as { OS: string }).OS = 'ios'
+    mockWidth.value = 390
+    const { UNSAFE_getByType } = render(<ScreenScroll tabBarInset><Text>A</Text></ScreenScroll>)
+    const { ScrollView } = require('react-native')
+    const { spacing } = require('../../../theme/tokens')
+    expect(StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle).paddingBottom).toBe(spacing.xl)
+  })
+
   it("composes a caller's onScroll with the bar feed instead of replacing it", () => {
     ;(Platform as { OS: string }).OS = 'android'
     mockWidth.value = 390
