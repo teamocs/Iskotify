@@ -130,6 +130,21 @@ describe('PracticeScreen (redesign M2)', () => {
     mockDecks.splice(0)
   })
 
+  // iOS redesign P2b: native tabs minimize on the first-descendant scroll
+  // view; with the P3 inset groups the page scroll must still be it.
+  it('iOS: the page scroll view is the first descendant', () => {
+    const { Platform } = require('react-native')
+    const { firstScrollDescendant } = require('../../../test-utils/firstScrollDescendant')
+    const os = Platform.OS
+    Platform.OS = 'ios'
+    try {
+      const r = render(<PracticeScreen />)
+      expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('screen-scroll')
+    } finally {
+      Platform.OS = os
+    }
+  })
+
   // P4: a quick-start row at the top — Diagnostic, Sprint, Drill, Mistakes.
   describe('quick start', () => {
     const quick = () => screen.getByTestId('practice-quick-start')
