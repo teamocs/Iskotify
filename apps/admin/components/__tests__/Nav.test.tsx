@@ -141,6 +141,46 @@ describe('landing Nav: phone menu', () => {
     expect(toggle().getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('is a labelled modal dialog while open', () => {
+    act(() => toggle().click())
+    const m = menu()
+    expect(m.getAttribute('role')).toBe('dialog')
+    expect(m.getAttribute('aria-modal')).toBe('true')
+    expect(m.getAttribute('aria-label')).toBe('Menu')
+  })
+
+  it('makes the page behind inert while open, and restores it on close', () => {
+    const page = document.createElement('main')
+    document.body.appendChild(page)
+    const before = document.createElement('div')
+    before.setAttribute('inert', '')
+    document.body.appendChild(before)
+    act(() => toggle().click())
+    expect(page.hasAttribute('inert')).toBe(true)
+    expect(host.hasAttribute('inert')).toBe(false)
+    expect(toggle().closest('[inert]')).toBeNull()
+    press('Escape')
+    expect(page.hasAttribute('inert')).toBe(false)
+    // Something that was already inert stays inert.
+    expect(before.hasAttribute('inert')).toBe(true)
+    page.remove()
+    before.remove()
+  })
+
+  it('locks scroll iOS-style (position: fixed at the saved offset) and restores the offset', () => {
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 420 })
+    const scrollTo = vi.fn()
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo
+    act(() => toggle().click())
+    expect(document.body.style.position).toBe('fixed')
+    expect(document.body.style.top).toBe('-420px')
+    press('Escape')
+    expect(document.body.style.position).toBe('')
+    expect(document.body.style.top).toBe('')
+    expect(scrollTo).toHaveBeenCalledWith(0, 420)
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+  })
+
   it('keeps Tab inside the open menu (button and menu items)', () => {
     act(() => toggle().click())
     const cta = Array.from(menu().querySelectorAll('a')).at(-1)!

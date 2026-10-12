@@ -20,9 +20,10 @@ const SEARCH = '[data-shortcut-search]'
 
 // Whether the page has a search box for the "/" shortcut (DataTable's search).
 // False on the server, so the affordance only appears once there is a real target.
+// Watches the page's <main> (the search lives there), not the whole document.
 function subscribeDom(onChange: () => void) {
   const mo = new MutationObserver(onChange)
-  mo.observe(document.body, { childList: true, subtree: true })
+  mo.observe(document.getElementById('main-content') ?? document.body, { childList: true, subtree: true })
   return () => mo.disconnect()
 }
 const usePageHasSearch = () =>

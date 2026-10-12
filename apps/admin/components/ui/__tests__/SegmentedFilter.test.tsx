@@ -67,18 +67,21 @@ describe('SegmentedFilter', () => {
   it('moves and selects with the arrow keys, wrapping, plus Home and End', () => {
     const onChange = vi.fn()
     mount(<SegmentedFilter label="Status" options={OPTIONS} allLabel="All" value="" onChange={onChange} />)
+    // The parent never updates `value` here, so each key moves from the optimistic choice.
     const [all, open, , dismissed] = radios()
     key(all!, 'ArrowRight')
     expect(onChange).toHaveBeenLastCalledWith('open')
     expect(document.activeElement).toBe(open)
+    key(open!, 'ArrowLeft')
+    expect(onChange).toHaveBeenLastCalledWith('')
     key(all!, 'ArrowLeft')
     expect(onChange).toHaveBeenLastCalledWith('dismissed')
     expect(document.activeElement).toBe(dismissed)
-    key(all!, 'ArrowDown')
-    expect(onChange).toHaveBeenLastCalledWith('open')
+    key(dismissed!, 'ArrowDown')
+    expect(onChange).toHaveBeenLastCalledWith('')
     key(all!, 'End')
     expect(onChange).toHaveBeenLastCalledWith('dismissed')
-    key(all!, 'Home')
+    key(dismissed!, 'Home')
     expect(onChange).toHaveBeenLastCalledWith('')
   })
 
@@ -114,6 +117,29 @@ describe('SegmentedFilter', () => {
       mount(<SegmentedFilter label="Status" options={OPTIONS} allLabel="All" param="status" />)
       act(() => radios()[2]!.click())
       expect(replace).toHaveBeenCalledWith('/admin/things?q=abc&status=resolved', { scroll: false })
+    })
+
+    it('moves optimistically: two quick ArrowRights move two segments before the URL catches up', () => {
+      search = ''
+      mount(<SegmentedFilter label="Status" options={OPTIONS} allLabel="All" param="status" />)
+      const [all] = radios()
+      key(all!, 'ArrowRight')
+      expect(checked()!.textContent).toContain('Open')
+      expect(radios().map(r => r.tabIndex)).toEqual([-1, 0, -1, -1])
+      key(document.activeElement as HTMLElement, 'ArrowRight')
+      expect(checked()!.textContent).toContain('Resolved')
+      expect(replace).toHaveBeenLastCalledWith('/admin/things?status=resolved', { scroll: false })
+    })
+
+    it('reconciles to the URL once it changes', () => {
+      search = ''
+      mount(<SegmentedFilter label="Status" options={OPTIONS} allLabel="All" param="status" />)
+      act(() => radios()[1]!.click())
+      expect(checked()!.textContent).toContain('Open')
+      // Someone else (Back button) lands on a different value: the URL wins.
+      search = 'status=dismissed'
+      mount(<SegmentedFilter label="Status" options={OPTIONS} allLabel="All" param="status" />)
+      expect(checked()!.textContent).toContain('Dismissed')
     })
 
     it('drops the param when "All" is chosen', () => {

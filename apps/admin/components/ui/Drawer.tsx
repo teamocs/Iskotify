@@ -21,7 +21,7 @@ const WIDTHS = { md: 'max-w-md', lg: 'max-w-xl', xl: 'max-w-3xl' } as const
  * beside the list (macOS inspector), rendered in place, so the caller lays it
  * out next to the table. Below `xl`, and on the server, it is the modal Drawer.
  */
-export function Drawer({ open, onClose, title, description, footer, initialFocusRef, onSubmit, dirty = false, children, width = 'md', inspector = false }: OverlayProps & {
+export function Drawer({ open, onClose, title, description, footer, initialFocusRef, returnFocusRef, onSubmit, dirty = false, children, width = 'md', inspector = false }: OverlayProps & {
   width?: keyof typeof WIDTHS
   inspector?: boolean
 }) {
@@ -32,7 +32,7 @@ export function Drawer({ open, onClose, title, description, footer, initialFocus
   const wide = useMediaQuery(INSPECTOR_QUERY)
   const docked = inspector && wide
   const { requestClose, discard } = useGuardedClose(open, dirty, onClose)
-  useFocusTrap({ active: open && !docked, containerRef: panelRef, onEscape: requestClose, initialFocusRef })
+  useFocusTrap({ active: open && !docked, containerRef: panelRef, onEscape: requestClose, initialFocusRef, returnFocusRef })
   useScrollLock(open && !docked)
 
   if (!open) return null
@@ -60,7 +60,7 @@ export function Drawer({ open, onClose, title, description, footer, initialFocus
 
   if (docked) {
     return (
-      <InspectorPane titleId={titleId} descId={description ? descId : undefined} initialFocusRef={initialFocusRef} onEscape={requestClose}>
+      <InspectorPane titleId={titleId} descId={description ? descId : undefined} initialFocusRef={initialFocusRef} returnFocusRef={returnFocusRef} onEscape={requestClose}>
         {header}
         {content}
         {discard}
@@ -95,10 +95,11 @@ export function Drawer({ open, onClose, title, description, footer, initialFocus
  * focus was still in the pane (it never yanks focus from where the user went).
  * A modal opened on top (the discard prompt) owns Escape.
  */
-function InspectorPane({ titleId, descId, initialFocusRef, onEscape, children }: {
+function InspectorPane({ titleId, descId, initialFocusRef, returnFocusRef, onEscape, children }: {
   titleId: string
   descId?: string
   initialFocusRef?: RefObject<HTMLElement | null>
+  returnFocusRef?: RefObject<HTMLElement | null>
   onEscape: () => void
   children: ReactNode
 }) {
@@ -122,14 +123,19 @@ function InspectorPane({ titleId, descId, initialFocusRef, onEscape, children }:
 
   useEffect(() => {
     const pane = ref.current
-    const restoreTo = document.activeElement as HTMLElement | null
+    const opened = document.activeElement as HTMLElement | null
     ;(initialFocusRef?.current ?? (pane ? tabbablesIn(pane)[0] : undefined) ?? pane)?.focus()
     return () => {
       const active = document.activeElement
       const focusWasHere = !active || active === document.body || Boolean(pane?.contains(active))
+      // The explicit opener wins: Safari leaves focus on <body> after a click.
+      // Read at close on purpose: the opener can change while open (a row switch).
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const explicit = returnFocusRef?.current
+      const restoreTo = explicit?.isConnected ? explicit : opened
       if (focusWasHere && restoreTo?.isConnected) restoreTo.focus()
     }
-  }, [initialFocusRef])
+  }, [initialFocusRef, returnFocusRef])
 
   return (
     <aside

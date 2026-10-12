@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { useRouter } from 'next/navigation'
 import { Drawer } from '@/components/ui/Drawer'
 import { Field, controlClass } from '@/components/ui/Field'
@@ -19,30 +19,56 @@ export interface EditableQuestion extends QuestionDraft {
 
 const letter = (i: number) => String.fromCharCode(65 + i)
 
+function toDraft(q: EditableQuestion): QuestionDraft {
+  const options = [...q.options]
+  while (options.length < MIN_OPTIONS) options.push('')
+  return { question_text: q.question_text, options, correct_index: q.correct_index }
+}
+
 /**
  * Edit a Question Bank item's text, options and correct answer in place.
  * Saves only the changed fields through PATCH /api/upcat-questions/[id].
  */
-export function QuestionEditDrawer({ question, onClose, onSaved, inspector = false }: {
+export function QuestionEditDrawer({ question, onClose, onSaved, inspector = false, onDirtyChange, returnFocusRef }: {
   question: EditableQuestion
   onClose: () => void
   onSaved?: () => void
   /** Dock as a non-modal inspector beside the list at xl and above (modal Drawer below). */
   inspector?: boolean
+  /** Reports unsaved edits, so a list can guard switching to another row. */
+  onDirtyChange?: (dirty: boolean) => void
+  /** The control that opened the editor; focus returns there on close. */
+  returnFocusRef?: RefObject<HTMLElement | null>
 }) {
   const router = useRouter()
   const uid = useId()
   const textRef = useRef<HTMLTextAreaElement>(null)
-  const [initial] = useState<QuestionDraft>(() => {
-    const options = [...question.options]
-    while (options.length < MIN_OPTIONS) options.push('')
-    return { question_text: question.question_text, options, correct_index: question.correct_index }
-  })
+  const [initial, setInitial] = useState<QuestionDraft>(() => toDraft(question))
   const [draft, setDraft] = useState<QuestionDraft>(initial)
   const [errors, setErrors] = useState<QuestionErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const dirty = isDraftDirty(initial, draft)
+
+  // The question refreshed underneath us (router.refresh after a save, dismiss
+  // or someone else's edit). A clean editor follows it; a dirty draft is kept.
+  // Adjusted while rendering, not in an effect.
+  const fresh = toDraft(question)
+  const freshKey = JSON.stringify(fresh)
+  const [seenKey, setSeenKey] = useState(freshKey)
+  if (freshKey !== seenKey) {
+    setSeenKey(freshKey)
+    if (!dirty) {
+      setInitial(fresh)
+      setDraft(fresh)
+      setErrors({})
+    }
+  }
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   function setOption(i: number, value: string) {
     setDraft(d => ({ ...d, options: d.options.map((o, j) => (j === i ? value : o)) }))
@@ -85,6 +111,7 @@ export function QuestionEditDrawer({ question, onClose, onSaved, inspector = fal
       title={`Edit question ${question.question_id}`}
       description="Rewrite weak options by hand. Saving updates the Question Bank; the flag clears if the options now pass."
       initialFocusRef={textRef}
+      returnFocusRef={returnFocusRef}
       dirty={dirty}
       onSubmit={handleSubmit}
       footer={close => (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useRef, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type KeyboardEvent } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 /** Above this many options a filter stays a native <select> chip (DataTable). */
@@ -49,10 +49,17 @@ export function SegmentedFilter({ label, options, allLabel, value, onChange, par
   const segments: SegmentOption[] = allLabel !== undefined ? [{ value: '', label: allLabel }, ...options] : options
   const fromUrl = param ? (params?.get(param) ?? '') : ''
   const raw = value ?? fromUrl
+  // Optimistic choice: the URL (or the parent) lags a router.replace behind, so
+  // the last pick shows at once and quick arrow presses build on it. It only
+  // holds while the source value is still the one it was chosen over; any
+  // change to the source (the URL caught up, Back, a link) wins.
+  const [pending, setPending] = useState<{ value: string; base: string } | null>(null)
+  const effective = pending && pending.base === raw ? pending.value : raw
   // An unknown value (a stale link) shows the first segment rather than nothing.
-  const current = segments.some(s => s.value === raw) ? raw : (segments[0]?.value ?? '')
+  const current = segments.some(s => s.value === effective) ? effective : (segments[0]?.value ?? '')
 
   function choose(next: string) {
+    setPending({ value: next, base: raw })
     if (onChange) { onChange(next); return }
     if (!param) return
     const qs = new URLSearchParams(params?.toString() ?? '')

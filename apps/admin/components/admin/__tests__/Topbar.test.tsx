@@ -28,7 +28,7 @@ describe('Topbar', () => {
     expect(html).not.toMatch(/[⬇🔄⏳☰]/u)
   })
 
-  it('is solid, not frosted glass, and uses tokens', () => {
+  it('frosts through the glass token, never ad-hoc backdrop-blur or raw alphas', () => {
     const html = renderToStaticMarkup(<Topbar title="T" />)
     expect(html).not.toContain('backdrop-blur')
     expect(html).not.toMatch(/(?:bg|border)-\[|border-black\/|bg-white\//)

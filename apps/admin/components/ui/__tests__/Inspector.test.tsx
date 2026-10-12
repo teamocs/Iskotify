@@ -152,6 +152,37 @@ describe('Drawer inspector below xl', () => {
   })
 })
 
+describe('explicit return focus (Safari does not focus a clicked button)', () => {
+  function Explicit() {
+    const [open, setOpen] = useState(false)
+    const opener = useRef<HTMLButtonElement>(null)
+    return (
+      <>
+        <button type="button" ref={opener} id="opener" onClick={() => setOpen(true)}>Edit</button>
+        <Drawer inspector open={open} onClose={() => setOpen(false)} title="T" returnFocusRef={opener}>
+          <input aria-label="Field" />
+        </Drawer>
+      </>
+    )
+  }
+  for (const isWide of [true, false]) {
+    it(`restores to returnFocusRef, not <body> (${isWide ? 'inspector' : 'modal'})`, () => {
+      wide = isWide
+      act(() => root.render(<Explicit />))
+      const opener = host.querySelector<HTMLButtonElement>('#opener')!
+      act(() => opener.click()) // no focus() first: focus stays on <body>, as in Safari
+      try {
+        expect(document.activeElement).not.toBe(document.body)
+        expect(document.activeElement?.getAttribute('aria-label')).toBe('Close')
+        press('Escape')
+        expect(document.activeElement).toBe(opener)
+      } finally {
+        wide = true
+      }
+    })
+  }
+})
+
 describe('server render', () => {
   it('renders the modal Drawer before the viewport is known (no hydration mismatch)', () => {
     const html = renderToStaticMarkup(<Drawer inspector open onClose={() => {}} title="T">b</Drawer>)

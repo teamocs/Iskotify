@@ -16,6 +16,11 @@ export interface OverlayProps {
   footer?: OverlayFooter
   initialFocusRef?: RefObject<HTMLElement | null>
   /**
+   * Where focus goes back to on close. Defaults to whatever was focused on
+   * open, which is <body> in Safari after a click (it does not focus buttons).
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>
+  /**
    * Makes the panel a real <form>: Enter in a field submits, and a footer
    * button with type="submit" is the submit. The default is prevented for you.
    * The form is `noValidate` so each Field shows its own inline error instead

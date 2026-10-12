@@ -27,6 +27,7 @@ export function Nav() {
   const menuId = useId()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
   // Return focus to the button only for closes that keep the user here
   // (Escape, the button). A link click navigates; focus follows the page.
   const returnFocus = useRef(false)
@@ -43,8 +44,27 @@ export function Nav() {
       return
     }
     menuRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+
+    // Scroll lock that also holds on iOS Safari, where overflow:hidden on
+    // <body> does not stop touch scrolling: pin the body at its offset.
+    const body = document.body
+    const scrollY = window.scrollY
+    const prev = { overflow: body.style.overflow, position: body.style.position, top: body.style.top, width: body.style.width }
+    body.style.overflow = 'hidden'
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
+
+    // Everything outside the header is inert while the menu is open, so
+    // neither Tab nor a screen reader's virtual cursor reaches the page behind.
+    const made: Element[] = []
+    for (let node: Element | null = headerRef.current; node && node !== body; node = node.parentElement) {
+      for (const sib of Array.from(node.parentElement?.children ?? [])) {
+        if (sib === node || sib.hasAttribute('inert') || sib.tagName === 'SCRIPT') continue
+        sib.setAttribute('inert', '')
+        made.push(sib)
+      }
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); close(true); return }
       // While open, Tab cycles the menu button and the menu's items only.
@@ -61,7 +81,9 @@ export function Nav() {
     window.addEventListener('keydown', onKey)
     wide?.addEventListener?.('change', onWide)
     return () => {
-      document.body.style.overflow = prevOverflow
+      for (const el of made) el.removeAttribute('inert')
+      Object.assign(body.style, prev)
+      window.scrollTo(0, scrollY)
       window.removeEventListener('keydown', onKey)
       wide?.removeEventListener?.('change', onWide)
     }
@@ -71,7 +93,7 @@ export function Nav() {
     // The frosted strip is a child, not the header itself: backdrop-filter makes
     // an element the containing block of fixed descendants, which would trap the
     // full-screen menu inside the 52px bar.
-    <header className="sticky top-0 z-50 w-full">
+    <header ref={headerRef} className="sticky top-0 z-50 w-full">
       <div className="glass relative z-10 w-full">
         <nav
           aria-label="Main"
@@ -124,6 +146,9 @@ export function Nav() {
       <div
         ref={menuRef}
         id={menuId}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
         hidden={!open}
         className="glass fixed inset-0 overflow-y-auto pt-[52px] md:hidden"
       >

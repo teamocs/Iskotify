@@ -120,9 +120,10 @@ module.exports = {
      * Falls back to a solid surface where backdrop-filter is unsupported, and
      * when the OS asks for reduced transparency.
      */
-    function glassPlugin({ addUtilities }) {
+    function glassPlugin({ addUtilities, theme }) {
       const solid = {
-        backgroundColor: "#ffffff",
+        // The surface token itself, so the fallback can never drift from it.
+        backgroundColor: theme("colors.surface.DEFAULT"),
         backdropFilter: "none",
         WebkitBackdropFilter: "none"
       };

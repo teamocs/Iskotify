@@ -90,8 +90,29 @@ describe('InboxView desk layout', () => {
     const html = render()
     // Content: drafts 4 + review 12 + mapping 1 + figures 2 = 19. Inbox: 7 + 0 + 3 = 10 (bug reports unavailable).
     expect(html).toMatch(/<h2[^>]*>Content<\/h2><p class="[^"]*text-large-title[^"]*tabular-nums[^"]*">19</)
-    expect(html).toMatch(/<h2[^>]*>Inbox<\/h2><p class="[^"]*tabular-nums[^"]*">10</)
-    expect(html).toContain('(some counts missing)')
+  })
+
+  it('never shows a partial sum as an exact headline: "10+" and says counts are missing', () => {
+    const html = render()
+    const inbox = html.match(/<h2[^>]*>Inbox<\/h2>[\s\S]*?<\/section>/)![0]
+    expect(inbox).toMatch(/<p class="[^"]*tabular-nums[^"]*">10\+</)
+    expect(inbox).not.toMatch(/>10</)
+    expect(inbox).toContain('Some counts unavailable')
+    // Not styled as all-clear (muted) even when the loaded part sums to zero.
+    const zeroish = { ...counts, reports: { ok: true, count: 0 }, dateCorrections: { ok: true, count: 0 } } as InboxCounts
+    const z = render(zeroish).match(/<h2[^>]*>Inbox<\/h2>[\s\S]*?<\/section>/)![0]
+    expect(z).toMatch(/text-ink [^"]*">0\+</)
+    expect(z).not.toContain('text-ink-subtle')
+  })
+
+  it('shows an exact number, and the all-clear style, only when every count loaded', () => {
+    const html = render()
+    const content = html.match(/<h2[^>]*>Content<\/h2>[\s\S]*?<\/section>/)![0]
+    expect(content).toMatch(/">19</)
+    expect(content).not.toContain('unavailable')
+    const clear = { ...counts, drafts: { ok: true, count: 0 }, reviewQueue: { ok: true, count: 0 }, driveNeedsMapping: { ok: true, count: 0 }, driveMissingFigures: { ok: true, count: 0 } } as InboxCounts
+    const c = render(clear).match(/<h2[^>]*>Content<\/h2>[\s\S]*?<\/section>/)![0]
+    expect(c).toMatch(/text-ink-subtle[^"]*">0</)
   })
 
   it('shows a dash, not zero, for a group whose counts all failed', () => {
