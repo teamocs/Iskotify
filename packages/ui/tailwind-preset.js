@@ -62,11 +62,50 @@ module.exports = {
         heading: ["var(--font-heading)", "Outfit", "system-ui", "sans-serif"],
         body:    ["var(--font-body)", "Lexend", "-apple-system", "system-ui", "sans-serif"]
       },
+      /*
+       * iOS text styles (2026-10 iOS-language redesign, P5a), as [size, {lineHeight}].
+       * Additive: the stock xs…9xl scale is untouched, and the admin console keeps
+       * its denser `text-ui` 13/20 for tables and nav.
+       */
+      fontSize: {
+        "large-title": ["34px", { lineHeight: "41px" }],
+        "title-1":     ["28px", { lineHeight: "34px" }],
+        "title-2":     ["22px", { lineHeight: "28px" }],
+        "title-3":     ["20px", { lineHeight: "25px" }],
+        headline:      ["17px", { lineHeight: "22px", fontWeight: "600" }],
+        body:          ["17px", { lineHeight: "22px" }],
+        callout:       ["16px", { lineHeight: "21px" }],
+        subhead:       ["15px", { lineHeight: "20px" }],
+        footnote:      ["13px", { lineHeight: "18px" }],
+        caption:       ["12px", { lineHeight: "16px" }]
+      },
       borderRadius: {
         sm:   "10px",
         md:   "16px",
         lg:   "22px",
-        pill: "980px"
+        pill: "980px",
+        // iOS-language radii, by role (P5a). Additive to the keys above.
+        chip:    "8px",
+        field:   "12px",
+        button:  "14px",
+        group:   "18px",
+        card:    "22px",
+        sheet:   "28px",
+        capsule: "9999px"
+      },
+      /*
+       * Motion. `snappy` for small state changes (toggles, segment thumbs),
+       * `smooth` for things that travel (sheets, menus). Durations: 200 for
+       * micro, 280 standard, 480 for a full-screen entrance.
+       */
+      transitionTimingFunction: {
+        snappy: "cubic-bezier(.2,.9,.25,1)",
+        smooth: "cubic-bezier(.32,.72,0,1)"
+      },
+      transitionDuration: {
+        200: "200ms",
+        280: "280ms",
+        480: "480ms"
       },
       boxShadow: {
         sm:   "0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04)",
@@ -74,5 +113,31 @@ module.exports = {
       }
     }
   },
-  plugins: []
+  plugins: [
+    /*
+     * `glass`: the translucent material for toolbars and the landing nav. The
+     * only place its rgba values live (components never write raw colours).
+     * Falls back to a solid surface where backdrop-filter is unsupported, and
+     * when the OS asks for reduced transparency.
+     */
+    function glassPlugin({ addUtilities }) {
+      const solid = {
+        backgroundColor: "#ffffff",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none"
+      };
+      addUtilities({
+        ".glass": {
+          backgroundColor: "rgba(255,255,255,0.72)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          // Inset hairline along the bottom edge, so a frosted bar still reads
+          // as a separate layer over white content.
+          boxShadow: "inset 0 -0.5px 0 rgba(0,0,0,0.12)",
+          "@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))": solid,
+          "@media (prefers-reduced-transparency: reduce)": solid
+        }
+      });
+    }
+  ]
 };

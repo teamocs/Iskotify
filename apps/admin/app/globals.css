@@ -50,6 +50,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * The admin console draws in the system font (2026-10 iOS-language redesign,
+ * P5). The landing page keeps Outfit/Lexend, so the root layout still loads
+ * them through next/font and sets --font-heading / --font-body on <html>.
+ * This scope re-points both variables, so every font-heading / font-body class
+ * inside it resolves to the system stack. Applied by AdminShell, the admin
+ * login, the admin 403, and the Dialog/Drawer portals (which mount on <body>,
+ * outside the shell).
+ */
+.admin-type {
+  --font-heading: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  font-family: var(--font-body);
+}
+
 /* Visible only to assistive tech, until focused — used by the skip link. */
 .sr-only {
   position: absolute;
@@ -144,6 +159,19 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 120ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Respect the OS "reduce transparency" setting: frosted layers become solid.
+ * The preset's `glass` utility already carries this fallback; this repeats it
+ * after the utilities layer so nothing (a later bg-* class) can re-tint it.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background-color: var(--surface) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 }
 

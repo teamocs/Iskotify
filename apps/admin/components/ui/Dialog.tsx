@@ -121,7 +121,7 @@ export function Dialog({ open, onClose, title, description, footer, initialFocus
   if (!open) return null
 
   return portal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="admin-type fixed inset-0 z-50 flex items-center justify-center p-4">
       <div aria-hidden="true" onClick={requestClose} className="absolute inset-0 bg-scrim" />
       <div
         ref={panelRef}

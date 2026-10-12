@@ -29,7 +29,7 @@ export function Drawer({ open, onClose, title, description, footer, initialFocus
   if (!open) return null
 
   return portal(
-    <div className="fixed inset-0 z-50">
+    <div className="admin-type fixed inset-0 z-50">
       <div aria-hidden="true" onClick={requestClose} className="absolute inset-0 bg-scrim" />
       <div
         ref={panelRef}
