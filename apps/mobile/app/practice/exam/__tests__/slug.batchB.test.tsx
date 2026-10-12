@@ -64,7 +64,11 @@ describe('BlueprintExam: Batch B', () => {
   let alertSpy: jest.SpyInstance
 
   beforeEach(() => {
-    jest.useRealTimers()
+    // Every test on fake timers: waitFor/findBy deadlines then count fake time,
+    // which RNTL advances while polling, instead of wall-clock time a busy CI
+    // runner can burn before the mocked load settles. Tests that need a clock
+    // jump still advance it explicitly.
+    jest.useFakeTimers()
     mockRecordSession.mockClear(); mockRecordAttempts.mockClear(); mockRouterBack.mockClear()
     mockSaveRun.mockClear(); mockLoadRun.mockClear().mockResolvedValue(null); mockClearRun.mockClear()
     mockGetExamBlueprint.mockResolvedValue(BLOCKED)
@@ -73,7 +77,7 @@ describe('BlueprintExam: Batch B', () => {
     // Math.random 0 reverses each 2-item pool: flat order is [A2, A1, B2, B1].
     randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0)
   })
-  afterEach(() => { randomSpy.mockRestore(); alertSpy.mockRestore() })
+  afterEach(() => { randomSpy.mockRestore(); alertSpy.mockRestore(); jest.useRealTimers() })
 
   async function startFull() {
     render(<BlueprintExam />)
@@ -227,10 +231,7 @@ describe('BlueprintExam: Batch B', () => {
 
   // ── Review fixes ───────────────────────────────────────────────────────────
   describe('finish-section confirm after the section clock expired', () => {
-    afterEach(() => { jest.useRealTimers() })
-
     it('is a no-op: it neither moves the student back nor resets the running clock', async () => {
-      jest.useFakeTimers()
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
       const t0 = Date.now()
@@ -256,7 +257,6 @@ describe('BlueprintExam: Batch B', () => {
     })
 
     it('is a no-op once the exam was submitted', async () => {
-      jest.useFakeTimers()
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
       fireEvent.press(screen.getByText('Full Mock'))
