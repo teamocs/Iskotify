@@ -669,6 +669,14 @@ export default function ExploreScreen() {
   // first in the tree and column-reverse lays the fixed header, chips and
   // field out above it: the same picture, with the list leading the chain.
   // Android and web keep the original order.
+  //
+  // TODO(P2b device check): VoiceOver order here. UIKit is expected to read
+  // the header, chips and field before the list (top to bottom on screen),
+  // but the tree order is list first. RN 0.83's experimental_accessibilityOrder
+  // (nativeIDs: header, chips, field, body) would pin it, but it is not in
+  // 0.83's public TypeScript types and is gated off by the
+  // enableAccessibilityOrder feature flag (default false), so it would be a
+  // no-op. Revisit when it ships; until then verify on a device.
   if (systemBar) {
     return (
       <Screen scroll={false} width="wide">

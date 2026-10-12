@@ -15,6 +15,7 @@ import { ListingCard } from '../explore/ListingCard'
 import { ExploreGrid, GridSkeleton } from '../explore/ExploreGrid'
 import type { BadgeSpec } from '../explore/exploreModel'
 import { useSyncSettled } from '../explore/useSyncSettled'
+import { usesSystemTabBar } from '../navigation/systemTabBar'
 import { normalizeSchoolType, type SchoolTypeBucket } from '../../utils/schoolType'
 import { passesFreeTuitionFilter } from '../../utils/freeTuitionFilter'
 import { parseSchoolSearchIntent } from '../../utils/schoolSearchIntent'
@@ -212,19 +213,8 @@ export function SchoolsDirectory({
     return <ErrorState title="Couldn't load the schools directory" onRetry={() => setAttempt(a => a + 1)} />
   }
 
-  const header = (
-    <View style={{ gap: spacing.sm }}>
-      {listHeader}
-      {filtered.length > 0 ? (
-        <Text style={textStyle('caption', t.textSecondary)} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.6}>
-          {filtered.length} school{filtered.length !== 1 ? 's' : ''}
-        </Text>
-      ) : null}
-    </View>
-  )
-
-  return (
-    <View style={{ flex: 1 }}>
+  const rails = (
+    <>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -261,6 +251,32 @@ export function SchoolsDirectory({
           ))}
         </View>
       </ScrollView>
+    </>
+  )
+
+  const counted = (
+    <View style={{ gap: spacing.sm }}>
+      {listHeader}
+      {filtered.length > 0 ? (
+        <Text style={textStyle('caption', t.textSecondary)} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.6}>
+          {filtered.length} school{filtered.length !== 1 ? 's' : ''}
+        </Text>
+      ) : null}
+    </View>
+  )
+
+  // iOS native tabs track the scroll view in the first-descendant chain, and
+  // react-native-screens does not skip horizontal ones: with the chip rails
+  // ahead of the list, the bar would minimize on (and inset) the Free tuition
+  // rail. So on iOS the rails ride at the top of the list's header (the list
+  // header's half-gap padding and the list's -half-gap margin cancel, so they
+  // stay flush with the page column). Android and web keep them fixed above.
+  const railsInList = usesSystemTabBar()
+  const header = railsInList ? <View>{rails}{counted}</View> : counted
+
+  return (
+    <View style={{ flex: 1 }}>
+      {railsInList ? null : rails}
 
       <ExploreGrid
         data={filtered}
