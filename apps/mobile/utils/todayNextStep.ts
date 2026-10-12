@@ -55,10 +55,24 @@ export function planItemCopy(item: PlanItemLike, topicNameById: Map<string, stri
   }
 }
 
+/**
+ * About how long a plan item takes, in whole minutes: ~30s a flashcard, ~1 min
+ * a question, ~10 min for the diagnostic. Null for a full mock, whose length
+ * depends on the exam (the prestart says).
+ */
+export function planItemMinutes(item: Pick<PlanItemLike, 'kind' | 'targetCount'>): number | null {
+  switch (item.kind) {
+    case 'srs_review': return Math.max(1, Math.ceil(item.targetCount / 2))
+    case 'topic_practice': return Math.max(1, item.targetCount)
+    case 'diagnostic': return 10
+    case 'mock_section': return null
+  }
+}
+
 export type NextStep =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | ({ kind: 'task'; itemId: number; done: number; total: number } & PlanItemCopy)
+  | ({ kind: 'task'; itemId: number; done: number; total: number; minutes: number | null } & PlanItemCopy)
   | { kind: 'done'; reason: 'complete' | 'empty'; tomorrowCount: number }
 
 export interface PickNextStepInput {
@@ -82,7 +96,10 @@ export function pickNextStep({ items, loading, error, tomorrowItemCount, topicNa
   const next = items.find(i => i.completedAt == null)
   if (!next) return { kind: 'done', reason: 'complete', tomorrowCount: tomorrowItemCount }
   const done = items.filter(i => i.completedAt != null).length
-  return { kind: 'task', itemId: next.id, done, total: items.length, ...planItemCopy(next, topicNameById) }
+  return {
+    kind: 'task', itemId: next.id, done, total: items.length, minutes: planItemMinutes(next),
+    ...planItemCopy(next, topicNameById),
+  }
 }
 
 export interface CountdownListingLike {
@@ -121,4 +138,24 @@ export function pickCountdown(
     best = { slug: l.slug, title: l.title, days, dateMs: l.examDate }
   }
   return best
+}
+
+/**
+ * Every upcoming focused exam with a date, soonest first (at most `limit`):
+ * the countdown tiles. Same calendar-day rules as pickCountdown.
+ */
+export function pickCountdowns(
+  listings: CountdownListingLike[],
+  now: number,
+  offsetMs: number = localDayOffsetMs(),
+  limit = 4,
+): Countdown[] {
+  const out: Countdown[] = []
+  for (const l of listings) {
+    if (l.type !== 'exam' || l.examDate == null) continue
+    const days = daysUntilDate(l.examDate, now, offsetMs)
+    if (days < 0) continue
+    out.push({ slug: l.slug, title: l.title, days, dateMs: l.examDate })
+  }
+  return out.sort((a, b) => a.dateMs - b.dateMs).slice(0, limit)
 }

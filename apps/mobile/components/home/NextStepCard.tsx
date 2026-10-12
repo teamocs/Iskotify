@@ -1,16 +1,12 @@
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import { router } from 'expo-router'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { CheckCircle1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
-import { Card } from '../ui/Card'
+import { radius, spacing } from '../../theme/tokens'
 import { Button } from '../ui/Button'
-import { ProgressBar } from '../ui/ProgressBar'
 import { Skeleton } from '../ui/Skeleton'
 import { ErrorState } from '../ui/ErrorState'
-import { decorative } from '../ui/a11y'
-import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { Text } from '../ui/Text'
+import { heading } from '../ui/a11y'
 import type { NextStep } from '../../utils/todayNextStep'
 
 interface Props {
@@ -18,85 +14,80 @@ interface Props {
   onRetry: () => void
 }
 
+/** The finished-plan line (brandbook: English, calm, forward-looking). */
+export const DONE_FOR_TODAY = "That's today done. See you tomorrow."
+
 /**
- * The hero of Today (direction C, "One Next Step"): the single task to do now
- * and the screen's only maroon primary action. Everything else on Today
- * supports this card.
+ * The hero of Today (direction C, "One Next Step"): a white card (22pt
+ * radius, shadowSm) naming the single task to do now, with the screen's only
+ * maroon primary action. Eyebrow "One next step" and a time estimate, the
+ * task in title2, a one-line reason, then one full-width button.
  */
 export function NextStepCard({ step, onRetry }: Props) {
   const { theme: t } = useTheme()
-  const compact = useBreakpoint() === 'compact'
-  const progress = step.kind === 'task' ? `${step.done} of ${step.total} done today` : null
+  const estimate = step.kind === 'task' && step.minutes != null ? `About ${step.minutes} min` : null
 
   return (
-    <View testID="next-step" style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, minHeight: 32 }}>
-        <Text accessibilityRole="header" style={[textStyle('titleSm', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={2}>
-          Your next step
+    <View
+      testID="next-step"
+      style={{
+        backgroundColor: t.surface,
+        borderRadius: radius.card,
+        borderCurve: 'continuous',
+        boxShadow: t.shadowSm,
+        padding: spacing.xl,
+        gap: spacing.md,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+        <Text role="footnote" color={t.textSecondary} {...heading(2)} style={{ flexShrink: 1, fontWeight: '600' }}>
+          One next step
         </Text>
-        {progress ? (
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{progress}</Text>
-        ) : null}
+        {estimate ? <Text role="footnote" color={t.textSecondary}>{estimate}</Text> : null}
       </View>
 
-      <Card elevated style={{ padding: spacing.xl, gap: spacing.md }}>
-        {step.kind === 'loading' ? (
-          <View style={{ gap: spacing.md }}>
-            <Skeleton accessible label="Loading your next step" width="70%" height={28} />
-            <Skeleton width="90%" height={16} />
-            <Skeleton width={compact ? '100%' : 200} height={52} radius={radius.lg} />
+      {step.kind === 'loading' ? (
+        <View style={{ gap: spacing.md }}>
+          <Skeleton accessible label="Loading your next step" width="70%" height={28} />
+          <Skeleton width="90%" height={16} />
+          <Skeleton height={52} radius={radius.button} />
+        </View>
+      ) : step.kind === 'error' ? (
+        <ErrorState
+          title="Couldn't load today's plan"
+          body="Check your connection, then try again. Your saved progress is safe."
+          onRetry={onRetry}
+        />
+      ) : step.kind === 'task' ? (
+        <>
+          <View style={{ gap: spacing.xs }}>
+            <Text role="title2">{step.title}</Text>
+            <Text role="subheadline" color={t.textSecondary}>{step.detail}</Text>
           </View>
-        ) : step.kind === 'error' ? (
-          <ErrorState
-            title="Couldn't load today's plan"
-            body="Check your connection, then try again. Your saved progress is safe."
-            onRetry={onRetry}
+          <Button
+            label={step.actionLabel}
+            accessibilityLabel={`${step.actionLabel}, ${step.title}`}
+            size="lg"
+            fullWidth
+            onPress={() => router.push(step.route as never)}
           />
-        ) : step.kind === 'task' ? (
-          <>
-            <View style={{ gap: spacing.xs }}>
-              <Text style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>{step.title}</Text>
-              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{step.detail}</Text>
-            </View>
-            <ProgressBar value={step.done / step.total} label="Today's plan progress" tone="success" />
-            <Button
-              label={step.actionLabel}
-              accessibilityLabel={`${step.actionLabel}, ${step.title}`}
-              size="lg"
-              fullWidth={compact}
-              onPress={() => router.push(step.route as never)}
-            />
-          </>
-        ) : (
-          <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-              <View
-                {...decorative}
-                style={{
-                  width: 48, height: 48, borderRadius: radius.pill, backgroundColor: t.successSurface,
-                  alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <Lineicons icon={CheckCircle1Outlined} size={24} color={t.successStrong} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
-                <Text style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={1.6}>
-                  {step.reason === 'complete' ? 'Tapos na for today' : 'Nothing due right now'}
-                </Text>
-                <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
-                  {doneBody(step.reason, step.tomorrowCount)}
-                </Text>
-              </View>
-            </View>
-            <Button
-              label="Practice anyway"
-              variant={step.reason === 'complete' ? 'secondary' : 'primary'}
-              fullWidth={compact}
-              onPress={() => router.push('/(tabs)/practice')}
-            />
-          </>
-        )}
-      </Card>
+        </>
+      ) : (
+        <>
+          <View style={{ gap: spacing.xs }}>
+            <Text role="title2">{step.reason === 'complete' ? DONE_FOR_TODAY : 'Nothing due right now'}</Text>
+            <Text role="subheadline" color={t.textSecondary}>{doneBody(step.reason, step.tomorrowCount)}</Text>
+          </View>
+          {/* Finished: a quiet secondary, so "see you tomorrow" is not undercut by a maroon push. */}
+          <Button
+            label="Practice anyway"
+            variant={step.reason === 'complete' ? 'secondary' : 'primary'}
+            size="lg"
+            fullWidth
+            onPress={() => router.push('/(tabs)/practice')}
+          />
+        </>
+      )}
     </View>
   )
 }

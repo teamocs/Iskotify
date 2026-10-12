@@ -1,10 +1,10 @@
-import { View, Text, Switch, Platform } from 'react-native'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { Platform, View } from 'react-native'
 import { Book1Outlined, TargetUserOutlined, CalendarDaysOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { Sheet } from '../ui/Sheet'
-import { decorative } from '../ui/a11y'
+import { InsetGroup, InsetRow } from '../ui/InsetGroup'
+import { Text } from '../ui/Text'
 
 const REMINDERS = [
   { icon: Book1Outlined, title: 'Daily practice reminder', detail: 'Every day at 9:00 AM, naming your next step' },
@@ -19,62 +19,42 @@ interface Props {
   onClose: () => void
 }
 
-/** Local study reminders (no push server): one switch, and what it sends. */
+/**
+ * Local study reminders (no push server), on the P3 Sheet: one switch row
+ * (the whole row toggles), then an inset group of what it sends.
+ */
 export function RemindersSheet({ visible, enabled, onToggle, onClose }: Props) {
   const { theme: t } = useTheme()
   return (
     <Sheet visible={visible} title="Study reminders" onClose={onClose}>
-      <View
-        style={{
-          flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56,
-          paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: t.divider,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Send study reminders</Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
-            {enabled ? 'On. They stay on this device.' : 'Off. Turn on to get the reminders below.'}
+      <View style={{ gap: spacing.xl, paddingTop: spacing.sm }}>
+        <InsetGroup inset={false}>
+          <InsetRow
+            title="Send study reminders"
+            subtitle={enabled ? 'On. They stay on this device.' : 'Off. Turn on to get the reminders below.'}
+            switchValue={enabled}
+            onSwitchChange={() => onToggle()}
+          />
+        </InsetGroup>
+
+        <InsetGroup inset={false} header="What you'll get">
+          {REMINDERS.map(r => (
+            <InsetRow
+              key={r.title}
+              title={r.title}
+              subtitle={r.detail}
+              icon={r.icon}
+              iconTone={enabled ? 'accent' : 'neutral'}
+            />
+          ))}
+        </InsetGroup>
+
+        {Platform.OS === 'android' ? (
+          <Text role="footnote" color={t.textSecondary}>
+            Reminders need the installed app build to work on Android.
           </Text>
-        </View>
-        <Switch
-          value={enabled}
-          onValueChange={onToggle}
-          accessibilityLabel="Send study reminders"
-          trackColor={{ false: t.divider, true: t.accentBorder }}
-          thumbColor={enabled ? t.accentText : t.surfaceRaised}
-          ios_backgroundColor={t.divider}
-        />
+        ) : null}
       </View>
-
-      <Text accessibilityRole="header" style={[textStyle('label', t.textSecondary), { marginTop: spacing.lg, marginBottom: spacing.xs }]}>
-        What you'll get
-      </Text>
-      {REMINDERS.map(r => (
-        <View
-          key={r.title}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md }}
-        >
-          <View
-            {...decorative}
-            style={{
-              width: 36, height: 36, borderRadius: radius.pill, backgroundColor: t.surface2,
-              alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Lineicons icon={r.icon} size={18} color={enabled ? t.accentText : t.textTertiary} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={textStyle('titleSm', enabled ? t.textPrimary : t.textSecondary)} maxFontSizeMultiplier={2}>{r.title}</Text>
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>{r.detail}</Text>
-          </View>
-        </View>
-      ))}
-
-      {Platform.OS === 'android' ? (
-        <Text style={[textStyle('caption', t.textSecondary), { marginTop: spacing.md }]} maxFontSizeMultiplier={2}>
-          Reminders need the installed app build to work on Android.
-        </Text>
-      ) : null}
     </Sheet>
   )
 }

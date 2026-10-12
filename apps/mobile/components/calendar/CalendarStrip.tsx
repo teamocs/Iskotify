@@ -11,10 +11,13 @@
  */
 
 import { useState, useMemo } from 'react'
-import { StyleSheet, View, Text, Pressable } from 'react-native'
+import { StyleSheet, View, Pressable } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { ChevronLeftOutlined, Flag1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight } from '../../theme/tokens'
 import { localDayIndex } from '../../utils/localDay'
+import { Text } from '../ui/Text'
+import { decorative } from '../ui/a11y'
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -31,31 +34,23 @@ export function CalendarStrip({
   onDayPress: (dayStartMs: number) => void
   onHeaderPress: () => void
 }) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const cs = useMemo(() => StyleSheet.create({
     container: { paddingVertical: 6 },
     navRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
     navLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    arrowTxt: { fontSize: typo.xl, color: t.textSecondary, ...weight('700'), lineHeight: 26 },
-    monthLbl: { fontSize: typo.sm, color: t.textPrimary, ...weight('700'), minWidth: 90, textAlign: 'center' },
-    pill: { marginLeft: 'auto', backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
-    pillTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('600') },
+    pill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: t.surface2, borderWidth: 1, borderColor: t.border, borderRadius: 980, paddingHorizontal: 10, paddingVertical: 3 },
     pillExam: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)' },
-    pillExamTxt: { color: t.accentText },
     row: { flexDirection: 'row', justifyContent: 'space-between' },
     dayCol: { alignItems: 'center', gap: 3, flex: 1 },
-    letter: { fontSize: typo.xs, color: t.textTertiary, ...weight('600') },
-    letterToday: { color: t.accentText },
     circle: { width: 28, minHeight: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     circleToday: { backgroundColor: t.textPrimary },
     circleExam: { borderWidth: 1.5, borderColor: t.accentText },
-    num: { fontSize: typo.xs, color: t.textSecondary, ...weight('700') },
-    numToday: { color: t.bg },
-    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
+    dot: { width: 4, aspectRatio: 1, borderRadius: 2, backgroundColor: 'transparent' },
     dotActive: { backgroundColor: '#60a5fa' },
     dotReminder: { backgroundColor: t.warning },
     dotExam: { backgroundColor: t.accentText },
-  }), [t, typo])
+  }), [t])
 
   const [weekOffset, setWeekOffset] = useState(0)
 
@@ -116,10 +111,12 @@ export function CalendarStrip({
             accessibilityLabel="Previous week"
             style={({ pressed }) => pressed && { opacity: 0.7 }}
           >
-            <Text style={cs.arrowTxt}>‹</Text>
+            <View {...decorative}>
+              <Lineicons icon={ChevronLeftOutlined} size={18} color={t.textSecondary} />
+            </View>
           </Pressable>
           <Pressable onPress={onHeaderPress} accessibilityRole="button" accessibilityLabel="Open full month calendar">
-            <Text style={cs.monthLbl}>{monthLabel}</Text>
+            <Text role="subheadline" maxFontSizeMultiplier={1.4} style={{ fontWeight: '700', minWidth: 90, textAlign: 'center' }}>{monthLabel}</Text>
           </Pressable>
           <Pressable
             onPress={() => setWeekOffset(w => w + 1)}
@@ -128,7 +125,9 @@ export function CalendarStrip({
             accessibilityLabel="Next week"
             style={({ pressed }) => pressed && { opacity: 0.7 }}
           >
-            <Text style={cs.arrowTxt}>›</Text>
+            <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
+              <Lineicons icon={ChevronLeftOutlined} size={18} color={t.textSecondary} />
+            </View>
           </Pressable>
         </View>
 
@@ -138,7 +137,7 @@ export function CalendarStrip({
             style={({ pressed }) => [cs.pill, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
           >
-            <Text style={cs.pillTxt}>Today</Text>
+            <Text role="caption" color={t.textSecondary} style={{ fontWeight: '600' }}>Today</Text>
           </Pressable>
         ) : null}
         {showNextExam && examWeekOffset != null ? (
@@ -147,7 +146,10 @@ export function CalendarStrip({
             style={({ pressed }) => [cs.pill, cs.pillExam, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
           >
-            <Text style={[cs.pillTxt, cs.pillExamTxt]}>📌 Exam</Text>
+            <View {...decorative}>
+              <Lineicons icon={Flag1Outlined} size={12} color={t.accentText} />
+            </View>
+            <Text role="caption" color={t.accentText} style={{ fontWeight: '600' }}>Exam</Text>
           </Pressable>
         ) : null}
       </View>
@@ -168,7 +170,7 @@ export function CalendarStrip({
             accessibilityRole="button"
             accessibilityLabel={`Day ${d.dayNum}`}
           >
-            <Text style={[cs.letter, d.isToday && cs.letterToday]}>
+            <Text role="caption" color={d.isToday ? t.accentText : t.textTertiary} maxFontSizeMultiplier={1.4} style={{ fontWeight: '600' }}>
               {d.dayLetter}
             </Text>
             <View style={[
@@ -176,8 +178,8 @@ export function CalendarStrip({
               d.isToday && cs.circleToday,
               d.hasExam && !d.isToday && cs.circleExam,
             ]}>
-              <Text style={[cs.num, d.isToday && cs.numToday]}>
-                {d.dayNum}
+              <Text role="caption" color={d.isToday ? t.bg : t.textSecondary} maxFontSizeMultiplier={1.4} style={{ fontWeight: '700' }}>
+                {String(d.dayNum)}
               </Text>
             </View>
             <View style={[

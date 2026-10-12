@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
+import { View, TextInput, Pressable, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Alarm1Outlined } from '@lineiconshq/free-icons'
+import { iosTextStyle } from '../../theme/tokens'
+import { Text } from '../ui/Text'
 
 export interface QuickReminderPayload {
   title: string
@@ -34,7 +36,7 @@ function makeChecklistId(): string {
 }
 
 export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [title, setTitle] = useState('')
   const [mode, setMode] = useState<'text' | 'checklist'>('text')
   const [textContent, setTextContent] = useState('')
@@ -44,24 +46,19 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
   const canSave = title.trim().length > 0
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { padding: 16, gap: 12 },
-    label: { fontSize: typo.xs, color: t.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-    input: { backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: t.textPrimary, fontSize: typo.md },
+    container: { paddingVertical: 8, gap: 12 },
+    input: { backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, ...iosTextStyle('body', t.textPrimary) },
     contentInput: { minHeight: 80, textAlignVertical: 'top' },
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    itemInput: { flex: 1, backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, color: t.textPrimary, fontSize: typo.md },
-    addChecklistBtn: { paddingVertical: 6, alignSelf: 'flex-start' },
-    addChecklistTxt: { color: t.accentText, fontSize: typo.sm, fontWeight: '600' },
+    itemInput: { flex: 1, backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, ...iosTextStyle('body', t.textPrimary) },
+    addChecklistBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
     timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     timeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 980, paddingHorizontal: 12, paddingVertical: 6 },
-    timeTxt: { color: t.textSecondary, fontSize: typo.sm, fontWeight: '600' },
     btnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
-    btnSecondary: { backgroundColor: 'transparent', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 980 },
-    btnSecondaryTxt: { color: t.textSecondary, fontSize: typo.sm, fontWeight: '600' },
-    btnPrimary: { backgroundColor: t.accent, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 980 },
-    btnPrimaryTxt: { color: t.textInverse, fontSize: typo.sm, fontWeight: '700' },
+    btnSecondary: { backgroundColor: 'transparent', paddingHorizontal: 14, minHeight: 44, justifyContent: 'center', borderRadius: 980 },
+    btnPrimary: { backgroundColor: t.accent, paddingHorizontal: 16, minHeight: 44, justifyContent: 'center', borderRadius: 980 },
     btnDisabled: { opacity: 0.4 },
-  }), [t, typo])
+  }), [t])
 
   function buildPayload(): QuickReminderPayload {
     const trimmedTitle = title.trim()
@@ -93,7 +90,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Title</Text>
+      <Text role="footnote" color={t.textSecondary} style={{ fontWeight: '600' }}>Title</Text>
       <TextInput
         style={styles.input}
         placeholder="What's the reminder?"
@@ -105,7 +102,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
 
       {mode === 'text' ? (
         <>
-          <Text style={styles.label}>Content (optional)</Text>
+          <Text role="footnote" color={t.textSecondary} style={{ fontWeight: '600' }}>Content (optional)</Text>
           <TextInput
             style={[styles.input, styles.contentInput]}
             placeholder="Content (optional)"
@@ -115,12 +112,12 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
             multiline
           />
           <Pressable onPress={() => setMode('checklist')} style={styles.addChecklistBtn}>
-            <Text style={styles.addChecklistTxt}>+ Add checklist</Text>
+            <Text role="subheadline" color={t.accentText} style={{ fontWeight: '600' }}>+ Add checklist</Text>
           </Pressable>
         </>
       ) : (
         <>
-          <Text style={styles.label}>Items</Text>
+          <Text role="footnote" color={t.textSecondary} style={{ fontWeight: '600' }}>Items</Text>
           {items.map((item, i) => (
             <View key={item.id} style={styles.itemRow}>
               <TextInput
@@ -138,9 +135,9 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
       <View style={styles.timeRow}>
         <View style={styles.timeChip}>
           <Lineicons icon={Alarm1Outlined} size={14} color={t.textSecondary} />
-          <Text style={styles.timeTxt}>12:00 PM</Text>
+          <Text role="subheadline" color={t.textSecondary} style={{ fontWeight: '600' }}>12:00 PM</Text>
         </View>
-        <Text style={{ color: t.textTertiary, fontSize: typo.xs }}>
+        <Text role="footnote" color={t.textSecondary} style={{ flexShrink: 1 }}>
           (custom time available in full editor)
         </Text>
       </View>
@@ -148,18 +145,18 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
       <View style={styles.btnRow}>
         {onCancel && (
           <Pressable onPress={onCancel} style={styles.btnSecondary}>
-            <Text style={styles.btnSecondaryTxt}>Cancel</Text>
+            <Text role="subheadline" color={t.textSecondary} style={{ fontWeight: '600' }}>Cancel</Text>
           </Pressable>
         )}
         <Pressable onPress={handleOpenEditor} style={styles.btnSecondary}>
-          <Text style={styles.btnSecondaryTxt}>Open in editor</Text>
+          <Text role="subheadline" color={t.textSecondary} style={{ fontWeight: '600' }}>Open in editor</Text>
         </Pressable>
         <Pressable
           onPress={handleSave}
           style={[styles.btnPrimary, !canSave && styles.btnDisabled]}
           disabled={!canSave}
         >
-          <Text style={styles.btnPrimaryTxt}>Save</Text>
+          <Text role="subheadline" color={t.textInverse} style={{ fontWeight: '700' }}>Save</Text>
         </Pressable>
       </View>
     </View>

@@ -1,19 +1,21 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { View, Text, RefreshControl, Platform } from 'react-native'
+import { View, RefreshControl, Platform } from 'react-native'
 // logo.svg has no viewBox attribute (2048×2048 canvas) — pass viewBox explicitly at the call site so it scales.
 import Logo from '../../assets/images/logo.svg'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { decorative } from '../../components/ui/a11y'
+import { Text } from '../../components/ui/Text'
 import { TodayHeader } from '../../components/home/TodayHeader'
 import { RemindersSheet } from '../../components/home/RemindersSheet'
 import { NextStepCard } from '../../components/home/NextStepCard'
 import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
+import { ExamCountdowns, type CountdownTile } from '../../components/home/ExamCountdowns'
 import { NewsAndDates } from '../../components/home/NewsAndDates'
 import { ScholarshipProfilePrompt } from '../../components/home/ScholarshipProfilePrompt'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { useTheme } from '../../theme/ThemeContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHomeStats } from '../../hooks/useHomeStats'
@@ -24,7 +26,10 @@ import { useNotifications } from '../../hooks/useNotifications'
 import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
-import { pickNextStep } from '../../utils/todayNextStep'
+import { pickCountdowns, pickNextStep } from '../../utils/todayNextStep'
+import { examPace } from '../../utils/examPace'
+import { isSchoolFocusSlug } from '../../utils/focusSlug'
+import { localDayIndex } from '../../utils/localDay'
 import { reviewContentSlugs } from '../../services/practiceSignals'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
@@ -34,17 +39,19 @@ import type { FeedItem } from '../../utils/admissionsFeed'
 type LoadStatus = 'loading' | 'ready' | 'error'
 
 /**
- * Today (redesign M2, direction C "One Next Step"). Answers "what should I do
- * now?" before anything else: one hero next step carrying the screen's only
- * primary action, then the plan, the exam countdown and what's coming up.
- * On expanded widths the plan and the exams sit side by side.
+ * Today (direction C "One Next Step", in the iOS language since P4). Answers
+ * "what should I do now?" before anything else. The order is fixed by the
+ * owner (2026-10-13): the One Next Step card (the screen's only primary
+ * action), the exam countdown tiles, today's plan, then what's coming up.
+ * Your exams and the scholarship prompt follow. On expanded widths the
+ * first three sit in the main column and the rest beside them.
  *
  * Owned elsewhere now: readiness → Progress, scholarships and quick links →
  * Explore, the Estimated Admission Score → Practice, settings → Profile.
  */
 export default function TodayScreen() {
   const stats = useHomeStats()
-  const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays } = stats
+  const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays, practiceDayIndices } = stats
   const { topicRows } = usePracticeData()
   const { addListing } = useFocusListings()
   const catalog = useHomeCatalog()
@@ -165,6 +172,13 @@ export default function TodayScreen() {
     topicNameById,
   })
 
+  const countdownTiles = useMemo<CountdownTile[]>(() => {
+    const now = Date.now()
+    const today = localDayIndex(now)
+    const exams = focusedListings.filter(l => l.type === 'exam' && !isSchoolFocusSlug(l.slug))
+    return pickCountdowns(exams, now).map(c => ({ ...c, pace: examPace(c.days, practiceDayIndices ?? [], today) }))
+  }, [focusedListings, practiceDayIndices])
+
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
 
   return (
@@ -194,6 +208,7 @@ export default function TodayScreen() {
         primary={
           <View style={{ gap: spacing.xxl }}>
             <NextStepCard step={nextStep} onRetry={() => void refreshPlan()} />
+            <ExamCountdowns tiles={countdownTiles} />
             {studyPlan.loading ? null : (
               <TodaysPlanFold
                 items={studyPlan.items}
@@ -205,6 +220,14 @@ export default function TodayScreen() {
         }
         secondary={
           <View style={{ gap: spacing.xxl }}>
+            <NewsAndDates
+              focusedListings={focusedListings}
+              noteReminders={noteReminders}
+              admissionItems={admissionItems}
+              hasAnyFocus={focusedListings.length > 0}
+              admissionsStatus={admissionsStatus}
+              onRetry={reloadAdmissions}
+            />
             <FocusExamsFold
               focusedListings={focusedListings}
               examListings={catalog.examListings}
@@ -219,14 +242,6 @@ export default function TodayScreen() {
               error={!!stats.error || !!catalog.error}
               onRetry={retryExams}
             />
-            <NewsAndDates
-              focusedListings={focusedListings}
-              noteReminders={noteReminders}
-              admissionItems={admissionItems}
-              hasAnyFocus={focusedListings.length > 0}
-              admissionsStatus={admissionsStatus}
-              onRetry={reloadAdmissions}
-            />
             {/* Last, and quiet: what the short onboarding no longer asks (P4). */}
             <ScholarshipProfilePrompt />
           </View>
@@ -240,7 +255,7 @@ export default function TodayScreen() {
             <Logo width={28} height={28} viewBox="0 0 2048 2048" />
           </View>
         )}
-        <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+        <Text role="footnote" color={t.textSecondary} style={{ textAlign: 'center' }}>
           Para sa mga Iskolar ng Bayan
         </Text>
       </View>

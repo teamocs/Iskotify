@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
-import { View, Text } from 'react-native'
+import { View } from 'react-native'
 import { router } from 'expo-router'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { GraduationCap1Outlined } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import { cachedQuery, subscribe } from '../../services/queryCache'
-import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
-import { decorative, heading } from '../ui/a11y'
+import { IconTile } from '../ui/InsetGroup'
+import { Text } from '../ui/Text'
+import { heading } from '../ui/a11y'
 import {
   scholarshipProfileGaps, scholarshipPromptMessage, shouldShowScholarshipPrompt,
   type ScholarshipPromptSettings,
@@ -48,22 +48,17 @@ export function ScholarshipProfilePrompt() {
   }
 
   return (
-    <Card testID="scholarship-profile-prompt">
+    <View
+      testID="scholarship-profile-prompt"
+      style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', padding: spacing.lg }}
+    >
       <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
-        <View
-          {...decorative}
-          style={{
-            width: 36, height: 36, borderRadius: radius.md, borderCurve: 'continuous',
-            alignItems: 'center', justifyContent: 'center', backgroundColor: t.accentSurface,
-          }}
-        >
-          <Lineicons icon={GraduationCap1Outlined} size={18} color={t.accentText} />
-        </View>
+        <IconTile icon={GraduationCap1Outlined} />
         <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
-          <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>
+          <Text role="headline" {...heading(2)}>
             Complete your scholarship profile
           </Text>
-          <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+          <Text role="subheadline" color={t.textSecondary}>
             {scholarshipPromptMessage(scholarshipProfileGaps(settings!))}
           </Text>
         </View>
@@ -83,6 +78,6 @@ export function ScholarshipProfilePrompt() {
           onPress={dismiss}
         />
       </View>
-    </Card>
+    </View>
   )
 }

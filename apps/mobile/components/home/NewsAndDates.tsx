@@ -1,17 +1,15 @@
 import { useMemo } from 'react'
 import { View } from 'react-native'
 import { router } from 'expo-router'
-import { Lineicons } from '@lineiconshq/react-native-lineicons'
-import { Bell1Outlined, CalendarDaysOutlined, Flag1Outlined, Megaphone1Outlined } from '@lineiconshq/free-icons'
+import { Megaphone1Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing } from '../../theme/tokens'
-import { SectionHeader } from '../ui/SectionHeader'
-import { Card } from '../ui/Card'
-import { ListRow } from '../ui/ListRow'
-import { Badge } from '../ui/Badge'
+import { layout, radius, spacing } from '../../theme/tokens'
+import { InsetGroup, InsetRow, IconTile } from '../ui/InsetGroup'
 import { Skeleton } from '../ui/Skeleton'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
+import { Text } from '../ui/Text'
+import { TodaySectionHeader } from './TodaySectionHeader'
 import {
   buildNewsAndDatesFeed, entryDaysAway, type FocusedListingLike, type NoteReminderLike, type MergedFeedEntry,
 } from '../../utils/newsAndDatesFeed'
@@ -20,18 +18,22 @@ import type { FeedItem } from '../../utils/admissionsFeed'
 /** Today shows only what's next; Explore owns the full list of dates and news. */
 export const COMING_UP_LIMIT = 3
 
-const SHORT_DATE = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' })
+/** At or under this many days, the relative time reads in warningStrong. */
+export const SOON_DAYS = 14
 
-function dayLabel(days: number): string {
+// Hoisted: building an Intl formatter is slow. Listing and admissions dates
+// are date-only values at UTC midnight, so they format in UTC; a note
+// reminder is a real instant and formats in the device's zone.
+const MONTH_UTC = new Intl.DateTimeFormat('en-PH', { month: 'short', timeZone: 'UTC' })
+const MONTH_LOCAL = new Intl.DateTimeFormat('en-PH', { month: 'short' })
+const DATE_UTC = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const DATE_LOCAL = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' })
+
+/** "Today", "Tomorrow", "In 8 days". */
+export function relativeDay(days: number): string {
   if (days < 1) return 'Today'
   if (days === 1) return 'Tomorrow'
-  return `${days} days`
-}
-
-function iconFor(item: MergedFeedEntry) {
-  if (item.kind === 'reminder') return Bell1Outlined
-  if (item.kind === 'news') return Megaphone1Outlined
-  return item.label === 'Deadline' ? Flag1Outlined : CalendarDaysOutlined
+  return `In ${days} days`
 }
 
 interface Props {
@@ -43,7 +45,34 @@ interface Props {
   onRetry: () => void
 }
 
-/** "Coming up": the next few dates and admissions news, soonest first. */
+/** An iOS Calendar-style date tile: the month in danger red over the day. Decorative. */
+function DateTile({ date, local }: { date: number; local: boolean }) {
+  const { theme: t } = useTheme()
+  const d = new Date(date)
+  const day = local ? d.getDate() : d.getUTCDate()
+  return (
+    <View
+      testID="date-tile"
+      style={{
+        minWidth: layout.rowMinHeight, minHeight: layout.rowMinHeight, paddingVertical: 2,
+        borderRadius: radius.chip, borderCurve: 'continuous', backgroundColor: t.bg,
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <Text role="caption" color={t.danger} maxFontSizeMultiplier={1.4} style={{ fontWeight: '600' }}>
+        {(local ? MONTH_LOCAL : MONTH_UTC).format(d)}
+      </Text>
+      <Text role="title3" maxFontSizeMultiplier={1.4}>{String(day)}</Text>
+    </View>
+  )
+}
+
+/**
+ * "Coming up": the next few deadlines, dates and admissions news, soonest
+ * first, on one inset group. A dated row leads with a calendar date tile and
+ * ends with a calm relative time ("In 8 days"; warningStrong only within two
+ * weeks). Every row names its official source host when the data has one.
+ */
 export function NewsAndDates({ focusedListings, noteReminders, admissionItems, hasAnyFocus, admissionsStatus, onRetry }: Props) {
   const { theme: t } = useTheme()
 
@@ -68,72 +97,81 @@ export function NewsAndDates({ focusedListings, noteReminders, admissionItems, h
     }
   }
 
-  let body: React.ReactNode
+  const rows: React.ReactNode[] = []
   if (admissionsStatus === 'loading' && feed.length === 0) {
-    body = (
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
+    rows.push(
+      <View key="loading" style={{ padding: spacing.lg, gap: spacing.md }}>
         <Skeleton accessible label="Loading dates and news" height={40} />
         <Skeleton height={40} />
-      </View>
+      </View>,
     )
   } else {
-    body = (
-      <>
-        {feed.map((item, i) => {
-          const icon = <Lineicons icon={iconFor(item)} size={20} color={t.accentText} />
-          const divider = { borderTopWidth: i === 0 ? 0 : 1, borderTopColor: t.divider }
-          if (item.date == null) {
-            return (
-              <View key={item.key} style={divider}>
-                <ListRow title={item.title} subtitle={item.label} leading={icon} onPress={() => onPressEntry(item)} />
-              </View>
-            )
+    for (const item of feed) {
+      const source = item.sourceHost ? `Source: ${item.sourceHost}` : null
+      if (item.date == null) {
+        rows.push(
+          <InsetRow
+            key={item.key}
+            title={item.title}
+            subtitle={[item.label, source].filter(Boolean).join(' · ')}
+            leading={<IconTile icon={Megaphone1Outlined} tone="neutral" />}
+            onPress={() => onPressEntry(item)}
+          />,
+        )
+        continue
+      }
+      const local = item.kind === 'reminder'
+      const days = entryDaysAway({ kind: item.kind, date: item.date })
+      const when = relativeDay(days)
+      const date = (local ? DATE_LOCAL : DATE_UTC).format(new Date(item.date))
+      rows.push(
+        <InsetRow
+          key={item.key}
+          title={item.title}
+          subtitle={[item.label, source].filter(Boolean).join(' · ')}
+          leading={<DateTile date={item.date} local={local} />}
+          trailing={
+            <Text role="footnote" color={days <= SOON_DAYS ? t.warningStrong : t.textSecondary} style={{ fontWeight: '600' }}>
+              {when}
+            </Text>
           }
-          const days = entryDaysAway({ kind: item.kind, date: item.date })
-          const when = dayLabel(days)
-          const date = SHORT_DATE.format(new Date(item.date))
-          return (
-            <View key={item.key} style={divider}>
-              <ListRow
-                title={item.title}
-                subtitle={`${item.label} · ${date}`}
-                leading={icon}
-                trailing={<Badge label={when} tone={days < 7 ? 'warning' : 'neutral'} />}
-                onPress={() => onPressEntry(item)}
-                accessibilityLabel={`${item.title}, ${item.label} on ${date}, ${when === 'Today' || when === 'Tomorrow' ? when.toLowerCase() : `in ${when}`}`}
-              />
-            </View>
-          )
-        })}
-        {feed.length === 0 && admissionsStatus !== 'error' ? (
-          <EmptyState
-            title="Nothing coming up yet"
-            body={hasAnyFocus
-              ? 'No dates or news for your exams right now. Check back soon.'
-              : 'Add exams or scholarships to your focus to track their dates here.'}
-          />
-        ) : null}
-        {admissionsStatus === 'error' ? (
-          <View style={{ borderTopWidth: feed.length > 0 ? 1 : 0, borderTopColor: t.divider }}>
-            <ErrorState
-              title="Couldn't load admissions news"
-              body="Your exam dates and reminders still show. Check your connection, then try again."
-              onRetry={onRetry}
-            />
-          </View>
-        ) : null}
-      </>
-    )
+          onPress={() => onPressEntry(item)}
+          accessibilityLabel={`${item.title}, ${item.label} on ${date}, ${when.toLowerCase()}${item.sourceHost ? `, source ${item.sourceHost}` : ''}`}
+        />,
+      )
+    }
+    if (feed.length === 0 && admissionsStatus !== 'error') {
+      rows.push(
+        <EmptyState
+          key="empty"
+          title="Nothing coming up yet"
+          body={hasAnyFocus
+            ? 'No dates or news for your exams right now. Check back soon.'
+            : 'Add exams or scholarships to your focus to track their dates here.'}
+        />,
+      )
+    }
+    if (admissionsStatus === 'error') {
+      rows.push(
+        <ErrorState
+          key="error"
+          title="Couldn't load admissions news"
+          body="Your exam dates and reminders still show. Check your connection, then try again."
+          onRetry={onRetry}
+        />,
+      )
+    }
   }
 
   return (
-    <View>
-      <SectionHeader
+    <View testID="coming-up">
+      <TodaySectionHeader
         title="Coming up"
-        actionLabel="All dates & news"
+        actionLabel="See all"
+        actionAccessibilityLabel="See all dates and news"
         onAction={() => router.push('/(tabs)/explore?section=news')}
       />
-      <Card padded={false} style={{ overflow: 'hidden' }}>{body}</Card>
+      <InsetGroup inset={false}>{rows}</InsetGroup>
     </View>
   )
 }

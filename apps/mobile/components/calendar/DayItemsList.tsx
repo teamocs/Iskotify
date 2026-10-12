@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Pressable, StyleSheet } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import type { DayExam, DayReminder } from '../../hooks/useDateReminders'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { Trash3Outlined, PlusOutlined } from '@lineiconshq/free-icons'
+import { Text } from '../ui/Text'
+import { heading } from '../ui/a11y'
 
 interface Props {
   exams: DayExam[]
@@ -24,31 +26,24 @@ function formatTime(ms: number): string {
 }
 
 export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTapAdd, onDeleteReminder }: Props) {
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const sortedReminders = useMemo(() => [...reminders].sort((a, b) => a.reminderAt - b.reminderAt), [reminders])
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { padding: 16, gap: 12 },
+    container: { paddingVertical: 8, gap: 12 },
     section: { gap: 8 },
-    label: { fontSize: typo.xs, color: t.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
     examPill: { backgroundColor: 'rgba(252,165,165,0.12)', borderColor: 'rgba(252,165,165,0.30)', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-    examTitle: { color: t.accentText, fontSize: typo.sm, fontWeight: '700' },
-    examMeta: { color: t.textSecondary, fontSize: typo.xs, marginTop: 2 },
     reminderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.surface2, borderColor: t.border, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
     reminderBody: { flex: 1, minWidth: 0 },
-    reminderTitle: { color: t.textPrimary, fontSize: typo.sm, fontWeight: '600' },
-    reminderTime: { color: t.textTertiary, fontSize: typo.xs, marginTop: 2 },
-    deleteBtn: { paddingHorizontal: 6, paddingVertical: 4 },
+    deleteBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
     addBtn: { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: t.border, borderStyle: 'dashed' },
-    addTxt: { color: t.accentText, fontSize: typo.sm, fontWeight: '700' },
-    empty: { color: t.textTertiary, fontSize: typo.sm, fontStyle: 'italic' },
-  }), [t, typo])
+  }), [t])
 
   return (
     <View style={styles.container}>
       {exams.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.label}>Important</Text>
+          <Text role="footnote" color={t.textSecondary} {...heading(3)} style={{ fontWeight: '600' }}>Important</Text>
           {exams.map(exam => (
             <Pressable
               key={`${exam.slug}-${exam.label}`}
@@ -57,17 +52,17 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
               accessibilityRole="button"
               accessibilityLabel={`Open ${exam.title}`}
             >
-              <Text style={styles.examTitle}>{exam.title}</Text>
-              <Text style={styles.examMeta}>{exam.label} day · tap to view listing</Text>
+              <Text role="subheadline" color={t.accentText} style={{ fontWeight: '700' }}>{exam.title}</Text>
+              <Text role="footnote" color={t.textSecondary} style={{ marginTop: 2 }}>{exam.label} day · tap to view listing</Text>
             </Pressable>
           ))}
         </View>
       )}
 
       <View style={styles.section}>
-        <Text style={styles.label}>Your reminders</Text>
+        <Text role="footnote" color={t.textSecondary} {...heading(3)} style={{ fontWeight: '600' }}>Your reminders</Text>
         {sortedReminders.length === 0 ? (
-          <Text style={styles.empty}>No reminders on this day yet.</Text>
+          <Text role="subheadline" color={t.textSecondary}>No reminders on this day yet.</Text>
         ) : (
           sortedReminders.map(r => (
             <View key={r.noteId} style={styles.reminderRow}>
@@ -77,8 +72,8 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
                 accessibilityRole="button"
                 accessibilityLabel={`Open reminder ${r.noteTitle}`}
               >
-                <Text style={styles.reminderTitle}>{r.noteTitle}</Text>
-                <Text style={styles.reminderTime}>
+                <Text role="subheadline" style={{ fontWeight: '600' }}>{r.noteTitle}</Text>
+                <Text role="footnote" color={t.textSecondary} style={{ marginTop: 2 }}>
                   {formatTime(r.reminderAt)}{r.type === 'checklist' ? ' · checklist' : ''}
                 </Text>
               </Pressable>
@@ -103,7 +98,7 @@ export function DayItemsList({ exams, reminders, onTapExam, onTapReminder, onTap
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Lineicons icon={PlusOutlined} size={16} color={t.accentText} />
-          <Text style={styles.addTxt}>Add reminder</Text>
+          <Text role="subheadline" color={t.accentText} style={{ fontWeight: '700' }}>Add reminder</Text>
         </View>
       </Pressable>
     </View>

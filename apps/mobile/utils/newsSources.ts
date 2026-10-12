@@ -15,7 +15,8 @@ export function isHttpUrl(v: unknown): v is string {
   return typeof v === 'string' && HTTP_URL.test(v)
 }
 
-const hostOf = (url: string) => (url.match(HTTP_URL)?.[2] ?? url).toLowerCase().replace(/^www\./, '')
+/** A URL's host, lowercased, without a leading www. */
+export const hostOf = (url: string) => (url.match(HTTP_URL)?.[2] ?? url).toLowerCase().replace(/^www\./, '')
 
 export function newsSources(raw: unknown): NewsSource[] {
   if (!Array.isArray(raw)) return []
@@ -27,4 +28,19 @@ export function newsSources(raw: unknown): NewsSource[] {
     out.push({ label: typeof given === 'string' && given.trim() ? given.trim() : hostOf(url), url })
   }
   return out
+}
+
+/**
+ * The host of the first http(s) source, for a "Source: sei.dost.gov.ph" line.
+ * Takes the stored form (a JSON string) or the parsed array. Null when the
+ * row has no usable source: a host is never made up.
+ */
+export function firstSourceHost(raw: unknown): string | null {
+  let value = raw
+  if (typeof raw === 'string') {
+    if (isHttpUrl(raw)) return hostOf(raw)
+    try { value = JSON.parse(raw) } catch { return null }
+  }
+  const first = newsSources(value)[0]
+  return first ? hostOf(first.url) : null
 }

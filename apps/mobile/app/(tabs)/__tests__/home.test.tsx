@@ -3,10 +3,13 @@ import { render, screen, fireEvent, waitFor, within, act } from '@testing-librar
 import { waitForSheetExit } from '../../../test-utils/sheet'
 import HomeScreen from '../index'
 import { aria } from '../../../test-utils/aria'
+import { lightTheme } from '../../../theme/tokens'
+import { eyebrowDate } from '../../../components/home/TodayHeader'
 
-// Redesign M2 (direction C, "One Next Step"): Today answers "what should I do
-// now?" first — one hero next step with the screen's only primary action —
-// then at most three supporting sections (plan, exams + countdown, coming up).
+// Redesign M2 (direction C, "One Next Step"), in the iOS language since P4:
+// Today answers "what should I do now?" first. The order is fixed by the
+// owner (2026-10-13): the One Next Step card (the screen's only primary
+// action), the exam countdown tiles, today's plan, then Coming up.
 // Readiness moved to Progress, scholarships and quick links to Explore, the
 // estimator entry to Practice, and settings into Profile.
 
@@ -172,6 +175,25 @@ const planItem = (o: Partial<{ id: number; kind: string; refId: string; targetCo
   id: 1, kind: 'topic_practice', refId: 't1', targetCount: 10, completedAt: null, ...o,
 })
 
+const flatStyle = (node: any) =>
+  [node.props.style].flat(Infinity).reduce((a: any, st: any) => (st && typeof st === 'object' ? { ...a, ...st } : a), {})
+
+/** Every rendered element filled with the maroon accent: primary buttons. */
+function maroonFills(): number {
+  let n = 0
+  const walk = (node: any): void => {
+    if (node == null || typeof node === 'string') return
+    if (Array.isArray(node)) { node.forEach(walk); return }
+    if (flatStyle(node).backgroundColor === lightTheme.accent) n++
+    if (node.children) walk(node.children)
+  }
+  walk(screen.toJSON())
+  return n
+}
+
+const MANILA_MS = 8 * 3_600_000
+const todayIndex = () => Math.floor((Date.now() + MANILA_MS) / DAY)
+
 function allText(): string[] {
   const texts: string[] = []
   const walk = (node: any): void => {
@@ -199,20 +221,19 @@ describe('Today', () => {
 
   // ── Header ────────────────────────────────────────────────────────────────
   describe('header', () => {
-    it('greets the student by first name, on its own line on a phone, as the screen heading', () => {
+    it('greets the student by first name in the large title, as the screen heading', () => {
       mockUseHomeStats.mockReturnValue({ ...emptyStats, fullName: 'Ana Reyes' })
       render(<HomeScreen />)
-      expect(screen.getByText(/^Good (morning|afternoon|evening),$/)).toBeTruthy()
       expect(screen.getByText('Ana')).toBeTruthy()
-      expect(screen.getByRole('header', { name: /Good (morning|afternoon|evening), Ana/ })).toBeTruthy()
+      expect(screen.getByRole('header', { name: /^Good (morning|afternoon|evening), Ana$/ })).toBeTruthy()
     })
 
-    it('shows the date in sentence case, not an uppercase eyebrow', () => {
+    it('shows the date as an uppercase footnote eyebrow ("Sunday, 12 October")', () => {
       render(<HomeScreen />)
-      // Phones get the short form so it never splits beside the header controls.
-      const date = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())
-      expect(screen.getByText(date)).toBeTruthy()
-      expect(screen.queryByText(date.toUpperCase())).toBeNull()
+      const flat = flatStyle(screen.getByText(eyebrowDate(new Date())))
+      expect(flat.textTransform).toBe('uppercase')
+      expect(flat.fontSize).toBe(13)
+      expect(flat.color).toBe(lightTheme.textSecondary)
     })
 
     it('the avatar opens Profile; Settings now lives in Profile, not on Today', () => {
@@ -239,7 +260,9 @@ describe('Today', () => {
       expect(screen.getByText('Daily practice reminder')).toBeTruthy()
       expect(screen.getByText('Weekly weak-areas nudge')).toBeTruthy()
       expect(screen.getByText('Exam countdown alerts')).toBeTruthy()
-      fireEvent(screen.getByRole('switch', { name: 'Send study reminders' }), 'valueChange', false)
+      const sw = screen.getByRole('switch', { name: 'Send study reminders' })
+      expect(aria(sw, 'aria-checked')).toBe(true)
+      fireEvent.press(sw)
       expect(mockToggle).toHaveBeenCalled()
     })
 
@@ -254,8 +277,8 @@ describe('Today', () => {
   })
 
   // ── Hero: your next step ──────────────────────────────────────────────────
-  describe('your next step', () => {
-    it('is the first section and names the first plan item that is not done', () => {
+  describe('one next step', () => {
+    it('is the first section and names the first plan item that is not done, with a time estimate', () => {
       mockUseStudyPlan.mockReturnValue({
         ...emptyStudyPlan,
         items: [
@@ -266,9 +289,32 @@ describe('Today', () => {
       })
       render(<HomeScreen />)
       const hero = screen.getByTestId('next-step')
-      expect(within(hero).getByRole('header', { name: 'Your next step' })).toBeTruthy()
+      expect(within(hero).getByRole('header', { name: 'One next step' })).toBeTruthy()
       expect(within(hero).getByText('Practice Algebra')).toBeTruthy()
-      expect(within(hero).getByText('1 of 3 done today')).toBeTruthy()
+      expect(within(hero).getByText('About 10 min')).toBeTruthy()
+      // The day's progress lives on the plan group's header.
+      expect(screen.getByLabelText('1 of 3 done')).toBeTruthy()
+    })
+
+    it('is a white 22pt card with the small shadow', () => {
+      mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, items: [planItem()] })
+      render(<HomeScreen />)
+      expect(flatStyle(screen.getByTestId('next-step'))).toMatchObject({
+        backgroundColor: lightTheme.surface, borderRadius: 22, boxShadow: lightTheme.shadowSm,
+      })
+    })
+
+    it('carries the only filled maroon button on the screen', async () => {
+      mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, items: [planItem(), planItem({ id: 2, kind: 'srs_review' })] })
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(20), deadline: null }],
+      })
+      render(<HomeScreen />)
+      await act(async () => {})
+      expect(maroonFills()).toBe(1)
+      const hero = screen.getByTestId('next-step')
+      expect(within(hero).getByRole('button', { name: 'Start practice, Practice Algebra' })).toBeTruthy()
     })
 
     it('has the one primary action, which opens that task', () => {
@@ -299,7 +345,8 @@ describe('Today', () => {
         ...emptyStudyPlan, allDone: true, tomorrowItemCount: 2, items: [planItem({ completedAt: 9 })],
       })
       render(<HomeScreen />)
-      expect(screen.getByText('Tapos na for today')).toBeTruthy()
+      expect(screen.getByText("That's today done. See you tomorrow.")).toBeTruthy()
+      expect(screen.queryByText(/Tapos na/)).toBeNull()
       expect(screen.getByText('Come back tomorrow for 2 more items.')).toBeTruthy()
     })
 
@@ -314,6 +361,29 @@ describe('Today', () => {
 
   // ── Today's plan checklist ────────────────────────────────────────────────
   describe("today's plan", () => {
+    it('shows an "N of M" count beside its title', () => {
+      mockUseStudyPlan.mockReturnValue({
+        ...emptyStudyPlan,
+        items: [planItem({ id: 1, completedAt: 5 }), planItem({ id: 2 }), planItem({ id: 3, kind: 'diagnostic' })],
+      })
+      render(<HomeScreen />)
+      expect(screen.getByText('1 of 3')).toBeTruthy()
+    })
+
+    it('each check circle is a checkbox with its checked state, and a done row is struck through', () => {
+      mockUseStudyPlan.mockReturnValue({
+        ...emptyStudyPlan,
+        items: [planItem({ id: 1, kind: 'srs_review', targetCount: 3, completedAt: 5 }), planItem({ id: 2 })],
+      })
+      render(<HomeScreen />)
+      const boxes = screen.getAllByRole('checkbox')
+      expect(boxes).toHaveLength(2)
+      expect(boxes.map(b => aria(b, 'aria-checked'))).toEqual([true, false])
+      const flat = flatStyle(within(screen.getByTestId('todays-plan')).getByText('Review 3 due flashcards'))
+      expect(flat.textDecorationLine).toBe('line-through')
+      expect(flat.color).toBe(lightTheme.textSecondary)
+    })
+
     it('lists every item with a real checkbox that marks it done', () => {
       const markComplete = jest.fn()
       mockUseStudyPlan.mockReturnValue({
@@ -344,20 +414,53 @@ describe('Today', () => {
   })
 
   // ── Your exams: countdown + focus exams ───────────────────────────────────
-  describe('your exams', () => {
-    it('shows one countdown for the soonest focused exam as a tabular number', () => {
-      mockUseHomeStats.mockReturnValue({
-        ...emptyStats,
-        focusedListings: [
-          { slug: 'acet', priority: 2, title: 'ACET 2027', type: 'exam', examDate: manilaNoonInDays(40), deadline: null },
-          { slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(10), deadline: null },
-        ],
-      })
+  describe('exam countdowns', () => {
+    const two = [
+      { slug: 'acet', priority: 2, title: 'ACET 2027', type: 'exam', examDate: manilaNoonInDays(40), deadline: null },
+      { slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(10), deadline: null },
+    ]
+
+    it('shows a tile per dated focused exam, soonest first, with a tabular day count', () => {
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: two })
       render(<HomeScreen />)
-      expect(screen.getByLabelText('Until UPCAT 2027: 10 days')).toBeTruthy()
-      expect(screen.queryByLabelText(/Until ACET 2027/)).toBeNull()
+      const tiles = within(screen.getByTestId('exam-countdowns')).getAllByRole('button')
+      expect(tiles.map(t => t.props.accessibilityLabel)).toEqual(['UPCAT 2027, 10 days to go', 'ACET 2027, 40 days to go'])
+      const flat = flatStyle(within(screen.getByTestId('countdown-upcat')).getByText('10'))
+      expect(flat.fontVariant).toEqual(['tabular-nums'])
+      expect(flat.fontSize).toBe(34)
     })
 
+    it('a tile opens its listing', () => {
+      const { router } = require('expo-router')
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: two })
+      render(<HomeScreen />)
+      fireEvent.press(screen.getByTestId('countdown-upcat'))
+      expect(router.push).toHaveBeenCalledWith('/listings/upcat')
+    })
+
+    it('says "On pace" in successStrong once the week meets its target', () => {
+      const today = todayIndex()
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [two[1]], practiceDayIndices: [0, 1, 2, 3, 4].map(i => today - i) })
+      render(<HomeScreen />)
+      expect(flatStyle(screen.getByText('On pace')).color).toBe(lightTheme.successStrong)
+    })
+
+    it('counts sessions to catch up in the accent colour, never "behind" or warning red', () => {
+      mockUseHomeStats.mockReturnValue({ ...emptyStats, focusedListings: [two[1]], practiceDayIndices: [todayIndex() - 1] })
+      render(<HomeScreen />)
+      const color = flatStyle(screen.getByText('4 sessions to catch up')).color
+      expect(color).toBe(lightTheme.accentText)
+      expect([lightTheme.danger, lightTheme.warning, lightTheme.dangerStrong, lightTheme.warningStrong]).not.toContain(color)
+      expect(allText().join(' ')).not.toMatch(/behind/i)
+    })
+
+    it('shows no tiles without a dated exam', () => {
+      render(<HomeScreen />)
+      expect(screen.queryByTestId('exam-countdowns')).toBeNull()
+    })
+  })
+
+  describe('your exams', () => {
     it('has an "All exams" link to Explore', () => {
       const { router } = require('expo-router')
       render(<HomeScreen />)
@@ -576,11 +679,12 @@ describe('Today', () => {
 
   // ── Coming up (was News & Dates) ──────────────────────────────────────────
   describe('coming up', () => {
-    it('has a header and an "All dates & news" link to Explore news', () => {
+    it('has a header and a "See all" link to Explore news', () => {
       const { router } = require('expo-router')
       render(<HomeScreen />)
       expect(screen.getByRole('header', { name: 'Coming up' })).toBeTruthy()
-      fireEvent.press(screen.getByRole('button', { name: 'All dates & news' }))
+      expect(screen.getByText('See all')).toBeTruthy()
+      fireEvent.press(screen.getByRole('button', { name: 'See all dates and news' }))
       expect(router.push).toHaveBeenCalledWith('/(tabs)/explore?section=news')
     })
 
@@ -595,7 +699,36 @@ describe('Today', () => {
         focusedListings: [{ slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: manilaNoonInDays(10), deadline: null }],
       })
       render(<HomeScreen />)
-      expect(await screen.findByText('10 days')).toBeTruthy()
+      // Within two weeks: warningStrong (calm, not danger).
+      expect(flatStyle(await screen.findByText('In 10 days')).color).toBe(lightTheme.warningStrong)
+      // An iOS Calendar-style date tile leads the row.
+      expect(within(screen.getByTestId('coming-up')).getByTestId('date-tile', { includeHiddenElements: true })).toBeTruthy()
+    })
+
+    it('a date further out reads in textSecondary', async () => {
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [{ slug: 'upcat-2026', priority: 1, title: 'UPCAT 2026', type: 'exam', examDate: manilaNoonInDays(30), deadline: null }],
+      })
+      render(<HomeScreen />)
+      expect(flatStyle(await screen.findByText('In 30 days')).color).toBe(lightTheme.textSecondary)
+    })
+
+    it('names the official source host only when the data has one', async () => {
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        focusedListings: [
+          { slug: 'dost', priority: 1, title: 'DOST-SEI', type: 'scholarship', examDate: null, deadline: manilaNoonInDays(8), sourceUrl: 'https://www.sei.dost.gov.ph/apply' },
+          { slug: 'other', priority: 2, title: 'Other Grant', type: 'scholarship', examDate: null, deadline: manilaNoonInDays(9), sourceUrl: null },
+        ],
+      })
+      render(<HomeScreen />)
+      expect(await screen.findByText('Deadline · Source: sei.dost.gov.ph')).toBeTruthy()
+      expect(screen.getByRole('button', { name: /^DOST-SEI, Deadline on .*, in 8 days, source sei\.dost\.gov\.ph$/ })).toBeTruthy()
+      // No source in the data: no source line, never a made-up one.
+      const other = screen.getByRole('button', { name: /^Other Grant, Deadline on .*, in 9 days$/ })
+      expect(within(other).queryByText(/Source:/)).toBeNull()
+      expect(within(other).getByText('Deadline')).toBeTruthy()
     })
 
     it('folds an admissions event into the list', async () => {
@@ -635,7 +768,7 @@ describe('Today', () => {
 
   // ── Structure ─────────────────────────────────────────────────────────────
   describe('structure', () => {
-    it('has one next step and at most four sections, in order', () => {
+    it('keeps the owner order: Next Step, countdowns, plan, then Coming up', () => {
       // Real data everywhere, so no EmptyState titles (also headers) render.
       mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, items: [planItem()] })
       mockUseHomeStats.mockReturnValue({
@@ -645,11 +778,13 @@ describe('Today', () => {
       render(<HomeScreen />)
       const texts = allText()
       const idx = (label: string) => texts.indexOf(label)
-      expect(idx('Your next step')).toBeGreaterThanOrEqual(0)
-      expect(idx("Today's plan")).toBeGreaterThan(idx('Your next step'))
-      expect(idx('Your exams')).toBeGreaterThan(idx("Today's plan"))
-      expect(idx('Coming up')).toBeGreaterThan(idx('Your exams'))
-      // Greeting + four section headings, nothing more.
+      expect(idx('One next step')).toBeGreaterThanOrEqual(0)
+      // The countdown tile's day count comes next ("20").
+      expect(idx('20')).toBeGreaterThan(idx('One next step'))
+      expect(idx("Today's plan")).toBeGreaterThan(idx('20'))
+      expect(idx('Coming up')).toBeGreaterThan(idx("Today's plan"))
+      expect(idx('Your exams')).toBeGreaterThan(idx('Coming up'))
+      // Greeting + the next step + three section headings, nothing more.
       expect(screen.getAllByRole('header').length).toBeLessThanOrEqual(5)
     })
 
@@ -658,6 +793,22 @@ describe('Today', () => {
       for (const gone of ['Subject preparedness', 'Recommended Scholarships', 'Estimated Admission Score', 'Explore', 'My Entrance Exams', 'News & Dates']) {
         expect(screen.queryByText(gone)).toBeNull()
       }
+    })
+
+    it('never renders "behind", "only … left" or the old Taglish sign-off', async () => {
+      mockUseStudyPlan.mockReturnValue({ ...emptyStudyPlan, tomorrowItemCount: 1, items: [planItem({ completedAt: 3 })] })
+      mockUseHomeStats.mockReturnValue({
+        ...emptyStats,
+        practiceDayIndices: [todayIndex() - 3],
+        focusedListings: [{ slug: 'upcat', priority: 1, title: 'UPCAT 2027', type: 'exam', examDate: manilaNoonInDays(5), deadline: null }],
+      })
+      render(<HomeScreen />)
+      await act(async () => {})
+      const text = allText().join(' ')
+      expect(text).not.toMatch(/\bbehind\b/i)
+      expect(text).not.toMatch(/only \d+ .*left/i)
+      expect(text).not.toMatch(/Tapos na/)
+      expect(text).toMatch(/That's today done\. See you tomorrow\./)
     })
 
     it('renders no emoji anywhere', async () => {

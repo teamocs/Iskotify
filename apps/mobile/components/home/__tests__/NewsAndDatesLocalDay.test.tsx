@@ -56,9 +56,9 @@ describe('NewsAndDates day badge', () => {
     unmount()
   })
 
-  it('a date 3 calendar days out reads "3 days" (not rounded up by the clock hour)', () => {
+  it('a date 3 calendar days out reads "In 3 days" (not rounded up by the clock hour)', () => {
     const { unmount } = renderAt(manila(1, 7, 59), { examDate: Date.UTC(2026, 9, 4), deadline: null })
-    expect(screen.getByText('3 days')).toBeTruthy()
+    expect(screen.getByText('In 3 days')).toBeTruthy()
     unmount()
     void DAY
   })

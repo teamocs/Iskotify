@@ -1,4 +1,43 @@
-import { pickNextStep, pickCountdown, planItemCopy, type PlanItemLike } from '../todayNextStep'
+import { pickNextStep, pickCountdown, pickCountdowns, planItemCopy, planItemMinutes, type PlanItemLike } from '../todayNextStep'
+
+describe('planItemMinutes', () => {
+  it('estimates a few minutes per item, and says nothing for a full mock', () => {
+    expect(planItemMinutes({ kind: 'srs_review', targetCount: 15 })).toBe(8)
+    expect(planItemMinutes({ kind: 'topic_practice', targetCount: 12 })).toBe(12)
+    expect(planItemMinutes({ kind: 'diagnostic', targetCount: 1 })).toBe(10)
+    expect(planItemMinutes({ kind: 'mock_section', targetCount: 1 })).toBeNull()
+  })
+
+  it('rides along on the next step', () => {
+    const step = pickNextStep({
+      items: [{ id: 1, kind: 'topic_practice', refId: 't', targetCount: 8, completedAt: null }],
+      loading: false, error: false, tomorrowItemCount: 0, topicNameById: new Map(),
+    })
+    expect(step).toMatchObject({ kind: 'task', minutes: 8 })
+  })
+})
+
+describe('pickCountdowns', () => {
+  const D = 86_400_000
+  const now = Date.UTC(2026, 8, 26, 2)
+
+  it('lists every upcoming focused exam, soonest first', () => {
+    const list = pickCountdowns([
+      { slug: 'acet', title: 'ACET', type: 'exam', examDate: now + 40 * D },
+      { slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: now + 12 * D },
+      { slug: 'old', title: 'Old', type: 'exam', examDate: now - 3 * D },
+      { slug: 'none', title: 'None', type: 'exam', examDate: null },
+      { slug: 'dost', title: 'DOST', type: 'scholarship', examDate: now + 3 * D },
+    ], now)
+    expect(list.map(c => c.slug)).toEqual(['upcat', 'acet'])
+    expect(list[0]!.days).toBe(12)
+  })
+
+  it('respects the limit', () => {
+    const many = [1, 2, 3, 4, 5, 6].map(i => ({ slug: `e${i}`, title: `E${i}`, type: 'exam', examDate: now + i * D }))
+    expect(pickCountdowns(many, now, undefined, 4)).toHaveLength(4)
+  })
+})
 
 const DAY = 86_400_000
 const topics = new Map([['t-alg', 'Algebra']])

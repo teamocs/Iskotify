@@ -1,14 +1,14 @@
 import React from 'react'
 import { Text } from 'react-native'
-import { render, screen, within } from '@testing-library/react-native'
-import { TodayHeader } from '../TodayHeader'
-import { textStyles } from '../../../theme/tokens'
+import { render, screen, within, fireEvent } from '@testing-library/react-native'
+import { TodayHeader, eyebrowDate } from '../TodayHeader'
+import { iosTextStyles, lightTheme } from '../../../theme/tokens'
 
-// Owner report (2026-09-26): on phones the greeting was squeezed into a narrow
-// column beside the refresh, reminders and avatar controls, so "Good
-// afternoon, Maximiliana" broke across three lines and the date split
-// mid-phrase. The redesign gives the heading the full width: a top row holds
-// the date and the controls, and the greeting sits on its own lines below.
+// iOS redesign P4. The large-title header: a top row with the date eyebrow
+// and the controls (refresh on web, reminders, the glass avatar that opens
+// the Profile sheet), then the greeting in the large-title role at full
+// width. Owner report (2026-09-26) still holds: the greeting is never
+// squeezed beside the controls, so a long name wraps at a word boundary.
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }))
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
@@ -34,7 +34,9 @@ function renderHeader(props: Partial<React.ComponentProps<typeof TodayHeader>> =
   )
 }
 
-/** Every Text style flattened, so we can assert on numberOfLines/ellipsis. */
+const flat = (node: any) => [node.props.style].flat(3).reduce((a: any, s: any) => (s && typeof s === 'object' ? { ...a, ...s } : a), {})
+
+/** Every Text's props, so we can assert on numberOfLines/ellipsis. */
 function textProps(node: any): any[] {
   const out: any[] = []
   const walk = (n: any) => {
@@ -54,27 +56,30 @@ describe('TodayHeader', () => {
     expect(screen.getByRole('header', { name: /^Good (morning|afternoon|evening), Maximiliana$/ })).toBeTruthy()
   })
 
+  it('draws the greeting in the large-title role', () => {
+    renderHeader()
+    const name = within(screen.getByTestId('today-header-greeting')).getByText('Maximiliana')
+    expect(flat(name).fontSize).toBe(iosTextStyles.largeTitle.fontSize)
+  })
+
   it('puts the controls in a top row, never beside the heading', () => {
     renderHeader()
     const top = screen.getByTestId('today-header-top')
     const heading = screen.getByTestId('today-header-greeting')
-    // Controls live in the top row …
     expect(within(top).getByRole('button', { name: 'Study reminders' })).toBeTruthy()
     expect(within(top).getByRole('button', { name: 'Profile' })).toBeTruthy()
     expect(within(top).getByTestId('refresh-slot')).toBeTruthy()
-    // … and the heading is not inside that row, so it gets the full width.
     expect(within(top).queryByTestId('today-header-greeting')).toBeNull()
     expect(within(heading).queryByRole('button')).toBeNull()
   })
 
-  it('on a phone, the first name gets its own line under the greeting', () => {
+  it('the glass avatar opens the Profile sheet', () => {
+    const { router } = require('expo-router')
     renderHeader()
-    const greeting = screen.getByTestId('today-header-greeting')
-    const line1 = within(greeting).getByText(/^Good (morning|afternoon|evening),$/)
-    const line2 = within(greeting).getByText('Maximiliana')
-    // Separate Text blocks (not one run that wraps wherever it happens to).
-    expect(line1).not.toBe(line2)
-    expect(within(line1).queryByText('Maximiliana')).toBeNull()
+    const profile = screen.getByRole('button', { name: 'Profile' })
+    expect(within(profile).getByTestId('profile-glass')).toBeTruthy()
+    fireEvent.press(profile)
+    expect(router.push).toHaveBeenCalledWith('/profile')
   })
 
   it('never truncates or ellipsises the greeting or the name', () => {
@@ -85,41 +90,36 @@ describe('TodayHeader', () => {
     }
   })
 
-  it('on a phone, uses the short date so it fits beside the controls without splitting', () => {
+  it('shows the date as an uppercase footnote eyebrow in textSecondary, day before month', () => {
     renderHeader()
-    const short = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())
-    expect(within(screen.getByTestId('today-header-top')).getByText(short)).toBeTruthy()
+    const d = new Date(2026, 9, 12)
+    expect(eyebrowDate(d)).toBe('Monday, 12 October')
+    const eyebrow = within(screen.getByTestId('today-header-top')).getByText(eyebrowDate(new Date()))
+    expect(flat(eyebrow)).toMatchObject({
+      textTransform: 'uppercase',
+      fontSize: iosTextStyles.footnote.fontSize,
+      color: lightTheme.textSecondary,
+    })
   })
 
-  it('on desktop, keeps the greeting on one line and spells the date out', () => {
-    mockBp.value = 'expanded'
-    renderHeader()
-    const long = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())
-    expect(screen.getByText(long)).toBeTruthy()
-    expect(within(screen.getByTestId('today-header-greeting')).getByText(/^Good (morning|afternoon|evening), /)).toBeTruthy()
-  })
-
-  it('shows the streak as its own quiet line under the name', () => {
+  it('shows the streak as its own quiet line under the greeting', () => {
     renderHeader({ streakDays: 13 })
     const greeting = screen.getByTestId('today-header-greeting')
     expect(within(greeting).queryByText(/13-day streak/)).toBeNull()
     expect(screen.getByText('13-day streak')).toBeTruthy()
   })
 
-  it('steps a very long first name down a size on a phone so it wraps at word boundaries, never mid-word', () => {
-    // 320pt phone at 2x font scale (capped 1.4): a 14-letter name in the 28pt
-    // title role is wider than the column and would split mid-word.
+  it('steps a very long first name down to title1 on a phone so it wraps at word boundaries, never mid-word', () => {
     renderHeader({ fullName: 'Christophersonn Reyes' })
     const name = within(screen.getByTestId('today-header-greeting')).getByText('Christophersonn')
-    const flat = [name.props.style].flat(3).reduce((a: any, s: any) => ({ ...a, ...s }), {})
-    expect(flat.fontSize).toBeLessThanOrEqual(20)
+    expect(flat(name).fontSize).toBe(iosTextStyles.title1.fontSize)
   })
 
-  it('keeps the title size for an ordinary first name', () => {
-    renderHeader()
-    const name = within(screen.getByTestId('today-header-greeting')).getByText('Maximiliana')
-    const flat = [name.props.style].flat(3).reduce((a: any, s: any) => ({ ...a, ...s }), {})
-    expect(flat.fontSize).toBe(textStyles.title.fontSize)
+  it('keeps the large title on wider screens even for a long name', () => {
+    mockBp.value = 'expanded'
+    renderHeader({ fullName: 'Christophersonn Reyes' })
+    const name = within(screen.getByTestId('today-header-greeting')).getByText('Christophersonn')
+    expect(flat(name).fontSize).toBe(iosTextStyles.largeTitle.fontSize)
   })
 
   it('falls back to "Student" when there is no name yet', () => {
@@ -129,9 +129,10 @@ describe('TodayHeader', () => {
 
   it('keeps 44pt targets on the controls', () => {
     renderHeader()
-    const bell = screen.getByRole('button', { name: 'Study reminders' })
-    const flat = [bell.props.style].flat(3).reduce((a: any, s: any) => (typeof s === 'function' ? a : { ...a, ...s }), {})
-    expect(flat.width).toBeGreaterThanOrEqual(44)
-    expect(flat.height).toBeGreaterThanOrEqual(44)
+    for (const name of ['Study reminders', 'Profile']) {
+      const s = flat(screen.getByRole('button', { name }))
+      expect(s.minWidth).toBeGreaterThanOrEqual(44)
+      expect(s.minHeight).toBeGreaterThanOrEqual(44)
+    }
   })
 })
