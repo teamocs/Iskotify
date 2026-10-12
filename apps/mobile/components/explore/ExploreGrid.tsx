@@ -1,5 +1,7 @@
 import { useCallback, type ReactElement } from 'react'
-import { FlatList, View, type ListRenderItemInfo, type StyleProp, type ViewStyle, type FlatListProps } from 'react-native'
+import { View, type ListRenderItemInfo, type StyleProp, type ViewStyle, type FlatListProps } from 'react-native'
+import Animated, { useAnimatedRef } from 'react-native-reanimated'
+import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { useTheme } from '../../theme/ThemeContext'
 import { radius, spacing } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -34,6 +36,9 @@ export function ExploreGrid<T>({
   refreshControl, contentContainerStyle, testID = 'explore-grid',
 }: Props<T>) {
   const cols = exploreColumns(useBreakpoint())
+  const onScroll = useTabBarScrollHandler()
+  const listRef = useAnimatedRef<Animated.FlatList<T>>()
+  useScrollToTopOnReselect(listRef)
 
   const renderCell = useCallback(({ item }: ListRenderItemInfo<T>) => (
     <View style={{ width: `${100 / cols}%`, paddingHorizontal: HALF_GAP, paddingBottom: spacing.sm }}>
@@ -42,7 +47,12 @@ export function ExploreGrid<T>({
   ), [cols, renderItem])
 
   return (
-    <FlatList
+    <Animated.FlatList
+      ref={listRef}
+      // Feeds the floating tab bar (minimize on scroll); re-pressing Explore
+      // scrolls this list to the top.
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       key={`cols-${cols}`}
       testID={testID}
       data={data as T[]}

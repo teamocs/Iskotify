@@ -5,11 +5,12 @@
  * result names its dates and official site only when the data has them.
  */
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import { listings as listingsTable } from '../../../db/schema'
 import SearchScreen from '../search'
 import { officialSource, listingMeta, searchCatalog, upcomingListings, type SearchListing } from '../../../components/search/searchModel'
 import { addRecent } from '../../../components/search/recentSearches'
+import { __resetSearchQueryForTests } from '../../../components/search/searchQuery'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -79,6 +80,7 @@ beforeEach(() => {
   mockData = { listings: LISTINGS, schools: SCHOOLS }
   mockDb = makeDb()
   mockSyncOnLaunch.mockClear()
+  __resetSearchQueryForTests()
 })
 
 describe('Search screen states', () => {
@@ -163,6 +165,18 @@ describe('Search screen states', () => {
     fireEvent(screen.getByTestId('search-input'), 'submitEditing')
     await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
     expect(JSON.parse(AsyncStorage.setItem.mock.calls[0][1])).toEqual(['upcat'])
+  })
+
+  it('when the floating bar hosts the field, the screen has no second one and follows the shared query', async () => {
+    const { TabBarScrollProvider } = require('../../../components/navigation/TabBarScrollContext')
+    const { setSearchQuery } = require('../../../components/search/searchQuery')
+    render(<TabBarScrollProvider barHostsSearch><SearchScreen /></TabBarScrollProvider>)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    expect(screen.queryByTestId('search-input')).toBeNull()
+    // Native: the list grows by the keyboard height so results stay reachable.
+    expect(screen.getByTestId('search-keyboard-spacer')).toBeTruthy()
+    act(() => setSearchQuery('dost'))
+    await waitFor(() => expect(screen.getByTestId('search-results')).toBeTruthy())
   })
 
   it('a failed sync with a catalog already on the device still searches it', async () => {

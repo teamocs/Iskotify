@@ -39,6 +39,8 @@ const SCREENS = [
   'app/upgrade.tsx',
   // P4 web glimpse: the guest diagnostic's intro.
   'app/try.tsx',
+  // iOS redesign P2a: the Search tab.
+  'app/(tabs)/search.tsx',
 ]
 
 const COMPONENTS = [
@@ -57,6 +59,14 @@ const COMPONENTS = [
   'components/practice/runner/RunnerReview.tsx',
   'components/estimator/ScoreDisclaimerModal.tsx',
   'components/premium/UpgradeCard.tsx',
+  // iOS redesign P2c: the navigation shell.
+  'components/navigation/FloatingTabBar.tsx',
+  'components/navigation/TabBarScrollContext.tsx',
+  'components/navigation/LargeTitleHeader.tsx',
+  'components/navigation/GlassIconButton.tsx',
+  'components/navigation/SceneBlurTarget.tsx',
+  'components/TabHeader.tsx',
+  'components/search/searchModel.ts',
 ]
 
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g

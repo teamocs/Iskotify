@@ -7,6 +7,7 @@ import { weight, radius, spacing, textStyle } from '../../theme/tokens'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Avatar } from '../ui/Avatar'
 import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { LargeTitleHeader } from '../navigation/LargeTitleHeader'
 
 function phHour(): number {
   const now = new Date()
@@ -61,7 +62,10 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
   // long first name steps down to the headline role instead.
   const nameRole = compact && firstName.length > LONG_NAME_CHARS ? 'headline' : 'title'
 
+  // A large-title header with a custom heading: once the greeting scrolls
+  // away, the inline band reads "Today".
   return (
+    <LargeTitleHeader title="Today" testID="today-header">
     <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.xl, gap: spacing.md }}>
       <View testID="today-header-top" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
         <Text
@@ -131,5 +135,6 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
         ) : null}
       </View>
     </View>
+    </LargeTitleHeader>
   )
 }

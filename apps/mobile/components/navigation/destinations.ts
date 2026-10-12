@@ -1,4 +1,5 @@
 import {
+  GlobeStandOutlined,
   Home2Outlined,
   Pencil1Outlined,
   Search1Outlined,
@@ -29,7 +30,7 @@ export interface Destination {
 export const TAB_DESTINATIONS: readonly Destination[] = [
   { name: 'index',    label: 'Today',    icon: Home2Outlined,    href: '/' },
   { name: 'practice', label: 'Practice', icon: Pencil1Outlined,  href: '/practice' },
-  { name: 'explore',  label: 'Explore',  icon: Search1Outlined,  href: '/explore' },
+  { name: 'explore',  label: 'Explore',  icon: GlobeStandOutlined, href: '/explore' },
   { name: 'progress', label: 'Progress', icon: TrendUp1Outlined, href: '/progress' },
 ]
 

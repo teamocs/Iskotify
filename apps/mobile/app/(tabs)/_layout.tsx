@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import { Platform, View } from 'react-native'
 import { Tabs } from 'expo-router'
-import { TabBar } from '../../components/TabBar'
+import { FloatingTabBar } from '../../components/navigation/FloatingTabBar'
+import { TabBarScrollProvider } from '../../components/navigation/TabBarScrollContext'
+import { SceneBlurTarget } from '../../components/navigation/SceneBlurTarget'
 import { EdgeSwipeNavigator } from '../../components/EdgeSwipeNavigator'
 import { SyncErrorBanner } from '../../components/SyncErrorBanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -47,7 +49,12 @@ export default function TabLayout() {
   // loads never fired, so they sat on skeletons until a reload. Every wrapper
   // below renders at every width; conditional children keep their slot (null)
   // so React reconciles the same <Tabs> instance.
+  //
+  // The floating bar (phones, tablets, compact/medium web) is drawn by Tabs
+  // after the scenes. On Android each scene sits in its own BlurTargetView
+  // (screenLayout) so the bar's glass can blur it; list cells never blur.
   return (
+    <TabBarScrollProvider barHostsSearch={!isDesktopWeb}>
     <EdgeSwipeNavigator enabled={!isDesktopWeb}>
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.bg }}>
         {isDesktopWeb ? <SidebarNav /> : null}
@@ -58,8 +65,9 @@ export default function TabLayout() {
           <View style={{ flex: 1, width: '100%', maxWidth: isDesktopWeb ? 1040 : undefined }}>
             <SyncErrorBanner onRetry={handleRetry} />
             <Tabs
-              tabBar={isDesktopWeb ? () => null : (props) => <TabBar {...props} />}
+              tabBar={isDesktopWeb ? () => null : (props) => <FloatingTabBar {...props} />}
               screenOptions={{ headerShown: false, animation: isDesktopWeb ? 'none' : 'shift' }}
+              screenLayout={({ children, route }) => <SceneBlurTarget routeKey={route.key}>{children}</SceneBlurTarget>}
             >
               {TAB_SCREENS}
             </Tabs>
@@ -67,5 +75,6 @@ export default function TabLayout() {
         </View>
       </View>
     </EdgeSwipeNavigator>
+    </TabBarScrollProvider>
   )
 }

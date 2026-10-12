@@ -169,7 +169,7 @@ export default function ExploreScreen() {
   const syncSettled = useSyncSettled()
 
   // Desktop web swaps the bottom tab bar for the sidebar: no clearance there.
-  const listBottom = insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.tabBarClearance)
+  const listBottom = insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.capsuleClearance)
 
   // ── Listings state (Schools & exams + Scholarships) ──────────────────────
   const [all, setAll] = useState<ListingRow[]>([])
@@ -622,6 +622,10 @@ export default function ExploreScreen() {
     <Screen
       scroll={false}
       width="wide"
+      // TODO(P2c follow-up): scroll this large title with the section lists and
+      // collapse it into the band (as Today, Practice, Search and Progress do).
+      // Deferred: the header sits above five different section lists and the
+      // chip row; until then it stays fixed.
       header={(
         <TabHeader
           title="Explore"

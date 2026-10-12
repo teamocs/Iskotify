@@ -11,14 +11,16 @@ import { act, render, screen, waitFor } from '@testing-library/react-native'
 
 const mockMounts = { tabs: 0, tabsUnmounts: 0 }
 let mockTabBarProp: ((p: unknown) => React.ReactNode) | undefined
+let mockScreenLayout: ((p: unknown) => React.ReactNode) | undefined
 let mockBp: 'compact' | 'medium' | 'expanded' = 'compact'
 let mockSwipeEnabled: boolean | undefined
 
 jest.mock('expo-router', () => {
   const React = require('react')
   const { Text } = require('react-native')
-  function Tabs({ tabBar }: { tabBar?: (p: unknown) => React.ReactNode }) {
+  function Tabs({ tabBar, screenLayout }: { tabBar?: (p: unknown) => React.ReactNode; screenLayout?: (p: unknown) => React.ReactNode }) {
     mockTabBarProp = tabBar
+    mockScreenLayout = screenLayout
     React.useEffect(() => {
       mockMounts.tabs += 1
       return () => { mockMounts.tabsUnmounts += 1 }
@@ -40,8 +42,8 @@ let mockConsent: Record<string, unknown> = { ageBand: 'adult', consentVersion: '
 jest.mock('../../../services/settings', () => ({ getSettings: jest.fn(async () => mockConsent) }))
 jest.mock('../../../services/sync', () => ({ syncOnLaunch: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('../../../components/SyncErrorBanner', () => ({ SyncErrorBanner: () => null }))
-jest.mock('../../../components/TabBar', () => ({
-  TabBar: () => require('react').createElement(require('react-native').Text, null, 'bottom-tab-bar'),
+jest.mock('../../../components/navigation/FloatingTabBar', () => ({
+  FloatingTabBar: () => require('react').createElement(require('react-native').Text, null, 'bottom-tab-bar'),
 }))
 jest.mock('../../../components/web/SidebarNav', () => ({
   SidebarNav: () => require('react').createElement(require('react-native').Text, { testID: 'sidebar-nav' }, 'sidebar'),
@@ -111,6 +113,20 @@ describe('TabLayout across the desktop breakpoint', () => {
     render(<TabLayout />)
     expect(screen.queryByTestId('sidebar-nav')).toBeNull()
     expect(renderTabBar().getByText('bottom-tab-bar')).toBeTruthy()
+  })
+
+  it('Android: each scene sits in a BlurTargetView so the bar glass can blur it', () => {
+    Platform.OS = 'android'
+    render(<TabLayout />)
+    const { UNSAFE_root } = render(<>{mockScreenLayout?.({ children: <Text>scene</Text>, route: { key: 'k', name: 'index' } })}</>)
+    expect(UNSAFE_root.findAll((n: any) => n.type?.displayName === 'BlurTargetView')).not.toHaveLength(0)
+  })
+
+  it('web and iOS: scenes are not wrapped (they blur the backdrop natively)', () => {
+    Platform.OS = 'web'
+    render(<TabLayout />)
+    const { UNSAFE_root } = render(<>{mockScreenLayout?.({ children: <Text>scene</Text>, route: { key: 'k', name: 'index' } })}</>)
+    expect(UNSAFE_root.findAll((n: any) => n.type?.displayName === 'BlurTargetView')).toHaveLength(0)
   })
 
   it('renders the tabs straight away: consent is gated once at the root (components/consent/ConsentGate.tsx)', async () => {

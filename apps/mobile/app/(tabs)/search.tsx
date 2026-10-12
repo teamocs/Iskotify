@@ -1,6 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, Platform, Text, View } from 'react-native'
 import { router } from 'expo-router'
+import Animated, { useAnimatedStyle } from 'react-native-reanimated'
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
@@ -29,6 +31,8 @@ import {
   type SearchListing, type SearchSchool,
 } from '../../components/search/searchModel'
 import { addRecent, loadRecentSearches, saveRecentSearches } from '../../components/search/recentSearches'
+import { subscribeSearchSubmit, useSearchQuery } from '../../components/search/searchQuery'
+import { useTabBarScroll } from '../../components/navigation/TabBarScrollContext'
 import { getSettings } from '../../services/settings'
 import { syncOnLaunch } from '../../services/sync'
 
@@ -67,7 +71,9 @@ export default function SearchScreen() {
   const [listings, setListings] = useState<SearchListing[]>([])
   const [schools, setSchools] = useState<SearchSchool[]>([])
   const [userRegion, setUserRegion] = useState('')
-  const [query, setQuery] = useState('')
+  // Shared with the floating bar, which hosts the field on phones and tablets.
+  const [query, setQuery] = useSearchQuery()
+  const barHostsField = useTabBarScroll()?.barHostsSearch ?? false
   const [recent, setRecent] = useState<string[]>([])
   const recentRef = useRef<string[]>([])
   const deferredQuery = useDeferredValue(query)
@@ -128,6 +134,9 @@ export default function SearchScreen() {
     applyRecent(next)
     void saveRecentSearches(next)
   }, [applyRecent])
+  // The bar's search key records a recent, like the screen's own field.
+  useEffect(() => subscribeSearchSubmit(remember), [remember])
+
   const clearRecent = useCallback(() => {
     applyRecent([])
     void saveRecentSearches([])
@@ -264,19 +273,22 @@ export default function SearchScreen() {
   return (
     <Screen
       tabBarInset
+      headerScrolls
       width="wide"
       header={<TabHeader title="Search" subtitle="Schools, scholarships and entrance exams" />}
     >
-      <View style={{ paddingBottom: spacing.lg }}>
-        <SearchField
-          testID="search-input"
-          value={query}
-          onChangeText={setQuery}
-          onSubmit={() => remember(query)}
-          placeholder="School, scholarship or exam, e.g. UPCAT"
-          accessibilityLabel="Search schools, scholarships and exams"
-        />
-      </View>
+      {barHostsField ? null : (
+        <View style={{ paddingBottom: spacing.lg }}>
+          <SearchField
+            testID="search-input"
+            value={query}
+            onChangeText={setQuery}
+            onSubmit={() => remember(query)}
+            placeholder="School, scholarship or exam, e.g. UPCAT"
+            accessibilityLabel="Search schools, scholarships and exams"
+          />
+        </View>
+      )}
       <Text
         testID="search-status"
         accessibilityLiveRegion="polite"
@@ -287,6 +299,17 @@ export default function SearchScreen() {
         {statusText}
       </Text>
       {body}
+      {/* While typing in the bar's field, the keyboard covers the bottom of
+          the page: grow the end of the list by its height so the last
+          results can still scroll above it. */}
+      {barHostsField && Platform.OS !== 'web' ? <KeyboardSpacer /> : null}
     </Screen>
   )
+}
+
+/** Keyboard-height spacer (UI thread): 0 when the keyboard is closed. */
+function KeyboardSpacer() {
+  const { height } = useReanimatedKeyboardAnimation()
+  const style = useAnimatedStyle(() => ({ height: Math.max(0, -height.value) }))
+  return <Animated.View testID="search-keyboard-spacer" style={style} />
 }
