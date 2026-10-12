@@ -40,7 +40,7 @@ const SCREENS = [
   // P4 web glimpse: the guest diagnostic's intro.
   'app/try.tsx',
   // iOS redesign P2a: the Search tab.
-  'app/(tabs)/search.tsx',
+  'app/(tabs)/search/index.tsx',
 ]
 
 const COMPONENTS = [
@@ -76,6 +76,12 @@ const COMPONENTS = [
   'components/ui/ListRow.tsx',
   'components/ui/Button.tsx',
   'components/ui/Pressable.tsx',
+  // iOS redesign P2b: the native-tabs shell.
+  'app/(tabs)/_layout.ios.tsx',
+  'app/(tabs)/search/_layout.ios.tsx',
+  'app/(tabs)/search/_layout.tsx',
+  'components/navigation/useTabShell.ts',
+  'components/navigation/systemTabBar.ts',
 ]
 
 const HEX_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b/g

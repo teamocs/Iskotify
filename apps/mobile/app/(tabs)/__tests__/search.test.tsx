@@ -5,6 +5,7 @@
  * result names its dates and official site only when the data has them.
  */
 import React from 'react'
+import { Platform } from 'react-native'
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import { listings as listingsTable } from '../../../db/schema'
 import SearchScreen from '../search'
@@ -34,7 +35,24 @@ jest.mock('../../../hooks/useProfileName', () => ({ useProfileName: () => 'Ana R
 jest.mock('../../../services/settings', () => ({ getSettings: jest.fn().mockResolvedValue({}) }))
 const mockSyncOnLaunch = jest.fn().mockResolvedValue(undefined)
 jest.mock('../../../services/sync', () => ({ syncOnLaunch: (...a: unknown[]) => mockSyncOnLaunch(...a) }))
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }))
+// iOS: the native search field (Stack.SearchBar in the Search tab's stack).
+type SearchBarProps = {
+  ref?: React.Ref<{ setText: (t: string) => void }>
+  placeholder?: string
+  onChangeText?: (e: { nativeEvent: { text: string } }) => void
+  onSearchButtonPress?: (e: { nativeEvent: { text: string } }) => void
+  onCancelButtonPress?: () => void
+}
+const mockSearchBar: { props: SearchBarProps | null; setText: jest.Mock } = { props: null, setText: jest.fn() }
+jest.mock('expo-router', () => {
+  const React = require('react')
+  function SearchBar(props: SearchBarProps) {
+    mockSearchBar.props = props
+    React.useImperativeHandle(props.ref, () => ({ setText: mockSearchBar.setText }))
+    return null
+  }
+  return { router: { push: jest.fn(), replace: jest.fn() }, Stack: { SearchBar } }
+})
 
 const DAY = 86_400_000
 const NOW = Date.now()
@@ -74,7 +92,14 @@ const makeDb = () => ({
 jest.mock('../../../hooks/useDb', () => ({ useDb: () => mockDb }))
 let mockDb = makeDb()
 
+const originalOS = Platform.OS
+afterAll(() => { Platform.OS = originalOS })
+
 beforeEach(() => {
+  // The screen's own field: Android and web (iOS uses the native one, below).
+  Platform.OS = 'android'
+  mockSearchBar.props = null
+  mockSearchBar.setText.mockClear()
   for (const k of Object.keys(mockStore)) delete mockStore[k]
   mockSync.value = { isSyncing: false, firstSyncDone: true, lastError: null }
   mockData = { listings: LISTINGS, schools: SCHOOLS }
@@ -139,21 +164,20 @@ describe('Search screen states', () => {
   })
 
   it('announces the result count politely (live region; VoiceOver announcement on iOS)', async () => {
-    const { AccessibilityInfo, Platform } = require('react-native')
-    const os = Platform.OS
+    const { AccessibilityInfo } = require('react-native')
     Platform.OS = 'ios'
     const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {})
     render(<SearchScreen />)
     await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
-    fireEvent.changeText(screen.getByTestId('search-input'), 'dost')
+    // iOS types in the native field.
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'dost' } }))
     await waitFor(() => expect(screen.getByTestId('search-status').props.children).toBe('1 result'))
     expect(screen.getByTestId('search-status').props.accessibilityLiveRegion).toBe('polite')
     await waitFor(() => expect(announce).toHaveBeenCalledWith('1 result'))
-    fireEvent.changeText(screen.getByTestId('search-input'), 'zzqx')
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'zzqx' } }))
     await waitFor(() => expect(screen.getByTestId('search-status').props.children).toBe('No matches'))
     await waitFor(() => expect(announce).toHaveBeenCalledWith('No matches'))
     announce.mockRestore()
-    Platform.OS = os
   })
 
   it('saves a recent outside the state updater, once per search', async () => {
@@ -184,6 +208,65 @@ describe('Search screen states', () => {
     render(<SearchScreen />)
     await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
     expect(screen.queryByTestId('search-offline')).toBeNull()
+  })
+})
+
+// iOS redesign P2b: on iOS the Search tab has the system search role and
+// the field is the native one in its stack header (Stack.SearchBar); typing
+// there drives the same shared query the floating bar uses elsewhere.
+describe('Search on iOS: the native search field', () => {
+  beforeEach(() => { Platform.OS = 'ios' })
+
+  it('draws no field of its own; the native one carries the same placeholder', async () => {
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    expect(screen.queryByTestId('search-input')).toBeNull()
+    expect(mockSearchBar.props?.placeholder).toBe('School, scholarship or exam, e.g. UPCAT')
+  })
+
+  it('typing in the native field updates the shared query and the results', async () => {
+    const { useSearchQuery } = require('../../../components/search/searchQuery')
+    let shared = ''
+    function Probe() { shared = useSearchQuery()[0]; return null }
+    render(<><SearchScreen /><Probe /></>)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'uplb' } }))
+    expect(shared).toBe('uplb')
+    await waitFor(() => expect(screen.getByText('Schools')).toBeTruthy())
+    expect(screen.getByLabelText(/Los Baños/)).toBeTruthy()
+  })
+
+  it('the keyboard search key records a recent', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default
+    AsyncStorage.setItem.mockClear()
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'upcat' } }))
+    act(() => mockSearchBar.props?.onSearchButtonPress?.({ nativeEvent: { text: 'upcat' } }))
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(AsyncStorage.setItem.mock.calls[0][1])).toEqual(['upcat'])
+  })
+
+  it('Cancel clears the query', async () => {
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'dost' } }))
+    await waitFor(() => expect(screen.getByTestId('search-results')).toBeTruthy())
+    act(() => mockSearchBar.props?.onCancelButtonPress?.())
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+  })
+
+  it('a query set on the screen (a recent search) is written into the native field', async () => {
+    mockStore['iskotify:recent-searches:v1'] = JSON.stringify(['upcat'])
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByText('Recent searches')).toBeTruthy())
+    fireEvent.press(screen.getByLabelText('Search again for upcat'))
+    await waitFor(() => expect(mockSearchBar.setText).toHaveBeenCalledWith('upcat'))
+    // Text typed natively is not echoed back into the field.
+    mockSearchBar.setText.mockClear()
+    act(() => mockSearchBar.props?.onChangeText?.({ nativeEvent: { text: 'dost' } }))
+    await waitFor(() => expect(screen.getByTestId('search-results')).toBeTruthy())
+    expect(mockSearchBar.setText).not.toHaveBeenCalled()
   })
 })
 

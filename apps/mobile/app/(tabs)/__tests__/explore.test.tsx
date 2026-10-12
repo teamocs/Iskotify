@@ -3,6 +3,7 @@ import { FlatList } from 'react-native'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native'
 import ListsScreen from '../explore'
 import { aria } from '../../../test-utils/aria'
+import { firstScrollDescendant } from '../../../test-utils/firstScrollDescendant'
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: any) => children,
@@ -186,6 +187,35 @@ describe('ListsScreen', () => {
   })
 
   // ── Redesign M1: Lists + Updates fold into Explore ─────────────────────────
+
+  // iOS redesign P2b: native tabs minimize the bar for the scroll view in the
+  // screen's first-descendant chain only, so on iOS the section list comes
+  // first in the tree and the fixed header, chips and field are laid out
+  // above it (column-reverse). Android and web keep the original order.
+  describe('the section list is the first descendant on iOS', () => {
+    const { Platform } = require('react-native')
+    const realOS = Platform.OS
+    afterEach(() => { Platform.OS = realOS })
+
+    it('iOS: the scholarships list leads the tree; the header still shows above it', async () => {
+      Platform.OS = 'ios'
+      const r = render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await waitFor(() => expect(gridColumns()).toBeDefined())
+      expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('explore-grid')
+      expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy()
+      expect(screen.getByTestId('explore-sections')).toBeTruthy()
+    })
+
+    it('Android: the header stays ahead of the list (unchanged)', async () => {
+      Platform.OS = 'android'
+      const r = render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await waitFor(() => expect(gridColumns()).toBeDefined())
+      expect(firstScrollDescendant(r.UNSAFE_root)).toBeNull()
+      expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy()
+    })
+  })
 
   it('renders the Explore title (the old Lists tab is now Explore)', () => {
     render(<ListsScreen />)

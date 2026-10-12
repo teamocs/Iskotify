@@ -7,6 +7,7 @@ import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBrea
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { LargeTitleBandHost } from '../navigation/LargeTitleHeader'
+import { usesSystemTabBar } from '../navigation/systemTabBar'
 
 interface Props {
   children: React.ReactNode
@@ -58,8 +59,12 @@ export function Screen({
 
   const gutter = padded ? pagePadding(bp) : 0
   // Desktop web swaps the bottom bar for the sidebar, so no clearance there.
+  // iOS: the system tab bar insets the tab's scroll view itself (bar and
+  // home indicator), so a tab screen adds only the page gap.
   const hasBottomBar = tabBarInset && !(Platform.OS === 'web' && bp === 'expanded')
-  const paddingBottom = bottomClearance(insets.bottom, hasBottomBar)
+  const paddingBottom = tabBarInset && usesSystemTabBar()
+    ? spacing.xl
+    : bottomClearance(insets.bottom, hasBottomBar)
   const inScroll = scroll && headerScrolls
 
   const column: ViewStyle = {

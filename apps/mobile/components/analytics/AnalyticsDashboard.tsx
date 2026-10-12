@@ -3,6 +3,7 @@ import { View, Text, ScrollView, RefreshControl, Pressable, Platform } from 'rea
 import Animated, { useAnimatedRef } from 'react-native-reanimated'
 import { useScrollToTopOnReselect, useTabBarScrollHandler } from '../navigation/TabBarScrollContext'
 import { useBandScrollY } from '../navigation/LargeTitleHeader'
+import { usesSystemTabBar } from '../navigation/systemTabBar'
 import { router } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
@@ -380,7 +381,10 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
       // Feeds the floating tab bar (minimize on scroll).
       onScroll={onScroll}
       scrollEventThrottle={16}
-      contentContainerStyle={{ paddingBottom: insets.bottom + (bottomBar ? layout.capsuleClearance : spacing.xxl) }}
+      // iOS: the system tab bar insets this (the tab's first) scroll view.
+      contentContainerStyle={{
+        paddingBottom: usesSystemTabBar() ? spacing.xxl : insets.bottom + (bottomBar ? layout.capsuleClearance : spacing.xxl),
+      }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

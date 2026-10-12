@@ -19,7 +19,8 @@ describe('route files', () => {
     ['listings/index.tsx', '/listings'],
     ['updates.tsx', '/updates'],
     ['analytics.tsx', '/analytics'],
-    ['(tabs)/search.tsx', '/search'],
+    // A folder since P2b: iOS wraps the page in a stack for the native field.
+    ['(tabs)/search/index.tsx', '/search'],
   ])('app/%s serves %s', rel => {
     expect(exists(rel)).toBe(true)
   })

@@ -32,6 +32,7 @@ import {
   dateUrgency, matchBadge, fmtShortDate, truncateQuery, SECTION_SEARCH, type BadgeSpec,
 } from '../../components/explore/exploreModel'
 import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
+import { usesSystemTabBar } from '../../components/navigation/systemTabBar'
 import { SchoolsDirectory } from '../../components/schools/SchoolsDirectory'
 import { syncOnLaunch } from '../../services/sync'
 import { listRunnableBlueprints } from '../../services/examBlueprints'
@@ -169,7 +170,11 @@ export default function ExploreScreen() {
   const syncSettled = useSyncSettled()
 
   // Desktop web swaps the bottom tab bar for the sidebar: no clearance there.
-  const listBottom = insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.capsuleClearance)
+  // iOS: the system tab bar insets the section list itself (it leads the tree).
+  const systemBar = usesSystemTabBar()
+  const listBottom = systemBar
+    ? spacing.xl
+    : insets.bottom + (Platform.OS === 'web' && bp === 'expanded' ? spacing.xl : layout.capsuleClearance)
 
   // ── Listings state (Schools & exams + Scholarships) ──────────────────────
   const [all, setAll] = useState<ListingRow[]>([])
@@ -618,47 +623,73 @@ export default function ExploreScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  return (
-    <Screen
-      scroll={false}
-      width="wide"
-      // TODO(P2c follow-up): scroll this large title with the section lists and
-      // collapse it into the band (as Today, Practice, Search and Progress do).
-      // Deferred: the header sits above five different section lists and the
-      // chip row; until then it stays fixed.
-      header={(
-        <TabHeader
-          title="Explore"
-          subtitle="Schools, exams, scholarships, courses and dates"
-          actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />}
-        />
-      )}
-    >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        {/* Section switcher — wraps rather than scrolls sideways, so every
-            section stays visible and the edge-swipe gesture never fights it. */}
-        <View
-          accessibilityRole="tablist"
-          testID="explore-sections"
-          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingBottom: spacing.md }}
-        >
-          {TAB_LABELS.map(({ key, label }) => (
-            <FilterChip key={key} label={label} role="tab" selected={tab === key} onPress={() => onChangeTab(key)} />
-          ))}
+  // TODO(P2c follow-up): scroll this large title with the section lists and
+  // collapse it into the band (as Today, Practice, Search and Progress do).
+  // Deferred: the header sits above five different section lists and the
+  // chip row; until then it stays fixed.
+  const header = (
+    <TabHeader
+      title="Explore"
+      subtitle="Schools, exams, scholarships, courses and dates"
+      actions={<WebRefreshButton onRefresh={onRefresh} refreshing={refreshing} iconOnly={bp === 'compact'} />}
+    />
+  )
+
+  const controls = (
+    <>
+      {/* Section switcher — wraps rather than scrolls sideways, so every
+          section stays visible and the edge-swipe gesture never fights it. */}
+      <View
+        accessibilityRole="tablist"
+        testID="explore-sections"
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingBottom: spacing.md }}
+      >
+        {TAB_LABELS.map(({ key, label }) => (
+          <FilterChip key={key} label={label} role="tab" selected={tab === key} onPress={() => onChangeTab(key)} />
+        ))}
+      </View>
+
+      {search ? (
+        <View style={{ gap: spacing.xs, paddingBottom: spacing.md }}>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={search.placeholder}
+            accessibilityLabel={search.label}
+          />
         </View>
+      ) : null}
+    </>
+  )
 
-        {search ? (
-          <View style={{ gap: spacing.xs, paddingBottom: spacing.md }}>
-            <SearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder={search.placeholder}
-              accessibilityLabel={search.label}
-            />
+  const bodyView = <View style={{ flex: 1 }}>{body}</View>
+
+  // iOS native tabs minimize the bar for (and inset) only the scroll view in
+  // the screen's first-descendant chain. So on iOS the section list comes
+  // first in the tree and column-reverse lays the fixed header, chips and
+  // field out above it: the same picture, with the list leading the chain.
+  // Android and web keep the original order.
+  if (systemBar) {
+    return (
+      <Screen scroll={false} width="wide">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+          <View style={{ flex: 1, flexDirection: 'column-reverse' }}>
+            {bodyView}
+            <View>
+              {header}
+              {controls}
+            </View>
           </View>
-        ) : null}
+        </KeyboardAvoidingView>
+      </Screen>
+    )
+  }
 
-        <View style={{ flex: 1 }}>{body}</View>
+  return (
+    <Screen scroll={false} width="wide" header={header}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        {controls}
+        {bodyView}
       </KeyboardAvoidingView>
     </Screen>
   )

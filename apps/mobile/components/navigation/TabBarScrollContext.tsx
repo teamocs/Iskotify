@@ -179,18 +179,26 @@ export interface HasCurrent { readonly current: unknown }
  * Re-pressing the tab you are on scrolls it to the top (the bar emits
  * `tabPress` and does not navigate). Like React Navigation's useScrollToTop,
  * but a no-op outside a navigator (tests, previews) and only for a screen
- * that is itself a tab.
+ * that is itself a tab, or the root of a stack that is one (Search sits in
+ * its own stack so iOS can give it the native search field).
  */
 export function useScrollToTopOnReselect(ref: HasCurrent) {
   const navigation = useContext(NavigationContext)
   useEffect(() => {
     if (!navigation) return
-    const type = (navigation.getState?.() as { type?: string } | undefined)?.type
-    if (type !== 'tab') return
-    const unsubscribe = (navigation.addListener as unknown as (
+    const stateOf = (n: { getState?: () => unknown } | undefined) =>
+      n?.getState?.() as { type?: string; index?: number } | undefined
+    const own = stateOf(navigation)
+    const parent = navigation.getParent?.()
+    const inTabStack = own?.type === 'stack' && stateOf(parent)?.type === 'tab'
+    if (own?.type !== 'tab' && !inTabStack) return
+    const tab = (inTabStack ? parent : navigation) as typeof navigation
+    const unsubscribe = (tab.addListener as unknown as (
       e: 'tabPress', cb: (ev: { defaultPrevented?: boolean }) => void,
     ) => () => void)('tabPress', (ev) => {
       if (!navigation.isFocused() || ev.defaultPrevented) return
+      // A screen pushed on the tab's stack is left to the stack (it pops).
+      if (inTabStack && (stateOf(navigation)?.index ?? 0) !== 0) return
       requestAnimationFrame(() => {
         const r = ref.current as ScrollableRef | null
         if (r?.scrollToOffset) r.scrollToOffset({ offset: 0, animated: true })
