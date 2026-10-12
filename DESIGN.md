@@ -213,7 +213,8 @@ The logo and wordmark sit left, the four section links are centred (14px, ink at
 44px targets), and a 32px maroon `rounded-capsule` "Start studying" sits right.
 Below `md`, a two-line menu button (`aria-expanded`/`aria-controls`) opens a
 full-screen frosted menu (`role="dialog"`, `aria-modal`, labelled "Menu"; the page
-behind is `inert`). It has 28px semibold links that fade and rise in a stagger
+behind is `inert`). Its first control is a visible 44px "Close menu" button, because
+`aria-modal` hides the header toggle from screen readers and phones have no Escape key. It has 28px semibold links that fade and rise in a stagger
 (`motion-safe` only) and the CTA at the bottom. Escape closes it, focus moves in and
 returns, Tab stays inside, page scroll locks (`position: fixed` at the saved offset,
 so iOS Safari holds too), and a link click closes it

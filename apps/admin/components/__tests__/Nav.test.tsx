@@ -112,7 +112,7 @@ describe('landing Nav: phone menu', () => {
   it('moves focus into the menu and locks page scroll', () => {
     act(() => toggle().click())
     expect(menu().contains(document.activeElement)).toBe(true)
-    expect(document.activeElement?.textContent).toBe('Practice')
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close menu')
     expect(document.body.style.overflow).toBe('hidden')
   })
 
@@ -181,12 +181,33 @@ describe('landing Nav: phone menu', () => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
   })
 
-  it('keeps Tab inside the open menu (button and menu items)', () => {
+  it('has its own labelled Close button first in the dialog (screen readers cannot reach the toggle behind aria-modal)', () => {
     act(() => toggle().click())
+    const close = menu().querySelector<HTMLButtonElement>('button[aria-label="Close menu"]')!
+    expect(close).toBeTruthy()
+    expect(menu().querySelector('a, button')).toBe(close)
+    expect(close.className).toMatch(/\bh-11\b[^"]*\bw-11\b/)
+    expect(close.querySelectorAll('[data-line]')).toHaveLength(2)
+    expect(document.activeElement).toBe(close)
+  })
+
+  it('activating Close closes the menu and returns focus to the toggle', () => {
+    act(() => toggle().click())
+    const close = menu().querySelector<HTMLButtonElement>('button[aria-label="Close menu"]')!
+    act(() => close.click())
+    expect(menu().hidden).toBe(true)
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(toggle())
+    expect(document.body.style.overflow).toBe('')
+  })
+
+  it('keeps Tab inside the open menu dialog (Close through the CTA)', () => {
+    act(() => toggle().click())
+    const close = menu().querySelector<HTMLButtonElement>('button[aria-label="Close menu"]')!
     const cta = Array.from(menu().querySelectorAll('a')).at(-1)!
     cta.focus()
     press('Tab')
-    expect(document.activeElement).toBe(toggle())
+    expect(document.activeElement).toBe(close)
     press('Tab', true)
     expect(document.activeElement).toBe(cta)
   })

@@ -67,9 +67,9 @@ export function Nav() {
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); close(true); return }
-      // While open, Tab cycles the menu button and the menu's items only.
-      if (e.key !== 'Tab' || !menuRef.current || !buttonRef.current) return
-      const items = [buttonRef.current, ...Array.from(menuRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))]
+      // While open, Tab cycles the dialog's own items (its Close button first).
+      if (e.key !== 'Tab' || !menuRef.current) return
+      const items = Array.from(menuRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
       const at = items.indexOf(document.activeElement as HTMLElement)
       const last = items.length - 1
       if (e.shiftKey && at <= 0) { e.preventDefault(); items[last]!.focus() }
@@ -126,18 +126,11 @@ export function Nav() {
               aria-expanded={open}
               aria-controls={menuId}
               onClick={() => (open ? close(true) : setOpen(true))}
-              className="-mr-2 flex h-11 w-11 items-center justify-center rounded-sm text-ink md:hidden"
+              // Hidden while open: aria-modal hides it from screen readers anyway,
+              // so the dialog carries its own Close button instead.
+              className={`-mr-2 flex h-11 w-11 items-center justify-center rounded-sm text-ink md:hidden ${open ? 'invisible' : ''}`}
             >
-              <span aria-hidden="true" className="relative block h-3 w-[18px]">
-                <span
-                  data-line=""
-                  className={`absolute left-0 h-[1.5px] w-full rounded-capsule bg-current transition-transform duration-280 ease-smooth ${open ? 'top-[5px] rotate-45' : 'top-0.5'}`}
-                />
-                <span
-                  data-line=""
-                  className={`absolute left-0 h-[1.5px] w-full rounded-capsule bg-current transition-transform duration-280 ease-smooth ${open ? 'top-[5px] -rotate-45' : 'top-2'}`}
-                />
-              </span>
+              <MenuGlyph open={false} />
             </button>
           </div>
         </nav>
@@ -152,7 +145,17 @@ export function Nav() {
         hidden={!open}
         className="glass fixed inset-0 overflow-y-auto pt-[52px] md:hidden"
       >
-        <ul className="mx-auto flex max-w-[1080px] flex-col px-8 pt-6">
+        <div className="mx-auto flex max-w-[1080px] justify-end px-4 pt-2 sm:px-6">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => close(true)}
+            className="-mr-2 flex h-11 w-11 items-center justify-center rounded-sm text-ink"
+          >
+            <MenuGlyph open />
+          </button>
+        </div>
+        <ul className="mx-auto flex max-w-[1080px] flex-col px-8">
           {LINKS.map((l, i) => (
             <li
               key={l.href}
@@ -177,5 +180,16 @@ export function Nav() {
         </ul>
       </div>
     </header>
+  )
+}
+
+/** The two-line menu glyph; `open` crosses the lines into an X. */
+function MenuGlyph({ open }: { open: boolean }) {
+  const line = 'absolute left-0 h-[1.5px] w-full rounded-capsule bg-current transition-transform duration-280 ease-smooth'
+  return (
+    <span aria-hidden="true" className="relative block h-3 w-[18px]">
+      <span data-line="" className={`${line} ${open ? 'top-[5px] rotate-45' : 'top-0.5'}`} />
+      <span data-line="" className={`${line} ${open ? 'top-[5px] -rotate-45' : 'top-2'}`} />
+    </span>
   )
 }
