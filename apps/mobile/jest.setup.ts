@@ -11,6 +11,11 @@ import 'react-native-gesture-handler/jestSetup'
 // missing; Reanimated imports it, so tests use the library's own JS mock.
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'))
 
+// Reanimated's own JS mock: shared values are plain objects, withSpring /
+// withTiming settle instantly, useAnimatedStyle runs its worklet once.
+// (iOS redesign P1a: PressableScale and the coming springs.)
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'))
+
 jest.mock('react-native-keyboard-controller', () => {
   const RN = require('react-native')
   return {

@@ -55,4 +55,36 @@ describe('light-only theme', () => {
       .map(f => path.relative(root, f))
     expect(offenders).toEqual([])
   })
+
+  // Glass and blur (iOS redesign P1a): a dark tint, a dark material, or an
+  // adaptive one (the un-suffixed system materials and `colorScheme="auto"`
+  // follow the phone's dark mode) would bring a second scheme back in.
+  it.each([
+    ['a dark blur tint', /\btint\s*[=:]\s*\{?\s*['"](dark|default|\w*Dark)['"]/],
+    ['a dark system material', /['"]system\w*MaterialDark['"]/],
+    ['an adaptive system material', /['"]system(UltraThin|Thin|Thick|Chrome)?Material['"]/],
+    ['a dark or adaptive glass colour scheme', /\bcolorScheme\s*[=:]\s*\{?\s*['"](dark|auto)['"]/],
+  ])('no source file uses %s', (_label, pattern) => {
+    const offenders = files
+      .filter(f => pattern.test(fs.readFileSync(f, 'utf8')))
+      .map(f => path.relative(root, f))
+    expect(offenders).toEqual([])
+  })
+
+  it('every GlassView pins the light colour scheme', () => {
+    const users = files.filter(f => /<GlassView\b/.test(fs.readFileSync(f, 'utf8')))
+    expect(users.length).toBeGreaterThan(0)
+    for (const f of users) {
+      const src = fs.readFileSync(f, 'utf8')
+      const opened = src.match(/<GlassView\b/g)!.length
+      const light = src.match(/<GlassView\b[^>]*colorScheme="light"/g)?.length ?? 0
+      expect({ file: path.relative(root, f), light }).toEqual({ file: path.relative(root, f), light: opened })
+    }
+  })
+
+  it('the glass tokens name light materials only', () => {
+    const { glass } = require('../theme/tokens')
+    expect(glass.iosMaterial).toMatch(/Light$/)
+    expect(glass.androidTint).toBe('light')
+  })
 })

@@ -53,6 +53,11 @@ module.exports = {
         '^expo-secure-store$': '<rootDir>/__mocks__/expoSecureStoreMock.js',
         // RevenueCat needs the native bridge; see __mocks__/reactNativePurchasesMock.js.
         '^react-native-purchases$': '<rootDir>/__mocks__/reactNativePurchasesMock.js',
+        // iOS redesign P1a: native views and the haptics engine.
+        '^expo-glass-effect$': '<rootDir>/__mocks__/expoGlassEffectMock.js',
+        '^expo-blur$': '<rootDir>/__mocks__/expoBlurMock.js',
+        '^expo-haptics$': '<rootDir>/__mocks__/expoHapticsMock.js',
+        '^expo-linear-gradient$': '<rootDir>/__mocks__/expoLinearGradientMock.js',
       },
     },
   ],

@@ -1,4 +1,4 @@
-import type { TextStyle } from 'react-native'
+import { Platform, type TextStyle } from 'react-native'
 
 // ── Design tokens (Refined Maroon, 2026) ─────────────────────────────────────
 // One source of truth for color, type, spacing, radius, elevation. Iskotify has
@@ -136,6 +136,128 @@ export function textStyle(role: TextStyleRole, color?: string): TextStyle {
   return color ? { ...base, color } : { ...base }
 }
 
+// ── iOS-language redesign (P1a, additive) ────────────────────────────────────
+// Nothing below is used by an existing screen yet; P1b moves the legacy roles
+// above onto these (see legacyTextRoleMap) and removes Outfit/Lexend.
+
+/** The platform UI font for a given OS: undefined on native (SF Pro on iOS,
+ *  Roboto on Android, which also gets Dynamic Type for free), the system
+ *  stack on web. */
+export function systemFontFor(os: string): string | undefined {
+  return os === 'web'
+    ? "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, sans-serif"
+    : undefined
+}
+
+export const systemFont = systemFontFor(Platform.OS)
+
+/** Apple's type ramp at the default (Large) content size. Floor stays 12. */
+export const iosTypeScale = [12, 13, 15, 16, 17, 20, 22, 28, 34] as const
+
+type IosTextRoleStyle = {
+  fontFamily: string | undefined
+  fontSize: (typeof iosTypeScale)[number]
+  lineHeight: number
+  fontWeight: '400' | '600' | '700'
+  letterSpacing?: number
+  fontVariant?: TextStyle['fontVariant']
+}
+
+/**
+ * iOS text roles (Apple HIG sizes/leading at the default content size). The
+ * system font applies its own optical tracking, so no letterSpacing is set.
+ * Use via `<Text role>` (components/ui/Text) or `iosTextStyle(role, color)`.
+ */
+export const iosTextStyles = {
+  largeTitle:  { fontFamily: systemFont, fontSize: 34, lineHeight: 41, fontWeight: '700' },
+  title1:      { fontFamily: systemFont, fontSize: 28, lineHeight: 34, fontWeight: '700' },
+  title2:      { fontFamily: systemFont, fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  title3:      { fontFamily: systemFont, fontSize: 20, lineHeight: 25, fontWeight: '600' },
+  headline:    { fontFamily: systemFont, fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  body:        { fontFamily: systemFont, fontSize: 17, lineHeight: 22, fontWeight: '400' },
+  callout:     { fontFamily: systemFont, fontSize: 16, lineHeight: 21, fontWeight: '400' },
+  subheadline: { fontFamily: systemFont, fontSize: 15, lineHeight: 20, fontWeight: '400' },
+  footnote:    { fontFamily: systemFont, fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  caption:     { fontFamily: systemFont, fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  // Timers, scores, countdowns: title2 / largeTitle metrics with tabular figures.
+  numeric:     { fontFamily: systemFont, fontSize: 22, lineHeight: 28, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  numericLg:   { fontFamily: systemFont, fontSize: 34, lineHeight: 41, fontWeight: '700', fontVariant: ['tabular-nums'] },
+} as const satisfies Record<string, IosTextRoleStyle>
+
+export type IosTextRole = keyof typeof iosTextStyles
+
+/** An iOS text role as a TextStyle, optionally with a colour (a theme token). */
+export function iosTextStyle(role: IosTextRole, color?: string): TextStyle {
+  const base = iosTextStyles[role] as TextStyle
+  return color ? { ...base, color } : { ...base }
+}
+
+/** Where each legacy role lands in the P1b cut-over (`label` also takes
+ *  fontWeight 600). Kept here so P1b is a token edit, not 467 call sites. */
+export const legacyTextRoleMap = {
+  display:   'largeTitle',
+  title:     'title1',
+  headline:  'title3',
+  titleSm:   'headline',
+  body:      'body',
+  bodySm:    'footnote',
+  label:     'footnote',
+  button:    'headline',
+  caption:   'caption',
+  numeric:   'numeric',
+  numericLg: 'numericLg',
+} as const satisfies Record<TextStyleRole, IosTextRole>
+
+/**
+ * Motion. Native springs feed Reanimated `withSpring`; the curves are their
+ * web (CSS / motion) equivalents. Animate transform and opacity only; under
+ * Reduce Motion travel becomes a `duration.reduced` crossfade.
+ */
+export const motion = {
+  spring: {
+    snappy: { damping: 30, stiffness: 400 },  // press, segments, tabs
+    smooth: { damping: 26, stiffness: 260 },  // sheets, push, large title
+    bouncy: { damping: 14, stiffness: 220 },  // correct answer, streak (once)
+  },
+  curve: {
+    snappy: { easing: 'cubic-bezier(.2,.9,.25,1)', duration: 280 },
+    smooth: { easing: 'cubic-bezier(.32,.72,0,1)', duration: 480 },
+  },
+  duration: {
+    fade:    200,  // toasts, skeleton to content
+    reduced: 160,  // Reduce Motion crossfade
+  },
+  pressScale: 0.97,
+} as const
+
+/**
+ * Glass chrome (tab capsule, header band, header buttons). Tiers are chosen
+ * by hooks/usePlatformCapabilities and drawn by components/ui/Glass.
+ * Measured on the WCAG formula, `fill` composited over bg / surface / accent
+ * gives textPrimary 17.36 / 18.11 / 4.55:1 and accentText 7.81 / 8.15 / 2.05:1.
+ * accentText fails over solid maroon, so a label that can float over
+ * accent uses `labelOverAccent`.
+ */
+export const glass = {
+  // Web recipe (canvas "Mobile-Navigation", .glass).
+  fill:           'rgba(255,255,255,0.42)',
+  backdropFilter: 'blur(24px) saturate(200%) brightness(1.04)',
+  webShadow:
+    'inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.35), ' +
+    'inset 0 0 0 1px rgba(255,255,255,0.55), 0 0 0 0.5px rgba(128,0,0,0.14), ' +
+    '0 8px 32px rgba(45,10,10,0.16), 0 1px 3px rgba(45,10,10,0.08)',
+  // Reduce Transparency, Android API 30 and below, no backdrop-filter: the page ground.
+  opaque:         lightTheme.bg,  // #fdf4f4
+  // Native materials: light only (guarded by __tests__/lightOnly.test.ts).
+  iosMaterial:       'systemChromeMaterialLight',
+  iosIntensity:      100,
+  androidTint:       'light',
+  androidBlurMethod: 'dimezisBlurViewSdk31Plus',
+  androidIntensity:  60,
+  androidBlurReductionFactor: 4,
+  labelOverAccent: 'textPrimary',
+} as const satisfies { labelOverAccent: keyof typeof lightTheme } & Record<string, string | number>
+
 // 4/8 spacing rhythm.
 export const spacing = {
   xs:   4,
@@ -148,6 +270,8 @@ export const spacing = {
 } as const
 
 // Corner radii (use with { borderCurve: 'continuous' } except pill/capsule).
+// The iOS shape scale (chip … capsule) is the target; the old keys stay as
+// aliases until the final P4 PR (sm splits into chip/field in P1c).
 export const radius = {
   sm:   10,
   md:   14,
@@ -155,6 +279,13 @@ export const radius = {
   xl:   22,
   xxl:  28,
   pill: 999,
+  chip:    8,
+  field:   12,
+  button:  14,
+  group:   18,   // inset grouped list
+  card:    22,
+  sheet:   28,
+  capsule: 999,
 } as const
 
 // Layout constants. The bottom tab bar is a flat absolute bar of `tabBarHeight`
@@ -164,9 +295,21 @@ export const radius = {
 export const layout = {
   tabBarHeight:    64,
   tabBarClearance: 80,  // tabBarHeight + 16 gap (add insets.bottom at the call site)
+  // ── iOS redesign (P1a, unused until P2c) ──
+  // Floating glass capsule: 62 tall, 16 from each side, 26 above the safe area.
+  tabCapsule:       { height: 62, inset: 16, bottom: 26 },
+  searchCircle:     62,
+  headerButton:     { visual: 40, hit: 44 },
+  rowMinHeight:     44,
+  iconTile:         30,
+  // Content clearance under the capsule: 62 + 26 + 16 gap (add insets.bottom).
+  // Replaces tabBarClearance when the capsule ships in P2c.
+  capsuleClearance: 104,
 } as const
 
 export type Theme      = typeof lightTheme
 export type Typography = typeof typography
 export type Spacing    = typeof spacing
 export type Radius     = typeof radius
+export type Motion     = typeof motion
+export type Glass      = typeof glass
