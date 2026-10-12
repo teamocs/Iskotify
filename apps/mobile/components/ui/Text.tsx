@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { Platform, Text as RNText, type TextProps } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
 import { iosTextStyle, type IosTextRole } from '../../theme/tokens'
@@ -27,6 +28,8 @@ export function dynamicTypeRampFor(role: IosTextRole): DynamicTypeRamp {
 // `role` here is the TYPE role and replaces RN's ARIA `role` prop; set an
 // ARIA role with `accessibilityRole` (e.g. "header").
 export interface RoleTextProps extends Omit<TextProps, 'role'> {
+  /** React 19 passes ref as a prop; it reaches the native Text. */
+  ref?: Ref<RNText>
   role: IosTextRole
   /** A theme token; defaults to textPrimary. */
   color?: string

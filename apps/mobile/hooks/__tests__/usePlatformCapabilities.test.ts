@@ -1,3 +1,4 @@
+import React from 'react'
 import { AccessibilityInfo } from 'react-native'
 import { renderHook, act, waitFor } from '@testing-library/react-native'
 import { isLiquidGlassAvailable, isGlassEffectAPIAvailable } from 'expo-glass-effect'
@@ -96,6 +97,24 @@ describe('usePlatformCapabilities', () => {
     act(() => transparencyListener?.(true))
     expect(result.current.reduceTransparency).toBe(true)
     expect(result.current.blurTier).toBe('opaque')
+  })
+
+  // Static web export renders in Node, where there is no CSS.supports or
+  // matchMedia. The server snapshot must be a constant, conservative value so
+  // hydration matches; React re-renders with the real snapshot afterwards.
+  it('server render (static web export) always gets the conservative snapshot', async () => {
+    const { result } = renderHook(() => usePlatformCapabilities())
+    await waitFor(() => expect(result.current.blurTier).toBe('blur'))
+
+    let onServer: unknown
+    const Probe = () => { onServer = usePlatformCapabilities(); return null }
+    const { renderToString } = require('react-dom/server') as typeof import('react-dom/server')
+    renderToString(React.createElement(Probe))
+    const conservative = { liquidGlass: false, blurTier: 'opaque', reduceTransparency: true, reduceMotion: true }
+    expect(onServer).toEqual(conservative)
+
+    renderToString(React.createElement(Probe))
+    expect(onServer).toEqual(conservative)
   })
 
   it('falls back to "not reduced" when the OS query fails', async () => {

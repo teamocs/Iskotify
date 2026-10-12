@@ -1,5 +1,5 @@
-import React from 'react'
-import { StyleSheet } from 'react-native'
+import React, { createRef } from 'react'
+import { StyleSheet, type Text as RNText } from 'react-native'
 import { render, screen } from '@testing-library/react-native'
 import { Text, dynamicTypeRampFor } from '../Text'
 import { iosTextStyles, lightTheme } from '../../../theme/tokens'
@@ -32,6 +32,13 @@ describe('<Text role>', () => {
   it('scales with Dynamic Type on iOS through the matching ramp', () => {
     render(<Text role="caption">Hint</Text>)
     expect(screen.getByText('Hint').props.dynamicTypeRamp).toBe('caption1')
+  })
+
+  it('forwards a ref to the native Text (React 19 ref-as-prop; also a type check under tsc)', () => {
+    const ref = createRef<RNText>()
+    render(<Text role="body" ref={ref}>Focus me</Text>)
+    expect(screen.getByText('Focus me')).toBeTruthy()
+    expect(ref.current).toBeTruthy()
   })
 
   it.each([

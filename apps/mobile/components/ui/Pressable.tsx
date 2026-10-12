@@ -23,6 +23,9 @@ export interface PressableScaleProps extends Omit<PressableProps, 'style'> {
  * on release (spring.snappy). Under Reduce Motion it only dims. Animates
  * transform and opacity only, on the UI thread. Accessibility props pass
  * straight through, so give it a role and a label as you would a Pressable.
+ *
+ * The animated style is applied last, so a caller's `opacity` or `transform`
+ * in `style` is overridden. Put those on a child view instead.
  */
 export function PressableScale({ style, onPressIn, onPressOut, ...rest }: PressableScaleProps) {
   const { reduceMotion } = usePlatformCapabilities()

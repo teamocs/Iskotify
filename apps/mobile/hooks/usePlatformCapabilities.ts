@@ -129,6 +129,20 @@ function getSnapshot(): PlatformCapabilities {
   return snapshot
 }
 
+// The static web export renders in Node (no CSS.supports, no matchMedia) and
+// hydration must reproduce that markup exactly, so server render and hydration
+// both read this constant; React then re-renders with getSnapshot.
+const SERVER_SNAPSHOT: PlatformCapabilities = Object.freeze({
+  liquidGlass: false,
+  blurTier: 'opaque',
+  reduceTransparency: true,
+  reduceMotion: true,
+})
+
+function getServerSnapshot(): PlatformCapabilities {
+  return SERVER_SNAPSHOT
+}
+
 function setFlag(flag: Flag, value: boolean): void {
   if (flags[flag] === value) return
   flags = { ...flags, [flag]: value }
@@ -175,7 +189,7 @@ function subscribe(listener: () => void): () => void {
  * does the former.
  */
 export function usePlatformCapabilities(): PlatformCapabilities {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }
 
 /** Test-only: forget the cached device facts, flags and OS subscriptions. */
