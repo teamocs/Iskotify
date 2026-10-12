@@ -32,11 +32,22 @@ describe('system font only (no brand fonts)', () => {
     ['Outfit', /Outfit/],
     ['Lexend', /Lexend/],
     ['@expo-google-fonts', /@expo-google-fonts/],
-    ['the retired fonts token', /\bfonts\./],
+    // The retired `fonts` export of theme/tokens: imported, or used as `fonts.x`.
+    ['the retired fonts token', /import\s*\{[^}]*\bfonts\b[^}]*\}\s*from\s*['"][^'"]*theme\/tokens['"]|(?<![\w.$])fonts\.(heading|headingSemi|headingReg|body|bodyMedium|bodySemi)\b/],
     ['useFonts', /\buseFonts\b/],
   ])('no source file mentions %s', (_label, pattern) => {
     const offenders = files
       .filter(f => pattern.test(fs.readFileSync(f, 'utf8')))
+      .map(f => path.relative(root, f))
+    expect(offenders).toEqual([])
+  })
+
+  // Families come only from theme/tokens (systemFont / weight()); a literal
+  // name anywhere else is a brand font sneaking back in.
+  it('sets no literal fontFamily outside theme/tokens.ts', () => {
+    const tokens = path.join(root, 'theme', 'tokens.ts')
+    const offenders = files
+      .filter(f => f !== tokens && /fontFamily\s*:\s*['"`]/.test(fs.readFileSync(f, 'utf8')))
       .map(f => path.relative(root, f))
     expect(offenders).toEqual([])
   })

@@ -143,7 +143,7 @@ function makeStyles(
     radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: t.border },
     radioOn: { borderColor: t.accent, backgroundColor: t.accent },
     reasonTxt: { flex: 1, fontSize: typo.sm, color: t.textPrimary, ...weight('400') },
-    reasonTxtOn: { ...weight('600'), },
+    reasonTxtOn: weight('600'),
     detailsInput: {
       minHeight: 64,
       borderWidth: 1,

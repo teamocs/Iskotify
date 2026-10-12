@@ -48,10 +48,9 @@ function KeyboardProviderCompat({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  // The app draws in the platform UI font, so no font loads before first paint;
+  // the splash only waits for app init.
   const [appReady, setAppReady] = useState(false)
-  // The app draws in the platform UI font, so nothing is loaded before first
-  // paint. Kept as a gate so the splash conditions below read the same.
-  const fontsReady = true
   // The splash sits outside ThemeProvider; it uses the one (light) palette's ground.
   const splashBg = lightTheme.bg
 
@@ -73,7 +72,7 @@ export default function RootLayout() {
               <WebSetupOverlay />
             </ThemeProvider>
           </DrizzleProvider>
-          {(!appReady || !fontsReady) && (
+          {!appReady && (
             <View style={{
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
               backgroundColor: splashBg, alignItems: 'center', justifyContent: 'center',
@@ -106,7 +105,7 @@ export default function RootLayout() {
           first frame — before the DB has opened and before AppInit mounts.
           Hides once AppInit signals ready AND fonts are loaded.
         */}
-        {(!appReady || !fontsReady) && (
+        {!appReady && (
           <View style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: splashBg, alignItems: 'center', justifyContent: 'center',
