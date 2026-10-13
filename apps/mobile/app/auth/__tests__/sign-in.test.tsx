@@ -37,6 +37,17 @@ jest.mock('../../../services/pwnedPasswords', () => ({
   checkPwnedPassword: (...args: any[]) => mockCheckPwnedPassword(...args),
 }))
 
+// The device's accessibility facts as a fixed value. The real store resolves
+// AccessibilityInfo asynchronously and pushes the result to every subscriber
+// (SegmentedControl, Glass, PressableScale…) outside act(); under the fake
+// timers below that update could land in the middle of an awaited act() and
+// leave it waiting (CI run 38355062895). A static value keeps the screen's
+// renders deterministic.
+jest.mock('../../../hooks/usePlatformCapabilities', () => ({
+  ...jest.requireActual('../../../hooks/usePlatformCapabilities'),
+  usePlatformCapabilities: () => ({ liquidGlass: false, blurTier: 'opaque', reduceTransparency: false, reduceMotion: false }),
+}))
+
 // One Tap no-op in tests
 jest.mock('../../../hooks/useGoogleOneTap', () => ({
   useGoogleOneTap: () => undefined,
@@ -176,8 +187,16 @@ describe('SignInScreen — sign-in success', () => {
  * a bounded wait, then re-enables the button with a clear retry message.
  */
 describe('SignInScreen — sign-in succeeds but the app never opens', () => {
-  beforeEach(() => { jest.useFakeTimers() })
+  // Only the clock is faked (the 8s routing wait). Microtasks, nextTick and
+  // setImmediate stay real, so promise resolution and React's act() flushing
+  // never wait on a faked queue.
+  beforeEach(() => { jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate'] }) })
   afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers() })
+
+  /** Advance the fake clock and let every resulting state update settle. */
+  async function advance(ms: number) {
+    await act(async () => { await jest.advanceTimersByTimeAsync(ms) })
+  }
 
   async function signIn() {
     mockSignInWithEmail.mockResolvedValue({ ok: true, data: undefined })
@@ -185,19 +204,21 @@ describe('SignInScreen — sign-in succeeds but the app never opens', () => {
     fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
     fireEvent.changeText(screen.getByPlaceholderText('Your password'), 'password123')
     fireEvent.press(screen.getByRole('button', { name: 'Sign in' }))
-    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    // Signed in and now waiting for the gate: the button is busy.
+    await waitFor(() => expect(mockSignInWithEmail).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByText('Signing in…')).toBeTruthy())
   }
 
   it('stays busy while routing is in flight', async () => {
     await signIn()
     expect(screen.getByText('Signing in…')).toBeTruthy()
-    act(() => { jest.advanceTimersByTime(3000) })
+    await advance(3000)
     expect(screen.getByText('Signing in…')).toBeTruthy()
   })
 
   it('after the wait, re-enables the button and says what to do', async () => {
     await signIn()
-    act(() => { jest.advanceTimersByTime(8000) })
+    await advance(8000)
     expect(screen.queryByText('Signing in…')).toBeNull()
     const btn = screen.getByRole('button', { name: 'Sign in' })
     expect(aria(btn, 'aria-busy')).not.toBe(true)
@@ -208,10 +229,15 @@ describe('SignInScreen — sign-in succeeds but the app never opens', () => {
 
   it('the student can retry: pressing Sign in again signs in again', async () => {
     await signIn()
-    act(() => { jest.advanceTimersByTime(8000) })
-    fireEvent.press(screen.getByRole('button', { name: 'Sign in' }))
-    await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    expect(mockSignInWithEmail).toHaveBeenCalledTimes(2)
+    await advance(8000)
+    // The wait is over: the button is idle again before the second press.
+    const btn = screen.getByRole('button', { name: 'Sign in' })
+    expect(aria(btn, 'aria-busy')).not.toBe(true)
+    expect(aria(btn, 'aria-disabled')).not.toBe(true)
+    fireEvent.press(btn)
+    await waitFor(() => expect(mockSignInWithEmail).toHaveBeenCalledTimes(2))
+    // And it is busy again, waiting for the gate a second time.
+    await waitFor(() => expect(screen.getByText('Signing in…')).toBeTruthy())
   })
 
   it('leaving the screen (the gate routed) cancels the timer', async () => {
