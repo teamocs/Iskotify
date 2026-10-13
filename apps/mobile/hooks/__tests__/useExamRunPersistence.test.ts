@@ -32,4 +32,16 @@ describe('useExamRunPersistence', () => {
     await result.current.clearRun('exam:upcat')
     expect(mockClear).toHaveBeenCalledWith(mockDb, 'exam:upcat')
   })
+
+  // The exam runners list saveRun in their autosave effect's deps and
+  // re-render on every 1 Hz timer tick. New identities per render would
+  // re-run the autosave (a SQLite write) every second.
+  it('keeps saveRun/loadRun/clearRun identities stable across re-renders', () => {
+    const { result, rerender } = renderHook(() => useExamRunPersistence())
+    const first = result.current
+    rerender({})
+    expect(result.current.saveRun).toBe(first.saveRun)
+    expect(result.current.loadRun).toBe(first.loadRun)
+    expect(result.current.clearRun).toBe(first.clearRun)
+  })
 })
