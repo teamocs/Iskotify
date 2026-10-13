@@ -1,0 +1,19 @@
+# Manual only: builds an installable preview APK (internal distribution,
+# "preview" channel and environment). The owner approves every APK, so this
+# never runs on push. Run with: npx eas workflow:run .eas/workflows/preview-apk.yml
+name: Preview APK (Android)
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  cancel_in_progress: false
+  group: preview-apk
+
+jobs:
+  build_android:
+    name: Build preview APK
+    type: build
+    params:
+      platform: android
+      profile: preview
