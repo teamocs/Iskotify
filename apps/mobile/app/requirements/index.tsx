@@ -9,7 +9,7 @@ import { useFocusListings } from '../../hooks/useFocusListings'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
 import { listings as listingsTable } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle, weight } from '../../theme/tokens'
 import { Screen } from '../../components/ui/Screen'
 import { PageTitle } from '../../components/ui/PageTitle'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -57,12 +57,12 @@ function ListingSection({ item }: { item: ListingRequirements }) {
     <Card style={{ gap: spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
-          <Text style={textStyle('titleSm', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{item.title}</Text>
+          <Text style={iosTextStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.6}>{item.title}</Text>
           <Badge label={item.type === 'scholarship' ? 'Scholarship' : 'Entrance exam'} tone="neutral" />
         </View>
         {total > 0 ? (
           <Text
-            style={textStyle('label', allDone ? t.success : t.textSecondary)}
+            style={{ ...iosTextStyle('footnote', allDone ? t.success : t.textSecondary), ...weight('600') }}
             maxFontSizeMultiplier={1.6}
             accessibilityLabel={`${acquired} of ${total} requirements done`}
           >
@@ -80,7 +80,7 @@ function ListingSection({ item }: { item: ListingRequirements }) {
           />
         </>
       ) : (
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={1.6}>
           No requirements listed yet. Check the official site.
         </Text>
       )}

@@ -153,6 +153,32 @@ describe('Search screen states', () => {
     await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
   })
 
+  // iOS redesign P4: inset groups and date tiles.
+  it('empty: coming-up rows lead with a date tile; recents sit in an inset group', async () => {
+    mockStore['iskotify:recent-searches:v1'] = JSON.stringify(['upcat'])
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-recent')).toBeTruthy())
+    expect(screen.getAllByTestId('date-tile', { includeHiddenElements: true }).length).toBeGreaterThan(0)
+    expect(screen.getAllByTestId('inset-group').length).toBeGreaterThan(0)
+  })
+
+  it('no match: still offers what is coming up, with date tiles', async () => {
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    fireEvent.changeText(screen.getByTestId('search-input'), 'zzqx')
+    await waitFor(() => expect(screen.getByTestId('search-no-match')).toBeTruthy())
+    expect(screen.getByText('Coming up')).toBeTruthy()
+    expect(screen.getAllByTestId('date-tile', { includeHiddenElements: true }).length).toBeGreaterThan(0)
+  })
+
+  it('results: a school row leads with its logo tile', async () => {
+    render(<SearchScreen />)
+    await waitFor(() => expect(screen.getByTestId('search-empty')).toBeTruthy())
+    fireEvent.changeText(screen.getByTestId('search-input'), 'uplb')
+    await waitFor(() => expect(screen.getByText('Schools')).toBeTruthy())
+    expect(screen.getAllByTestId('logo-tile', { includeHiddenElements: true }).length).toBeGreaterThan(0)
+  })
+
   it('offline: nothing synced yet and the last sync failed → a calm retry', async () => {
     mockData = { listings: [], schools: [] }
     mockSync.value = { isSyncing: false, firstSyncDone: false, lastError: 'Network request failed' }

@@ -12,7 +12,7 @@ import {
   aiCareerImpact as aiImpactTable,
 } from '../../../db/schema'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, radius, textStyle, type Theme } from '../../../theme/tokens'
+import { spacing, radius, iosTextStyle, weight, type Theme } from '../../../theme/tokens'
 import { Card } from '../../../components/ui/Card'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -21,6 +21,7 @@ import { Skeleton } from '../../../components/ui/Skeleton'
 import { decorative } from '../../../components/ui/a11y'
 import { useWebContentWidth } from '../../../components/ui/webMaxWidth'
 import { DetailTopBar } from '../../../components/explore/DetailTopBar'
+import { LargeTitleHeader } from '../../../components/navigation/LargeTitleHeader'
 import { cachedQuery } from '../../../services/queryCache'
 
 // ---------------------------------------------------------------------------
@@ -92,18 +93,16 @@ type Styles = ReturnType<typeof makeStyles>
 function makeStyles(t: Theme) {
   return StyleSheet.create({
     root:        { flex: 1, backgroundColor: t.bg },
-    heroTitle:   textStyle('title', t.textPrimary),
-    heroSub:     { ...textStyle('body', t.textSecondary), marginTop: spacing.xs },
     rankHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
     rankBadge:   { minWidth: 36, minHeight: 36, paddingHorizontal: spacing.xs, borderRadius: radius.chip, alignItems: 'center', justifyContent: 'center', backgroundColor: t.surface2, flexShrink: 0 },
-    rankNum:     textStyle('label', t.textPrimary),
-    schoolName:  { ...textStyle('titleSm', t.textPrimary), flex: 1 },
+    rankNum:     { ...iosTextStyle('footnote', t.textPrimary), ...weight('600') },
+    schoolName:  { ...iosTextStyle('headline', t.textPrimary), flex: 1 },
     metaRow:     { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.lg, rowGap: spacing.xs },
-    metaTxt:     textStyle('bodySm', t.textSecondary),
-    highlight:   { ...textStyle('label', t.textPrimary), fontVariant: ['tabular-nums'] },
+    metaTxt:     iosTextStyle('footnote', t.textSecondary),
+    highlight:   { ...{ ...iosTextStyle('footnote', t.textPrimary), ...weight('600') }, fontVariant: ['tabular-nums'] },
     disclaimer:  { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', marginTop: spacing.lg, backgroundColor: t.warningSurface, borderRadius: radius.field, padding: spacing.md },
-    disclaimerTxt: { ...textStyle('bodySm', t.warningStrong), flex: 1 },
-    empty:       { ...textStyle('body', t.textSecondary), textAlign: 'center', marginTop: spacing.xl },
+    disclaimerTxt: { ...iosTextStyle('footnote', t.warningStrong), flex: 1 },
+    empty:       { ...iosTextStyle('body', t.textSecondary), textAlign: 'center', marginTop: spacing.xl },
   })
 }
 
@@ -243,8 +242,12 @@ export default function CourseSchoolsScreen() {
   const header = useMemo(() => (
     <View style={{ gap: spacing.lg, marginBottom: spacing.sm }}>
       <View style={{ gap: spacing.sm }}>
-        <Text accessibilityRole="header" style={s.heroTitle} maxFontSizeMultiplier={1.4}>{courseLabel}</Text>
-        <Text style={s.heroSub} maxFontSizeMultiplier={1.6}>Schools ranked by PRC board-exam pass rate, adjusted for class size (Wilson score)</Text>
+        <LargeTitleHeader
+          testID="course-title"
+          eyebrow="Top schools by course"
+          title={courseLabel}
+          subtitle="Schools ranked by PRC board-exam pass rate, adjusted for class size (Wilson score)"
+        />
         {aiRow?.aiSafetyScore != null ? (
           <Badge
             label={`AI-safe score ${aiRow.aiSafetyScore}/5${aiRow.aiSafetyLabel ? ` · ${aiRow.aiSafetyLabel}` : ''}`}
@@ -264,7 +267,7 @@ export default function CourseSchoolsScreen() {
       </View>
       <SectionHeader title="School rankings" subtitle={total > 0 ? `${total} schools ranked` : undefined} />
     </View>
-  ), [s, t, courseLabel, aiRow, taxonomy, total])
+  ), [t, courseLabel, aiRow, taxonomy, total])
 
   const footer = useMemo(() => (
     <View>

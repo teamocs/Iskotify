@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
-import { View, Text } from 'react-native'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { View } from 'react-native'
 import { router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -17,20 +17,22 @@ import {
 import { NewsDetailModal } from '../updates/NewsDetailModal'
 import { ScreenScroll } from '../ui/ScreenScroll'
 import { Card } from '../ui/Card'
+import { InsetGroup, InsetRow } from '../ui/InsetGroup'
 import { SectionHeader } from '../ui/SectionHeader'
 import { Badge } from '../ui/Badge'
-import { ListRow } from '../ui/ListRow'
 import { Skeleton } from '../ui/Skeleton'
 import { EmptyState } from '../ui/EmptyState'
 import { ErrorState } from '../ui/ErrorState'
 import { CalendarStrip } from '../calendar/CalendarStrip'
 import { DateActionSheet } from '../calendar/DateActionSheet'
 import { MonthSheet } from '../calendar/MonthSheet'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { spacing } from '../../theme/tokens'
 import { useHomeStats } from '../../hooks/useHomeStats'
 import { scheduleNoteReminder, cancelNoteReminder } from '../../services/notifications'
 import type { QuickReminderPayload } from '../calendar/QuickReminderForm'
-import type { BadgeSpec } from './exploreModel'
+import { fmtShortDate, sourceHost, type BadgeSpec } from './exploreModel'
+import { DateTile } from './DateTile'
+import { newsSources } from '../../utils/newsSources'
 import { useLatestRequest } from './useLatestRequest'
 import { reminderDayIndices } from '../../utils/localDay'
 import { schedulePushUserData } from '../../services/pushScheduler'
@@ -57,41 +59,10 @@ function eventWhen(days: number): BadgeSpec {
   return { label: `In ${days} days`, tone: days <= 7 ? 'warning' : 'neutral' }
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/** A small calendar leaf — month over a tabular day number. Decorative (ListRow hides it). */
-function DateTile({ iso }: { iso: string }) {
-  const { theme: t } = useTheme()
-  const [, m, d] = iso.split('-').map(Number)
-  return (
-    <View
-      style={{
-        width: 44, minHeight: 48, borderRadius: radius.field, borderCurve: 'continuous',
-        borderWidth: 1, borderColor: t.border, backgroundColor: t.surface,
-        alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xs,
-      }}
-    >
-      <Text style={[textStyle('caption', t.accentText), { textTransform: 'uppercase' }]} maxFontSizeMultiplier={1.2}>
-        {MONTHS[(m ?? 1) - 1]}
-      </Text>
-      <Text style={textStyle('numeric', t.textPrimary)} maxFontSizeMultiplier={1.2}>{d}</Text>
-    </View>
-  )
-}
-
-/** Rows grouped in one card with hairlines between them. */
-function RowGroup({ children }: { children: React.ReactNode[] }) {
-  const { theme: t } = useTheme()
-  return (
-    <Card padded={false} style={{ overflow: 'hidden' }}>
-      {children.map((row, i) => (
-        <Fragment key={i}>
-          {i > 0 ? <View style={{ height: 1, backgroundColor: t.divider, marginLeft: spacing.lg }} /> : null}
-          {row}
-        </Fragment>
-      ))}
-    </Card>
-  )
+/** Local midnight of an ISO yyyy-mm-dd date. */
+function isoToMs(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1).getTime()
 }
 
 // ── Sections ───────────────────────────────────────────────────────────────────
@@ -102,22 +73,25 @@ function UpcomingDates({ items }: { items: FeedItem[] }) {
   return (
     <View>
       <SectionHeader title="Upcoming dates" subtitle="Exam days, deadlines and result releases" />
-      <RowGroup>
+      <InsetGroup inset={false} testID="upcoming-dates">
         {events.map(item => {
           const when = eventWhen(daysUntil(item.eventDate!))
-          const sub = [item.schoolName, item.eventType].filter(Boolean).join(' · ')
+          // The trust rule: the exact date, and where it comes from when the feed names a source.
+          const exact = fmtShortDate(isoToMs(item.eventDate!))
+          const host = sourceHost(newsSources(item.sources)[0]?.url)
+          const sub = [exact, item.schoolName, item.eventType, host ? `Source: ${host}` : null].filter(Boolean).join(' · ')
           return (
-            <ListRow
+            <InsetRow
               key={item.id}
-              leading={<DateTile iso={item.eventDate!} />}
+              leading={<DateTile date={item.eventDate!} />}
               title={item.title}
-              subtitle={sub || undefined}
+              subtitle={sub}
               trailing={<Badge label={when.label} tone={when.tone} />}
-              accessibilityLabel={`${item.title}, ${item.eventDate}, ${when.label}${sub ? `, ${sub}` : ''}`}
+              accessibilityLabel={`${item.title}, ${sub}, ${when.label}`}
             />
           )
         })}
-      </RowGroup>
+      </InsetGroup>
     </View>
   )
 }
@@ -137,12 +111,12 @@ function AdmissionsNews({ items, onOpen }: { items: FeedItem[]; onOpen: (item: F
           />
         </Card>
       ) : (
-        <RowGroup>
+        <InsetGroup inset={false}>
           {sorted.map(item => {
             const sev = severityBadge(item.severity)
             const sub = [item.schoolName, item.body].filter(Boolean).join(' · ')
             return (
-              <ListRow
+              <InsetRow
                 key={item.id}
                 title={item.title}
                 subtitle={sub || undefined}
@@ -153,7 +127,7 @@ function AdmissionsNews({ items, onOpen }: { items: FeedItem[]; onOpen: (item: F
               />
             )
           })}
-        </RowGroup>
+        </InsetGroup>
       )}
     </View>
   )
@@ -182,7 +156,6 @@ function NewsSkeleton() {
  * dates column sits beside the news column.
  */
 export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
-  const { theme: t } = useTheme()
   const db = useDb()
   const twoUp = columnCount(useBreakpoint()) === 2
   const [items, setItems] = useState<FeedItem[]>([])
@@ -317,21 +290,15 @@ export function NewsFeed({ refreshKey = 0 }: { refreshKey?: number } = {}) {
           onHeaderPress={() => setShowMonth(true)}
         />
       </View>
-      <RowGroup>
-        {[
-          <ListRow
-            key="tracker"
-            leading={(
-              <View style={{ width: 40, height: 40, borderRadius: radius.chip, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                <Lineicons icon={ClipboardOutlined} size={20} color={t.textSecondary} />
-              </View>
-            )}
-            title="Results Tracker"
-            subtitle="Track school results you're waiting on"
-            onPress={() => router.push('/results-tracker')}
-          />,
-        ]}
-      </RowGroup>
+      <InsetGroup inset={false}>
+        <InsetRow
+          icon={ClipboardOutlined}
+          iconTone="neutral"
+          title="Results Tracker"
+          subtitle="Track school results you're waiting on"
+          onPress={() => router.push('/results-tracker')}
+        />
+      </InsetGroup>
       {status === 'ready' ? <UpcomingDates items={items} /> : null}
     </View>
   )

@@ -226,21 +226,34 @@ describe('ListsScreen', () => {
       expect(screen.getByTestId('explore-sections')).toBeTruthy()
     })
 
-    it('Schools filter rails: inside the list header on iOS, fixed above the list on Android', async () => {
-      const inGrid = () => {
-        const grid = screen.UNSAFE_getAllByType(FlatList).find(l => l.props.testID === 'explore-grid')
-        return (grid?.findAll((n: { props: { accessibilityLabel?: string } }) => n.props.accessibilityLabel === 'Free tuition') ?? []).length > 0
-      }
+    // P4: the school filters moved onto a sheet behind the header's Filters
+    // button, so no horizontal chip rail sits in the Schools list's chain on
+    // either platform; the section rail (horizontal) sits after the list on iOS.
+    it('iOS: neither the section rail nor a filter rail is the first scroll view', async () => {
       Platform.OS = 'ios'
       const r = render(<ListsScreen />)
-      await waitFor(() => expect(screen.getAllByLabelText('Free tuition').length).toBeGreaterThan(0))
-      expect(inGrid()).toBe(true)
-      r.unmount()
+      await waitFor(() => expect(firstScrollDescendant(r.UNSAFE_root)?.props.testID).toBe('explore-grid'))
+      expect(screen.queryByLabelText('Free tuition')).toBeNull()
+      expect(screen.getByTestId('explore-sections').props.accessibilityLabel).toBe('Explore sections')
+    })
 
+    // Android and web keep the original order (header, rail and field, then
+    // the list); the floating capsule tracks scrolling through its context,
+    // not the first-descendant chain, so the chain ends before any scroll view.
+    it.each([
+      ['the default section (Schools & exams)', null],
+      ['Schools & exams', 'Schools & exams'],
+      ['Scholarships', 'Scholarships'],
+      ['Courses', 'Courses'],
+      ['Destinations', 'Destinations'],
+      ['News & dates', 'News & dates'],
+    ])('Android: %s keeps the header ahead of its list (no first scroll view)', async (_name, chip) => {
       Platform.OS = 'android'
-      render(<ListsScreen />)
-      await waitFor(() => expect(screen.getAllByLabelText('Free tuition').length).toBeGreaterThan(0))
-      expect(inGrid()).toBe(false)
+      const r = render(<ListsScreen />)
+      if (chip) fireEvent.press(screen.getAllByText(chip)[0])
+      await waitFor(() => expect(screen.getByRole('header', { name: 'Explore' })).toBeTruthy())
+      await act(async () => {})
+      expect(firstScrollDescendant(r.UNSAFE_root)).toBeNull()
     })
 
     it('Android: the header stays ahead of the list (unchanged)', async () => {
@@ -837,17 +850,121 @@ describe('ListsScreen', () => {
     await waitFor(() => expect(gridColumns()).toBe(1))
   })
 
-  it('school filters are FilterChips: Free tuition is a checkbox, regions are radios', async () => {
+  // ── iOS redesign P4 ─────────────────────────────────────────────────────
+
+  it('school filters live on a sheet behind the header Filters button: a Free tuition switch, region radios', async () => {
     const { useDb } = require('../../../hooks/useDb')
     useDb.mockReturnValue(makeDb([], [
       { id: 'upd', name: 'UP Diliman', acronym: 'UPD', region: 'NCR', province: null, type: 'State University', dataConfidence: 'HIGH', freeTuition: true },
     ]))
     render(<ListsScreen />)
-    const free = await screen.findByRole('checkbox', { name: 'Free tuition' })
+    await screen.findByText('UP Diliman')
+    expect(screen.queryByRole('switch', { name: 'Free tuition' })).toBeNull()
+    fireEvent.press(screen.getByRole('button', { name: 'Filters' }))
+    const free = await screen.findByRole('switch', { name: 'Free tuition' })
     expect(aria(free, 'aria-checked')).toBe(false)
     fireEvent.press(free)
-    expect(aria(screen.getByRole('checkbox', { name: 'Free tuition' }), 'aria-checked')).toBe(true)
+    expect(aria(screen.getByRole('switch', { name: 'Free tuition' }), 'aria-checked')).toBe(true)
     expect(screen.getByRole('radio', { name: 'NCR' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Filters, 1 on' })).toBeTruthy()
+  })
+
+  it('the Filters button shows only on Schools & exams (the only section with filters)', () => {
+    render(<ListsScreen />)
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeTruthy()
+    fireEvent.press(screen.getByText('Scholarships'))
+    expect(screen.queryByRole('button', { name: /^Filters/ })).toBeNull()
+  })
+
+  it('the large title carries the eyebrow "Schools, scholarships, exams"', () => {
+    render(<ListsScreen />)
+    expect(screen.getByTestId('large-title-eyebrow').props.children).toBe('Schools, scholarships, exams')
+  })
+
+  it('the section rail is a tablist of capsule tabs; the selected one is aria-selected', () => {
+    render(<ListsScreen />)
+    expect(screen.getByTestId('explore-sections').props.accessibilityLabel).toBe('Explore sections')
+    const selected = screen.getAllByRole('tab').filter(t => aria(t, 'aria-selected') === true)
+    expect(selected.map(t => t.props.accessibilityLabel)).toEqual(['Schools & exams'])
+  })
+
+  describe('scholarship rows and the featured card (trust rule: real dates, the official source)', () => {
+    const DAY = 86_400_000
+    const scholarship = (over: Record<string, unknown>) => ({
+      id: 's1', slug: 'dost', title: 'DOST-SEI Undergraduate Scholarship', type: 'scholarship', examDate: null,
+      deadline: null, region: 'National', provider: 'DOST-SEI', externalUrl: '', targetCourses: '[]', ...over,
+    })
+
+    it('names "Official site: {host}" on a row only when the listing has an external_url', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb([
+        scholarship({ id: 'a', slug: 'a', title: 'With Site', externalUrl: 'https://www.sei.dost.gov.ph/apply' }),
+        scholarship({ id: 'b', slug: 'b', title: 'Without Site', externalUrl: '' }),
+      ]))
+      render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await screen.findByText('With Site')
+      expect(screen.getAllByText('Official site: sei.dost.gov.ph')).toHaveLength(1)
+      expect(screen.getByRole('button', { name: /^With Site, .*Official site: sei\.dost\.gov\.ph/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /^Without Site/ }).props.accessibilityLabel).not.toMatch(/Official site/)
+    })
+
+    it('a row with a deadline shows the exact date and a date tile', async () => {
+      const deadline = new Date(2030, 9, 20, 12).getTime()
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb([scholarship({ deadline })]))
+      render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      expect(await screen.findByText(/Apply by Oct 20, 2030/)).toBeTruthy()
+      expect(screen.getAllByTestId('date-tile', { includeHiddenElements: true }).length).toBeGreaterThan(0)
+    })
+
+    it('features the next open deadline: ink card, "Closes {date}" capsule, its source only with a URL', async () => {
+      const deadline = manilaNoonInDays(8)
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb([
+        scholarship({ id: 'soon', slug: 'soon', title: 'Soon Grant', deadline, externalUrl: 'https://ched.gov.ph/x' }),
+        scholarship({ id: 'later', slug: 'later', title: 'Later Grant', deadline: deadline + 30 * DAY }),
+      ]))
+      render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      const card = await screen.findByTestId('featured-card')
+      expect(card.props.accessibilityLabel).toMatch(/^Next scholarship deadline, Soon Grant, Closes /)
+      expect(card.props.accessibilityLabel).toMatch(/In 8 days/)
+      expect(card.props.accessibilityLabel).toMatch(/Official site: ched\.gov\.ph$/)
+      expect(screen.getByTestId('featured-date')).toBeTruthy()
+      fireEvent.press(card)
+      expect(require('expo-router').router.push).toHaveBeenCalledWith('/listings/soon')
+    })
+
+    it('shows no featured card when no listing has an open deadline (never invented)', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb([
+        scholarship({ id: 'none', slug: 'none', title: 'No Date Grant', deadline: null }),
+        scholarship({ id: 'past', slug: 'past', title: 'Past Grant', deadline: Date.now() - 3 * DAY }),
+      ]))
+      render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      await screen.findByText('No Date Grant')
+      expect(screen.queryByTestId('featured-card')).toBeNull()
+    })
+
+    it('the featured card names no source when the listing has no external_url', async () => {
+      const { useDb } = require('../../../hooks/useDb')
+      useDb.mockReturnValue(makeDb([scholarship({ deadline: manilaNoonInDays(3), externalUrl: '' })]))
+      render(<ListsScreen />)
+      fireEvent.press(screen.getByText('Scholarships'))
+      const card = await screen.findByTestId('featured-card')
+      expect(card.props.accessibilityLabel).not.toMatch(/Official site/)
+    })
+  })
+
+  it('has no primary (maroon) action on the Explore tab itself: rows and cards only', async () => {
+    const { Button } = require('../../../components/ui/Button')
+    render(<ListsScreen />)
+    await act(async () => {})
+    const primaries = screen.UNSAFE_queryAllByType(Button).filter(b => (b.props.variant ?? 'primary') === 'primary')
+    expect(primaries).toHaveLength(0)
   })
 
   // Noon (Manila) five calendar days ahead: "now + 5 days + 1 hour" crossed Manila

@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { AccessibilityInfo, Platform, Text, View } from 'react-native'
+import { AccessibilityInfo, Platform, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import type { SearchBarCommands } from 'react-native-screens'
 import Animated, { useAnimatedStyle } from 'react-native-reanimated'
@@ -7,23 +7,25 @@ import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
-  Buildings1Outlined, CertificateBadge1Outlined, GraduationCap1Outlined, Search1Outlined, SearchMinusOutlined,
+  CertificateBadge1Outlined, GraduationCap1Outlined, Search1Outlined, SearchMinusOutlined,
   Globe1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../../../hooks/useDb'
 import { useSyncStatus } from '../../../hooks/useSyncStatus'
 import { useTheme } from '../../../theme/ThemeContext'
-import { spacing, textStyle } from '../../../theme/tokens'
+import { spacing } from '../../../theme/tokens'
 import { listings as listingsTable, tertiarySchools, universityProfiles } from '../../../db/schema'
 import { Screen } from '../../../components/ui/Screen'
 import { SectionHeader } from '../../../components/ui/SectionHeader'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { ErrorState } from '../../../components/ui/ErrorState'
-import { ListRow } from '../../../components/ui/ListRow'
-import { decorative } from '../../../components/ui/a11y'
+import { InsetGroup, InsetRow } from '../../../components/ui/InsetGroup'
+import { Text } from '../../../components/ui/Text'
 import { TabHeader } from '../../../components/TabHeader'
 import { SearchField } from '../../../components/explore/SearchField'
 import { ListingCard } from '../../../components/explore/ListingCard'
+import { DateTile } from '../../../components/explore/DateTile'
+import { LogoTile } from '../../../components/explore/LogoTile'
 import { GridSkeleton, StaticGrid } from '../../../components/explore/ExploreGrid'
 import { dateUrgency, truncateQuery, type BadgeSpec } from '../../../components/explore/exploreModel'
 import { useSyncSettled } from '../../../components/explore/useSyncSettled'
@@ -44,8 +46,13 @@ const schoolKey = (s: SearchSchool) => s.id
 const openListing = (slug: string) => router.push(`/listings/${slug}` as never)
 const openSchool = (id: string) => router.push(`/schools/${id}` as never)
 
+/** The date a listing's row leads with: the deadline, else (for an exam) the exam day. */
+function listingDate(l: SearchListing): number | null {
+  return l.deadline ?? (l.type === 'exam' ? l.examDate : null)
+}
+
 function listingBadges(l: SearchListing): BadgeSpec[] {
-  const soon = dateUrgency(l.deadline ?? (l.type === 'exam' ? l.examDate : null))
+  const soon = dateUrgency(listingDate(l))
   const out: BadgeSpec[] = soon ? [soon] : []
   if (l.isVerified) out.push({ label: 'Verified', tone: 'neutral' })
   return out
@@ -154,7 +161,8 @@ export default function SearchScreen() {
 
   const renderListing = useCallback((l: SearchListing) => (
     <ListingCard
-      icon={l.type === 'exam' ? GraduationCap1Outlined : CertificateBadge1Outlined}
+      icon={listingDate(l) != null ? undefined : l.type === 'exam' ? GraduationCap1Outlined : CertificateBadge1Outlined}
+      leading={listingDate(l) != null ? <DateTile date={listingDate(l)!} /> : undefined}
       title={l.title}
       meta={[l.type === 'scholarship' ? l.provider : null, listingMeta(l)].filter(Boolean).join(' · ')}
       badges={listingBadges(l)}
@@ -167,7 +175,7 @@ export default function SearchScreen() {
 
   const renderSchool = useCallback((s: SearchSchool) => (
     <ListingCard
-      icon={Buildings1Outlined}
+      leading={<LogoTile name={s.name} acronym={s.acronym} />}
       title={s.name}
       meta={schoolMeta(s)}
       onPress={() => { remember(query); openSchool(s.id) }}
@@ -212,15 +220,18 @@ export default function SearchScreen() {
         {recent.length > 0 ? (
           <View>
             <SectionHeader title="Recent searches" actionLabel="Clear" onAction={clearRecent} />
-            {recent.map(r => (
-              <ListRow
-                key={r}
-                title={r}
-                leading={<View {...decorative}><Lineicons icon={Search1Outlined} size={18} color={t.textSecondary} /></View>}
-                onPress={() => setQuery(r)}
-                accessibilityLabel={`Search again for ${r}`}
-              />
-            ))}
+            <InsetGroup inset={false} testID="search-recent">
+              {recent.map(r => (
+                <InsetRow
+                  key={r}
+                  title={r}
+                  icon={Search1Outlined}
+                  iconTone="neutral"
+                  onPress={() => setQuery(r)}
+                  accessibilityLabel={`Search again for ${r}`}
+                />
+              ))}
+            </InsetGroup>
           </View>
         ) : null}
         {upcoming.length > 0 ? (
@@ -240,7 +251,7 @@ export default function SearchScreen() {
     )
   } else if (resultCount(results) === 0) {
     body = (
-      <View testID="search-no-match">
+      <View testID="search-no-match" style={{ gap: spacing.xl }}>
         <EmptyState
           icon={<Lineicons icon={SearchMinusOutlined} size={26} color={t.textSecondary} />}
           title={`No matches for “${truncateQuery(q)}”`}
@@ -248,6 +259,12 @@ export default function SearchScreen() {
           actionLabel="Clear search"
           onAction={() => setQuery('')}
         />
+        {upcoming.length > 0 ? (
+          <View>
+            <SectionHeader title="Coming up" subtitle="The nearest deadlines and exam dates" />
+            <StaticGrid items={upcoming} keyExtractor={listingKey} renderItem={renderListing} />
+          </View>
+        ) : null}
       </View>
     )
   } else {
@@ -298,10 +315,11 @@ export default function SearchScreen() {
       )}
       <Text
         testID="search-status"
+        role="caption"
+        color={t.textSecondary}
         accessibilityLiveRegion="polite"
         aria-live="polite"
-        style={[textStyle('caption', t.textSecondary), statusText ? { paddingBottom: spacing.sm } : null]}
-        maxFontSizeMultiplier={2}
+        style={statusText ? { paddingBottom: spacing.sm } : null}
       >
         {statusText}
       </Text>

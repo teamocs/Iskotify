@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View, Linking } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq } from 'drizzle-orm'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import {
   Bookmark1Outlined, Bell1Outlined, Pencil1Outlined, ArrowAngularTopRightOutlined,
-  GraduationCap1Outlined, HourglassOutlined, FileQuestionOutlined, CheckCircle1Outlined,
+  GraduationCap1Outlined, HourglassOutlined, FileQuestionOutlined, CheckCircle1Outlined, Globe1Outlined,
 } from '@lineiconshq/free-icons'
 import { useDb } from '../../hooks/useDb'
 import { useFocusListings } from '../../hooks/useFocusListings'
@@ -16,21 +16,23 @@ import { useTheme } from '../../theme/ThemeContext'
 import { RequirementsChecklist } from '../../components/RequirementsChecklist'
 import { SuggestDateCorrectionModal } from '../../components/SuggestDateCorrectionModal'
 import { ScreenScroll } from '../../components/ui/ScreenScroll'
-import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Chip } from '../../components/ui/Chip'
+import { InsetGroup, InsetRow } from '../../components/ui/InsetGroup'
+import { PressableScale } from '../../components/ui/Pressable'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
-import { decorative, focusRing, type WebPressableState } from '../../components/ui/a11y'
+import { Text } from '../../components/ui/Text'
+import { decorative, focusRing } from '../../components/ui/a11y'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
 import { Disclosure } from '../../components/explore/Disclosure'
-import { LinkRow } from '../../components/explore/LinkRow'
 import { externalLinkProps } from '../../components/explore/externalLink'
-import { daysUntilDate, fmtLongDate, matchBadge } from '../../components/explore/exploreModel'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { daysUntilDate, fmtLongDate, matchBadge, relativeDay, sourceHost } from '../../components/explore/exploreModel'
+import { radius, spacing, weight } from '../../theme/tokens'
 import { getSettings } from '../../services/settings'
 import { listRunnableBlueprints } from '../../services/examBlueprints'
 import { hasReviewContent } from '../../services/practiceSignals'
@@ -84,13 +86,13 @@ function preview(text: string, max = 60): string {
 
 // ── Small local pieces ────────────────────────────────────────────────────────
 
-/** Label/value line inside the key-facts panel and detail disclosures. */
+/** Label/value line inside the detail disclosures. */
 function FactRow({ label, value }: { label: string; value: string }) {
   const { theme: t } = useTheme()
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: spacing.xs }}>
-      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={1.6}>{label}</Text>
-      <Text style={[textStyle('label', t.textPrimary), { textAlign: 'right', flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>{value}</Text>
+      <Text role="footnote" color={t.textSecondary}>{label}</Text>
+      <Text role="footnote" style={[weight('600'), { textAlign: 'right', flexShrink: 1 }]}>{value}</Text>
     </View>
   )
 }
@@ -100,7 +102,7 @@ function Bullet({ children, color }: { children: string; color: string }) {
   return (
     <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
       <View {...decorative} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: color, marginTop: 8 }} />
-      <Text style={[textStyle('bodySm', color), { flex: 1 }]} maxFontSizeMultiplier={1.6}>{children}</Text>
+      <Text role="footnote" color={color} style={{ flex: 1 }}>{children}</Text>
     </View>
   )
 }
@@ -113,39 +115,37 @@ function Bullet({ children, color }: { children: string; color: string }) {
 function PrimaryLinkButton({ label, url }: { label: string; url: string }) {
   const { theme: t } = useTheme()
   return (
-    <Pressable
+    <PressableScale
+      testID="primary-action"
       {...externalLinkProps(url)}
       accessibilityRole="link"
       accessibilityLabel={label}
       accessibilityHint="Opens in your browser"
-      style={(state) => {
-        const { pressed, focused } = state as WebPressableState
-        return [
-          {
-            minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-            paddingHorizontal: spacing.xl, borderRadius: radius.lg, borderCurve: 'continuous',
-            backgroundColor: pressed ? t.accentPressed : t.accent,
-          },
-          focusRing(t.focusRing, focused),
-        ]
-      }}
+      style={({ pressed, focused }) => [
+        {
+          minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
+          paddingHorizontal: spacing.xxl, borderRadius: radius.button, borderCurve: 'continuous',
+          backgroundColor: pressed ? t.accentPressed : t.accent,
+        },
+        focusRing(t.focusRing, focused),
+      ]}
     >
-      <Text style={textStyle('button', t.textInverse)} maxFontSizeMultiplier={2}>{label}</Text>
+      <Text role="headline" color={t.textInverse}>{label}</Text>
       <View {...decorative}>
         <Lineicons icon={ArrowAngularTopRightOutlined} size={16} color={t.textInverse} />
       </View>
-    </Pressable>
+    </PressableScale>
   )
 }
 
 function DetailSkeleton() {
   return (
     <View testID="listing-skeleton" accessible accessibilityLabel="Loading" aria-busy style={{ gap: spacing.lg, paddingTop: spacing.md }}>
-      <Skeleton width={96} height={20} radius={radius.pill} />
+      <Skeleton width={96} height={20} radius={radius.capsule} />
       <Skeleton width="80%" height={28} />
       <Skeleton width="50%" height={14} />
-      <Skeleton height={160} radius={radius.xl} />
-      <Skeleton height={48} radius={radius.lg} />
+      <Skeleton height={160} radius={radius.group} />
+      <Skeleton height={48} radius={radius.button} />
     </View>
   )
 }
@@ -268,6 +268,7 @@ export default function ListingDetailScreen() {
   const isExam = listing.type === 'exam'
   const keyDate = isExam ? (listing.examDate ?? listing.deadline) : (listing.deadline ?? listing.examDate)
   const daysLeft = daysUntilDate(keyDate)
+  const when = relativeDay(keyDate)
   const requirements = parseJson<unknown[]>(listing.requirements, []).map(String)
   const meta = isScholarship ? parseJson<Record<string, unknown>>(listing.scholarshipMeta, {}) : {}
   const otherBenefits: string[] = Array.isArray(meta.other_benefits) ? (meta.other_benefits as unknown[]).map(String) : []
@@ -276,136 +277,140 @@ export default function ListingDetailScreen() {
   const extraReasons = matchResult ? [...matchResult.reasons.slice(2)] : []
   const warnings = matchResult?.warnings ?? []
   const obligation = listing.serviceObligationYears ?? 0
+  // The trust rule: every date shows its official source, when the catalog has one.
+  const host = sourceHost(listing.externalUrl)
 
   const benefitsPreview = listing.grantAmount ? `₱${listing.grantAmount} grant`
     : listing.monthlyStipend != null ? `${peso(listing.monthlyStipend)} monthly stipend`
     : otherBenefits[0] ?? preview(listing.coverage)
 
-  const countdownLabel = isExam ? 'days until the exam' : 'days left to apply'
   const dateLabel = isExam ? 'Exam date' : 'Application deadline'
+  const countdownName = isExam ? 'Exam' : 'Deadline'
 
   // ── Blocks ──────────────────────────────────────────────────────────────────
 
   const hero = (
-    <View style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-        <Badge label={isExam ? 'Entrance exam' : 'Scholarship'} tone="neutral" />
-        {listing.status && listing.status !== 'active' ? (
-          <Badge label={listing.status.charAt(0).toUpperCase() + listing.status.slice(1)} tone="warning" />
-        ) : null}
-      </View>
-      <Text accessibilityRole="header" style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.4}>
-        {listing.title}
-      </Text>
-      {listing.provider || listing.region ? (
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>
-          {[listing.provider, listing.region].filter(Boolean).join(' · ')}
-        </Text>
+    <View style={{ gap: spacing.xs }}>
+      <LargeTitleHeader
+        testID="listing-title"
+        eyebrow={isExam ? 'Entrance exam' : 'Scholarship'}
+        title={listing.title}
+        subtitle={[listing.provider, listing.region].filter(Boolean).join(' · ') || undefined}
+      />
+      {listing.status && listing.status !== 'active' ? (
+        <Badge label={listing.status.charAt(0).toUpperCase() + listing.status.slice(1)} tone="warning" />
       ) : null}
     </View>
   )
 
-  // 1. Deadline first, 2. eligibility — the two facts a student decides on.
+  // 1. Dates first (exact, with their source), 2. eligibility — the two facts a student decides on.
   const keyFacts = (
-    <Card testID="listing-key-facts" style={{ gap: spacing.md }}>
-      {daysLeft != null && daysLeft >= 0 ? (
+    <View testID="listing-key-facts" style={{ gap: spacing.lg }}>
+      {daysLeft != null && daysLeft >= 0 && when ? (
         <View
           accessible
-          accessibilityLabel={daysLeft === 0 ? `${isExam ? 'Exam' : 'Deadline'} is today` : `${daysLeft} ${countdownLabel}`}
-          style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}
+          accessibilityLabel={daysLeft === 0 ? `${countdownName} is today` : `${countdownName} ${when.toLowerCase()}`}
+          style={{ paddingHorizontal: spacing.lg }}
         >
-          <Text style={textStyle('numericLg', daysLeft <= 7 ? t.warning : t.textPrimary)} maxFontSizeMultiplier={1.3}>
-            {daysLeft === 0 ? 'Today' : String(daysLeft)}
+          <Text role="title2" color={daysLeft <= 7 ? t.warningStrong : t.textPrimary} style={{ fontVariant: ['tabular-nums'] }}>
+            {when}
           </Text>
-          {daysLeft === 0 ? null : (
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{countdownLabel}</Text>
-          )}
         </View>
       ) : daysLeft != null ? (
-        <Badge label={isExam ? 'This exam date has passed' : 'The deadline has passed'} tone="neutral" />
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <Badge label={isExam ? 'This exam date has passed' : 'The deadline has passed'} tone="neutral" />
+        </View>
       ) : null}
 
-      <View>
-        {keyDate ? <FactRow label={dateLabel} value={fmtLongDate(keyDate)} /> : null}
+      <InsetGroup inset={false} testID="listing-dates">
+        {keyDate ? <InsetRow title={dateLabel} subtitle={fmtLongDate(keyDate)} /> : null}
         {isExam && listing.deadline && listing.examDate ? (
-          <FactRow label="Application deadline" value={fmtLongDate(listing.deadline)} />
+          <InsetRow title="Application deadline" subtitle={fmtLongDate(listing.deadline)} />
         ) : null}
-        {listing.resultsDate ? <FactRow label="Results expected" value={fmtLongDate(listing.resultsDate)} /> : null}
-        {!keyDate ? (
-          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>Dates to be announced.</Text>
+        {listing.resultsDate ? <InsetRow title="Results expected" subtitle={fmtLongDate(listing.resultsDate)} /> : null}
+        {!keyDate ? <InsetRow title="Dates to be announced" /> : null}
+        {host ? (
+          <InsetRow
+            testID="listing-source"
+            icon={Globe1Outlined}
+            iconTone="neutral"
+            title={`Official site: ${host}`}
+            accessibilityRole="link"
+            accessibilityLabel={`Official site: ${host}, opens in your browser`}
+            onPress={() => { Linking.openURL(listing.externalUrl).catch(() => { /* no handler for the link */ }) }}
+          />
         ) : null}
-      </View>
-      <Button
-        label="Suggest a date correction"
-        variant="ghost"
-        size="sm"
-        icon={<Lineicons icon={Pencil1Outlined} size={14} color={t.accentText} />}
-        onPress={() => setShowDateCorrection(true)}
-        style={{ marginLeft: -spacing.lg }}
-      />
-
-      <View style={{ height: 1, backgroundColor: t.divider }} />
+        <InsetRow
+          icon={Pencil1Outlined}
+          iconTone="neutral"
+          title="Suggest a date correction"
+          onPress={() => setShowDateCorrection(true)}
+        />
+      </InsetGroup>
 
       <View style={{ gap: spacing.sm }}>
-        <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>Eligibility</Text>
-        {isScholarship ? (
-          match && matchResult && !profileIncomplete ? (
-            <View style={{ gap: spacing.sm }}>
-              <Badge label={match.label} tone={match.tone} />
-              {matchResult.reasons.slice(0, 2).map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
-              {reasonsOpen ? (
-                <>
-                  {extraReasons.map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
-                  {warnings.map(w => <Bullet key={w} color={t.warning}>{w}</Bullet>)}
-                </>
-              ) : null}
-              {extraReasons.length + warnings.length > 0 ? (
-                <Button
-                  label={reasonsOpen ? 'Show fewer reasons' : `Show ${extraReasons.length + warnings.length} more`}
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => setReasonsOpen(v => !v)}
-                  style={{ marginLeft: -spacing.lg }}
-                />
-              ) : null}
-            </View>
+        <Text role="footnote" color={t.textSecondary} style={[weight('600'), { paddingHorizontal: spacing.lg }]}>Eligibility</Text>
+        <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.sm }}>
+          {isScholarship ? (
+            match && matchResult && !profileIncomplete ? (
+              <View style={{ gap: spacing.sm }}>
+                <Badge label={match.label} tone={match.tone} />
+                {matchResult.reasons.slice(0, 2).map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
+                {reasonsOpen ? (
+                  <>
+                    {extraReasons.map(r => <Bullet key={r} color={t.textSecondary}>{r}</Bullet>)}
+                    {warnings.map(w => <Bullet key={w} color={t.warningStrong}>{w}</Bullet>)}
+                  </>
+                ) : null}
+                {extraReasons.length + warnings.length > 0 ? (
+                  <Button
+                    label={reasonsOpen ? 'Show fewer reasons' : `Show ${extraReasons.length + warnings.length} more`}
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => setReasonsOpen(v => !v)}
+                    style={{ marginLeft: -spacing.lg }}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <View style={{ gap: spacing.sm }}>
+                <Text role="footnote">
+                  Add your GWA, family income and province to see if you qualify.
+                </Text>
+                <Button label="Complete profile" variant="secondary" size="sm" onPress={() => router.push('/profile/scholarship-info')} />
+              </View>
+            )
           ) : (
-            <View style={{ gap: spacing.sm }}>
-              <Text style={textStyle('bodySm', t.textPrimary)} maxFontSizeMultiplier={1.6}>
-                Add your GWA, family income and province to see if you qualify.
+            <View>
+              <FactRow label="Open to" value={listing.region || 'Students nationwide'} />
+              {listing.provider ? <FactRow label="Given by" value={listing.provider} /> : null}
+            </View>
+          )}
+          {isScholarship && obligation > 0 ? (
+            <View
+              style={{
+                flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
+                padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
+              }}
+            >
+              <View {...decorative} style={{ marginTop: 2 }}>
+                <Lineicons icon={HourglassOutlined} size={16} color={t.warningStrong} />
+              </View>
+              <Text role="footnote" color={t.warningStrong} style={{ flex: 1 }}>
+                Requires {obligation} year{obligation === 1 ? '' : 's'} of service after graduation.
               </Text>
-              <Button label="Complete profile" variant="secondary" size="sm" onPress={() => router.push('/profile/scholarship-info')} />
             </View>
-          )
-        ) : (
-          <View>
-            <FactRow label="Open to" value={listing.region || 'Students nationwide'} />
-            {listing.provider ? <FactRow label="Given by" value={listing.provider} /> : null}
-          </View>
-        )}
-        {isScholarship && obligation > 0 ? (
-          <View
-            style={{
-              flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start',
-              padding: spacing.md, borderRadius: radius.field, backgroundColor: t.warningSurface,
-            }}
-          >
-            <View {...decorative} style={{ marginTop: 2 }}>
-              <Lineicons icon={HourglassOutlined} size={16} color={t.warningStrong} />
-            </View>
-            <Text style={[textStyle('bodySm', t.warningStrong), { flex: 1 }]} maxFontSizeMultiplier={1.6}>
-              Requires {obligation} year{obligation === 1 ? '' : 's'} of service after graduation.
-            </Text>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
-    </Card>
+    </View>
   )
 
   // 3. One primary action, then the save action (Focus).
   const primary = isExam ? (
     practice === 'mock' ? (
       <Button
+        testID="primary-action"
         label="Take a mock exam"
         size="lg"
         fullWidth={!twoUp}
@@ -414,9 +419,9 @@ export default function ListingDetailScreen() {
       />
     ) : practice === 'review' ? (
       // The exam's chooser: topic review now, with "Mock exam coming soon".
-      <Button label="Practise for this exam" size="lg" fullWidth={!twoUp} onPress={() => router.push(`/practice/start/${slug}`)} />
+      <Button testID="primary-action" label="Practise for this exam" size="lg" fullWidth={!twoUp} onPress={() => router.push(`/practice/start/${slug}`)} />
     ) : practice === 'none' ? (
-      <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Practice coming soon</Text>
+      <Text role="footnote" color={t.textSecondary}>Practice coming soon</Text>
     ) : null
   ) : listing.externalUrl ? (
     <PrimaryLinkButton label="Apply on the official site" url={listing.externalUrl} />
@@ -458,7 +463,7 @@ export default function ListingDetailScreen() {
     <View>
       {listing.description ? (
         <Disclosure title="About" preview={preview(listing.description)}>
-          <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{listing.description}</Text>
+          <Text role="body" color={t.textSecondary}>{listing.description}</Text>
         </Disclosure>
       ) : null}
 
@@ -493,7 +498,7 @@ export default function ListingDetailScreen() {
           <View style={{ gap: spacing.sm }}>
             {listing.grantAmount ? <FactRow label="Grant amount" value={`₱${listing.grantAmount}`} /> : null}
             {listing.coverage ? (
-              <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={1.6}>{listing.coverage}</Text>
+              <Text role="body" color={t.textSecondary}>{listing.coverage}</Text>
             ) : null}
             {otherBenefits.map(b => <Bullet key={b} color={t.textSecondary}>{b}</Bullet>)}
           </View>
@@ -503,13 +508,10 @@ export default function ListingDetailScreen() {
       <View style={{ borderTopWidth: 1, borderTopColor: t.divider, paddingTop: spacing.lg, gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
           <Badge label={listing.isVerified ? 'Verified' : 'Unverified'} tone={listing.isVerified ? 'success' : 'neutral'} />
-          <Text style={[textStyle('caption', t.textSecondary), { flex: 1, minWidth: 180 }]} maxFontSizeMultiplier={1.6}>
+          <Text role="caption" color={t.textSecondary} style={{ flex: 1, minWidth: 180 }}>
             Details change every year. Check the official site before you apply.
           </Text>
         </View>
-        {listing.externalUrl && isExam ? (
-          <LinkRow label="Official website" url={listing.externalUrl} />
-        ) : null}
       </View>
     </View>
   )
@@ -526,7 +528,7 @@ export default function ListingDetailScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <DetailTopBar fallbackHref={fallbackHref} />
-      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: spacing.sm }}>
+      <ScreenScroll tabBarInset={false} contentContainerStyle={{ paddingTop: 0 }}>
         {twoUp ? (
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xxl }}>
             <View style={{ flex: 3, minWidth: 0 }}>{main}</View>

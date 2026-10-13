@@ -45,6 +45,7 @@ function makeSchool(overrides?: Partial<{
   id: string; name: string; acronym: string | null; region: string | null
   province: string | null; type: string | null; dataConfidence: string | null; freeTuition: boolean | null
   isSuc: boolean; isLuc: boolean; entranceExamAcronym: string | null; requirements: string | null
+  city: string | null; coursesOffered: string | null
 }>) {
   return {
     id: 'up-diliman',
@@ -59,9 +60,13 @@ function makeSchool(overrides?: Partial<{
     isLuc: false,
     entranceExamAcronym: 'UPCAT',
     requirements: '["Form 138", "Barangay Certificate"]',
+    city: null,
+    coursesOffered: null,
     ...overrides,
   }
 }
+
+const openFilters = () => fireEvent.press(screen.getByRole('button', { name: /^Filters/ }))
 
 // ---------------------------------------------------------------------------
 // Tests — Directory Screen
@@ -87,9 +92,28 @@ describe('SchoolsDirectoryScreen', () => {
     })
   })
 
-  it('renders the Free tuition filter as a checkbox chip', async () => {
+  // iOS redesign P4: the filters moved off the page onto a sheet behind the
+  // top bar's Filters button.
+  it('the Filters button opens the filter sheet, with Free tuition as a switch row', async () => {
     render(<SchoolsDirectoryScreen />)
-    expect(await screen.findByRole('checkbox', { name: 'Free tuition' })).toBeTruthy()
+    await screen.findByText('No schools match')
+    expect(screen.queryByRole('switch', { name: 'Free tuition' })).toBeNull()
+    openFilters()
+    expect(await screen.findByRole('switch', { name: 'Free tuition' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'All types' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'All regions' })).toBeTruthy()
+  })
+
+  it('the Filters button says how many filters are on, and the list says which', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([makeSchool()]))
+    render(<SchoolsDirectoryScreen />)
+    await screen.findByText('University of the Philippines Diliman')
+    openFilters()
+    fireEvent.press(screen.getByRole('switch', { name: 'Free tuition' }))
+    expect(await screen.findByRole('button', { name: 'Filters, 1 on' })).toBeTruthy()
+    expect(screen.getByTestId('school-filter-summary')).toBeTruthy()
+    expect(screen.getByText('Filtered: Free tuition')).toBeTruthy()
   })
 
   it('shows empty state when no schools', async () => {
@@ -143,13 +167,25 @@ describe('SchoolsDirectoryScreen', () => {
 
   // ── Task 5: richer card + working filters ─────────────────────────────────
 
-  it('shows the entrance-exam acronym chip on the card', async () => {
+  it('a row says where the school is, its entrance exam and its course count, from the data only', async () => {
     const { useDb } = require('../../hooks/useDb')
-    useDb.mockReturnValue(mockDb([makeSchool({ entranceExamAcronym: 'UPCAT' })]))
+    useDb.mockReturnValue(mockDb([
+      makeSchool({ entranceExamAcronym: 'UPCAT', city: 'Quezon City', coursesOffered: '["BS Physics, BS Biology"]' }),
+      makeSchool({ id: 'bare', name: 'Bare College', acronym: null, region: null, entranceExamAcronym: null, city: null, coursesOffered: null }),
+    ]))
     render(<SchoolsDirectoryScreen />)
-    await waitFor(() => {
-      expect(screen.getByText('UPCAT')).toBeTruthy()
-    })
+    expect(await screen.findByText('Quezon City · UPCAT · 2 courses')).toBeTruthy()
+    // Nothing on record: no subtitle at all, never a guess.
+    expect(screen.getByRole('button', { name: /^Bare College, Free tuition/ })).toBeTruthy()
+  })
+
+  it('a row leads with a logo tile of the school initials', async () => {
+    const { useDb } = require('../../hooks/useDb')
+    useDb.mockReturnValue(mockDb([makeSchool()]))
+    render(<SchoolsDirectoryScreen />)
+    await screen.findByText('University of the Philippines Diliman')
+    expect(screen.getByTestId('logo-tile', { includeHiddenElements: true })).toBeTruthy()
+    expect(screen.getByText('UPD', { includeHiddenElements: true })).toBeTruthy()
   })
 
   it('shows the "Requirements listed" indicator only when requirements is a non-empty array', async () => {
@@ -176,7 +212,8 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => expect(screen.getByText('SUC No Profile')).toBeTruthy())
-    fireEvent.press(screen.getByRole('checkbox', { name: 'Free tuition' }))
+    openFilters()
+    fireEvent.press(screen.getByRole('switch', { name: 'Free tuition' }))
     await waitFor(() => {
       expect(screen.getByText('SUC No Profile')).toBeTruthy()
       expect(screen.queryByText('Private School')).toBeNull()
@@ -191,6 +228,7 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await waitFor(() => expect(screen.getByText('School A')).toBeTruthy())
+    openFilters()
     // Both raw strings normalize to the same "SUC" bucket — only one chip, not two.
     expect(screen.getAllByText('SUC')).toHaveLength(1)
   })
@@ -243,8 +281,9 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await screen.findByText('Private U')
-    fireEvent.press(screen.getByRole('checkbox', { name: 'Free tuition' }))
-    fireEvent.press(await screen.findByRole('button', { name: 'Clear filters' }))
+    openFilters()
+    fireEvent.press(screen.getByRole('switch', { name: 'Free tuition' }))
+    fireEvent.press(screen.getAllByRole('button', { name: 'Clear filters' })[0]!)
     expect(await screen.findByText('Private U')).toBeTruthy()
   })
 
@@ -256,6 +295,7 @@ describe('SchoolsDirectoryScreen', () => {
     ]))
     render(<SchoolsDirectoryScreen />)
     await screen.findByText('Private U')
+    openFilters()
     const checked = (name: string) => aria(screen.getByRole('radio', { name }), 'aria-checked')
     expect(checked('All types')).toBe(true)
 
@@ -304,7 +344,7 @@ describe('SchoolsDirectoryScreen', () => {
     const { useDb } = require('../../hooks/useDb')
     useDb.mockReturnValue(mockDb([makeSchool()]))
     render(<SchoolsDirectoryScreen />)
-    fireEvent.press(await screen.findByRole('button', { name: /^University of the Philippines Diliman, UPD/ }))
+    fireEvent.press(await screen.findByRole('button', { name: /^University of the Philippines Diliman, NCR · UPCAT/ }))
     expect(router.push).toHaveBeenCalledWith('/schools/up-diliman')
   })
 })

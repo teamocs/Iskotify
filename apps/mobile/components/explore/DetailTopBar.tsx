@@ -1,11 +1,13 @@
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { router, type Href } from 'expo-router'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing } from '../../theme/tokens'
 import { useBreakpoint, pagePadding, contentMaxWidth } from '../../hooks/useBreakpoint'
-import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { decorative, focusRing } from '../ui/a11y'
+import { PressableScale } from '../ui/Pressable'
+import { Text } from '../ui/Text'
 import { WebTopSpacer } from '../ui/WebTopSpacer'
 
 interface Props {
@@ -65,32 +67,30 @@ export function DetailTopBar({ fallbackHref, title, actions, bare = false }: Pro
           minHeight: 56,
         }}
       >
-        <Pressable
+        <PressableScale
           onPress={() => goBackOr(fallbackHref)}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={(state) => {
-            const { pressed, hovered, focused } = state as WebPressableState
-            return [
-              {
-                width: 44, height: 44, borderRadius: radius.pill,
-                alignItems: 'center', justifyContent: 'center',
-                backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
-              },
-              focusRing(t.focusRing, focused),
-            ]
-          }}
+          style={({ pressed, hovered, focused }) => [
+            {
+              width: 44, height: 44, borderRadius: radius.capsule,
+              alignItems: 'center', justifyContent: 'center',
+              backgroundColor: pressed || hovered ? t.surface2 : 'transparent',
+            },
+            focusRing(t.focusRing, focused),
+          ]}
         >
           <View {...decorative}>
             <Lineicons icon={ChevronLeftOutlined} size={22} color={t.textPrimary} />
           </View>
-        </Pressable>
+        </PressableScale>
         {title ? (
           <Text
+            role="headline"
+            chrome
             accessibilityRole="header"
             numberOfLines={1}
-            maxFontSizeMultiplier={1.4}
-            style={[textStyle('headline', t.textPrimary), { flex: 1, minWidth: 0 }]}
+            style={{ flex: 1, minWidth: 0 }}
           >
             {title}
           </Text>

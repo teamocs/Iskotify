@@ -3,6 +3,7 @@ import { Linking } from 'react-native'
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import ListingDetailScreen from '../[slug]'
 import { aria } from '../../../test-utils/aria'
+import { countPrimaryActions } from '../../../test-utils/primaryActions'
 
 jest.mock('@lineiconshq/react-native-lineicons', () => ({ Lineicons: () => null }))
 
@@ -170,19 +171,54 @@ describe('ListingDetailScreen — exam', () => {
     expect(router.replace).toHaveBeenCalledWith('/explore?section=universities')
   })
 
-  it('leads with the date: a tabular countdown and the exam date', async () => {
+  it('leads with the date: a calm relative time ("In 30 days") and the exact exam date', async () => {
     render(<ListingDetailScreen />)
     expect(await screen.findByTestId('listing-key-facts')).toBeTruthy()
-    expect(screen.getByText('30')).toBeTruthy()
-    expect(screen.getByText('days until the exam')).toBeTruthy()
+    expect(screen.getByText('In 30 days')).toBeTruthy()
+    expect(screen.getByLabelText('Exam in 30 days')).toBeTruthy()
     expect(screen.getByText('Exam date')).toBeTruthy()
+    // The exact date, in words, under its label.
+    expect(screen.getByText(/^[A-Z][a-z]{2}, [A-Z][a-z]+ \d{1,2}, \d{4}$/)).toBeTruthy()
+  })
+
+  it('uses the large title with an eyebrow naming the kind of listing', async () => {
+    render(<ListingDetailScreen />)
+    expect(await screen.findByRole('header', { name: 'UPCAT 2025' })).toBeTruthy()
+    expect(screen.getByTestId('large-title-eyebrow').props.children).toBe('Entrance exam')
+  })
+
+  it('names no official source when the listing has no external_url', async () => {
+    render(<ListingDetailScreen />)
+    await screen.findByTestId('listing-key-facts')
+    expect(screen.queryByTestId('listing-source')).toBeNull()
+    expect(screen.queryByText(/Official site:/)).toBeNull()
+  })
+
+  it('names the official source host beside the dates when the listing has an external_url', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({ ...BASE_EXAM_LISTING, externalUrl: 'https://www.up.edu.ph/upcat' }))
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never)
+    render(<ListingDetailScreen />)
+    const source = await screen.findByRole('link', { name: 'Official site: up.edu.ph, opens in your browser' })
+    expect(screen.getByText('Official site: up.edu.ph')).toBeTruthy()
+    fireEvent.press(source)
+    expect(open).toHaveBeenCalledWith('https://www.up.edu.ph/upcat')
+    open.mockRestore()
+  })
+
+  it('has exactly one primary action (the mock exam) when the mock can run', async () => {
+    const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listRunnableBlueprints.mockResolvedValue([{ slug: 'upcat' }])
+    render(<ListingDetailScreen />)
+    await screen.findByRole('button', { name: 'Take a mock exam' })
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
   })
 
   it('puts the key facts BEFORE the actions, and actions before About', async () => {
     render(<ListingDetailScreen />)
     await screen.findByTestId('listing-key-facts')
     const order = textOrder()
-    const facts = order.indexOf('days until the exam')
+    const facts = order.indexOf('In 30 days')
     const save = order.indexOf('Add to Focus')
     const about = order.indexOf('"About"')
     expect(facts).toBeGreaterThan(-1)
@@ -301,12 +337,21 @@ describe('ListingDetailScreen — scholarship', () => {
     useLocalSearchParams.mockReturnValue({ slug: 'dost-sei' })
   })
 
-  it('leads with the deadline countdown', async () => {
+  it('leads with the deadline: "In 60 days" and the exact deadline', async () => {
     render(<ListingDetailScreen />)
     await screen.findByTestId('listing-key-facts')
-    expect(screen.getByText('60')).toBeTruthy()
-    expect(screen.getByText('days left to apply')).toBeTruthy()
+    expect(screen.getByText('In 60 days')).toBeTruthy()
+    expect(screen.getByLabelText('Deadline in 60 days')).toBeTruthy()
     expect(screen.getByText('Application deadline')).toBeTruthy()
+  })
+
+  it('with an official URL: exactly one primary action, and the source host beside the deadline', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb({ ...BASE_SCHOLARSHIP_LISTING, externalUrl: 'https://sei.dost.gov.ph/apply' }))
+    render(<ListingDetailScreen />)
+    await screen.findByRole('link', { name: 'Apply on the official site' })
+    expect(countPrimaryActions(screen.UNSAFE_root)).toBe(1)
+    expect(screen.getByText('Official site: sei.dost.gov.ph')).toBeTruthy()
   })
 
   it('with no profile, eligibility invites the student to complete it', async () => {

@@ -1,22 +1,14 @@
-import { useState, useMemo, useCallback } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  Pressable,
-  TextInput,
-  ScrollView,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  StyleSheet,
-} from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useState, useCallback, useEffect } from 'react'
+import { View, Platform, Alert } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, radius, type Theme, type Typography, weight } from '../theme/tokens'
+import { spacing, weight } from '../theme/tokens'
 import { submitDateContribution, type ContribField } from '../services/dateContributions'
+import { Sheet, SHEET_EXIT_MS } from './ui/Sheet'
+import { Button } from './ui/Button'
+import { FilterChip } from './ui/Chip'
+import { TextField } from './ui/TextField'
+import { Text } from './ui/Text'
 
 interface Props {
   visible: boolean
@@ -33,27 +25,30 @@ const FIELDS: { key: ContribField; label: string }[] = [
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * Themed modal that lets a signed-in user suggest a correction to a listing's
- * key dates. Rendered on both native and web (RN Modal overlays on web). Inner
- * form only mounts while visible so state resets cleanly on every open.
+ * Lets a signed-in student suggest a correction to a listing's key dates, on
+ * the P3 in-place Sheet (it has text inputs, so not a routed formSheet). Each
+ * opening gets a fresh form; the submit button is the sheet's one primary
+ * action.
  */
 export function SuggestDateCorrectionModal({ visible, onClose, listingSlug }: Props) {
+  // A fresh form per opening (its state resets), kept mounted through the
+  // sheet's exit so the panel does not empty while it slides away.
+  const [opening, setOpening] = useState(0)
+  useEffect(() => { if (visible) setOpening(n => n + 1) }, [visible])
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="fullScreen"
-    >
-      {visible ? (
-        <SuggestDateCorrectionInner listingSlug={listingSlug} onClose={onClose} />
-      ) : null}
-    </Modal>
+    <Sheet visible={visible} title="Suggest a correction" onClose={onClose}>
+      {opening > 0 ? <SuggestDateCorrectionForm key={opening} listingSlug={listingSlug} onClose={onClose} /> : null}
+    </Sheet>
   )
 }
 
-function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: string; onClose: () => void }) {
-  const { theme: t, typo } = useTheme()
+/** Runs after the sheet has finished leaving (an alert or a push over a closing Modal can be dropped on iOS). */
+function afterSheetCloses(fn: () => void) {
+  setTimeout(fn, SHEET_EXIT_MS + 50)
+}
+
+function SuggestDateCorrectionForm({ listingSlug, onClose }: { listingSlug: string; onClose: () => void }) {
+  const { theme: t } = useTheme()
   const [field, setField] = useState<ContribField>('exam_date')
   const [date, setDate] = useState('')
   const [note, setNote] = useState('')
@@ -62,13 +57,11 @@ function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: str
   const [error, setError] = useState<string | null>(null)
   const [needsAuth, setNeedsAuth] = useState(false)
 
-  const s = useMemo(() => makeStyles(t, typo), [t, typo])
-
   // Inline format hint: only once the user has typed something malformed.
   const formatInvalid = date.length > 0 && !DATE_RE.test(date)
   const canSubmit = DATE_RE.test(date) && !submitting
 
-  const handleSubmit = useCallback(async () => {
+  const submit = useCallback(async () => {
     if (!DATE_RE.test(date)) {
       setError('Enter a valid date')
       return
@@ -87,10 +80,10 @@ function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: str
 
     if (res.ok) {
       onClose()
-      Alert.alert(
-        'Thanks — salamat!',
+      afterSheetCloses(() => Alert.alert(
+        'Thanks',
         "Your suggested date was sent for review. We'll double-check it against the official source.",
-      )
+      ))
       return
     }
     if (res.needsAuth) {
@@ -103,255 +96,75 @@ function SuggestDateCorrectionInner({ listingSlug, onClose }: { listingSlug: str
 
   const goSignIn = useCallback(() => {
     onClose()
-    router.push('/auth/sign-in')
+    afterSheetCloses(() => router.push('/auth/sign-in'))
   }, [onClose])
 
   return (
-    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <View style={{ gap: spacing.md }}>
+      <Text role="subheadline" color={t.textSecondary}>
+        Spotted a wrong date? Suggest the correct one and we&apos;ll review it against the official source.
+      </Text>
+
+      <Text role="footnote" style={weight('600')}>Which date?</Text>
+      <View
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Which date to correct"
       >
-        {/* Header */}
-        <View style={s.header}>
-          <Text style={s.headerTitle} numberOfLines={1} maxFontSizeMultiplier={1.3}>
-            Suggest a correction
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={8}
-            style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={s.closeTxt}>✕</Text>
-          </Pressable>
-        </View>
+        {FIELDS.map(f => (
+          <FilterChip key={f.key} label={f.label} selected={field === f.key} onPress={() => setField(f.key)} />
+        ))}
+      </View>
 
-        <ScrollView
-          contentContainerStyle={s.body}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator
-        >
-          <Text style={s.intro} maxFontSizeMultiplier={1.4}>
-            Spotted a wrong date? Suggest the correct one and we&apos;ll review it against the
-            official source.
-          </Text>
+      <TextField
+        label="Correct date"
+        value={date}
+        onChangeText={(v) => { setDate(v); if (error) setError(null) }}
+        placeholder="YYYY-MM-DD"
+        hint="Format: year-month-day, e.g. 2026-08-15"
+        error={formatInvalid ? 'Use the format YYYY-MM-DD (e.g. 2026-08-15).' : undefined}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+        maxLength={10}
+        accessibilityLabel="Correct date, format year month day"
+      />
 
-          {/* Field selector */}
-          <Text style={s.label} maxFontSizeMultiplier={1.4}>Which date?</Text>
-          <View
-            style={s.fieldRow}
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Which date to correct"
-          >
-            {FIELDS.map(f => {
-              const selected = field === f.key
-              return (
-                <Pressable
-                  key={f.key}
-                  onPress={() => setField(f.key)}
-                  accessibilityRole="radio"
-                  aria-checked={selected}
-                  accessibilityLabel={f.label}
-                  style={({ pressed }) => [
-                    s.fieldChip,
-                    selected && s.fieldChipOn,
-                    pressed && { opacity: 0.8 },
-                  ]}
-                >
-                  <Text
-                    style={[s.fieldChipTxt, selected && s.fieldChipTxtOn]}
-                    maxFontSizeMultiplier={1.4}
-                  >
-                    {f.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
+      <TextField
+        label="Note (optional)"
+        value={note}
+        onChangeText={setNote}
+        placeholder="Where did you see this date?"
+        multiline
+        accessibilityLabel="Note about this correction"
+      />
 
-          {/* Date entry */}
-          <Text style={s.label} maxFontSizeMultiplier={1.4}>Correct date</Text>
-          <TextInput
-            style={[s.input, formatInvalid && s.inputError]}
-            value={date}
-            onChangeText={(v) => { setDate(v); if (error) setError(null) }}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={t.textTertiary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
-            maxLength={10}
-            maxFontSizeMultiplier={1.4}
-            accessibilityLabel="Correct date, format year month day"
-          />
-          {formatInvalid ? (
-            <Text style={s.hint} maxFontSizeMultiplier={1.4}>Use the format YYYY-MM-DD (e.g. 2026-08-15).</Text>
-          ) : null}
+      <TextField
+        label="Source link (optional)"
+        value={sourceUrl}
+        onChangeText={setSourceUrl}
+        placeholder="https://…"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        accessibilityLabel="Source link for this correction"
+      />
 
-          {/* Optional note */}
-          <Text style={s.label} maxFontSizeMultiplier={1.4}>Note (optional)</Text>
-          <TextInput
-            style={[s.input, s.multiline]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Where did you see this date?"
-            placeholderTextColor={t.textTertiary}
-            multiline
-            maxFontSizeMultiplier={1.4}
-            accessibilityLabel="Note about this correction"
-          />
+      {error ? (
+        <Text role="footnote" color={t.danger} accessibilityLiveRegion="polite" aria-live="polite">{error}</Text>
+      ) : null}
 
-          {/* Optional source URL */}
-          <Text style={s.label} maxFontSizeMultiplier={1.4}>Source link (optional)</Text>
-          <TextInput
-            style={s.input}
-            value={sourceUrl}
-            onChangeText={setSourceUrl}
-            placeholder="https://…"
-            placeholderTextColor={t.textTertiary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            maxFontSizeMultiplier={1.4}
-            accessibilityLabel="Source link for this correction"
-          />
-
-          {error ? (
-            <Text style={s.errorTxt} maxFontSizeMultiplier={1.4}>{error}</Text>
-          ) : null}
-
-          {needsAuth ? (
-            <Pressable
-              onPress={goSignIn}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in"
-              style={({ pressed }) => [s.signInBtn, pressed && { opacity: 0.82 }]}
-            >
-              <Text style={s.signInTxt} maxFontSizeMultiplier={1.4}>Sign in</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => void handleSubmit()}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              aria-disabled={!canSubmit}
-              accessibilityLabel="Submit suggestion"
-              style={({ pressed }) => [
-                s.submitBtn,
-                pressed && { opacity: 0.82 },
-                !canSubmit && { opacity: 0.5 },
-              ]}
-            >
-              {submitting ? (
-                <ActivityIndicator color={t.textInverse} />
-              ) : (
-                <Text style={s.submitTxt} maxFontSizeMultiplier={1.4}>Submit suggestion</Text>
-              )}
-            </Pressable>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      {needsAuth ? (
+        <Button label="Sign in" fullWidth onPress={goSignIn} />
+      ) : (
+        <Button
+          label="Submit suggestion"
+          fullWidth
+          disabled={!canSubmit}
+          loading={submitting}
+          onPress={() => void submit()}
+        />
+      )}
+    </View>
   )
-}
-
-function makeStyles(t: Theme, typo: Typography) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: t.bg },
-    flex: { flex: 1 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: t.divider,
-      gap: spacing.sm,
-    },
-    headerTitle: {
-      flex: 1,
-      fontSize: typo.md,
-      ...weight('700'),
-      color: t.textPrimary,
-    },
-    closeBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 },
-    closeTxt: { fontSize: 22, color: t.textSecondary },
-    body: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.xxxl, gap: spacing.sm },
-    intro: {
-      fontSize: typo.sm,
-      color: t.textSecondary,
-      ...weight('400'),
-      lineHeight: typo.sm * 1.6,
-      marginBottom: spacing.sm,
-    },
-    label: {
-      fontSize: typo.sm,
-      color: t.textPrimary,
-      ...weight('600'),
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    fieldRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    fieldChip: {
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.pill,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      minHeight: 44,
-      justifyContent: 'center',
-    },
-    fieldChipOn: { backgroundColor: t.accentSurface, borderColor: t.accent },
-    fieldChipTxt: { fontSize: typo.xs, color: t.textSecondary, ...weight('400') },
-    fieldChipTxtOn: { color: t.accentText, ...weight('600') },
-    input: {
-      backgroundColor: t.surfaceSubtle,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      fontSize: typo.sm,
-      color: t.textPrimary,
-      ...weight('400'),
-      minHeight: 48,
-    },
-    inputError: { borderColor: t.danger },
-    multiline: { minHeight: 88, textAlignVertical: 'top' },
-    hint: { fontSize: typo.xs, color: t.textTertiary, ...weight('400'), marginTop: spacing.xs },
-    errorTxt: {
-      fontSize: typo.xs,
-      color: t.danger,
-      ...weight('400'),
-      marginTop: spacing.md,
-      lineHeight: typo.xs * 1.5,
-    },
-    submitBtn: {
-      backgroundColor: t.accentStrong,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      paddingVertical: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: 48,
-      marginTop: spacing.lg,
-    },
-    submitTxt: { ...weight('700'), fontSize: typo.base, color: t.textInverse },
-    signInBtn: {
-      backgroundColor: t.accentStrong,
-      borderRadius: radius.md,
-      borderCurve: 'continuous',
-      paddingVertical: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: 48,
-      marginTop: spacing.md,
-    },
-    signInTxt: { ...weight('700'), fontSize: typo.base, color: t.textInverse },
-  })
 }

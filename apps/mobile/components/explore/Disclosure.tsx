@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronDownOutlined, ChevronUpOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
-import { decorative, focusRing, type WebPressableState } from '../ui/a11y'
+import { spacing } from '../../theme/tokens'
+import { PressableScale } from '../ui/Pressable'
+import { Text } from '../ui/Text'
+import { decorative, focusRing } from '../ui/a11y'
 
 interface Props {
   title: string
@@ -15,10 +17,10 @@ interface Props {
 }
 
 /**
- * Collapsible section for secondary detail (About, Benefits…). A 44pt header
- * button that announces its expanded state; the chevron is drawn and silent.
- * No height animation: the body appears instantly, which also respects
- * reduced motion without a branch.
+ * Collapsible section for secondary detail (About, Benefits…). A header
+ * button (at least 56pt) that announces its expanded state; the chevron is
+ * drawn and silent. No height animation: the body appears instantly, which
+ * also respects Reduce Motion without a branch.
  */
 export function Disclosure({ title, preview, defaultExpanded = false, children }: Props) {
   const { theme: t } = useTheme()
@@ -26,39 +28,33 @@ export function Disclosure({ title, preview, defaultExpanded = false, children }
 
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: t.divider }}>
-      <Pressable
+      <PressableScale
         onPress={() => setExpanded(v => !v)}
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityHint={preview && !expanded ? preview : undefined}
         aria-expanded={expanded}
-        style={(state) => {
-          const { pressed, focused } = state as WebPressableState
-          return [
-            {
-              minHeight: 56,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.md,
-              paddingVertical: spacing.md,
-              opacity: pressed ? 0.7 : 1,
-            },
-            focusRing(t.focusRing, focused),
-          ]
-        }}
+        style={({ focused }) => [
+          {
+            minHeight: 56,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+            paddingVertical: spacing.md,
+          },
+          focusRing(t.focusRing, focused),
+        ]}
       >
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={1.6}>{title}</Text>
+          <Text role="headline">{title}</Text>
           {!expanded && preview ? (
-            <Text style={textStyle('bodySm', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.6}>
-              {preview}
-            </Text>
+            <Text role="footnote" color={t.textSecondary} numberOfLines={1}>{preview}</Text>
           ) : null}
         </View>
         <View {...decorative}>
           <Lineicons icon={expanded ? ChevronUpOutlined : ChevronDownOutlined} size={18} color={t.textSecondary} />
         </View>
-      </Pressable>
+      </PressableScale>
       {expanded ? <View style={{ paddingBottom: spacing.lg }}>{children}</View> : null}
     </View>
   )

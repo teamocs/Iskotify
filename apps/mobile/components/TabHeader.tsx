@@ -6,6 +6,8 @@ import { LargeTitleHeader } from './navigation/LargeTitleHeader'
 interface Props {
   title: string
   subtitle?: string
+  /** A short line above the title (see LargeTitleHeader). */
+  eyebrow?: string
   /** Extra header actions (e.g. the web refresh button), placed before the avatar. */
   actions?: React.ReactNode
   /** Pass when the screen already knows the name, to skip the lookup. */
@@ -17,7 +19,7 @@ interface Props {
  * that collapses into the inline title band once scrolled (see
  * LargeTitleHeader), an optional subtitle, and the avatar that opens Profile.
  */
-export function TabHeader({ title, subtitle, actions, avatarName }: Props) {
+export function TabHeader({ title, subtitle, eyebrow, actions, avatarName }: Props) {
   const looked = useProfileName(avatarName === undefined)
   const name = avatarName ?? looked
 
@@ -25,6 +27,7 @@ export function TabHeader({ title, subtitle, actions, avatarName }: Props) {
     <LargeTitleHeader
       title={title}
       subtitle={subtitle}
+      eyebrow={eyebrow}
       actions={(
         <>
           {actions}

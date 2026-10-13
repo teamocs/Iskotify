@@ -72,12 +72,12 @@ describe('ResultsTrackerScreen', () => {
     expect(mockPush).toHaveBeenCalledWith('/explore?section=universities')
   })
 
-  it('a pending result shows a waiting status and the days to go', async () => {
+  it('a pending result shows a waiting status and a calm relative time ("In 12 days")', async () => {
     mockRows = [{ slug: 'upcat', addedAt: 1, title: 'UPCAT', resultsDate: Date.now() + 12 * DAY, externalUrl: null }]
     render(<ResultsTrackerScreen />)
     expect(await screen.findByText('Waiting for results')).toBeTruthy()
-    expect(screen.getByText('12')).toBeTruthy()
-    expect(screen.getByText('days to go')).toBeTruthy()
+    expect(screen.getByText('In 12 days')).toBeTruthy()
+    expect(screen.queryByText('days to go')).toBeNull()
   })
 
   it('a due result links to the official site', async () => {
