@@ -70,9 +70,13 @@ function StepButton({ label, direction, disabled, onPress }: { label: string; di
 
 /**
  * The stepper an InsetRow carries as its trailing control: Earlier · value ·
- * Later. For assistive tech it is one adjustable control named by the setting
- * (swipe up/down on iOS, volume keys on TalkBack); the buttons, for touch and
- * the keyboard, name the setting too.
+ * Later, the buttons named by the setting.
+ *
+ * - Native: one adjustable control named by the setting (swipe up/down on
+ *   iOS, volume keys on TalkBack); the buttons stay for touch.
+ * - Web: a labelled group, never a slider. A slider's children are
+ *   presentational in ARIA, so its buttons could be unreachable; in a group
+ *   both buttons stay their own keyboard tab stops and the value stays text.
  */
 function Stepper({ label, value, disabled, onEarlier, onLater }: {
   label: string; value: string; disabled: boolean; onEarlier: () => void; onLater: () => void
@@ -83,17 +87,21 @@ function Stepper({ label, value, disabled, onEarlier, onLater }: {
     if (e.nativeEvent.actionName === 'decrement') onEarlier()
   }
   const name = label.charAt(0).toLowerCase() + label.slice(1)
+  const container = Platform.OS === 'web'
+    // `accessible` is not a DOM prop on react-native-web, so the group itself
+    // is not a tab stop; it only names its children.
+    ? { accessible: true, role: 'group' as const, 'aria-label': label }
+    : {
+        accessible: true,
+        accessibilityRole: 'adjustable' as const,
+        accessibilityLabel: label,
+        accessibilityValue: { text: value },
+        accessibilityActions: [{ name: 'increment' }, { name: 'decrement' }],
+        onAccessibilityAction: onAction,
+        'aria-disabled': disabled,
+      }
   return (
-    <View
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      accessibilityValue={{ text: value }}
-      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-      onAccessibilityAction={onAction}
-      aria-disabled={disabled}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
-    >
+    <View {...container} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
       <StepButton label={`Earlier ${name}`} direction="back" disabled={disabled} onPress={onEarlier} />
       <Text
         role="headline"

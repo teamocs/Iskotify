@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import SettingsScreen from '../settings'
 import { aria } from '../../test-utils/aria'
 
@@ -126,6 +126,28 @@ describe('SettingsScreen', () => {
     fireEvent(adj, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
     expect(await screen.findByText('10:00 AM')).toBeTruthy()
     fireEvent(screen.getByRole('adjustable', { name: 'Daily reminder time' }), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } })
+    expect(await screen.findByText('9:00 AM')).toBeTruthy()
+  })
+
+  // Web: a slider's children are presentational in ARIA, so on web the stepper
+  // is a labelled group whose two buttons are their own keyboard tab stops.
+  it('web: the reminder time is a labelled group (not a slider) with two focusable named buttons', async () => {
+    Platform.OS = 'web'
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    expect(screen.queryByRole('adjustable')).toBeNull()
+    const group = screen.getByRole('group', { name: 'Daily reminder time' })
+    expect(group.props.role).toBe('group')
+    const earlier = within(group).getByRole('button', { name: 'Earlier daily reminder time' })
+    const later = within(group).getByRole('button', { name: 'Later daily reminder time' })
+    for (const b of [earlier, later]) {
+      expect(b.props.focusable).not.toBe(false)
+      expect(b.props.tabIndex).not.toBe(-1)
+    }
+    expect(within(group).getByText('9:00 AM')).toBeTruthy()
+    fireEvent.press(later)
+    expect(await screen.findByText('10:00 AM')).toBeTruthy()
+    fireEvent.press(within(screen.getByRole('group', { name: 'Daily reminder time' })).getByRole('button', { name: 'Earlier daily reminder time' }))
     expect(await screen.findByText('9:00 AM')).toBeTruthy()
   })
 
