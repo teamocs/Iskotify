@@ -14,6 +14,8 @@ export interface GlassIconButtonProps {
   accessibilityLabel: string
   onPress: () => void
   accessibilityHint?: string
+  /** A state the button reflects, read after its name (e.g. reminders "On"). */
+  accessibilityValue?: { text: string }
   /** Android API 31+: the BlurTargetView behind the button (see <Glass>). */
   blurTarget?: RefObject<View | null>
   testID?: string
@@ -25,7 +27,7 @@ const { visual: VISUAL, hit: HIT } = layout.headerButton
  * A round glass header button: a 40pt glass disc inside a 44pt target, the
  * icon in textPrimary (it can float over maroon content; see glass tokens).
  */
-export function GlassIconButton({ icon, accessibilityLabel, onPress, accessibilityHint, blurTarget, testID }: GlassIconButtonProps) {
+export function GlassIconButton({ icon, accessibilityLabel, onPress, accessibilityHint, accessibilityValue, blurTarget, testID }: GlassIconButtonProps) {
   const { theme: t } = useTheme()
   return (
     <Pressable
@@ -34,6 +36,7 @@ export function GlassIconButton({ icon, accessibilityLabel, onPress, accessibili
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
+      accessibilityValue={accessibilityValue}
       style={(state) => {
         const { pressed, focused } = state as WebPressableState
         return [

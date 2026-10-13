@@ -12,7 +12,7 @@ import { RemindersSheet } from '../../components/home/RemindersSheet'
 import { NextStepCard } from '../../components/home/NextStepCard'
 import { TodaysPlanFold } from '../../components/home/TodaysPlanFold'
 import { FocusExamsFold } from '../../components/home/FocusExamsFold'
-import { ExamCountdowns, type CountdownTile } from '../../components/home/ExamCountdowns'
+import { ExamCountdowns } from '../../components/home/ExamCountdowns'
 import { NewsAndDates } from '../../components/home/NewsAndDates'
 import { ScholarshipProfilePrompt } from '../../components/home/ScholarshipProfilePrompt'
 import { spacing } from '../../theme/tokens'
@@ -27,9 +27,7 @@ import { useStudyPlan } from '../../hooks/useStudyPlan'
 import { useDb } from '../../hooks/useDb'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { pickCountdowns, pickNextStep } from '../../utils/todayNextStep'
-import { examPace } from '../../utils/examPace'
 import { isSchoolFocusSlug } from '../../utils/focusSlug'
-import { localDayIndex } from '../../utils/localDay'
 import { reviewContentSlugs } from '../../services/practiceSignals'
 import { invalidate } from '../../services/queryCache'
 import { syncOnLaunch } from '../../services/sync'
@@ -51,7 +49,7 @@ type LoadStatus = 'loading' | 'ready' | 'error'
  */
 export default function TodayScreen() {
   const stats = useHomeStats()
-  const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays, practiceDayIndices } = stats
+  const { fullName, focusedListings, noteReminders, listingAccuracy, streakDays } = stats
   const { topicRows } = usePracticeData()
   const { addListing } = useFocusListings()
   const catalog = useHomeCatalog()
@@ -172,12 +170,11 @@ export default function TodayScreen() {
     topicNameById,
   })
 
-  const countdownTiles = useMemo<CountdownTile[]>(() => {
-    const now = Date.now()
-    const today = localDayIndex(now)
-    const exams = focusedListings.filter(l => l.type === 'exam' && !isSchoolFocusSlug(l.slug))
-    return pickCountdowns(exams, now).map(c => ({ ...c, pace: examPace(c.days, practiceDayIndices ?? [], today) }))
-  }, [focusedListings, practiceDayIndices])
+  // Every dated focused exam gets a tile (none hidden behind a cap).
+  const countdownTiles = useMemo(
+    () => pickCountdowns(focusedListings.filter(l => l.type === 'exam' && !isSchoolFocusSlug(l.slug)), Date.now()),
+    [focusedListings],
+  )
 
   const isDesktopWeb = Platform.OS === 'web' && bp === 'expanded'
 
@@ -213,7 +210,7 @@ export default function TodayScreen() {
               <TodaysPlanFold
                 items={studyPlan.items}
                 topicNameById={topicNameById}
-                onMarkComplete={(id) => void studyPlan.markComplete(id)}
+                onMarkComplete={studyPlan.markComplete}
               />
             )}
           </View>

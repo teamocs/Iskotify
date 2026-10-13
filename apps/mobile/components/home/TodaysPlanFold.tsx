@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
 import { router } from 'expo-router'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
@@ -21,8 +21,12 @@ interface Props {
   items: PlanItemLike[]
   /** topicId → display name, from the already-loaded topic catalog. */
   topicNameById: Map<string, string>
-  onMarkComplete: (id: number) => void
+  /** Resolves false when the check-off could not be saved (the item reverts). */
+  onMarkComplete: (id: number) => Promise<boolean | void> | void
 }
+
+/** Said (and shown) when a check-off could not be saved. */
+export const SAVE_FAILED = "Couldn't save. Try again."
 
 /**
  * Today's plan as an inset group with an "N of M" count. Each row has a 24pt
@@ -32,8 +36,19 @@ interface Props {
  * all-caught-up states.
  */
 export function TodaysPlanFold({ items, topicNameById, onMarkComplete }: Props) {
+  const { theme: t } = useTheme()
+  const [failed, setFailed] = useState(false)
   if (items.length === 0) return null
   const done = items.filter(i => i.completedAt != null).length
+
+  const markComplete = async (id: number) => {
+    setFailed(false)
+    const saved = await onMarkComplete(id)
+    if (saved === false) {
+      setFailed(true)
+      AccessibilityInfo.announceForAccessibility(SAVE_FAILED)
+    }
+  }
 
   return (
     <View testID="todays-plan">
@@ -45,10 +60,21 @@ export function TodaysPlanFold({ items, topicNameById, onMarkComplete }: Props) 
             item={item}
             last={i === items.length - 1}
             topicNameById={topicNameById}
-            onMarkComplete={onMarkComplete}
+            onMarkComplete={(id) => { void markComplete(id) }}
           />
         ))}
       </InsetGroup>
+      {failed ? (
+        <Text
+          role="footnote"
+          color={t.textSecondary}
+          accessibilityLiveRegion="polite"
+          aria-live="polite"
+          style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}
+        >
+          {SAVE_FAILED}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -70,7 +96,10 @@ function PlanRow({ item, last, topicNameById, onMarkComplete }: {
         accessibilityRole="checkbox"
         accessibilityLabel={copy.title}
         accessibilityHint={done ? undefined : 'Marks this as done'}
+        // Done is final (there is no un-complete): checked, and not interactive.
         aria-checked={done}
+        aria-disabled={done}
+        disabled={done}
         style={(state) => {
           const { focused } = state as WebPressableState
           return [
@@ -132,11 +161,13 @@ export function CheckCircle({ done }: { done: boolean }) {
   const { reduceMotion } = usePlatformCapabilities()
   const fill = useSharedValue(done ? 1 : 0)
   const scale = useSharedValue(1)
-  const mounted = useRef(false)
+  const prevDone = useRef(done)
 
   useEffect(() => {
-    // The first render shows the state as it is; only a change animates.
-    if (!mounted.current) { mounted.current = true; return }
+    // Only a change of `done` animates: not the first render, and not a
+    // Reduce Motion toggle on an unchanged item (that would replay the pop).
+    if (prevDone.current === done) return
+    prevDone.current = done
     if (reduceMotion || !done) {
       scale.value = 1
       fill.value = withTiming(done ? 1 : 0, { duration: motion.duration.reduced })

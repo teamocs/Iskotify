@@ -5,16 +5,21 @@ import { radius, spacing } from '../../theme/tokens'
 import { PressableScale } from '../ui/Pressable'
 import { Text } from '../ui/Text'
 import { focusRing } from '../ui/a11y'
-import { examPaceLabel, type ExamPace } from '../../utils/examPace'
 import type { Countdown } from '../../utils/todayNextStep'
 
-export interface CountdownTile extends Countdown {
-  /** Null: nothing to measure yet, so no status line. */
-  pace: ExamPace | null
+interface Props {
+  tiles: Countdown[]
 }
 
-interface Props {
-  tiles: CountdownTile[]
+// Hoisted: building an Intl formatter is slow. Exam dates are date-only
+// values at UTC midnight, so their calendar parts are read in UTC.
+const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' })
+const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' })
+
+/** The tile's date line, day before month: "Sat, 9 Aug". */
+export function examTileDate(dateMs: number): string {
+  const d = new Date(dateMs)
+  return `${WEEKDAY.format(d)}, ${d.getUTCDate()} ${MONTH.format(d)}`
 }
 
 function dayUnit(days: number): string {
@@ -22,14 +27,15 @@ function dayUnit(days: number): string {
 }
 
 /**
- * The exam countdowns: a 2-column grid of white 18pt tiles, one per focused
- * exam with a date. Each shows the exam, a big tabular day count and a calm
- * pace line: successStrong "On pace" or accent "N sessions to catch up".
- * Never "behind", never warning red. A tile opens its listing.
+ * The exam countdowns: a 2-column grid of white 18pt tiles, one for EVERY
+ * focused exam with an upcoming date (the grid wraps; none is hidden). Each
+ * shows the exam, a big tabular day count and a calm footnote date. No pace
+ * line: there is no real pace data yet (owner, 2026-10-13). A tile opens its
+ * listing.
  */
 export function ExamCountdowns({ tiles }: Props) {
   if (tiles.length === 0) return null
-  const rows: CountdownTile[][] = []
+  const rows: Countdown[][] = []
   for (let i = 0; i < tiles.length; i += 2) rows.push(tiles.slice(i, i + 2))
 
   return (
@@ -44,18 +50,18 @@ export function ExamCountdowns({ tiles }: Props) {
   )
 }
 
-function Tile({ tile }: { tile: CountdownTile }) {
+function Tile({ tile }: { tile: Countdown }) {
   const { theme: t } = useTheme()
   const today = tile.days === 0
-  const status = tile.pace ? examPaceLabel(tile.pace) : null
   const when = today ? 'today' : `${tile.days} ${dayUnit(tile.days)} to go`
+  const date = examTileDate(tile.dateMs)
 
   return (
     <PressableScale
       testID={`countdown-${tile.slug}`}
       onPress={() => router.push(`/listings/${tile.slug}` as never)}
       accessibilityRole="button"
-      accessibilityLabel={`${tile.title}, ${when}${status ? `, ${status.toLowerCase()}` : ''}`}
+      accessibilityLabel={`${tile.title}, ${when}, ${date}`}
       style={({ pressed, focused }) => [
         {
           flex: 1, minWidth: 0, minHeight: 120,
@@ -71,11 +77,7 @@ function Tile({ tile }: { tile: CountdownTile }) {
         <Text role="numericLg" maxFontSizeMultiplier={1.4}>{today ? 'Today' : String(tile.days)}</Text>
         {today ? null : <Text role="subheadline" color={t.textSecondary}>{dayUnit(tile.days)}</Text>}
       </View>
-      {status ? (
-        <Text role="footnote" color={tile.pace?.kind === 'on_pace' ? t.successStrong : t.accentText} style={{ fontWeight: '600' }}>
-          {status}
-        </Text>
-      ) : null}
+      <Text role="footnote" color={t.textSecondary}>{date}</Text>
     </PressableScale>
   )
 }

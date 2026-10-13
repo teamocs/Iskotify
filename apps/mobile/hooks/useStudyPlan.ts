@@ -25,7 +25,9 @@ export interface UseStudyPlanResult {
   allDone: boolean
   /** Rough size of tomorrow's plan, shown in the all-caught-up state. 0 when unknown/none. */
   tomorrowItemCount: number
-  markComplete: (id: number) => Promise<void>
+  /** Optimistic check-off. Resolves true once saved; false when the write
+   *  failed and the item was reverted from the DB (the UI announces it). */
+  markComplete: (id: number) => Promise<boolean>
   refresh: () => Promise<void>
 }
 
@@ -124,14 +126,16 @@ export function useStudyPlan(): UseStudyPlanResult {
     InteractionManager.runAfterInteractions(() => { void load() })
   }, [load]))
 
-  const markComplete = useCallback(async (id: number) => {
+  const markComplete = useCallback(async (id: number): Promise<boolean> => {
     const completedAt = Date.now()
     setItems(prev => prev.map(it => (it.id === id && it.completedAt == null) ? { ...it, completedAt } : it))
     try {
       await markPlanItemDone(db, id, completedAt)
+      return true
     } catch (e) {
       console.error('[useStudyPlan] markComplete error:', e)
       await load() // resync with the DB on failure rather than trust the optimistic update
+      return false
     }
   }, [db, load])
 

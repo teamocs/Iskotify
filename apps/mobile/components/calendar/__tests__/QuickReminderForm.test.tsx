@@ -26,6 +26,16 @@ describe('QuickReminderForm', () => {
     baseProps.onCancel.mockReset()
   })
 
+  it('names every input for screen readers and does not grab focus on open', () => {
+    const { getByLabelText, getByText } = render(<QuickReminderForm {...baseProps} />)
+    const title = getByLabelText('Title')
+    // Focus would race the Sheet's title announcement.
+    expect(title.props.autoFocus).toBeFalsy()
+    expect(getByLabelText('Content (optional)')).toBeTruthy()
+    fireEvent.press(getByText('+ Add checklist'))
+    expect(getByLabelText('Item 1')).toBeTruthy()
+  })
+
   it('disables the Save button when title is empty', () => {
     const { getByText } = render(<QuickReminderForm {...baseProps} />)
     const save = getByText('Save')

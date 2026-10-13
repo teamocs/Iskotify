@@ -141,14 +141,15 @@ export function pickCountdown(
 }
 
 /**
- * Every upcoming focused exam with a date, soonest first (at most `limit`):
+ * Every upcoming focused exam with a date, soonest first (all of them unless
+ * a `limit` is given):
  * the countdown tiles. Same calendar-day rules as pickCountdown.
  */
 export function pickCountdowns(
   listings: CountdownListingLike[],
   now: number,
   offsetMs: number = localDayOffsetMs(),
-  limit = 4,
+  limit = Infinity,
 ): Countdown[] {
   const out: Countdown[] = []
   for (const l of listings) {

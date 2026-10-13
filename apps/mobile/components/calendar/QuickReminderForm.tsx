@@ -97,7 +97,8 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
         placeholderTextColor={t.textTertiary}
         value={title}
         onChangeText={setTitle}
-        autoFocus
+        accessibilityLabel="Title"
+        // No autoFocus: it would race the Sheet moving screen-reader focus to its title.
       />
 
       {mode === 'text' ? (
@@ -109,6 +110,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
             placeholderTextColor={t.textTertiary}
             value={textContent}
             onChangeText={setTextContent}
+            accessibilityLabel="Content (optional)"
             multiline
           />
           <Pressable onPress={() => setMode('checklist')} style={styles.addChecklistBtn}>
@@ -126,6 +128,7 @@ export function QuickReminderForm({ dayStartMs, onSave, onOpenEditor, onCancel }
                 placeholderTextColor={t.textTertiary}
                 value={item.text}
                 onChangeText={txt => updateItem(item.id, txt)}
+                accessibilityLabel={`Item ${i + 1}`}
               />
             </View>
           ))}

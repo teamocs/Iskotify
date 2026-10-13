@@ -127,6 +127,15 @@ describe('TodayHeader', () => {
     expect(screen.getByRole('header', { name: /, Student$/ })).toBeTruthy()
   })
 
+  it('exposes the reminders on/off state as the button value, not only a hint', () => {
+    const { rerender } = renderHeader({ remindersOn: false })
+    expect(screen.getByRole('button', { name: 'Study reminders' }).props.accessibilityValue).toEqual({ text: 'Off' })
+    rerender(
+      <TodayHeader fullName={LONG_NAME} streakDays={0} remindersOn onOpenReminders={jest.fn()} />,
+    )
+    expect(screen.getByRole('button', { name: 'Study reminders' }).props.accessibilityValue).toEqual({ text: 'On' })
+  })
+
   it('keeps 44pt targets on the controls', () => {
     renderHeader()
     for (const name of ['Study reminders', 'Profile']) {

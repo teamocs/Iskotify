@@ -64,6 +64,18 @@ describe('CheckCircle', () => {
     expect(mockCalls).toContainEqual({ fn: 'spring', to: 1, config: motion.spring.bouncy })
   })
 
+  it('does not replay the pop when Reduce Motion toggles on a done item', () => {
+    const { rerender } = render(<CheckCircle done={false} />)
+    rerender(<CheckCircle done />)
+    mockCalls.length = 0
+    mockCaps.reduceMotion = true
+    rerender(<CheckCircle done />)
+    mockCaps.reduceMotion = false
+    rerender(<CheckCircle done />)
+    expect(mockCalls).toEqual([])
+    expect(fill().opacity).toBe(1)
+  })
+
   it('crossfades instead under Reduce Motion', () => {
     mockCaps.reduceMotion = true
     const { rerender } = render(<CheckCircle done={false} />)

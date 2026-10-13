@@ -85,7 +85,8 @@ export function TodayHeader({ fullName, streakDays, remindersOn, onOpenReminders
             icon={remindersOn ? Bell1Solid : Bell1Outlined}
             onPress={onOpenReminders}
             accessibilityLabel="Study reminders"
-            accessibilityHint={remindersOn ? 'Reminders are on' : 'Reminders are off'}
+            accessibilityHint="Opens the study reminder settings"
+            accessibilityValue={{ text: remindersOn ? 'On' : 'Off' }}
           />
           <Pressable
             onPress={() => router.push('/profile')}
