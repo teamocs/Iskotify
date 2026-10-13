@@ -180,6 +180,12 @@ describe('AnalyticsDashboard (Progress)', () => {
       expect(screen.queryByRole('button', { name: /Science, 0%/ })).toBeNull()
     })
 
+    it('says a tap practises the subject (not every subject has a diagnostic)', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getByText('Lowest first. Tap one to practise it.')).toBeTruthy()
+      expect(screen.queryByText(/take its diagnostic/)).toBeNull()
+    })
+
     it('opens the diagnostic for a UPCAT subtest subject', () => {
       const { router } = require('expo-router')
       render(<AnalyticsDashboard />)
@@ -325,6 +331,13 @@ describe('AnalyticsDashboard (Progress)', () => {
     it('show only real numbers: streak, sessions, active days and accuracy', () => {
       render(<AnalyticsDashboard />)
       expect(screen.getAllByTestId('habit-tile')).toHaveLength(4)
+    })
+
+    it('says the streak covers all exams when an exam filter is on (the other tiles are filtered)', () => {
+      render(<AnalyticsDashboard />)
+      expect(screen.getByLabelText('Day streak: 4 days')).toBeTruthy()
+      fireEvent.press(screen.getByRole('radio', { name: 'UPCAT 2026' }))
+      expect(screen.getByLabelText('Day streak (all exams): 4 days')).toBeTruthy()
     })
   })
 

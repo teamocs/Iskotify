@@ -8,10 +8,12 @@ import { TabHeader } from '../../components/TabHeader'
  * the large title rides in the dashboard's scroll view and collapses into the
  * Screen's title band, like Today's. The legacy /analytics route redirects here.
  */
+// No "This week" eyebrow: the first figures (exam readiness, streak,
+// sessions) are all-time, and only the Study time card is the last 7 days.
 export default function ProgressScreen() {
   return (
     <Screen scroll={false} width="wide">
-      <AnalyticsDashboard header={<TabHeader title="Progress" eyebrow="This week" />} />
+      <AnalyticsDashboard header={<TabHeader title="Progress" />} />
     </Screen>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { View, Alert, BackHandler, Platform } from 'react-native'
+import { View, Alert, BackHandler, Platform, type AccessibilityActionEvent } from 'react-native'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import { eq } from 'drizzle-orm'
@@ -68,11 +68,33 @@ function StepButton({ label, direction, disabled, onPress }: { label: string; di
   )
 }
 
-/** The stepper an InsetRow carries as its trailing control: Earlier · value · Later. */
-function Stepper({ value, disabled, onEarlier, onLater }: { value: string; disabled: boolean; onEarlier: () => void; onLater: () => void }) {
+/**
+ * The stepper an InsetRow carries as its trailing control: Earlier · value ·
+ * Later. For assistive tech it is one adjustable control named by the setting
+ * (swipe up/down on iOS, volume keys on TalkBack); the buttons, for touch and
+ * the keyboard, name the setting too.
+ */
+function Stepper({ label, value, disabled, onEarlier, onLater }: {
+  label: string; value: string; disabled: boolean; onEarlier: () => void; onLater: () => void
+}) {
+  const onAction = (e: AccessibilityActionEvent) => {
+    if (disabled) return
+    if (e.nativeEvent.actionName === 'increment') onLater()
+    if (e.nativeEvent.actionName === 'decrement') onEarlier()
+  }
+  const name = label.charAt(0).toLowerCase() + label.slice(1)
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-      <StepButton label="Earlier" direction="back" disabled={disabled} onPress={onEarlier} />
+    <View
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={label}
+      accessibilityValue={{ text: value }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={onAction}
+      aria-disabled={disabled}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+    >
+      <StepButton label={`Earlier ${name}`} direction="back" disabled={disabled} onPress={onEarlier} />
       <Text
         role="headline"
         accessibilityLiveRegion="polite"
@@ -81,7 +103,7 @@ function Stepper({ value, disabled, onEarlier, onLater }: { value: string; disab
       >
         {value}
       </Text>
-      <StepButton label="Later" direction="forward" disabled={disabled} onPress={onLater} />
+      <StepButton label={`Later ${name}`} direction="forward" disabled={disabled} onPress={onLater} />
     </View>
   )
 }
@@ -187,6 +209,7 @@ export default function SettingsScreen() {
           disabled={!notifEnabled}
           trailing={(
             <Stepper
+              label="Daily reminder time"
               value={formatHour(dailyReminderHour)}
               disabled={!notifEnabled}
               onEarlier={() => void setReminderHour((dailyReminderHour + 23) % 24, focusedListings)}

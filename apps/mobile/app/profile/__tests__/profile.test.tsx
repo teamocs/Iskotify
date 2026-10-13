@@ -225,6 +225,18 @@ describe('ProfileScreen — empty DB', () => {
     expect(screen.getByRole('header', { name: 'Exams in focus' })).toBeTruthy()
   })
 
+  // Review: the section headings sit directly under the h1 "Profile", so they
+  // are h2 (no skipped level).
+  it('section headings are level 2 under the level-1 Profile title', async () => {
+    const { aria } = require('../../../test-utils/aria')
+    render(<ProfileScreen />)
+    await screen.findByText('Student')
+    expect(aria(screen.getByRole('header', { name: 'Profile' }), 'aria-level')).toBe(1)
+    for (const name of ['Exams in focus', 'Study', 'Account', 'Help']) {
+      expect(aria(screen.getByRole('header', { name }), 'aria-level')).toBe(2)
+    }
+  })
+
   // P4: inset grouped sections in the iOS order.
   it('groups its rows under Study, Account and Help, then a destructive Sign out', async () => {
     render(<ProfileScreen />)

@@ -117,11 +117,31 @@ describe('SettingsScreen', () => {
     expect(screen.getByRole('switch', { name: 'Weekly summary' })).toBeTruthy()
   })
 
+  it('the reminder time is one adjustable control named by the setting, with increment and decrement', async () => {
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    const adj = screen.getByRole('adjustable', { name: 'Daily reminder time' })
+    expect(adj.props.accessibilityValue).toEqual({ text: '9:00 AM' })
+    expect(adj.props.accessibilityActions.map((a: { name: string }) => a.name)).toEqual(['increment', 'decrement'])
+    fireEvent(adj, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } })
+    expect(await screen.findByText('10:00 AM')).toBeTruthy()
+    fireEvent(screen.getByRole('adjustable', { name: 'Daily reminder time' }), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } })
+    expect(await screen.findByText('9:00 AM')).toBeTruthy()
+  })
+
+  it('the stepper buttons name the setting they change', async () => {
+    render(<SettingsScreen />)
+    await screen.findByText('9:00 AM')
+    expect(screen.getByRole('button', { name: 'Earlier daily reminder time' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Later daily reminder time' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Later' })).toBeNull()
+  })
+
   it('stepping the reminder time forward shows the next hour; steppers are 44pt', async () => {
     const { StyleSheet } = require('react-native')
     render(<SettingsScreen />)
     await screen.findByText('9:00 AM')
-    const later = screen.getByRole('button', { name: 'Later' })
+    const later = screen.getByRole('button', { name: 'Later daily reminder time' })
     const st = StyleSheet.flatten(typeof later.props.style === 'function' ? later.props.style({ pressed: false }) : later.props.style)
     expect(st.width).toBeGreaterThanOrEqual(44)
     expect(st.height).toBeGreaterThanOrEqual(44)
@@ -161,7 +181,7 @@ describe('SettingsScreen', () => {
     for (const name of ['Push notifications', 'Weekly summary', 'Share anonymous usage analytics']) {
       expect(screen.getByRole('switch', { name })).toBeTruthy()
     }
-    for (const name of ['Earlier', 'Later', 'Grades and family details', 'Report a bug', 'Leave feedback',
+    for (const name of ['Earlier daily reminder time', 'Later daily reminder time', 'Grades and family details', 'Report a bug', 'Leave feedback',
       'About Iskotify', 'Help and support', 'Privacy policy', 'Terms of service', 'Exit app']) {
       expect(screen.getByRole('button', { name })).toBeTruthy()
     }

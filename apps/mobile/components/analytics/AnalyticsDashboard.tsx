@@ -189,7 +189,8 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
               <StatNumber
                 value={analytics.streak}
                 unit={analytics.streak === 1 ? 'day' : 'days'}
-                label="Day streak"
+                // The streak is global; with an exam filter on, the other tiles are not.
+                label={activeSlug === 'overall' ? 'Day streak' : 'Day streak (all exams)'}
               />
             </View>
             <View testID="habit-tile" style={tile}><StatNumber value={analytics.sessionCount} label="Sessions" /></View>
@@ -210,7 +211,7 @@ export function AnalyticsDashboard({ initialFilter = 'overall', scrollable = tru
                 <WeeklyChart data={analytics.weeklyData} />
               </ProgressSection>
 
-              <ProgressSection title="Readiness by subject" summary="Lowest first. Tap one to take its diagnostic.">
+              <ProgressSection title="Readiness by subject" summary="Lowest first. Tap one to practise it.">
                 <SubjectReadinessList {...readiness} />
               </ProgressSection>
 

@@ -572,7 +572,7 @@ export default function ProfileScreen() {
       {/* Study: the exams in focus (drag or step to reorder), then reminders. */}
       <View style={{ gap: spacing.xl }}>
         <View style={{ gap: spacing.sm - 2 }}>
-          <Text role="footnote" color={t.textSecondary} {...heading(3)} style={{ paddingHorizontal: spacing.lg }}>
+          <Text role="footnote" color={t.textSecondary} {...heading(2)} style={{ paddingHorizontal: spacing.lg }}>
             Exams in focus
           </Text>
           <View style={{ backgroundColor: t.surface, borderRadius: radius.group, borderCurve: 'continuous', overflow: 'hidden' }}>
@@ -606,7 +606,7 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        <InsetGroup header="Study" inset={false} footer="A daily practice nudge, plus exam countdowns.">
+        <InsetGroup header="Study" headerLevel={2} inset={false} footer="A daily practice nudge, plus exam countdowns.">
           <InsetRow
             title="Study reminders"
             subtitle={remindersOn ? `Daily at ${formatHour(dailyReminderHour)}` : 'Off'}
@@ -637,7 +637,7 @@ export default function ProfileScreen() {
 
   const secondary = (
     <View style={{ gap: spacing.xl }}>
-      <InsetGroup header="Account" inset={false}>
+      <InsetGroup header="Account" headerLevel={2} inset={false}>
         {premium.enabled ? (
           <InsetRow
             title="Iskotify Full Access"
@@ -665,7 +665,7 @@ export default function ProfileScreen() {
         />
       </InsetGroup>
 
-      <InsetGroup header="Help" inset={false}>
+      <InsetGroup header="Help" headerLevel={2} inset={false}>
         <InsetRow title="Leave feedback" icon={Comment1Outlined} iconTone="neutral" onPress={() => router.push('/settings/leave-feedback')} />
         <InsetRow title="Report a bug" icon={Bug1Outlined} iconTone="neutral" onPress={() => router.push('/settings/report-bug')} />
         <InsetRow title="Privacy policy" icon={Shield2Outlined} iconTone="neutral" onPress={() => router.push('/privacy')} />
