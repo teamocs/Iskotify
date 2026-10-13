@@ -218,6 +218,10 @@ describe('radius tokens', () => {
     }).toEqual({ chip: 8, field: 12, button: 14, group: 18, card: 22, sheet: 28, capsule: 999 })
   })
 
+  it('has the 36pt sign-in hero sheet', () => {
+    expect(radius.heroSheet).toBe(36)
+  })
+
   it('keeps the old keys as aliases with their old values', () => {
     expect({ md: radius.md, lg: radius.lg, xl: radius.xl, xxl: radius.xxl, pill: radius.pill })
       .toEqual({ md: 14, lg: 18, xl: 22, xxl: 28, pill: 999 })
@@ -283,6 +287,18 @@ describe('glass tokens', () => {
       expect(ratio(hex(lightTheme.accentText), onGlass(grounds.accent))).toBeLessThan(4.5)
       expect(glass.labelOverAccent).toBe('textPrimary')
     })
+  })
+})
+
+describe('sign-in sheet fill', () => {
+  // Over the darkest thing behind it on the hero (the accentPressed shape).
+  const ground = hex(lightTheme.accentPressed)
+  const fill = rgba(glass.sheetFill, ground)
+  it.each(['textPrimary', 'textSecondary', 'accentText'] as const)('%s clears 4.5:1 on the sheet over the maroon hero', (k) => {
+    expect(ratio(hex(lightTheme[k]), fill)).toBeGreaterThanOrEqual(4.5)
+  })
+  it('is the page ground, translucent', () => {
+    expect(glass.sheetFill).toBe('rgba(253,244,244,0.80)')
   })
 })
 

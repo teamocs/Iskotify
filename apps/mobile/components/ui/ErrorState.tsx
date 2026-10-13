@@ -2,7 +2,7 @@ import { View, Text } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { CloudRefreshClockwiseOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { Button } from './Button'
 import { decorative } from './a11y'
 
@@ -32,15 +32,15 @@ export function ErrorState({
       <View
         {...decorative}
         style={{
-          width: 56, height: 56, borderRadius: radius.pill, backgroundColor: t.warningSurface,
+          width: 56, height: 56, borderRadius: radius.capsule, backgroundColor: t.warningSurface,
           alignItems: 'center', justifyContent: 'center',
         }}
       >
         <Lineicons icon={CloudRefreshClockwiseOutlined} size={26} color={t.warningStrong} />
       </View>
       {/* The title carries the alert role so the retry button stays separately focusable. */}
-      <Text accessibilityRole="alert" style={[textStyle('titleSm', t.textPrimary), { textAlign: 'center' }]}>{title}</Text>
-      <Text style={[textStyle('bodySm', t.textSecondary), { textAlign: 'center', maxWidth: 420 }]}>{body}</Text>
+      <Text accessibilityRole="alert" style={[iosTextStyle('headline', t.textPrimary), { textAlign: 'center' }]}>{title}</Text>
+      <Text style={[iosTextStyle('footnote', t.textSecondary), { textAlign: 'center', maxWidth: 420 }]}>{body}</Text>
       <Button label={retryLabel} variant="secondary" onPress={onRetry} />
     </View>
   )

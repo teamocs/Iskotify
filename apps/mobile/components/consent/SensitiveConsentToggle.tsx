@@ -1,6 +1,6 @@
 import { View, Text, Switch } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { Card } from '../ui/Card'
 
 export const SENSITIVE_TOGGLE_LABEL =
@@ -21,8 +21,8 @@ export function SensitiveConsentToggle({ value, onChange }: Props) {
   return (
     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
       <View style={{ flex: 1, gap: spacing.xs }}>
-        <Text style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>{SENSITIVE_TOGGLE_LABEL}</Text>
-        <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>{SENSITIVE_TOGGLE_LABEL}</Text>
+        <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
           Scholarships and the admission estimate need these details, and you can withdraw your consent anytime in your profile.
         </Text>
       </View>

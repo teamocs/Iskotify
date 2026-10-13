@@ -8,7 +8,7 @@ import { useDb } from '../../hooks/useDb'
 import { invalidate } from '../../services/queryCache'
 import { userSettings, focusListings } from '../../db/schema'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { eq } from 'drizzle-orm'
 import { hasOnboardingFocus } from '../../utils/onboardingStatus'
 import { webEntryTarget } from '../../utils/webEntryTarget'
@@ -227,7 +227,7 @@ export default function AuthCallback() {
       <Text
         accessibilityLiveRegion="polite"
         aria-live="polite"
-        style={textStyle('body', t.textSecondary)}
+        style={iosTextStyle('body', t.textSecondary)}
       >
         Signing you in…
       </Text>

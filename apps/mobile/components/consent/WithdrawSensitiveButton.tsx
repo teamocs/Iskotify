@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text } from 'react-native'
 import { Button } from '../ui/Button'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { useDb } from '../../hooks/useDb'
 import { confirmAction } from '../../utils/confirmAction'
 import { withdrawSensitiveConsent } from '../../services/consent'
@@ -48,7 +48,7 @@ export function WithdrawSensitiveButton({ onWithdrawn }: { onWithdrawn?: () => v
         )}
       />
       {error ? (
-        <Text accessibilityRole="alert" style={textStyle('bodySm', t.dangerStrong)} maxFontSizeMultiplier={2}>{error}</Text>
+        <Text accessibilityRole="alert" style={iosTextStyle('footnote', t.dangerStrong)} maxFontSizeMultiplier={2}>{error}</Text>
       ) : null}
     </View>
   )

@@ -33,7 +33,7 @@ import { SectionRail } from '../../components/explore/SectionRail'
 import { SearchField } from '../../components/explore/SearchField'
 import { ExploreGrid, GridSkeleton, StaticGrid } from '../../components/explore/ExploreGrid'
 import {
-  dateUrgency, matchBadge, fmtShortDate, truncateQuery, officialSourceLine, pickFeatured, SECTION_SEARCH,
+  dateUrgency, matchBadge, practiceScoreBadge, fmtShortDate, truncateQuery, officialSourceLine, pickFeatured, SECTION_SEARCH,
   type BadgeSpec,
 } from '../../components/explore/exploreModel'
 import { parseExploreSection, type ExploreSection } from '../../components/navigation/destinations'
@@ -43,7 +43,6 @@ import { syncOnLaunch } from '../../services/sync'
 import { listRunnableBlueprints } from '../../services/examBlueprints'
 import { getSettings } from '../../services/settings'
 import { getListingMockBest, getListingAccuracy } from '../../services/homeAggregates'
-import { readinessTone, type ReadinessTone } from '../../utils/readinessTone'
 import { matchScholarship, scholarshipProfileIncomplete, studentProfileFromSettings } from '../../utils/scholarshipMatch'
 import type { MatchInput, MatchStatus, StudentProfile } from '../../utils/scholarshipMatch'
 import { searchListings, rankForDisplay, type SearchableListing } from '../../utils/listingSearch'
@@ -124,11 +123,6 @@ const TAB_LABELS: { key: Tab; label: string }[] = [
   { key: 'news', label: 'News & dates' },
 ]
 
-// Same readiness % → tone mapping as the Today exam tiles, so a number reads
-// the same colour everywhere in the app.
-const TONE_TO_BADGE: Record<ReadinessTone, BadgeSpec['tone']> = {
-  strong: 'success', fair: 'warning', weak: 'danger', none: 'neutral',
-}
 
 const listingKey = (l: ListingRow) => l.id
 const courseKey = (c: CourseTabOption) => c.courseTab
@@ -189,7 +183,7 @@ export default function ExploreScreen() {
   const [userRegion, setUserRegion] = useState<string>('')
   const [userClusters, setUserClusters] = useState<Set<string>>(new Set())
   const [blueprintSlugs, setBlueprintSlugs] = useState<Set<string>>(new Set())
-  // Per-exam readiness (getListingMockBest, falling back to listingAccuracy) —
+  // Per-exam practice score (getListingMockBest, falling back to listingAccuracy) —
   // the same source the Today exam tiles use, so the numbers agree.
   const [listingMockBest, setListingMockBest] = useState<Map<string, number>>(new Map())
   const [listingAccuracy, setListingAccuracy] = useState<Record<string, number>>({})
@@ -447,15 +441,13 @@ export default function ExploreScreen() {
 
   const renderExam = useCallback((l: ListingRow) => {
     const hasMock = blueprintSlugs.has(l.slug)
-    const readiness = hasMock ? (listingMockBest.get(l.slug) ?? listingAccuracy[l.slug] ?? null) : null
+    const score = hasMock ? practiceScoreBadge(listingMockBest.get(l.slug), listingAccuracy[l.slug]) : null
     const p = focusPriority.get(l.slug) ?? null
     const badges: BadgeSpec[] = []
     const soon = dateUrgency(l.examDate)
     if (soon) badges.push(soon)
     if (hasMock) {
-      badges.push(readiness != null
-        ? { label: `Readiness ${readiness}%`, tone: TONE_TO_BADGE[readinessTone(readiness)] }
-        : { label: 'Mock exam available', tone: 'neutral' })
+      badges.push(score ?? { label: 'Mock exam available', tone: 'neutral' })
     } else if (p !== null) {
       badges.push({ label: `Focus #${p}`, tone: 'accent' })
     }

@@ -171,7 +171,7 @@ describe('Tour: leaving (after onboarding)', () => {
     for (let i = 0; i < 5; i++) next()
     expect(screen.getByText('6 of 6')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Skip the tour' })).toBeNull()
-    fireEvent.press(screen.getByRole('button', { name: /Tara, simulan na natin/ }))
+    fireEvent.press(screen.getByRole('button', { name: /Let's get started/ }))
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)')
   })
 })
@@ -273,5 +273,26 @@ describe('Tour: arrow keys on web', () => {
     await renderTour()
     act(() => { docListeners.forEach(l => l(key('ArrowRight'))) })
     expect(screen.getByText('1 of 6')).toBeTruthy()
+  })
+})
+
+describe('Tour: iOS language (P4)', () => {
+  it('every card has exactly one primary action (Next, then the send-off)', async () => {
+    const { countPrimaryActions } = require('../../test-utils/primaryActions')
+    render(<TourScreen />)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    for (let i = 0; i < 6; i++) {
+      const { UNSAFE_root } = screen
+      expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+      if (i < 5) next()
+    }
+    expect(screen.getByRole('button', { name: "Let's get started" })).toBeTruthy()
+  })
+
+  it('speaks English: the last card is "Let\'s get started", no Taglish', async () => {
+    await renderTour()
+    for (let i = 0; i < 5; i++) next()
+    expect(screen.getByRole('header', { name: "Let's get started" })).toBeTruthy()
+    expect(screen.queryByText(/Tara|Kaya mo/)).toBeNull()
   })
 })

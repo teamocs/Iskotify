@@ -7,7 +7,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTim
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { motion, radius, spacing, textStyle } from '../../theme/tokens'
+import { motion, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint, type Breakpoint } from '../../hooks/useBreakpoint'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
@@ -196,7 +196,7 @@ export function Sheet({ visible, title, onClose, children, footer, closeLabel = 
                 paddingLeft: spacing.xl, paddingRight: spacing.sm, paddingTop: spacing.sm,
               }}
             >
-              <Text ref={titleRef} nativeID={titleId} accessibilityRole="header" style={[textStyle('headline', t.textPrimary), { flex: 1 }]}>
+              <Text ref={titleRef} nativeID={titleId} accessibilityRole="header" style={[iosTextStyle('title3', t.textPrimary), { flex: 1 }]}>
                 {title}
               </Text>
               <Pressable

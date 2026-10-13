@@ -327,6 +327,7 @@ Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack o
 | `group` | 18 | Inset grouped lists (`InsetGroup`) |
 | `card` | 22 | Cards |
 | `sheet` | 28 | Sheets and dialogs (in-place and routed) |
+| `heroSheet` | 36 | The sign-in sheet over the maroon hero (canvas "Sign in"), on `glass.sheetFill` (the ground at 80%, frosted on web) |
 | `capsule` | 999 | Pills, segmented control, filter chips, round buttons |
 
 `sm` (10) was split into `chip`/`field` and removed. The legacy `md`/`lg`/`xl`/`xxl`/`pill` keys remain as aliases (14/18/22/28/999) until the P4 screen migrations finish.
@@ -388,10 +389,10 @@ Example responsive screen:
 | `ListRow` | Compact list item with optional leading icon, two text lines, optional trailing. Now an `InsetRow` (same props). | Pressable with `accessibilityRole="button"` if interactive |
 | `SegmentedControl` | Capsule track with a sliding white thumb (spring.snappy; jumps under Reduce Motion), haptic tick on change. ≥ 44pt. | `radiogroup` / `radio` with `aria-checked` (no tab panel); roving tabindex, Left/Right, Home/End and Space on web |
 | `SearchField` | Search input: 12pt field radius, `inputBorder` edge, 44pt "Clear search" button, optional visible label. | Named by its label or `accessibilityLabel` |
-| `ListCard` | Broader list card, tappable. Used in lists and grids. | `accessibilityRole="button"`, `accessibilityLabel` |
 | `SectionHeader` | Section title with optional trailing action. | `role="heading"` via `<Text accessibilityRole="header">` |
 | `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 220ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
-| `EmptyState` / `ErrorState` / `LoadingState` | Feedback states when lists are empty, errors occur, or data is loading. | Clear messaging; `LoadingState` avoids announcing a loading spinner repeatedly |
+| `EmptyState` / `ErrorState` | Feedback states when lists are empty or errors occur (loading uses `Skeleton`). | Clear messaging |
+| `PageTransition` | A paged flow's page change (onboarding steps, tour cards): a short slide on spring.smooth with a fade; a 160ms crossfade under Reduce Motion. | Transform and opacity only |
 | `InfoBanner` | Top-of-screen alert/notification. | `role="alert"` if notifying of an error or state change |
 
 ### Navigation
@@ -457,6 +458,8 @@ One guard per redesigned area:
 - `apps/mobile/__tests__/noScareCopy.test.ts` — app-wide voice (brandbook §5–6): no "behind" as status text, no "only N … left" or "N days left" (outside an allowlisted neutral label), no emoji in `app/`, `components/`, `utils/`, `services/` (notifications) and `hooks/`
 - `apps/mobile/components/explore/__tests__/designLint.test.ts` — Explore, listings, schools, career
 - `apps/mobile/components/practice/__tests__/practiceAreaTokens.test.ts` — Practice, exam runner, results, notes, estimator
+- `apps/mobile/app/__tests__/m2RestDesignTokens.test.ts` — first run, auth, settings and info pages; since the iOS P4 remaining-screens PR also onboarding, sign-in, the guest diagnostic, consent, the tour, subject detail, the overlays and the primitives they use: no legacy type API or retired role names, no legacy radius keys, no raw `Modal` (the Sheet primitive aside) and no fixed `height:` on a text container
+- `apps/mobile/__tests__/iosLanguageComplete.test.ts` — repo-wide (app/, components/, hooks/): no `textStyle()` or retired role name, no `typo.`/`typography.`, no `fontSize:` literal, no `Modal` imported from react-native, and no readiness/accuracy/score badge whose tone follows its value, outside a printed allowlist (the files of still-open PRs, the landing page, and the full-screen passage reader, figure zoom and estimator disclaimer). The allowlist only shrinks
 - `apps/mobile/app/__tests__/m3AppScreensDesign.test.ts` — M3: practice choosers and runners, notes, subjects, estimator, requirements, scholarship profile, results tracker and their shared components; also requires every listed screen to lay out through `Screen` / `TwoColumn` / `useBreakpoint`, and every tab's web refresh control to be icon-only on phones
 
 Each enforces the same rules on the files it scans:

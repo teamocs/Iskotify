@@ -12,15 +12,17 @@
 import { useEffect, useState } from 'react'
 import { View, Text } from 'react-native'
 import { router } from 'expo-router'
+import { Locked1Outlined, StopwatchOutlined, User4Outlined } from '@lineiconshq/free-icons'
 import { Screen } from '../components/ui/Screen'
 import { PageTitle } from '../components/ui/PageTitle'
 import { Button } from '../components/ui/Button'
 import { Skeleton } from '../components/ui/Skeleton'
-import { ChoiceRow } from '../components/onboarding/ChoiceRow'
+import { ChoiceGroup, ChoiceRow } from '../components/onboarding/ChoiceRow'
+import { InsetGroup, InsetRow } from '../components/ui/InsetGroup'
 import { LegalLine } from '../components/consent/LegalLinks'
 import { heading } from '../components/ui/a11y'
 import { useTheme } from '../theme/ThemeContext'
-import { radius, spacing, textStyle } from '../theme/tokens'
+import { radius, spacing, iosTextStyle } from '../theme/tokens'
 import { useDb } from '../hooks/useDb'
 import { useGuestMode } from '../hooks/useGuestMode'
 import { listRunnableBlueprints } from '../services/examBlueprints'
@@ -33,6 +35,7 @@ const FACTS = [
   'Nothing is saved to an account. You don’t need one to try it.',
   'Your results stay on this device. Create a free account afterwards to keep them.',
 ] as const
+const FACT_ICONS = [StopwatchOutlined, User4Outlined, Locked1Outlined] as const
 
 export default function TryScreen() {
   const db = useDb()
@@ -85,22 +88,22 @@ export default function TryScreen() {
           lead="See where you stand for your entrance exam before you make an account."
         />
 
-        <View style={{ backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.md }}>
-          {FACTS.map(f => (
-            <Text key={f} style={textStyle('body', t.textPrimary)} maxFontSizeMultiplier={2}>{f}</Text>
+        <InsetGroup inset={false} header="How it works">
+          {FACTS.map((f, i) => (
+            <InsetRow key={f} title={f} icon={FACT_ICONS[i]} numberOfLines={4} />
           ))}
-        </View>
+        </InsetGroup>
 
         {!ready ? (
           <View accessible accessibilityLabel="Getting the questions ready" aria-busy style={{ gap: spacing.md }}>
-            <Text style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>Getting the questions ready…</Text>
-            <Skeleton height={64} radius={radius.lg} />
-            <Skeleton height={64} radius={radius.lg} />
+            <Text style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>Getting the questions ready…</Text>
+            <Skeleton height={64} radius={radius.group} />
+            <Skeleton height={64} radius={radius.group} />
           </View>
         ) : (
           <View style={{ gap: spacing.md }}>
-            <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)} maxFontSizeMultiplier={2}>Choose your exam</Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel="Choose your exam" style={{ gap: spacing.sm }}>
+            <Text {...heading(2)} style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={2}>Choose your exam</Text>
+            <ChoiceGroup accessibilityRole="radiogroup" accessibilityLabel="Choose your exam">
               {options.map(o => (
                 <ChoiceRow
                   key={o.slug}
@@ -112,7 +115,7 @@ export default function TryScreen() {
                   onPress={() => setSelected(o.slug)}
                 />
               ))}
-            </View>
+            </ChoiceGroup>
           </View>
         )}
 

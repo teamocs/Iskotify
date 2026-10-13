@@ -8,15 +8,26 @@
  * Dismissal is keyed off the error VALUE — dismissing hides the banner for the
  * current lastError string only, so a NEW (different) error re-shows it.
  * markSyncStart() clears lastError, so the banner also hides while a retry runs.
+ *
+ * iOS redesign P4: a floating glass card (chrome, never in a list) in the
+ * field radius, a danger icon tile so the state is not colour alone, text in
+ * the iOS roles, and 44pt Retry / dismiss targets.
  */
 
 import React, { useState } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { XmarkOutlined, CloudRefreshClockwiseOutlined } from '@lineiconshq/free-icons'
 import { useSyncStatus } from '../hooks/useSyncStatus'
 import { useTheme } from '../theme/ThemeContext'
 import { BACKUP_FAILED_MESSAGE } from '../services/syncStatus'
-import { spacing, radius } from '../theme/tokens'
+import { layout, radius, spacing, weight } from '../theme/tokens'
+import { Glass } from './ui/Glass'
+import { IconTile } from './ui/InsetGroup'
+import { PressableScale } from './ui/Pressable'
+import { Text } from './ui/Text'
+import { decorative, focusRing } from './ui/a11y'
 
 interface SyncErrorBannerProps {
   onRetry: () => void
@@ -24,7 +35,7 @@ interface SyncErrorBannerProps {
 
 export function SyncErrorBanner({ onRetry }: SyncErrorBannerProps) {
   const { lastError, isSyncing } = useSyncStatus()
-  const { theme, typo } = useTheme()
+  const { theme: t } = useTheme()
   const insets = useSafeAreaInsets()
 
   // The exact error string the user dismissed. A different error won't match,
@@ -35,95 +46,61 @@ export function SyncErrorBanner({ onRetry }: SyncErrorBannerProps) {
   if (!visible) return null
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          marginTop: insets.top + spacing.sm,
-          backgroundColor: theme.dangerSurface,
-          borderColor: theme.danger,
-        },
-      ]}
+    <Glass
+      variant="header"
+      style={{
+        marginTop: insets.top + spacing.sm,
+        marginHorizontal: spacing.lg,
+        borderRadius: radius.field,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: t.dangerBorder,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingVertical: spacing.xs,
+        paddingLeft: spacing.md,
+        paddingRight: spacing.xs,
+      }}
     >
+      <IconTile icon={CloudRefreshClockwiseOutlined} tone="danger" />
       {/* The alert role lives on the Text (an accessibility element) so screen
           readers announce it while Retry/dismiss stay individually focusable. */}
-      <Text
-        accessibilityRole="alert"
-        style={[styles.message, { color: theme.textPrimary, fontSize: typo.sm }]}
-        maxFontSizeMultiplier={1.4}
-      >
+      <Text role="footnote" accessibilityRole="alert" chrome style={{ flex: 1, paddingVertical: spacing.xs }}>
         {lastError === BACKUP_FAILED_MESSAGE ? BACKUP_FAILED_MESSAGE : "Couldn't refresh data — check your connection."}
       </Text>
 
-      <Pressable
+      <PressableScale
         onPress={onRetry}
         accessibilityRole="button"
         accessibilityLabel="Retry sync"
-        hitSlop={8}
-        style={({ pressed }) => [
-          styles.retryBtn,
-          { backgroundColor: theme.accentStrong },
-          pressed && styles.pressed,
+        style={({ pressed, focused }) => [
+          {
+            minHeight: layout.rowMinHeight, justifyContent: 'center', paddingHorizontal: spacing.md,
+            borderRadius: radius.capsule, backgroundColor: pressed ? t.surface2 : 'transparent',
+          },
+          focusRing(t.focusRing, focused),
         ]}
       >
-        <Text
-          style={[styles.retryText, { color: theme.textInverse, fontSize: typo.sm }]}
-          maxFontSizeMultiplier={1.4}
-        >
-          Retry
-        </Text>
-      </Pressable>
+        <Text role="subheadline" color={t.accentText} chrome style={weight('600')}>Retry</Text>
+      </PressableScale>
 
-      <Pressable
+      <PressableScale
         onPress={() => setDismissedError(lastError)}
         accessibilityRole="button"
         accessibilityLabel="Dismiss sync error"
-        hitSlop={8}
-        style={({ pressed }) => [styles.dismissBtn, pressed && styles.pressed]}
+        style={({ pressed, focused }) => [
+          {
+            width: layout.headerButton.hit, height: layout.headerButton.hit, alignItems: 'center', justifyContent: 'center',
+            borderRadius: radius.capsule, backgroundColor: pressed ? t.surface2 : 'transparent',
+          },
+          focusRing(t.focusRing, focused),
+        ]}
       >
-        <Text
-          style={[styles.dismissText, { color: theme.textSecondary, fontSize: typo.sm }]}
-          maxFontSizeMultiplier={1.4}
-        >
-          ✕
-        </Text>
-      </Pressable>
-    </View>
+        <View {...decorative}>
+          <Lineicons icon={XmarkOutlined} size={16} color={t.textSecondary} />
+        </View>
+      </PressableScale>
+    </Glass>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-  },
-  message: {
-    flex: 1,
-    lineHeight: 18,
-  },
-  retryBtn: {
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  retryText: {
-    fontWeight: '600',
-  },
-  dismissBtn: {
-    padding: spacing.xs,
-  },
-  dismissText: {
-    fontWeight: '600',
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-})

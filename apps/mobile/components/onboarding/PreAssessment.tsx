@@ -1,7 +1,7 @@
 import { View, Text, Pressable, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { useBreakpoint, pagePadding } from '../../hooks/useBreakpoint'
 import { QuestionFigure } from '../practice/QuestionFigure'
 import { Button } from '../ui/Button'
@@ -26,7 +26,7 @@ export function QuestionView({ q, index, total, onAnswer }: {
   return (
     <View style={{ gap: spacing.lg }}>
       <View style={{ gap: spacing.sm }}>
-        <Text style={textStyle('label', t.textSecondary)} maxFontSizeMultiplier={1.6}>
+        <Text style={{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }} maxFontSizeMultiplier={1.6}>
           {`${q.subject} · Question ${index + 1} of ${total}`}
         </Text>
         <ProgressBar value={(index + 1) / total} label={`Question ${index + 1} of ${total}`} height={4} />
@@ -34,10 +34,10 @@ export function QuestionView({ q, index, total, onAnswer }: {
       <View
         style={{
           backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-          borderRadius: radius.xl, borderCurve: 'continuous', padding: spacing.xl,
+          borderRadius: radius.card, borderCurve: 'continuous', padding: spacing.xl,
         }}
       >
-        <Text {...heading(2)} style={textStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>{q.stem}</Text>
+        <Text {...heading(2)} style={iosTextStyle('title3', t.textPrimary)} maxFontSizeMultiplier={2}>{q.stem}</Text>
       </View>
       <QuestionFigure imageUrl={q.imageUrl} imageAlt={q.imageAlt} imageWidth={q.imageWidth} imageHeight={q.imageHeight} />
       <View style={{ gap: spacing.sm }}>
@@ -52,7 +52,7 @@ export function QuestionView({ q, index, total, onAnswer }: {
               return [{
                 minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                 paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-                borderRadius: radius.lg, borderCurve: 'continuous', borderWidth: 1,
+                borderRadius: radius.group, borderCurve: 'continuous', borderWidth: 1,
                 borderColor: t.inputBorder,
                 backgroundColor: pressed ? t.surface2 : hovered ? t.surfaceSubtle : t.surface,
               }, focusRing(t.focusRing, focused)]
@@ -65,9 +65,9 @@ export function QuestionView({ q, index, total, onAnswer }: {
                 backgroundColor: t.accentSurface, alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Text style={textStyle('titleSm', t.accentText)}>{LETTERS[i]}</Text>
+              <Text style={iosTextStyle('headline', t.accentText)}>{LETTERS[i]}</Text>
             </View>
-            <Text style={[textStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{opt}</Text>
+            <Text style={[iosTextStyle('body', t.textPrimary), { flex: 1 }]} maxFontSizeMultiplier={2}>{opt}</Text>
           </Pressable>
         ))}
       </View>
@@ -92,14 +92,13 @@ export function ResultsView({ correct, total, bySubject, focusTitles, onStart }:
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg }}>
-      {Platform.OS === 'web' ? <View style={{ height: spacing.md }} /> : null}
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: t.bg, paddingTop: Platform.OS === 'web' ? spacing.md : 0 }}>
       <ScrollView contentContainerStyle={{ paddingVertical: spacing.xxl }}>
         <View style={{ width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: pagePadding(bp), gap: spacing.xl }}>
           <View style={{ gap: spacing.sm }}>
-            <Text style={textStyle('label', t.accentText)}>Tapos na!</Text>
-            <Text {...heading(1)} style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>Your starting point</Text>
-            <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
+            <Text style={{ ...iosTextStyle('footnote', t.accentText), ...weight('600') }}>All done</Text>
+            <Text {...heading(1)} style={iosTextStyle('largeTitle', t.textPrimary)} maxFontSizeMultiplier={1.6}>Your starting point</Text>
+            <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>
               {`You got ${correct} of ${total} right. This isn't a grade — it shows where to begin, and your study plan starts here.`}
             </Text>
           </View>
@@ -110,12 +109,12 @@ export function ResultsView({ correct, total, bySubject, focusTitles, onStart }:
                 key={sub}
                 style={{
                   backgroundColor: t.surface, borderWidth: 1, borderColor: t.border,
-                  borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.sm,
+                  borderRadius: radius.group, borderCurve: 'continuous', padding: spacing.lg, gap: spacing.sm,
                 }}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
-                  <Text {...heading(2)} style={[textStyle('titleSm', t.textPrimary), { flex: 1 }]}>{sub}</Text>
-                  <Text style={[textStyle('label', t.textSecondary), { ...weight('600'), fontVariant: ['tabular-nums'] }]}>
+                  <Text {...heading(2)} style={[iosTextStyle('headline', t.textPrimary), { flex: 1 }]}>{sub}</Text>
+                  <Text style={[{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }, { ...weight('600'), fontVariant: ['tabular-nums'] }]}>
                     {`${c} of ${n}`}
                   </Text>
                 </View>
@@ -126,9 +125,9 @@ export function ResultsView({ correct, total, bySubject, focusTitles, onStart }:
 
           {focusTitles.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              <Text {...heading(2)} style={textStyle('titleSm', t.textPrimary)}>Your focus list</Text>
+              <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)}>Your focus list</Text>
               {focusTitles.map(title => (
-                <Text key={title} style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{title}</Text>
+                <Text key={title} style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{title}</Text>
               ))}
             </View>
           ) : null}

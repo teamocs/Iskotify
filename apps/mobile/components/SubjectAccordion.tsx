@@ -4,7 +4,7 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined } from '@lineiconshq/free-icons'
 import type { SubjectGroup } from '../utils/groupTopicsBySubject'
 import { useTheme } from '../theme/ThemeContext'
-import { spacing, textStyle } from '../theme/tokens'
+import { spacing, iosTextStyle } from '../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './ui/a11y'
 
 interface Props<T> {
@@ -64,7 +64,7 @@ export function SubjectAccordion<T>({
   if (groups.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={[textStyle('body', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
+        <Text style={[iosTextStyle('body', t.textSecondary), { textAlign: 'center' }]} maxFontSizeMultiplier={2}>
           {emptyText ?? 'Nothing to show'}
         </Text>
       </View>
@@ -98,11 +98,11 @@ export function SubjectAccordion<T>({
               <View {...decorative} style={{ transform: [{ rotate: isOpen ? '-90deg' : '180deg' }] }}>
                 <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textSecondary} />
               </View>
-              <Text style={[textStyle('titleSm', t.textPrimary), { flex: 1, minWidth: 0 }]} maxFontSizeMultiplier={2}>
+              <Text style={[iosTextStyle('headline', t.textPrimary), { flex: 1, minWidth: 0 }]} maxFontSizeMultiplier={2}>
                 {group.subjectName}
               </Text>
               {group.summary ? (
-                <Text style={textStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>{group.summary}</Text>
+                <Text style={iosTextStyle('caption', t.textSecondary)} maxFontSizeMultiplier={2}>{group.summary}</Text>
               ) : null}
             </Pressable>
             {isOpen ? (

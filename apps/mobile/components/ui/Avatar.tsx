@@ -2,7 +2,7 @@ import { View, Text, Pressable } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { User4Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius } from '../../theme/tokens'
+import { weight, radius, iosTextStyle, type IosTextRole } from '../../theme/tokens'
 import { decorative } from './a11y'
 
 /** "Juan Dela Cruz" → "JC" (first + last word), "maria" → "M". */
@@ -12,6 +12,14 @@ export function initialsFor(name: string | null | undefined): string {
   const first = words[0]!.charAt(0)
   const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : ''
   return (first + last).toUpperCase()
+}
+
+/** The initials' text role for a circle of `size` (about 0.38 of it, 12pt floor). */
+export function initialsRole(size: number): IosTextRole {
+  if (size >= 48) return 'title3'
+  if (size >= 40) return 'subheadline'
+  if (size >= 34) return 'footnote'
+  return 'caption'
 }
 
 interface Props {
@@ -35,7 +43,7 @@ export function Avatar({ name, size = 36, onPress, accessibilityLabel, accessibi
       style={{
         width: size,
         height: size,
-        borderRadius: radius.pill,
+        borderRadius: radius.capsule,
         backgroundColor: t.accentSurface,
         borderWidth: 1,
         borderColor: t.accentBorder,
@@ -46,7 +54,7 @@ export function Avatar({ name, size = 36, onPress, accessibilityLabel, accessibi
     >
       {initials ? (
         <Text
-          style={{ ...weight('700'), fontSize: Math.max(12, Math.round(size * 0.38)), color: t.accentText }}
+          style={[iosTextStyle(initialsRole(size), t.accentText), weight('700')]}
           maxFontSizeMultiplier={1}
         >
           {initials}

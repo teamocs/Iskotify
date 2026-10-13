@@ -1,7 +1,11 @@
-import { useMemo } from 'react'
-import { StyleSheet, View, Text, Modal, Pressable } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { PauseOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../theme/ThemeContext'
-import { weight } from '../theme/tokens'
+import { radius, spacing } from '../theme/tokens'
+import { Button } from './ui/Button'
+import { Text } from './ui/Text'
+import { decorative } from './ui/a11y'
 
 interface Props {
   visible: boolean
@@ -10,86 +14,55 @@ interface Props {
   onEnd: () => void
 }
 
-function formatMinutes(secs: number): string {
+export function formatMinutes(secs: number): string {
   const minutes = Math.floor(secs / 60)
   const remSecs = secs % 60
   if (minutes <= 0) return `${remSecs} sec`
   return `${minutes} min ${remSecs > 0 ? `${remSecs} sec` : ''}`.trim()
 }
 
+/**
+ * The paused focus session (hooks/useFocusMode): an opaque page over the
+ * runner, so no question shows while the app was in the background. Render it
+ * as the LAST child of the screen's root view; it fills that view and is modal
+ * for screen readers. One primary (Resume), End as a quiet secondary.
+ *
+ * iOS redesign P4: no raw Modal (the screen's own Back handling stays in
+ * charge, as useFocusMode expects), a drawn pause icon instead of a glyph, and
+ * text in the iOS roles.
+ */
 export function SessionPausedOverlay({ visible, timeRemainingSecs, onResume, onEnd }: Props) {
-  const { theme: t, typo } = useTheme()
-  const s = useMemo(() => StyleSheet.create({
-    backdrop: {
-      flex: 1,
-      backgroundColor: t.bg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 32,
-    },
-    icon: { fontSize: 64, marginBottom: 20 },
-    title: {
-      ...weight('700'),
-      fontSize: typo.h2,
-      color: t.textPrimary,
-      marginBottom: 8,
-    },
-    sub: {
-      ...weight('400'),
-      fontSize: typo.md,
-      color: t.textSecondary,
-      marginBottom: 36,
-      textAlign: 'center',
-    },
-    resumeBtn: {
-      backgroundColor: 'rgba(128,0,0,0.85)',
-      borderRadius: 18,
-      paddingVertical: 16,
-      paddingHorizontal: 40,
-      width: '100%',
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    resumeBtnTxt: {
-      ...weight('700'),
-      fontSize: typo.md,
-      color: t.textInverse,
-    },
-    endBtn: {
-      paddingVertical: 12,
-      width: '100%',
-      alignItems: 'center',
-    },
-    endBtnTxt: {
-      ...weight('400'),
-      fontSize: typo.sm,
-      color: t.textSecondary,
-    },
-  }), [t, typo])
+  const { theme: t } = useTheme()
+  if (!visible) return null
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={() => { /* swallow back */ }}>
-      <View style={s.backdrop}>
-        <Text style={s.icon}>⏸</Text>
-        <Text style={s.title}>Session Paused</Text>
-        <Text style={s.sub}>Time remaining: {formatMinutes(timeRemainingSecs)}</Text>
-        <Pressable
-          style={s.resumeBtn}
-          onPress={onResume}
-          accessibilityRole="button"
-          accessibilityLabel="Resume session"
+    <View
+      testID="session-paused"
+      accessibilityViewIsModal
+      aria-modal
+      style={[StyleSheet.absoluteFill, { backgroundColor: t.bg, zIndex: 10, alignItems: 'center', justifyContent: 'center' }]}
+    >
+      <View style={{ width: '100%', maxWidth: 420, paddingHorizontal: spacing.xxxl, alignItems: 'center', gap: spacing.xl }}>
+        <View
+          {...decorative}
+          style={{
+            width: 72, height: 72, borderRadius: radius.card, borderCurve: 'continuous',
+            backgroundColor: t.accentSurface, alignItems: 'center', justifyContent: 'center',
+          }}
         >
-          <Text style={s.resumeBtnTxt}>Resume Session</Text>
-        </Pressable>
-        <Pressable
-          style={s.endBtn}
-          onPress={onEnd}
-          accessibilityRole="button"
-          accessibilityLabel="End session"
-        >
-          <Text style={s.endBtnTxt}>End Session</Text>
-        </Pressable>
+          <Lineicons icon={PauseOutlined} size={32} color={t.accentText} />
+        </View>
+        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+          <Text role="title1" accessibilityRole="header" style={{ textAlign: 'center' }}>Session paused</Text>
+          <Text role="body" color={t.textSecondary} style={{ textAlign: 'center' }}>
+            {`Time remaining: ${formatMinutes(timeRemainingSecs)}`}
+          </Text>
+        </View>
+        <View style={{ alignSelf: 'stretch', gap: spacing.sm }}>
+          <Button label="Resume session" onPress={onResume} size="lg" fullWidth />
+          <Button label="End session" variant="ghost" onPress={onEnd} fullWidth />
+        </View>
       </View>
-    </Modal>
+    </View>
   )
 }

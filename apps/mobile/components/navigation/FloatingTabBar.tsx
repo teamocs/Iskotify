@@ -8,7 +8,7 @@ import { XmarkOutlined } from '@lineiconshq/free-icons'
 // react-doctor-disable-next-line react-doctor/rn-no-non-native-navigator
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../../theme/ThemeContext'
-import { layout, motion, radius, spacing, textStyle, weight } from '../../theme/tokens'
+import { layout, motion, radius, spacing, weight, iosTextStyle } from '../../theme/tokens'
 import { useSafeInsets } from '../../hooks/useSafeInsets'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 import { selection } from '../../lib/haptics'
@@ -131,7 +131,7 @@ function TabItem({ dest, isFocused, onPress }: {
         <Lineicons icon={dest.icon} size={22} color={color} />
       </View>
       <Text
-        style={[textStyle('caption', color), weight(isFocused ? '600' : '500')]}
+        style={[iosTextStyle('caption', color), weight(isFocused ? '600' : '500')]}
         numberOfLines={1}
         maxFontSizeMultiplier={LABEL_SCALE}
       >
@@ -191,7 +191,7 @@ function BarSearchField() {
         autoCapitalize="none"
         maxFontSizeMultiplier={LABEL_SCALE}
         style={[
-          textStyle('body', t.textPrimary),
+          iosTextStyle('body', t.textPrimary),
           { flex: 1, minHeight: 44, paddingHorizontal: spacing.sm },
           Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null,
         ]}
@@ -204,7 +204,7 @@ function BarSearchField() {
           style={(state) => {
             const { pressed, focused } = state as WebPressableState
             return [
-              { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 },
+              { width: 44, height: 44, borderRadius: radius.capsule, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 },
               insetRing(t.focusRing, focused),
             ]
           }}

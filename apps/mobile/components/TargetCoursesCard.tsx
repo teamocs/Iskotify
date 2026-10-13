@@ -1,15 +1,23 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import {
-  View, Text, TextInput, Pressable, Modal, ScrollView, ActivityIndicator, StyleSheet,
-} from 'react-native'
+import { View, ActivityIndicator } from 'react-native'
+import { Lineicons } from '@lineiconshq/react-native-lineicons'
+import { CheckOutlined, PlusOutlined, XmarkOutlined } from '@lineiconshq/free-icons'
 import { eq } from 'drizzle-orm'
 import { useDb } from '../hooks/useDb'
 import { useTheme } from '../theme/ThemeContext'
-import { weight } from '../theme/tokens'
+import { layout, radius, spacing, weight } from '../theme/tokens'
 import { userSettings, courseTaxonomyMap, careerCourses } from '../db/schema'
 import { allCourseOptions, type CourseOption } from '../utils/targetExams'
 import { supabase } from '../services/supabase'
 import { schedulePushUserData } from '../services/pushScheduler'
+import { Button } from './ui/Button'
+import { Card } from './ui/Card'
+import { InsetGroup } from './ui/InsetGroup'
+import { PressableScale } from './ui/Pressable'
+import { SearchField } from './ui/SearchField'
+import { Sheet } from './ui/Sheet'
+import { Text } from './ui/Text'
+import { decorative, focusRing, heading } from './ui/a11y'
 
 const MAX_COURSES = 3
 
@@ -36,7 +44,7 @@ function parseCourses(raw: string | null | undefined): CourseOption[] {
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function TargetCoursesCard() {
   const db = useDb()
-  const { theme: t, typo } = useTheme()
+  const { theme: t } = useTheme()
   const [selected, setSelected] = useState<CourseOption[]>([])
   const [all, setAll] = useState<CourseOption[]>([])
   const [loadingAll, setLoadingAll] = useState(false)
@@ -133,114 +141,132 @@ export function TargetCoursesCard() {
     return base.slice(0, 50)
   }, [all, q])
 
-  const s = useMemo(() => StyleSheet.create({
-    card: { backgroundColor: t.surface2, borderWidth: 1, borderColor: t.divider, borderRadius: 22, padding: 16, marginBottom: 10 },
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    secTitle: { fontSize: typo.md, color: t.textPrimary, ...weight('600') },
-    addLink: { ...weight('500'), fontSize: 12, color: t.accentText },
-    empty: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary, marginTop: 4 },
-    chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(128,0,0,0.12)', borderWidth: 1, borderColor: 'rgba(128,0,0,0.30)', borderRadius: 980, paddingHorizontal: 12, paddingVertical: 6 },
-    chipText: { ...weight('500'), fontSize: typo.sm, color: t.accentText },
-    chipX: { ...weight('700'), fontSize: typo.sm, color: t.accentText },
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '78%', paddingTop: 12, paddingHorizontal: 16, paddingBottom: 24 },
-    handle: { width: 36, height: 4, backgroundColor: t.divider, borderRadius: 2, alignSelf: 'center', marginBottom: 14 },
-    sheetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    sheetTitle: { ...weight('700'), fontSize: typo.lg, color: t.textPrimary, flex: 1 },
-    closeTxt: { ...weight('400'), fontSize: 18, color: t.textSecondary, padding: 4 },
-    input: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, ...weight('400'), fontSize: typo.md, color: t.textPrimary, marginBottom: 10 },
-    countHint: { ...weight('400'), fontSize: typo.xs, color: t.textTertiary, marginBottom: 8 },
-    row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, marginBottom: 8, borderWidth: 1 },
-    rowLabel: { flex: 1, ...weight('600'), fontSize: typo.base, color: t.textPrimary },
-    rowMark: { fontSize: 18 },
-    emptyResults: { ...weight('400'), fontSize: typo.sm, color: t.textTertiary, textAlign: 'center', paddingTop: 30 },
-  }), [t, typo])
-
   const atMax = selected.length >= MAX_COURSES
 
   return (
-    <View style={s.card}>
-      <View style={s.headerRow}>
-        <Text style={s.secTitle}>Target Courses</Text>
-        <Pressable onPress={openModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.6 }}>
-          <Text style={s.addLink}>{selected.length > 0 ? 'Edit' : '+ Add courses'}</Text>
-        </Pressable>
+    <Card style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+        <Text role="headline" {...heading(3)} style={{ flex: 1 }}>Target courses</Text>
+        <Button
+          label={selected.length > 0 ? 'Edit' : 'Add courses'}
+          accessibilityLabel={selected.length > 0 ? 'Edit target courses' : 'Add target courses'}
+          variant="ghost"
+          size="sm"
+          shape="pill"
+          onPress={openModal}
+          icon={selected.length > 0 ? undefined : <Lineicons icon={PlusOutlined} size={16} color={t.accentText} />}
+        />
       </View>
 
       {selected.length === 0 ? (
-        <Text style={s.empty}>No target courses yet. Add up to 3 to personalise your recommendations.</Text>
+        <Text role="subheadline" color={t.textSecondary}>No target courses yet. Add up to 3 to personalise your recommendations.</Text>
       ) : (
-        <View style={s.chipWrap}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {selected.map(c => (
-            <View key={c.id} style={s.chip}>
-              <Text style={s.chipText}>{c.label}</Text>
-              <Pressable onPress={() => toggle(c)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }} accessibilityLabel={`Remove ${c.label}`} accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.5 }}>
-                <Text style={s.chipX}>✕</Text>
-              </Pressable>
+            <View
+              key={c.id}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: layout.rowMinHeight,
+                paddingLeft: spacing.md, borderRadius: radius.capsule,
+                backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accentBorder,
+              }}
+            >
+              <Text role="subheadline" color={t.accentText} style={weight('600')}>{c.label}</Text>
+              <PressableScale
+                onPress={() => toggle(c)}
+                accessibilityLabel={`Remove ${c.label}`}
+                accessibilityRole="button"
+                style={({ pressed, focused }) => [
+                  {
+                    width: layout.headerButton.hit, height: layout.headerButton.hit, borderRadius: radius.capsule,
+                    alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent',
+                  },
+                  focusRing(t.focusRing, focused),
+                ]}
+              >
+                <View {...decorative}>
+                  <Lineicons icon={XmarkOutlined} size={14} color={t.accentText} />
+                </View>
+              </PressableScale>
             </View>
           ))}
         </View>
       )}
 
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
-        <View style={s.backdrop}>
-          <Pressable style={{ flex: 1 }} onPress={() => setModalOpen(false)} accessibilityLabel="Close" />
-          <View style={s.sheet}>
-            <View style={s.handle} />
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>Target Courses</Text>
-              <Pressable onPress={() => setModalOpen(false)} accessibilityLabel="Close" accessibilityRole="button" style={({ pressed }) => pressed && { opacity: 0.5 }}>
-                <Text style={s.closeTxt}>✕</Text>
-              </Pressable>
+      <Sheet visible={modalOpen} title="Target courses" onClose={() => setModalOpen(false)}>
+        <View style={{ gap: spacing.md }}>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="e.g. Nursing, Civil Engineering"
+            accessibilityLabel="Search courses"
+          />
+          <Text role="footnote" color={t.textSecondary} accessibilityLiveRegion="polite">
+            {`${selected.length}/${MAX_COURSES} selected${atMax ? ' — remove one to swap' : ''}`}
+          </Text>
+          {loadingAll ? (
+            <View style={{ paddingTop: spacing.xxxl, alignItems: 'center' }}>
+              <ActivityIndicator color={t.accentText} accessibilityLabel="Loading courses" />
             </View>
-            <TextInput
-              style={s.input}
-              placeholder="Search courses (e.g. Nursing, Civil Engineering)…"
-              placeholderTextColor={t.textTertiary}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-            />
-            <Text style={s.countHint}>{selected.length}/{MAX_COURSES} selected{atMax ? ' — remove one to swap' : ''}</Text>
-            {loadingAll ? (
-              <View style={{ paddingTop: 30, alignItems: 'center' }}><ActivityIndicator color={t.accentText} /></View>
-            ) : (
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                {results.length === 0 ? (
-                  <Text style={s.emptyResults}>{all.length === 0 ? 'Course list not synced yet. Pull to refresh on Profile, then try again.' : 'No courses found.'}</Text>
-                ) : (
-                  results.map(c => {
-                    const sel = selected.some(x => x.id === c.id)
-                    const disabled = !sel && atMax
-                    return (
-                      <Pressable
-                        key={c.id}
-                        onPress={() => toggle(c)}
-                        disabled={disabled}
-                        accessibilityRole="checkbox"
-                        accessibilityLabel={c.label}
-                        aria-checked={sel}
-                        aria-disabled={disabled}
-                        style={({ pressed }) => [s.row, {
-                          backgroundColor: sel ? 'rgba(128,0,0,0.20)' : t.surface,
-                          borderColor: sel ? '#831626' : t.border,
-                          opacity: disabled ? 0.4 : 1,
-                        }, pressed && !disabled && { opacity: 0.7 }]}
-                      >
-                        <Text style={s.rowLabel}>{c.label}</Text>
-                        <Text style={[s.rowMark, { color: sel ? t.accentText : t.textTertiary }]}>{sel ? '✓' : '＋'}</Text>
-                      </Pressable>
-                    )
-                  })
-                )}
-              </ScrollView>
-            )}
-          </View>
+          ) : results.length === 0 ? (
+            <Text role="subheadline" color={t.textSecondary} style={{ textAlign: 'center', paddingTop: spacing.xxl }}>
+              {all.length === 0 ? 'Course list not synced yet. Pull to refresh on Profile, then try again.' : 'No courses found.'}
+            </Text>
+          ) : (
+            <View accessibilityLabel="Courses">
+              <InsetGroup inset={false}>
+                {results.map(c => {
+                  const sel = selected.some(x => x.id === c.id)
+                  return (
+                    <CourseRow key={c.id} label={c.label} selected={sel} disabled={!sel && atMax} onPress={() => toggle(c)} />
+                  )
+                })}
+              </InsetGroup>
+            </View>
+          )}
         </View>
-      </Modal>
-    </View>
+      </Sheet>
+    </Card>
+  )
+}
+
+/**
+ * One course in the picker: a checkbox (aria-checked, a drawn check, never
+ * colour alone) laid out like an inset-group row. A row stays visible at the
+ * 3-course cap but cannot be picked.
+ */
+function CourseRow({ label, selected, disabled, onPress }: { label: string; selected: boolean; disabled: boolean; onPress: () => void }) {
+  const { theme: t } = useTheme()
+  return (
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      aria-checked={selected}
+      aria-disabled={disabled}
+      style={({ pressed, hovered, focused }) => [
+        {
+          minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+          paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
+          backgroundColor: selected ? t.accentSurface : pressed ? t.surface2 : hovered && !disabled ? t.surfaceSubtle : 'transparent',
+          opacity: disabled ? 0.5 : 1,
+          borderBottomWidth: 1, borderBottomColor: t.divider,
+        },
+        focusRing(t.focusRing, focused),
+      ]}
+    >
+      <Text role="body" style={[{ flex: 1 }, selected ? weight('600') : null]}>{label}</Text>
+      <View
+        {...decorative}
+        style={{
+          width: 24, height: 24, borderRadius: radius.chip, borderCurve: 'continuous', borderWidth: 2,
+          borderColor: selected ? t.accent : t.inputBorder, backgroundColor: selected ? t.accent : 'transparent',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {selected ? <Lineicons icon={CheckOutlined} size={14} color={t.textInverse} /> : null}
+      </View>
+    </PressableScale>
   )
 }

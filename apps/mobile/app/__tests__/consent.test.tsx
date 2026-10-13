@@ -100,3 +100,15 @@ describe('ConsentUpdateScreen', () => {
     expect(screen.getByText(/If you don't agree, you can close the app/)).toBeTruthy()
   })
 })
+
+describe('ConsentUpdateScreen — iOS language (P4)', () => {
+  it('has one primary action, Agree and continue, under a large title', () => {
+    const { countPrimaryActions } = require('../../test-utils/primaryActions')
+    const { iosTextStyles } = require('../../theme/tokens')
+    const { UNSAFE_root } = render(<ConsentUpdateScreen />)
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+    expect(screen.getByRole('button', { name: 'Agree and continue' })).toBeTruthy()
+    const h1 = screen.getByRole('header', { name: /updated our Terms/ })
+    expect(Object.assign({}, ...[h1.props.style].flat(Infinity).filter(Boolean)).fontSize).toBe(iosTextStyles.largeTitle.fontSize)
+  })
+})

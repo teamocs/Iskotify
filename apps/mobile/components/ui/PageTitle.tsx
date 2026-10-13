@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { heading } from './a11y'
 
 interface Props {
@@ -22,13 +22,13 @@ export function PageTitle({ title, lead, trailing, testID }: Props) {
   return (
     <View testID={testID} style={{ gap: spacing.xs, paddingTop: spacing.xs, marginBottom: spacing.xl }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.md, rowGap: spacing.xs }}>
-        <Text {...heading(1)} style={[textStyle('title', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>
+        <Text {...heading(1)} style={[iosTextStyle('largeTitle', t.textPrimary), { flexShrink: 1 }]} maxFontSizeMultiplier={1.6}>
           {title}
         </Text>
         {trailing}
       </View>
       {lead ? (
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{lead}</Text>
+        <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{lead}</Text>
       ) : null}
     </View>
   )

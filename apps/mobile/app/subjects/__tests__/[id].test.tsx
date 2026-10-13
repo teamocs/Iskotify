@@ -282,3 +282,19 @@ describe('SubjectDetailsScreen ([id]) — readiness per topic', () => {
     })
   })
 })
+
+describe('SubjectDetailsScreen — iOS language (P4)', () => {
+  it('a large title, topics on one inset group with mastery bars, and one primary action', async () => {
+    const { useDb } = require('../../../hooks/useDb')
+    const { countPrimaryActions } = require('../../../test-utils/primaryActions')
+    useDb.mockReturnValue(makeDb(SUBJECT, TOPICS))
+    setBest([{ topicId: 't1', bestPct: 80 }, { topicId: 't2', bestPct: 40 }])
+    const { UNSAFE_root } = render(<SubjectDetailsScreen />)
+    await waitFor(() => expect(screen.getByText('Algebra')).toBeTruthy())
+    expect(screen.getByTestId('subject-title')).toBeTruthy()
+    expect(screen.getByTestId('inset-group')).toBeTruthy()
+    const { ProgressBar } = require('../../../components/ui/ProgressBar')
+    expect(UNSAFE_root.findAllByType(ProgressBar).length).toBeGreaterThan(0) // a mastery bar under each practised topic
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+  })
+})

@@ -631,3 +631,69 @@ describe('Onboarding: "Before we start" consent step', () => {
     expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
   })
 })
+
+// ─── iOS redesign P4: one primary per step, every field still saved ─────────
+
+describe('Onboarding: iOS language (P4)', () => {
+  const { countPrimaryActions } = require('../../test-utils/primaryActions')
+  beforeEach(() => { mockConsented = false })
+
+  it('every step has exactly one primary action, and the whole flow still saves every field', async () => {
+    mockUpCatalog()
+    const { UNSAFE_root } = render(<OnboardingScreen />)
+    await flush()
+
+    // 1. Consent
+    expect(screen.getByRole('header', { name: 'Before we start' })).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+    fireEvent.press(screen.getByRole('radio', { name: "I'm under 18" }))
+    fireEvent.press(screen.getByRole('checkbox', { name: READ_BOX }))
+    fireEvent.press(screen.getByRole('checkbox', { name: GUARDIAN_BOX }))
+    pressContinue()
+    await flush()
+
+    // 2. About you
+    expect(screen.getByRole('header', { name: ABOUT })).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+    await answerAboutYou('Maria Santos', 'Grade 12')
+
+    // 3. Your exam
+    expect(screen.getByRole('header', { name: GOAL })).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+    fireEvent.press(await screen.findByRole('checkbox', { name: /University of the Philippines Diliman/ }))
+    await act(async () => { pressContinue(); await Promise.resolve() })
+    await flush()
+
+    // 4. Quick check: optional, Skip finishes (no maroon primary on a question)
+    expect(screen.getByRole('header', { name: CHECK })).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBeLessThanOrEqual(1)
+
+    const writes = mockInserts.filter(i => i.table === userSettings).map(i => i.values)
+    const merged = Object.assign({}, ...writes)
+    expect(merged).toMatchObject({
+      ageBand: 'minor',
+      consentVersion: expect.any(String),
+      consentedAt: expect.any(Number),
+      guardianConsentAt: expect.any(Number),
+      fullName: 'Maria Santos',
+      gradeLevel: 12,
+      targetExams: expect.stringContaining('UPCAT'),
+    })
+    expect(writes.map(w => w.onboardingStep)).toEqual(expect.arrayContaining(['consent', 'about', 'goals']))
+  })
+
+  it('answers sit on one inset-group panel, with hairline separators between rows', async () => {
+    await renderFresh()
+    fireEvent.press(screen.getByRole('radio', { name: "I'm 18 or older" }))
+    expect(screen.getAllByTestId('choice-separator', { includeHiddenElements: true }).length).toBeGreaterThan(0)
+  })
+
+  it('titles each step with a large title (the iOS largeTitle role)', async () => {
+    mockConsented = true
+    await renderFresh()
+    const { iosTextStyles } = require('../../theme/tokens')
+    const h = screen.getByRole('header', { name: ABOUT })
+    const flat = Object.assign({}, ...[h.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.fontSize).toBe(iosTextStyles.largeTitle.fontSize)
+  })
+})

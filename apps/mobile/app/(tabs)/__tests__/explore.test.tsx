@@ -992,6 +992,33 @@ describe('ListsScreen', () => {
     expect(screen.getAllByText('Mock exam available')).toHaveLength(1)
   })
 
+  // Owner rule (brandbook §5): a practice number is a fact, never a traffic
+  // light. Whatever the value, the badge is the one neutral tone and says what
+  // the number measures.
+  it.each([
+    ['a low best mock', [{ listingSlug: 'upcat', bestPct: 30 }], [], 'Best mock 30%'],
+    ['a high best mock', [{ listingSlug: 'upcat', bestPct: 92 }], [], 'Best mock 92%'],
+    ['practice accuracy without a mock', [], [{ listingSlug: 'upcat', ok: 4, total: 10 }], 'Practice accuracy 40%'],
+  ])('shows %s as a neutral badge named for what it measures', async (_name, mockBest, accuracy, label) => {
+    const { listRunnableBlueprints } = require('../../../services/examBlueprints')
+    listRunnableBlueprints.mockResolvedValueOnce([{ slug: 'upcat', name: 'UPCAT', acronym: 'UPCAT', totalItems: 10, totalTimeMinutes: 10, items: 10, minutes: 10 }])
+    const agg = require('../../../services/homeAggregates')
+    agg.getListingMockBest.mockResolvedValueOnce(mockBest)
+    agg.getListingAccuracy.mockResolvedValueOnce(accuracy)
+    const { useDb } = require('../../../hooks/useDb')
+    useDb.mockReturnValue(makeDb(
+      [{ id: 'e1', slug: 'upcat', title: 'UPCAT', type: 'exam', examDate: null, region: 'NCR', provider: 'UP', targetCourses: '[]' }],
+      [],
+    ))
+    const { UNSAFE_root } = render(<ListsScreen />)
+    expect(await screen.findByText(label)).toBeTruthy()
+    expect(screen.queryByText(/Readiness \d+%/)).toBeNull()
+    const { Badge } = require('../../../components/ui/Badge')
+    const badge = UNSAFE_root.findAll((n: { type: unknown; props: { label?: string } }) => n.type === Badge && n.props.label === label)
+    expect(badge).toHaveLength(1)
+    expect((badge[0]!.props as { tone?: string }).tone).toBe('neutral')
+  })
+
   it('a published mock with no runnable questions is not "available"', async () => {
     const { listPublishedBlueprintSlugs, listRunnableBlueprints } = require('../../../services/examBlueprints')
     listPublishedBlueprintSlugs.mockResolvedValueOnce(['upcat'])

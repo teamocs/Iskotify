@@ -249,6 +249,12 @@ export const glass = {
   androidIntensity:  60,
   androidBlurReductionFactor: 4,
   labelOverAccent: 'textPrimary',
+  // The sign-in sheet (canvas "Sign in"): the page ground at 80% over the
+  // maroon hero, frosted on web. Every label on it (textPrimary, textSecondary,
+  // accentText) clears 4.5:1 even over the darkest hero shape (accentPressed);
+  // see theme/__tests__/tokens.test.ts.
+  sheetFill:      'rgba(253,244,244,0.80)',
+  sheetBackdropFilter: 'blur(30px) saturate(180%)',
 } as const satisfies { labelOverAccent: keyof typeof lightTheme } & Record<string, string | number>
 
 // 4/8 spacing rhythm.
@@ -278,6 +284,7 @@ export const radius = {
   group:   18,   // inset grouped list
   card:    22,
   sheet:   28,
+  heroSheet: 36, // the sign-in sheet over the maroon hero (canvas "Sign in")
   capsule: 999,
 } as const
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, memo } from 'react'
-import { View, Text, Pressable } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, router } from 'expo-router'
 import { eq, and } from 'drizzle-orm'
 import { useDb } from '../../hooks/useDb'
@@ -9,8 +9,9 @@ import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ChevronLeftOutlined, Books2Outlined } from '@lineiconshq/free-icons'
 import { Screen } from '../../components/ui/Screen'
 import { TwoColumn } from '../../components/ui/TwoColumn'
-import { PageTitle } from '../../components/ui/PageTitle'
+import { LargeTitleHeader } from '../../components/navigation/LargeTitleHeader'
 import { Card } from '../../components/ui/Card'
+import { InsetGroup } from '../../components/ui/InsetGroup'
 import { Button } from '../../components/ui/Button'
 import { StatNumber } from '../../components/ui/StatNumber'
 import { DetailTopBar } from '../../components/explore/DetailTopBar'
@@ -18,8 +19,10 @@ import { Skeleton } from '../../components/ui/Skeleton'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorState } from '../../components/ui/ErrorState'
 import { ProgressBar } from '../../components/ui/ProgressBar'
-import { decorative, focusRing, heading, type WebPressableState } from '../../components/ui/a11y'
-import { spacing, radius, iosTextStyle } from '../../theme/tokens'
+import { decorative, focusRing, heading } from '../../components/ui/a11y'
+import { PressableScale } from '../../components/ui/Pressable'
+import { Text } from '../../components/ui/Text'
+import { layout, spacing, radius } from '../../theme/tokens'
 import { cachedQuery, invalidate } from '../../services/queryCache'
 import { getSubjectRecentAccuracy, getTopicRecentAccuracy } from '../../services/homeAggregates'
 import { topicReadiness } from '../../utils/subjectReadiness'
@@ -63,50 +66,52 @@ function byReadiness(a: TopicRow, b: TopicRow): number {
 }
 
 // ---------------------------------------------------------------------------
-// Topic row — name, a neutral readiness bar, and the number. Readiness is one
-// ink at every score (redesign M2): a red/green percent reads as a verdict.
+// Topic row — an inset-group row: the name, the number, and a thin mastery
+// bar under the name. Readiness is one ink at every score (redesign M2): a
+// red/green percent reads as a verdict.
 // ---------------------------------------------------------------------------
 
-const TopicProgressRow = memo(function TopicProgressRow({ row }: { row: TopicRow }) {
+const TopicProgressRow = memo(function TopicProgressRow({ row, last }: { row: TopicRow; last: boolean }) {
   const { theme: t } = useTheme()
   const pctLabel = row.pct != null ? `${row.pct}%` : '—'
 
   return (
-    <Pressable
+    <PressableScale
       onPress={() => router.push(`/practice/${row.id}`)}
       accessibilityRole="button"
       accessibilityLabel={`${row.name}, ${row.pct != null ? `readiness ${pctLabel}` : 'not started'}`}
       accessibilityHint="Opens practice for this topic"
-      style={(state) => {
-        const { pressed, focused } = state as WebPressableState
-        return [
-          {
-            minHeight: 64, gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.lg,
-            backgroundColor: pressed ? t.surface2 : t.surface,
-            borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, borderCurve: 'continuous',
-          },
-          focusRing(t.focusRing, focused),
-        ]
-      }}
+      style={({ pressed, hovered, focused }) => [
+        {
+          minHeight: layout.rowMinHeight, flexDirection: 'row', alignItems: 'stretch', paddingLeft: spacing.lg,
+          backgroundColor: pressed ? t.surface2 : hovered ? t.surfaceSubtle : 'transparent',
+        },
+        focusRing(t.focusRing, focused),
+      ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text testID="topic-name" style={iosTextStyle('headline', t.textPrimary)} numberOfLines={2} maxFontSizeMultiplier={1.8}>
-            {row.name}
-          </Text>
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingRight: spacing.lg, paddingVertical: spacing.md }}>
+        <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
+          <Text testID="topic-name" role="body" numberOfLines={2}>{row.name}</Text>
           {row.pct == null ? (
-            <Text style={iosTextStyle('caption', t.textSecondary)} numberOfLines={1} maxFontSizeMultiplier={1.8}>Not started</Text>
-          ) : null}
+            <Text role="subheadline" color={t.textSecondary} numberOfLines={1}>Not started</Text>
+          ) : (
+            <ProgressBar value={row.pct / 100} label={`${row.name} readiness`} height={4} />
+          )}
         </View>
-        <Text style={[iosTextStyle('numeric', row.pct == null ? t.textSecondary : t.textPrimary)]} maxFontSizeMultiplier={1.4}>
+        <Text role="headline" color={row.pct == null ? t.textSecondary : t.textPrimary} style={{ fontVariant: ['tabular-nums'] }} chrome>
           {pctLabel}
         </Text>
         <View {...decorative} style={{ transform: [{ scaleX: -1 }] }}>
-          <Lineicons icon={ChevronLeftOutlined} size={16} color={t.textTertiary} />
+          <Lineicons icon={ChevronLeftOutlined} size={14} color={t.textTertiary} />
         </View>
+        {!last ? (
+          <View
+            {...decorative}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: t.divider }}
+          />
+        ) : null}
       </View>
-      {row.pct != null ? <ProgressBar value={row.pct / 100} label={`${row.name} readiness`} height={4} /> : null}
-    </Pressable>
+    </PressableScale>
   )
 })
 
@@ -187,7 +192,7 @@ export default function SubjectDetailsScreen() {
       <Screen header={header} width="wide">
         <View accessible accessibilityLabel="Loading topics" aria-busy style={{ gap: spacing.sm, paddingTop: spacing.md }}>
           <Skeleton height={32} width="40%" radius={radius.chip} />
-          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.lg} />)}
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} height={64} radius={radius.group} />)}
         </View>
       </Screen>
     )
@@ -207,14 +212,17 @@ export default function SubjectDetailsScreen() {
   const next = rows[0] as TopicRow | undefined
 
   const title = (
-    <PageTitle
-      title={subjectName}
-      lead="Readiness per topic, lowest first. Tap a topic to practise it."
-      trailing={
-        // The subject's identity colour, as a small marker (decorative).
-        <View {...decorative} style={{ width: 12, height: 12, borderRadius: radius.pill, backgroundColor: accent }} />
-      }
-    />
+    <View style={{ marginBottom: spacing.lg }}>
+      <LargeTitleHeader
+        testID="subject-title"
+        title={subjectName}
+        subtitle="Readiness per topic, lowest first. Tap a topic to practise it."
+        actions={
+          // The subject's identity colour, as a small marker (decorative).
+          <View {...decorative} style={{ width: 12, height: 12, borderRadius: radius.capsule, backgroundColor: accent }} />
+        }
+      />
+    </View>
   )
 
   if (rows.length === 0) {
@@ -231,14 +239,16 @@ export default function SubjectDetailsScreen() {
   }
 
   const topics = (
-    <View testID="topics-list" style={{ gap: spacing.sm }}>
-      {rows.map(row => <TopicProgressRow key={row.id} row={row} />)}
+    <View testID="topics-list">
+      <InsetGroup inset={false} header="Topics">
+        {rows.map((row, i) => <TopicProgressRow key={row.id} row={row} last={i === rows.length - 1} />)}
+      </InsetGroup>
     </View>
   )
 
   const summary = (
     <Card style={{ gap: spacing.lg }}>
-      <Text {...heading(2)} style={iosTextStyle('headline', t.textPrimary)} maxFontSizeMultiplier={2}>
+      <Text {...heading(2)} role="title3">
         Subject summary
       </Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xl }}>

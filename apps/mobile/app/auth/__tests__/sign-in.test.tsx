@@ -59,7 +59,7 @@ describe('SignInScreen — initial render (sign-in mode)', () => {
     expect(screen.getByText('Iskotify')).toBeTruthy()
   })
 
-  it('renders Sign in and Create account tabs', () => {
+  it('renders the Sign in / Create account switch', () => {
     render(<SignInScreen />)
     // Both tabs exist — use getAllByText since "Sign in" also appears on submit button
     expect(screen.getAllByText('Sign in').length).toBeGreaterThan(0)
@@ -85,7 +85,7 @@ describe('SignInScreen — initial render (sign-in mode)', () => {
 
   it('renders Forgot password link', () => {
     render(<SignInScreen />)
-    expect(screen.getByText('Forgot password?')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Forgot password' })).toBeTruthy()
   })
 })
 
@@ -94,15 +94,15 @@ describe('SignInScreen — initial render (sign-in mode)', () => {
 describe('SignInScreen — mode toggle', () => {
   it('switching to Create account shows create account submit button text', () => {
     render(<SignInScreen />)
-    fireEvent.press(screen.getByText('Create account'))
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
     // "Create account" now appears both in the tab and the submit button
     expect(screen.getAllByText('Create account').length).toBeGreaterThan(0)
   })
 
   it('Create account mode hides Forgot password', () => {
     render(<SignInScreen />)
-    fireEvent.press(screen.getByText('Create account'))
-    expect(screen.queryByText('Forgot password?')).toBeNull()
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
+    expect(screen.queryByRole('button', { name: 'Forgot password' })).toBeNull()
   })
 })
 
@@ -244,7 +244,7 @@ describe('SignInScreen — sign-up success with email confirmation', () => {
     mockSignUpWithEmail.mockResolvedValue({ ok: true, data: { needsEmailConfirm: true } })
     render(<SignInScreen />)
     // Switch to create account mode
-    fireEvent.press(screen.getByText('Create account'))
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
     const emailInput = screen.getByPlaceholderText('you@example.com')
     const passwordInput = screen.getByPlaceholderText('At least 8 characters')
     fireEvent.changeText(emailInput, 'user@example.com')
@@ -260,7 +260,7 @@ describe('SignInScreen — sign-up success with email confirmation', () => {
   it('shows the confirmed sign-in button in the success panel', async () => {
     mockSignUpWithEmail.mockResolvedValue({ ok: true, data: { needsEmailConfirm: true } })
     render(<SignInScreen />)
-    fireEvent.press(screen.getByText('Create account'))
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
     const emailInput = screen.getByPlaceholderText('you@example.com')
     const passwordInput = screen.getByPlaceholderText('At least 8 characters')
     fireEvent.changeText(emailInput, 'user@example.com')
@@ -279,7 +279,7 @@ describe('SignInScreen — sign-up error', () => {
   it('shows error from signUpWithEmail', async () => {
     mockSignUpWithEmail.mockResolvedValue({ ok: false, error: 'That email already has an account — try signing in.' })
     render(<SignInScreen />)
-    fireEvent.press(screen.getByText('Create account'))
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
     const emailInput = screen.getByPlaceholderText('you@example.com')
     const passwordInput = screen.getByPlaceholderText('At least 8 characters')
     fireEvent.changeText(emailInput, 'user@example.com')
@@ -329,12 +329,12 @@ describe('SignInScreen — redesign M2', () => {
     expect(screen.queryByText(/AI-powered/i)).toBeNull()
   })
 
-  it('the mode switch is a tablist whose tabs expose aria-selected', () => {
+  it('the mode switch is a segmented control whose segments expose aria-checked', () => {
     render(<SignInScreen />)
-    expect(aria(screen.getByRole('tab', { name: 'Sign in' }), 'aria-selected')).toBe(true)
-    expect(aria(screen.getByRole('tab', { name: 'Create account' }), 'aria-selected')).toBe(false)
-    fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
-    expect(aria(screen.getByRole('tab', { name: 'Create account' }), 'aria-selected')).toBe(true)
+    expect(aria(screen.getByRole('radio', { name: 'Sign in' }), 'aria-checked')).toBe(true)
+    expect(aria(screen.getByRole('radio', { name: 'Create account' }), 'aria-checked')).toBe(false)
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
+    expect(aria(screen.getByRole('radio', { name: 'Create account' }), 'aria-checked')).toBe(true)
   })
 
   it('labels fields visibly and sets the right autocomplete for password managers', () => {
@@ -346,7 +346,7 @@ describe('SignInScreen — redesign M2', () => {
     const pw = screen.getByLabelText('Password')
     expect(pw.props.autoComplete).toBe('current-password')
     expect(pw.props.textContentType).toBe('password')
-    fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
     const newPw = screen.getByLabelText('Password')
     expect(newPw.props.autoComplete).toBe('new-password')
     expect(newPw.props.textContentType).toBe('newPassword')
@@ -420,7 +420,7 @@ describe('SignInScreen — no idle flash after success', () => {
 const BREACHED = 'This password has appeared in a known data breach. Please choose a different one.'
 
 function fillSignUp(password = 'password123') {
-  fireEvent.press(screen.getByRole('tab', { name: 'Create account' }))
+  fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
   fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
   fireEvent.changeText(screen.getByPlaceholderText('At least 8 characters'), password)
 }
@@ -562,5 +562,76 @@ describe('SignInScreen — guest diagnostic (web only)', () => {
   it('opens on sign-in otherwise', () => {
     render(<SignInScreen />)
     expect(screen.getByText('Welcome back')).toBeTruthy()
+  })
+})
+
+// ── iOS redesign P4 (canvas "Sign in") ───────────────────────────────────────
+
+describe('SignInScreen — iOS language', () => {
+  const { countPrimaryActions } = require('../../../test-utils/primaryActions')
+
+  it('has one primary action: the maroon Sign in capsule', () => {
+    const { UNSAFE_root } = render(<SignInScreen />)
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+  })
+
+  it('in create-account mode the one primary is Create account', () => {
+    const { UNSAFE_root } = render(<SignInScreen />)
+    fireEvent.press(screen.getByRole('radio', { name: 'Create account' }))
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy()
+  })
+
+  it('Continue with Google is a dark capsule, not a second maroon primary', () => {
+    const { lightTheme } = require('../../../theme/tokens')
+    render(<SignInScreen />)
+    const g = screen.getByRole('button', { name: 'Continue with Google' })
+    const flat = Object.assign({}, ...[g.props.style].flat(Infinity).filter(Boolean))
+    expect(flat.backgroundColor).toBe(lightTheme.textPrimary)
+    expect(flat.backgroundColor).not.toBe(lightTheme.accent)
+  })
+
+  it('orders the sheet as the canvas does: Google, "or with email", fields, Sign in, legal', () => {
+    render(<SignInScreen />)
+    const json = JSON.stringify(screen.toJSON())
+    const at = (s: string) => json.indexOf(s)
+    expect(at('Continue with Google')).toBeLessThan(at('or with email'))
+    expect(at('or with email')).toBeLessThan(at('Email address'))
+    expect(at('Email address')).toBeLessThan(at('Password'))
+    expect(at('Password')).toBeLessThan(at('By continuing you agree to the'))
+  })
+
+  it('keeps the current app logo and the approved tagline on the maroon hero', () => {
+    const { UNSAFE_root } = render(<SignInScreen />)
+    const RN = require('react-native')
+    const imgs = UNSAFE_root.findAll((n: { type: unknown }) => n.type === RN.Image)
+    expect(imgs.length).toBeGreaterThan(0)
+    expect(imgs[0]!.props.source).toEqual(require('../../../assets/images/icon.png'))
+    expect(screen.getByText('Para sa mga Iskolar ng Bayan')).toBeTruthy()
+    expect(screen.getByTestId('auth-sheet')).toBeTruthy()
+  })
+
+  it('Forgot? sends the reset link to the typed email', async () => {
+    mockSendPasswordReset.mockResolvedValue({ ok: true, data: undefined })
+    render(<SignInScreen />)
+    fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), 'user@example.com')
+    expect(screen.getByText('Forgot?')).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Forgot password' }))
+    await waitFor(() => expect(mockSendPasswordReset).toHaveBeenCalledWith('user@example.com'))
+    expect(await screen.findByText('Check your email for a reset link.')).toBeTruthy()
+  })
+
+  it('Forgot? without an email says what to do first', async () => {
+    render(<SignInScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Forgot password' }))
+    expect(await screen.findByText(/Enter your email above first/)).toBeTruthy()
+    expect(mockSendPasswordReset).not.toHaveBeenCalled()
+  })
+
+  it('a failed Google sign-in shows its error', async () => {
+    mockSignInWithGoogleWeb.mockResolvedValue({ ok: false, error: 'Google sign-in was cancelled.' })
+    render(<SignInScreen />)
+    fireEvent.press(screen.getByRole('button', { name: 'Continue with Google' }))
+    expect(await screen.findByText('Google sign-in was cancelled.')).toBeTruthy()
   })
 })

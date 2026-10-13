@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, Platform, type TextInputProps } from 
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { EyeOutlined, EyeSolid } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { weight, radius, spacing, textStyle } from '../../theme/tokens'
+import { weight, radius, spacing, iosTextStyle } from '../../theme/tokens'
 import { decorative, focusRing, type WebPressableState } from './a11y'
 
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
@@ -77,7 +77,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           Not a separate accessible element: the input already carries the
           label as its name, so screen readers still hear it once. */}
       <Pressable onPress={() => inputRef.current?.focus()} accessible={false} focusable={false}>
-        <Text style={textStyle('label', t.textPrimary)} maxFontSizeMultiplier={2}>
+        <Text style={{ ...iosTextStyle('footnote', t.textPrimary), ...weight('600') }} maxFontSizeMultiplier={2}>
           {label}
           {required ? <Text {...decorative} style={{ color: t.accentText }}> *</Text> : null}
         </Text>
@@ -110,7 +110,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           {...inputProps}
           {...ariaProps}
           style={[
-            textStyle('body', t.textPrimary),
+            iosTextStyle('body', t.textPrimary),
             { flex: 1, minHeight: 44, paddingVertical: spacing.sm },
             multiline ? { minHeight: 104, paddingTop: spacing.md } : null,
             // The frame draws the focus state; drop the browser's own outline.
@@ -139,7 +139,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             <View {...decorative}>
               <Lineicons icon={shown ? EyeSolid : EyeOutlined} size={18} color={t.textSecondary} />
             </View>
-            <Text style={[textStyle('label', t.textSecondary), weight('500')]} maxFontSizeMultiplier={1.6}>
+            <Text style={[{ ...iosTextStyle('footnote', t.textSecondary), ...weight('600') }, weight('500')]} maxFontSizeMultiplier={1.6}>
               {shown ? 'Hide' : 'Show'}
             </Text>
           </Pressable>
@@ -150,13 +150,13 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           nativeID={errorId}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
-          style={textStyle('bodySm', t.danger)}
+          style={iosTextStyle('footnote', t.danger)}
           maxFontSizeMultiplier={2}
         >
           {error}
         </Text>
       ) : hint ? (
-        <Text nativeID={hintId} style={textStyle('bodySm', t.textSecondary)} maxFontSizeMultiplier={2}>
+        <Text nativeID={hintId} style={iosTextStyle('footnote', t.textSecondary)} maxFontSizeMultiplier={2}>
           {hint}
         </Text>
       ) : null}

@@ -3,7 +3,7 @@ import { Text, View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { ArrowRightOutlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../theme/ThemeContext'
-import { spacing, textStyle } from '../../theme/tokens'
+import { spacing, iosTextStyle } from '../../theme/tokens'
 import { Button } from '../ui/Button'
 import { heading } from '../ui/a11y'
 import type { TourCard as TourCardData } from './tourFlow'
@@ -24,12 +24,12 @@ export const TourCard = forwardRef<Text, Props>(function TourCard({ card, lead, 
   const { theme: t } = useTheme()
   return (
     <View style={{ gap: spacing.md }}>
-      <Text ref={ref} {...heading(1)} style={textStyle('title', t.textPrimary)} maxFontSizeMultiplier={1.6}>
+      <Text ref={ref} {...heading(1)} style={iosTextStyle('largeTitle', t.textPrimary)} maxFontSizeMultiplier={1.6}>
         {card.title}
       </Text>
       <View style={{ gap: spacing.xs }}>
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{lead ?? card.body[0]}</Text>
-        <Text style={textStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{card.body[1]}</Text>
+        <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{lead ?? card.body[0]}</Text>
+        <Text style={iosTextStyle('body', t.textSecondary)} maxFontSizeMultiplier={2}>{card.body[1]}</Text>
       </View>
       {card.href && card.tabLabel && onTakeMeThere ? (
         <Button

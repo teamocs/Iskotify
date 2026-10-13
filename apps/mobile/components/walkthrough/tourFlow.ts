@@ -67,9 +67,9 @@ export const TOUR_CARDS: readonly TourCard[] = [
   },
   {
     id: 'ready',
-    title: 'Tara, simulan na natin!',
+    title: "Let's get started",
     body: [
-      "Start with today's next step. Kaya mo 'to.",
+      "Start with today's next step. You've got this.",
       'Replay this tour anytime from Help and support.',
     ],
   },
