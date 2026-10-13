@@ -70,6 +70,18 @@ it('never uploads the premium cache with the settings backup', async () => {
   expect(settings).not.toHaveProperty('premiumUserId')
 })
 
+// Not premium, but the same rule: a local-only column stays off the backup.
+// focus_mode_enabled still exists in SQLite (append-only migrations) but is
+// retired, so the backup no longer carries it.
+it('never uploads the retired focus_mode_enabled column', async () => {
+  const { raw, db } = makeDb()
+  synced(raw, { focus_mode_enabled: 0 })
+  expect(await pushUserData(db)).toBe(true)
+  const settings = (mockState.remote as { settings: Record<string, unknown> }).settings
+  expect(settings).not.toHaveProperty('focusModeEnabled')
+  expect(settings).not.toHaveProperty('focus_mode_enabled')
+})
+
 it('never restores premium from a backup', async () => {
   const { raw, db } = makeDb()
   synced(raw)

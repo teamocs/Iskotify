@@ -340,7 +340,6 @@ const USER_SETTINGS_RESET = {
   googleId: null,
   email: null,
   notificationsEnabled: true,
-  focusModeEnabled: true,
   googleCalendarConnected: false,
   incomeBracket: null,
   gwa: null,
@@ -657,7 +656,6 @@ async function pullUserDataOnce(db: DrizzleClient): Promise<void> {
         selectedListingSlug: str(remoteSettings.selectedListingSlug, local?.selectedListingSlug, ''),
         lastSyncedAt: 0,  // force catalog re-sync on next launch
         notificationsEnabled: remoteSettings.notificationsEnabled ?? local?.notificationsEnabled ?? true,
-        focusModeEnabled: remoteSettings.focusModeEnabled ?? local?.focusModeEnabled ?? true,
         dailyReminderHour: remoteSettings.dailyReminderHour ?? local?.dailyReminderHour ?? 9,
         weeklySummaryEnabled: remoteSettings.weeklySummaryEnabled ?? local?.weeklySummaryEnabled ?? true,
         targetExams: str(remoteSettings.targetExams, local?.targetExams, '[]'),
