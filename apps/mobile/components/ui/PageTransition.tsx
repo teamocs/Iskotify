@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useState, type ReactNode } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { motion } from '../../theme/tokens'
@@ -14,6 +14,8 @@ interface Props {
   testID?: string
 }
 
+const HIDDEN = { opacity: 0 } as const
+
 /** How far a page travels as it settles. */
 export const PAGE_TRAVEL = motion.pageTravel
 
@@ -27,16 +29,22 @@ export const PAGE_TRAVEL = motion.pageTravel
 export function PageTransition({ pageKey, direction = 1, style, children, testID }: Props) {
   const { reduceMotion } = usePlatformCapabilities()
   const progress = useSharedValue(1)
-  const first = useRef(true)
   const dir = useSharedValue(direction)
+  // The page whose transition has started. Until the new page's transition
+  // starts it is drawn at opacity 0, so its first frame never paints at full
+  // opacity (the fade starts in the layout effect, before the browser or the
+  // native view paints). The first page shows as is.
+  const [startedKey, setStartedKey] = useState(pageKey)
+  const pending = startedKey !== pageKey
 
-  useEffect(() => {
-    if (first.current) { first.current = false; return }
+  useLayoutEffect(() => {
+    if (!pending) return
     dir.value = direction
     progress.value = 0
     progress.value = reduceMotion
       ? withTiming(1, { duration: motion.duration.reduced })
       : withTiming(1, { duration: motion.duration.page, easing: Easing.out(Easing.cubic) })
+    setStartedKey(pageKey)
     // Shared values are stable; the transition keys on the page alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageKey])
@@ -50,7 +58,7 @@ export function PageTransition({ pageKey, direction = 1, style, children, testID
   })
 
   return (
-    <Animated.View testID={testID} style={[style, animated]}>
+    <Animated.View testID={testID} style={[style, animated, pending ? HIDDEN : null]}>
       {children}
     </Animated.View>
   )

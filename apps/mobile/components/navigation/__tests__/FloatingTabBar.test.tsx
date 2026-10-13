@@ -278,6 +278,23 @@ describe('FloatingTabBar: lens and motion', () => {
     expect(timing).toHaveBeenCalledWith(326, expect.objectContaining({ duration: 260 }))
   })
 
+  it('an interrupted morph only takes the time its remaining distance needs', () => {
+    // Hold the minimize halfway (326 to 62 stops at 194), then expand again.
+    const timing = jest.spyOn(Reanimated, 'withTiming').mockImplementation(((to: number) => (to === 62 ? 194 : to)) as never)
+    const { ctx } = renderBar(makeProps('index'))
+    layoutRow()
+    act(() => ctx.current!.setMinimized(true))
+    timing.mockClear()
+    act(() => ctx.current!.setMinimized(false))
+    const call = timing.mock.calls.find(c => c[0] === 326)!
+    expect((call[1] as { duration: number }).duration).toBe(Math.round(motion.duration.bar * (326 - 194) / (326 - 62)))
+  })
+
+  it('rapid mode changes retarget a running crossfade instead of blinking it to 0', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, '../FloatingTabBar.tsx'), 'utf8')
+    expect(src).toMatch(/if \(fade\.value >= 1\) fade\.value = 0/)
+  })
+
   it('Reduce Motion: the lens jumps and the morph is a 120ms crossfade', () => {
     mockCaps.reduceMotion = true
     const spring = jest.spyOn(Reanimated, 'withSpring')

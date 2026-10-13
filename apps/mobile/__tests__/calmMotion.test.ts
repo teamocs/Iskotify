@@ -37,6 +37,8 @@ const FILES = DIRS.flatMap(d => walk(path.join(ROOT, d)))
 const read = (rel: string) => FILES.find(f => f.rel === rel)!.src
 
 const BOUNCY_ALLOWED = ['components/practice/AnimatedCheck.tsx']
+/** spring.bouncy, a destructured `bouncy` from a spring object, or spring['bouncy']. */
+const BOUNCY_USE = /\bspring\.bouncy\b|\{[^{}]*\bbouncy\b[^{}]*\}\s*=\s*[\w.]*\bspring\b|\bspring\s*\[\s*['"]bouncy['"]\s*\]/
 /** Loops, not transitions. */
 const LONG_ALLOWED = ['components/ui/Skeleton.tsx']
 const MAX_MS = 340
@@ -47,8 +49,16 @@ describe('calm motion', () => {
   })
 
   it('spring.bouncy is reserved for the correct-answer check', () => {
-    const users = FILES.filter(f => /\bspring\.bouncy\b/.test(f.src)).map(f => f.rel)
+    const users = FILES.filter(f => BOUNCY_USE.test(f.src)).map(f => f.rel)
     expect(users).toEqual(BOUNCY_ALLOWED)
+  })
+
+  it('the bouncy check also sees destructuring and index access', () => {
+    expect(BOUNCY_USE.test('withSpring(1, motion.spring.bouncy)')).toBe(true)
+    expect(BOUNCY_USE.test('const { bouncy } = motion.spring')).toBe(true)
+    expect(BOUNCY_USE.test('const { snappy, bouncy: pop } = spring')).toBe(true)
+    expect(BOUNCY_USE.test("motion.spring['bouncy']")).toBe(true)
+    expect(BOUNCY_USE.test('withSpring(1, motion.spring.snappy)')).toBe(false)
   })
 
   it('every spring uses a motion token, never an inline damping / stiffness', () => {
@@ -79,6 +89,8 @@ describe('calm motion', () => {
     expect(layout).not.toMatch(/'shift'/)
     expect(layout).toMatch(/animation:\s*isDesktopWeb\s*\?\s*'none'\s*:\s*'fade'/)
     expect(layout).toMatch(/duration:\s*motion\.duration\.fade/)
+    // Desktop web has no tab animation, so it gets no transition spec either.
+    expect(layout).toMatch(/isDesktopWeb\s*\?\s*null\s*:\s*\{\s*transitionSpec/)
   })
 
   it('the collapsed large title only fades (no translateY)', () => {

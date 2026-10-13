@@ -289,9 +289,16 @@ export default function SignInScreen() {
           accessibilityLabel="Sign in or create an account"
         />
 
-        <GoogleButton onPress={() => void handleGoogle()} disabled={loading} />
-
-        <Divider label="or with email" />
+        {/* Google sign-in here is the browser OAuth redirect (signInWithGoogleWeb),
+            which does nothing in the native app (owner decision 2026-10-13):
+            native students reach this screen from "Suggest a date correction"
+            and sign in with email, or with Google from the landing screen. */}
+        {Platform.OS === 'web' ? (
+          <>
+            <GoogleButton onPress={() => void handleGoogle()} disabled={loading} />
+            <Divider label="or with email" />
+          </>
+        ) : null}
 
         <TextField
           label="Email address"

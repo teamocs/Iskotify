@@ -282,7 +282,9 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     const modeChanged = shownMode.current !== null && shownMode.current !== mode
     shownMode.current = mode
     if (modeChanged) {
-      fade.value = 0
+      // Restart the crossfade only once the last one has finished: rapid taps
+      // retarget a running fade instead of blinking the row back to 0.
+      if (fade.value >= 1) fade.value = 0
       fade.value = withTiming(1, { duration: reduceMotion ? motion.duration.reduced : motion.duration.fade })
     }
     if (reduceMotion) {
@@ -290,9 +292,14 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
       searchW.value = w.search
       return
     }
-    const morph = { duration: motion.duration.bar, easing: Easing.out(Easing.cubic) }
-    capsuleW.value = withTiming(w.capsule, morph)
-    searchW.value = withTiming(w.search, morph)
+    // 260ms for the whole morph, less for what is left of an interrupted one.
+    const span = Math.max(1, barWidths('tabs', rowWidth).capsule - CIRCLE)
+    const morphFor = (from: number, to: number) => ({
+      duration: Math.max(motion.duration.reduced, Math.round(motion.duration.bar * Math.min(1, Math.abs(to - from) / span))),
+      easing: Easing.out(Easing.cubic),
+    })
+    capsuleW.value = withTiming(w.capsule, morphFor(capsuleW.value, w.capsule))
+    searchW.value = withTiming(w.search, morphFor(searchW.value, w.search))
   }, [mode, rowWidth, reduceMotion, capsuleW, searchW, fade])
 
   // Until the row is measured the capsule just fills it (no animated width,

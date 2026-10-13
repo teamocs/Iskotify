@@ -164,7 +164,9 @@ export function AuthHeroLayout({ children }: { children: React.ReactNode }) {
   const { theme: t } = useTheme()
   const bp = useBreakpoint()
   if (bp === 'expanded') {
-    return <AuthLayout>{children}</AuthLayout>
+    // The brand panel shows the wordmark; BrandBlock keeps the page's h1 for
+    // screen readers (sr-only at this width).
+    return <AuthLayout><BrandBlock />{children}</AuthLayout>
   }
   const gutter = spacing.md
   return (

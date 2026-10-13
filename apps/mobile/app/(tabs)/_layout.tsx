@@ -64,7 +64,8 @@ export default function TabLayout() {
               screenOptions={{
                 headerShown: false,
                 animation: isDesktopWeb ? 'none' : 'fade',
-                transitionSpec: { animation: 'timing', config: { duration: motion.duration.fade } },
+                // Desktop web has no tab animation, so no spec either.
+                ...(isDesktopWeb ? null : { transitionSpec: { animation: 'timing' as const, config: { duration: motion.duration.fade } } }),
               }}
               screenLayout={({ children, route }) => <SceneBlurTarget routeKey={route.key}>{children}</SceneBlurTarget>}
             >

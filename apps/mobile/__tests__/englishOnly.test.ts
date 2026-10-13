@@ -2,18 +2,18 @@
 // The one exception is the tagline "Para sa mga Iskolar ng Bayan", and the
 // owner-frozen landing page (app/landing.tsx) keeps its approved copy.
 // This fails on the Taglish words the app used to ship ("Tara, simulan na
-// natin", "Kaya mo 'to", "Tapos na!", "Salamat!") anywhere in the source of
-// app/, components/, utils/, services/ (notifications) and hooks/. Comments
-// are stripped first.
+// natin", "Kaya mo 'to", "Tapos na!", "Salamat!") and a few more common ones,
+// anywhere in the source of app/, components/, utils/, services/
+// (notifications), hooks/, lib/ and theme/. Comment lines are skipped.
 import fs from 'fs'
 import path from 'path'
 
 const ROOT = path.join(__dirname, '..')
-const DIRS = ['app', 'components', 'utils', 'services', 'hooks']
+const DIRS = ['app', 'components', 'utils', 'services', 'hooks', 'lib', 'theme']
 /** Frozen by the owner (2026-10-12); its copy is approved as is. */
 const EXEMPT = ['app/landing.tsx']
 
-export const TAGLISH = /\b(?:tara|natin|kaya mo|salamat|tapos na|sige|galing|ingat|pwede|naman|kayo|ikaw)\b/i
+export const TAGLISH = /\b(?:tara|natin|kaya mo|salamat|tapos na|sige|galing|ingat|pwede|naman|kayo|ikaw|po|mabuhay|maligayang)\b/i
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = []
@@ -29,8 +29,12 @@ function sourceFiles(dir: string): string[] {
   return out
 }
 
-function strip(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
+/**
+ * Drop comment lines only (a trimmed line starting with //, /* or *), so a
+ * `//` inside a string ("https://…") never hides the rest of its line.
+ */
+export function codeLines(src: string): string[] {
+  return src.split('\n').map(l => (/^\s*(?:\/\/|\/\*|\*)/.test(l) ? '' : l))
 }
 
 describe('English only (the tagline aside)', () => {
@@ -40,7 +44,7 @@ describe('English only (the tagline aside)', () => {
       for (const file of sourceFiles(path.join(ROOT, dir))) {
         const rel = path.relative(ROOT, file).replace(/\\/g, '/')
         if (EXEMPT.includes(rel)) continue
-        strip(fs.readFileSync(file, 'utf8')).split('\n').forEach((line, i) => {
+        codeLines(fs.readFileSync(file, 'utf8')).forEach((line, i) => {
           if (TAGLISH.test(line)) hits.push(`${rel}:${i + 1}: ${line.trim()}`)
         })
       }
@@ -49,11 +53,22 @@ describe('English only (the tagline aside)', () => {
   })
 
   it('catches the retired phrases and spares the tagline and English', () => {
-    for (const s of ['Tara, simulan na natin!', "Kaya mo 'to.", 'Tapos na! Practice complete.', 'Report sent. Salamat!']) {
+    for (const s of [
+      'Tara, simulan na natin!', "Kaya mo 'to.", 'Tapos na! Practice complete.', 'Report sent. Salamat!',
+      'Salamat po', 'Mabuhay!', 'Maligayang pagdating',
+    ]) {
       expect(TAGLISH.test(s)).toBe(true)
     }
-    for (const s of ['Para sa mga Iskolar ng Bayan', "Let's get started", 'Thanks. We got your feedback.', 'Practice complete.']) {
+    for (const s of [
+      'Para sa mga Iskolar ng Bayan', "Let's get started", 'Thanks. We got your feedback.', 'Practice complete.',
+      'Export to PDF', 'point', 'Post a reply',
+    ]) {
       expect(TAGLISH.test(s)).toBe(false)
     }
+  })
+
+  it('skips comment lines but keeps a string that contains //', () => {
+    const lines = codeLines("// Salamat in a comment\n * Tara in a block\nconst u = 'https://x.ph' + ' Salamat!'")
+    expect(lines.filter(l => TAGLISH.test(l))).toEqual(["const u = 'https://x.ph' + ' Salamat!'"])
   })
 })

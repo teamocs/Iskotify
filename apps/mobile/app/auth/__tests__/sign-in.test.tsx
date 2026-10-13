@@ -48,6 +48,11 @@ beforeEach(() => {
 })
 
 import SignInScreen from '../sign-in'
+
+/** Google sign-in is offered on the web only; the default jest platform is iOS. */
+function onWeb(): { restore(): void } {
+  return jest.replaceProperty(require('react-native').Platform, 'OS', 'web')
+}
 import { setAccountNotice, takeAccountNotice, ACCOUNT_DELETED_NOTICE } from '../../../services/accountNotice'
 import { aria } from '../../../test-utils/aria'
 
@@ -78,8 +83,10 @@ describe('SignInScreen — initial render (sign-in mode)', () => {
     expect(screen.getAllByText('Sign in').length).toBeGreaterThan(0)
   })
 
-  it('renders Continue with Google button', () => {
+  it('renders Continue with Google button (web)', () => {
+    const os = onWeb()
     render(<SignInScreen />)
+    os.restore()
     expect(screen.getByText('Continue with Google')).toBeTruthy()
   })
 
@@ -295,9 +302,11 @@ describe('SignInScreen — sign-up error', () => {
 // ── Google button ─────────────────────────────────────────────────────────────
 
 describe('SignInScreen — Google sign-in', () => {
-  it('calls signInWithGoogleWeb when Continue with Google is pressed', async () => {
+  it('calls signInWithGoogleWeb when Continue with Google is pressed (web)', async () => {
     mockSignInWithGoogleWeb.mockResolvedValue({ ok: true, data: undefined })
+    const os = onWeb()
     render(<SignInScreen />)
+    os.restore()
     fireEvent.press(screen.getByText('Continue with Google'))
     await waitFor(() => {
       expect(mockSignInWithGoogleWeb).toHaveBeenCalled()
@@ -584,7 +593,9 @@ describe('SignInScreen — iOS language', () => {
 
   it('Continue with Google is a dark capsule, not a second maroon primary', () => {
     const { lightTheme } = require('../../../theme/tokens')
+    const os = onWeb()
     render(<SignInScreen />)
+    os.restore()
     const g = screen.getByRole('button', { name: 'Continue with Google' })
     const flat = Object.assign({}, ...[g.props.style].flat(Infinity).filter(Boolean))
     expect(flat.backgroundColor).toBe(lightTheme.textPrimary)
@@ -592,7 +603,9 @@ describe('SignInScreen — iOS language', () => {
   })
 
   it('orders the sheet as the canvas does: Google, "or with email", fields, Sign in, legal', () => {
+    const os = onWeb()
     render(<SignInScreen />)
+    os.restore()
     const json = JSON.stringify(screen.toJSON())
     const at = (s: string) => json.indexOf(s)
     expect(at('Continue with Google')).toBeLessThan(at('or with email'))
@@ -630,8 +643,49 @@ describe('SignInScreen — iOS language', () => {
 
   it('a failed Google sign-in shows its error', async () => {
     mockSignInWithGoogleWeb.mockResolvedValue({ ok: false, error: 'Google sign-in was cancelled.' })
+    const os = onWeb()
     render(<SignInScreen />)
+    os.restore()
     fireEvent.press(screen.getByRole('button', { name: 'Continue with Google' }))
     expect(await screen.findByText('Google sign-in was cancelled.')).toBeTruthy()
+  })
+})
+
+// ECC review M2 (owner decision 2026-10-13): Google sign-in here is the
+// browser OAuth redirect, a silent no-op in the native app, so native shows
+// the email/password form only. Auth logic is unchanged.
+describe('SignInScreen — native vs web Google', () => {
+  const { countPrimaryActions } = require('../../../test-utils/primaryActions')
+
+  it('native: no Google button and no "or with email" divider; the sheet starts with the form', () => {
+    const { UNSAFE_root } = render(<SignInScreen />)
+    expect(screen.queryByRole('button', { name: 'Continue with Google' })).toBeNull()
+    expect(screen.queryByText('or with email')).toBeNull()
+    expect(screen.getByLabelText('Email address')).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+  })
+
+  it('web: the Google button and the divider are there, still one primary', () => {
+    const os = onWeb()
+    const { UNSAFE_root } = render(<SignInScreen />)
+    os.restore()
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy()
+    expect(screen.getByText('or with email')).toBeTruthy()
+    expect(countPrimaryActions(UNSAFE_root)).toBe(1)
+  })
+})
+
+// ECC review M1: every layout keeps exactly one level-1 heading (wide windows
+// show the wordmark in the brand panel, so the h1 is screen-reader only there).
+describe('SignInScreen — one h1 at every width', () => {
+  const bp = require('../../../hooks/useBreakpoint')
+  let spy: jest.SpyInstance | null = null
+  afterEach(() => { spy?.mockRestore(); spy = null })
+  it.each(['compact', 'medium', 'expanded'] as const)('%s: exactly one level-1 heading', (size) => {
+    spy = jest.spyOn(bp, 'useBreakpoint').mockReturnValue(size)
+    render(<SignInScreen />)
+    const h1 = screen.getAllByRole('header').filter(h => aria(h, 'aria-level') === 1)
+    expect(h1).toHaveLength(1)
+    expect(h1[0]).toHaveTextContent('Iskotify')
   })
 })

@@ -69,7 +69,7 @@ export default function TourScreen() {
     return () => { alive = false }
   }, [db])
 
-  // Card change: PageTransition slides the card in on spring.smooth (a
+  // Card change: PageTransition cross-fades the card in over 200ms with an 8pt slide (a
   // crossfade under Reduce Motion), and on native, screen-reader focus moves
   // to the new title.
   const dirRef = useRef<1 | -1>(1)
