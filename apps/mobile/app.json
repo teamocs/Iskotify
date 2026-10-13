@@ -60,7 +60,12 @@
           "androidCollapsedTitle": "Iskotify"
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-localization"
     ],
     "experiments": {

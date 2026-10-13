@@ -57,6 +57,15 @@ describe('Expo project ownership', () => {
     expect(app.runtimeVersion).toEqual({ policy: 'appVersion' })
   })
 
+  // The app uses no biometrics. expo-secure-store adds a default
+  // NSFaceIDUsageDescription unless told not to, and App Review asks about
+  // every usage string. `false` makes the plugin delete the key.
+  it('asks for no Face ID usage string (expo-secure-store faceIDPermission: false)', () => {
+    const entry = app.plugins.find((p: string | [string, unknown]) => (Array.isArray(p) ? p[0] : p) === 'expo-secure-store')
+    expect(entry).toEqual(['expo-secure-store', { faceIDPermission: false }])
+    expect(app.ios?.infoPlist?.NSFaceIDUsageDescription).toBeUndefined()
+  })
+
   it('bundles the Google Play billing SDK (RevenueCat) and never blocks the billing permission', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'))
     expect(pkg.dependencies['react-native-purchases']).toBeDefined()
