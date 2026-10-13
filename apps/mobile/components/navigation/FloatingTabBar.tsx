@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, TextInput, Platform, type LayoutChangeEvent, type ViewStyle } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { KeyboardStickyView } from 'react-native-keyboard-controller'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
@@ -29,9 +29,11 @@ import {
 //   minimized  ( active )                           ( search )   scrolled down
 //   search     ( back to tab )  [ search field ...............]   on Search
 //
-// The capsule and the search control morph by width on spring.smooth; the
-// selection lens slides on spring.bouncy. Reduce Motion: the lens jumps and
-// the morphs become a 160ms crossfade.
+// The capsule and the search control morph by width over a 260ms ease-out
+// (motion.duration.bar) while the row crossfades in 140ms; the selection lens
+// slides on spring.snappy, with no sideways overshoot (owner feedback,
+// 2026-10-13). Reduce Motion: the lens jumps and the morphs become a 120ms
+// crossfade.
 // ---------------------------------------------------------------------------
 
 const BAR = layout.tabCapsule.height          // 62
@@ -279,17 +281,18 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     const w = barWidths(mode, rowWidth)
     const modeChanged = shownMode.current !== null && shownMode.current !== mode
     shownMode.current = mode
+    if (modeChanged) {
+      fade.value = 0
+      fade.value = withTiming(1, { duration: reduceMotion ? motion.duration.reduced : motion.duration.fade })
+    }
     if (reduceMotion) {
       capsuleW.value = w.capsule
       searchW.value = w.search
-      if (modeChanged) {
-        fade.value = 0
-        fade.value = withTiming(1, { duration: motion.duration.reduced })
-      }
       return
     }
-    capsuleW.value = withSpring(w.capsule, motion.spring.smooth)
-    searchW.value = withSpring(w.search, motion.spring.smooth)
+    const morph = { duration: motion.duration.bar, easing: Easing.out(Easing.cubic) }
+    capsuleW.value = withTiming(w.capsule, morph)
+    searchW.value = withTiming(w.search, morph)
   }, [mode, rowWidth, reduceMotion, capsuleW, searchW, fade])
 
   // Until the row is measured the capsule just fills it (no animated width,
@@ -319,7 +322,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
       lensPlaced.current = true
       return
     }
-    lensIndex.value = withSpring(focusedIndex, motion.spring.bouncy)
+    lensIndex.value = withSpring(focusedIndex, motion.spring.snappy)
   }, [focusedIndex, reduceMotion, lensIndex])
 
   const lensStyle = useAnimatedStyle(() => {

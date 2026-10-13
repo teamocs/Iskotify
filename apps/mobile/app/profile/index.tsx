@@ -61,7 +61,7 @@ import { Text } from '../../components/ui/Text'
 import { PressableScale } from '../../components/ui/Pressable'
 import { WebRefreshButton } from '../../components/ui/WebRefreshButton'
 import { decorative, focusRing, heading } from '../../components/ui/a11y'
-import { layout, radius, spacing } from '../../theme/tokens'
+import { layout, motion, radius, spacing } from '../../theme/tokens'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { syncOnLaunch, pushBeforeSignOut } from '../../services/sync'
 import { usePremium } from '../../hooks/usePremium'
@@ -175,7 +175,7 @@ function FocusListItem({
 
   // Long press lifts the row (visual cue). Under reduced motion the lift is
   // an instant background change, with no scale spring.
-  const spring = { damping: 12, stiffness: 300 }
+  const spring = motion.spring.snappy
   const longPressGesture = Gesture.LongPress()
     .minDuration(300)
     .onStart(() => {

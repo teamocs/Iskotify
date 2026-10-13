@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Animated, Platform } from 'react-native'
 import { usePathname } from 'expo-router'
+import { motion } from '../../theme/tokens'
 
 /**
  * Web-only route-change fade, applying the view-transitions playbook within
@@ -31,7 +32,7 @@ export function RouteFade({ children }: { children: ReactNode }) {
     opacity.setValue(0.25)
     const anim = Animated.timing(opacity, {
       toValue: 1,
-      duration: 180,
+      duration: motion.duration.fade,
       useNativeDriver: false, // no native driver on web
     })
     anim.start()

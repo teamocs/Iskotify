@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
-import { motion, spacing } from '../../theme/tokens'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import { motion } from '../../theme/tokens'
 import { usePlatformCapabilities } from '../../hooks/usePlatformCapabilities'
 
 interface Props {
@@ -15,13 +15,14 @@ interface Props {
 }
 
 /** How far a page travels as it settles. */
-export const PAGE_TRAVEL = spacing.xxl
+export const PAGE_TRAVEL = motion.pageTravel
 
 /**
- * A paged flow's page change (onboarding steps, the tour's cards): the new
- * page slides in a short way on spring.smooth while it fades up. Under Reduce
- * Motion it is a 160ms crossfade with no travel. Transform and opacity only,
- * on the UI thread.
+ * A paged flow's page change (onboarding steps, the tour's cards): a short
+ * 200ms ease-out crossfade with at most an 8pt slide, never a spring (owner
+ * feedback 2026-10-13: no over-animated page swings). Under Reduce Motion it
+ * is a 120ms crossfade with no travel. Transform and opacity only, on the UI
+ * thread.
  */
 export function PageTransition({ pageKey, direction = 1, style, children, testID }: Props) {
   const { reduceMotion } = usePlatformCapabilities()
@@ -35,7 +36,7 @@ export function PageTransition({ pageKey, direction = 1, style, children, testID
     progress.value = 0
     progress.value = reduceMotion
       ? withTiming(1, { duration: motion.duration.reduced })
-      : withSpring(1, motion.spring.smooth)
+      : withTiming(1, { duration: motion.duration.page, easing: Easing.out(Easing.cubic) })
     // Shared values are stable; the transition keys on the page alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageKey])

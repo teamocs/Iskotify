@@ -235,16 +235,19 @@ describe('radius tokens', () => {
 })
 
 describe('motion tokens', () => {
+  // Calmer motion (owner feedback, 2026-10-13): no visible overshoot outside
+  // the correct-answer check, shorter transitions.
   it('defines the three springs', () => {
-    expect(motion.spring.snappy).toEqual({ damping: 30, stiffness: 400 })
-    expect(motion.spring.smooth).toEqual({ damping: 26, stiffness: 260 })
-    expect(motion.spring.bouncy).toEqual({ damping: 14, stiffness: 220 })
+    expect(motion.spring.snappy).toEqual({ damping: 34, stiffness: 500, overshootClamping: true })
+    expect(motion.spring.smooth).toEqual({ damping: 32, stiffness: 360, overshootClamping: true })
+    expect(motion.spring.bouncy).toEqual({ damping: 18, stiffness: 300 })
   })
 
   it('defines the web curves, durations and press scale', () => {
-    expect(motion.curve.snappy).toEqual({ easing: 'cubic-bezier(.2,.9,.25,1)', duration: 280 })
-    expect(motion.curve.smooth).toEqual({ easing: 'cubic-bezier(.32,.72,0,1)', duration: 480 })
-    expect(motion.duration).toEqual({ fade: 200, reduced: 160 })
+    expect(motion.curve.snappy).toEqual({ easing: 'cubic-bezier(0.25,0.9,0.3,1)', duration: 200 })
+    expect(motion.curve.smooth).toEqual({ easing: 'cubic-bezier(0.32,0.72,0,1)', duration: 340 })
+    expect(motion.duration).toEqual({ fade: 140, reduced: 120, sheetExit: 200, bar: 260, page: 200 })
+    expect(motion.pageTravel).toBe(8)
     expect(motion.pressScale).toBe(0.97)
   })
 })

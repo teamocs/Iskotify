@@ -61,7 +61,8 @@ describe('CheckCircle', () => {
   it('pops in on spring.bouncy when checked', () => {
     const { rerender } = render(<CheckCircle done={false} />)
     rerender(<CheckCircle done />)
-    expect(mockCalls).toContainEqual({ fn: 'spring', to: 1, config: motion.spring.bouncy })
+    expect(mockCalls).toContainEqual({ fn: 'spring', to: 1, config: motion.spring.snappy })
+    expect(mockCalls).not.toContainEqual(expect.objectContaining({ config: motion.spring.bouncy }))
   })
 
   it('does not replay the pop when Reduce Motion toggles on a done item', () => {

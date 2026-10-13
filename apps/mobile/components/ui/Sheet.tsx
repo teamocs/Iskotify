@@ -24,7 +24,7 @@ const NativeKeyboardAvoidingView: React.ComponentType<{ behavior: 'padding'; sty
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
 /** The exit: a quick ease-out (Reduce Motion: the 160ms crossfade). */
-export const SHEET_EXIT_MS = 220
+export const SHEET_EXIT_MS = motion.duration.sheetExit
 
 /** How far a centred dialog rises as it appears (a bottom sheet travels the whole screen). */
 const DIALOG_RISE = spacing.xxl

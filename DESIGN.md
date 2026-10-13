@@ -300,6 +300,95 @@ The iOS text roles (Apple HIG sizes at the default content size). The floor is *
 
 The legacy `textStyle()` API (display, title, titleSm, bodySm, label, button…) was retired in the final P4 PR. Six aliases (`title`, `headline`, `titleSm`, `body`, `bodySm`, `caption`) remain, deprecated, only for the owner-frozen `app/landing.tsx`; `typography` / `typo` are gone. `__tests__/iosLanguageComplete.test.ts` keeps them out of every other file.
 
+Font: the platform UI font (SF Pro on iOS, Roboto on Android, the system stack on web), set by the theme roles (`iosTextStyle` / `<Text role>`) via `systemFont` in `theme/tokens.ts`. Outfit and Lexend are no longer loaded on mobile (iOS redesign P1b); nothing loads before first paint. Weight bumps on top of a role use `weight()`; never set a literal `fontFamily` (guarded by `__tests__/noBrandFonts.test.ts`). Admin and the landing page keep Outfit/Lexend for now.
+
+#### Spacing and radius
+
+**4/8 spacing rhythm** (all in pt):
+
+| Token | Value | Usage |
+|---|---|---|
+| `xs` | 4 | Tight gaps (icon + text) |
+| `sm` | 8 | Default gap between elements |
+| `md` | 12 | Medium padding inside components |
+| `lg` | 16 | Card padding, small gutter |
+| `xl` | 20 | Section spacing |
+| `xxl` | 24 | Large sections, between folds |
+| `xxxl` | 32 | Full-height spacing, layout gaps |
+
+**Radii** (pair with `borderCurve: 'continuous'` except pills/capsules; `components/ui/__tests__/continuousCorners.test.ts` guards the primitives). The iOS shape scale (P1c/P3):
+
+| Token | Value | Usage |
+|---|---|---|
+| `chip` | 8 | Static chips, icon tiles, small badges and squares |
+| `field` | 12 | Text fields, search, banners, small panels |
+| `button` | 14 | Buttons |
+| `group` | 18 | Inset grouped lists (`InsetGroup`) |
+| `card` | 22 | Cards |
+| `sheet` | 28 | Sheets and dialogs (in-place and routed) |
+| `heroSheet` | 36 | The sign-in sheet over the maroon hero (canvas "Sign in"), on `glass.sheetFill` (the ground at 80%, frosted on web) |
+| `capsule` | 999 | Pills, segmented control, filter chips, round buttons |
+
+`sm` (10) was split into `chip`/`field` and removed. The legacy `lg`/`xl`/`xxl`/`pill` aliases were removed in the final P4 PR; `md` (14, = `button`) stays, deprecated, only for the owner-frozen `app/landing.tsx`.
+
+#### Motion (`motion` in `theme/tokens.ts`)
+
+Calm by default (owner feedback, 2026-10-13: "do not over transition or animate it"). Nothing overshoots except the correct-answer check, and no transition runs longer than 340ms. Animate transform and opacity only.
+
+| Token | Native | Web | Use |
+|---|---|---|---|
+| `spring.snappy` | damping 34, stiffness 500, overshoot clamped | `cubic-bezier(0.25,0.9,0.3,1)` 200ms | press, segmented thumb, tab lens |
+| `spring.smooth` | damping 32, stiffness 360, overshoot clamped | `cubic-bezier(0.32,0.72,0,1)` 340ms | sheets in, push, flashcard flip |
+| `spring.bouncy` | damping 18, stiffness 300 | — | ONLY `AnimatedCheck` (the correct-answer check), once |
+| `duration.fade` | 140ms | | tab content, bar labels, route fade |
+| `duration.reduced` | 120ms | | every Reduce Motion crossfade |
+| `duration.sheetExit` | 200ms | | an in-place sheet leaving |
+| `duration.bar` | 260ms ease-out | | tab capsule minimize / expand, search morph |
+| `duration.page` | 200ms ease-out, `pageTravel` 8pt | | onboarding steps, tour cards |
+
+`pressScale` stays 0.97. `__tests__/calmMotion.test.ts` keeps `spring.bouncy` to AnimatedCheck, bans inline springs and caps every duration at 340ms (the skeleton's loading pulse aside).
+
+### Responsive layout
+
+Three window-size breakpoints (Material 3):
+- **compact** < 600 (phones, portrait tablets)
+- **medium** 600–1023 (landscape tablets)
+- **expanded** ≥ 1024 (desktop web, landscape large tablets)
+
+Use `useBreakpoint()` to get the current class; `breakpointForWidth(width)` for pure mapping.
+
+#### Layout dimensions
+
+**Gutters** (horizontal page padding, responsive):
+- compact: 16 (spacing.lg)
+- medium: 24 (spacing.xxl)
+- expanded: 32 (spacing.xxxl)
+
+**Content max-widths**:
+- `reading` — 720 (single-column, readable prose measure)
+- `wide` — 1040 (two-column dashboards, grid-heavy screens)
+
+**Tab bar**: a floating glass capsule, 62pt tall, 16pt from each side, 26pt above the bottom safe-area inset. Screens using tabs reserve `layout.capsuleClearance` (104pt = 62 + 26 + 16 gap) plus the inset (`Screen tabBarInset`, `ScreenScroll`, Explore's grids, `AnalyticsDashboard`). `layout.tabBarClearance` is retired from screens.
+
+#### Layout primitives
+
+| Component | Purpose | Breakpoint handling |
+|---|---|---|
+| `<Screen>` | Safe area + themed ground + responsive gutter + centered content column (non-scrolling) | Accepts `width="reading"` or `"wide"` |
+| `<ScreenScroll>` | Scrolling variant; wraps children at a max-width on web medium/expanded | Same width control; handles tab bar clearance |
+| `<TwoColumn primary secondary>` | Side-by-side on expanded (3:2 flex ratio); stacked on compact/medium | Uses `columnCount(bp)` to decide layout |
+
+Example responsive screen:
+
+```tsx
+<Screen width="wide" tabBarInset>
+  <TwoColumn
+    primary={<PrimaryPanel />}
+    secondary={<SecondaryPanel />}
+  />
+</Screen>
+```
+
 ### Primitives catalogue
 
 | Component | Purpose | Accessibility |
@@ -317,9 +406,9 @@ The legacy `textStyle()` API (display, title, titleSm, bodySm, label, button…)
 | `SegmentedControl` | Capsule track with a sliding white thumb (spring.snappy; jumps under Reduce Motion), haptic tick on change. ≥ 44pt. | `radiogroup` / `radio` with `aria-checked` (no tab panel); roving tabindex, Left/Right, Home/End and Space on web |
 | `SearchField` | Search input: 12pt field radius, `inputBorder` edge, 44pt "Clear search" button, optional visible label. | Named by its label or `accessibilityLabel` |
 | `SectionHeader` | Section title with optional trailing action. | `role="heading"` via `<Text accessibilityRole="header">` |
-| `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 220ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
+| `Sheet` | In-place modal panel (use it for forms with inputs): 28pt corners, glass header, slides in on spring.smooth and out over 200ms before unmounting (crossfade both ways under Reduce Motion); a centred dialog from medium widths up. Routed sheets use `sheetRouteOptions()` (native formSheet, detents 0.5 / 1, grabber, 28pt). | `role="dialog"`, `aria-modal="true"`, `aria-label` |
 | `EmptyState` / `ErrorState` | Feedback states when lists are empty or errors occur (loading uses `Skeleton`). | Clear messaging |
-| `PageTransition` | A paged flow's page change (onboarding steps, tour cards): a short slide on spring.smooth with a fade; a 160ms crossfade under Reduce Motion. | Transform and opacity only |
+| `PageTransition` | A paged flow's page change (onboarding steps, tour cards): a 200ms ease-out crossfade with at most an 8pt slide (never a spring); a 120ms crossfade under Reduce Motion. | Transform and opacity only |
 | `InfoBanner` | Top-of-screen alert/notification. | `role="alert"` if notifying of an error or state change |
 
 ### Navigation
@@ -332,10 +421,10 @@ Four top-level destinations (redesign M2, direction C, 2026-09):
 
 Each lives at a route: `/`, `/practice`, `/explore`, `/progress`.
 
-**Floating tab bar** (`components/navigation/FloatingTabBar.tsx`; Android, iOS until P2b, and web below 1024): a `Glass variant="bar"` capsule with the four tabs (icon + 12pt label, active in `accentText` on an `accentSurface` lens that springs on `spring.bouncy`, others `textPrimary`) and a separate 62pt glass search circle 12pt to its right. Web caps the capsule at 560 and centres it.
+**Floating tab bar** (`components/navigation/FloatingTabBar.tsx`; Android, iOS until P2b, and web below 1024): a `Glass variant="bar"` capsule with the four tabs (icon + 12pt label, active in `accentText` on an `accentSurface` lens that slides on `spring.snappy` (no sideways overshoot), others `textPrimary`) and a separate 62pt glass search circle 12pt to its right. Web caps the capsule at 560 and centres it.
 - *Minimize on scroll*: scrolling down past 140pt collapses the capsule to a 62pt pill with the active icon (a "Show tab bar, {Tab} selected" button); only the focused screen moves it, and the bottom overscroll bounce does not count as scrolling up; scrolling up, being within 80pt of the top, a tab change or tapping the pill expands it. Every tab scroll view feeds `TabBarScrollContext` (`Screen`, `ScreenScroll`, `ExploreGrid`, `AnalyticsDashboard`).
 - *Search morph*: on Search, the capsule becomes a 62pt "Back to {tab}" circle and the search circle widens into the bottom search field (shared with the screen via `components/search/searchQuery`), riding above the keyboard (keyboard-controller `KeyboardStickyView`).
-- Haptic selection tick on a tab change only; re-pressing the current tab scrolls it to the top; `tabPress` and `defaultPrevented` are respected. Reduce Motion: the lens jumps and the morphs are a 160ms crossfade.
+- Haptic selection tick on a tab change only; re-pressing the current tab scrolls it to the top; `tabPress` and `defaultPrevented` are respected. The minimize / expand and search morphs are a 260ms ease-out with a 140ms label crossfade; tab content only crossfades (140ms, no shift). Reduce Motion: the lens jumps and the morphs are a 120ms crossfade.
 - Android glass: each tab scene sits in its own `BlurTargetView` (`SceneBlurTarget` via the navigator's `screenLayout`); the bar, rendered after the scenes, passes the focused scene's ref to `<Glass>`. API 31+ blurs; API 30 and below stays opaque `#fdf4f4`.
 
 **Large titles** (`components/navigation/LargeTitleHeader.tsx`): `TabHeader` and `TodayHeader` render a 34/41 bold large title. On screens whose header scrolls (`Screen headerScrolls`, a header inside the scroll content, or Progress via `AnalyticsDashboard header` + `useBandScrollY`; Explore keeps a fixed header for now) it collapses into a 17pt semibold inline title on a `Glass variant="header"` band with a 24pt bg→transparent fade, hidden from assistive tech until collapsed. `GlassIconButton` is the round glass header control (40pt disc, 44pt target, label required).

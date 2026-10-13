@@ -181,19 +181,25 @@ export function weight<W extends '400' | '500' | '600' | '700'>(w: W): { fontFam
  * Reduce Motion travel becomes a `duration.reduced` crossfade.
  */
 export const motion = {
+  // Calmer motion (owner feedback, 2026-10-13): snappy and smooth are near
+  // critically damped and clamp any overshoot, so nothing bounces sideways.
   spring: {
-    snappy: { damping: 30, stiffness: 400 },  // press, segments, tabs
-    smooth: { damping: 26, stiffness: 260 },  // sheets, push, large title
-    bouncy: { damping: 14, stiffness: 220 },  // correct answer, streak (once)
+    snappy: { damping: 34, stiffness: 500, overshootClamping: true },  // press, segments, tab lens, bar
+    smooth: { damping: 32, stiffness: 360, overshootClamping: true },  // sheets in, push, large-title band
+    bouncy: { damping: 18, stiffness: 300 },  // ONLY the correct-answer check (AnimatedCheck), once
   },
   curve: {
-    snappy: { easing: 'cubic-bezier(.2,.9,.25,1)', duration: 280 },
-    smooth: { easing: 'cubic-bezier(.32,.72,0,1)', duration: 480 },
+    snappy: { easing: 'cubic-bezier(0.25,0.9,0.3,1)', duration: 200 },
+    smooth: { easing: 'cubic-bezier(0.32,0.72,0,1)', duration: 340 },
   },
   duration: {
-    fade:    200,  // toasts, skeleton to content
-    reduced: 160,  // Reduce Motion crossfade
+    fade:      140,  // toasts, skeleton to content, tab content, bar labels
+    reduced:   120,  // Reduce Motion crossfade
+    sheetExit: 200,  // an in-place sheet leaving
+    bar:       260,  // the tab capsule's minimize / expand and search morph (ease-out)
+    page:      200,  // a paged flow's crossfade (onboarding, tour)
   },
+  pageTravel: 8,     // at most this far does a page slide as it fades in
   pressScale: 0.97,
 } as const
 
