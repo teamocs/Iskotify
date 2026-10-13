@@ -1031,7 +1031,8 @@ export default function BlueprintExam() {
   const lastInSection = sectionEnd !== undefined && idx === sectionEnd - 1 && !isLast
   const jump = (i: number) => { if (!submitting && i >= floorIdx && (sectionEnd === undefined || i < sectionEnd)) setIdx(i) }
   const jumpSection = (start: number) => { if (!submitting) setIdx(clampNavIndex(start, floorIdx, sectionEnd)) }
-  const stepForward = () => setIdx(i => clampNavIndex(i + 1, floorIdx, sectionEnd))
+  // Never past the last question, even for a second tap that lands before the re-render.
+  const stepForward = () => setIdx(i => clampNavIndex(i + 1, floorIdx, sectionEnd ?? questions.length))
   /** Finish the current section early: confirm, lock it, start the next section's clock. */
   const finishSection = () => {
     const next = sectionIdx + 1

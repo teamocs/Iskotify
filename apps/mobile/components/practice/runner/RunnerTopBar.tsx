@@ -1,4 +1,5 @@
-import { View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { AccessibilityInfo, View } from 'react-native'
 import { Lineicons } from '@lineiconshq/react-native-lineicons'
 import { XmarkOutlined, StopwatchOutlined, Flag1Outlined, Flag2Outlined } from '@lineiconshq/free-icons'
 import { useTheme } from '../../../theme/ThemeContext'
@@ -22,6 +23,32 @@ export function fmtClock(totalSecs: number): string {
 /** Seconds at or under which a timer switches to its "almost out" state. */
 export const LOW_TIME_SECS = 60
 
+/** The moments a timer speaks, once each: 5 minutes, then 1 minute. */
+export const TIME_ANNOUNCEMENTS = [
+  { secs: 300, words: '5 minutes' },
+  { secs: 60, words: '1 minute' },
+] as const
+
+/**
+ * Speaks low time once as the clock crosses each mark (never per second, never
+ * on mount: a timer resumed under 5 minutes only speaks at the 1-minute mark).
+ */
+function useLowTimeAnnouncements(label: string, secs: number) {
+  const prev = useRef<number | null>(null)
+  const spoken = useRef(new Set<number>())
+  useEffect(() => {
+    const before = prev.current
+    prev.current = secs
+    if (before == null) return
+    for (const mark of TIME_ANNOUNCEMENTS) {
+      if (before > mark.secs && secs <= mark.secs && secs > 0 && !spoken.current.has(mark.secs)) {
+        spoken.current.add(mark.secs)
+        AccessibilityInfo.announceForAccessibility(`${label}: ${mark.words}`)
+      }
+    }
+  }, [label, secs])
+}
+
 export interface RunnerTimer {
   /** Spoken name ("Time left", "Section time left"). */
   label: string
@@ -39,6 +66,7 @@ export function TimerCapsule({ label, secs, emphasis }: RunnerTimer) {
   const { theme: t } = useTheme()
   const low = secs <= LOW_TIME_SECS
   const fg = low ? t.warningStrong : emphasis ? t.textPrimary : t.textSecondary
+  useLowTimeAnnouncements(label, secs)
   return (
     <View
       accessible

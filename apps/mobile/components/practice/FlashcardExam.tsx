@@ -328,8 +328,8 @@ export function FlashcardExam({ title, questions, listingSlug, subtest, topicId,
           submitting={submitting}
           onBack={() => setIdx(i => Math.max(0, i - 1))}
           onQuestions={expanded ? undefined : () => setReviewOpen(true)}
-          onSkip={() => setIdx(i => i + 1)}
-          onNext={() => setIdx(i => i + 1)}
+          onSkip={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
+          onNext={() => setIdx(i => Math.min(i + 1, questions.length - 1))}
           onReview={() => setReviewOpen(true)}
           labels={{
             back: 'Previous question',

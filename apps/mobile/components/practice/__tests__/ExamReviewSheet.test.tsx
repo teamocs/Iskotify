@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, fireEvent, screen, act } from '@testing-library/react-native'
-import { Alert, AccessibilityInfo } from 'react-native'
+import { Alert, AccessibilityInfo, Modal } from 'react-native'
 import { ExamReviewSheet } from '../ExamReviewSheet'
 import { aria } from '../../../test-utils/aria'
 
@@ -185,6 +185,49 @@ describe('ExamReviewSheet', () => {
       } finally {
         restoreOS.restore()
       }
+    })
+
+    // M5 (web): react-native-web's Modal traps focus and moves it to the first
+    // focusable descendant on open, then restores it to the opener when the
+    // Modal unmounts. The sheet's design is that this first stop is Close
+    // (inside the sheet, never a question cell behind it), with the summary
+    // next in reading order, and that the Modal really unmounts on close.
+    describe('on web', () => {
+      let restoreOS: { restore: () => void }
+      beforeEach(() => { restoreOS = jest.replaceProperty(require('react-native').Platform, 'OS', 'web') })
+      afterEach(() => restoreOS.restore())
+
+      const focusables = () => screen.UNSAFE_root.findAll((n: any) => typeof n.type === 'string'
+        && (n.props?.accessibilityRole === 'button' || n.props?.role === 'button')
+        && n.props?.tabIndex !== -1 && n.props?.focusable !== false)
+
+      it('focus lands inside the sheet on open, starting at Close (the backdrop is out of the tab order)', () => {
+        render(<ExamReviewSheet {...baseProps} visible />)
+        act(() => { jest.advanceTimersByTime(300) })
+        const first = focusables()[0]!
+        expect(first.props.accessibilityLabel).toBe('Close')
+        // Close sits inside the modal panel.
+        let n: any = first
+        let inPanel = false
+        for (; n; n = n.parent) if (n.props?.testID === 'sheet-panel') { inPanel = true; break }
+        expect(inPanel).toBe(true)
+        const backdrop = screen.getByTestId('sheet-backdrop', { includeHiddenElements: true })
+        expect(backdrop.props.tabIndex ?? -1).toBe(-1)
+        // The dialog is named by its title.
+        const modal = screen.UNSAFE_getByType(Modal)
+        const titleId = modal.props['aria-labelledby']
+        expect(screen.getByText('Review your answers').props.nativeID).toBe(titleId)
+      })
+
+      it('unmounts the Modal after closing, so react-native-web returns focus to the opener', () => {
+        const { rerender } = render(<ExamReviewSheet {...baseProps} visible />)
+        act(() => { jest.advanceTimersByTime(300) })
+        expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true)
+        rerender(<ExamReviewSheet {...baseProps} visible={false} />)
+        act(() => { jest.advanceTimersByTime(300) }) // the 220ms exit
+        expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false)
+        expect(screen.queryByText('Review your answers')).toBeNull()
+      })
     })
 
     it('puts Close first and the unanswered summary before any question cell (reading order)', () => {

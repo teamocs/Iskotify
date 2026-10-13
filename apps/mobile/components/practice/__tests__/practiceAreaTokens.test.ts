@@ -73,8 +73,9 @@ function expectNone(hits: Hit[]) {
 
 // ── AST helpers ─────────────────────────────────────────────────────────────
 
-function parse(file: string): ts.SourceFile {
-  return ts.createSourceFile(file, fs.readFileSync(path.join(ROOT, file), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+function parse(file: string, source?: string): ts.SourceFile {
+  const text = source ?? fs.readFileSync(path.join(ROOT, file), 'utf8')
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 }
 
 function lineOf(sf: ts.SourceFile, node: ts.Node): number {
@@ -99,29 +100,90 @@ function hasFixedHeight(node: ts.Node): boolean {
   return found
 }
 
-function containsText(node: ts.Node): boolean {
+function tagName(n: ts.JsxOpeningElement | ts.JsxSelfClosingElement, sf: ts.SourceFile): string {
+  return n.tagName.getText(sf)
+}
+
+/**
+ * The tags in this file that put text on screen:
+ * - `Text`, and any `*.Text` (Animated.Text);
+ * - an import aliased from a Text (`import { Text as RoleText }`);
+ * - a component declared in this file whose body renders one of those
+ *   (resolved to a fixed point, so a Label that renders a Caption counts).
+ */
+function textTags(sf: ts.SourceFile): Set<string> {
+  const tags = new Set<string>(['Text'])
+  ts.forEachChild(sf, n => {
+    if (ts.isImportDeclaration(n) && n.importClause?.namedBindings && ts.isNamedImports(n.importClause.namedBindings)) {
+      for (const el of n.importClause.namedBindings.elements) {
+        if ((el.propertyName ?? el.name).text === 'Text') tags.add(el.name.text)
+      }
+    }
+  })
+  const components: { name: string; body: ts.Node }[] = []
+  const collect = (n: ts.Node) => {
+    if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text) && n.body) components.push({ name: n.name.text, body: n.body })
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer
+      && (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) {
+      components.push({ name: n.name.text, body: n.initializer.body })
+    }
+    ts.forEachChild(n, collect)
+  }
+  collect(sf)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const c of components) {
+      if (!tags.has(c.name) && rendersText(c.body, tags, sf)) { tags.add(c.name); grew = true }
+    }
+  }
+  return tags
+}
+
+/**
+ * Renders text: a text tag (or any `*.Text`), a JSX text node, or a child
+ * component handed a visible label (`label=` / `title=` / `value=` string
+ * props draw words: Button, Badge, Chip, StatNumber, InsetRow...).
+ */
+function rendersText(node: ts.Node, tags: Set<string>, sf: ts.SourceFile): boolean {
   let found = false
   const visit = (n: ts.Node) => {
     if (found) return
-    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && n.tagName.getText() === 'Text') found = true
-    else ts.forEachChild(n, visit)
+    if (ts.isJsxText(n) && n.text.trim()) { found = true; return }
+    if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
+      const name = tagName(n, sf)
+      if (tags.has(name) || /\.Text$/.test(name)) { found = true; return }
+      const labelled = n.attributes.properties.some(a => ts.isJsxAttribute(a)
+        && ['label', 'title', 'value'].includes(a.name.getText(sf)))
+      if (labelled && /^[A-Z]/.test(name)) { found = true; return }
+    }
+    ts.forEachChild(n, visit)
   }
   visit(node)
   return found
 }
 
 /**
- * JSX elements whose `style` sets a fixed `height` (inline, or through a
- * style-object key of the same file such as a StyleSheet entry) and that
- * render a <Text> inside: at large Dynamic Type sizes that text overflows.
+ * JSX elements whose `style` sets a fixed `height` and that render text
+ * inside (see rendersText): at large Dynamic Type sizes that text overflows.
+ * The style may be inline, a property of a style object (`s.disc`, a
+ * StyleSheet entry), or an identifier bound to an object with a height
+ * (`const box = { height: 40 }` ... `style={box}` or `style={[box, x]}`).
  */
-function fixedHeightTextContainers(file: string): Hit[] {
-  const sf = parse(file)
+function fixedHeightTextContainers(file: string, source?: string): Hit[] {
+  const sf = parse(file, source)
+  const tags = textTags(sf)
+  // Style-object keys (StyleSheet entries, nested objects) and plain consts that set a height.
   const sheetKeys = new Set<string>()
+  const heightConsts = new Set<string>()
   const collect = (n: ts.Node) => {
     if (ts.isPropertyAssignment(n) && ts.isIdentifier(n.name) && ts.isObjectLiteralExpression(n.initializer)
       && n.initializer.properties.some(isHeightKey)) {
       sheetKeys.add(n.name.text)
+    }
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      let init: ts.Expression = n.initializer
+      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) init = init.expression
+      if (ts.isObjectLiteralExpression(init) && init.properties.some(isHeightKey)) heightConsts.add(n.name.text)
     }
     ts.forEachChild(n, collect)
   }
@@ -137,15 +199,17 @@ function fixedHeightTextContainers(file: string): Hit[] {
       if (expr) {
         let fixed = hasFixedHeight(expr)
         if (!fixed) {
-          const refs: string[] = []
+          const props: string[] = []
+          const idents: string[] = []
           const findRefs = (r: ts.Node) => {
-            if (ts.isPropertyAccessExpression(r)) refs.push(r.name.text)
+            if (ts.isPropertyAccessExpression(r)) props.push(r.name.text)
+            else if (ts.isIdentifier(r)) idents.push(r.text)
             ts.forEachChild(r, findRefs)
           }
           findRefs(expr)
-          fixed = refs.some(k => sheetKeys.has(k))
+          fixed = props.some(k => sheetKeys.has(k)) || idents.some(k => heightConsts.has(k))
         }
-        if (fixed && n.children.some(containsText)) {
+        if (fixed && n.children.some(c => rendersText(c, tags, sf))) {
           hits.push({ file, line: lineOf(sf, n), text: n.openingElement.getText(sf).replace(/\s+/g, ' ').slice(0, 100) })
         }
       }
@@ -211,24 +275,37 @@ describe('Practice area design-token hygiene', () => {
   })
 
   it('never gives a text container a fixed height (minHeight grows with Dynamic Type)', () => {
-    expectNone(FILES.flatMap(fixedHeightTextContainers))
+    expectNone(FILES.flatMap(f => fixedHeightTextContainers(f)))
   })
 
-  it('the fixed-height check catches inline and StyleSheet heights', () => {
-    const tmp = 'components/practice/__guardProbe__.tsx'
-    const abs = path.join(ROOT, tmp)
-    fs.writeFileSync(abs, [
+  // The probe is an in-memory source (nothing is written into the tree).
+  // Each `hit` line must be flagged and each `ok` line must not.
+  it.each([
+    ['inline height around a Text', 'const a = <View style={{ height: 40 }}><Text>A</Text></View>', true],
+    ['a StyleSheet entry', 'const b = <View style={s.disc}><Text>B</Text></View>', true],
+    ['Animated.Text (any *.Text)', 'const c = <View style={{ height: 30 }}><Animated.Text>C</Animated.Text></View>', true],
+    ['an aliased Text import', 'const d = <View style={{ height: 30 }}><RoleText role="body">D</RoleText></View>', true],
+    ['a local component that renders a label', 'const e = <View style={{ height: 30 }}><Label /></View>', true],
+    ['a nested local component (Label renders Caption)', 'const f = <View style={{ height: 30 }}><Wrapper /></View>', true],
+    ['a child handed a visible label prop', 'const g = <View style={{ height: 30 }}><Badge label="New" /></View>', true],
+    ['an identifier style bound to a top-level const', 'const h = <View style={box}><Text>H</Text></View>', true],
+    ['an identifier inside a style array', 'const i = <View style={[box, { padding: 4 }]}><Text>I</Text></View>', true],
+    ['raw JSX text', 'const j = <View style={{ height: 20 }}>Words</View>', true],
+    ['a bar with no text', 'const k = <View style={{ height: 4 }} />', false],
+    ['a fixed box around an icon only', 'const l = <View style={{ height: 44, width: 44 }}><Lineicons icon={X} /></View>', false],
+    ['minHeight around text', 'const m = <View style={{ minHeight: 44 }}><Text>M</Text></View>', false],
+  ])('fixed-height probe: %s', (_name, line, flagged) => {
+    const source = [
+      "import { Text as RoleText } from '../ui/Text'",
       'const s = StyleSheet.create({ disc: { width: 22, height: 22 } })',
-      'const a = <View style={{ height: 40 }}><Text>A</Text></View>',
-      'const b = <View style={s.disc}><Text>B</Text></View>',
-      'const c = <View style={{ height: 4 }} />',
-      'const d = <View style={{ minHeight: 44 }}><Text>D</Text></View>',
-    ].join('\n'))
-    try {
-      expect(fixedHeightTextContainers(tmp).map(h => h.line)).toEqual([2, 3])
-    } finally {
-      fs.unlinkSync(abs)
-    }
+      'const box = { height: 40, width: 40 }',
+      'function Caption() { return <Text>caption</Text> }',
+      'function Label() { return <Text>label</Text> }',
+      'const Wrapper = () => <View><Caption /></View>',
+      line,
+    ].join('\n')
+    const hits = fixedHeightTextContainers('probe.tsx', source).filter(h => h.line === 7)
+    expect(hits.length > 0).toBe(flagged)
   })
 
   it('keeps the copy calm: no "behind", no "only … left!", English only', () => {

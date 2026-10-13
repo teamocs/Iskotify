@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
-import { View, ScrollView, StyleSheet } from 'react-native'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessibilityInfo, AppState, View, ScrollView, StyleSheet } from 'react-native'
+import { NavigationContext } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { XmarkOutlined } from '@lineiconshq/free-icons'
@@ -16,6 +17,7 @@ import { Text } from '../ui/Text'
 import { Button } from '../ui/Button'
 import { ProgressBar } from '../ui/ProgressBar'
 import { Screen } from '../ui/Screen'
+import { EmptyState } from '../ui/EmptyState'
 import { PressableScale } from '../ui/Pressable'
 import { WebTopSpacer } from '../ui/WebTopSpacer'
 import { decorative, focusRing, heading } from '../ui/a11y'
@@ -26,7 +28,7 @@ import { QuestionFigure } from './QuestionFigure'
 export interface StackCard {
   id: string
   question: string
-  /** The flashcards.answer text, shown after "Show answer". */
+  /** The flashcards.answer text, shown after "Show answer" ('' = none saved yet). */
   answer: string
   explanation?: string | null
   imageUrl?: string | null
@@ -62,6 +64,18 @@ const GRADE_TONE: Record<Exclude<Grade, 'good'>, { bg: keyof Theme; fg: keyof Th
   easy: { bg: 'successSurface', fg: 'successStrong' },
 }
 
+/** Shown (and announced) for a card whose row has no answer text yet. */
+export const NO_ANSWER = 'No answer saved yet'
+
+/**
+ * Owner decision 2026-10-13: only Good and Easy count as a correct answer
+ * (progress, the session score, the SRS correct flag). Hard is still a pass
+ * for scheduling — it is just not counted as knowing the card.
+ */
+export function gradeIsCorrect(g: Grade): boolean {
+  return g === 'good' || g === 'easy'
+}
+
 /** Same floor as Button size md, so the four grades line up. */
 const GRADE_MIN_HEIGHT = 48
 
@@ -72,18 +86,21 @@ type CardRowLike = Omit<StackCard, 'id' | 'answer'> & { id: string; answer: stri
 /**
  * toStackCards — the stack's cards for a served question set, in its order,
  * with each card's own answer/explanation/figure from its flashcards row. A
- * question without a row, or a row without an answer, is left out.
+ * question without a row is left out. A row with no answer text is KEPT and
+ * shows "No answer saved yet": dropping it would leave it due forever (it
+ * would count on Today but never be served), so the student can still grade
+ * it and move it on.
  */
 export function toStackCards(served: { id?: string }[], rows: CardRowLike[]): StackCard[] {
   const byId = new Map(rows.map(r => [r.id, r]))
   const out: StackCard[] = []
   for (const q of served) {
     const row = q.id != null ? byId.get(q.id) : undefined
-    if (!row || !row.answer) continue
+    if (!row) continue
     out.push({
       id: row.id,
       question: row.question,
-      answer: row.answer,
+      answer: row.answer?.trim() ?? '',
       explanation: row.explanation ?? null,
       imageUrl: row.imageUrl ?? null,
       imageAlt: row.imageAlt ?? null,
@@ -128,11 +145,17 @@ export function FlashcardStack({ title, cards, deckId, onExit }: FlashcardStackP
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [graded, setGraded] = useState<GradedCard[]>([])
-  const [done, setDone] = useState(cards.length === 0)
+  const [done, setDone] = useState(false)
 
   const startRef = useRef(Date.now())
   const shownAtRef = useRef(Date.now())
-  const recordedRef = useRef(false)
+  // M1: what is graded is saved however the student leaves. gradedRef is the
+  // latest list (for unmount / beforeRemove / background handlers),
+  // flushedRef how many of them already reached user_progress, and
+  // sessionRef whether the one session row was written.
+  const gradedRef = useRef<GradedCard[]>([])
+  const flushedRef = useRef(0)
+  const sessionRef = useRef(false)
 
   // ── Motion: flip on reveal, rise from the stack on advance ─────────────────
   const flip = useSharedValue(0)   // rotateY degrees
@@ -171,32 +194,67 @@ export function FlashcardStack({ title, cards, deckId, onExit }: FlashcardStackP
   }
 
   // ── Recording ──────────────────────────────────────────────────────────────
-  function recordRun(list: GradedCard[]) {
-    if (recordedRef.current || list.length === 0) return
-    recordedRef.current = true
+  /**
+   * Writes the graded cards not yet in user_progress and, when `final`, the
+   * run's one session row. Idempotent: each card is written once and the
+   * session once, whichever of finish / Exit / unmount / beforeRemove /
+   * background gets there first. Never blocks the UI.
+   */
+  function recordRun(list: GradedCard[], final: boolean) {
+    const fresh = list.slice(flushedRef.current)
+    flushedRef.current = list.length
+    const writeSession = final && !sessionRef.current && list.length > 0
+    if (writeSession) sessionRef.current = true
+    if (fresh.length === 0 && !writeSession) return
     void (async () => {
       // Progress first, then the session (its backup push should carry both).
-      try {
-        await recordProgress(list.map(g => ({ flashcardId: g.id, correct: g.grade !== 'again', answeredAt: g.at })))
-      } catch (err) { warn('recordProgress')(err) }
-      try {
-        await recordSession({
-          listingSlug: '',
-          topicId: '',
-          deckId,
-          score: list.filter(g => g.grade !== 'again').length,
-          total: list.length,
-          startTime: startRef.current,
-          kind: 'flashcard',
-        })
-      } catch (err) { warn('recordSession')(err) }
+      if (fresh.length > 0) {
+        try {
+          await recordProgress(fresh.map(g => ({ flashcardId: g.id, correct: gradeIsCorrect(g.grade), answeredAt: g.at })))
+        } catch (err) { warn('recordProgress')(err) }
+      }
+      if (writeSession) {
+        try {
+          await recordSession({
+            listingSlug: '',
+            topicId: '',
+            deckId,
+            score: list.filter(g => gradeIsCorrect(g.grade)).length,
+            total: list.length,
+            startTime: startRef.current,
+            kind: 'flashcard',
+          })
+        } catch (err) { warn('recordSession')(err) }
+      }
     })()
   }
+  const recordRunRef = useRef(recordRun)
+  recordRunRef.current = recordRun
+
+  // Leaving by any route saves: unmount (iOS swipe-back, Android back, a
+  // router.back()), the navigator's beforeRemove (fires before the exit
+  // animation), and the app going to the background (it may be killed there:
+  // progress is flushed, the session waits for the run to end).
+  const navigation = useContext(NavigationContext)
+  useEffect(() => {
+    const offRemove = navigation?.addListener?.('beforeRemove', () => recordRunRef.current(gradedRef.current, true))
+    const sub = AppState.addEventListener('change', next => {
+      if (next === 'background') recordRunRef.current(gradedRef.current, false)
+    })
+    return () => {
+      offRemove?.()
+      sub?.remove?.()
+      recordRunRef.current(gradedRef.current, true)
+    }
+  }, [navigation])
 
   function reveal() {
     if (revealed) return
     setRevealed(true)
     animateReveal()
+    // M2: iOS VoiceOver ignores accessibilityLiveRegion, so say the answer.
+    const shown = cards[index]
+    if (shown) AccessibilityInfo.announceForAccessibility(`Answer: ${shown.answer || NO_ANSWER}`)
   }
 
   function grade(g: Grade) {
@@ -204,14 +262,15 @@ export function FlashcardStack({ title, cards, deckId, onExit }: FlashcardStackP
     if (!card || !revealed) return
     const now = Date.now()
     try {
-      void recordSrs([{ flashcardId: card.id, correct: g !== 'again', elapsedMs: now - shownAtRef.current, grade: g }])
+      void recordSrs([{ flashcardId: card.id, correct: gradeIsCorrect(g), elapsedMs: now - shownAtRef.current, grade: g }])
         .catch(warn('recordSrs'))
     } catch (err) { warn('recordSrs')(err) }
 
     const next = [...graded, { id: card.id, grade: g, at: now }]
+    gradedRef.current = next
     setGraded(next)
     if (index + 1 >= cards.length) {
-      recordRun(next)
+      recordRun(next, true)
       setDone(true)
       return
     }
@@ -222,8 +281,23 @@ export function FlashcardStack({ title, cards, deckId, onExit }: FlashcardStackP
   }
 
   function exit() {
-    recordRun(graded)
+    recordRun(graded, true)
     onExit()
+  }
+
+  // Nothing to show (e.g. every served card vanished): say so honestly,
+  // never "Review done · You reviewed 0 cards".
+  if (cards.length === 0) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Nothing to review"
+          body="There are no cards to review here right now."
+          actionLabel="Go back"
+          onAction={onExit}
+        />
+      </Screen>
+    )
   }
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -309,7 +383,9 @@ export function FlashcardStack({ title, cards, deckId, onExit }: FlashcardStackP
               {revealed ? (
                 <View testID="stack-answer" accessibilityLiveRegion="polite" style={{ gap: spacing.md }}>
                   <View {...decorative} style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.divider }} />
-                  <Text role="headline">{card.answer}</Text>
+                  {card.answer
+                    ? <Text role="headline">{card.answer}</Text>
+                    : <Text role="headline" color={t.textSecondary}>{NO_ANSWER}</Text>}
                   {card.explanation ? <Text role="body" color={t.textSecondary}>{card.explanation}</Text> : null}
                 </View>
               ) : null}

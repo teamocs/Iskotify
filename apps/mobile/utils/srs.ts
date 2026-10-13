@@ -44,6 +44,21 @@ export const HARD_SECOND_INTERVAL_DAYS = 2
 export const HARD_INTERVAL_MULTIPLIER = 1.2
 export const MAX_INTERVAL_DAYS = 180
 
+// ── Self-graded ladder (the card stack; owner decision 2026-10-13) ──────────
+/** Again on a self-graded card: relearn the same day, this many minutes on. */
+export const AGAIN_RELEARN_MINUTES = 10
+/** Easy on a brand-new card skips straight past the 1-day step. */
+export const EASY_FIRST_INTERVAL_DAYS = 4
+/** Easy on a later rep: Good's interval × this bonus, so Easy is always longer. */
+export const EASY_BONUS = 1.3
+
+/**
+ * 'derived' (default): the MCQ ladder, grades from deriveGrade. 'self': the
+ * self-graded card stack, where each of the four grades gets a distinct
+ * interval (Again < Hard <= Good < Easy at every rep).
+ */
+export type ScheduleMode = 'derived' | 'self'
+
 const DAY_MS = 86_400_000
 
 export interface SrsCardState {
@@ -104,7 +119,8 @@ export function isDue(dueAt: number, now: number): boolean {
  * 2nd → HARD_SECOND_INTERVAL_DAYS, 3rd+ → interval × HARD_INTERVAL_MULTIPLIER
  * (min 1, capped), and ease drops by EASE_DELTA_HARD (floored at MIN).
  */
-export function scheduleNext(state: SrsCardState, grade: Grade, now: number): SrsCardState {
+export function scheduleNext(state: SrsCardState, grade: Grade, now: number, mode: ScheduleMode = 'derived'): SrsCardState {
+  if (mode === 'self') return scheduleSelfGraded(state, grade, now)
   if (grade === 'again') {
     const easeFactor = Math.max(MIN_EASE_FACTOR, state.easeFactor + EASE_DELTA_AGAIN)
     return {
@@ -143,6 +159,60 @@ export function scheduleNext(state: SrsCardState, grade: Grade, now: number): Sr
 }
 
 /**
+ * The self-graded ladder. A student who presses a grade is telling us how
+ * well they recalled, so the four grades must schedule four different things:
+ * - Again: a lapse, relearned the same day (AGAIN_RELEARN_MINUTES); reps reset.
+ * - 1st rep: Hard 1 day, Good 1 day, Easy EASY_FIRST_INTERVAL_DAYS.
+ * - 2nd rep: Hard 2, Good SECOND_INTERVAL_DAYS (3), Easy 4 (strictly rising).
+ * - Later: Hard = max(I + 1, I × 1.2), Good = I × ease (never below Hard),
+ *   Easy = I × ease × EASY_BONUS (always above Good), all capped.
+ * Ease moves as in the derived ladder (Hard −0.15, Easy +0.15, Again −0.2).
+ * Any stored row reads fine: it only uses intervalDays, easeFactor,
+ * repetitions and lapses.
+ */
+function scheduleSelfGraded(state: SrsCardState, grade: Grade, now: number): SrsCardState {
+  if (grade === 'again') {
+    return {
+      intervalDays: 0,
+      easeFactor: Math.max(MIN_EASE_FACTOR, state.easeFactor + EASE_DELTA_AGAIN),
+      repetitions: 0,
+      lapses: state.lapses + 1,
+      dueAt: now + AGAIN_RELEARN_MINUTES * 60_000,
+      lastReviewedAt: now,
+      lastGrade: grade,
+    }
+  }
+  const cap = (d: number) => Math.min(MAX_INTERVAL_DAYS, Math.max(1, d))
+  let ladder: { hard: number; good: number; easy: number }
+  if (state.repetitions === 0) {
+    ladder = { hard: FIRST_INTERVAL_DAYS, good: FIRST_INTERVAL_DAYS, easy: EASY_FIRST_INTERVAL_DAYS }
+  } else if (state.repetitions === 1) {
+    ladder = { hard: HARD_SECOND_INTERVAL_DAYS, good: SECOND_INTERVAL_DAYS, easy: SECOND_INTERVAL_DAYS + 1 }
+  } else {
+    const prior = Math.max(1, state.intervalDays)
+    const hard = cap(Math.max(prior + 1, Math.round(prior * HARD_INTERVAL_MULTIPLIER)))
+    const good = cap(Math.max(hard, Math.round(prior * state.easeFactor)))
+    const easy = cap(Math.max(good + 1, Math.round(prior * state.easeFactor * EASY_BONUS)))
+    ladder = { hard, good, easy }
+  }
+  const intervalDays = cap(ladder[grade])
+  const easeFactor = grade === 'easy'
+    ? Math.min(MAX_EASE_FACTOR, state.easeFactor + EASE_DELTA_EASY)
+    : grade === 'hard'
+      ? Math.max(MIN_EASE_FACTOR, state.easeFactor + EASE_DELTA_HARD)
+      : state.easeFactor
+  return {
+    intervalDays,
+    easeFactor,
+    repetitions: state.repetitions + 1,
+    lapses: state.lapses,
+    dueAt: now + intervalDays * DAY_MS,
+    lastReviewedAt: now,
+    lastGrade: grade,
+  }
+}
+
+/**
  * applyReview — convenience wrapper combining deriveGrade + scheduleNext for
  * a single MCQ outcome. `existing` is null for a card with no flashcard_srs
  * row yet (never reviewed).
@@ -162,7 +232,7 @@ export function applyReview(
  * is null for a card with no flashcard_srs row yet (never reviewed).
  */
 export function scheduleReview(existing: SrsCardState | null, grade: Grade, now: number): SrsCardState {
-  return scheduleNext(existing ?? newSrsState(), grade, now)
+  return scheduleNext(existing ?? newSrsState(), grade, now, 'self')
 }
 
 /**
@@ -173,14 +243,15 @@ export function scheduleReview(existing: SrsCardState | null, grade: Grade, now:
 export function previewIntervals(state: SrsCardState | null, now: number): Record<Grade, number> {
   const base = state ?? newSrsState()
   return {
-    again: scheduleNext(base, 'again', now).intervalDays,
-    hard: scheduleNext(base, 'hard', now).intervalDays,
-    good: scheduleNext(base, 'good', now).intervalDays,
-    easy: scheduleNext(base, 'easy', now).intervalDays,
+    again: scheduleNext(base, 'again', now, 'self').intervalDays,
+    hard: scheduleNext(base, 'hard', now, 'self').intervalDays,
+    good: scheduleNext(base, 'good', now, 'self').intervalDays,
+    easy: scheduleNext(base, 'easy', now, 'self').intervalDays,
   }
 }
 
-/** "1 day", "3 days". */
+/** "10 min" (a same-day relearn), "1 day", "3 days". */
 export function formatIntervalDays(days: number): string {
+  if (days <= 0) return `${AGAIN_RELEARN_MINUTES} min`
   return days === 1 ? '1 day' : `${days} days`
 }

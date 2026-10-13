@@ -373,6 +373,33 @@ describe('BlueprintExam', () => {
       expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
     })
 
+    // M6: a fast double tap on the primary from the second-to-last question
+    // (both taps land on the same "Next" before it re-renders as "Review")
+    // must stop on the last question and never run past the end, never
+    // submit: the second tap opens nothing it shouldn't, Review opens the sheet.
+    it('a double tap on Next from the second-to-last question never submits and never runs past the end', async () => {
+      render(<BlueprintExam />)
+      await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())
+      fireEvent.press(screen.getByText('Full Mock'))
+      await waitFor(() => expect(screen.getByText('2+2?')).toBeTruthy())
+      fireEvent.press(screen.getByText('4'))
+      const next = screen.getByRole('button', { name: 'Next' })
+      fireEvent.press(next)
+      fireEvent.press(next) // the stale second tap
+      await waitFor(() => expect(screen.getByText('1+1?')).toBeTruthy())
+      expect(screen.getByText('Question 2 of 2')).toBeTruthy()
+      expect(screen.queryByLabelText('Loading question')).toBeNull()
+      // The primary is now Review; tapping it twice opens the sheet, never submits.
+      const review = screen.getByRole('button', { name: 'Review' })
+      fireEvent.press(review)
+      fireEvent.press(review)
+      expect(await screen.findByRole('button', { name: /submit exam/i })).toBeTruthy()
+      await act(async () => {})
+      expect(mockRecordAttempts).not.toHaveBeenCalled()
+      expect(mockRecordSession).not.toHaveBeenCalled()
+      expect(alertSpy).not.toHaveBeenCalled() // no submit confirmation was even asked for
+    })
+
     it('does not submit if the review sheet is dismissed via "Back to exam"', async () => {
       render(<BlueprintExam />)
       await waitFor(() => expect(screen.getByText('Full Mock')).toBeTruthy())

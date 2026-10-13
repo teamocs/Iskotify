@@ -1,7 +1,8 @@
 import React from 'react'
-import { StyleSheet } from 'react-native'
+import { AccessibilityInfo, AppState, StyleSheet } from 'react-native'
+import { NavigationContext } from '@react-navigation/native'
 import { render, fireEvent, screen, act } from '@testing-library/react-native'
-import { FlashcardStack, type StackCard } from '../FlashcardStack'
+import { FlashcardStack, toStackCards, type StackCard } from '../FlashcardStack'
 import { lightTheme, motion, radius } from '../../../theme/tokens'
 import { newSrsState, type SrsCardState } from '../../../utils/srs'
 
@@ -152,13 +153,13 @@ describe('FlashcardStack — reveal and grade', () => {
     renderStack(3)
     fireEvent.press(screen.getByRole('button', { name: 'Show answer' }))
     expect(screen.queryByRole('button', { name: 'Show answer' })).toBeNull()
-    // c1 is on its second rep: again 1, hard 2, good 3, easy 3.
-    expect(screen.getByRole('button', { name: 'Again, next review in 1 day' })).toBeTruthy()
+    // c1 is on its second rep: again 10 min (same day), hard 2, good 3, easy 4.
+    expect(screen.getByRole('button', { name: 'Again, next review in 10 min' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Hard, next review in 2 days' })).toBeTruthy()
     const good = screen.getByRole('button', { name: 'Good, next review in 3 days' })
-    expect(screen.getByRole('button', { name: 'Easy, next review in 3 days' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Easy, next review in 4 days' })).toBeTruthy()
     // The label always says the grade (never colour alone).
-    expect(screen.getByText('Again · 1 day')).toBeTruthy()
+    expect(screen.getByText('Again · 10 min')).toBeTruthy()
     expect(screen.getByText('Hard · 2 days')).toBeTruthy()
     expect(screen.getByText('Good · 3 days')).toBeTruthy()
     expect(primaryButtons()).toEqual([good])
@@ -172,7 +173,7 @@ describe('FlashcardStack — reveal and grade', () => {
     expect(bg(/^Hard/)).toBe(lightTheme.warningSurface)
     expect(bg(/^Easy/)).toBe(lightTheme.successSurface)
     expect(StyleSheet.flatten(screen.getByText('Hard · 2 days').props.style).color).toBe(lightTheme.warningStrong)
-    expect(StyleSheet.flatten(screen.getByText('Again · 1 day').props.style).color).toBe(lightTheme.dangerStrong)
+    expect(StyleSheet.flatten(screen.getByText('Again · 10 min').props.style).color).toBe(lightTheme.dangerStrong)
     expect(StyleSheet.flatten(screen.getByRole('button', { name: /^Hard/ }).props.style).minHeight).toBeGreaterThanOrEqual(44)
   })
 
@@ -181,6 +182,8 @@ describe('FlashcardStack — reveal and grade', () => {
     await grade(/^Good/)
     fireEvent.press(screen.getByRole('button', { name: 'Show answer' }))
     expect(screen.getByRole('button', { name: 'Hard, next review in 1 day' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Good, next review in 1 day' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Easy, next review in 4 days' })).toBeTruthy()
   })
 
   it('shows the grades without intervals until the schedule has loaded (never invented)', () => {
@@ -197,7 +200,8 @@ describe('FlashcardStack — reveal and grade', () => {
     await grade(/^Hard/)
     expect(mockRecordSrs).toHaveBeenCalledTimes(1)
     expect(mockRecordSrs.mock.calls[0]![0]).toEqual([
-      expect.objectContaining({ flashcardId: 'c1', grade: 'hard', correct: true }),
+      // Owner decision 2026-10-13: only Good and Easy count as correct.
+      expect.objectContaining({ flashcardId: 'c1', grade: 'hard', correct: false }),
     ])
     expect(screen.getByText('Question 2')).toBeTruthy()
     expect(screen.getByText('Card 2 of 3')).toBeTruthy()
@@ -257,7 +261,7 @@ describe('FlashcardStack — summary and recording', () => {
     expect(onExit).toHaveBeenCalledTimes(1)
   })
 
-  it('records progress (correct unless Again) and one flashcard session on finishing', async () => {
+  it('records progress (correct only for Good / Easy) and one flashcard session on finishing', async () => {
     renderStack(3)
     await grade(/^Good/)
     await grade(/^Again/)
@@ -276,8 +280,9 @@ describe('FlashcardStack — summary and recording', () => {
     const onExit = renderStack(3)
     await grade(/^Hard/)
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Exit review' })) })
-    expect(mockRecordProgress.mock.calls[0]![0]).toEqual([expect.objectContaining({ flashcardId: 'c1', correct: true })])
-    expect(mockRecordSession.mock.calls[0]![0]).toMatchObject({ score: 1, total: 1 })
+    // Hard is a pass for scheduling, but not a correct answer for the score.
+    expect(mockRecordProgress.mock.calls[0]![0]).toEqual([expect.objectContaining({ flashcardId: 'c1', correct: false })])
+    expect(mockRecordSession.mock.calls[0]![0]).toMatchObject({ score: 0, total: 1 })
     expect(onExit).toHaveBeenCalledTimes(1)
   })
 
@@ -289,6 +294,18 @@ describe('FlashcardStack — summary and recording', () => {
     expect(onExit).toHaveBeenCalledTimes(1)
   })
 
+  it('scores honestly: Again and Hard are not correct, Good and Easy are', async () => {
+    renderStack(4)
+    await grade(/^Again/)
+    await grade(/^Hard/)
+    await grade(/^Good/)
+    await grade(/^Easy/)
+    const rows = mockRecordProgress.mock.calls[0]![0]
+    expect(rows.map((r: any) => r.correct)).toEqual([false, false, true, true])
+    expect(mockRecordSession.mock.calls[0]![0]).toMatchObject({ score: 2, total: 4 })
+    expect(mockRecordSrs.mock.calls.map(c => c[0][0].correct)).toEqual([false, false, true, true])
+  })
+
   it('a failed progress/session write still reaches the summary', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     mockRecordProgress.mockRejectedValue(new Error('disk'))
@@ -297,5 +314,107 @@ describe('FlashcardStack — summary and recording', () => {
     await grade(/^Good/)
     expect(screen.getByRole('header', { name: 'Review done' })).toBeTruthy()
     warn.mockRestore()
+  })
+})
+
+// ── M1: progress is never lost on leave ──────────────────────────────────────
+describe('FlashcardStack — saving on leave', () => {
+  it('unmounting part-way (iOS swipe-back, Android back) saves what was graded, once', async () => {
+    const { unmount } = render(<FlashcardStack title="Due today" cards={cards(3)} deckId="__due__" onExit={jest.fn()} />)
+    await grade(/^Good/)
+    await grade(/^Again/)
+    expect(mockRecordProgress).not.toHaveBeenCalled()
+    await act(async () => { unmount() })
+    expect(mockRecordProgress).toHaveBeenCalledTimes(1)
+    expect(mockRecordProgress.mock.calls[0]![0].map((r: any) => [r.flashcardId, r.correct])).toEqual([['c1', true], ['c2', false]])
+    expect(mockRecordSession).toHaveBeenCalledTimes(1)
+    expect(mockRecordSession.mock.calls[0]![0]).toMatchObject({ kind: 'flashcard', score: 1, total: 2, deckId: '__due__' })
+  })
+
+  it('unmounting with nothing graded writes nothing', async () => {
+    const { unmount } = render(<FlashcardStack title="Due today" cards={cards(3)} deckId="__due__" onExit={jest.fn()} />)
+    await act(async () => { unmount() })
+    expect(mockRecordProgress).not.toHaveBeenCalled()
+    expect(mockRecordSession).not.toHaveBeenCalled()
+  })
+
+  it('saves on the navigator\'s beforeRemove, and the unmount after it does not write twice', async () => {
+    const listeners: Record<string, () => void> = {}
+    const navigation = { addListener: jest.fn((evt: string, cb: () => void) => { listeners[evt] = cb; return () => {} }) }
+    const { unmount } = render(
+      <NavigationContext.Provider value={navigation as never}>
+        <FlashcardStack title="Due today" cards={cards(3)} deckId="__due__" onExit={jest.fn()} />
+      </NavigationContext.Provider>,
+    )
+    await grade(/^Easy/)
+    expect(navigation.addListener).toHaveBeenCalledWith('beforeRemove', expect.any(Function))
+    await act(async () => { listeners.beforeRemove!() })
+    expect(mockRecordSession).toHaveBeenCalledTimes(1)
+    await act(async () => { unmount() })
+    expect(mockRecordProgress).toHaveBeenCalledTimes(1)
+    expect(mockRecordSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('going to the background saves the graded cards; finishing later adds only the rest and one session', async () => {
+    let onChange: ((s: string) => void) | undefined
+    const sub = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, cb: (s: string) => void) => {
+      onChange = cb
+      return { remove: jest.fn() }
+    }) as never)
+    renderStack(3)
+    await grade(/^Good/)
+    await act(async () => { onChange!('background') })
+    expect(mockRecordProgress).toHaveBeenCalledTimes(1)
+    expect(mockRecordProgress.mock.calls[0]![0].map((r: any) => r.flashcardId)).toEqual(['c1'])
+    expect(mockRecordSession).not.toHaveBeenCalled()
+    await act(async () => { onChange!('active') })
+    await grade(/^Hard/)
+    await grade(/^Easy/)
+    expect(mockRecordProgress).toHaveBeenCalledTimes(2)
+    expect(mockRecordProgress.mock.calls[1]![0].map((r: any) => r.flashcardId)).toEqual(['c2', 'c3'])
+    expect(mockRecordSession).toHaveBeenCalledTimes(1)
+    expect(mockRecordSession.mock.calls[0]![0]).toMatchObject({ score: 2, total: 3 })
+    sub.mockRestore()
+  })
+})
+
+// ── M2 + honest empties ──────────────────────────────────────────────────────
+describe('FlashcardStack — accessibility and empty cards', () => {
+  it('announces the answer to screen readers when it is revealed (iOS ignores live regions)', () => {
+    const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {})
+    renderStack(3)
+    expect(announce).not.toHaveBeenCalled()
+    fireEvent.press(screen.getByRole('button', { name: 'Show answer' }))
+    expect(announce).toHaveBeenCalledTimes(1)
+    expect(announce).toHaveBeenCalledWith('Answer: Answer 1')
+    announce.mockRestore()
+  })
+
+  it('an empty stack is an honest empty state, never "Review done" with 0 cards', () => {
+    const onExit = jest.fn()
+    render(<FlashcardStack title="Due today" cards={[]} deckId="__due__" onExit={onExit} />)
+    expect(screen.queryByText('Review done')).toBeNull()
+    expect(screen.queryByText(/reviewed 0 cards/)).toBeNull()
+    expect(screen.getByRole('header', { name: 'Nothing to review' })).toBeTruthy()
+    fireEvent.press(screen.getByRole('button', { name: 'Go back' }))
+    expect(onExit).toHaveBeenCalled()
+  })
+
+  it('toStackCards keeps a due card whose answer is empty (consistent with the due count), drops only missing rows', () => {
+    const rows = [
+      { id: 'a', question: 'QA', answer: 'Yes' },
+      { id: 'b', question: 'QB', answer: null },
+      { id: 'c', question: 'QC', answer: '   ' },
+    ]
+    const out = toStackCards([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'gone' }], rows as never)
+    expect(out.map(c => [c.id, c.answer])).toEqual([['a', 'Yes'], ['b', ''], ['c', '']])
+  })
+
+  it('a card with no saved answer says so, and can still be graded (so it leaves the due queue)', async () => {
+    render(<FlashcardStack title="Due today" cards={[{ id: 'c1', question: 'Q?', answer: '' }]} deckId="__due__" onExit={jest.fn()} />)
+    fireEvent.press(screen.getByRole('button', { name: 'Show answer' }))
+    expect(screen.getByText('No answer saved yet')).toBeTruthy()
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: /^Good/ })) })
+    expect(mockRecordSrs).toHaveBeenCalledTimes(1)
   })
 })
