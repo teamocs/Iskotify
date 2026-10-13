@@ -1,5 +1,5 @@
 import {
-  buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters, scoreBand,
+  buildBlueprintExam, scoreBlueprintExam, filterCourseNotesByClusters,
   groupReviewBySection, sectionChipState, orderBlueprintsForUser,
   scaleExamTimeMinutes, scaleSectionTimeMinutes, scaleBlueprintTiming,
   computeSprintItemCounts, buildStudySprintExam, STUDY_SPRINT_MINUTES, plannedItemCount,
@@ -313,20 +313,13 @@ describe('filterCourseNotesByClusters', () => {
 // Fix 3 (exam safety): estimatePercentileBand's `percentile` field was raw %
 // correct dressed up as a percentile — it drove "Below cut-off (need Nth)"
 // verdict pills that look like a normed qualification score but aren't.
-// scoreBand() keeps only the descriptive, non-judgemental band + blurb.
-describe('scoreBand', () => {
-  it('clamps and labels tiers', () => {
-    expect(scoreBand(95).band).toBe('Top tier')
-    expect(scoreBand(80).band).toBe('Competitive')
-    expect(scoreBand(60).band).toBe('Developing')
-    expect(scoreBand(20).band).toBe('Foundational')
-  })
-  it('handles out-of-range pct without throwing (clamped internally, no percentile exposed)', () => {
-    expect(scoreBand(150).band).toBe('Top tier')
-    expect(scoreBand(-5).band).toBe('Foundational')
-  })
-  it('never exposes a percentile field', () => {
-    expect(scoreBand(73)).not.toHaveProperty('percentile')
+// Its successor scoreBand() ("Top tier" / "Foundational" with a judging blurb)
+// was a verdict by another name; iOS redesign P4 removed it once nothing used it.
+describe('no score bands', () => {
+  it('exports no scoreBand / estimatePercentileBand', () => {
+    const mod = require('../examBuilder') as Record<string, unknown>
+    expect(mod.scoreBand).toBeUndefined()
+    expect(mod.estimatePercentileBand).toBeUndefined()
   })
 })
 
